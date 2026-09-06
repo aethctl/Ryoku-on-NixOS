@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="page-progress" aria-hidden="true"><span></span></div>
   <div class="grain" aria-hidden="true"></div>
 
   <header class="site-header">
@@ -17,141 +18,219 @@
       <span class="brand-text">RYOKU // NIXOS</span>
     </a>
 
+    <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false">
+      <span></span><span></span>
+    </button>
+
     <nav class="nav" aria-label="Primary navigation">
       <a href="#what">What</a>
+      <a href="#showcase">Showcase</a>
       <a href="#install">Install</a>
       <a href="#faq">FAQ</a>
-      <a href="#changelog">Changelog</a>
       <a href="#status">Status</a>
-      <a href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
+      <a class="nav-github" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
     </nav>
   </header>
 
   <main id="top">
-    <section class="hero section-pad">
-      <div class="eyebrow">RYOKU · NIXOS · DECLARATIVE · HYPRLAND</div>
+    <section class="hero" data-section="top">
+      <div class="hero-media" aria-hidden="true">
+        <img src="assets/hero-train.webp" alt="" />
+        <div class="hero-vignette"></div>
+        <div class="hero-lines"></div>
+      </div>
 
-      <div class="hero-grid">
-        <div class="hero-copy">
-          <div class="kanji">力</div>
-          <h1>RYOKU<br><span>ON NIXOS</span></h1>
-          <p class="lede">The same shell. The same motion. The same identity.<br>A different foundation.</p>
+      <div class="hero-meta hero-meta-left">
+        <span>RYOKU · NIXOS · DECLARATIVE</span>
+        <span>HYPRLAND / QUICKSHELL / WAYLAND</span>
+      </div>
+      <div class="hero-meta hero-meta-right">
+        <span>BUILD 0.60.1-BETA.19</span>
+        <span>SHOT ON NIXOS</span>
+      </div>
 
-          <div class="hero-actions">
-            <a class="button primary" href="#install">Install Ryoku</a>
-            <a class="button" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">Source ↗</a>
+      <div class="hero-copy">
+        <div class="hero-kanji">力</div>
+        <p class="hero-kicker">For the sake of power and beauty.</p>
+        <h1>
+          <span class="hero-title-line">RYOKU</span>
+          <span class="hero-title-line outline">NIXOS</span>
+        </h1>
+        <p class="hero-lede">The Ryoku desktop, rebuilt as a declarative NixOS system.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#install">Install Ryoku</a>
+          <a class="button ghost" href="#showcase">Enter showcase ↓</a>
+        </div>
+      </div>
+
+      <aside class="hero-dossier" aria-label="System dossier">
+        <div class="dossier-head"><span>力</span> SYSTEM DOSSIER</div>
+        <dl>
+          <div><dt>Platform</dt><dd>NixOS</dd></div>
+          <div><dt>Compositor</dt><dd>Hyprland</dd></div>
+          <div><dt>Shell</dt><dd>Quickshell</dd></div>
+          <div><dt>Theming</dt><dd>Matugen</dd></div>
+          <div><dt>Delivery</dt><dd>Nix flakes</dd></div>
+          <div><dt>State</dt><dd>Declarative</dd></div>
+        </dl>
+      </aside>
+
+      <a class="scroll-cue" href="#what" aria-label="Scroll to introduction">
+        <span>SCROLL</span><i></i>
+      </a>
+    </section>
+
+    <div class="ticker" aria-hidden="true">
+      <div class="ticker-track">
+        <span>ONE SOURCE</span><b>力</b><span>GENERATIONS</span><b>力</b><span>ROLLBACK</span><b>力</b><span>HYPRLAND</span><b>力</b><span>QUICKSHELL</span><b>力</b><span>MATUGEN</span><b>力</b>
+        <span>ONE SOURCE</span><b>力</b><span>GENERATIONS</span><b>力</b><span>ROLLBACK</span><b>力</b><span>HYPRLAND</span><b>力</b><span>QUICKSHELL</span><b>力</b><span>MATUGEN</span><b>力</b>
+      </div>
+    </div>
+
+    <section id="what" class="section split-section" data-section="what">
+      <div class="section-marker reveal">源</div>
+      <div class="section-main">
+        <div class="eyebrow reveal">01 // WHAT IT IS</div>
+        <h2 class="display-heading reveal">Same identity.<br><em>Different foundation.</em></h2>
+        <p class="section-lede reveal">Ryoku on NixOS keeps the shell, motion, theming and desktop language intact, while the system underneath becomes reproducible, generational and declarative.</p>
+
+        <div class="story-feature reveal">
+          <figure class="media-frame lightbox-target" tabindex="0" data-lightbox="assets/hub-aether.webp" data-caption="Ryoku Hub / Settings — live system dossier on NixOS">
+            <img src="assets/hub-aether.webp" alt="Ryoku Hub and settings displayed on a dark desktop" loading="lazy" />
+            <figcaption><span>01.A</span><strong>THE SYSTEM, AS A SURFACE.</strong><small>Click to expand</small></figcaption>
+          </figure>
+          <div class="story-copy">
+            <span class="story-number">01</span>
+            <h3>Ryoku still feels like Ryoku.</h3>
+            <p>Hyprland, Ryoku Shell, Hub, launcher, theming, lockscreen and the desktop interaction model stay cohesive. Nix changes the implementation — not the identity.</p>
+            <ul class="micro-list">
+              <li>Normal NixOS generations</li>
+              <li>Flake-based delivery</li>
+              <li>Rollback capable</li>
+              <li>User-owned overrides remain separate</li>
+            </ul>
           </div>
         </div>
-
-        <aside class="dossier" aria-label="System dossier">
-          <div class="dossier-head">力 · SYSTEM DOSSIER</div>
-          <dl>
-            <div><dt>Platform</dt><dd>NixOS</dd></div>
-            <div><dt>Compositor</dt><dd>Hyprland</dd></div>
-            <div><dt>Shell</dt><dd>Quickshell</dd></div>
-            <div><dt>Theming</dt><dd>Matugen</dd></div>
-            <div><dt>Delivery</dt><dd>Nix flakes</dd></div>
-            <div><dt>State</dt><dd>Declarative</dd></div>
-            <div><dt>Arch</dt><dd>x86_64-linux</dd></div>
-            <div><dt>Release</dt><dd>0.60.1-beta.19</dd></div>
-          </dl>
-        </aside>
-      </div>
-
-      <div class="rule"></div>
-      <div class="micro-row">
-        <span>PAPER #000000</span>
-        <span>INK #CDC4BA</span>
-        <span>ONE SOURCE</span>
-        <span>GENERATIONS</span>
-        <span>ROLLBACK</span>
       </div>
     </section>
 
-    <section id="what" class="section-pad split-section">
-      <div class="section-index">源</div>
-      <div class="section-content">
-        <div class="eyebrow">01 // WHAT IT IS</div>
-        <h2>A declarative port of Ryoku.</h2>
-        <p>Ryoku on NixOS brings the Ryoku desktop to a reproducible NixOS system without changing what makes Ryoku feel like Ryoku.</p>
-
-        <div class="statement-grid">
-          <article>
-            <span>01</span>
-            <h3>Same desktop.</h3>
-            <p>Hyprland, the Ryoku shell, theming, lockscreen, Hub, helpers and desktop experience.</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>Nix underneath.</h3>
-            <p>Normal NixOS generations, flake inputs, rollback, and declarative integration.</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>No fake distro tricks.</h3>
-            <p>Ryoku does not repartition your drives, replace your bootloader, or own your GPU setup.</p>
-          </article>
+    <section id="showcase" class="section showcase" data-section="showcase">
+      <div class="section-top reveal">
+        <div>
+          <div class="eyebrow">02 // SHOWCASE</div>
+          <h2 class="display-heading">A desktop that<br><em>moves like one thing.</em></h2>
         </div>
+        <p>Not a theme pack. Not a screenshot collection. One visual system across launcher, overview, settings, media, store and extensions.</p>
+      </div>
+
+      <div class="showcase-grid">
+        <figure class="showcase-card wide reveal lightbox-target" tabindex="0" data-lightbox="assets/launcher-media.webp" data-caption="Ryoku Launcher — search, weather and media in one surface">
+          <img src="assets/launcher-media.webp" alt="Ryoku launcher with weather and media controls" loading="lazy" />
+          <figcaption><span>LAUNCHER / MEDIA</span><b>Everything starts here.</b></figcaption>
+        </figure>
+
+        <figure class="showcase-card reveal lightbox-target" tabindex="0" data-lightbox="assets/overview.webp" data-caption="Ryoku Overview — workspaces and windows as a visual workspace">
+          <img src="assets/overview.webp" alt="Ryoku overview showing multiple workspaces" loading="lazy" />
+          <figcaption><span>OVERVIEW</span><b>See the whole desk at once.</b></figcaption>
+        </figure>
+
+        <figure class="showcase-card reveal lightbox-target" tabindex="0" data-lightbox="assets/hero-train.webp" data-caption="Ryoku desktop — a clean daily-use surface">
+          <img src="assets/hero-train.webp" alt="Ryoku desktop using a bright train and cherry blossom wallpaper" loading="lazy" />
+          <figcaption><span>DESKTOP</span><b>At rest, almost nothing asks for attention.</b></figcaption>
+        </figure>
       </div>
     </section>
 
-    <section id="install" class="section-pad split-section">
-      <div class="section-index">入</div>
-      <div class="section-content">
-        <div class="eyebrow">02 // INSTALL</div>
-        <h2>Three steps in.</h2>
-        <p class="section-intro">Built for people who are new to NixOS. No assumed wizardry.</p>
+    <section class="feature-band feature-band-dark section" data-section="ecosystem">
+      <div class="feature-copy reveal">
+        <div class="eyebrow">03 // RYOSTORE</div>
+        <div class="feature-kanji">店</div>
+        <h2>Make it yours<br>without making it a mess.</h2>
+        <p>RyoStore turns Ryoku customization into a browsable surface — themes, lock screens, Fastfetch designs, plugins and visual extras without scattering manual files across the system.</p>
+        <div class="feature-tags"><span>THEMES</span><span>FASTFETCH</span><span>LOCKSCREENS</span><span>PLUGINS</span></div>
+      </div>
+      <figure class="feature-media reveal lightbox-target" tabindex="0" data-lightbox="assets/ryostore.webp" data-caption="RyoStore — Ryoku's customization surface">
+        <img src="assets/ryostore.webp" alt="RyoStore displaying themes, lock screens, Fastfetch designs and plugins" loading="lazy" />
+        <div class="media-index">03 / STORE</div>
+      </figure>
+    </section>
 
-        <div class="steps">
-          <article class="step">
-            <div class="step-top"><span>01</span><strong>Enable flakes</strong></div>
-            <p>Add this inside <code>/etc/nixos/configuration.nix</code>:</p>
+    <section class="feature-band reverse section" data-section="rashin">
+      <div class="feature-copy reveal">
+        <div class="eyebrow">04 // RASHIN</div>
+        <div class="feature-kanji">羅</div>
+        <h2>Local context.<br>Inside the desktop.</h2>
+        <p>Rashin gives the shell a local system-aware layer designed to understand the machine it lives on. It belongs beside the rest of Ryoku rather than floating in a disconnected browser tab.</p>
+        <div class="feature-tags"><span>LOCAL</span><span>SYSTEM AWARE</span><span>OPTIONAL</span></div>
+      </div>
+      <figure class="feature-media reveal lightbox-target" tabindex="0" data-lightbox="assets/rashin.webp" data-caption="Ryoku Rashin — local system context integrated into Settings">
+        <img src="assets/rashin.webp" alt="Ryoku Rashin settings interface on a muted desktop" loading="lazy" />
+        <div class="media-index">04 / RASHIN</div>
+      </figure>
+    </section>
+
+    <section id="install" class="section install-section" data-section="install">
+      <div class="section-marker reveal">入</div>
+      <div class="section-main">
+        <div class="eyebrow reveal">05 // INSTALL</div>
+        <h2 class="display-heading reveal">Three steps in.<br><em>No Nix wizardry required.</em></h2>
+        <p class="section-lede reveal">Fresh NixOS is enough. Ryoku installs on top of your existing system and leaves your bootloader, disks, kernel and graphics configuration under your control.</p>
+
+        <div class="install-grid">
+          <article class="install-step reveal">
+            <div class="step-head"><span>01</span><strong>Enable flakes</strong></div>
+            <p>Add this inside <code>/etc/nixos/configuration.nix</code>.</p>
             <pre><code>nix.settings.experimental-features = [
   "nix-command"
   "flakes"
-];</code><button class="copy" data-copy='nix.settings.experimental-features = [\n  "nix-command"\n  "flakes"\n];'>Copy</button></pre>
-            <pre><code>sudo nixos-rebuild switch</code><button class="copy" data-copy="sudo nixos-rebuild switch">Copy</button></pre>
+];</code><button class="copy" data-copy='nix.settings.experimental-features = [\n  "nix-command"\n  "flakes"\n];'>COPY</button></pre>
+            <pre><code>sudo nixos-rebuild switch</code><button class="copy" data-copy="sudo nixos-rebuild switch">COPY</button></pre>
           </article>
 
-          <article class="step">
-            <div class="step-top"><span>02</span><strong>Make NixOS flake-based</strong></div>
-            <p>Create <code>/etc/nixos/flake.nix</code> and rebuild from it.</p>
-            <pre><code>sudo nixos-rebuild switch --flake /etc/nixos#nixos</code><button class="copy" data-copy="sudo nixos-rebuild switch --flake /etc/nixos#nixos">Copy</button></pre>
-            <a class="text-link" href="#faq-flakes">Need the beginner flake example →</a>
+          <article class="install-step reveal">
+            <div class="step-head"><span>02</span><strong>Make NixOS flake-based</strong></div>
+            <p>Create <code>/etc/nixos/flake.nix</code>, then rebuild from it.</p>
+            <pre><code>sudo nixos-rebuild switch --flake /etc/nixos#nixos</code><button class="copy" data-copy="sudo nixos-rebuild switch --flake /etc/nixos#nixos">COPY</button></pre>
+            <a class="text-link" href="#faq-flakes">Open the beginner flake example →</a>
           </article>
 
-          <article class="step accent-step">
-            <div class="step-top"><span>03</span><strong>Install Ryoku</strong></div>
-            <p>Preview first if you want:</p>
-            <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run">Copy</button></pre>
+          <article class="install-step accent reveal">
+            <div class="step-head"><span>03</span><strong>Install Ryoku</strong></div>
+            <p>Preview the installer first if you want to see exactly what changes.</p>
+            <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run">COPY</button></pre>
             <p>Then install:</p>
-            <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install">Copy</button></pre>
+            <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install">COPY</button></pre>
           </article>
+        </div>
+
+        <div class="install-note reveal">
+          <span>SAFE BY DESIGN</span>
+          <p>The installer builds before switching and stores affected configuration backups under <code>/var/backups/ryoku-nixos/</code>.</p>
         </div>
       </div>
     </section>
 
-    <section id="faq" class="section-pad split-section">
-      <div class="section-index">問</div>
-      <div class="section-content">
-        <div class="eyebrow">03 // FAQ</div>
-        <h2>Common questions.</h2>
+    <section id="faq" class="section faq-section" data-section="faq">
+      <div class="section-marker reveal">問</div>
+      <div class="section-main">
+        <div class="eyebrow reveal">06 // FAQ</div>
+        <h2 class="display-heading reveal">Common questions.<br><em>Short answers.</em></h2>
 
-        <div class="faq-list">
-          <details id="faq-flakes" open>
-            <summary>How do I enable flakes?</summary>
+        <div class="faq-list reveal">
+          <details id="faq-flakes">
+            <summary><span>01</span>How do I enable flakes?<i>+</i></summary>
             <div class="faq-body">
-              <p>Add the following to <code>/etc/nixos/configuration.nix</code>, then rebuild:</p>
+              <p>Add this to <code>/etc/nixos/configuration.nix</code>:</p>
               <pre><code>nix.settings.experimental-features = [
   "nix-command"
   "flakes"
 ];</code></pre>
-              <pre><code>sudo nixos-rebuild switch</code></pre>
+              <p>Then run <code>sudo nixos-rebuild switch</code>.</p>
             </div>
           </details>
 
           <details>
-            <summary>What should a basic flake.nix look like?</summary>
+            <summary><span>02</span>What should a beginner flake.nix look like?<i>+</i></summary>
             <div class="faq-body">
               <pre><code>{
   description = "My NixOS system";
@@ -165,97 +244,81 @@
     };
   };
 }</code></pre>
+              <p>Rebuild with <code>sudo nixos-rebuild switch --flake /etc/nixos#nixos</code>.</p>
             </div>
           </details>
 
           <details>
-            <summary>How do I update Ryoku?</summary>
+            <summary><span>03</span>How do I update Ryoku?<i>+</i></summary>
             <div class="faq-body">
               <pre><code>ryoku update</code></pre>
-              <p>That's it. Ryoku updates its configured flake input, builds a new NixOS generation and switches to it.</p>
+              <p>That's it. Ryoku advances its configured flake input, builds a new NixOS generation and switches to it.</p>
             </div>
           </details>
 
           <details>
-            <summary>Does Ryoku replace NixOS?</summary>
-            <div class="faq-body">
-              <p>No. Ryoku integrates into your existing NixOS configuration. Your bootloader, kernel, disks and graphics configuration remain owned by your NixOS system.</p>
-            </div>
+            <summary><span>04</span>Does Ryoku replace NixOS?<i>+</i></summary>
+            <div class="faq-body"><p>No. Ryoku integrates into your existing NixOS configuration. Your bootloader, kernel, disks and hardware-specific graphics setup remain owned by your host configuration.</p></div>
           </details>
 
           <details>
-            <summary>What if an update breaks?</summary>
-            <div class="faq-body">
-              <p>Ryoku updates create normal NixOS generations. Previous generations remain available through standard NixOS rollback and boot-menu mechanisms.</p>
-            </div>
-          </details>
-
-          <details>
-            <summary>Where does Ryoku back up my configuration?</summary>
-            <div class="faq-body">
-              <pre><code>/var/backups/ryoku-nixos/</code></pre>
-            </div>
+            <summary><span>05</span>What if an update breaks?<i>+</i></summary>
+            <div class="faq-body"><p>Ryoku updates create normal NixOS generations, so previous generations remain available through standard NixOS rollback and boot-menu mechanisms.</p></div>
           </details>
         </div>
       </div>
     </section>
 
-    <section id="changelog" class="section-pad split-section">
-      <div class="section-index">報</div>
-      <div class="section-content">
-        <div class="eyebrow">04 // CHANGELOG</div>
-        <h2>What's new on NixOS.</h2>
-
-        <article class="release-card">
-          <div class="release-meta">
-            <span>LATEST</span>
-            <strong>0.60.1-beta.19</strong>
-          </div>
-          <div class="release-grid">
-            <div><span>PARALLAX</span><p>Layered wallpaper depth system.</p></div>
-            <div><span>DISPLAY</span><p>Improved multi-monitor and HDMI persistence.</p></div>
-            <div><span>THEMING</span><p>KDE palette integration and expanded live retinting.</p></div>
-            <div><span>RYOTUNES</span><p>Native NixOS packaging and desktop integration.</p></div>
-          </div>
-          <a class="button" href="https://github.com/aethctl/Ryoku-on-NixOS/commits/main" target="_blank" rel="noreferrer">Full history ↗</a>
-        </article>
+    <section id="status" class="section status-section" data-section="status">
+      <div class="status-visual reveal">
+        <span class="status-kanji">未</span>
+        <div class="status-pulse"><i></i> ACTIVE PORT</div>
       </div>
-    </section>
-
-    <section id="status" class="section-pad split-section">
-      <div class="section-index">未</div>
-      <div class="section-content">
-        <div class="eyebrow">05 // HONEST STATUS</div>
+      <div class="status-copy reveal">
+        <div class="eyebrow">07 // HONEST STATUS</div>
         <h2>This is a living port.</h2>
-        <p>Ryoku develops quickly. NixOS sometimes needs different integration than Arch, and releases can land slightly later while Nix-specific packaging is tested.</p>
-
-        <div class="status-grid">
-          <div><span>PORT</span><strong>ACTIVE</strong></div>
-          <div><span>CHANNEL</span><strong>BETA</strong></div>
-          <div><span>PLATFORM</span><strong>NIXOS</strong></div>
-          <div><span>UPSTREAM</span><strong>RYOKU</strong></div>
+        <p>Ryoku develops quickly. NixOS sometimes needs different packaging and integration than Arch, so releases can land slightly later while the Nix-specific work is tested.</p>
+        <dl class="status-grid">
+          <div><dt>Current</dt><dd>0.60.1-beta.19</dd></div>
+          <div><dt>Channel</dt><dd>Beta</dd></div>
+          <div><dt>Platform</dt><dd>NixOS</dd></div>
+          <div><dt>Upstream</dt><dd>Ryoku</dd></div>
+        </dl>
+        <div class="status-actions">
+          <a class="button primary" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">Source ↗</a>
+          <a class="button ghost" href="https://ryoku.dev" target="_blank" rel="noreferrer">ryoku.dev ↗</a>
         </div>
       </div>
     </section>
 
-    <section class="section-pad links-section">
-      <div class="eyebrow">06 // LINKS</div>
-      <div class="link-grid">
-        <a href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer"><span>GitHub</span><b>Source ↗</b></a>
-        <a href="https://ryoku.dev" target="_blank" rel="noreferrer"><span>Ryoku</span><b>Main site ↗</b></a>
-        <a href="https://discord.gg/8KjBmUEyKA" target="_blank" rel="noreferrer"><span>Discord</span><b>Community ↗</b></a>
-        <a href="https://www.reddit.com/r/RyokuArch/" target="_blank" rel="noreferrer"><span>Reddit</span><b>r/RyokuArch ↗</b></a>
+    <section class="finale section">
+      <div class="finale-bg" aria-hidden="true"><img src="assets/hero-train.webp" alt="" loading="lazy" /></div>
+      <div class="finale-copy reveal">
+        <span>力</span>
+        <h2>FOR THE SAKE OF<br>POWER AND BEAUTY.</h2>
+        <p>RYOKU // NIXOS</p>
       </div>
     </section>
   </main>
 
-  <footer class="footer section-pad">
-    <div class="footer-kanji">力</div>
-    <div>
-      <strong>RYOKU // NIXOS</strong>
-      <p>力と美のために · For the sake of power and beauty.</p>
-    </div>
+  <footer class="footer">
+    <div><span>力</span><strong>RYOKU // NIXOS</strong></div>
+    <nav>
+      <a href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
+      <a href="https://discord.gg/8KjBmUEyKA" target="_blank" rel="noreferrer">Discord ↗</a>
+      <a href="https://www.reddit.com/r/RyokuArch/" target="_blank" rel="noreferrer">Reddit ↗</a>
+      <a href="https://ryoku.dev" target="_blank" rel="noreferrer">Ryoku ↗</a>
+    </nav>
+    <small>力と美のために · For the sake of power and beauty.</small>
   </footer>
+
+  <div class="lightbox" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Screenshot viewer">
+    <button class="lightbox-close" type="button" aria-label="Close screenshot">CLOSE ×</button>
+    <div class="lightbox-inner">
+      <img src="" alt="Expanded Ryoku screenshot" />
+      <p></p>
+    </div>
+  </div>
 
   <script src="script.js"></script>
 </body>
