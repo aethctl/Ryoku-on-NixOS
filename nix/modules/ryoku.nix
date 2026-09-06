@@ -1325,6 +1325,10 @@ in
     systemd.user.services.ryotunesd = {
       description = "Ryotunes playback daemon";
 
+      # ryotunesd launches ryotunes-qml by command name. Keep the
+      # Ryotunes package first, then expose the normal Ryoku runtime.
+      path = [ ryokuRyotunes ] ++ runtimePackages;
+
       # Upstream's daemon launches the native frontend with
       # Command::new("ryotunes-qml"), and that Quickshell client in turn
       # launches normal desktop helpers such as sh, ryostore, zenity and
