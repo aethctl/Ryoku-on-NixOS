@@ -1205,3 +1205,79 @@ details[open] summary i { transform: rotate(45deg); }
   .how-modal-bottom { align-items: stretch; flex-direction: column; }
   .how-modal-bottom .button { width: 100%; }
 }
+
+/* ─────────────────────────────────────────────────────────────
+   V2.4 PATCH NOTES ARCHIVE
+   Full release notes without predictive summaries.
+   ───────────────────────────────────────────────────────────── */
+.patch-hero .subpage-hero-copy p { max-width: 820px; }
+.patch-notes-content { max-width: 1080px; }
+.release-entry-full { scroll-margin-top: 110px; }
+.release-entry-full + .release-entry-full { margin-top: 100px; }
+.release-entry-full .release-summary strong { color: var(--ink-bright); }
+
+.notes-group {
+  margin-top: 26px;
+  border: 1px solid var(--line);
+  background: rgba(205, 196, 186, 0.025);
+}
+.notes-group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.notes-group-head span { font-size: 18px; }
+.notes-group-head h3 {
+  margin: 0;
+  color: var(--ink-bright);
+  font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 4px 20px 8px;
+}
+.notes-list li {
+  position: relative;
+  padding: 14px 8px 14px 24px;
+  border-bottom: 1px solid rgba(205,196,186,.09);
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.55;
+}
+.notes-list li:last-child { border-bottom: 0; }
+.notes-list li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--ink-bright);
+}
+.notes-list strong { color: var(--ink-bright); }
+.notes-known {
+  border-color: rgba(226,52,42,.48);
+  background: rgba(226,52,42,.045);
+}
+.notes-known .notes-group-head { border-bottom-color: rgba(226,52,42,.34); }
+.notes-known .notes-group-head h3,
+.notes-known .notes-list li::before { color: #ff746d; }
+.tested-stamp {
+  margin-top: 28px;
+  padding: 18px 20px;
+  border: 1px solid rgba(205,196,186,.25);
+  color: var(--ink-bright);
+  background: rgba(205,196,186,.045);
+  font: 700 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .notes-group-head { padding: 14px 16px; }
+  .notes-list { padding: 2px 16px 6px; }
+  .notes-list li { padding: 12px 4px 12px 20px; font-size: 15px; }
+  .release-entry-full + .release-entry-full { margin-top: 72px; }
+}

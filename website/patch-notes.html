@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000" />
   <meta name="description" content="Ryoku on NixOS patch notes and release archive." />
   <title>Ryoku on NixOS — Patch Notes</title>
-  <link rel="stylesheet" href="styles-v2-3.css" />
+  <link rel="stylesheet" href="styles-v2-4.css" />
 </head>
 <body class="subpage-body">
   <div class="page-progress" aria-hidden="true"><span></span></div>
@@ -28,15 +28,15 @@
   </header>
 
   <main>
-    <section class="subpage-hero">
+    <section class="subpage-hero patch-hero">
       <div class="subpage-hero-copy reveal visible">
         <div class="subpage-kicker">報 // RELEASE ARCHIVE</div>
         <h1>PATCH<em>NOTES.</em></h1>
-        <p>The NixOS-specific release history: what changed, what was ported, and what was fixed. New releases stay at the top; older notes remain addressable by permanent version anchors.</p>
+        <p>The real NixOS release history. No generated summaries, no guessed features — these notes are kept from the releases as they were written.</p>
       </div>
       <dl class="subpage-meta reveal visible">
         <div><dt>Current</dt><dd>0.60.1-beta.19</dd></div>
-        <div><dt>Channel</dt><dd>Beta</dd></div>
+        <div><dt>Previous</dt><dd>Musubi 0.58.6-beta.19</dd></div>
         <div><dt>Order</dt><dd>Newest first</dd></div>
         <div><dt>Archive</dt><dd>Persistent</dd></div>
       </dl>
@@ -47,57 +47,126 @@
         <div class="docs-sidebar-title">RELEASES // INDEX</div>
         <nav>
           <a href="#v0-60-1-beta-19"><span>01</span>0.60.1-beta.19</a>
-          <a href="#v0-59-series"><span>02</span>0.59 series</a>
+          <a href="#v0-58-6-beta-19"><span>02</span>Musubi 0.58.6-beta.19</a>
           <a href="#archive-format"><span>+</span>Archive format</a>
         </nav>
         <a class="button" href="index.html">← Back to site</a>
       </aside>
 
-      <div class="docs-content">
-        <article id="v0-60-1-beta-19" class="release-entry">
+      <div class="docs-content patch-notes-content">
+        <article id="v0-60-1-beta-19" class="release-entry release-entry-full">
           <div class="eyebrow">LATEST // CURRENT NIXOS PORT</div>
           <header class="release-head">
             <h2 class="release-version">0.60.1<br>BETA.19</h2>
-            <div class="release-date">RYOKU 0.60.1-BETA.19<br>NIXOS PORT</div>
+            <div class="release-date">RYOKU ON NIXOS<br>UPDATE PATCH NOTES</div>
           </header>
-          <p class="release-summary">A broad parity release focused on bringing the 0.60.1 Ryoku surface across cleanly while keeping NixOS-specific ownership, persistence and packaging intact.</p>
-          <div class="release-grid">
-            <section class="release-item"><span>PARALLAX</span><h3>Declarative wallpaper depth.</h3><p>Parallax integration is packaged and delivered through the NixOS port rather than depending on Arch-style mutable installation paths.</p></section>
-            <section class="release-item"><span>DISPLAY</span><h3>Stronger monitor persistence.</h3><p>Per-monitor behavior and HDMI persistence were hardened for the NixOS environment.</p></section>
-            <section class="release-item"><span>THEMING</span><h3>More system surfaces follow Ryoku.</h3><p>KDE palette integration, spectrum retints, and visualizer presentation were brought into the parity pass.</p></section>
-            <section class="release-item"><span>DESKTOP</span><h3>Preserve user-owned state.</h3><p>Ghostty and other user-facing configuration paths were handled with stronger preservation instead of blind replacement.</p></section>
-            <section class="release-item"><span>POWER</span><h3>Power profiles integrated.</h3><p>NixOS-specific integration keeps power behavior part of the declarative host rather than an external mutable setup step.</p></section>
-            <section class="release-item"><span>RYOTUNES</span><h3>Native NixOS packaging.</h3><p>Ryotunes is packaged with its daemon/frontend runtime exposed correctly to the user service environment.</p></section>
-          </div>
-          <div class="status-actions">
-            <a class="button" href="https://github.com/aethctl/Ryoku-on-NixOS/commits/main" target="_blank" rel="noreferrer">Full commit history ↗</a>
-          </div>
+
+          <p class="release-summary">This update brings Ryoku on NixOS up to <strong>v0.60.1-beta.19</strong>, adding the latest upstream features while fixing several NixOS-specific issues found during testing/ bug reporting.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li>Parallax Wallpapers with layered foreground/background effects and multi-monitor support</li>
+              <li>Parallax tab added beside Depth in Quick Settings</li>
+              <li>KDE colour integration allowing KDE apps to follow Ryoku/Matugen themes</li>
+              <li>Music visualizers now automatically update colours with your wallpaper</li>
+              <li>Improved visualizer rotation and edge positioning</li>
+              <li>Improved HDMI/TV monitor persistence</li>
+              <li>Power profiles now persist more reliably between sessions</li>
+              <li>Ghostty now keeps your personal configuration when Ryoku updates its theme</li>
+              <li>Full visible shell/widget parity with the latest upstream Ryoku</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Ryogami wallpaper UI failing to open on NixOS</li>
+              <li>Fixed Qt/QuickShell incompatibilities which could break wallpaper previews and multimedia features</li>
+              <li>Fixed Parallax not appearing automatically for users upgrading from older Ryoku versions</li>
+              <li>Fixed HDMI displays and TVs losing saved monitor settings after connector changes</li>
+              <li>Fixed wallpaper/theme changes not updating the now-playing spectrum correctly</li>
+              <li>Fixed Ghostty theme updates overwriting user settings</li>
+              <li>Fixed power profile state being lost unexpectedly</li>
+              <li>Removed outdated Spotify/Spicetify integration and leftover packaging</li>
+              <li>Fixed several NixOS packaging, service and dependency issues discovered during the 0.60 port</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Changes</h3></div>
+            <ul class="notes-list">
+              <li>Spotify and Spicetify are no longer bundled or managed by Ryoku</li>
+              <li>Ryoku's Qt and QuickShell components are now kept on the same locked version to prevent compatibility issues</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-known">
+            <div class="notes-group-head"><span>⁉️</span><h3>Known Issues</h3></div>
+            <ul class="notes-list">
+              <li>Ryotunes Spotify doesnt work as intended (This song is not avaliable on spotify errors on every song), this is not a bug with NixOS and simply an upstream bug from the main repo</li>
+            </ul>
+          </section>
         </article>
 
-        <article id="v0-59-series" class="release-entry">
-          <div class="eyebrow">ARCHIVE // 0.59 SERIES</div>
+        <article id="v0-58-6-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // MUSUBI</div>
           <header class="release-head">
-            <h2 class="release-version">0.59<br>SERIES</h2>
-            <div class="release-date">HISTORICAL<br>NIXOS PARITY PASS</div>
+            <h2 class="release-version">MUSUBI<br>0.58.6</h2>
+            <div class="release-date">結び<br>BETA.19</div>
           </header>
-          <p class="release-summary">The 0.59 work established the first broad parity baseline and proved that the Ryoku desktop could be delivered as a coherent NixOS module/package set rather than a pile of mutable compatibility scripts.</p>
-          <div class="release-grid">
-            <section class="release-item"><span>PARITY</span><h3>Desktop audit completed.</h3><p>The major visible and runtime surfaces were checked against upstream and moved into the Nix delivery model.</p></section>
-            <section class="release-item"><span>HUB</span><h3>Plugins and key sounds.</h3><p>Hub plugin surfaces and key-sound support were included in the NixOS parity work.</p></section>
-            <section class="release-item"><span>VIRTUALISATION</span><h3>Ryoport / Looking Glass.</h3><p>Optional Ryoport and Looking Glass support was packaged without forcing passthrough or VFIO onto the host.</p></section>
-            <section class="release-item"><span>FOUNDATION</span><h3>Nix-native ownership.</h3><p>The port settled on normal NixOS generations, flake inputs and explicit package/module ownership as its foundation.</p></section>
-          </div>
+
+          <p class="release-summary">Musubi, (meaning to tie together in Japanese) updates Ryoku on NixOS from <strong>0.48.8-beta.18 → 0.58.6-beta.19</strong>.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li><strong>Ryogami</strong> wallpaper engine with live wallpapers, shaders, transitions, playlists and multi-monitor support</li>
+              <li><strong>Depth Wallpapers</strong> fully integrated into Ryogami</li>
+              <li><strong>Ryotunes</strong> with MPRIS and playerctl support</li>
+              <li><strong>Ryoport</strong> with Looking Glass and optional GPU passthrough</li>
+              <li><strong>Plugin system</strong> with install, validate, remove, export and QS Bar integration</li>
+              <li><strong>QS Bar overhaul</strong> with persistent layouts, widget catalogue and improved Control Center</li>
+              <li><strong>Rashin upgrades</strong> with packaged skills and Prowl code intelligence</li>
+              <li><strong>New NixOS installer</strong> with dry runs, backups, rollback and safe flake editing aswell as <strong>finally</strong> fully supporting NixOS stable</li>
+              <li><strong>Native Nix update backend</strong></li>
+              <li><strong>Declarative GPU passthrough module</strong></li>
+              <li>New keyboard OSD, widgets, launcher actions and visual improvements</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Arch-only pacman, AUR and system management behaviour on NixOS</li>
+              <li>Fixed Doctor attempting unsafe Arch-specific repairs</li>
+              <li>Fixed update/version detection for local NixOS checkouts</li>
+              <li>Fixed SDDM theme switching and Polkit integration</li>
+              <li>Fixed Rashin skills not being packaged or detected</li>
+              <li>Fixed Rashin incorrectly identifying NixOS as Arch</li>
+              <li>Fixed Ryogami/Depth paths, renderer cleanup and multi-monitor behaviour</li>
+              <li>Fixed RyoVM help commands and missing xorriso</li>
+              <li>Fixed GPU passthrough being exposed before the host is configured</li>
+              <li>Fixed plugin install, discovery and cleanup issues</li>
+              <li>Fixed installer host detection and flake parsing edge cases</li>
+              <li>Fixed Git hooks failing on NixOS due to /bin/bash</li>
+              <li>Numerous additional NixOS path, service and dependency fixes</li>
+            </ul>
+          </section>
+
+          <div class="tested-stamp">✅ Fully tested on my main PC and Testing laptop</div>
         </article>
 
         <section id="archive-format" class="docs-section">
           <div class="eyebrow">ARCHIVE // FORWARD COMPATIBILITY</div>
-          <h2>Older notes never have to disappear.</h2>
-          <p>Each release is a standalone version block with its own permanent anchor, so Discord posts, support answers and old links can keep pointing at the exact notes they were written for.</p>
+          <h2>Past notes stay here.</h2>
+          <p>Each release keeps its own permanent anchor, so old Discord announcements and support links can continue to point to the exact patch notes they were written for.</p>
           <div class="archive-placeholder">
             <strong>Adding the next release</strong>
-            Put the newest release above the current one, add its version to the left-hand index, and leave every older block in place. That keeps the page reverse-chronological without breaking historical links.
+            Put the newest release above the current one, add its version to the release index, and leave every older release untouched underneath it.
           </div>
-          <div class="release-template">ANCHOR EXAMPLE // patch-notes.html#v0-60-1-beta-19</div>
+          <div class="release-template">CURRENT ANCHOR // patch-notes.html#v0-60-1-beta-19</div>
+          <div class="release-template">MUSUBI ANCHOR // patch-notes.html#v0-58-6-beta-19</div>
         </section>
       </div>
     </div>
@@ -108,6 +177,6 @@
     <nav><a href="index.html">Home</a><a href="install.html">Install guide</a><a href="https://ryoku.dev" target="_blank" rel="noreferrer">Ryoku ↗</a></nav>
     <small>力と美のために · For the sake of power and beauty.</small>
   </footer>
-  <script src="script-v2-3.js"></script>
+  <script src="script-v2-4.js"></script>
 </body>
 </html>
