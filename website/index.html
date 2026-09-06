@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000" />
   <meta name="description" content="Ryoku on NixOS — the declarative NixOS port of the Ryoku Hyprland desktop." />
   <title>Ryoku on NixOS</title>
-  <link rel="stylesheet" href="styles-v2-1.css" />
+  <link rel="stylesheet" href="styles-v2-2.css" />
 </head>
 <body>
   <div class="page-progress" aria-hidden="true"><span></span></div>
@@ -26,6 +26,7 @@
       <a href="#what">What</a>
       <a href="#showcase">Showcase</a>
       <a href="#install">Install</a>
+      <a href="patch-notes.html">Patch notes</a>
       <a href="#faq">FAQ</a>
       <a href="#status">Status</a>
       <a class="nav-github" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
@@ -59,6 +60,7 @@
         <p class="hero-lede">The Ryoku desktop, rebuilt as a declarative NixOS system.</p>
         <div class="hero-actions">
           <a class="button primary" href="#install">Install Ryoku</a>
+          <a class="button badge-button" href="patch-notes.html"><span class="button-dot"></span>Patch notes</a>
           <a class="button ghost" href="#showcase">Enter showcase ↓</a>
         </div>
       </div>
@@ -203,6 +205,15 @@
           </article>
         </div>
 
+        <div class="install-guide-cta reveal">
+          <div>
+            <span class="eyebrow">NEED THE FULL WALKTHROUGH?</span>
+            <h3>Fresh NixOS → Ryoku, one step at a time.</h3>
+            <p>No assumed Nix knowledge. Every file, command, save step and rebuild is explained.</p>
+          </div>
+          <a class="button primary" href="install.html">Step-by-step install guide →</a>
+        </div>
+
         <div class="install-note reveal">
           <span>SAFE BY DESIGN</span>
           <p>The installer builds before switching and stores affected configuration backups under <code>/var/backups/ryoku-nixos/</code>.</p>
@@ -320,6 +331,6 @@
     </div>
   </div>
 
-  <script src="script-v2-1.js"></script>
+  <script src="script-v2-2.js"></script>
 </body>
 </html>

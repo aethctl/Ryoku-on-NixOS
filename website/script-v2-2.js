@@ -14,8 +14,8 @@ window.addEventListener('DOMContentLoaded', () => {
 function updateScrollEffects() {
   const y = window.scrollY;
   const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  progress.style.transform = `scaleX(${Math.min(1, y / max)})`;
-  header.classList.toggle('scrolled', y > 24);
+  if (progress) progress.style.transform = `scaleX(${Math.min(1, y / max)})`;
+  header?.classList.toggle('scrolled', y > 24);
 
   if (!prefersReducedMotion && y < window.innerHeight * 1.2) {
     root.style.setProperty('--hero-y', `${Math.min(34, y * 0.03)}px`);
@@ -87,43 +87,46 @@ document.querySelectorAll('.copy').forEach((button) => {
 });
 
 const lightbox = document.querySelector('.lightbox');
-const lightboxImage = lightbox.querySelector('img');
-const lightboxCaption = lightbox.querySelector('p');
-const lightboxClose = lightbox.querySelector('.lightbox-close');
 let previousFocus = null;
 
-function openLightbox(target) {
-  previousFocus = document.activeElement;
-  lightboxImage.src = target.dataset.lightbox;
-  lightboxCaption.textContent = target.dataset.caption || '';
-  lightbox.classList.add('open');
-  lightbox.setAttribute('aria-hidden', 'false');
-  body.style.overflow = 'hidden';
-  lightboxClose.focus();
-}
+if (lightbox) {
+  const lightboxImage = lightbox.querySelector('img');
+  const lightboxCaption = lightbox.querySelector('p');
+  const lightboxClose = lightbox.querySelector('.lightbox-close');
 
-function closeLightbox() {
-  lightbox.classList.remove('open');
-  lightbox.setAttribute('aria-hidden', 'true');
-  body.style.overflow = '';
-  lightboxImage.src = '';
-  previousFocus?.focus?.();
-}
+  function openLightbox(target) {
+    previousFocus = document.activeElement;
+    lightboxImage.src = target.dataset.lightbox;
+    lightboxCaption.textContent = target.dataset.caption || '';
+    lightbox.classList.add('open');
+    lightbox.setAttribute('aria-hidden', 'false');
+    body.style.overflow = 'hidden';
+    lightboxClose?.focus();
+  }
 
-document.querySelectorAll('.lightbox-target').forEach((target) => {
-  target.addEventListener('click', () => openLightbox(target));
-  target.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openLightbox(target);
-    }
+  function closeLightbox() {
+    lightbox.classList.remove('open');
+    lightbox.setAttribute('aria-hidden', 'true');
+    body.style.overflow = '';
+    lightboxImage.src = '';
+    previousFocus?.focus?.();
+  }
+
+  document.querySelectorAll('.lightbox-target').forEach((target) => {
+    target.addEventListener('click', () => openLightbox(target));
+    target.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openLightbox(target);
+      }
+    });
   });
-});
 
-lightboxClose.addEventListener('click', closeLightbox);
-lightbox.addEventListener('click', (event) => {
-  if (event.target === lightbox) closeLightbox();
-});
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox();
-});
+  lightboxClose?.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', (event) => {
+    if (event.target === lightbox) closeLightbox();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox();
+  });
+}

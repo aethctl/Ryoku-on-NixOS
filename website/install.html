@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Step-by-step beginner installation guide for Ryoku on NixOS." />
+  <title>Install Ryoku on NixOS — Step by Step</title>
+  <link rel="stylesheet" href="styles-v2-2.css" />
+</head>
+<body class="subpage-body">
+  <div class="page-progress" aria-hidden="true"><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header scrolled">
+    <a class="brand" href="index.html" aria-label="Ryoku on NixOS home">
+      <span class="brand-mark">力</span>
+      <span class="brand-text">RYOKU // NIXOS</span>
+    </a>
+    <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span></button>
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="index.html#showcase">Showcase</a>
+      <a class="active" href="install.html">Install guide</a>
+      <a href="patch-notes.html">Patch notes</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="nav-github" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="subpage-hero">
+      <div class="subpage-hero-copy reveal visible">
+        <div class="subpage-kicker">入 // BEGINNER INSTALLATION</div>
+        <h1>INSTALL<em>RYOKU.</em></h1>
+        <p>A fresh-NixOS walkthrough written for people who have never used flakes before. Follow it in order; every command tells you exactly where it belongs.</p>
+      </div>
+      <dl class="subpage-meta reveal visible">
+        <div><dt>Difficulty</dt><dd>Beginner</dd></div>
+        <div><dt>Platform</dt><dd>NixOS x86_64</dd></div>
+        <div><dt>Method</dt><dd>Nix flakes</dd></div>
+        <div><dt>Installer</dt><dd>Ryoku NixOS</dd></div>
+      </dl>
+    </section>
+
+    <div class="docs-shell">
+      <aside class="docs-sidebar">
+        <div class="docs-sidebar-title">INSTALL // INDEX</div>
+        <nav>
+          <a href="#before"><span>00</span>Before you start</a>
+          <a href="#flakes"><span>01</span>Enable flakes</a>
+          <a href="#flake-file"><span>02</span>Create flake.nix</a>
+          <a href="#test"><span>03</span>Test the flake</a>
+          <a href="#preview"><span>04</span>Preview Ryoku</a>
+          <a href="#install"><span>05</span>Install Ryoku</a>
+          <a href="#update"><span>06</span>Update later</a>
+          <a href="#help"><span>07</span>If something fails</a>
+        </nav>
+        <a class="button" href="index.html">← Back to site</a>
+      </aside>
+
+      <div class="docs-content">
+        <section id="before" class="docs-section">
+          <div class="eyebrow">00 // BEFORE YOU START</div>
+          <h2>You only need a normal NixOS install.</h2>
+          <p>You should already be booted into NixOS, connected to the internet, and able to use <code>sudo</code>. Your normal configuration should exist at <code>/etc/nixos/configuration.nix</code>.</p>
+          <div class="docs-callout"><strong>Already using flakes?</strong> Skip straight to <a href="#preview">Preview Ryoku</a>. You do not need to convert your system again.</div>
+        </section>
+
+        <section id="flakes" class="docs-section">
+          <div class="eyebrow">01 // ENABLE FLAKES</div>
+          <h2>Turn on the Nix features Ryoku needs.</h2>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">01.A</div>
+            <div>
+              <h3>Open your NixOS configuration.</h3>
+              <pre><code>sudo nano /etc/nixos/configuration.nix</code><button class="copy" data-copy="sudo nano /etc/nixos/configuration.nix">COPY</button></pre>
+            </div>
+          </div>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">01.B</div>
+            <div>
+              <h3>Add this inside the main <code>{ }</code> block.</h3>
+              <pre><code>nix.settings.experimental-features = [
+  "nix-command"
+  "flakes"
+];</code><button class="copy" data-copy='nix.settings.experimental-features = [\n  "nix-command"\n  "flakes"\n];'>COPY</button></pre>
+              <p>Do not paste it above the opening <code>{</code> or below the final <code>}</code>.</p>
+            </div>
+          </div>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">01.C</div>
+            <div>
+              <h3>Save and close Nano.</h3>
+              <div class="save-keys"><kbd>Ctrl + O</kbd><kbd>Enter</kbd><kbd>Ctrl + X</kbd></div>
+            </div>
+          </div>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">01.D</div>
+            <div>
+              <h3>Apply the change.</h3>
+              <pre><code>sudo nixos-rebuild switch</code><button class="copy" data-copy="sudo nixos-rebuild switch">COPY</button></pre>
+              <p>If this finishes successfully, flakes are enabled.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="flake-file" class="docs-section">
+          <div class="eyebrow">02 // CREATE FLAKE.NIX</div>
+          <h2>Make the system itself flake-based.</h2>
+          <p>Create one new file alongside your existing NixOS configuration. Your existing <code>configuration.nix</code> and <code>hardware-configuration.nix</code> stay where they are.</p>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">02.A</div>
+            <div>
+              <h3>Create the file.</h3>
+              <pre><code>sudo nano /etc/nixos/flake.nix</code><button class="copy" data-copy="sudo nano /etc/nixos/flake.nix">COPY</button></pre>
+            </div>
+          </div>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">02.B</div>
+            <div>
+              <h3>Paste this beginner flake.</h3>
+              <pre><code>{
+  description = "My NixOS system";
+
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+  };
+
+  outputs = { nixpkgs, ... }: {
+    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+
+      modules = [
+        ./configuration.nix
+      ];
+    };
+  };
+}</code></pre>
+              <p>This creates a flake target called <code>nixos</code>, which is why the rebuild command below ends in <code>#nixos</code>.</p>
+            </div>
+          </div>
+
+          <div class="walkthrough-step">
+            <div class="walkthrough-number">02.C</div>
+            <div>
+              <h3>Save it.</h3>
+              <div class="save-keys"><kbd>Ctrl + O</kbd><kbd>Enter</kbd><kbd>Ctrl + X</kbd></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="test" class="docs-section">
+          <div class="eyebrow">03 // TEST YOUR FLAKE</div>
+          <h2>Make sure NixOS rebuilds before adding Ryoku.</h2>
+          <pre><code>sudo nixos-rebuild switch --flake /etc/nixos#nixos</code><button class="copy" data-copy="sudo nixos-rebuild switch --flake /etc/nixos#nixos">COPY</button></pre>
+          <div class="docs-callout"><strong>Stop here if this fails.</strong> Ryoku should only be installed after your own flake can rebuild successfully. Fix the NixOS error first rather than stacking another change on top.</div>
+        </section>
+
+        <section id="preview" class="docs-section">
+          <div class="eyebrow">04 // PREVIEW RYOKU</div>
+          <h2>See what the installer will do first.</h2>
+          <p>Run this as your normal user. Do <strong>not</strong> put <code>sudo</code> in front of it; the installer asks for elevated access only when it actually needs it.</p>
+          <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run">COPY</button></pre>
+          <p>The dry run does not install Ryoku. It gives you a chance to inspect the planned integration first.</p>
+        </section>
+
+        <section id="install" class="docs-section">
+          <div class="eyebrow">05 // INSTALL</div>
+          <h2>Install Ryoku.</h2>
+          <pre><code>nix run github:aethctl/Ryoku-on-NixOS/main#install</code><button class="copy" data-copy="nix run github:aethctl/Ryoku-on-NixOS/main#install">COPY</button></pre>
+          <p>The installer integrates Ryoku into your existing flake, builds a new NixOS generation, and switches only after that build succeeds.</p>
+          <div class="docs-callout"><strong>Ryoku does not reinstall NixOS.</strong> It does not repartition your drives, replace your bootloader, or take ownership of your hardware-specific GPU configuration.</div>
+        </section>
+
+        <section id="update" class="docs-section">
+          <div class="eyebrow">06 // UPDATE LATER</div>
+          <h2>Future updates are one command.</h2>
+          <pre><code>ryoku update</code><button class="copy" data-copy="ryoku update">COPY</button></pre>
+          <p>Ryoku advances its Nix flake input, builds a new NixOS generation, and switches to it. You do not need to reinstall or clone the repository again.</p>
+        </section>
+
+        <section id="help" class="docs-section">
+          <div class="eyebrow">07 // IF SOMETHING FAILS</div>
+          <h2>Do not panic-reinstall.</h2>
+          <p>NixOS gives us a much better failure model than destructive package replacement. A failed build should be diagnosed from the exact error first.</p>
+          <div class="docs-callout"><strong>Useful support information:</strong> copy the final error from your terminal, say which step of this guide you were on, and include whether your system rebuilt successfully with <code>/etc/nixos#nixos</code> before Ryoku.</div>
+          <div class="status-actions">
+            <a class="button primary" href="https://discord.gg/8KjBmUEyKA" target="_blank" rel="noreferrer">Discord support ↗</a>
+            <a class="button" href="https://github.com/aethctl/Ryoku-on-NixOS/issues" target="_blank" rel="noreferrer">GitHub issues ↗</a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div><span>力</span><strong>RYOKU // NIXOS</strong></div>
+    <nav><a href="index.html">Home</a><a href="patch-notes.html">Patch notes</a><a href="https://ryoku.dev" target="_blank" rel="noreferrer">Ryoku ↗</a></nav>
+    <small>力と美のために · For the sake of power and beauty.</small>
+  </footer>
+  <script src="script-v2-2.js"></script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Ryoku on NixOS patch notes and release archive." />
+  <title>Ryoku on NixOS — Patch Notes</title>
+  <link rel="stylesheet" href="styles-v2-2.css" />
+</head>
+<body class="subpage-body">
+  <div class="page-progress" aria-hidden="true"><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header scrolled">
+    <a class="brand" href="index.html" aria-label="Ryoku on NixOS home">
+      <span class="brand-mark">力</span>
+      <span class="brand-text">RYOKU // NIXOS</span>
+    </a>
+    <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span></button>
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="index.html#showcase">Showcase</a>
+      <a href="install.html">Install guide</a>
+      <a class="active" href="patch-notes.html">Patch notes</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="nav-github" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="subpage-hero">
+      <div class="subpage-hero-copy reveal visible">
+        <div class="subpage-kicker">報 // RELEASE ARCHIVE</div>
+        <h1>PATCH<em>NOTES.</em></h1>
+        <p>The NixOS-specific release history: what changed, what was ported, and what was fixed. New releases stay at the top; older notes remain addressable by permanent version anchors.</p>
+      </div>
+      <dl class="subpage-meta reveal visible">
+        <div><dt>Current</dt><dd>0.60.1-beta.19</dd></div>
+        <div><dt>Channel</dt><dd>Beta</dd></div>
+        <div><dt>Order</dt><dd>Newest first</dd></div>
+        <div><dt>Archive</dt><dd>Persistent</dd></div>
+      </dl>
+    </section>
+
+    <div class="docs-shell">
+      <aside class="docs-sidebar">
+        <div class="docs-sidebar-title">RELEASES // INDEX</div>
+        <nav>
+          <a href="#v0-60-1-beta-19"><span>01</span>0.60.1-beta.19</a>
+          <a href="#v0-59-series"><span>02</span>0.59 series</a>
+          <a href="#archive-format"><span>+</span>Archive format</a>
+        </nav>
+        <a class="button" href="index.html">← Back to site</a>
+      </aside>
+
+      <div class="docs-content">
+        <article id="v0-60-1-beta-19" class="release-entry">
+          <div class="eyebrow">LATEST // CURRENT NIXOS PORT</div>
+          <header class="release-head">
+            <h2 class="release-version">0.60.1<br>BETA.19</h2>
+            <div class="release-date">RYOKU 0.60.1-BETA.19<br>NIXOS PORT</div>
+          </header>
+          <p class="release-summary">A broad parity release focused on bringing the 0.60.1 Ryoku surface across cleanly while keeping NixOS-specific ownership, persistence and packaging intact.</p>
+          <div class="release-grid">
+            <section class="release-item"><span>PARALLAX</span><h3>Declarative wallpaper depth.</h3><p>Parallax integration is packaged and delivered through the NixOS port rather than depending on Arch-style mutable installation paths.</p></section>
+            <section class="release-item"><span>DISPLAY</span><h3>Stronger monitor persistence.</h3><p>Per-monitor behavior and HDMI persistence were hardened for the NixOS environment.</p></section>
+            <section class="release-item"><span>THEMING</span><h3>More system surfaces follow Ryoku.</h3><p>KDE palette integration, spectrum retints, and visualizer presentation were brought into the parity pass.</p></section>
+            <section class="release-item"><span>DESKTOP</span><h3>Preserve user-owned state.</h3><p>Ghostty and other user-facing configuration paths were handled with stronger preservation instead of blind replacement.</p></section>
+            <section class="release-item"><span>POWER</span><h3>Power profiles integrated.</h3><p>NixOS-specific integration keeps power behavior part of the declarative host rather than an external mutable setup step.</p></section>
+            <section class="release-item"><span>RYOTUNES</span><h3>Native NixOS packaging.</h3><p>Ryotunes is packaged with its daemon/frontend runtime exposed correctly to the user service environment.</p></section>
+          </div>
+          <div class="status-actions">
+            <a class="button" href="https://github.com/aethctl/Ryoku-on-NixOS/commits/main" target="_blank" rel="noreferrer">Full commit history ↗</a>
+          </div>
+        </article>
+
+        <article id="v0-59-series" class="release-entry">
+          <div class="eyebrow">ARCHIVE // 0.59 SERIES</div>
+          <header class="release-head">
+            <h2 class="release-version">0.59<br>SERIES</h2>
+            <div class="release-date">HISTORICAL<br>NIXOS PARITY PASS</div>
+          </header>
+          <p class="release-summary">The 0.59 work established the first broad parity baseline and proved that the Ryoku desktop could be delivered as a coherent NixOS module/package set rather than a pile of mutable compatibility scripts.</p>
+          <div class="release-grid">
+            <section class="release-item"><span>PARITY</span><h3>Desktop audit completed.</h3><p>The major visible and runtime surfaces were checked against upstream and moved into the Nix delivery model.</p></section>
+            <section class="release-item"><span>HUB</span><h3>Plugins and key sounds.</h3><p>Hub plugin surfaces and key-sound support were included in the NixOS parity work.</p></section>
+            <section class="release-item"><span>VIRTUALISATION</span><h3>Ryoport / Looking Glass.</h3><p>Optional Ryoport and Looking Glass support was packaged without forcing passthrough or VFIO onto the host.</p></section>
+            <section class="release-item"><span>FOUNDATION</span><h3>Nix-native ownership.</h3><p>The port settled on normal NixOS generations, flake inputs and explicit package/module ownership as its foundation.</p></section>
+          </div>
+        </article>
+
+        <section id="archive-format" class="docs-section">
+          <div class="eyebrow">ARCHIVE // FORWARD COMPATIBILITY</div>
+          <h2>Older notes never have to disappear.</h2>
+          <p>Each release is a standalone version block with its own permanent anchor, so Discord posts, support answers and old links can keep pointing at the exact notes they were written for.</p>
+          <div class="archive-placeholder">
+            <strong>Adding the next release</strong>
+            Put the newest release above the current one, add its version to the left-hand index, and leave every older block in place. That keeps the page reverse-chronological without breaking historical links.
+          </div>
+          <div class="release-template">ANCHOR EXAMPLE // patch-notes.html#v0-60-1-beta-19</div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div><span>力</span><strong>RYOKU // NIXOS</strong></div>
+    <nav><a href="index.html">Home</a><a href="install.html">Install guide</a><a href="https://ryoku.dev" target="_blank" rel="noreferrer">Ryoku ↗</a></nav>
+    <small>力と美のために · For the sake of power and beauty.</small>
+  </footer>
+  <script src="script-v2-2.js"></script>
+</body>
+</html>
