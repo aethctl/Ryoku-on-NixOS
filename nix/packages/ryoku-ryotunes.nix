@@ -5,21 +5,18 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "ryoku-ryotunes";
-  version = "2.4.1";
+  version = "2.5.1";
 
   src = ryotunesSrc;
 
-  # Rust dependencies are fully described by upstream's committed
-  # Cargo.lock, so we do not need a separate cargoHash.
-  cargoLock = {
-    lockFile = "${ryotunesSrc}/Cargo.lock";
-  };
+  # Ryotunes 2.5 gained additional workspace crates plus pinned
+  # librespot git dependencies. Keep the complete Cargo vendor tree
+  # fixed to the exact 2.5.1 source.
+  cargoHash = "sha256-1NzCCVxFsvlofTVQEC7QhBf5skLfUbcQ8Q9BghDoBvk=";
 
-  # The Svelte/Vite frontend is a standalone pnpm project under ui/.
-  #
-  # The first build intentionally starts with fakeHash. The script
-  # surrounding this derivation captures Nix's real hash and writes
-  # it back before doing the final build.
+  # The legacy Tauri frontend is still shipped as an explicit fallback,
+  # so build its Svelte/Vite payload even though the native QML client is
+  # now the normal Ryoku launch path.
   pnpmDeps = pkgs.fetchPnpmDeps {
     pname = "ryotunes-ui";
     inherit version;
@@ -27,6 +24,7 @@ pkgs.rustPlatform.buildRustPackage rec {
     src = ryotunesSrc + "/ui";
 
     fetcherVersion = 4;
+
     hash = "sha256-L0HRYhFO5A0qqwdiYzN+h28kV7vAqB3up+Zu4ShYnBo=";
   };
 
@@ -39,12 +37,8 @@ pkgs.rustPlatform.buildRustPackage rec {
     pkgs.pnpm
     pkgs.pnpmConfigHook
 
-    pkgs.makeWrapper
     pkgs.wrapGAppsHook3
 
-    # libmpv2's sys layer may require bindgen depending on the
-    # resolved crate version. Providing the standard hook keeps
-    # that path deterministic.
     pkgs.rustPlatform.bindgenHook
   ];
 
@@ -64,15 +58,9 @@ pkgs.rustPlatform.buildRustPackage rec {
     pkgs.libayatana-appindicator
 
     pkgs.openssl
+    pkgs.librsvg
   ];
 
-  # Upstream performs these as two explicit stages:
-  #
-  #   ui/ -> pnpm build -> ui/build
-  #   cargo build --release --locked --package ryotunes
-  #
-  # buildRustPackage handles the locked Cargo invocation; this
-  # hook produces the frontend Tauri embeds.
   preBuild = ''
     export HOME="$TMPDIR"
 
@@ -87,18 +75,55 @@ pkgs.rustPlatform.buildRustPackage rec {
   cargoBuildFlags = [
     "--package"
     "ryotunes"
+
+    "--package"
+    "sync-server"
+
+    "--package"
+    "ryotunesd"
+
+    "--package"
+    "ryotunes-cli"
   ];
 
-  # Upstream's release packaging does not run the application test
-  # suite as part of packaging. Runtime integration will be tested
-  # after Musubi's complete generation is assembled.
+  # Upstream runs its full workspace test suite at release time.
+  # The Ryoku Nix derivation keeps packaging deterministic here;
+  # runtime and integration tests happen against the assembled
+  # NixOS generation.
   doCheck = false;
 
   installPhase = ''
     runHook preInstall
 
+    install_bin() {
+      local name="$1"
+      local binary
+
+      binary="$(
+        find target \
+          -type f \
+          -path "*/release/$name" \
+          -perm -0100 \
+          -print \
+          -quit
+      )"
+
+      if [ -z "$binary" ]; then
+        printf 'ryoku-ryotunes: built binary missing: %s\n' \
+          "$name" >&2
+        exit 1
+      fi
+
+      install -Dm755 \
+        "$binary" \
+        "$out/bin/$name"
+    }
+
     mkdir -p \
       "$out/bin" \
+      "$out/share/ryotunes/client" \
+      "$out/share/ryotunes/skins" \
+      "$out/share/ryotunes/matugen" \
       "$out/share/applications" \
       "$out/share/icons/hicolor/32x32/apps" \
       "$out/share/icons/hicolor/64x64/apps" \
@@ -106,49 +131,70 @@ pkgs.rustPlatform.buildRustPackage rec {
       "$out/share/icons/hicolor/256x256/apps" \
       "$out/share/icons/hicolor/512x512/apps" \
       "$out/share/metainfo" \
-      "$out/share/licenses/ryotunes"
+      "$out/share/licenses/ryotunes" \
+      "$out/share/doc/ryotunes"
 
-    binary="$(
-      find target \
-        -type f \
-        -path '*/release/ryotunes' \
-        -perm -0100 \
-        -print \
-        -quit
-    )"
+    install_bin ryotunes
+    install_bin ryotunes-sync
+    install_bin ryotunesd
+    install_bin ryotunes-cli
 
-    if [ -z "$binary" ]; then
-      printf '%s\n' \
-        "ryoku-ryotunes: built ryotunes binary not found" >&2
-      exit 1
-    fi
+    # Native Quickshell client.
+    cp -r \
+      client/. \
+      "$out/share/ryotunes/client/"
 
-    install -Dm755 \
-      "$binary" \
-      "$out/bin/ryotunes"
+    rm -rf \
+      "$out/share/ryotunes/client/tests"
 
-    cat > "$out/share/applications/ryotunes.desktop" <<'DESKTOP'
-[Desktop Entry]
-Type=Application
-Name=Ryotunes
-GenericName=Music Player
-Comment=The Ryoku music app
-Exec=ryotunes
-Icon=ryotunes
-Terminal=false
-Categories=AudioVideo;Audio;Player;
-Keywords=music;youtube;ytmusic;player;ryotunes;lyrics;
-StartupNotify=true
-StartupWMClass=ryotunes
-DESKTOP
+    find "$out/share/ryotunes/client" \
+      -type d \
+      -exec chmod 755 {} +
+
+    find "$out/share/ryotunes/client" \
+      -type f \
+      -exec chmod 644 {} +
+
+    # Shipped appearance system.
+    cp -r \
+      skins/. \
+      "$out/share/ryotunes/skins/"
+
+    find "$out/share/ryotunes/skins" \
+      -type d \
+      -exec chmod 755 {} +
+
+    find "$out/share/ryotunes/skins" \
+      -type f \
+      -exec chmod 644 {} +
+
+    install -Dm644 \
+      matugen/ryotunes.json \
+      "$out/share/ryotunes/matugen/ryotunes.json"
+
+    # Do not preserve upstream's /usr/share launcher path.
+    # The client lives inside this immutable Nix derivation.
+    cat > "$out/bin/ryotunes-qml" <<EOF
+#!${pkgs.runtimeShell}
+exec ${pkgs.quickshell}/bin/qs \
+  -p "$out/share/ryotunes/client" \
+  "\$@"
+EOF
+
+    chmod 755 \
+      "$out/bin/ryotunes-qml"
+
+    install -Dm644 \
+      packaging/linux/ryotunes.desktop \
+      "$out/share/applications/ryotunes.desktop"
+
+    install -Dm644 \
+      packaging/linux/ryotunes-qml.desktop \
+      "$out/share/applications/ryotunes-qml.desktop"
 
     install -Dm644 \
       packaging/linux/dev.ryoku.ryotunes.metainfo.xml \
       "$out/share/metainfo/dev.ryoku.ryotunes.metainfo.xml"
-
-    install -Dm644 \
-      LICENSE \
-      "$out/share/licenses/ryotunes/LICENSE"
 
     install -Dm644 \
       src-tauri/icons/32x32.png \
@@ -170,12 +216,28 @@ DESKTOP
       src-tauri/icons/icon.png \
       "$out/share/icons/hicolor/512x512/apps/ryotunes.png"
 
+    install -Dm755 \
+      scripts/diagnostics.sh \
+      "$out/bin/ryotunes-diagnostics"
+
+    install -Dm644 \
+      LICENSE \
+      "$out/share/licenses/ryotunes/LICENSE"
+
+    install -Dm644 \
+      README.md \
+      "$out/share/doc/ryotunes/README.md"
+
+    install -Dm644 \
+      UPSTREAM.md \
+      "$out/share/doc/ryotunes/UPSTREAM.md"
+
     runHook postInstall
   '';
 
   meta = {
     description =
-      "Ryotunes native YouTube Music client for the Ryoku desktop";
+      "Native Ryoku music client with daemon, CLI and QML frontend";
 
     homepage =
       "https://github.com/neur0map/ryotunes";

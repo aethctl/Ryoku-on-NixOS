@@ -12,7 +12,6 @@ pkgs.writeShellApplication {
     jq
     nix
     nixos-rebuild
-    sudo
   ];
 
   text =

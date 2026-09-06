@@ -6,6 +6,16 @@ let
   depthPython = pkgs.python3.withPackages (ps: [
     ps.rembg
   ]);
+
+  # Parallax uses the same foreground-removal stack as Depth plus a
+  # deterministic scipy/Pillow inpaint pass. Keep the Python runtime
+  # declarative on NixOS; only downloaded model data belongs in user state.
+  parallaxPython = pkgs.python3.withPackages (ps: [
+    ps.rembg
+    ps.numpy
+    ps.pillow
+    ps.scipy
+  ]);
 in
 pkgs.stdenvNoCC.mkDerivation {
   pname = "ryoku-helpers";
@@ -126,6 +136,87 @@ SH
       --replace-fail '@DEPTH_BIN@' "${depthPython}/bin"
 
     chmod 755 "$out/bin/ryoku-depth"
+
+    # Parallax wallpaper cutout/inpaint engine.
+    #
+    # Upstream creates a mutable pip venv. NixOS provides the complete Python
+    # runtime declaratively instead, while REMBG_HOME remains writable so model
+    # files can be downloaded to user state.
+    install -Dm755 \
+      ryoku/shell/scripts/ryoku-parallax-engine \
+      "$out/libexec/ryoku-parallax-engine"
+
+    cat > "$out/bin/ryoku-parallax-engine" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+
+real="@REAL@"
+python="@PYTHON@"
+
+export PATH="@PARALLAX_BIN@:@FINDUTILS_BIN@:@COREUTILS_BIN@:$PATH"
+
+state="''${XDG_STATE_HOME:-$HOME/.local/state}/ryoku/parallax"
+models="$state/models"
+
+export REMBG_HOME="$models"
+export U2NET_HOME="$models"
+
+mkdir -p "$models"
+
+# On Arch, `install` provisions a pip venv. The Nix package already contains
+# rembg, numpy, Pillow and scipy, so install means only fetching model data.
+if [[ ''${1:-} == install ]]; then
+  shift
+
+  if (( $# == 0 )); then
+    set -- u2netp
+  fi
+
+  for model in "$@"; do
+    case "$model" in
+      u2netp|birefnet-general-lite)
+        ;;
+      *)
+        printf 'ryoku-parallax-engine: unsupported model: %s\n' "$model" >&2
+        exit 2
+        ;;
+    esac
+
+    printf 'Downloading model %s...\n' "$model"
+
+    "$python" - "$model" <<'PYMODEL'
+import sys
+from rembg import new_session
+
+model = sys.argv[1]
+
+try:
+    new_session(
+        model,
+        providers=[
+            "CUDAExecutionProvider",
+            "CPUExecutionProvider",
+        ],
+    )
+except Exception:
+    new_session(model)
+PYMODEL
+  done
+
+  exec "$real" check
+fi
+
+exec "$real" "$@"
+SH
+
+    substituteInPlace "$out/bin/ryoku-parallax-engine" \
+      --replace-fail '@REAL@' "$out/libexec/ryoku-parallax-engine" \
+      --replace-fail '@PYTHON@' "${parallaxPython}/bin/python3" \
+      --replace-fail '@PARALLAX_BIN@' "${parallaxPython}/bin" \
+      --replace-fail '@FINDUTILS_BIN@' "${pkgs.findutils}/bin" \
+      --replace-fail '@COREUTILS_BIN@' "${pkgs.coreutils}/bin"
+
+    chmod 755 "$out/bin/ryoku-parallax-engine"
 
     # Settings -> language integration.
     install -Dm755 \

@@ -2,22 +2,36 @@ package doctor
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"ryoku-cli/internal/sys"
 )
 
+// ryotunesSocketUnit is the socket-activation unit used by the native
+// Ryotunes daemon/client architecture introduced upstream.
+//
+// Arch enables the package-delivered socket during repair. NixOS owns
+// enablement declaratively through the Ryoku module and Doctor may only
+// repair transient runtime state there.
+const ryotunesSocketUnit = "ryotunesd.socket"
+
 // Ryotunes ships as a Ryoku desktop package.
 //
-// Arch installs the package beneath /usr and owns it through pacman. NixOS
-// instead exposes the native Ryotunes derivation through Ryoku's immutable
-// package bundle. Keep the stale ~/.local/bin migration on both platforms,
-// because an old browser wrapper there can shadow either packaged app.
+// A stale wrapper/local build under ~/.local/bin can shadow the packaged
+// application on either platform. Package installation and unit ownership,
+// however, remain platform-specific.
 func reconcileRyotunes(checkOnly bool) recResult {
 	var problems, fixes []string
 
-	bin := filepath.Join(sys.Home(), ".local", "bin", "ryotunes")
+	bin := filepath.Join(
+		sys.Home(),
+		".local",
+		"bin",
+		"ryotunes",
+	)
+
 	stale := staleUserRyotunes(bin)
 
 	if stale != "" {
@@ -28,7 +42,8 @@ func reconcileRyotunes(checkOnly bool) recResult {
 
 		fixes = append(
 			fixes,
-			"rm -f ~/.local/bin/ryotunes ~/.local/share/applications/ryotunes.desktop",
+			"rm -f ~/.local/bin/ryotunes "+
+				"~/.local/share/applications/ryotunes.desktop",
 		)
 	}
 
@@ -42,11 +57,28 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		)
 	}
 
-	// Arch package ownership / repair path.
-	if sys.ResolveRepo() == "" &&
-		sys.PkgInstalled("ryoku-desktop") &&
-		!sys.PkgInstalled("ryotunes") {
+	return reconcileRyotunesArch(
+		checkOnly,
+		bin,
+		stale,
+		problems,
+		fixes,
+	)
+}
 
+func reconcileRyotunesArch(
+	checkOnly bool,
+	bin string,
+	stale string,
+	problems []string,
+	fixes []string,
+) recResult {
+	missingPackage :=
+		sys.ResolveRepo() == "" &&
+			sys.PkgInstalled("ryoku-desktop") &&
+			!sys.PkgInstalled("ryotunes")
+
+	if missingPackage {
 		problems = append(
 			problems,
 			"the ryotunes package is not installed",
@@ -58,24 +90,47 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		)
 	}
 
+	socketMissing :=
+		sys.PkgInstalled("ryotunes") &&
+			!ryotunesSocketEnabled()
+
+	if socketMissing {
+		problems = append(
+			problems,
+			"the ryotunesd socket is not enabled, "+
+				"so `ryotunes` opens the old Tauri app",
+		)
+
+		fixes = append(
+			fixes,
+			"systemctl --user enable --now ryotunesd.socket",
+		)
+	}
+
 	if len(problems) == 0 {
 		if _, err := sys.RunOut(
 			"pacman",
 			"-Qoq",
 			"/usr/bin/ryotunes",
 		); err == nil {
-			return okRes("ryotunes is the packaged app")
+			return okRes(
+				"ryotunes is the packaged app",
+			)
 		}
 
 		if sys.Exists("/usr/bin/ryotunes") {
 			return warnRes(
-				"/usr/bin/ryotunes is not owned by the ryotunes package",
+				"/usr/bin/ryotunes is not owned by " +
+					"the ryotunes package",
 			).withFix(
-				"sudo pacman -S --overwrite /usr/bin/ryotunes ryotunes",
+				"sudo pacman -S --overwrite " +
+					"/usr/bin/ryotunes ryotunes",
 			)
 		}
 
-		return okRes("ryotunes is the packaged app")
+		return okRes(
+			"ryotunes is the packaged app",
+		)
 	}
 
 	if checkOnly {
@@ -91,10 +146,7 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		removeStaleUserRyotunes(bin)
 	}
 
-	if sys.ResolveRepo() == "" &&
-		sys.PkgInstalled("ryoku-desktop") &&
-		!sys.PkgInstalled("ryotunes") {
-
+	if missingPackage {
 		if err := sys.Sudo(
 			"pacman",
 			"-S",
@@ -111,15 +163,43 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 
+	if socketMissing {
+		_ = exec.Command(
+			"systemctl",
+			"--user",
+			"daemon-reload",
+		).Run()
+
+		if err := exec.Command(
+			"systemctl",
+			"--user",
+			"enable",
+			"--now",
+			ryotunesSocketUnit,
+		).Run(); err != nil {
+			return failRes(
+				"could not enable %s: %v",
+				ryotunesSocketUnit,
+				err,
+			).withFix(
+				"systemctl --user enable --now " +
+					"ryotunesd.socket",
+			)
+		}
+	}
+
 	return fixedRes(
 		"ryotunes opens the packaged app (%s)",
 		strings.Join(problems, "; "),
 	)
 }
 
-// NixOS never asks doctor to install or repair a package imperatively.
-// The Ryoku module owns the native Ryotunes derivation through the system
-// closure; doctor may only remove an obsolete per-user wrapper that shadows it.
+// NixOS owns both the Ryotunes package and socket enablement through the
+// active system generation. Doctor never installs packages or creates an
+// imperative systemd enablement symlink.
+//
+// It may still remove an obsolete user wrapper and start an already-delivered
+// socket in the current session after daemon-reload.
 func reconcileRyotunesNixOS(
 	checkOnly bool,
 	bin string,
@@ -127,10 +207,29 @@ func reconcileRyotunesNixOS(
 	problems []string,
 	fixes []string,
 ) recResult {
-	if stale == "" && !sys.Has("ryotunes") {
+	available := sys.Has("ryotunes")
+
+	if !available {
 		problems = append(
 			problems,
-			"ryotunes is not available from the active Ryoku NixOS generation",
+			"ryotunes is not available from the active "+
+				"Ryoku NixOS generation",
+		)
+
+		fixes = append(
+			fixes,
+			"rebuild the NixOS configuration that enables Ryoku",
+		)
+	}
+
+	socketMissing :=
+		available &&
+			!ryotunesSocketEnabled()
+
+	if socketMissing {
+		problems = append(
+			problems,
+			"the declarative ryotunesd socket is not enabled",
 		)
 
 		fixes = append(
@@ -141,7 +240,8 @@ func reconcileRyotunesNixOS(
 
 	if len(problems) == 0 {
 		return okRes(
-			"ryotunes is provided by the Ryoku NixOS package set",
+			"ryotunes and its socket are provided by " +
+				"the Ryoku NixOS generation",
 		)
 	}
 
@@ -158,17 +258,55 @@ func reconcileRyotunesNixOS(
 		removeStaleUserRyotunes(bin)
 	}
 
-	if !sys.Has("ryotunes") {
+	if !available {
 		return warnRes(
-			"ryotunes is not available from the active Ryoku NixOS generation",
+			"ryotunes is not available from the active " +
+				"Ryoku NixOS generation",
 		).withFix(
 			"rebuild the NixOS configuration that enables Ryoku",
 		)
 	}
 
+	if socketMissing {
+		_ = exec.Command(
+			"systemctl",
+			"--user",
+			"daemon-reload",
+		).Run()
+
+		// Runtime repair only. The NixOS module owns whether this unit is
+		// enabled for future sessions.
+		if err := exec.Command(
+			"systemctl",
+			"--user",
+			"start",
+			ryotunesSocketUnit,
+		).Run(); err != nil {
+			return warnRes(
+				"could not start the declarative %s: %v",
+				ryotunesSocketUnit,
+				err,
+			).withFix(
+				"rebuild the NixOS configuration that enables Ryoku",
+			)
+		}
+	}
+
 	return fixedRes(
-		"removed the stale user Ryotunes app; the NixOS package is now authoritative",
+		"repaired Ryotunes user state; " +
+			"the NixOS package remains authoritative",
 	)
+}
+
+func ryotunesSocketEnabled() bool {
+	out, _ := exec.Command(
+		"systemctl",
+		"--user",
+		"is-enabled",
+		ryotunesSocketUnit,
+	).Output()
+
+	return strings.TrimSpace(string(out)) == "enabled"
 }
 
 func removeStaleUserRyotunes(bin string) {
@@ -222,6 +360,7 @@ func removeStaleUserRyotunes(bin string) {
 // development deploy.
 func staleUserRyotunes(bin string) string {
 	st, err := os.Stat(bin)
+
 	if err != nil || st.IsDir() {
 		return ""
 	}

@@ -3,6 +3,39 @@
 ## Unreleased
 
 ### Added
+- **Ryotunes skins are a RyoStore category.** RyoStore serves the community
+  Ryotunes-skin catalogue as `ryotunes-skins` (group `wear`): a skin installs
+  as a generic product into `~/.local/share/ryoku/ryotunes-skins/<id>/` with a
+  receipt, and Ryotunes searches it as its "store" skin source. The store only
+  installs and removes; the worn skin is chosen in Ryotunes (Settings ›
+  Appearance, or `ryotunes-cli skin use`), and an item reads as active when
+  `~/.config/ryotunes/client.json` `skin` equals its id. `ryostore open
+  ryotunes-skins` opens the store on it
+  (`apps/ryostore/backend/provider_ryotunes_skins.go`).
+- **Key sounds: a keyboard sound on every key press, from the compositor.**
+  `hyprland/plugins/keysounds` is Ryoku's first compositor plugin: Hyprland
+  sees every key before any app does, so one plugin covers every window with
+  nothing grabbing input. Samples play through libcanberra (the sound server
+  caches them, so a press costs one small request and presses mix there), a
+  random variant per press, with dedicated samples for Space, Enter and
+  Backspace and their releases when the profile has them. Eleven profiles ship,
+  each a recording of the real switch cut from the MIT-licensed Mechvibes packs
+  at build time and named for it: cherry-mx-blue, cherry-mx-brown (default),
+  cherry-mx-black, cherry-mx-red, topre, creamy, nk-cream, holy-panda, tealios,
+  crystal-purple, oreo. `ryoku-keysounds-import <pack>` turns any Mechvibes
+  pack into a profile of your own under `~/.local/share/ryoku/keysounds/`, and
+  a plain folder of samples named by role is one too. Off by default;
+  Settings > Plugins > Key sounds turns it on, picks the switch, sets the
+  volume; a change is heard as it is picked. Package `ryoku-keysounds`.
+- **Hyprland plugins rebuild themselves after a Hyprland bump.** Every plugin
+  copy Ryoku builds carries an `.abi` receipt (the compositor build it was
+  compiled for), `ryoku doctor` rebuilds each enabled plugin whose receipts no
+  longer match the installed headers on every `ryoku update`, and `deploy.sh`
+  builds through the same `ryoku-hub hypr plugins rebuild --stale` instead of
+  its own makepkg loop, rebuilding on any ABI change rather than only a
+  Hyprland version change, which is what left a cursor-motion plugin refusing
+  to load after an aquamarine bump (`cli/internal/doctor/reconcile_hypr_plugins.go`,
+  `shell/deploy.sh`; see `docs/hyprland-plugins.md`).
 - **A documented fix for TVs and ultrawides that refuse a resolution.** Some
   panels (LG ultrawides, TVs over HDMI) list a mode but snap back to a smaller
   one, with Hyprland logging "REJECTED available mode" beside "atomic drm
@@ -12,11 +45,32 @@
   it can crash a hybrid laptop, so a single-GPU nvidia TV box sets it by hand),
   plus a note on Hyprland's whole-pixel scale rule
   (`hyprland/monitors_user.lua.example`).
+- **Ryotunes joins the matugen app suite.** The native music client reads its
+  palette as a Ryoku skin: matugen fans the Material 3 roles into
+  `~/.config/ryotunes/skins/matugen/skin.json`, the user skins dir where the
+  client's Skin singleton loads it as the "System" theme, regenerated on every
+  wallpaper change (`shell/matugen/templates/ryotunes.json`,
+  `shell/matugen/apps.toml`, `shell/ipc/matugen.go`, `../hub/backend/matugen.go`).
 
 ### Fixed
 - `rashin/`: **resident agents no longer assume every Ryoku system is Arch.**
   Live prompts, vault pointers and the shipped skill use platform-neutral Ryoku
   wording so the same agent contract accurately describes Musubi on NixOS.
+- **Floating windows fit the screen they open on (#147).** Files, Ryoku
+  Settings, Ryostore, Ryovm and the other fixed-size floating rules asked for
+  1500x850 or bigger, so on a 1366x768 panel Files opened larger than the
+  monitor and read as a stuck fullscreen that no dconf setting could undo. Every
+  size in `hyprland/modules/window_rules.lua` is now capped at the monitor
+  (92% wide, 88% tall) through Hyprland's size expressions, so the same rule
+  fits a laptop panel and a desktop monitor.
+- **Rashin chat follows a hermes reconfigure (#145).** Switching hermes to a
+  new provider in the terminal (say NVIDIA NIM) left the dashboard chat failing
+  with "HTTP 404" on every turn: the daemon re-applied the model it had
+  remembered from before the switch onto the new endpoint, and the resident
+  `hermes acp` process kept the provider and keys it loaded at spawn. The
+  remembered pick is now tied to the hermes config it was made under and
+  dropped when that changes, and a chat turn after `config.yaml` or `.env`
+  changed respawns the session first (`rashin/backend/`).
 - **Google Chrome loads pages and shares the keyring, like Chromium.** Ryoku
   pinned native Wayland and the GNOME keyring for Chromium (`chromium-flags.conf`)
   and for Electron apps (`ELECTRON_OZONE_PLATFORM_HINT`), but Google Chrome reads

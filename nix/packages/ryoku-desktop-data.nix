@@ -266,10 +266,6 @@ LUA
       ryoku/apps/nautilus/ryoku-stash-menu.py \
       "$out/share/ryoku/nautilus/ryoku-stash-menu.py"
 
-    install -Dm644 \
-      ryoku/apps/spicetify/ryoku-canvas.js \
-      "$out/share/ryoku/spicetify/ryoku-canvas.js"
-
     # ── Browser integration ────────────────────────────────────
 
     mkdir -p "$out/share/ryoku/browser"

@@ -24,10 +24,10 @@
       flake = false;
     };
 
-    # Native Ryotunes 2.4.1 application used by Ryoku 0.58.6.
+    # Native Ryotunes 2.5.1 application used by Ryoku 0.59.7.
     # Keep this pinned to the exact upstream release commit.
     ryotunesSrc = {
-      url = "github:neur0map/ryotunes/7f9feedfa406516a4b4c712448af124592557f9c";
+      url = "github:neur0map/ryotunes/2e2652192d629632fe6bc5a5232bba82c77d41e2";
       flake = false;
     };
   };
@@ -77,6 +77,7 @@
       nixosModules.default =
         import ./nix/modules/ryoku.nix {
           inherit self;
+          ryokuNixpkgs = pkgs;
         };
 
       packages.${system} = {
@@ -99,6 +100,7 @@
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
         ryoku-ryotunes = ryoku.ryotunes;
+        ryoku-keysounds = ryoku.keysounds;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;
         ryoku-helpers = ryoku.helpers;
@@ -164,6 +166,7 @@
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
         ryoku-ryotunes = ryoku.ryotunes;
+        ryoku-keysounds = ryoku.keysounds;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;
 

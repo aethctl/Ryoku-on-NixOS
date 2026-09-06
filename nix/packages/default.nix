@@ -84,6 +84,10 @@ let
       ;
   };
 
+  keysounds = import ./ryoku-keysounds.nix {
+    inherit pkgs src;
+  };
+
   helpers = import ./ryoku-helpers.nix {
     inherit pkgs src;
   };
@@ -100,7 +104,12 @@ let
   });
 
   hyprPlugins = import ./ryoku-hypr-plugins.nix {
-    inherit pkgs hyprglass imgborders;
+    inherit
+      pkgs
+      hyprglass
+      imgborders
+      keysounds
+      ;
   };
 
   cursorMaterial = import ./ryoku-cursor-material.nix {
@@ -251,6 +260,7 @@ in
     livewall
     ryogami
     ryotunes
+    keysounds
     qmkHid
     waifu2x
     desktopData

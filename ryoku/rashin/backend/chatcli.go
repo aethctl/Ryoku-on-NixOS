@@ -21,7 +21,7 @@ import (
 // `chat` is the sidebar's multi-turn client: it drives the daemon's shared
 // hermes session over /ws/chat and relays each frame as one line of JSON
 // (working|delta|perm|done|error) so streamed chunks keep their newlines.
-// Flags: --image <path> (repeatable), --cancel, --new.
+// Flags: --image <path> (repeatable), --cancel, --new, --perm <id> <option>.
 
 func chatWSURL() string {
 	return fmt.Sprintf("ws://127.0.0.1:%d/ws/chat", LoadConfig().Port)
@@ -231,7 +231,7 @@ func emitHistory(ctx context.Context, c *websocket.Conn) {
 
 func cmdChat(args []string) error {
 	var images, words []string
-	var modelID, sessionID string
+	var modelID, sessionID, permID, permOption string
 	mode := "ask"
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -260,6 +260,12 @@ func cmdChat(args []string) error {
 			if i+1 < len(args) {
 				i++
 				modelID = args[i]
+			}
+		case "--perm":
+			mode = "perm"
+			if i+2 < len(args) {
+				permID, permOption = args[i+1], args[i+2]
+				i += 2
 			}
 		case "--image":
 			if i+1 < len(args) {
@@ -295,6 +301,10 @@ func cmdChat(args []string) error {
 	case "new":
 		_ = wsjson.Write(ctx, c, wsIn{Type: "new"})
 		time.Sleep(200 * time.Millisecond)
+		return nil
+	case "perm":
+		_ = wsjson.Write(ctx, c, wsIn{Type: "permission", RequestID: permID, OptionID: permOption})
+		time.Sleep(150 * time.Millisecond)
 		return nil
 	case "history":
 		hctx, hcancel := context.WithTimeout(ctx, 3*time.Second)
@@ -430,7 +440,7 @@ func cmdChat(args []string) error {
 			full.WriteString(m.Text)
 			emitChat(map[string]any{"type": "delta", "text": m.Text})
 		case "permission":
-			emitChat(map[string]any{"type": "perm", "title": m.Title, "requestId": m.RequestID})
+			emitChat(map[string]any{"type": "perm", "title": m.Title, "requestId": m.RequestID, "options": m.Options})
 		case "models":
 			emitModelsFrame(m)
 		case "turn_end":

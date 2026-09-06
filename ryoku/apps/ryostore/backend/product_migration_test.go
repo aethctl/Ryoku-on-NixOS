@@ -8,6 +8,27 @@ import (
 	"testing"
 )
 
+// writeMigrationFixture establishes both the contents and the exact mode
+// expected by a receipt. os.WriteFile's creation mode is filtered through the
+// process umask, so chmod explicitly makes these tests independent of the
+// developer or CI environment.
+func writeMigrationFixture(
+	t *testing.T,
+	path string,
+	body []byte,
+	mode os.FileMode,
+) {
+	t.Helper()
+
+	if err := os.WriteFile(path, body, mode); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Chmod(path, mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func migrationReceipt(body []byte) Receipt {
 	return Receipt{
 		Category:    "lockscreens",
@@ -30,9 +51,12 @@ func TestAdoptExactReceiptClaimsOnlyExactPayload(t *testing.T) {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dst, "Main.qml"), body, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeMigrationFixture(
+		t,
+		filepath.Join(dst, "Main.qml"),
+		body,
+		0o644,
+	)
 
 	if err := adoptExactReceipt(dst, receipt); err != nil {
 		t.Fatal(err)
@@ -49,7 +73,17 @@ func TestAdoptExactReceiptClaimsOnlyExactPayload(t *testing.T) {
 func TestAdoptExactReceiptRejectsChangedOrAdditionalFiles(t *testing.T) {
 	for name, mutate := range map[string]func(string) error{
 		"changed": func(dst string) error {
-			return os.WriteFile(filepath.Join(dst, "Main.qml"), []byte("changed"), 0o644)
+			path := filepath.Join(dst, "Main.qml")
+
+			if err := os.WriteFile(
+				path,
+				[]byte("changed"),
+				0o644,
+			); err != nil {
+				return err
+			}
+
+			return os.Chmod(path, 0o644)
 		},
 		"additional": func(dst string) error {
 			return os.WriteFile(filepath.Join(dst, "personal.qml"), []byte("mine"), 0o644)
@@ -64,9 +98,13 @@ func TestAdoptExactReceiptRejectsChangedOrAdditionalFiles(t *testing.T) {
 			if err := os.MkdirAll(dst, 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(dst, "Main.qml"), body, 0o644); err != nil {
-				t.Fatal(err)
-			}
+			writeMigrationFixture(
+				t,
+				filepath.Join(dst, "Main.qml"),
+				body,
+				0o644,
+			)
+
 			if err := mutate(dst); err != nil {
 				t.Fatal(err)
 			}
@@ -95,9 +133,12 @@ func TestAdoptExactReceiptRejectsSymlinkedParent(t *testing.T) {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dst, "Main.qml"), body, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeMigrationFixture(
+		t,
+		filepath.Join(dst, "Main.qml"),
+		body,
+		0o644,
+	)
 
 	if err := adoptExactReceipt(dst, receipt); err == nil {
 		t.Fatal("adoptExactReceipt() accepted a symlinked destination parent")

@@ -56,3 +56,31 @@ func TestHermesModelStopsAtBlockEnd(t *testing.T) {
 		t.Fatal("empty mapping followed by another block must not count")
 	}
 }
+
+func TestSavedSessionModelFollowsHermesConfig(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("RYOKU_STATE_PATH", t.TempDir())
+	writeHermesConfig(t, "model:\n  provider: openrouter\n  default: z-ai/glm-5.3\n")
+	saveSessionModel("openrouter:z-ai/glm-5.3")
+	if got := savedSessionModel(); got != "openrouter:z-ai/glm-5.3" {
+		t.Fatalf("pick under the same config = %q", got)
+	}
+	// The user ran `hermes setup` again and chose another provider: the old
+	// pick must not be re-applied on the new endpoint.
+	writeHermesConfig(t, "model:\n  provider: nvidia\n  default: meta/llama-3.3-70b-instruct\n")
+	if got := savedSessionModel(); got != "" {
+		t.Fatalf("pick survived a reconfigure: %q", got)
+	}
+}
+
+func TestSavedSessionModelWithoutFingerprintIsForgotten(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("RYOKU_STATE_PATH", t.TempDir())
+	writeHermesConfig(t, "model: openrouter/anthropic/claude-sonnet-4.5\n")
+	if err := os.WriteFile(modelStatePath(), []byte("openrouter:z-ai/glm-5.3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := savedSessionModel(); got != "" {
+		t.Fatalf("a pick from before the fingerprint must not be trusted: %q", got)
+	}
+}

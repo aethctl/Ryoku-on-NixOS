@@ -144,10 +144,17 @@ func (h *chatHub) broadcastExcept(m wsOut, skip *chatClient) {
 	h.mu.Unlock()
 }
 
-// ensureConn starts hermes if there is no live session. Called with h.mu held.
-func (h *chatHub) ensureConnLocked() {
+// ensureConn starts hermes if there is no live session, and replaces one that
+// outlived a hermes reconfigure (the process would keep answering with the
+// provider and keys it loaded at spawn). Called with h.mu held.
+func (h *chatHub) ensureConnLocked() (spawned bool) {
+	if h.conn != nil && h.conn.stale() {
+		old := h.conn
+		h.conn = nil
+		go old.Close()
+	}
 	if h.conn != nil {
-		return
+		return false
 	}
 	h.last = wsOut{Type: "state", State: "starting"}
 	conn, err := startACP(VaultDir())
@@ -155,7 +162,7 @@ func (h *chatHub) ensureConnLocked() {
 		h.conn = nil
 		h.last = wsOut{Type: "state", State: "dead", Error: err.Error()}
 		go h.broadcast(h.last)
-		return
+		return false
 	}
 	h.conn = conn
 	h.introduced = false
@@ -168,6 +175,7 @@ func (h *chatHub) ensureConnLocked() {
 		h.broadcast(wsOut{Type: "state", State: "ready"})
 	}()
 	go h.pump(conn)
+	return true
 }
 
 func (h *chatHub) dropConn(c *acpConn) {
@@ -269,8 +277,9 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 			break
 		}
 		h.mu.Lock()
-		if h.conn == nil && in.Type == "user" {
-			h.ensureConnLocked()
+		spawned := false
+		if in.Type == "user" || in.Type == "new" {
+			spawned = h.ensureConnLocked()
 		}
 		conn := h.conn
 		h.mu.Unlock()
@@ -347,19 +356,24 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 				}(conn, in.SessionID)
 			}
 		case "new":
-			go func(c *acpConn) {
+			go func(c *acpConn, fresh bool) {
 				h.mu.Lock()
 				h.transcript = nil
 				h.introduced = false
 				h.mu.Unlock()
 				h.broadcast(wsOut{Type: "replay_start"})
 				h.broadcast(wsOut{Type: "replay_end"})
+				// A process spawned for this request opens its own first
+				// session in Initialize; asking for another would race it.
+				if fresh {
+					return
+				}
 				if err := c.NewSession(); err != nil {
 					h.broadcast(wsOut{Type: "state", State: "dead", Error: err.Error()})
 					return
 				}
 				h.broadcast(wsOut{Type: "state", State: "ready"})
-			}(conn)
+			}(conn, spawned)
 		}
 	}
 

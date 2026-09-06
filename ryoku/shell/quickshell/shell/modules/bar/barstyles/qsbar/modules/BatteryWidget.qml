@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Services.UPower
+import shell.services
 
 Item {
     id: rootMod
@@ -110,9 +111,14 @@ Item {
                     Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: 200 } }
 
-                    // font-free charging shimmer that sweeps across the fill
+                    // font-free charging shimmer that sweeps across the fill. The
+                    // indigo body, the wash and the bolt already say "charging"; the
+                    // sweep is ambient motion, and every frame of it is a compositor
+                    // frame off a full-screen layer, so it follows the same rule as
+                    // the bar's silent drift: Performance only (Perf.ambientMotion),
+                    // and a sweep every few seconds rather than back to back.
                     Rectangle {
-                        visible: rootMod.charging && !rootMod.full
+                        visible: rootMod.charging && !rootMod.full && Perf.ambientMotion
                         anchors.top: parent.top
                         anchors.bottom: parent.bottom
                         width: 6
@@ -121,10 +127,10 @@ Item {
                         property real pos: 0
                         x: (parent.width + width) * pos - width
                         SequentialAnimation on pos {
-                            running: rootMod.charging && !rootMod.full
+                            running: rootMod.charging && !rootMod.full && Perf.ambientMotion
                             loops: Animation.Infinite
                             NumberAnimation { from: 0; to: 1; duration: 1100; easing.type: Easing.InOutSine }
-                            PauseAnimation { duration: 500 }
+                            PauseAnimation { duration: 3500 }
                         }
                     }
                 }

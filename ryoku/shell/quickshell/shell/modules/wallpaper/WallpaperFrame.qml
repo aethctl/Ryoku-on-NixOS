@@ -11,6 +11,10 @@ QtObject {
     property int depthRev: 0
     property string videoPath: ""
     property bool live: false
+    // The in-shell clip's audio: muted by default, full volume (0-100). The
+    // daemon fills them for a video frame; a still leaves the defaults.
+    property bool mute: true
+    property int volume: 100
 
     function apply(line: string): bool {
         try {
@@ -27,6 +31,8 @@ QtObject {
             revision = entry.revision || 0;
             videoPath = entry.videoPath || "";
             live = entry.live === true;
+            mute = entry.mute !== false;
+            volume = (typeof entry.volume === "number") ? entry.volume : 100;
             return true;
         } catch (error) {
             return false;

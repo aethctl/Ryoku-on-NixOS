@@ -1,4 +1,4 @@
-{ self }:
+{ self, ryokuNixpkgs }:
 
 { config, lib, pkgs, ... }:
 
@@ -16,6 +16,8 @@ let
   ryokuSystemBridge = ryokuPkgs.ryoku-nixos-system-bridge;
   ryokuDesktopData = ryokuPkgs.ryoku-desktop-data;
   ryokuRyogami = ryokuPkgs.ryoku-ryogami;
+  ryokuQuickshell = ryokuNixpkgs.quickshell;
+  ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
 
   # Hyprland plugins are ABI-sensitive, so the compositor, portal and
   # plugin bundle must all come from Ryoku's own locked package set.
@@ -327,12 +329,12 @@ EOF
   };
 
   qtQmlPath = lib.makeSearchPath "lib/qt-6/qml" [
-    pkgs.qt6.qtdeclarative
-    pkgs.qt6.qtmultimedia
-    pkgs.qt6.qtwayland
-    pkgs.qt6.qt5compat
-    pkgs.qt6.qtsvg
-    pkgs.qt6.qtimageformats
+    ryokuNixpkgs.qt6.qtdeclarative
+    ryokuNixpkgs.qt6.qtmultimedia
+    ryokuNixpkgs.qt6.qtwayland
+    ryokuNixpkgs.qt6.qt5compat
+    ryokuNixpkgs.qt6.qtsvg
+    ryokuNixpkgs.qt6.qtimageformats
   ];
 
   optionalPkg = name:
@@ -365,6 +367,17 @@ EOF
       "gpu-screen-recorder"
       "hyprland-preview-share-picker"
     ];
+
+  # NixOS cannot keep setuid executables in the immutable Nix store.
+  # Expose only the privileged wrappers Ryoku needs through the shell's
+  # otherwise store-only systemd PATH.
+  ryokuPrivilegePath = pkgs.runCommand "ryoku-nixos-privilege-path" { } ''
+    mkdir -p "$out/bin"
+
+    ln -s       "${config.security.wrapperDir}/pkexec"       "$out/bin/pkexec"
+
+    ln -s       "${config.security.wrapperDir}/sudo"       "$out/bin/sudo"
+  '';
 
   runtimePackages = with pkgs; [
     # ─────────────────────────────────────────────────────────
@@ -415,7 +428,7 @@ EOF
     # Compositor / shell
     # ─────────────────────────────────────────────────────────
 
-    quickshell
+    ryokuQuickshell
     ryokuHyprPlugins
 
     # ─────────────────────────────────────────────────────────
@@ -728,6 +741,7 @@ in
     };
 
     security.polkit.enable = true;
+    security.polkit.enablePkexecWrapper = lib.mkDefault true;
 
     # Ryoku NixOS privileged helper policy.
     #
@@ -1032,9 +1046,17 @@ in
       RYOKU_UPDATE_BACKEND = "nix";
       RYOKU_NIX_FLAKE = cfg.updateFlake;
       RYOKU_NIX_INPUT = cfg.updateInput;
+      RYOKU_NIX_SUDO =
+        "${config.security.wrapperDir}/sudo";
       RYOKU_SDDM_THEME_APPLY =
         "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
       RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
+
+      # Hyprland plugin binaries are ABI-sensitive generation state.
+      # Hub may configure them, but Nix owns compilation and package paths.
+      RYOKU_HYPR_PLUGINS_MANAGED = "nix";
+      RYOKU_HYPR_PLUGIN_DIR =
+        "${ryokuHyprPlugins}/lib/hyprland/plugins";
 
       # Ryowalls and Ryoshot normally use Arch's /usr/share
       # model path. Point them at the immutable nixpkgs payload.
@@ -1278,6 +1300,59 @@ in
     #
     # Upstream installs /usr/bin/ryogami and a user unit under
     # /usr/lib/systemd/user. NixOS owns both declaratively.
+    # ─────────────────────────────────────────────────────────
+    # Ryotunes
+    #
+    # Ryotunes 2.5 uses a socket-activated playback daemon and
+    # native Quickshell client. Upstream enables the user socket
+    # through a package preset; NixOS owns both units here.
+    # ─────────────────────────────────────────────────────────
+
+    systemd.user.sockets.ryotunesd = {
+      description = "Ryotunes playback daemon socket";
+
+      wantedBy = [
+        "sockets.target"
+      ];
+
+      socketConfig = {
+        ListenStream = "%t/ryotunes/ryotunesd.sock";
+        SocketMode = "0600";
+        DirectoryMode = "0700";
+      };
+    };
+
+    systemd.user.services.ryotunesd = {
+      description = "Ryotunes playback daemon";
+
+      # Upstream's daemon launches the native frontend with
+      # Command::new("ryotunes-qml"), and that Quickshell client in turn
+      # launches normal desktop helpers such as sh, ryostore, zenity and
+      # xdg-open.
+      #
+      # Keep Ryotunes itself deterministic and first in PATH, then expose the
+      # active NixOS system profile just like an ordinary graphical session.
+      # This preserves upstream's desktop-command model without baking FHS
+      # paths or mutable tool copies into the package.
+      environment = {
+        RUST_LOG = "warn";
+      };
+
+      after = [
+        "graphical-session.target"
+      ];
+
+      requires = [
+        "ryotunesd.socket"
+      ];
+
+      serviceConfig = {
+        ExecStart = "${ryokuRyotunes}/bin/ryotunesd";
+        Restart = "on-failure";
+        RestartSec = "2s";
+      };
+    };
+
     systemd.user.services.ryogami = {
       description = "Ryogami wallpaper daemon";
 
@@ -1353,7 +1428,7 @@ in
         "ryoku-materialize.service"
       ];
 
-      path = runtimePackages;
+      path = [ ryokuPrivilegePath ] ++ runtimePackages;
 
       environment = {
 
@@ -1368,9 +1443,17 @@ in
         RYOKU_UPDATE_BACKEND = "nix";
         RYOKU_NIX_FLAKE = cfg.updateFlake;
         RYOKU_NIX_INPUT = cfg.updateInput;
+        RYOKU_NIX_SUDO =
+          "${config.security.wrapperDir}/sudo";
         RYOKU_SDDM_THEME_APPLY =
           "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
         RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
+
+      # Hyprland plugin binaries are ABI-sensitive generation state.
+      # Hub may configure them, but Nix owns compilation and package paths.
+      RYOKU_HYPR_PLUGINS_MANAGED = "nix";
+      RYOKU_HYPR_PLUGIN_DIR =
+        "${ryokuHyprPlugins}/lib/hyprland/plugins";
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
 
         QT_MEDIA_BACKEND = "ffmpeg";

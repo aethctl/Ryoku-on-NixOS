@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -97,7 +100,29 @@ type acpConn struct {
 	// when the dashboard and the terminal race to answer it.
 	answeredPerms map[int64]bool
 
+	// configStamp is the hermes config the process loaded at spawn; hermes
+	// reads config.yaml and .env once, so a session outlives a `hermes setup`
+	// run in a terminal with the old provider and keys (issue 145).
+	configStamp string
+
 	events chan AcpEvent
+}
+
+// hermesConfigStamp fingerprints the files hermes loads at startup.
+func hermesConfigStamp() string {
+	var b strings.Builder
+	for _, p := range []string{hermesConfig(), filepath.Join(home(), ".hermes", ".env")} {
+		if st, err := os.Stat(p); err == nil {
+			fmt.Fprintf(&b, "%s:%d:%d;", p, st.ModTime().UnixNano(), st.Size())
+		}
+	}
+	return b.String()
+}
+
+// stale reports that hermes's config changed since this process started, so
+// its provider and keys no longer match what the terminal runs.
+func (c *acpConn) stale() bool {
+	return c.configStamp != hermesConfigStamp()
 }
 
 func newACPConn(in io.Writer, out io.Reader, closer io.Closer) *acpConn {
@@ -594,6 +619,7 @@ func startACP(vault string) (*acpConn, error) {
 	if !ok {
 		return nil, errors.New("hermes not installed")
 	}
+	stamp := hermesConfigStamp()
 	cmd := exec.Command(bin, "acp")
 	cmd.Dir = vault
 	stdin, err := cmd.StdinPipe()
@@ -609,6 +635,7 @@ func startACP(vault string) (*acpConn, error) {
 		return nil, err
 	}
 	c := newACPConn(stdin, stdout, stdin)
+	c.configStamp = stamp
 	go func() { _ = cmd.Wait() }()
 	return c, nil
 }

@@ -4,6 +4,52 @@
 
 ### Fixed
 - **NixOS no longer starts the reactor's Pacman log watcher.** The QS Bar particle stream now respects `RYOKU_UPDATE_BACKEND=nix` instead of tailing `/var/log/pacman.log` on Musubi.
+- **The reload cover renders a `~`-based custom asset (#146).** The reload
+  cover built its media URL as a bare `"file://" + path`, so a `reloadCover`
+  path carrying a leading `~` (a hand-edited or ported `brand.json`) became
+  `file://~/...`, which never resolves, and the reload silently showed the
+  default wordmark instead of the chosen asset. The renderer now expands a
+  leading `~` to `$HOME` before building the URL, the way the shell already
+  resolves the brand mark, for both the image and the video path
+  (`quickshell/reload-cover/ReloadMedia.qml`).
+- **The Super+S chat can approve a tool.** When hermes paused on an edit or a
+  command, the sidebar only showed "waiting for approval" with no way to
+  answer, so the turn dead-ended unless the dashboard was open. The permission
+  frame now carries hermes's options through `ryoku-rashin chat`, the bubble
+  shows them as buttons, and a pick answers over the new `--perm <id>
+  <option>` flag (`services/Needle.qml`, `modules/bar/panel/PanelChat.qml`,
+  `rashin/backend/chatcli.go`).
+- **In-shell video wallpapers can play sound again (#139).** The in-shell
+  engine's QtMultimedia player was hardwired to `AudioOutput { muted: true }`,
+  so a live wallpaper stayed silent even with audio turned on in the picker.
+  The daemon now carries the picker's mute and volume on the `wallpaper` frame
+  (new `mute`/`volume` keys, taken from the per-output apply maps or the
+  wall-ui `wallpaperMute`/`wallpaperVolume` defaults), persists both in
+  `outputs.json`, and republishes the live frame on `wall.set_audio` so a
+  running clip changes at once; the backdrop binds them to its player. The
+  in-shell transcode cache keeps its audio track now (the `-an` that stripped
+  it is gone, and the cache key changed so stale silent re-encodes are
+  ignored). The ryogami C player stays intentionally silent
+  (`ryogami/daemon/`, `modules/wallpaper/`).
+- **A silent bar sits still again, and the GPU drift is paced (#60, third
+  round).** The GPU gap animation (`StreamShader.qml`) drove its shader clock
+  with a `FrameAnimation`, which makes Quickshell render and commit a frame
+  every vsync whether or not the picture changed, on the full-screen bar
+  layer, on every profile. The shader itself costs nothing; the frames do:
+  each one is a compositor frame, and on a 165 Hz hybrid laptop rendering on
+  the discrete GPU (reverse PRIME, ~7 ms a frame) that held Hyprland at
+  ~38% of a core and the shell at ~26%, silent, all day. The clock is now a
+  Timer at the paces the Canvas stream already used: 30 fps (60 for the fast
+  modes 5 and 6) while audio drives it, 20 fps for the silent drift, and the
+  silent drift only on Performance (`Perf.ambientMotion`), so Balanced and
+  Saver idle still like caelestia and end-4. The battery's charging shimmer
+  follows the same rule: it was an infinite sweep at vsync whenever the
+  laptop was plugged in below full, now Performance-only and one sweep every
+  few seconds; the indigo body, wash and bolt still say "charging". Measured
+  on the dev box, silent: shell 26% -> 5% (Balanced) / 11% (Performance),
+  the shell's share of Hyprland ~56% -> ~17% / ~39%
+  (`modules/bar/barstyles/qsbar/modules/StreamShader.qml`,
+  `BatteryWidget.qml`, `ReactorLayer.qml`).
 - **Quickshell's runtime logs can no longer eat the RAM.** Quickshell keeps
   a per-instance directory under `$XDG_RUNTIME_DIR` (a tmpfs, so memory) with
   two unbounded logs and never removes it; one warning storm wrote 4.3 GB
@@ -17,6 +63,15 @@
   the picker closes; the process stays warm, so a reopen is instant (36 ms
   measured) and an idle picker sits at about 160 MB instead of 410
   (`ryogami/wall-ui/shell.qml`).
+- **The desktop lands on a wallpaper when none was ever recorded (#149).**
+  Ryogami painted nothing on startup when no choice was stored, so a fresh
+  install -- or a box cut over from awww without ever setting one through
+  Ryoku -- sat on the empty grey frame, and went black the moment the doctor
+  retired a hand-started awww-daemon. The startup restore now paints the first
+  static image in the wallpaper directory when nothing is recorded and persists
+  it, so the next login restores that choice; a clip is never picked, so the
+  fallback stays off the live player on every GPU (`ryogami/daemon/apply.go`,
+  `ryogami/daemon/daemon.go`).
 
 ### Changed
 - **The Ryogami picker closes once something is applied.** Wallpaper, video,

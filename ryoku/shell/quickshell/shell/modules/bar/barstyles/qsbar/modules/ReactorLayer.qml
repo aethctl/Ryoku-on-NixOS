@@ -94,10 +94,11 @@ Item {
     // cannot strand a half-drawn frozen frame over the bar; balanced or
     // performance loads it back and animates.
     // Drift modes 1-6 render on the GPU: StreamShader draws the same motion with a
-    // fragment shader instead of a CPU Canvas, so they cost ~0 CPU and animate on
-    // every profile (only reduce-motion / Power Saver unloads them). The stateful
-    // modes -- 7 (reactor) and 8 (quotes) -- keep cross-frame state and stay on the
-    // Canvas-based ParticleStream below.
+    // fragment shader instead of a CPU Canvas. It paces itself the way the Canvas
+    // does: 60 fps under audio, 20 fps for the silent drift, and the silent drift
+    // only on Performance (Perf.ambientMotion), so a silent bar sits still on
+    // Balanced and Saver. The stateful modes -- 7 (reactor) and 8 (quotes) --
+    // keep cross-frame state and stay on the Canvas-based ParticleStream below.
     LazyLoader {
         active: reactor.visible && reactor.shellVisible && reactor.runs.length > 1
                 && !Perf.reduceMotion && reactor.theme && reactor.theme.barAnim >= 1 && reactor.theme.barAnim <= 6

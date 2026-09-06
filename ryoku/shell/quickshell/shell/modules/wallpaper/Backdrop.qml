@@ -50,6 +50,12 @@ Item {
     // the layer; false for the in-shell engine, which plays inside this surface.
     property bool live: false
 
+    // The in-shell clip's audio the player binds: muted by default, volume
+    // 0-100 (scaled to AudioOutput's 0..1). A live wallpaper is no longer
+    // forced silent; the daemon threads the picker's mute/volume here.
+    property bool videoMuted: true
+    property int videoVolume: 100
+
     // Decoding is capped at the surface resolution: an 8K source costs a
     // screen-sized texture instead of a full-resolution decode, which lagged
     // every switch and overran the image allocation cap on very large files.
@@ -427,7 +433,10 @@ Item {
         id: player
         loops: MediaPlayer.Infinite
         videoOutput: vout
-        audioOutput: AudioOutput { muted: true }
+        audioOutput: AudioOutput {
+            muted: view.videoMuted
+            volume: view.videoVolume / 100
+        }
     }
     VideoOutput {
         id: vout

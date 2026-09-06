@@ -34,6 +34,7 @@ Item {
     }
     readonly property string wallpaperUrl: frame.path.length > 0
         ? "file://" + frame.path + "?v=" + frame.revision : ""
+    readonly property string wallpaperPath: frame.path
     readonly property string depthUrl: frame.depth.length > 0
         ? "file://" + frame.depth + "?v=" + frame.depthRev : ""
     readonly property string fit: frame.fit
@@ -42,6 +43,10 @@ Item {
     // The video clip for a live wallpaper ("" for a still).
     readonly property string videoUrl: frame.videoPath.length > 0
         ? "file://" + frame.videoPath : ""
+    // The in-shell clip's audio, threaded to the backdrop's player: muted by
+    // default, volume 0-100 (Backdrop scales it to 0..1).
+    readonly property bool videoMuted: frame.mute
+    readonly property int videoVolume: frame.volume
     // The ryogami-live yield flag: hide the in-shell painter while the C
     // player owns the background layer; false for the in-shell engine.
     readonly property bool live: frame.live

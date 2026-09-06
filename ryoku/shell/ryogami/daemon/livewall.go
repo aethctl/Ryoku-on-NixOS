@@ -297,12 +297,12 @@ func transcodeCachePath(src string, fps, capW int) string {
 	dir := filepath.Join(cacheHome(), "ryogami", "livewall")
 	name := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 	return filepath.Join(dir, name+"-"+strconv.FormatInt(st.ModTime().Unix(), 10)+
-		"-w"+strconv.Itoa(capW)+"-f"+strconv.Itoa(fps)+".mp4")
+		"-w"+strconv.Itoa(capW)+"-f"+strconv.Itoa(fps)+"-a.mp4")
 }
 
 // ensureVideoTranscode re-encodes a clip to a bite-sized mp4 (fps + width
-// capped), cached per source mtime and cap, for the in-shell engine. "" on
-// failure keeps the original.
+// capped, its audio kept so the in-shell player can unmute), cached per source
+// mtime and cap, for the in-shell engine. "" on failure keeps the original.
 func ensureVideoTranscode(src string, fps, capW int) string {
 	out := transcodeCachePath(src, fps, capW)
 	if out == "" {
@@ -321,7 +321,7 @@ func ensureVideoTranscode(src string, fps, capW int) string {
 		"-i", src,
 		"-vf", fmt.Sprintf("scale='min(%d,iw)':-2:flags=bicubic,fps=%d", capW, fps),
 		"-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-bf", "0",
-		"-pix_fmt", "yuv420p", "-an", tmp)
+		"-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-ac", "2", tmp)
 	if err := cmd.Run(); err != nil || !fileExists(tmp) {
 		_ = os.Remove(tmp)
 		return ""

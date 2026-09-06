@@ -100,17 +100,17 @@
     "ryotunesSrc": {
       "flake": false,
       "locked": {
-        "lastModified": 1788404957,
-        "narHash": "sha256-hLw5lKJLQWin9ZDwZZB3csXf0SQ7W+Jcc9s7aHEPGDs=",
+        "lastModified": 1788674941,
+        "narHash": "sha256-JbZiGfAdZDIZ6eQ4vglejzhYEpFs7LZNasoORn1Qxl4=",
         "owner": "neur0map",
         "repo": "ryotunes",
-        "rev": "7f9feedfa406516a4b4c712448af124592557f9c",
+        "rev": "2e2652192d629632fe6bc5a5232bba82c77d41e2",
         "type": "github"
       },
       "original": {
         "owner": "neur0map",
         "repo": "ryotunes",
-        "rev": "7f9feedfa406516a4b4c712448af124592557f9c",
+        "rev": "2e2652192d629632fe6bc5a5232bba82c77d41e2",
         "type": "github"
       }
     }

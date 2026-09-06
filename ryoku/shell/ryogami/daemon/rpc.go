@@ -156,7 +156,12 @@ func (d *daemon) dispatchRequest(req *request) response {
 		if v, has := p["mute"].(bool); has {
 			mute = &v
 		}
-		d.setAudio(mute, strsParam(p, "outputs"))
+		var volume *int
+		if v, has := p["volume"].(float64); has {
+			vol := clampVolume(int(v))
+			volume = &vol
+		}
+		d.setAudio(mute, volume, strsParam(p, "outputs"))
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "wall.cache_rebuild":
@@ -367,11 +372,7 @@ func volumeParam(p map[string]interface{}) map[string]int {
 	if m, has := p["outputs_volume"].(map[string]interface{}); has {
 		for k, v := range m {
 			if n, isNum := v.(float64); isNum {
-				vol := int(n)
-				if vol > 100 {
-					vol = 100
-				}
-				out[k] = vol
+				out[k] = clampVolume(int(n))
 			}
 		}
 	}

@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Fixed
+- **Lockscreen skin switching can authenticate correctly on NixOS.** Hub
+  processes launched by the Ryoku shell can now resolve NixOS's real setuid
+  `pkexec` wrapper instead of the immutable non-setuid store binary.
 - **Ryoport capability hints respect NixOS.** Missing virtualization or
   passthrough tooling now points Musubi users back to the declarative NixOS
   configuration instead of suggesting Pacman or AUR commands.
@@ -20,6 +23,80 @@
   `/etc/sddm.conf.d` paths on NixOS; the selected skin is copied safely into
   the mutable `/var/lib/ryoku/sddm-theme` payload instead.
 - **Settings and Profile report NixOS package information correctly.** The Settings header identifies Ryoku NixOS, Profile reports SYSTEM and USER Nix package counts instead of pacman and AUR counts, and the profile install-date fallback no longer reads Arch's pacman log.
+
+### Added
+- **A Plugins page manages every Hyprland compositor plugin.** Settings >
+  Plugins (DESKTOP, next to Windows) takes over the Windows page's Plugins tab
+  and grows into the one place for compositor plugins: a tab per plugin (title
+  bars, glass, image borders, cursor motion, focus flash, the new key sounds,
+  and anything the user adds) with a status card above its settings: where the
+  copy came from (package, built here with commit and date, hyprpm), whether it
+  is running, and the verdict when it is not. A plugin is ABI-locked to the
+  exact Hyprland build, and an Arch bump of aquamarine or hyprutils between two
+  Ryoku releases left a copy the compositor refused with "version mismatch" on
+  every reload while the toggle looked on. Every copy now carries an `.abi`
+  receipt, the card says "built for aquamarine 0.14, running 0.15", and
+  **Rebuild** builds it here from upstream (its hyprpm.toml pin for the
+  installed Hyprland, against the installed headers), with **Rebuild stale**
+  for all of them and **Docs** for each plugin's own documentation. Cursor
+  motion and focus flash keep their rows on the Cursor and Animations pages and
+  are borrowed here, so each row is written once (`pages/PluginsPage.qml`,
+  `schema/PluginsPage.js`, `backend/hyprplugins.go`).
+- **Add a plugin from any git repository.** "+ Add from git" on the Plugins
+  page takes a repository with a `hyprpm.toml`, lists the plugins it declares,
+  builds the ones picked on this machine and lays them beside the bundled
+  ones; Save loads them. Its settings are detected: the `plugin:<ns>:<key>`
+  names read out of the `.so`, typed and defaulted by the compositor once it
+  loads, rendered as native controls (switch, stepper, slider, field) and
+  stored under `plugins.extra.<id>.config`, so a plugin nobody in Ryoku has
+  seen still gets a control for every option. **Remove** drops it again.
+  hyprpm-installed plugins show on the same page (`backend/hyprplugins_build.go`).
+- **`ryoku-hub hypr plugins list|rebuild|add|remove`.** The backend behind the
+  page and the doctor: the roster with source, version, ABI verdict and
+  detected settings; the builder (bundled plugins from upstream, keysounds from
+  the checkout or the shipped source, any git repository), which writes the
+  `.so`, its `.abi` and a build receipt under `~/.local/lib/hyprland/plugins`;
+  and removal. `settings.lua` now loads only a copy whose receipt matches the
+  running compositor and leaves a stale one out with a comment instead of
+  having Hyprland refuse it on every reload, and Save unloads a plugin turned
+  off (a reload only unloads what it loaded itself). See `docs/hyprland-plugins.md`.
+
+### Fixed
+- **A rice carries its custom reload cover (#146).** The brand layer bundled
+  the mark image but left `reloadCover.path` as the author's absolute path, so
+  applying a rice on another box (or after the source asset moved) wrote a path
+  to a file that was never there and the shell reload fell back to the default
+  cover. Capture now copies the reload-cover asset into the rice and rewrites
+  the path to `rice://`, apply lands it under `rice-assets/<slug>/` like the
+  mark, and a dangling `rice://` or foreign absolute path is dropped so the
+  reload degrades to the default cover cleanly (`backend/rice.go`).
+- **Store lock skins show in Settings again, and a read failure says so.**
+  Settings > Lockscreen listed skins by walking `~/.local/share/qylock/themes`
+  two levels deep for a `Main.qml`, but `os.ReadDir` reports a symlinked theme
+  dir with `IsDir()` false, so a skin installed as (or under) a symlink was
+  dropped and vanished though its files were on disk. The scan now follows a
+  symlinked directory, and `ryoku-hub lock list` unions in a second source: the
+  RyoStore receipts under `~/.local/state/ryoku/store/lockscreens/*.json`, so a
+  receipt-owned product the folder heuristic misses still lists as long as its
+  `Main.qml` is present. A themes dir that exists but cannot be read now returns
+  an `error`, and the page tells "Couldn't read the lock skins list" (retry)
+  apart from "No lock skins installed yet" (browse the Store), instead of one
+  message for both (`backend/lock.go`, `pages/LockscreenPage.qml`).
+- **Plugin settings apply on Save, and preview live.** `hl.plugin.load()` only
+  declares a path; Hyprland loads the declared set after the config pass and
+  reloads once more, and the old `if hl.plugin.<name> ~= nil` guard was only
+  ever true for a plugin that registers Lua functions, so every other plugin's
+  `hl.config` line never ran: key sounds kept its default profile and volume
+  whatever the page said, cursor motion its default mode. The config now runs
+  behind a lookup in `hl.get_loaded_plugins()` (true on that second pass),
+  Save pushes it once more through `hyprctl eval` after the reload, and the
+  live preview pushes it on every edit, so a profile change is heard as it is
+  picked (`backend/hypr.go`).
+- **Key sounds' Docs and Sounds buttons go somewhere real.** Docs opened a
+  README on the GitHub `main` branch that does not carry the plugin yet; it now
+  opens the README shipped beside the plugin's source on this box (the
+  checkout, or `/usr/share/ryoku/hypr-plugins/keysounds`), and a new Sounds
+  button opens the Mechvibes packs the profiles are cut from.
 
 ### Added
 - **`ryoku-hub gpu vm` builds and runs the passthrough VM.** A new subcommand

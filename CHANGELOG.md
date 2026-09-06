@@ -6,6 +6,11 @@ for finer detail.
 ## Unreleased
 
 ### Added
+- **Ryotunes 2.5.1 is native on NixOS.** Ryoku now builds the new
+  `ryotunesd` daemon, CLI, native Quickshell client, shipped skins and Matugen
+  payload from the pinned upstream source. NixOS owns the playback daemon
+  declaratively through `ryotunesd.socket` and `ryotunesd.service` rather than
+  Arch's package preset or mutable user-unit installation.
 - **Plain-language GitHub release notes, generated from commit notes.** A change
   users notice gets a `Note: New|Fixed|Removed: ...` trailer on its commit;
   `bin/ryoku-release-notes` collects these between releases and the
@@ -57,6 +62,11 @@ for finer detail.
   example.
 
 ### Fixed
+- **NixOS privileged actions now use the real security wrappers.** The Ryoku
+  shell exposes NixOS's setuid `pkexec`/`sudo` wrappers through its otherwise
+  immutable service PATH, and the Nix updater calls the configured sudo wrapper
+  directly instead of accidentally selecting the non-setuid Nix store binary.
+  This fixes SDDM lock-skin switching and `ryoku update` privilege escalation.
 - **Repository Git hooks now run natively on NixOS.** Hook scripts use the
   portable `env bash` interpreter instead of assuming `/bin/bash` exists, and
   safely treat an unset force-push override as disabled under strict shell mode.

@@ -57,7 +57,7 @@ Singleton {
         if ((q.length === 0 && imgs.length === 0) || root.busy)
             return;
         messages.append({ who: "user", body: q, imagesJson: JSON.stringify(imgs),
-            working: "", streaming: false, failed: false, activityJson: "[]" });
+            working: "", streaming: false, failed: false, activityJson: "[]", permJson: "" });
         root._run(q, imgs);
     }
 
@@ -84,7 +84,7 @@ Singleton {
     // Append the agent bubble and start the turn (shared by send + regenerate).
     function _run(q, imgs) {
         messages.append({ who: "agent", body: "", imagesJson: "[]",
-            working: "waking the needle", streaming: true, failed: false, activityJson: "[]" });
+            working: "waking the needle", streaming: true, failed: false, activityJson: "[]", permJson: "" });
         root.liveIdx = messages.count - 1;
         root.busy = true;
         root.lastSeen = Date.now();
@@ -131,6 +131,18 @@ Singleton {
             return;
         root.currentModel = String(id);
         Quickshell.execDetached(["ryoku-rashin", "chat", "--set-model", String(id)]);
+    }
+
+    // Answer the approval hermes is waiting on; an empty option declines it.
+    function answerPermission(optionId) {
+        var i = root.liveIdx;
+        if (i < 0 || i >= messages.count || messages.get(i).permJson.length === 0)
+            return;
+        var req;
+        try { req = JSON.parse(messages.get(i).permJson); } catch (e) { return; }
+        messages.setProperty(i, "permJson", "");
+        messages.setProperty(i, "working", optionId ? "approved, continuing" : "declined");
+        Quickshell.execDetached(["ryoku-rashin", "chat", "--perm", String(req.id), String(optionId || "")]);
     }
 
     // Append or update (tools are keyed by id) an activity item on message i.
@@ -212,6 +224,8 @@ Singleton {
                     break;
                 case "perm":
                     messages.setProperty(i, "working", "waiting for approval: " + String(f.title || ""));
+                    messages.setProperty(i, "permJson", JSON.stringify({ id: String(f.requestId || ""), title: String(f.title || ""), options: f.options || [] }));
+                    root.touched();
                     break;
                 case "models":
                     root.models = f.models || [];
@@ -296,7 +310,7 @@ Singleton {
                 for (var i = 0; i < f.messages.length; i++) {
                     var m = f.messages[i];
                     messages.append({ who: String(m.who), body: String(m.body),
-                        imagesJson: "[]", working: "", streaming: false, failed: false, activityJson: "[]" });
+                        imagesJson: "[]", working: "", streaming: false, failed: false, activityJson: "[]", permJson: "" });
                 }
                 root.touched();
             }

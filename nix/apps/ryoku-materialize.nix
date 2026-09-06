@@ -141,19 +141,28 @@ pkgs.writeShellApplication {
         "$user_qml/$module"
     done
 
-    # Hyprland's optional plugins are immutable Nix packages, but the
-    # upstream Hub already knows how to discover/load ~/.local plugin files.
-    # Materialize stable user-facing symlinks instead of teaching the Hub Nix
-    # store paths or writing into /usr/lib.
+    # Hyprland's bundled plugins are immutable generation-owned packages.
+    # Older Ryoku-on-NixOS revisions exposed them through ~/.local symlinks;
+    # Hub now receives the store package directory directly instead.
+    #
+    # Remove only those old symlinks. A real user-created plugin file is left
+    # alone, although bundled plugin IDs are ignored by Hub while Nix owns them.
     plugin_dir="$HOME/.local/lib/hyprland/plugins"
-    mkdir -p "$plugin_dir"
 
-    for plugin in dynamic-cursors hyprbars hyprfocus hyprglass imgborders; do
-      rm -f -- "$plugin_dir/$plugin.so"
-      ln -s \
-        "${ryoku.hyprPlugins}/lib/hyprland/plugins/$plugin.so" \
-        "$plugin_dir/$plugin.so"
-    done
+    if [ -d "$plugin_dir" ]; then
+      for plugin in \
+        dynamic-cursors \
+        hyprbars \
+        hyprfocus \
+        hyprglass \
+        imgborders \
+        keysounds
+      do
+        if [ -L "$plugin_dir/$plugin.so" ]; then
+          rm -f -- "$plugin_dir/$plugin.so"
+        fi
+      done
+    fi
 
     # ----------------------------------------------------------
     # NixOS owns Ryoku's systemd user units declaratively.

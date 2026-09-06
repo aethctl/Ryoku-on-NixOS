@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,4 +248,69 @@ func wallPrefs() wallTune {
 		p.TransWidth = *shell.Wallpaper.TransWidth
 	}
 	return p
+}
+
+// wallAudio is the wall-ui's global video-audio default for a clip: whether it
+// plays muted and at what volume (0-100). It is the fallback for any output a
+// wall.apply audio map does not name.
+type wallAudio struct {
+	mute   bool
+	volume int
+}
+
+// ryogamiWallConfigDir resolves the wall-ui config directory the way its
+// Config.qml does: RYOGAMI_WALL_CONFIG when set, else $XDG_CONFIG_HOME (or
+// ~/.config) + /ryogami-wall.
+func ryogamiWallConfigDir() string {
+	if d := os.Getenv("RYOGAMI_WALL_CONFIG"); d != "" {
+		return d
+	}
+	if d := os.Getenv("XDG_CONFIG_HOME"); d != "" {
+		return filepath.Join(d, "ryogami-wall")
+	}
+	return filepath.Join(home(), ".config", "ryogami-wall")
+}
+
+// wallAudioDefaults reads ~/.config/ryogami-wall/config.json for the picker's
+// global audio knobs, mirroring wall-ui's Config.qml: wallpaperMute is true
+// unless the key is exactly false, and wallpaperVolume defaults to 100, rounded
+// and clamped to 0-100. An absent file yields muted at full volume.
+func wallAudioDefaults() wallAudio {
+	a := wallAudio{mute: true, volume: 100}
+	var data struct {
+		Mute   *bool    `json:"wallpaperMute"`
+		Volume *float64 `json:"wallpaperVolume"`
+	}
+	loadJSON(filepath.Join(ryogamiWallConfigDir(), "config.json"), &data)
+	if data.Mute != nil {
+		a.mute = *data.Mute
+	}
+	if data.Volume != nil {
+		a.volume = clampVolume(int(math.Round(*data.Volume)))
+	}
+	return a
+}
+
+// effectiveAudio resolves one output's clip audio: the explicit per-output value
+// from a wall.apply audio map when the key is present, else the global default.
+func effectiveAudio(key string, mute map[string]bool, volume map[string]int, def wallAudio) (bool, int) {
+	m := def.mute
+	if v, ok := mute[key]; ok {
+		m = v
+	}
+	vol := def.volume
+	if v, ok := volume[key]; ok {
+		vol = clampVolume(v)
+	}
+	return m, vol
+}
+
+func clampVolume(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 100 {
+		return 100
+	}
+	return v
 }

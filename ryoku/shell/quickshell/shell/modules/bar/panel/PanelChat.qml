@@ -538,6 +538,7 @@ Item {
             required property bool streaming
             required property bool failed
             required property string activityJson
+            required property string permJson
 
             width: ListView.view ? ListView.view.width : 0
             spacing: 5 * root.s
@@ -579,9 +580,14 @@ Item {
                     anchors.margins: 8 * root.s
                     spacing: 6 * root.s
 
-                    // working indicator (agent, pre-answer)
+                    readonly property var permReq: {
+                        try { return msg.permJson.length > 0 ? JSON.parse(msg.permJson) : null; }
+                        catch (e) { return null; }
+                    }
+
+                    // working indicator (agent, pre-answer); the approval card replaces it
                     Row {
-                        visible: !msg.isUser && msg.streaming && msg.body.length === 0
+                        visible: !msg.isUser && msg.streaming && msg.body.length === 0 && bodyCol.permReq === null
                         spacing: 6 * root.s
                         Rectangle {
                             width: 6 * root.s; height: 6 * root.s; radius: width / 2
@@ -603,18 +609,180 @@ Item {
                         }
                     }
 
-                    // live activity: the tools the agent runs and its reasoning
+                    // approval: hermes paused on a tool and waits for a pick. A
+                    // card in the accent, not a status line: this is the one thing
+                    // the turn cannot continue without.
+                    Rectangle {
+                        id: permCard
+                        width: parent.width
+                        visible: !msg.isUser && msg.streaming && bodyCol.permReq !== null
+                        height: visible ? permCol.implicitHeight + 20 * root.s : 0
+                        radius: 9 * root.s
+                        color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.10)
+                        border.width: 1
+                        border.color: Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.45)
+                        Column {
+                            id: permCol
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 10 * root.s
+                            spacing: 8 * root.s
+                            Row {
+                                spacing: 6 * root.s
+                                MaterialIcon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "shield"
+                                    font.pixelSize: 13 * root.s
+                                    color: Theme.primary
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: I18n.tr("NEEDS YOUR OK")
+                                    color: Theme.primary
+                                    font.family: Theme.mono
+                                    font.pixelSize: 8 * root.s
+                                    font.letterSpacing: 1.2
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                            Text {
+                                width: parent.width
+                                text: bodyCol.permReq ? String(bodyCol.permReq.title || "") : ""
+                                color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
+                                font.family: Theme.mono
+                                font.pixelSize: 10.5 * root.s
+                                wrapMode: Text.WrapAnywhere
+                                maximumLineCount: 3
+                                elide: Text.ElideMiddle
+                            }
+                            Flow {
+                                width: parent.width
+                                spacing: 6 * root.s
+                                Repeater {
+                                    // hermes usually offers its own reject option; add one only when it did not
+                                    model: {
+                                        var req = bodyCol.permReq;
+                                        if (!req) return [];
+                                        var opts = req.options.slice();
+                                        var hasReject = opts.some((o) => String(o.kind || "").indexOf("reject") >= 0);
+                                        return hasReject ? opts : opts.concat([{ id: "", name: "Decline", kind: "reject" }]);
+                                    }
+                                    delegate: Rectangle {
+                                        id: permBtn
+                                        required property var modelData
+                                        readonly property bool allow: modelData.id !== "" && String(modelData.kind || "").indexOf("reject") < 0
+                                        height: 28 * root.s
+                                        width: permBtnRow.implicitWidth + 22 * root.s
+                                        radius: 7 * root.s
+                                        color: allow
+                                            ? (pbArea.containsMouse ? Qt.lighter(Theme.primary, 1.12) : Theme.primary)
+                                            : Qt.rgba(Theme.onSurface.r, Theme.onSurface.g, Theme.onSurface.b, pbArea.containsMouse ? 0.14 : 0.06)
+                                        border.width: allow ? 0 : 1
+                                        border.color: Qt.rgba(Theme.onSurface.r, Theme.onSurface.g, Theme.onSurface.b, 0.18)
+                                        Behavior on color { ColorAnimation { duration: Motion.fast } }
+                                        Row {
+                                            id: permBtnRow
+                                            anchors.centerIn: parent
+                                            spacing: 5 * root.s
+                                            MaterialIcon {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: permBtn.allow ? "check" : "close"
+                                                font.pixelSize: 13 * root.s
+                                                color: permBtn.allow ? Theme.inkOn(Theme.primary, Theme.onPrimary)
+                                                    : Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                            }
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: String(permBtn.modelData.name || permBtn.modelData.id)
+                                                color: permBtn.allow ? Theme.inkOn(Theme.primary, Theme.onPrimary)
+                                                    : Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                                font.family: Theme.fontPrimary
+                                                font.pixelSize: 11 * root.s
+                                                font.weight: permBtn.allow ? Font.DemiBold : Font.Normal
+                                            }
+                                        }
+                                        MouseArea {
+                                            id: pbArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: Needle.answerPermission(permBtn.modelData.id)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // live activity: the tools the agent runs and its reasoning. A
+                    // long run collapses to its last few steps behind a count, so a
+                    // twenty-file read does not push the answer off the panel.
                     Column {
                         id: activityCol
                         width: parent.width
                         spacing: 3 * root.s
-                        visible: !msg.isUser && actRepeater.count > 0
+                        visible: !msg.isUser && activityCol.items.length > 0
+                        property bool expanded: false
+                        readonly property int tail: 3
+                        readonly property var items: {
+                            try { return JSON.parse(msg.activityJson) || []; }
+                            catch (e) { return []; }
+                        }
+                        readonly property bool folded: !expanded && items.length > tail + 1
+                        readonly property string summary: {
+                            var byKind = {}, running = 0, failed = 0, tools = 0;
+                            for (var i = 0; i < items.length; i++) {
+                                var it = items[i];
+                                if (it.k !== "tool") continue;
+                                tools++;
+                                var kind = it.kind || "tool";
+                                byKind[kind] = (byKind[kind] || 0) + 1;
+                                if (it.status === "failed") failed++;
+                                else if (it.status !== "completed") running++;
+                            }
+                            var parts = [];
+                            for (var k in byKind)
+                                parts.push(byKind[k] + " " + k + (byKind[k] > 1 ? "s" : ""));
+                            var s = tools + " " + (tools === 1 ? "step" : "steps");
+                            if (parts.length) s += " · " + parts.join(", ");
+                            if (running) s += " · " + running + " running";
+                            if (failed) s += " · " + failed + " failed";
+                            return s;
+                        }
+
+                        Item {
+                            width: parent.width
+                            height: 18 * root.s
+                            visible: activityCol.items.length > activityCol.tail + 1
+                            Row {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 4 * root.s
+                                MaterialIcon {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: activityCol.expanded ? "expand_less" : "expand_more"
+                                    font.pixelSize: 13 * root.s
+                                    color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                }
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: activityCol.summary
+                                    color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                    font.family: Theme.mono
+                                    font.pixelSize: 8.5 * root.s
+                                    font.letterSpacing: 0.4
+                                }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: activityCol.expanded = !activityCol.expanded
+                            }
+                        }
                         Repeater {
                             id: actRepeater
-                            model: {
-                                try { return JSON.parse(msg.activityJson) || []; }
-                                catch (e) { return []; }
-                            }
+                            model: activityCol.folded ? activityCol.items.slice(activityCol.items.length - activityCol.tail) : activityCol.items
                             delegate: Item {
                                 id: actRow
                                 required property var modelData
@@ -669,9 +837,9 @@ Item {
                                     text: actRow.isTool
                                         ? ((actRow.modelData.title && actRow.modelData.title.length) ? actRow.modelData.title : (actRow.modelData.kind || "tool"))
                                         : (actRow.modelData.text || "")
-                                    wrapMode: Text.Wrap
+                                    wrapMode: actRow.isTool ? Text.NoWrap : Text.Wrap
                                     maximumLineCount: actRow.isTool ? 1 : 3
-                                    elide: Text.ElideRight
+                                    elide: actRow.isTool ? Text.ElideMiddle : Text.ElideRight
                                     textFormat: actRow.isTool ? Text.PlainText : Text.MarkdownText
                                     color: actRow.isTool ? Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
                                         : Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)

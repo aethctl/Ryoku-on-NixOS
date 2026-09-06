@@ -18,8 +18,6 @@ func TestNixHostOwnedReconcilersDoNotMutateHost(t *testing.T) {
 		{"quickshell", reconcileQuickshell},
 		{"qmk", reconcileQMK},
 		{"asus aura", reconcileAsusAura},
-		{"spicetify", reconcileSpicetifyCanvas},
-		{"spicetify marketplace", reconcileSpicetifyMarketplace},
 		{"lockscreen", reconcileLockscreen},
 		{"lockscreen drift", reconcileLockscreenDrift},
 		{"portal routing", reconcilePortalRouting},

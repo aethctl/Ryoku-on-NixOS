@@ -1,3 +1,13 @@
+-- A floating window sized past the monitor reads as a broken fullscreen (issue
+-- 147: Files on a 1366x768 panel). Every fixed size below is capped to the
+-- monitor the window opens on; Hyprland evaluates the expressions per window.
+local function fit(w, h)
+    return {
+        "min(" .. w .. ", monitor_w * 0.92)",
+        "min(" .. h .. ", monitor_h * 0.88)",
+    }
+end
+
 hl.window_rule({
     name           = "suppress-maximize",
     match          = { class = ".*" },
@@ -52,7 +62,7 @@ hl.window_rule({
     name   = "float-nautilus",
     match  = { class = "org.gnome.Nautilus" },
     float  = true,
-    size   = { 1500, 850 },
+    size   = fit(1500, 850),
     center = true,
 })
 
@@ -60,7 +70,7 @@ hl.window_rule({
 	name   = "float-ryoku-settings",
 	match  = { title = "^(Ryoku Settings)$" },
 	float  = true,
-	size   = { 1360, 880 },
+	size   = fit(1360, 880),
 	center = true,
 })
 
@@ -68,7 +78,7 @@ hl.window_rule({
     name   = "float-ryostore",
     match  = { title = "^(Ryostore)$" },
     float  = true,
-    size   = { 1180, 760 },
+    size   = fit(1180, 760),
     center = true,
 })
 
@@ -76,7 +86,7 @@ hl.window_rule({
     name   = "float-ryovm",
     match  = { title = "^(ryovm)$" },
     float  = true,
-    size   = { 1180, 760 },
+    size   = fit(1180, 760),
     center = true,
     -- qs paints its first frame slowly on this hybrid GPU (Mesa falls back off
     -- the NVIDIA node), so the pop-in would reveal the uninitialised surface as
@@ -88,7 +98,7 @@ hl.window_rule({
     name   = "float-ryoport-ssh",
     match  = { class = "ryoport-ssh" },
     float  = true,
-    size   = { 900, 560 },
+    size   = fit(900, 560),
     center = true,
 })
 
@@ -103,7 +113,7 @@ hl.window_rule({
     name   = "float-ryostore",
     match  = { class = "ryostore" },
     float  = true,
-    size   = { 900, 600 },
+    size   = fit(900, 600),
     center = true,
 })
 
@@ -111,7 +121,7 @@ hl.window_rule({
     name   = "float-ryoku-rashin-setup",
     match  = { class = "ryoku-rashin-setup" },
     float  = true,
-    size   = { 900, 600 },
+    size   = fit(900, 600),
     center = true,
 })
 
@@ -119,7 +129,7 @@ hl.window_rule({
     name   = "float-looking-glass",
     match  = { class = "looking-glass-client" },
     float  = true,
-    size   = { 1600, 900 },
+    size   = fit(1600, 900),
     center = true,
 })
 
@@ -127,7 +137,7 @@ hl.window_rule({
     name   = "float-qemu",
     match  = { class = "[Qq]emu" },
     float  = true,
-    size   = { 1280, 800 },
+    size   = fit(1280, 800),
     center = true,
 })
 
@@ -135,7 +145,7 @@ hl.window_rule({
     name   = "float-ryoku-welcome",
     match  = { title = "^(Welcome to Ryoku)$" },
     float  = true,
-    size   = { 1180, 760 },
+    size   = fit(1180, 760),
     center = true,
 })
 
@@ -162,10 +172,17 @@ hl.window_rule({
 
 -- Ryotunes, the music app ([ryoku] package, neur0map/ryotunes). Float it like
 -- the other music players (Spotify above); the app sizes and centres its own
--- floating window.
+-- floating window. The Tauri app maps with class "ryotunes"; the native
+-- Quickshell client (ryotunes-qml) maps with Quickshell's class and the title
+-- "Ryotunes" (its mini player is "Ryotunes Mini", which stays tiled).
 hl.window_rule({
     name  = "float-ryotunes",
     match = { class = "^ryotunes$" },
+    float = true,
+})
+hl.window_rule({
+    name  = "float-ryotunes-qml",
+    match = { class = "^org\\.quickshell$", title = "^Ryotunes$" },
     float = true,
 })
 

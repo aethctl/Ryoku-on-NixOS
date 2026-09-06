@@ -22,10 +22,6 @@ output_path = "~/.config/vesktop/themes/matugen.css"
 input_path = "~/.config/matugen/templates/discord.css"
 output_path = "~/.config/equibop/themes/matugen.css"
 
-[templates.qt5ct]
-input_path = "~/.config/matugen/templates/qt6ct-colors.conf"
-output_path = "~/.config/qt5ct/colors/ryoku.conf"
-
 [templates.obs]
 input_path = "~/.config/matugen/templates/obs.theme"
 output_path = "~/.config/obs-studio/themes/matugen.theme"
@@ -50,9 +46,12 @@ output_path = "~/.steam/steam/steamui/skins/Material-Theme/css/main/colors/matug
 input_path = "~/.config/matugen/templates/cava.ini"
 output_path = "~/.config/cava/config"
 
+# ghostty/config is the user's own file; matugen writes only the palette to a
+# sibling the config includes (`config-file = ryoku-colors`), so a retint never
+# clobbers it -- the same split kitty uses with current-theme.conf.
 [templates.ghostty]
 input_path = "~/.config/matugen/templates/ghostty.conf"
-output_path = "~/.config/ghostty/config"
+output_path = "~/.config/ghostty/ryoku-colors"
 
 [templates.micro]
 input_path = "~/.config/matugen/templates/micro.micro"
@@ -75,11 +74,6 @@ output_path = "~/.config/yazi/theme.toml"
 input_path = "~/.config/matugen/templates/obsidian.css"
 output_path = "~/.config/matugen/generated/obsidian.css"
 
-[templates.kvantum]
-input_path = "~/.config/matugen/templates/kvantum.kvconfig"
-output_path = "~/.config/Kvantum/ryoku/ryoku.kvconfig"
-post_hook = "mkdir -p ~/.config/Kvantum/ryoku && cp -f ~/.config/matugen/templates/kvantum.svg ~/.config/Kvantum/ryoku/ryoku.svg 2>/dev/null; kvantummanager --set ryoku 2>/dev/null || true"
-
 [templates.zathura]
 input_path = "~/.config/matugen/templates/zathura"
 output_path = "~/.config/zathura/zathurarc"
@@ -95,3 +89,10 @@ output_path = "~/.config/tmux/ryoku-colors.conf"
 [templates.sidra]
 input_path = "~/.config/matugen/templates/sidra.css"
 output_path = "~/.config/Sidra/custom.css"
+
+# Ryotunes (the native music client) reads its palette as a Ryoku skin: matugen
+# renders the skin manifest into the user skins dir, where the client's Skin
+# singleton picks it up as the "matugen" skin (the Settings "System" source).
+[templates.ryotunes]
+input_path = "~/.config/matugen/templates/ryotunes.json"
+output_path = "~/.config/ryotunes/skins/matugen/skin.json"
