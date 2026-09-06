@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000" />
   <meta name="description" content="Ryoku on NixOS — the declarative NixOS port of the Ryoku Hyprland desktop." />
   <title>Ryoku on NixOS</title>
-  <link rel="stylesheet" href="styles-v2-2.css" />
+  <link rel="stylesheet" href="styles-v2-3.css" />
 </head>
 <body>
   <div class="page-progress" aria-hidden="true"><span></span></div>
@@ -205,14 +205,18 @@
           </article>
         </div>
 
-        <div class="install-guide-cta reveal">
-          <div>
-            <span class="eyebrow">NEED THE FULL WALKTHROUGH?</span>
-            <h3>Fresh NixOS → Ryoku, one step at a time.</h3>
-            <p>No assumed Nix knowledge. Every file, command, save step and rebuild is explained.</p>
+        <a class="install-guide-cta install-guide-feature reveal" href="install.html" aria-label="Open the step-by-step Ryoku installation guide">
+          <div class="install-guide-index">00 → 07</div>
+          <div class="install-guide-copy">
+            <span class="eyebrow">STEP-BY-STEP INSTALL GUIDE</span>
+            <h3>Fresh NixOS → Ryoku. Nothing skipped.</h3>
+            <p>For first-time NixOS users: every file, command, save step, rebuild, dry run and recovery point explained in order.</p>
+            <div class="install-guide-path" aria-hidden="true">
+              <span>FLAKES</span><i>→</i><span>FLAKE.NIX</span><i>→</i><span>TEST</span><i>→</i><span>PREVIEW</span><i>→</i><span>INSTALL</span>
+            </div>
           </div>
-          <a class="button primary" href="install.html">Step-by-step install guide →</a>
-        </div>
+          <span class="install-guide-arrow">OPEN GUIDE ↗</span>
+        </a>
 
         <div class="install-note reveal">
           <span>SAFE BY DESIGN</span>
@@ -226,6 +230,15 @@
       <div class="section-main">
         <div class="eyebrow reveal">06 // FAQ</div>
         <h2 class="display-heading reveal">Common questions.<br><em>Short answers.</em></h2>
+
+        <button class="faq-feature reveal" type="button" data-how-open aria-haspopup="dialog">
+          <span class="faq-feature-index">00</span>
+          <span class="faq-feature-copy">
+            <strong>How does it work?</strong>
+            <small>See how Arch-shaped Ryoku is translated into a declarative NixOS system.</small>
+          </span>
+          <span class="faq-feature-action">OPEN EXPLAINER ↗</span>
+        </button>
 
         <div class="faq-list reveal">
           <details id="faq-flakes">
@@ -323,6 +336,80 @@
     <small>力と美のために · For the sake of power and beauty.</small>
   </footer>
 
+
+  <div class="how-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="how-modal-title">
+    <div class="how-modal-backdrop" data-how-close></div>
+    <div class="how-modal-shell">
+      <div class="how-modal-top">
+        <div>
+          <span class="eyebrow">力 // PORT ARCHITECTURE</span>
+          <h2 id="how-modal-title">HOW DOES IT WORK?</h2>
+        </div>
+        <button class="how-modal-close" type="button" data-how-close>CLOSE ×</button>
+      </div>
+
+      <p class="how-modal-lede">Ryoku on NixOS is not a rewrite and it is not a pile of copied dotfiles. The port keeps upstream Ryoku intact where possible, then translates the assumptions an Arch system normally provides into Nix-native equivalents.</p>
+
+      <div class="translation-flow" aria-label="Ryoku NixOS translation layers">
+        <article>
+          <span>01</span><b>UPSTREAM RYOKU</b>
+          <p>Arch-oriented shell, helpers, QML, scripts and desktop behavior remain the source of truth.</p>
+        </article>
+        <i>→</i>
+        <article>
+          <span>02</span><b>PACKAGE LAYER</b>
+          <p>Nix derivations package the shell, plugins and helpers into reproducible, immutable store paths.</p>
+        </article>
+        <i>→</i>
+        <article>
+          <span>03</span><b>RUNTIME BRIDGE</b>
+          <p>Wrappers, declared PATHs and user services expose the commands and runtime dependencies upstream expects.</p>
+        </article>
+        <i>→</i>
+        <article>
+          <span>04</span><b>STATE BRIDGE</b>
+          <p>Package-owned code stays immutable while genuinely writable settings, caches and generated state live in user-owned paths.</p>
+        </article>
+        <i>→</i>
+        <article>
+          <span>05</span><b>NIXOS MODULE</b>
+          <p>The desktop is attached declaratively to your existing NixOS system without taking ownership of your hardware config.</p>
+        </article>
+      </div>
+
+      <div class="how-detail-grid">
+        <article>
+          <span>TRANSLATION, NOT EMULATION</span>
+          <h3>Arch assumptions become Nix declarations.</h3>
+          <p>Where upstream expects a binary on PATH, a mutable file, a service, or a desktop helper, the port supplies the NixOS equivalent instead of pretending the machine is Arch.</p>
+        </article>
+        <article>
+          <span>ONE QT STACK</span>
+          <h3>QML stays ABI-consistent.</h3>
+          <p>Quickshell, Qt and private multimedia pieces are built from the same Nix package set so the shell does not mix incompatible Qt internals.</p>
+        </article>
+        <article>
+          <span>HOST OWNERSHIP</span>
+          <h3>Your NixOS system stays yours.</h3>
+          <p>Ryoku does not seize your kernel, bootloader, disks or GPU configuration. Those remain in your host configuration; Ryoku adds the desktop layer.</p>
+        </article>
+        <article>
+          <span>GENERATIONS</span>
+          <h3>Updates are normal NixOS rebuilds.</h3>
+          <p><code>ryoku update</code> advances the Ryoku flake input, builds a new generation and switches to it. Previous generations remain available for rollback.</p>
+        </article>
+      </div>
+
+      <div class="how-modal-bottom">
+        <div>
+          <span class="eyebrow">THE RESULT</span>
+          <strong>Upstream Ryoku behavior on a reproducible NixOS foundation.</strong>
+        </div>
+        <a class="button primary" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">VIEW SOURCE ↗</a>
+      </div>
+    </div>
+  </div>
+
   <div class="lightbox" role="dialog" aria-modal="true" aria-hidden="true" aria-label="Screenshot viewer">
     <button class="lightbox-close" type="button" aria-label="Close screenshot">CLOSE ×</button>
     <div class="lightbox-inner">
@@ -331,6 +418,6 @@
     </div>
   </div>
 
-  <script src="script-v2-2.js"></script>
+  <script src="script-v2-3.js"></script>
 </body>
 </html>

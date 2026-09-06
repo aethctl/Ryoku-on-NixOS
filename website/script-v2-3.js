@@ -130,3 +130,32 @@ if (lightbox) {
     if (event.key === 'Escape' && lightbox.classList.contains('open')) closeLightbox();
   });
 }
+
+// V2.3 — "How does it work?" architecture explainer
+const howModal = document.querySelector('.how-modal');
+const howOpeners = document.querySelectorAll('[data-how-open]');
+const howClosers = document.querySelectorAll('[data-how-close]');
+let howPreviousFocus = null;
+
+function openHowModal() {
+  if (!howModal) return;
+  howPreviousFocus = document.activeElement;
+  howModal.classList.add('open');
+  howModal.setAttribute('aria-hidden', 'false');
+  body.style.overflow = 'hidden';
+  howModal.querySelector('.how-modal-close')?.focus();
+}
+
+function closeHowModal() {
+  if (!howModal) return;
+  howModal.classList.remove('open');
+  howModal.setAttribute('aria-hidden', 'true');
+  body.style.overflow = '';
+  howPreviousFocus?.focus?.();
+}
+
+howOpeners.forEach((button) => button.addEventListener('click', openHowModal));
+howClosers.forEach((button) => button.addEventListener('click', closeHowModal));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && howModal?.classList.contains('open')) closeHowModal();
+});
