@@ -732,6 +732,40 @@ Item {
                     width: dflick.width - Tokens.s3
                     spacing: Tokens.s5
 
+                    // A plugin Ryoku did not write says so first: the same
+                    // warning the Store and QS Bar Settings print.
+                    Rectangle {
+                        width: parent.width
+                        visible: detail.man.official !== true
+                        height: visible ? communityRow.implicitHeight + Tokens.s4 * 2 : 0
+                        radius: Tokens.radius
+                        color: "transparent"
+                        border.width: Tokens.border
+                        border.color: Tokens.lineStrong
+                        Row {
+                            id: communityRow
+                            anchors {
+                                left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter
+                                leftMargin: Tokens.s4; rightMargin: Tokens.s4
+                            }
+                            spacing: Tokens.s3
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "warning"
+                                color: Tokens.inkDim
+                                font.family: "Material Symbols Rounded"
+                                font.pixelSize: Tokens.fRow
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - Tokens.fRow - parent.spacing
+                                text: I18n.tr("Community plugin. Ryoku does not review or maintain it: it runs inside your shell with your permissions, so inspect its code before you trust it.")
+                                color: Tokens.inkDim; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                                wrapMode: Text.WordWrap
+                            }
+                        }
+                    }
+
                     // ── Placement: enable, host, and where a popout sits ──
                     Column {
                         width: parent.width

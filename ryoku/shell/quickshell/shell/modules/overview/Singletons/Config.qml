@@ -27,9 +27,17 @@ Singleton {
     // background behind their window previews. The daemon writes the absolute
     // path (+ newline) to ~/.local/state/ryoku-wallpaper on every change; watch
     // it and expose a file:// url (empty until it resolves).
+    // The workspace cells render this as a still Image backdrop, so a live (video)
+    // wallpaper has no frame to decode: feeding its path to Image just logs
+    // "Unsupported image format" per cell. Treat a video (.mp4/.webm/.mkv/.mov) as
+    // no backdrop -- the cell falls back to its flat fill -- matching the
+    // Session.wallIsVideo extension check.
     property string wallpaper: {
         var t = wallFile.text().trim();
-        return t.length > 0 ? "file://" + t : "";
+        if (t.length === 0) return "";
+        var p = t.toLowerCase();
+        if (p.endsWith(".mp4") || p.endsWith(".webm") || p.endsWith(".mkv") || p.endsWith(".mov")) return "";
+        return "file://" + t;
     }
     FileView {
         id: wallFile

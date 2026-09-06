@@ -40,17 +40,28 @@ func UserEditFiles() ([]string, error) {
 	return rels, err
 }
 
-// LiveOwnedConfig are the tool's own user-include files: each is edited at its
-// normal ~/.config path and loaded there directly (hyprland.lua's
-// optional("user") and optional("monitors_user"); kitty.conf includes
-// user.conf). Ryoku seeds user.lua once and never touches it; the other two are
-// never shipped. They must NEVER live in the overlay: overlayUserEdits would
-// re-lay a frozen copy over the live file on every update and silently wipe hand
-// edits made afterward. The overlay is for forking a whole Ryoku file, not these.
+// LiveOwnedConfig are the files edited at their normal ~/.config path and
+// loaded there directly. Two kinds qualify: the tool's own user-include files
+// (hyprland.lua's optional("user") and optional("monitors_user"); kitty.conf
+// includes user.conf), and the update seeds the runtime or the Hub edits in
+// place (materialize's generatedSeed set: the Hub's Fastfetch editor and the
+// store's readout styles rewrite fastfetch/config.jsonc, ryoku-gpu owns
+// gpu.lua, the display flow owns monitors.lua and keyboard.lua, matugen owns
+// kitty/current-theme.conf). They must NEVER live in the overlay:
+// overlayUserEdits would re-lay a frozen copy over the live file on every
+// update and silently wipe edits made afterward. The user.lua report was the
+// first sighting; "updates keep resetting my fastfetch" was the same bug
+// through the seed set. The overlay is for forking a whole Ryoku file, not
+// these.
 var LiveOwnedConfig = []string{
 	"hypr/user.lua",
 	"hypr/monitors_user.lua",
 	"kitty/user.conf",
+	"fastfetch/config.jsonc",
+	"hypr/monitors.lua",
+	"hypr/gpu.lua",
+	"hypr/keyboard.lua",
+	"kitty/current-theme.conf",
 }
 
 // IsLiveOwnedConfig reports whether rel (a slash path relative to ~/.config) is

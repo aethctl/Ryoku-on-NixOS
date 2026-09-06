@@ -147,14 +147,14 @@ var rows = [
         "tab": "",
         "group": "POINTER",
         "key": "input.followMouse",
-        "label": "Follow mouse",
-        "desc": "How window focus follows the pointer; Loose keeps typing where it was",
+        "label": "Focus behavior",
+        "desc": "Click to focus keeps newly launched and dock-selected apps in front",
         "ctl": "seg",
         "src": "settings.lua (input.follow_mouse)",
         "opts": [
-            "0",
-            "1",
-            "2"
+            "Ignore pointer movement",
+            "Focus under pointer",
+            "Click to focus"
         ]
     },
     {

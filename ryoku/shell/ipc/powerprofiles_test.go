@@ -147,3 +147,27 @@ func TestApplyDelay(t *testing.T) {
 		t.Errorf("applyDelay with 0 = %v, want 400ms default", got)
 	}
 }
+
+func TestPersistDecision(t *testing.T) {
+	const long = time.Hour
+	cases := []struct {
+		name                             string
+		active                           string
+		restoreDone, onBat, saverFeature bool
+		sinceFlip                        time.Duration
+		want                             bool
+	}{
+		{"empty profile", "", true, false, false, long, false},
+		{"before restore is boot noise", "performance", false, false, false, long, false},
+		{"battery saver is not a choice", "power-saver", true, true, true, long, false},
+		{"saver on AC is a real pick", "power-saver", true, false, true, long, true},
+		{"switch right after an AC flip is automatic", "performance", true, false, false, 2 * time.Second, false},
+		{"settled performance is a choice", "performance", true, false, false, long, true},
+		{"settled balanced is a choice", "balanced", true, false, false, long, true},
+	}
+	for _, c := range cases {
+		if got := persistDecision(c.active, c.restoreDone, c.onBat, c.saverFeature, c.sinceFlip); got != c.want {
+			t.Errorf("%s: persistDecision = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -36,6 +36,10 @@ const flathubRepo = "https://flathub.org/repo/flathub.flatpakrepo"
 var flatpakPresent = func() bool { return sys.Has("flatpak") }
 
 func reconcileFlatpakRemote(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("system Flatpak remote policy is not mutated imperatively by Doctor on NixOS")
+	}
+
 	if !flatpakPresent() {
 		return okRes("no flatpak installed; the app channel is not needed")
 	}

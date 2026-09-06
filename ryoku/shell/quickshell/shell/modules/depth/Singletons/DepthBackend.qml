@@ -18,6 +18,7 @@ Singleton {
 
     property bool available: false
     property bool installing: false
+    property bool removing: false
     property var models: []
     property string progress: ""
 
@@ -33,6 +34,15 @@ Singleton {
         installProc.command = (model && model.length > 0) ? [root.bin, "install", model] : [root.bin, "install"];
         installProc.running = false;
         installProc.running = true;
+    }
+    function remove(model) {
+        if (root.removing || root.installing || !model || model.length === 0)
+            return;
+        root.removing = true;
+        root.progress = "";
+        removeProc.command = [root.bin, "remove", model];
+        removeProc.running = false;
+        removeProc.running = true;
     }
     // Which curated models are already downloaded (drives the quality option).
     function hasModel(m) {
@@ -91,6 +101,20 @@ Singleton {
         }
         onExited: {
             root.installing = false;
+            root.recheck();
+        }
+    }
+
+    Process {
+        id: removeProc
+        stdout: SplitParser {
+            onRead: line => root.progress = line
+        }
+        stderr: SplitParser {
+            onRead: line => root.progress = line
+        }
+        onExited: {
+            root.removing = false;
             root.recheck();
         }
     }

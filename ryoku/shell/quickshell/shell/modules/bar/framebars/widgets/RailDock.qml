@@ -91,11 +91,10 @@ Item {
             // Docker-style items: the real app icon, in colour, resolved from
             // the desktop entry and the system icon themes (user decision). The
             // app-grid glyph is only the last resort when nothing resolves.
-            readonly property string iconSource: {
-                const desktop = DesktopEntries.heuristicLookup(className);
-                const byEntry = (desktop && desktop.icon) ? Quickshell.iconPath(desktop.icon, true) : "";
-                return byEntry !== "" ? byEntry : Quickshell.iconPath(className.toLowerCase(), true);
-            }
+            // Shared with the first-class dock (services/Dock.qml): resolves the
+            // desktop-entry icon then the class name, and re-resolves reactively so a
+            // transient miss at boot or after an app update heals without a reload.
+            readonly property string iconSource: Dock.iconFor(className)
 
             Rectangle {
                 anchors.fill: parent

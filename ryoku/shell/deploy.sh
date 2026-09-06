@@ -89,7 +89,8 @@ restart_shell() {
   # kill the video player too: a running livewall satisfies init's liveAlive
   # early return, so a freshly built binary would never take effect until the
   # next live switch. the restarted daemon relaunches it from state.
-  pkill -x ryoku-livewall >/dev/null 2>&1 || true
+  pkill -x ryogami-live >/dev/null 2>&1 || true
+  pkill -x ryoku-livewall >/dev/null 2>&1 || true  # pre-rename orphans
   sleep 0.2
 
   mkdir -p "$(dirname -- "$log")"
@@ -152,22 +153,44 @@ for s in "$here/../hyprland/scripts"/ryoku-*; do
   [[ -f $s ]] || continue
   install -m755 "$s" "$bindir/${s##*/}"
 done
-# ryoku-summon lives with the ryowalls app, but the binds call it by bare name too.
-[[ -f "$here/../apps/ryowalls/bin/ryoku-summon" ]] &&
-  install -m755 "$here/../apps/ryowalls/bin/ryoku-summon" "$bindir/ryoku-summon"
 say "installed the hyprland leaf scripts to $bindir"
 
-# Build ryoku-livewall, the software-decode video-wallpaper daemon the shell drives
+# Build ryogami-live, the software-decode video-wallpaper daemon the shell drives
 # for live wallpapers. Needs wayland-scanner + a C toolchain + ffmpeg/wayland dev
 # libs (build-time only); skip cleanly when absent so a plain config deploy still
 # works (it ships prebuilt on installs, and a missing daemon just leaves the clip's
 # still frame as the wallpaper).
 if command -v wayland-scanner >/dev/null 2>&1 && command -v cc >/dev/null 2>&1 &&
-   "$here/livewall/build.sh" "$bindir/ryoku-livewall"; then
-  say "installed $bindir/ryoku-livewall"
+   "$here/livewall/build.sh" "$bindir/ryogami-live"; then
+  say "installed $bindir/ryogami-live"
 else
-  say "skipped ryoku-livewall (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
+  say "skipped ryogami-live (toolchain or ffmpeg/wayland dev libs absent; live falls back to the still)"
 fi
+
+# Build ryogami, the Go wallpaper daemon (catalog, thumbs, applies, depth
+# surface) the shell and the wall-ui picker drive over ryogami.sock. Same Go
+# toolchain the rest of the desktop builds with, so no extra gate.
+say "building ryogami"
+(cd "$here/ryogami/daemon" && go build -o ryogami .)
+install -m755 "$here/ryogami/daemon/ryogami" "$bindir/ryogami"
+say "installed $bindir/ryogami"
+
+# Stage the wall-ui, the vendored skwd-wall picker the daemon spawns through
+# quickshell over ryogami.sock. Pure QML; the unit rewrite below points the
+# daemon at this copy (the package resolver default is /usr/share/ryogami).
+datadir="${XDG_DATA_HOME:-$HOME/.local/share}"
+rm -rf "$datadir/ryogami/wall-ui"
+mkdir -p "$datadir/ryogami/wall-ui"
+cp -a "$here/ryogami/wall-ui/." "$datadir/ryogami/wall-ui/"
+say "installed wall-ui -> $datadir/ryogami/wall-ui"
+# Seed the picker's own config once; user edits persist across deploys. The
+# empty object takes every built-in default (wallpapers in ~/Pictures/Wallpapers)
+# and the marker skips the first-run onboarding on a box that already has walls.
+if [[ ! -f "$cfg/ryogami-wall/config.json" ]]; then
+  mkdir -p "$cfg/ryogami-wall"
+  printf '{}\n' > "$cfg/ryogami-wall/config.json"
+fi
+[[ -e "$cfg/ryogami-wall/.bootstrapped" ]] || : > "$cfg/ryogami-wall/.bootstrapped"
 
 # Build the Ryoku Hub backend (a separate Go binary; the hub's quickshell config
 # shells out to it for the keybind legend and its TOML config).
@@ -265,6 +288,17 @@ mkdir -p "$state_dir"
 printf '%s\n' "$repo_root" > "$state_dir/repo"
 git -C "$repo_root" rev-parse HEAD > "$state_dir/deployed" 2>/dev/null || rm -f "$state_dir/deployed"
 say "recorded update-channel checkout -> $state_dir/repo"
+
+# The `ryoku` agent skill resolves through the repo pointer just recorded:
+# `ryoku-rashin wire` looks at RYOKU_RASHIN_SKILLS, then /usr/share/ryoku/skills
+# (absent on a checkout), then <repo>/ryoku/rashin/skills via ~/.local/state/
+# ryoku/repo, so it finds THIS checkout's skill dir with no separate symlink.
+# Refresh the links now, but only when a Rashin vault already exists (the user
+# opted in); never wire agents for a box that left Rashin off.
+if [[ -d "$datadir/ryoku/rashin" && -x "$bindir/ryoku-rashin" ]]; then
+  "$bindir/ryoku-rashin" wire >/dev/null 2>&1 || true
+  say "refreshed rashin agent wiring (ryoku skill + vault pointers)"
+fi
 
 # Build the Ryoku.Blobs QML plugin (the frame's blob renderer) and install the
 # module onto the user's QML import path. ryoku-shell points QML2_IMPORT_PATH
@@ -437,13 +471,83 @@ if [[ -x "$here/../lockscreen/install-qylock" ]]; then
   fi
 fi
 
-# ryotunes: YouTube Music as a Chromium app-window (apps/ryotunes). Not a
-# quickshell app, so it ships explicitly like the other non-qs launchers: the
-# wrapper on PATH, its .desktop, and its icon into the hicolor set.
-install -m755 "$here/../apps/ryotunes/bin/ryotunes" "$bindir/ryotunes"
-install -Dm644 "$here/../apps/ryotunes/ryotunes.desktop" "$appshare/applications/ryotunes.desktop"
-install -Dm644 "$here/../apps/ryotunes/ryotunes.svg" "$appshare/icons/hicolor/scalable/apps/ryotunes.svg"
-say "installed ryotunes launcher"
+# Packaged externals on a checkout box. ryotunes (and every other package
+# release/packages pins to an upstream commit) is a [ryoku] package users get
+# from pacman; a dev box takes the same signed package from the channel its
+# branch publishes to (unstable-dev -> testing, main -> stable) rather than
+# spending minutes on a local makepkg that could differ from what ships. The
+# release key is in the checkout (release/packages/ryoku-keyring), so trusting
+# it needs no network; the stanza is added once and repointed when the tracked
+# branch changes, and a [ryoku] that points somewhere Ryoku does not publish
+# (a private mirror) is left alone. Skipped cleanly without sudo (CI).
+# The Chromium wrapper this script once laid into ~/.local/bin is retired
+# first so it can never shadow the app.
+if [[ -f "$bindir/ryotunes" ]] && [[ "$(head -c 2 "$bindir/ryotunes" 2>/dev/null)" == '#!' ]] \
+   && grep -q 'music.youtube.com' "$bindir/ryotunes"; then
+  rm -f "$bindir/ryotunes" "$appshare/applications/ryotunes.desktop" \
+    "$appshare/icons/hicolor/scalable/apps/ryotunes.svg"
+  say "retired the ryotunes chromium wrapper"
+fi
+# a locally built copy from the interim makepkg path shadows the package on PATH
+if [[ -x "$bindir/ryotunes" ]] && [[ -f "$HOME/.local/share/ryoku/ryotunes.commit" ]]; then
+  rm -f "$bindir/ryotunes" "$appshare/applications/ryotunes.desktop" \
+    "$HOME/.local/share/ryoku/ryotunes.commit" "$appshare"/icons/hicolor/*/apps/ryotunes.png
+  say "retired the locally built ryotunes (the package takes over)"
+fi
+if command -v sudo >/dev/null 2>&1 && command -v pacman >/dev/null 2>&1; then
+  _rkey=EB6D3C0F55A7B3CABA6B2838847B274F025DD6E3
+  _rbase="https://repo.ryoku.dev/stable"
+  case "${RYOKU_CHANNEL:-$(sed -n 's/^RYOKU_CHANNEL=//p' "$HOME/.config/environment.d/ryoku.conf" 2>/dev/null)}" in
+    unstable-dev) _rserver="$_rbase/channels/testing/\$arch" ;;
+    *)            _rserver="$_rbase/\$arch" ;;
+  esac
+  _rcur="$(awk '/^\[ryoku\]/{f=1;next} /^\[/{f=0} f && /^Server/{sub(/^Server *= */,""); print; exit}' /etc/pacman.conf)"
+  if [[ -z "$_rcur" ]]; then
+    say "adding the [ryoku] repo ($_rserver) so packaged externals install from it"
+    sudo pacman-key --add "$repo_root/release/packages/ryoku-keyring/ryoku.gpg" >/dev/null 2>&1 || true
+    sudo pacman-key --lsign-key "$_rkey" >/dev/null 2>&1 || true
+    printf '\n[ryoku]\nSigLevel = Required\nServer = %s\n' "$_rserver" | sudo tee -a /etc/pacman.conf >/dev/null
+  elif [[ "$_rcur" != "$_rserver" ]] && [[ "$_rcur" == "$_rbase"/* ]]; then
+    say "repointing the [ryoku] repo at $_rserver"
+    sudo sed -i "/^\[ryoku\]/,/^\[/ s|^Server *=.*|Server = $_rserver|" /etc/pacman.conf
+  fi
+  # -Syu, not -Sy + -S: a refreshed db with an un-upgraded system is the
+  # partial-upgrade trap, and a packaged box upgrades on every update anyway.
+  _plog="$HOME/.cache/ryoku/deploy-pacman.log"
+  mkdir -p "$(dirname "$_plog")"
+  # the redirect is the user's file, which is the intent (shellcheck SC2024 is
+  # about root-owned targets); pacman's own output goes to the log for -v.
+  # --overwrite the ryoku-owned paths the ISO installer and this script seed
+  # unowned (privileged helpers, systemd units, polkit rules, the plymouth theme,
+  # the boot configs); once ryoku-desktop packages them an unowned copy otherwise
+  # aborts the whole -Syu with "exists in filesystem" and nothing upgrades.
+  # Mirrors updater.ryokuOverwriteGlob / the doctor's ryokuSystemGlobs.
+  _rovw='/usr/bin/ryoku-*,/usr/lib/systemd/system/ryoku-*,/usr/share/polkit-1/rules.d/*ryoku*.rules,/usr/share/plymouth/themes/ryoku/*,/usr/share/ryoku/boot/*'
+  _pac_ryotunes() { sudo pacman -Syu --needed --noconfirm --overwrite "$_rovw" ryotunes; }
+  # shellcheck disable=SC2024
+  if _pac_ryotunes >"$_plog" 2>&1; then
+    say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}')"
+  elif grep -q 'exists in filesystem' "$_plog"; then
+    # a new package now claims files that exist unowned (an installer/deploy
+    # stray for any package, not just ryoku): remove the ones no package owns and
+    # retry once. A file another package owns is a real conflict, left in place.
+    _strays=()
+    while IFS= read -r _f; do
+      [ -e "$_f" ] || continue
+      pacman -Qo "$_f" >/dev/null 2>&1 || _strays+=("$_f")
+    done < <(sed -n 's/.*: \(\/[^ ]*\) exists in filesystem.*/\1/p' "$_plog")
+    # shellcheck disable=SC2024
+    if [ "${#_strays[@]}" -gt 0 ] && sudo rm -f "${_strays[@]}" && _pac_ryotunes >>"$_plog" 2>&1; then
+      say "ryotunes from [ryoku]: $(pacman -Q ryotunes 2>/dev/null | awk '{print $2}') (cleared ${#_strays[@]} unowned file(s))"
+    else
+      say "  ryotunes not installed from [ryoku] (file conflicts remain; see $_plog)"
+    fi
+  else
+    say "  ryotunes not installed from [ryoku] (channel unreachable or not published yet); see $_plog"
+  fi
+else
+  say "skipping packaged externals (sudo or pacman not available)"
+fi
 
 # ryoku-canvas: a spicetify extension (apps/spicetify) that relays the playing
 # track's Spotify Canvas to the shell so the music widget can show it. Landed in
@@ -513,6 +617,14 @@ wireplumber_policy="$cfg/wireplumber/wireplumber.conf.d/51-ryoku-bluetooth.conf"
 wireplumber_before=
 [[ -f $wireplumber_policy ]] && wireplumber_before=$(<"$wireplumber_policy")
 
+# Files the machine owns after first boot are seeded once and never re-laid,
+# the same generatedSeed set `ryoku materialize` honours (ryoku/cli
+# internal/updater/materialize.go): the Hub and the store rewrite
+# fastfetch/config.jsonc in place (an imported logo lives in it), matugen owns
+# kitty/current-theme.conf. Re-copying them on every deploy is what reset the
+# fastfetch emblem on a dev box after each `ryoku update`.
+seed_once() { [[ -e $2 ]] || cp -a "$1" "$2"; }
+
 # Palette generation, per-app config, and the user session target.
 mkdir -p "$cfg/matugen"; cp -a "$here/matugen/." "$cfg/matugen/"
 cp -a "$here/../apps/fish/config.fish" "$cfg/fish/config.fish"
@@ -527,17 +639,31 @@ mkdir -p "$cfg/gtk-3.0"; cp -a "$here/gtk-3.0/settings.ini" "$cfg/gtk-3.0/settin
 mkdir -p "$cfg/gtk-4.0"; cp -a "$here/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settings.ini"
 mkdir -p "$cfg/btop"; cp -a "$here/../apps/btop/btop.conf" "$cfg/btop/btop.conf"
 mkdir -p "$cfg/fastfetch"
-cp -a "$here/../apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
+seed_once "$here/../apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
 install -m755 "$here/../apps/fastfetch/ryoku-fastfetch" "$bindir/ryoku-fastfetch"
 mkdir -p "$cfg/kitty"
 cp -a "$here/../apps/kitty/kitty.conf" "$cfg/kitty/kitty.conf"
-cp -a "$here/../apps/kitty/current-theme.conf" "$cfg/kitty/current-theme.conf"
+seed_once "$here/../apps/kitty/current-theme.conf" "$cfg/kitty/current-theme.conf"
 mkdir -p "$cfg/wireplumber"; cp -a "$here/../apps/wireplumber/." "$cfg/wireplumber/"
 mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
 # dev deploy runs the daemon from ~/.local/bin; the package ships /usr/bin.
 sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryoku-shell daemon|" \
   -e "s|^ExecStartPre=.*|ExecStartPre=-$bindir/ryoku-shell quit|" "$cfg/systemd/user/ryoku-shell.service"
+# ryogami.service ships ExecStart=/usr/bin/ryogami (the package path); point the
+# dev-deployed unit at ~/.local/bin, mirroring the ryoku-shell rewrite above,
+# and at the staged wall-ui QML (the unit file is re-copied every deploy, so the
+# injected line never stacks).
+sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryogami|" \
+  -e "/^\[Service\]/a Environment=RYOGAMI_SHELL_QML=$datadir/ryogami/wall-ui/shell.qml" \
+  "$cfg/systemd/user/ryogami.service"
 systemctl --user daemon-reload 2>/dev/null || true
+# daemon-reload only re-reads the unit; it never restarts a running service, so
+# without this the freshly built ryogami binary sits on disk while the old
+# daemon keeps running until the next logout ("ran ryoku update, nothing
+# changed"). try-restart cycles it only when it is already up, so a pre-session
+# install deploy does not start it early; the restart relaunches the resident
+# wall-ui picker too.
+systemctl --user try-restart ryogami.service 2>/dev/null || true
 # ryoku-ai-usage.service ships three ExecStart=-/usr/bin/<collector> lines (the
 # package path); rewrite them to ~/.local/bin so the dev-deployed collectors
 # resolve, mirroring the ryoku-shell.service rewrite above.
@@ -555,8 +681,10 @@ if command -v sudo >/dev/null 2>&1; then
   cmp -s "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list ||
     sudo install -Dm644 "$here/../apps/mimeapps.list" /usr/share/applications/mimeapps.list || true
 fi
-# chromium reads ~/.config/chromium-flags.conf at launch; pin its password store to the GNOME keyring.
+# chromium reads ~/.config/chromium-flags.conf, Google Chrome reads chrome-flags.conf;
+# lay the one source to both (GNOME keyring password store + native Wayland).
 cp -a "$here/../apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
+cp -a "$here/../apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
 # the screen-share source chooser xdph launches (hypr/xdph.conf names it). Its
 # stylesheet is matugen's, rendered to ~/.cache/ryoku/share-picker.css.
 mkdir -p "$cfg/hyprland-preview-share-picker"

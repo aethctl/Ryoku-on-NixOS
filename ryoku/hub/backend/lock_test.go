@@ -210,3 +210,33 @@ func TestRunLockRejectsMovedStoreCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestGreeterApplyInvocationUsesNixHelper(t *testing.T) {
+	const helper = "/nix/store/test-ryoku-sddm-theme-apply/bin/ryoku-sddm-theme-apply"
+
+	t.Setenv("RYOKU_SDDM_THEME_APPLY", helper)
+
+	program, args, err := greeterApplyInvocation("clockwork/orbital")
+	if err != nil {
+		t.Fatalf("greeterApplyInvocation: %v", err)
+	}
+
+	if program != helper {
+		t.Fatalf("program = %q, want %q", program, helper)
+	}
+
+	if len(args) != 1 || args[0] != "clockwork/orbital" {
+		t.Fatalf("args = %#v, want selected slug only", args)
+	}
+}
+
+func TestGreeterApplyInvocationRejectsRelativeNixHelper(t *testing.T) {
+	t.Setenv(
+		"RYOKU_SDDM_THEME_APPLY",
+		"ryoku-sddm-theme-apply",
+	)
+
+	if _, _, err := greeterApplyInvocation("clockwork/orbital"); err == nil {
+		t.Fatal("relative Nix helper path should be rejected")
+	}
+}

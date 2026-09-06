@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -37,6 +38,12 @@ type powerProfilesState struct {
 	applyTimer   *time.Timer // debounce for re-applying the active profile after a ppd switch
 	applyMu      sync.Mutex  // serialises applies so overlapping fires never race
 	lastApplyErr string      // profile whose apply last failed; logged once per change
+
+	// restoreDone: a PropertiesChanged before restore-on-login finishes is ppd's
+	// boot default, not a user pick. acFlipNs: unix-nanos of the last AC flip; a
+	// change within autoSwitchWindow of it is automatic, not a pick.
+	restoreDone atomic.Bool
+	acFlipNs    atomic.Int64
 }
 
 // startPowerProfiles brings the power-profile integration up, registers the
@@ -55,6 +62,9 @@ func (d *daemon) startPowerProfiles() {
 		topic: d.registerTopic("powerprofiles"),
 	}
 	d.pp = p
+	// Capture the saved choice before wiring signals: a boot-time
+	// PropertiesChanged could rewrite the store before restore reads it.
+	saved := readPersistedProfile()
 
 	if err := conn.AddMatchSignal(
 		dbus.WithMatchObjectPath(dbus.ObjectPath(ppPath)),
@@ -69,6 +79,7 @@ func (d *daemon) startPowerProfiles() {
 		for range sigs {
 			p.publish()
 			p.scheduleApply()
+			p.maybePersistActive()
 		}
 		if p.applyTimer != nil {
 			p.applyTimer.Stop()
@@ -84,6 +95,16 @@ func (d *daemon) startPowerProfiles() {
 		}
 		return nil, p.setProfile(a.Profile)
 	})
+
+	// Restore the profile the user last chose. power-profiles-daemon resets to a
+	// platform default on reboot (and can boot differently on AC vs battery), so
+	// without this the desktop forgets a balanced/performance pick every restart.
+	if saved != "" && saved != p.activeProfile() {
+		if err := p.setProfile(saved); err != nil {
+			log.Printf("ryoku-shell: restore power profile %q: %v", saved, err)
+		}
+	}
+	p.restoreDone.Store(true)
 
 	p.publish()
 }
@@ -144,6 +165,85 @@ func (p *powerProfilesState) setProfile(name string) error {
 	}
 	return p.obj.Call("org.freedesktop.DBus.Properties.Set", 0,
 		ppIface, "ActiveProfile", dbus.MakeVariant(name)).Err
+}
+
+// persistedProfilePath is the daemon-owned store for the user's last explicit
+// power-profile choice, kept beside power.json but separate so a ryoku-power
+// write of the CPU knobs never clobbers it (and vice versa).
+func persistedProfilePath() string {
+	dir := ryokuConfigDir()
+	if dir == "" {
+		return ""
+	}
+	return filepath.Join(dir, "power-profile.json")
+}
+
+// persistProfile records an explicit user profile choice so it can be restored
+// after a reboot. Only the user path calls this; autoprofile's transient
+// on-battery switch must not overwrite the saved preference.
+func (p *powerProfilesState) persistProfile(name string) {
+	if name == "" {
+		return
+	}
+	if path := persistedProfilePath(); path != "" {
+		_ = writeJSONFile(path, map[string]string{"profile": name})
+	}
+}
+
+const autoSwitchWindow = 6 * time.Second
+
+// persistDecision reports whether active should be saved as the user's choice.
+// Pure, so the guard is unit-tested without a bus or clock.
+func persistDecision(active string, restoreDone, onBattery, saverFeature bool, sinceACFlip time.Duration) bool {
+	switch {
+	case active == "" || !restoreDone:
+		return false
+	case active == ppSaver && onBattery && saverFeature:
+		return false // autoprofile's battery switch, not a choice
+	case sinceACFlip < autoSwitchWindow:
+		return false // automatic reaction to plugging or unplugging
+	default:
+		return true
+	}
+}
+
+// noteACFlip records that AC just plugged or unplugged.
+func (p *powerProfilesState) noteACFlip() { p.acFlipNs.Store(time.Now().UnixNano()) }
+
+// maybePersistActive saves the current profile as the user's choice on any path
+// (the bar widget shells out to powerprofilesctl, not this daemon), skipping the
+// changes persistDecision flags as automatic. Runs on every PropertiesChanged.
+func (p *powerProfilesState) maybePersistActive() {
+	active := p.activeProfile()
+	sinceFlip := time.Duration(1) << 62
+	if ns := p.acFlipNs.Load(); ns != 0 {
+		sinceFlip = time.Since(time.Unix(0, ns))
+	}
+	st := readPowerState()
+	onBattery := st.present && st.discharging
+	if persistDecision(active, p.restoreDone.Load(), onBattery, perfFlag("autoPowerSaverOnBattery"), sinceFlip) {
+		p.persistProfile(active)
+	}
+}
+
+// readPersistedProfile returns the user's last saved profile, or "" when none is
+// stored or it is unreadable.
+func readPersistedProfile() string {
+	path := persistedProfilePath()
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		Profile string `json:"profile"`
+	}
+	if json.Unmarshal(b, &s) != nil {
+		return ""
+	}
+	return s.Profile
 }
 
 // profileNames extracts profile names from the raw Profiles property value
@@ -252,4 +352,16 @@ func (p *powerProfilesState) applyActiveProfile(active string) {
 		return
 	}
 	p.lastApplyErr = ""
+}
+
+// saverActive reports whether Power Saver should shape the desktop: the active
+// power profile is power-saver and the user left "Follow the power profile" on
+// (performance.json powerProfileEffects, default on). Without a power-profiles
+// connection it reads false. Read by the palette / widget / visualiser unload
+// gates to reclaim memory while the machine is asking for frugality.
+func (d *daemon) saverActive() bool {
+	if d.pp == nil || !perfFlagDefault("powerProfileEffects", true) {
+		return false
+	}
+	return d.pp.activeProfile() == ppSaver
 }

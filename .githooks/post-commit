@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ryoku post-commit: a non-blocking delivery report. right after a commit lands,
 # it prints whether every config reaches an installed box and how far the
 # published tree (main) lags development, so a delivery gap never goes unnoticed.

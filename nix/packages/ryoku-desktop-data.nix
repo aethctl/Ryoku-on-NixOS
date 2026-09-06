@@ -243,18 +243,10 @@ LUA
     done
 
     # ── Ryotunes ───────────────────────────────────────────────
-
-    install -Dm755 \
-      ryoku/apps/ryotunes/bin/ryotunes \
-      "$out/bin/ryotunes"
-
-    install -Dm644 \
-      ryoku/apps/ryotunes/ryotunes.desktop \
-      "$out/share/applications/ryotunes.desktop"
-
-    install -Dm644 \
-      ryoku/apps/ryotunes/ryotunes.svg \
-      "$out/share/icons/hicolor/scalable/apps/ryotunes.svg"
+    #
+    # Current Ryoku ships Ryotunes as a compiled application.
+    # Musubi packages it independently instead of materializing
+    # the retired browser-wrapper files from ryoku/apps.
 
     # ── Lockscreen ─────────────────────────────────────────────
 

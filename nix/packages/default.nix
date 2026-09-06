@@ -4,6 +4,7 @@
   hyprglassSrc,
   bibataMaterialSrc,
   imgbordersSrc,
+  ryotunesSrc,
   version,
 }:
 
@@ -14,8 +15,17 @@ let
     inherit pkgs src;
   };
 
+  desktopData = import ./ryoku-desktop-data.nix {
+    inherit pkgs src;
+  };
+
   cli = import ./ryoku-cli.nix {
-    inherit pkgs src version;
+    inherit
+      pkgs
+      src
+      version
+      desktopData
+      ;
   };
 
   nixUpdate = import ./ryoku-nix-update.nix {
@@ -28,6 +38,10 @@ let
 
   rashin = import ./ryoku-rashin.nix {
     inherit pkgs src;
+  };
+
+  prowlAgent = import ./prowl-agent.nix {
+    inherit pkgs;
   };
 
   ryostore = import ./ryoku-ryostore.nix {
@@ -54,8 +68,20 @@ let
     inherit pkgs;
   };
 
-  desktopData = import ./ryoku-desktop-data.nix {
-    inherit pkgs src;
+  ryogami = import ./ryoku-ryogami.nix {
+    inherit
+      pkgs
+      src
+      livewall
+      waifu2x
+      ;
+  };
+
+  ryotunes = import ./ryoku-ryotunes.nix {
+    inherit
+      pkgs
+      ryotunesSrc
+      ;
   };
 
   helpers = import ./ryoku-helpers.nix {
@@ -195,10 +221,13 @@ let
       nixUpdate
       hub
       rashin
+      prowlAgent
       ryostore
       ryomotion
       ryovmHelpers
       livewall
+      ryogami
+      ryotunes
       qmkHid
       waifu2x
       desktopData
@@ -215,10 +244,13 @@ in
     nixUpdate
     hub
     rashin
+    prowlAgent
     ryostore
     ryomotion
     ryovmHelpers
     livewall
+    ryogami
+    ryotunes
     qmkHid
     waifu2x
     desktopData

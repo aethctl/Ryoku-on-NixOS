@@ -21,7 +21,7 @@ func TestQuickshellConfigReadsBothSelectorForms(t *testing.T) {
 		{"checkout desktop", []string{"qs", "-p", "/repo/ryoku/shell/quickshell/shell"}, "shell", true},
 		{"long flag", []string{"/usr/bin/qs", "--config", "shell"}, "shell", true},
 		{"the other binary name", []string{"/usr/bin/quickshell", "-c", "shell"}, "shell", true},
-		{"an app, not the desktop", []string{"qs", "-c", "ryowalls"}, "ryowalls", true},
+		{"an app, not the desktop", []string{"qs", "-c", "ryovm"}, "ryovm", true},
 		{"an ipc client is not an instance", []string{"qs", "-c", "shell", "ipc", "call", "bar", "hide"}, "", false},
 		{"another program", []string{"sleep", "-c", "shell"}, "", false},
 		{"no selector", []string{"qs", "ipc", "call"}, "", false},

@@ -5,7 +5,7 @@ import Ryoku.Ui.Singletons
 // The wallpaper-palette accent picker: color01..07 plus foreground. Selecting
 // emits `chose(id)`; the caller writes root.barColor.
 //
-// This is the one control in the studio that keeps its colour, because here the
+// This is the one control in the panel that keeps its colour, because here the
 // colour IS the data: a swatch that showed its own hue as a grey plate would be
 // lying about what it does. The selection ring is bone, like every other
 // emphasis in the panel.

@@ -93,9 +93,17 @@ Singleton {
         refreshProc.running = false;
         refreshProc.running = true;
     }
+    function clearCache() {
+        clearProc.running = false;
+        clearProc.running = true;
+    }
     Process {
         id: refreshProc
         command: ["ryoku-shell", "depth", "refresh"]
+    }
+    Process {
+        id: clearProc
+        command: ["ryoku-shell", "depth", "clear"]
     }
     Process {
         id: setEnabledProc

@@ -3,6 +3,101 @@
 ## Unreleased
 
 ### Added
+- `ryovm/`: **a Looking Glass lane for GPU-passthrough VMs.** Ryoport grows a
+  fourth section (rail + `Ctrl+4`) that manages passthrough machines: point it
+  at an install ISO and pick the guest, and it defines a tuned `ryoku-<name>`
+  libvirt domain (CPU pinning, Hyper-V enlightenments for Windows, virtio disk,
+  the dGPU + its audio as vfio hostdevs, the kvmfr Looking Glass shared-memory
+  device); one button starts it (the vfio hook binds the dGPU) and opens
+  `looking-glass-client`. The lane gates on the GPU page's readiness verdict and
+  states the blocker when passthrough is not ready, and a standing checklist
+  names the guest-side steps that cannot be automated (OS, virtio drivers, the
+  Looking Glass host app, and a virtual-display driver for laptop dGPUs). CLI:
+  `ryovm lg <name>` (or the `ryoport` alias) starts a machine and opens Looking
+  Glass. Strictly passthrough, always Looking Glass -- quickemu cannot pass a
+  GPU through, so this is a separate engine (`Singletons/Lg.qml`,
+  `PassthroughPage.qml`, `bin/ryovm` lg verb, `bin/ryoport`).
+- `fastfetch/`: **the OS line carries the release name** ("Ryoku Onogoro
+  v0.56.0-beta.19") via `ryoku version --pretty` (`config.jsonc`).
+
+### Fixed
+- `ryovm/`: **Ryoport help and ISO-builder errors now respect the host.**
+  `ryovm lg --help`, `-h` and `help` show the Looking Glass command grammar
+  instead of being parsed as passthrough VM names, and the instant-VM path no
+  longer tells NixOS users to install `libisoburn` with Pacman when an ISO
+  builder is unavailable.
+- `ryostore/`: **An installed theme now carries the store's preview image, so
+  the Color-scheme picker shows it.** The install wrote `scheme.json` and
+  `meta.json` and nothing else, while Ryogami's Themes tab looked for
+  `preview.jpg` beside them and fell back to palette pills for every store
+  theme. The install now fetches the catalogue's preview (through the store's
+  asset cache, so the card and the install share one download) and writes it
+  as `preview.<ext>`; an unreachable preview still installs the scheme. The
+  shell's `theme catalog` reports the art it finds (`preview`) and the picker
+  reads that instead of guessing a filename, so `.png` and `.jpg` sources both
+  show (`backend/provider_colorschemes.go`, `shell/ipc/usertheme.go`,
+  `ryogami/wall-ui/.../WallpaperSelector.qml`).
+- `ryostore/`: **A theme's own wallpapers come with it.** Every HANCORE scheme
+  ships the backgrounds it was drawn for; the catalogue now lists them
+  (`wallpapers`, pinned to a commit) and the install lands them in
+  `~/Pictures/Wallpapers` as `<id>-N.<ext>`, where the picker shows them beside
+  the rest. Remove takes exactly those files back out.
+- `ryogami/`: **The picker refreshes live.** The Themes and Rices strips were
+  read once and cached for the picker's lifetime, so a scheme installed while
+  Super+W was open never appeared until a reopen. Both are reloaded on every
+  open and re-read when their library folders change (a native folder watch,
+  no external tool). The wallpaper strip's own watcher execs `inotifywait`,
+  which nothing declared: `ryogami` now depends on `inotify-tools`, so a wall
+  that lands while the picker is open shows up on user boxes too.
+
+### Removed
+- `ryotunes/`: **The Chromium app-window wrapper is gone; Ryotunes is now a real
+  app.** YouTube Music ran as a Chromium `--app` window in its own profile
+  because the Tauri/Electron clients of the time crashed on this compositor or
+  published no MPRIS. The Ryostore-submitted Ryotunes (Tauri + libmpv,
+  `neur0map/ryotunes`) does both, so it ships as the `ryotunes` package from the
+  `[ryoku]` repo (`release/packages/ryotunes/`) and the wrapper, its `.desktop`
+  and icon leave this tree. The desktop's music integration is unchanged: it
+  follows `org.mpris.MediaPlayer2.ryotunes`. Super+J now launches Ryotunes
+  directly (it is single-instance, so a second press focuses the window)
+  instead of toggling the `special:music` scratchpad, and the music widget's
+  corner button runs the music app the same way; the `ryoku-music-toggle`
+  script that tucked the window into that scratchpad is gone. A dev checkout
+  (git channel, which never publishes packages) gets the app too: `ryoku
+  deploy` builds `release/packages/ryotunes` with makepkg and lays the binary,
+  launcher and icons into `~/.local`, rebuilding only when the pinned commit
+  changes.
+
+### Fixed
+- `ryowalls/`: **A download that returns an error page or a Git LFS pointer no
+  longer poisons the wallpaper folder.** `curl` fetches those with a 200 and
+  exit 0, so ryowalls saved a few hundred bytes of ASCII as a `.png`; the
+  catalog could not thumbnail it and the picker silently dropped the row, so a
+  "saved" wallpaper never appeared. Every download verb now validates the file
+  is decodable media (`identify` for images, `ffprobe` for clips) and, on a bad
+  file, removes it and fails so the UI reports "Download failed" instead
+  (`ryowalls/bin/ryowalls`).
+
+### Added
+- `ryostore/`: **Plugins browse as ALL / BAR / DESKTOP, and community plugins
+  carry a warning.** The Plugins tab gets the same subtab strip Themes and Decor
+  use: BAR is every plugin whose `hosts` includes `topbarGlyph`, DESKTOP the
+  rest. A plugin whose registry entry is not `official: true` shows a COMMUNITY
+  tag and a warning band on its detail (Ryoku does not review or maintain it; it
+  runs in your shell with your permissions), and the backend marks it
+  `metadata.community` (`quickshell/App.qml`, `ProductDetail.qml`,
+  `lib/store.js`, `backend/provider_plugins.go`).
+
+- `ryostore/backend`: **`ryostore install plugins <id> --from <dir>` installs a
+  plugin from a local directory through the same supply-chain transaction as a
+  registry install.** It builds a ProductManifest by walking the directory
+  (hashing every regular file, skipping symlinks and `.git`), takes the version
+  from the plugin's `manifest.json`, and feeds the existing `installProduct`
+  transaction with the file bytes read from the directory instead of the cache,
+  so the receipt, the content-hashed view, and the journal are written exactly as
+  for a store install. This is what lets `ryoku plugin add` produce a plugin the
+  shell's `discover.sh` actually loads (`ryostore/backend/provider_plugins_local.go`,
+  `product_transaction.go`, `main.go`).
 - `fish/`, `bash/`, `zsh/`, `terminal-shell/`: **Fish, Bash, and Zsh now
   carry the same Ryoku terminal tools.** All three initialize Starship, zoxide,
   mise and fzf, share the same eza aliases and environment, load user overrides

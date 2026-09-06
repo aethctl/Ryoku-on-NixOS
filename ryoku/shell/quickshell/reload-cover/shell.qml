@@ -13,6 +13,19 @@ ShellRoot {
     property bool finishQueued: false
     property int mappedCount: 0
     property var mappedOutputs: ({})
+    readonly property string brandPath: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/ryoku/brand.json"
+    readonly property var reloadCover: brandAdapter.reloadCover || ({ path: "", name: "", kind: "default", bytes: 0 })
+
+    FileView {
+        path: root.brandPath
+        blockLoading: true
+        printErrors: false
+        JsonAdapter {
+            id: brandAdapter
+            property var reloadCover: ({ path: "", name: "", kind: "default", bytes: 0 })
+        }
+    }
+
 
     function mapped(name: string): void {
         if (!mappedOutputs[name]) {
@@ -82,6 +95,7 @@ ShellRoot {
                 targetScreen: modelData
                 phase: root.phase
                 startClose: root.startClose
+                reloadCover: root.reloadCover
                 onMapped: root.mapped(targetScreen.name)
             }
         }

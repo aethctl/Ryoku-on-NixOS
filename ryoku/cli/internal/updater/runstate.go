@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"ryoku-cli/internal/sys"
 	"strings"
 	"time"
 )
@@ -150,7 +151,8 @@ func (p *publisher) skip(key string) {
 // run-state log so the GUI shows the same narrative, then republishes.
 func (p *publisher) logf(format string, a ...any) {
 	line := fmt.Sprintf(format, a...)
-	fmt.Println("==> " + line)
+	fmt.Println(sys.Brand("▸") + " " + line)
+	logRaw(line)
 	p.log = append(p.log, line)
 	if len(p.log) > runLogCap {
 		p.log = p.log[len(p.log)-runLogCap:]

@@ -17,6 +17,19 @@ import (
 	"strings"
 )
 
+func nixGpuPassthroughConfigured() bool {
+	if os.Getenv("RYOKU_NIX_GPU_PASSTHROUGH_READY") == "1" {
+		return true
+	}
+
+	b, err := os.ReadFile("/etc/ryoku/gpu-passthrough-ready")
+	if err != nil {
+		return false
+	}
+
+	return strings.TrimSpace(string(b)) == "1"
+}
+
 func runGpuApply(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("gpu apply needs enable|disable [--dry-run]")
@@ -25,6 +38,22 @@ func runGpuApply(args []string) error {
 	if action != "enable" && action != "disable" {
 		return fmt.Errorf("gpu apply: action must be enable or disable")
 	}
+	if _, err := os.Stat("/etc/NIXOS"); err == nil {
+		if nixGpuPassthroughConfigured() {
+			return fmt.Errorf(
+				"GPU passthrough is managed declaratively on NixOS; " +
+					"change programs.ryoku.gpuPassthrough and rebuild " +
+					"instead of using `gpu apply`",
+			)
+		}
+
+		return fmt.Errorf(
+			"GPU passthrough host setup is declarative on NixOS; " +
+				"enable programs.ryoku.gpuPassthrough in your NixOS " +
+				"configuration and rebuild",
+		)
+	}
+
 	dryRun := false
 	for _, a := range args[1:] {
 		if a == "--dry-run" {
@@ -313,7 +342,11 @@ func snapshot(desc string) {
 	if _, err := exec.LookPath("snapper"); err != nil {
 		return
 	}
-	run("snapper", "-c", "root", "create", "--description", desc)
+	// -c number tags the snapshot for snapper's number cleanup so it counts
+	// against NUMBER_LIMIT and prunes like update snapshots; without it these piled
+	// up unbounded. Enforce the cap right after creating.
+	run("snapper", "-c", "root", "create", "-c", "number", "--description", desc)
+	run("snapper", "-c", "root", "cleanup", "number")
 }
 
 func run(name string, args ...string) {

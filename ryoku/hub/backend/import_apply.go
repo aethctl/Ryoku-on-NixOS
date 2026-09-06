@@ -318,7 +318,10 @@ func snapshotBestEffort(ts string) {
 	if _, err := exec.LookPath("snapper"); err != nil {
 		return
 	}
-	_ = exec.Command("snapper", "create", "-d", "ryoku config import "+ts).Run()
+	// -c root + -c number so it uses the root config and prunes under NUMBER_LIMIT
+	// like update snapshots, instead of piling up untagged forever.
+	_ = exec.Command("snapper", "-c", "root", "create", "-c", "number", "-d", "ryoku config import "+ts).Run()
+	_ = exec.Command("snapper", "-c", "root", "cleanup", "number").Run()
 }
 
 // --- write helpers -----------------------------------------------------------

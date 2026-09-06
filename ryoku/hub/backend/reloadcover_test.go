@@ -259,12 +259,16 @@ func TestImportReloadCoverRejectsFIFODestinationCollision(t *testing.T) {
 		done <- err
 	}()
 
+	// the deadline only guards against a true hang (a blocking open on the
+	// reader-less FIFO): import rejects it via a non-blocking open, but first
+	// fsyncs its temp file, which on a slow CI disk can take well over 100ms, so
+	// keep the window generous rather than timing that fsync.
 	select {
 	case err := <-done:
 		if err == nil {
 			t.Fatal("FIFO collision was accepted")
 		}
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(10 * time.Second):
 		t.Fatal("import blocked on FIFO collision")
 	}
 	info, err := os.Lstat(destination)

@@ -44,7 +44,7 @@ Item {
     Process {
         id: idp
         running: true
-        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else head -1 /var/log/pacman.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; fi"]
+        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else echo; fi"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const l = text.split("\n");
@@ -82,7 +82,7 @@ Item {
         if (k === "net")
             return "\u2193 " + pg.fmtRate(LiveStats.netDown);
         if (k === "frac")
-            return "BETA · 18";
+            return Version.editionSummary;
         return "";
     }
     function statSub(k) {
@@ -95,7 +95,7 @@ Item {
         if (k === "net")
             return "\u2191 " + pg.fmtRate(LiveStats.netUp);
         if (k === "frac")
-            return "STABLE";
+            return Version.editionIndex;
         return "";
     }
 
@@ -755,7 +755,7 @@ Item {
                         }
                     }
                     Text {
-                        text: SysInfo.sysPkgExplicit + I18n.tr(" EXPLICIT · ") + SysInfo.sysPkgAur + I18n.tr(" AUR · ") + SysInfo.sysPackages + I18n.tr(" TOTAL")
+                        text: SysInfo.sysPkgExplicit + I18n.tr(" SYSTEM · ") + SysInfo.sysPkgAur + I18n.tr(" USER · ") + SysInfo.sysPackages + I18n.tr(" TOTAL")
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
                         font.pixelSize: 10

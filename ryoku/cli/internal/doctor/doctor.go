@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"ryoku-cli/internal/sys"
 	"strconv"
 	"strings"
@@ -104,6 +105,7 @@ func reconcilers() []reconciler {
 		{"limine boot entry", reconcileLimineBootEntry},
 		{"alongside boot entry", reconcileAlongsideBootEntry},
 		{"limine UKI boot tree", reconcileLimineUKITree},
+		{"limine kernel boot images", reconcileLimineKernelImages},
 		{"limine autoboot", reconcileLimineAutoboot},
 		{"limine snapshot sync", reconcileLimineOSName},
 		{"updatedb snapshot prune", reconcileUpdatedbPrune},
@@ -113,6 +115,8 @@ func reconcilers() []reconciler {
 		{"stale update run-state", reconcileStaleUpdateRun},
 		{"stale install crypt mapper", reconcileStaleCryptMapper},
 		{"ryoku package channel", reconcileRyokuChannel},
+		{"ryoku package database", reconcileRyokuSyncDB},
+		{"boot guard", reconcileBootGuard},
 		{"update channel checkout", reconcileUpdateChannel},
 		{"update checkout pointer", reconcileRepoPointer},
 		{"stale dev residue", reconcileDevResidue},
@@ -134,6 +138,9 @@ func reconcilers() []reconciler {
 		{"sumi bar simplification", reconcileSumiBar},
 		{"dock config store", reconcileDockStore},
 		{"retired shell menus", reconcileRetiredMenus},
+		{"retired wallpaper keys", reconcileRetiredWallpaperKeys},
+		{"ryogami wallpaper daemon", reconcileRyogamiWallpaper},
+		{"ryowalls app leftovers", reconcileRyowallsRemoval},
 		{"quick-settings capture tab", reconcileCaptureModule},
 		{"quick-settings depth tab", reconcileDepthModule},
 		{"retired system sidebar", reconcileLegacySystemSidebar},
@@ -143,16 +150,23 @@ func reconcilers() []reconciler {
 		{"obsidian palette snippet", reconcileObsidianSnippet},
 		{"flatpak app channel", reconcileFlatpakRemote},
 		{"browser theme host", reconcileBrowserTheme},
+		{"zen browser policy", reconcileZen},
+		{"zen browser animations", reconcileZenUserChrome},
 		{"launcher local-frost default", reconcileLauncherLocalFrostDefault},
 		{"user edits overlay", reconcileUserEdits},
 		{"default app map", reconcileMimeDefaults},
 		{"keyring unlock policy", reconcileKeyring},
 		{"SDDM greeter theme", reconcileGreeterTheme},
 		{"SDDM greeter display server", reconcileGreeterDisplayServer},
+		{"login screen cursor", reconcileGreeterCursor},
 		{"fastfetch readout emblem", reconcileFastfetchEmblem},
+		{"rice fastfetch emblem", reconcileRiceEmblem},
+		{"ryotunes", reconcileRyotunes},
+		{"fastfetch OS line", reconcileFastfetchOSLine},
 		{"brand mark image", reconcileBrandLogo},
 		{"decor art", reconcileRyodecors},
 		{"Hyprland config integrity", reconcileHyprlandConfig},
+		{"stale window-border pin", reconcileBorderPin},
 		{"orphaned theme.lua", reconcileThemeLua},
 		{"follow-mouse default", reconcileFollowMouseDefault},
 		{"quickshell runtime", reconcileQuickshell},
@@ -160,6 +174,7 @@ func reconcilers() []reconciler {
 		{"ryoku shell daemon", reconcileShellDaemon},
 		{"duplicate desktop instances", reconcileShellInstances},
 		{"rashin agent daemon", reconcileRashinDaemon},
+		{"prowl-agent for rashin", reconcileProwlAgent},
 		{"recordings directory", reconcileRecordingsDir},
 		{"failed services", reconcileFailedUnits},
 		{"btrfs device health", reconcileBtrfsHealth},
@@ -168,6 +183,8 @@ func reconcilers() []reconciler {
 		{"QMK/VIA keyboard lighting provider", reconcileQMK},
 		{"display backlight", reconcileBacklight},
 		{"discrete GPU idle drain", reconcileDgpuPanel},
+		{"stale GPU render pin", reconcileGpuPin},
+		{"power profiles vs AMD GPU", reconcilePpdAmdgpu},
 		{"display resolution", reconcileDisplayModes},
 		{"phantom Wayland output", reconcilePhantomOutput},
 		{"Kepler NVIDIA recovery", reconcileKeplerNvidia},
@@ -570,6 +587,9 @@ func gatherSnapperState() snapperState {
 // -> write the canonical installer layout. non-btrfs root -> warn honestly
 // instead of silently ok. healthy box -> consistency checks gate "ok".
 func reconcileSnapper(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Snapper configuration is managed declaratively on NixOS")
+	}
 	st := gatherSnapperState()
 	outcome, problems := planSnapper(st)
 	switch outcome {
@@ -738,6 +758,10 @@ func markMigration(marker string) error {
 // ---- reconciler: stale pacman lock -------------------------------------------
 
 func reconcilePacmanLock(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	const lock = "/var/lib/pacman/db.lck"
 	if !sys.Exists(lock) {
 		return okRes("no stale pacman lock")
@@ -809,6 +833,10 @@ func reconcileStaleUpdateRun(checkOnly bool) recResult {
 // Safe: a "root" node backing a live mount (the running root) is never touched,
 // only a true orphan with no mount; closing a LUKS mapper only re-locks it.
 func reconcileStaleCryptMapper(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	nodes := cryptMapperNodes()
 	if len(nodes) == 0 {
 		return okRes("no crypt mappers present")
@@ -910,9 +938,13 @@ func baseSource(s string) string {
 // (installation/backend/lib/deploy.sh ryoku_repo_pacman_conf). doctor re-adds
 // this exact block when a pacnew merge or a hand-edit drops it, so a package box
 // does not silently fall off the update channel.
-const ryokuRepoStanza = "\n[ryoku]\nSigLevel = Required\nServer = https://repo.ryoku.dev/stable/$arch\n"
+const ryokuRepoStanza = "\n[ryoku]\nSigLevel = Required\nServer = " + sys.RepoBase + "/$arch\n"
 
 func reconcileRyokuChannel(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	if !sys.PkgInstalled("ryoku-desktop") {
 		return okRes("not a packaged install (desktop runs from a checkout)")
 	}
@@ -927,7 +959,20 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 			withFix("sudo pacman -S ryoku-keyring, then run ryoku doctor")
 	}
 	if strings.Contains(string(conf), "[ryoku]") {
-		return okRes("ryoku package channel configured")
+		// the Server line is the channel. name it, and flag a server Ryoku
+		// does not publish without touching it: a local build-repo.sh tree or
+		// a private mirror is deliberate, but it means no release reaches here.
+		switch ch := sys.ChannelOfServer(sys.RyokuServer()); {
+		case ch == sys.ChannelStable:
+			return okRes("ryoku package channel: stable (named releases)")
+		case ch == sys.ChannelTesting:
+			return okRes("ryoku package channel: testing (every unstable-dev push); `ryoku track stable` returns to releases")
+		case sys.IsReleaseTag(ch):
+			return okRes("ryoku package channel: pinned to release %s; `ryoku track stable` follows releases again", ch)
+		default:
+			return warnRes("the [ryoku] repo points at %s, which Ryoku does not publish; releases will not arrive from it", sys.RyokuServer()).
+				withFix("ryoku track stable")
+		}
 	}
 	// the keyring is here but the repo stanza is gone (a pacnew merge or a
 	// hand-edit dropped it): re-add it so `ryoku update` reaches the package
@@ -944,6 +989,57 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 	// re-populating is idempotent and cheap.
 	_ = sys.Sudo("pacman-key", "--populate", "ryoku")
 	return fixedRes("re-added the [ryoku] repo to pacman.conf so updates arrive again")
+}
+
+// ---- reconciler: ryoku sync database health ----------------------------------
+
+// reconcileRyokuSyncDB heals a cached [ryoku] sync db wedged against its
+// signature. The db is non-reproducible and its detached .sig is fetched fresh
+// on every refresh even when the db itself is unchanged (a 304), so any box
+// that syncs while the mirror briefly serves a db and .sig from different
+// builds caches a mismatched pair. pacman then rejects it -- "invalid or
+// corrupted database (PGP signature)" -- on every transaction, and -Sy will not
+// replace a db it thinks is current, so `pacman -S <anything>` stays wedged
+// until the cache is dropped. `ryoku update` self-heals on the spot; this
+// catches a box a user only ever drives through plain pacman. Detection is
+// read-only (`pacman -Sl` loads and verifies the cached db); the fix drops it
+// and pulls a fresh, matched pair.
+func reconcileRyokuSyncDB(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
+	if !sys.PkgInstalled("ryoku-desktop") {
+		return okRes("not a packaged install (desktop runs from a checkout)")
+	}
+	// a missing key is a keyring problem the channel reconciler owns; dropping
+	// the db would only refetch one that fails the same way.
+	if !sys.PkgInstalled("ryoku-keyring") || sys.RyokuServer() == "" {
+		return okRes("[ryoku] repo or keyring absent; nothing to verify")
+	}
+	if !sys.Exists("/var/lib/pacman/sync/ryoku.db") {
+		return okRes("no cached [ryoku] sync db to check")
+	}
+	out, err := sys.RunOut("sh", "-c", "LC_ALL=C pacman -Sl ryoku 2>&1")
+	if err == nil {
+		return okRes("the [ryoku] sync db loads and verifies")
+	}
+	if !strings.Contains(out, "invalid or corrupted database") && !strings.Contains(out, "signature") {
+		// another failure (offline, transient); not the stale-signature wedge.
+		return okRes("the [ryoku] sync db is present; no signature wedge")
+	}
+	if checkOnly {
+		return wouldRes("the cached [ryoku] sync db no longer matches its signature; every pacman transaction fails until it is refreshed").
+			withFix("ryoku doctor")
+	}
+	if err := sys.DropRyokuSyncDB(); err != nil {
+		return failRes("could not drop the stale [ryoku] sync db: %v", err).
+			withFix("sudo rm -f /var/lib/pacman/sync/ryoku.* && sudo pacman -Syy")
+	}
+	// the db is gone now, so a plain -Sy pulls a fresh, matched pair; best-effort
+	// so an offline box simply refetches on its next update.
+	_ = sys.Sudo("pacman", "-Sy", "--noconfirm")
+	return fixedRes("dropped the stale [ryoku] sync db so pacman refetches a matched db and signature")
 }
 
 // ---- reconciler: Material Symbols icon font ------------------------------------
@@ -982,6 +1078,10 @@ func materialSymbolsAvailable() bool {
 }
 
 func reconcileIconFont(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	if !sys.Exists(filepath.Join(sys.Home(), ".config", "hypr")) &&
 		!sys.Has("Hyprland") {
 		return okRes("not a Hyprland desktop")
@@ -1931,6 +2031,9 @@ func portalRoutesHyprland(content string) bool {
 // a ~25s D-Bus timeout ("apps are slow to open"). heals boxes converted
 // before the installer started moving the user file aside, and the /etc case.
 func reconcilePortalRouting(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("xdg-desktop-portal routing is managed declaratively by the Ryoku NixOS module")
+	}
 	if !sys.Exists(filepath.Join(sys.Home(), ".config", "hypr")) && !sys.Has("Hyprland") {
 		return okRes("not a Hyprland desktop")
 	}
@@ -2264,6 +2367,9 @@ func greeterThemeHealthy(ownerUID uint32, dirPerm, mainPerm os.FileMode) bool {
 // normalizes on write; this backports the fix to boxes that already picked a
 // skin. only ever touches the one fixed Ryoku greeter dir.
 func reconcileGreeterTheme(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM theme ownership is managed by the Ryoku NixOS module")
+	}
 	di, err := os.Stat(greeterThemeDir)
 	if err != nil {
 		return okRes("no Ryoku greeter theme installed")
@@ -2302,12 +2408,23 @@ const sddmWaylandConf = "/etc/sddm.conf.d/10-ryoku-wayland.conf"
 // weston present -- the greeter could not start.
 const greeterCompositorBin = "/usr/share/ryoku/lockscreen/ryoku-greeter"
 
+// greeterEnvironment is SDDM's comma-separated GreeterEnvironment. The greeter
+// is a Qt client of the weston kiosk with no session behind it, so it inherits
+// no XCURSOR_*: Qt then asks libwayland-cursor for the "default" theme, and on a
+// box where that chain resolves to nothing the greeter sets a null cursor and
+// the login screen has no visible pointer. Pin the shipped Bibata set
+// (ryoku-cursors, a hard depend) at the size env.lua uses. This only helps
+// clients that honor XCURSOR_THEME; reconcileGreeterCursor establishes the
+// "default" theme itself for the ones (SDDM's Wayland greeter, weston) that fall
+// back to it regardless.
+const greeterEnvironment = "QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24"
+
 func sddmWaylandBody() string {
 	compositor := "weston --shell=kiosk"
 	if sys.Exists(greeterCompositorBin) {
 		compositor = greeterCompositorBin
 	}
-	return "[General]\nDisplayServer=wayland\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
+	return "[General]\nDisplayServer=wayland\nGreeterEnvironment=" + greeterEnvironment + "\n\n[Wayland]\nCompositorCommand=" + compositor + "\n"
 }
 
 // reconcileGreeterDisplayServer moves the SDDM greeter to Wayland. SDDM's
@@ -2320,6 +2437,9 @@ func sddmWaylandBody() string {
 // depend `pacman -Syu` lands before doctor runs, so this is unmet only on a box
 // that has not pulled the package yet.
 func reconcileGreeterDisplayServer(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM display-server configuration is managed declaratively on NixOS")
+	}
 	if !sys.Exists(greeterThemeDir) {
 		return okRes("no Ryoku greeter installed")
 	}
@@ -2328,8 +2448,20 @@ func reconcileGreeterDisplayServer(checkOnly bool) recResult {
 			withFix("ryoku update")
 	}
 	want := sddmWaylandBody()
-	if readFileSafe(sddmWaylandConf) == want {
+	have := readFileSafe(sddmWaylandConf)
+	if have == want {
 		return okRes("SDDM greeter runs on Wayland (weston kiosk)")
+	}
+	if have != "" {
+		if checkOnly {
+			return wouldRes("SDDM greeter config is out of date (the pinned cursor theme, the compositor wrapper)").
+				withFix("ryoku doctor")
+		}
+		if err := writeRootFile(sddmWaylandConf, want, "0644"); err != nil {
+			return failRes("could not write %s: %v", sddmWaylandConf, err).
+				withFix("check sudo access, then re-run ryoku doctor")
+		}
+		return fixedRes("refreshed the SDDM greeter config; the login screen pointer uses the shipped cursor theme")
 	}
 	if checkOnly {
 		return wouldRes("SDDM greeter still runs on X11; it is orphaned when a Wayland session starts and keeps drawing power").
@@ -2340,6 +2472,66 @@ func reconcileGreeterDisplayServer(checkOnly bool) recResult {
 			withFix("check sudo access, then re-run ryoku doctor")
 	}
 	return fixedRes("moved the SDDM greeter to Wayland (weston kiosk); it is torn down cleanly at login now")
+}
+
+// ---- reconciler: login screen cursor -----------------------------------------
+
+const defaultCursorDir = "/usr/share/icons/default"
+const defaultCursorIndex = defaultCursorDir + "/index.theme"
+
+// defaultCursorIndexBody points the freedesktop "default" cursor theme at the
+// shipped Bibata set. libwayland-cursor (weston's own pointer, and the SDDM
+// greeter's Qt client) and libXcursor fall back to the theme literally named
+// "default" whenever the requested theme is missing -- or, as SDDM's Wayland
+// greeter does, silently ignored. Ryoku ships no /usr/share/icons/default, so
+// that fallback resolves to nothing and the login screen (at system start and
+// after logout) draws no pointer at all. An Inherits= stub gives "default" a
+// real target, covering every client that does not honor GreeterEnvironment's
+// XCURSOR_THEME. Kept as a stub, not a copy, so it tracks whatever Bibata ships.
+func defaultCursorIndexBody() string {
+	return "[Icon Theme]\nName=Default\nComment=Ryoku default cursor\nInherits=" + defaultCursorTheme + "\n"
+}
+
+// defaultCursorEstablished: the system already has a "default" cursor theme --
+// our index.theme, a foreign one, or a real cursors/ dir. Any of these means the
+// fallback resolves, so we must not clobber it (a user or another package may
+// own it).
+func defaultCursorEstablished() bool {
+	return sys.Exists(defaultCursorIndex) || sys.Exists(defaultCursorDir+"/cursors")
+}
+
+// reconcileGreeterCursor keeps the login screen pointer visible. The SDDM
+// greeter runs on a weston kiosk with no session env; where the greeter or
+// weston falls back to the "default" cursor theme (SDDM's Wayland greeter
+// ignores XCURSOR_THEME), a box with no /usr/share/icons/default draws no
+// pointer at all -- the "no cursor on login/logout" break. This establishes the
+// fallback, pointing "default" at the shipped Bibata set. Only ever creates the
+// stub when absent, so a user's own default cursor is left untouched. Scoped to
+// login boxes (a Ryoku greeter is installed) and only once ryoku-cursors, which
+// ships Bibata, has landed.
+func reconcileGreeterCursor(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM cursor configuration is managed declaratively on NixOS")
+	}
+	if !sys.Exists(greeterThemeDir) {
+		return okRes("no Ryoku greeter installed")
+	}
+	if defaultCursorEstablished() {
+		return okRes(`the "default" cursor theme resolves; the login screen has a pointer`)
+	}
+	if !cursorThemeInstalled(defaultCursorTheme, []string{"/usr/share/icons"}) {
+		return warnRes("cursor theme %q is not on disk yet; the login screen pointer cannot be pinned", defaultCursorTheme).
+			withFix("ryoku update")
+	}
+	if checkOnly {
+		return wouldRes(`no "default" cursor theme; the SDDM greeter draws no pointer at system start or after logout`).
+			withFix("ryoku doctor")
+	}
+	if err := writeRootFile(defaultCursorIndex, defaultCursorIndexBody(), "0644"); err != nil {
+		return failRes("could not write %s: %v", defaultCursorIndex, err).
+			withFix("check sudo access, then re-run ryoku doctor")
+	}
+	return fixedRes(`pointed the "default" cursor theme at %s; the login screen has a pointer now`, defaultCursorTheme)
 }
 
 // ---- reconciler: fastfetch readout emblem ------------------------------------
@@ -2422,6 +2614,106 @@ func reconcileFastfetchEmblem(checkOnly bool) recResult {
 		return failRes("could not restore fastfetch emblem: %v", err).withFix("ryoku materialize")
 	}
 	return fixedRes("restored the fastfetch emblem; the readout no longer falls back to the Arch logo")
+}
+
+// ---- reconciler: fastfetch OS line -------------------------------------------
+
+// fastfetch's OS line used to run `ryoku version`; with named releases it runs
+// `ryoku version --pretty` ("Ryoku Onogoro v0.56.3-beta.19"). config.jsonc is
+// seeded once and then owned by the box (the Hub, the store and the user edit
+// it in place), so the shipped change never reaches an existing box on its
+// own; this rewrites that one command and nothing else.
+// the shipped seed writes `2>`; a config the Hub saved carries Go's JSON
+// escape `2\u003e` for the same byte, so both spellings are the old line.
+var fastfetchOSLineOld = []string{`ryoku version 2>/dev/null`, `ryoku version 2\u003e/dev/null`}
+
+func upgradeFastfetchOSLine(raw string) (string, bool) {
+	for _, old := range fastfetchOSLineOld {
+		if strings.Contains(raw, old) {
+			return strings.Replace(raw, old, strings.Replace(old, "ryoku version ", "ryoku version --pretty ", 1), 1), true
+		}
+	}
+	return raw, false
+}
+
+func reconcileFastfetchOSLine(checkOnly bool) recResult {
+	path := filepath.Join(sys.ConfigHome(), "fastfetch", "config.jsonc")
+	raw := readFileSafe(path)
+	if raw == "" {
+		return okRes("no Ryoku fastfetch config")
+	}
+	migrated, changed := upgradeFastfetchOSLine(raw)
+	if !changed {
+		return okRes("fastfetch's OS line names the release")
+	}
+	if checkOnly {
+		return wouldRes("fastfetch's OS line predates named releases (ryoku version -> ryoku version --pretty)").
+			withFix("ryoku doctor rewrites that one line")
+	}
+	tmp := path + ".ryoku-tmp"
+	if err := os.WriteFile(tmp, []byte(migrated), 0o644); err != nil {
+		return failRes("could not write %s: %v", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return failRes("could not replace %s: %v", path, err)
+	}
+	return fixedRes("fastfetch's OS line now names the release (ryoku version --pretty)")
+}
+
+// ---- reconciler: rice fastfetch emblem ---------------------------------------
+
+// riceEmblemAsset reports the active rice's fastfetch emblem (rice.json
+// assets.fastfetch), or false when no rice is active or it carries none.
+func riceEmblemAsset() (string, bool) {
+	rices := filepath.Join(sys.ConfigHome(), "ryoku", "rices")
+	slug := strings.TrimSpace(readFileSafe(filepath.Join(rices, ".active")))
+	if slug == "" {
+		return "", false
+	}
+	var r struct {
+		Assets struct {
+			Fastfetch string `json:"fastfetch"`
+		} `json:"assets"`
+	}
+	if json.Unmarshal([]byte(readFileSafe(filepath.Join(rices, slug, "rice.json"))), &r) != nil || r.Assets.Fastfetch == "" {
+		return "", false
+	}
+	return filepath.Join(rices, slug, r.Assets.Fastfetch), true
+}
+
+// reconcileRiceEmblem puts an applied rice's fastfetch emblem back after an
+// update. `rice apply` used to copy the emblem over the SHIPPED
+// fastfetch-emblem.png, which `ryoku materialize` re-lays on every update, so
+// the rice's logo reset to the brand mark each time. apply now lands it on the
+// user-owned ryoku-logo path; this converges boxes riced before that, exactly
+// once: it acts only while the readout still draws the shipped emblem and the
+// active rice carries one, and never touches a logo the user imported.
+func reconcileRiceEmblem(checkOnly bool) recResult {
+	asset, ok := riceEmblemAsset()
+	if !ok {
+		return okRes("no rice emblem to keep")
+	}
+	if !sys.Exists(asset) {
+		return okRes("active rice's emblem file is gone; nothing to restore")
+	}
+	src, ok := fastfetchLogoSource(readFileSafe(filepath.Join(sys.ConfigHome(), "fastfetch", "config.jsonc")))
+	if ok && filepath.Base(src) != fastfetchEmblem {
+		return okRes("rice emblem in place")
+	}
+	if !sys.Has("ryoku-hub") {
+		return warnRes("the rice's fastfetch emblem was reset by an update; ryoku-hub is not installed to restore it").
+			withFix("ryoku update")
+	}
+	if checkOnly {
+		return wouldRes("the rice's fastfetch emblem was reset to the brand mark by an update").
+			withFix("ryoku doctor (runs `ryoku-hub rice emblem`)")
+	}
+	if err := sys.Run("ryoku-hub", "rice", "emblem"); err != nil {
+		return failRes("could not restore the rice's fastfetch emblem: %v", err).
+			withFix("re-apply the rice from Ryoku Settings")
+	}
+	return fixedRes("restored the rice's fastfetch emblem on a path updates never overwrite")
 }
 
 // ---- reconciler: brand mark image --------------------------------------------
@@ -3252,6 +3544,7 @@ type pacnewOutcome int
 const (
 	pacnewIdentical pacnewOutcome = iota // bytes match: pacman's new default is already in place
 	pacnewRyokuOnly                      // differs only by Ryoku's deterministic [ryoku] repo stanza
+	pacnewLocaleGen                      // locale.gen re-shipping the template that re-comments the user's locale
 	pacnewConflict                       // a real merge only a human should make
 )
 
@@ -3270,7 +3563,36 @@ func classifyPacnew(livePath string, live, pacnew []byte) pacnewOutcome {
 		bytes.Equal(trimTrailing(stripRyokuRepoStanza(live)), trimTrailing(pacnew)) {
 		return pacnewRyokuOnly
 	}
+	// locale.gen perpetually .pacnews: the installer uncomments the user's
+	// locale, so every glibc bump re-ships the all-commented template (and now and
+	// then a new obscure commented locale). On a configured system it is never
+	// user-actionable -- the active locales live in the real file and dropping the
+	// .pacnew never touches them -- so clear it instead of nagging forever.
+	if filepath.Base(livePath) == "locale.gen" && localeConfigured(live) {
+		return pacnewLocaleGen
+	}
 	return pacnewConflict
+}
+
+var localeCharsetRe = regexp.MustCompile(`^[A-Z0-9][A-Z0-9._-]*$`)
+
+// localeConfigured reports whether locale.gen has at least one active
+// (uncommented) locale definition, i.e. a normal configured system whose
+// locale.gen.pacnew is just the re-shipped template. A charset-shaped second
+// field distinguishes a locale line from the prose header.
+func localeConfigured(live []byte) bool {
+	sc := bufio.NewScanner(bytes.NewReader(live))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 2 && strings.ContainsAny(fields[0], "_.") && localeCharsetRe.MatchString(fields[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // stripRyokuRepoStanza removes the `[ryoku]` section (and a single blank
@@ -3314,6 +3636,10 @@ func trimTrailing(b []byte) []byte { return bytes.TrimRight(b, " \t\r\n") }
 // packaged default. genuine merges are reported for `sudo pacdiff`. idempotent:
 // once the safe ones are gone a re-run only sees (and reports) the conflicts.
 func reconcilePacnew(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	out, _ := sys.RunOut("find", "/etc", "-name", "*.pacnew")
 	files := nonEmptyLines(out)
 	if len(files) == 0 {
@@ -3340,9 +3666,9 @@ func reconcilePacnew(checkOnly bool) recResult {
 	}
 	if conflicts == 0 {
 		if checkOnly {
-			return wouldRes("%d pending .pacnew are safe to drop (identical to the live config or only the [ryoku] repo addition)", resolved)
+			return wouldRes("%d pending .pacnew are safe to drop (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)", resolved)
 		}
-		return fixedRes("cleared %d safe .pacnew (identical to the live config or only the [ryoku] repo addition)", resolved)
+		return fixedRes("cleared %d safe .pacnew (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)", resolved)
 	}
 	msg := warnRes("%d pending config update(s) (.pacnew) need review", conflicts)
 	if resolved > 0 {
@@ -3497,17 +3823,23 @@ func tailLines(s string, n int) string {
 
 // ---- reconciler: unowned Ryoku system files (deploy-seeded) -------------------
 
-// ryokuSystemGlobs are the paths ryoku-desktop packages that ryoku/shell
-// deploy.sh also seeds unowned (privileged helpers + their polkit rules, so a dev
-// checkout's pkexec has a rule to match). On a packaged box an unowned copy from
-// an earlier dev deploy or `ryoku recovery` collides with the package on
-// `pacman -Syu` ("exists in filesystem") and aborts the whole atomic transaction,
-// so no update lands. `ryoku update` now passes --overwrite for these, but a box
-// already wedged cannot reach that fixed binary; clearing the copies here lets the
-// next update adopt them.
+// ryokuSystemGlobs are the ryoku-desktop-owned paths that the ISO installer
+// (bootloader.sh) and ryoku/shell deploy.sh also seed unowned: the privileged
+// helpers + their polkit rules (so a dev checkout's pkexec has a rule to match),
+// the ryoku-owned systemd units, the shipped boot configs under
+// /usr/share/ryoku/boot, and the Plymouth splash theme. On a packaged box an
+// unowned copy from an
+// earlier dev deploy, an older ISO, or `ryoku recovery` collides with the package
+// on `pacman -Syu` ("exists in filesystem") and aborts the whole atomic
+// transaction, so no update lands. `ryoku update` now passes --overwrite for these
+// (updater.ryokuOverwriteGlob), but a box already wedged cannot reach that fixed
+// binary; clearing the copies here lets the next update adopt them.
 var ryokuSystemGlobs = []string{
 	"/usr/bin/ryoku-*",
+	"/usr/lib/systemd/system/ryoku-*",
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules",
+	"/usr/share/plymouth/themes/ryoku/*",
+	"/usr/share/ryoku/boot/*",
 }
 
 // pkgOwnsFile reports whether an installed package owns path. A var so tests stub
@@ -3536,6 +3868,10 @@ func strayRyokuFiles(globs []string, glob func(string) ([]string, error), owned 
 }
 
 func reconcileConflictingRyokuFiles(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("persistent host repair is managed declaratively or outside Doctor on NixOS")
+	}
+
 	// Only a packaged box hits the conflict. A dev checkout has no ryoku-desktop,
 	// and deploy.sh's unowned helpers there are correct, so leave them be.
 	if !sys.PkgInstalled("ryoku-desktop") {

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Ryoku Arch pre-push.
 # safety net for pushes to origin:
@@ -29,7 +29,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # 1. block force-pushes to main.
   if [[ $remote_ref == "refs/heads/main" && $remote_sha != "$zero" ]]; then
     if ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-      if [[ -z $RYOKU_ALLOW_FORCE_MAIN ]]; then
+      if [[ -z ${RYOKU_ALLOW_FORCE_MAIN:-} ]]; then
         echo "pre-push hook: this push rewrites history on main." >&2
         echo "  local  $local_sha" >&2
         echo "  remote $remote_sha" >&2

@@ -60,10 +60,9 @@ type userThemeMeta struct {
 	Provider string `json:"provider"`
 }
 
-// userTheme is one installed scheme resolved to the catalog's role palette. No
-// preview art: the picker draws every scheme as its own palette, because the
-// libraries ship a 16:9 illustrated mockup that cannot be cropped into a
-// portrait tile without looking broken.
+// userTheme is one installed scheme resolved to the catalog's role palette. The
+// preview art beside it, when present, is reported on the card by
+// userThemeCards, not carried here.
 type userTheme struct {
 	ID       string
 	Label    string
@@ -230,7 +229,9 @@ func effectiveThemeThemeValues() []string {
 }
 
 // userThemeCards projects the installed library into the switcher/Hub catalog
-// projection, after the built-ins, each tagged with its provider.
+// projection, after the built-ins, each tagged with its provider and, when the
+// scheme folder carries preview art (the store installs the catalogue's image
+// beside scheme.json), the path to it.
 func userThemeCards() []themeCard {
 	ts := userThemes()
 	cards := make([]themeCard, 0, len(ts))
@@ -246,9 +247,22 @@ func userThemeCards() []themeCard {
 			Provider: t.Provider,
 			Dark:     !ok || luma < 0.5,
 			Sw:       sw,
+			Preview:  userThemePreview(t.ID),
 		})
 	}
 	return cards
+}
+
+// userThemePreview is the preview image beside an installed scheme, or "" when
+// the folder carries none. The accepted names match colorschemes/AUTHORING.md.
+func userThemePreview(id string) string {
+	for _, name := range []string{"preview.jpg", "preview.png", "preview.jpeg", "preview.webp"} {
+		p := filepath.Join(userThemeDir(), id, name)
+		if st, err := os.Stat(p); err == nil && st.Mode().IsRegular() {
+			return p
+		}
+	}
+	return ""
 }
 
 // mixHex linearly blends two hex colours by t in [0,1]; a non-hex input returns

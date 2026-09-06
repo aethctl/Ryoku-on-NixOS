@@ -1026,18 +1026,31 @@ func genPlugins(o Overrides) string {
 }
 
 // genPluginBlock loads soName.so and sets its config under `plugin[section]`,
-// plus any verbatim extra Lua (e.g. hyprbars buttons). The whole block runs in a
-// pcall so a missing or ABI-mismatched plugin degrades to "off" rather than
-// erroring settings.lua. section is the Lua table key: a bare identifier
-// (hyprbars) or a bracketed literal for a dashed name (["dynamic-cursors"]).
+// plus any verbatim extra Lua (e.g. hyprbars buttons). section is the Lua table
+// key: a bare identifier (hyprbars) or a bracketed literal for a dashed name
+// (["dynamic-cursors"]).
+//
+// The load and config run in a pcall, but that alone is not enough: setting
+// hl.config on a plugin namespace that never loaded is NOT a Lua error (pcall
+// catches nothing), and Hyprland then paints its "unknown config key
+// 'plugin.<name>.*'" overlay. A load can fail silently after a Hyprland ABI bump
+// (the .so no longer matches), so gate the keys on the live namespace being
+// present, the same guard the hyprbars buttons already use, and the block
+// degrades cleanly to "plugin off" instead of erroring settings.lua.
 func genPluginBlock(soName, section string, opts []string, extra string) string {
+	guard := "hl.plugin." + section
+	if strings.HasPrefix(section, "[") {
+		guard = "hl.plugin" + section // dashed name: hl.plugin["dynamic-cursors"]
+	}
 	var b strings.Builder
 	b.WriteString("pcall(function()\n")
 	fmt.Fprintf(&b, "  hl.plugin.load(%s)\n", luaStr(pluginSoPath(soName)))
-	fmt.Fprintf(&b, "  hl.config({ plugin = { %s = { %s } } })\n", section, strings.Join(opts, ", "))
+	fmt.Fprintf(&b, "  if %s ~= nil then\n", guard)
+	fmt.Fprintf(&b, "    hl.config({ plugin = { %s = { %s } } })\n", section, strings.Join(opts, ", "))
 	if extra != "" {
 		b.WriteString(extra)
 	}
+	b.WriteString("  end\n")
 	b.WriteString("end)\n\n")
 	return b.String()
 }

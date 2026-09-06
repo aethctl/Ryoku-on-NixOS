@@ -64,7 +64,7 @@ Scope {
         case "reboot":
         case "shutdown": ShellState.askSessionAction(id, root.modelData ? root.modelData.name : ""); break;
         case "screenshot": Spawn.run(["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"]); break;
-        case "wallpaper": if (root.state) root.state.wallpaperSwitcherOpen = !root.state.wallpaperSwitcherOpen; break;
+        case "wallpaper": Quickshell.execDetached(["ryogami", "wallpaper", "ui"]); break;
         case "color-picker": Quickshell.execDetached(["ryoku-cmd-color-picker"]); break;
         case "app-launcher": if (root.state) root.state.launcherOpen = !root.state.launcherOpen; break;
         default: return;
@@ -391,11 +391,10 @@ Scope {
                     function onSurfaceRequested(id, mon, ctx) {
                         if (mon !== "" && mon !== (root.modelData ? root.modelData.name : ""))
                             return;
-                        // The wallpaper + theme picker is the standalone Switcher
-                        // overlay now, not a frame-blob menu: route its surface
-                        // request straight to the overlay toggle.
+                        // The wallpaper + theme picker is the ryogami overlay now
+                        // (Super+W); route its surface request straight there.
                         if (id === "wallpaper") {
-                            if (root.state) root.state.wallpaperSwitcherOpen = !root.state.wallpaperSwitcherOpen;
+                            Quickshell.execDetached(["ryogami", "wallpaper", "ui"]);
                             return;
                         }
                         frameMenus.openSurface(id, null, mon, ctx);

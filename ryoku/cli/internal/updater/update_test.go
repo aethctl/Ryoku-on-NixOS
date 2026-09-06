@@ -149,17 +149,21 @@ func TestPackagedStatusUpToDateOfflineEmptyRecent(t *testing.T) {
 }
 
 // systemUpgradeArgs must run an unattended -Syu and --overwrite the Ryoku system
-// paths deploy.sh seeds unowned (ryoku-dns / ryoku-wifi-powersave + their polkit
-// rules). Once ryoku-desktop packages those paths a file conflict otherwise
-// aborts the whole -Syu and blocks every user update; dropping the glob silently
-// reintroduces that outage, so pin it here.
+// paths the ISO installer and deploy.sh seed unowned (ryoku-dns /
+// ryoku-wifi-powersave + their polkit rules, and the Plymouth splash theme).
+// Once ryoku-desktop packages those paths a file conflict otherwise aborts the
+// whole -Syu and blocks every user update; dropping any of them from the glob
+// silently reintroduces that outage, so pin them here.
 func TestSystemUpgradeAdoptsSeededRyokuFiles(t *testing.T) {
-	args := systemUpgradeArgs()
+	args := systemUpgradeArgs(false)
 	joined := strings.Join(args, " ")
 	for _, want := range []string{"pacman -Syu", "--noconfirm", "--overwrite"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("systemUpgradeArgs missing %q: %v", want, args)
 		}
+	}
+	if !strings.Contains(strings.Join(systemUpgradeArgs(true), " "), "pacman -Syyu") {
+		t.Error("a channel move must force the db refresh (-Syyu); a frozen release is older than the cached db")
 	}
 	var glob string
 	for i, a := range args {
@@ -175,6 +179,10 @@ func TestSystemUpgradeAdoptsSeededRyokuFiles(t *testing.T) {
 		"/usr/bin/ryoku-wifi-powersave",
 		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules",
 		"/usr/share/polkit-1/rules.d/49-ryoku-wifi-powersave.rules",
+		"/usr/share/plymouth/themes/ryoku/bullet.png",
+		"/usr/share/plymouth/themes/ryoku/logo.png",
+		"/usr/lib/systemd/system/ryoku-network-kill-guard.service",
+		"/usr/share/ryoku/boot/default.conf",
 	} {
 		covered := false
 		for _, g := range strings.Split(glob, ",") {
@@ -186,5 +194,28 @@ func TestSystemUpgradeAdoptsSeededRyokuFiles(t *testing.T) {
 		if !covered {
 			t.Errorf("--overwrite %q does not cover deploy.sh-seeded path %q", glob, p)
 		}
+	}
+}
+
+// prowlDecide is the pure core of prowlRefresh: a dev install (on PATH, not
+// pacman-owned) self-updates; a pacman-owned copy is left to `pacman -Syu`; an
+// absent binary is a no-op. Pinned so the dev-vs-packaged branch cannot regress.
+func TestProwlDecide(t *testing.T) {
+	cases := []struct {
+		name        string
+		onPath      bool
+		pacmanOwned bool
+		want        prowlAction
+	}{
+		{"absent does nothing", false, false, prowlNoop},
+		{"packaged is left to pacman", true, true, prowlManaged},
+		{"dev install self-updates", true, false, prowlSelfUpdate},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := prowlDecide(c.onPath, c.pacmanOwned); got != c.want {
+				t.Fatalf("prowlDecide(onPath=%v, owned=%v) = %v, want %v", c.onPath, c.pacmanOwned, got, c.want)
+			}
+		})
 	}
 }

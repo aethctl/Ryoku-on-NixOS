@@ -51,10 +51,31 @@ Singleton {
     // to these: rebuilding a Repeater from the live list while Pipewire is
     // mid-dispatch of a node removal has crashed Quickshell's Pipewire service.
     // Every consumer binds to the settled snapshots below instead.
-    readonly property var liveOutputs: root.nodes.filter(root.isOutput)
-    readonly property var liveInputs: root.nodes.filter(root.isInput)
+    // Dedup devices by node.name: some graphs (seen on multi-card boxes) surface
+    // the same sink/source node more than once, which listed a device several
+    // times and lit every copy as "default". Streams are left alone -- two
+    // instances of one app share an app name but are distinct nodes to mix.
+    readonly property var liveOutputs: root.dedupByName(root.nodes.filter(root.isOutput))
+    readonly property var liveInputs: root.dedupByName(root.nodes.filter(root.isInput))
     readonly property var liveStreams: root.nodes.filter(root.isPlayStream)
     readonly property var liveCaptureStreams: root.nodes.filter(root.isCaptureStream)
+
+    // Collapse nodes sharing a node.name, keeping the first. node.name is a
+    // device's stable identity (alsa_output.pci-..., bluez_output.<mac>...), so
+    // this removes true duplicates without merging two distinct devices.
+    function dedupByName(list) {
+        var seen = ({});
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+            var n = list[i];
+            var key = (n && n.name) ? ("" + n.name) : ("__i" + i);
+            if (seen[key])
+                continue;
+            seen[key] = true;
+            out.push(n);
+        }
+        return out;
+    }
 
     // Settled snapshots the whole shell binds to (the bar audio widget, the
     // volume panel, the framebar menus, the popout, the visualiser). A short
@@ -93,10 +114,19 @@ Singleton {
     // track every node we show so its properties (media/app/codec metadata) and
     // live audio (volume, mute) populate. classification above reads only the
     // node's constant flags, so this never deadlocks on untracked properties.
-    // Tracked from the LIVE lists so metadata populates without the settle delay.
+    //
+    // Track the SETTLED lists, not the live ones. Rewriting a PwObjectTracker's
+    // object set inside Pipewire's node-removal dispatch mutates Quickshell's
+    // Pipewire structures mid-teardown -- the same hazard the view snapshots above
+    // avoid -- and a mass reset (a device flap, "Device or resource busy") churns
+    // the live lists on every single removal. The settled lists already exclude a
+    // node by the time the debounce fires, so the tracker never re-tracks across a
+    // dying node. The two default devices stay live so the bar volume/mute read
+    // immediately; they are single objects, not the per-removal churn, and no view
+    // shows a node before it reaches the settled list, so this costs no immediacy.
     PwObjectTracker {
         objects: [root.sink, root.source].filter(Boolean)
-            .concat(root.liveOutputs).concat(root.liveInputs).concat(root.liveStreams).concat(root.liveCaptureStreams)
+            .concat(root.outputs).concat(root.inputs).concat(root.streams).concat(root.captureStreams)
     }
 
     // --- device presentation ------------------------------------------------

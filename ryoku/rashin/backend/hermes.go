@@ -16,6 +16,8 @@ type HermesInfo struct {
 	Version    string `json:"version"`
 	Configured bool   `json:"configured"`
 	Wired      bool   `json:"wired"`
+	// SkillWired is true when ~/.hermes/skills/ryoku links the shipped skill.
+	SkillWired bool   `json:"skillWired"`
 	Provider   string `json:"provider,omitempty"`
 	Model      string `json:"model,omitempty"`
 }
@@ -57,6 +59,7 @@ func HermesStatus() HermesInfo {
 	}
 	info.Configured = hermesOnboarded()
 	info.Wired = fileHasBlock(hermesMemory())
+	info.SkillWired = isOurSkillLink(filepath.Join(home(), ".hermes", "skills", "ryoku"))
 	info.Provider, info.Model, _ = hermesModel()
 	if saved := savedSessionModel(); saved != "" {
 		info.Model = saved

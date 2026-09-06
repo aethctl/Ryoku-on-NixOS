@@ -190,3 +190,38 @@ func TestDetectAgentsPresentWired(t *testing.T) {
 		t.Fatalf("agent file path should be tilde-abbreviated: %q", claude.File)
 	}
 }
+
+// prowlSkillClients maps rashin's own agent detection onto the prowl-agent
+// client ids: the claude and omp coding agents (plus hermes, host-dependent).
+// codex and opencode are detected agents but not prowl client ids, so they must
+// never leak into the --clients list.
+func TestProwlSkillClients(t *testing.T) {
+	h := agentEnv(t)
+	has := func(ids []string, id string) bool {
+		for _, g := range ids {
+			if g == id {
+				return true
+			}
+		}
+		return false
+	}
+	// No coding-agent homes -> neither claude nor omp is reported.
+	got := prowlSkillClients()
+	if has(got, "claude") || has(got, "omp") {
+		t.Fatalf("no agent dirs but got %v", got)
+	}
+	// claude + omp homes -> both detected.
+	for _, d := range []string{".claude", ".omp", ".codex"} {
+		if err := os.MkdirAll(filepath.Join(h, d), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got = prowlSkillClients()
+	if !has(got, "claude") || !has(got, "omp") {
+		t.Fatalf("prowlSkillClients() = %v, want claude and omp present", got)
+	}
+	// codex has a home but is not a prowl client id.
+	if has(got, "codex") || has(got, "opencode") {
+		t.Fatalf("prowlSkillClients() leaked a non-prowl client: %v", got)
+	}
+}

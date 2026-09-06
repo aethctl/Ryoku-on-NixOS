@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Ryoku Arch commit-msg hook.
 # blocks commits with no impact label, a subject over 72 chars or ending in a

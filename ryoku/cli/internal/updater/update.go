@@ -54,6 +54,15 @@ var (
 // the update island and Hub show real, determinate progress.
 func Update(args []string) error {
 	stage2 := len(args) >= 2 && args[0] == "--stage2"
+	channelSwitch := false
+	for _, a := range args {
+		if a == "-v" || a == "--verbose" {
+			verboseLog = true
+		}
+		if a == "--channel-switch" {
+			channelSwitch = true
+		}
+	}
 
 	if nixBackend() {
 		if stage2 {
@@ -84,6 +93,14 @@ func Update(args []string) error {
 			"(an update that runs out of disk can leave the system half-upgraded)", free)
 	}
 
+	// Cache the sudo credential once, on the terminal, before any step needs it.
+	// The pre-snapshot, pacman, yay and the post snapshot all escalate, several
+	// through pipes or RunOut where a prompt cannot be seen; one prompt up front is
+	// what users were doing by hand with `sudo -v && ryoku update`.
+	primeSudo()
+	stopKeepalive := sudoKeepalive()
+	defer stopKeepalive()
+
 	checkout := sys.ResolveRepo() != ""
 	if checkout {
 		progress.begin(gitSteps)
@@ -98,33 +115,67 @@ func Update(args []string) error {
 	// checkout: update through the git channel. packaged: pacman + a hand-off
 	// to the freshly installed binary (stage2).
 	if checkout {
+		logPath := startUpdateLog()
+		defer stopUpdateLog()
 		if err := channelUpdate(); err != nil {
 			progress.fail(err)
 			return err
 		}
 		rashinReindex()
+		prowlRefresh()
 		progress.at("doctor")
 		offerSnapperHelpers()
 		runFreshDoctor()
 		progress.at("finalize")
 		snapperPost(pre, "ryoku-update")
 		progress.logf("Update complete")
+		if logPath != "" {
+			fmt.Println("  " + sys.Dim("full log: "+logPath))
+		}
 		return finishRun()
 	}
 
 	progress.at("packages")
 	progress.logf("Updating system packages (pacman)")
+	// the release this box runs before pacman moves it; stage2 (the new
+	// binary) reads it from the environment to arm the boot guard.
+	if from := sys.ReadRelease().Release; from != "" {
+		os.Setenv("RYOKU_UPDATE_FROM", from)
+	}
 	clearStalePacmanLock()
-	if err := runSystemUpgrade(); err != nil {
-		// only advertise `ryoku rollback` when the pre snapshot it needs exists;
-		// snapperPre is best-effort and returns "" when it was skipped.
-		hint := "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly"
-		if pre != "" {
-			hint = "see `ryoku rollback` (pre-update snapshot " + pre + ")"
+	if conflicts, err := runSystemUpgrade(channelSwitch); err != nil {
+		// One in-place recovery, then a single retry: clear the unowned files a
+		// new package now claims (an installer/deploy stray), or, with nothing to
+		// clear, drop a stale [ryoku] db whose signature no longer matches. A
+		// channel switch already forces -Syyu, so it does not retry here.
+		if !channelSwitch {
+			healSystemUpgrade(conflicts)
+			_, err = runSystemUpgrade(true)
 		}
-		e := fmt.Errorf("pacman -Syu failed; %s: %w", hint, err)
-		progress.fail(e)
-		return e
+		if err != nil {
+			// only advertise `ryoku rollback` when the pre snapshot it needs exists;
+			// snapperPre is best-effort and returns "" when it was skipped.
+			hint := "no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly"
+			if pre != "" {
+				hint = "see `ryoku rollback` (pre-update snapshot " + pre + ")"
+			}
+			e := fmt.Errorf("pacman -Syu failed; %s: %w", hint, err)
+			progress.fail(e)
+			return e
+		}
+	}
+	// `ryoku track` just repointed the [ryoku] repo. -Syu only moves up, so a
+	// box leaving testing for stable, or pinning an earlier release, still
+	// holds the newer set; an explicit -S of the umbrella installs the
+	// channel's version, and its exact-version depends bring the whole Ryoku
+	// set along, down as well as up.
+	if channelSwitch {
+		progress.logf("Moving the Ryoku set to what %s serves", sys.PackagedChannel())
+		if err := runInhibited("System", "Ryoku channel switch", channelSwitchArgs()); err != nil {
+			e := fmt.Errorf("channel switch failed: %w", err)
+			progress.fail(e)
+			return e
+		}
 	}
 
 	if sys.Has("yay") {
@@ -205,6 +256,46 @@ func humanBytes(n uint64) string {
 	}
 }
 
+// primeSudo caches the sudo credential once, up front, on the real terminal, so
+// every escalation the rest of the update makes finds it instead of prompting.
+// Several of those prompts cannot be seen or answered: the pre-snapshot runs
+// through RunOut (no tty), pacman's runs through the curated output pipe, and yay
+// and flatpak escalate on their own -- an unseen prompt there is exactly why users
+// learned to run `sudo -v` by hand first. No tty -> skip (a GUI or timer run has
+// no terminal to prompt on); a NOPASSWD box sees nothing. Best-effort.
+func primeSudo() {
+	if !sys.StdinIsTTY() {
+		return
+	}
+	_ = sys.Run("sudo", "-v")
+}
+
+// sudoKeepalive refreshes the cached credential every minute so a long
+// transaction (a large AUR compile) cannot let it lapse mid-run and re-prompt
+// where the prompt is invisible. `-n` never prompts, so once the credential is
+// gone this is a silent no-op, and RunOut keeps its "a password is required" off
+// the terminal. The returned stop func ends the refresher; the stage1->stage2
+// exec replaces the process, so a stop it never reaches leaks nothing.
+func sudoKeepalive() func() {
+	if !sys.StdinIsTTY() {
+		return func() {}
+	}
+	stop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(time.Minute)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				_, _ = sys.RunOut("sudo", "-n", "-v")
+			}
+		}
+	}()
+	return func() { close(stop) }
+}
+
 // snapshotDesc labels the pre-update snapshot (and its Limine boot-menu entry)
 // with the version being updated from, so a user restoring after a bad update can
 // tell the snapshots apart instead of a row of identical "ryoku-update".
@@ -224,25 +315,86 @@ func snapshotDesc() string {
 // runSystemUpgrade runs `pacman -Syu` sleep-inhibited (a lid-close or idle
 // suspend mid-transaction cannot corrupt it) and skips snap-pac's per-transaction
 // snapshot: `ryoku update` already brackets the whole run with one snapper
-// pre/post pair, so snap-pac's extra pair is pure noise in the list and the boot
-// menu. sudo resets the environment, so SNAP_PAC_SKIP rides inside via env(1).
-func runSystemUpgrade() error {
-	return runInhibited("System package upgrade", systemUpgradeArgs())
+// pre/post pair. It returns any "exists in filesystem" conflict paths so a
+// failed run can clear unowned strays and retry.
+func runSystemUpgrade(forceRefresh bool) ([]string, error) {
+	return runUpgradeCollecting("System", "System package upgrade", systemUpgradeArgs(forceRefresh))
 }
 
-// systemUpgradeArgs is the packaged-box upgrade command. --overwrite adopts the
-// privileged helpers + polkit rules deploy.sh seeds unowned (ryoku-dns,
-// ryoku-wifi-powersave) once ryoku-desktop packages those paths; without it a
-// pacman file conflict aborts the whole -Syu and blocks every update until the
-// files are deleted by hand.
-func systemUpgradeArgs() []string {
-	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", "-Syu", "--noconfirm",
-		"--overwrite", "/usr/bin/ryoku-*,/usr/share/polkit-1/rules.d/*ryoku*.rules"}
+// healSystemUpgrade recovers from a failed system upgrade in place, once. Files
+// that block the transaction and that no package owns ("exists in filesystem"
+// for an installer/deploy stray a new package now claims) are removed so the
+// package adopts them; a file another package owns is a real conflict and is
+// left untouched for the retry to surface. With nothing to clear, it assumes a
+// stale [ryoku] db whose signature no longer matches and forces a clean refresh.
+func healSystemUpgrade(conflicts []string) {
+	if strays := unownedFiles(conflicts); len(strays) > 0 {
+		progress.logf("Clearing %d unowned file(s) blocking the upgrade, then retrying", len(strays))
+		_ = sys.Sudo(append([]string{"rm", "-f"}, strays...)...)
+		return
+	}
+	progress.logf("Package database rejected; dropping the stale [ryoku] db and retrying")
+	_ = sys.DropRyokuSyncDB()
+}
+
+// unownedFiles keeps only the paths no installed package owns: pacman -Qo fails
+// on a stray, and removing a file a package ships would break that package.
+func unownedFiles(paths []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, p := range paths {
+		if p == "" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		if _, err := sys.RunOut("pacman", "-Qo", p); err != nil {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// ryokuOverwriteGlob names the ryoku-desktop-owned paths that the ISO installer
+// and ryoku/shell/deploy.sh seed unowned before the package began owning them:
+// the privileged helpers (ryoku-dns, ryoku-network-kill, ryoku-boot-apply,
+// ryoku-wifi-powersave), their polkit rules, the Plymouth splash theme, the
+// ryoku-owned systemd units, and the shipped boot configs under
+// /usr/share/ryoku/boot. Every ryoku-desktop (re)install --overwrites these, or
+// the first upgrade that starts owning a seeded path aborts the whole
+// transaction ("exists in filesystem") and blocks every update until the files
+// are removed by hand. Keep in sync with the doctor's ryokuSystemGlobs, which
+// clears the same paths on an already-wedged box.
+const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
+	"/usr/lib/systemd/system/ryoku-*," +
+	"/usr/share/polkit-1/rules.d/*ryoku*.rules," +
+	"/usr/share/plymouth/themes/ryoku/*," +
+	"/usr/share/ryoku/boot/*"
+
+// systemUpgradeArgs is the packaged-box upgrade command. After a channel move
+// the refresh is forced (-Syy): pacman skips a db that is not newer than its
+// cached copy, and a frozen release directory is older than the channel the
+// box just left, so a plain -Sy kept the old db against the new signature and
+// failed with "invalid or corrupted database (PGP signature)".
+func systemUpgradeArgs(forceRefresh bool) []string {
+	op := "-Syu"
+	if forceRefresh {
+		op = "-Syyu"
+	}
+	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", op, "--noconfirm",
+		"--overwrite", ryokuOverwriteGlob}
+}
+
+// channelSwitchArgs installs the [ryoku] channel's ryoku-desktop explicitly,
+// which pacman honours in either direction (a downgrade warns and proceeds),
+// pulling the umbrella's exact-version depends with it.
+func channelSwitchArgs() []string {
+	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "pacman", "-S", "--noconfirm",
+		"--overwrite", ryokuOverwriteGlob, "ryoku-desktop"}
 }
 
 // runAURUpgrade runs `yay -Sua` under the same sleep inhibitor.
 func runAURUpgrade() error {
-	return runInhibited("AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
+	return runInhibited("AUR", "AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
 }
 
 // flatpakUpdatable reports whether a flatpak update is worth attempting at all:
@@ -262,18 +414,25 @@ func flatpakUpdatable() bool {
 // same sleep inhibitor as the package steps, since a suspend mid-deploy leaves a
 // half-written app tree.
 func runFlatpakUpgrade() error {
-	return runInhibited("Flatpak app upgrade", []string{"flatpak", "update", "--noninteractive", "--assumeyes"})
+	return runInhibited("Flatpak", "Flatpak app upgrade",
+		[]string{"flatpak", "update", "--noninteractive", "--assumeyes"})
 }
 
 // runInhibited runs argv while holding a logind sleep+idle block, so a suspend
 // mid-upgrade cannot interrupt a package transaction. Degrades to running argv
-// directly when systemd-inhibit is unavailable.
-func runInhibited(why string, argv []string) error {
+// directly when systemd-inhibit is unavailable. On a real terminal it renders a
+// curated view of the output (phase is the header label); for pipes, logs, and
+// --verbose it streams raw so nothing that scrapes the output breaks.
+func runInhibited(phase, why string, argv []string) error {
+	full := argv
 	if sys.Has("systemd-inhibit") {
-		head := []string{"--what=sleep:idle", "--who=ryoku update", "--why=" + why, "--mode=block"}
-		return sys.Run("systemd-inhibit", append(head, argv...)...)
+		head := []string{"systemd-inhibit", "--what=sleep:idle", "--who=ryoku update", "--why=" + why, "--mode=block"}
+		full = append(head, argv...)
 	}
-	return sys.Run(argv[0], argv[1:]...)
+	if verboseLog || !sys.StdoutIsTTY() {
+		return sys.Run(full[0], full[1:]...)
+	}
+	return renderUpgrade(phase, full)
 }
 
 // finishRun publishes the terminal "done" state, holds it briefly so a watching
@@ -291,6 +450,12 @@ func finishRun() error {
 // so it re-begins the packaged step list and marks the pre-handoff steps done
 // to keep one continuous progress bar.
 func updateStage2(pre string) error {
+	// A fresh process after the exec handoff: re-cache the credential (a no-op
+	// inside the timeout) so materialize, the post snapshot and doctor never
+	// prompt where it cannot be seen.
+	primeSudo()
+	stopKeepalive := sudoKeepalive()
+	defer stopKeepalive()
 	progress.begin(pkgSteps)
 	progress.setSnapshot(pre)
 	progress.markDone("snapshot", "packages")
@@ -299,6 +464,12 @@ func updateStage2(pre string) error {
 	} else {
 		progress.skip("aur")
 	}
+
+	// The packages are in. From here the boot guard watches: if the next two
+	// boots never bring the desktop up, it puts the Ryoku set back on the
+	// release this box ran before. Armed only for a real move (the release
+	// changed) so a no-op update never leaves a marker behind.
+	armBootGuard(pre)
 
 	progress.at("apply")
 	progress.logf("Applying the new configuration")
@@ -322,6 +493,7 @@ func updateStage2(pre string) error {
 	hyprReload()
 	startShell()
 	rashinReindex()
+	prowlRefresh()
 
 	progress.at("doctor")
 	offerSnapperHelpers()
@@ -344,6 +516,58 @@ func rashinReindex() {
 	if err := sys.Run(pkgBin("ryoku-rashin"), "index"); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: rashin reindex failed: %v\n", err)
 	}
+	// Re-wire every agent after the index: the shipped ryoku skill and Prowl's
+	// skills may have moved or grown with this update, and wire is idempotent.
+	if err := sys.Run(pkgBin("ryoku-rashin"), "wire"); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: rashin wire failed: %v\n", err)
+	}
+}
+
+// prowlRefresh keeps a dev box's prowl-agent current after an update. A packaged
+// box already got it through `pacman -Syu`, so this runs `prowl-agent update`
+// only when the binary is on PATH but not owned by a pacman package (a dev or
+// manual install). Best effort, and it logs one line either way.
+func prowlRefresh() {
+	path, err := exec.LookPath("prowl-agent")
+	if err != nil {
+		return
+	}
+	switch prowlDecide(true, prowlPacmanOwned(path)) {
+	case prowlManaged:
+		fmt.Println("==> prowl-agent is managed by pacman; refreshed with the system packages")
+	case prowlSelfUpdate:
+		fmt.Println("==> Updating prowl-agent")
+		if err := sys.Run(path, "update"); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: prowl-agent update failed: %v\n", err)
+		}
+	}
+}
+
+// prowlPacmanOwned reports whether path belongs to an installed pacman package;
+// `pacman -Qo <path>` exits non-zero for a file no package owns (a dev install).
+func prowlPacmanOwned(path string) bool {
+	return exec.Command("pacman", "-Qo", path).Run() == nil
+}
+
+// prowlAction is what an update should do about prowl-agent.
+type prowlAction int
+
+const (
+	prowlNoop       prowlAction = iota // not installed; nothing to do
+	prowlManaged                       // pacman-owned; the system upgrade covered it
+	prowlSelfUpdate                    // dev install; run `prowl-agent update`
+)
+
+// prowlDecide is the pure update decision, split out so it is unit-testable
+// without a live PATH or pacman.
+func prowlDecide(onPath, pacmanOwned bool) prowlAction {
+	if !onPath {
+		return prowlNoop
+	}
+	if pacmanOwned {
+		return prowlManaged
+	}
+	return prowlSelfUpdate
 }
 
 // clearStalePacmanLock mirrors doctor's reconcilePacmanLock right before the
@@ -469,33 +693,106 @@ func runFreshDoctor() {
 	_ = sys.Run(pkgBin("ryoku"), "doctor")
 }
 
-// Rollback guides restoring a snapshot. Ryoku pins the root subvolume on the
-// kernel cmdline and in fstab (rootflags=subvol=@), and `snapper rollback`
-// cannot serve that layout: it works by flipping the btrfs default subvolume,
-// which a pinned subvol= simply ignores -- limine-snapper-sync's own tooling
-// states the layout is "not compatible with 'snapper rollback'". The supported
-// restore is the boot menu: boot the snapshot entry (whose matching kernels
-// limine-snapper-sync staged on the ESP), then `limine-snapper-restore` copies
-// it back onto @. So this command teaches that flow instead of running a
+// Rollback is the way back, on two levels. `--to <tag>` moves the Ryoku set
+// (its packages and config) to a published release without a reboot: the
+// [ryoku] repo is pinned at that frozen release directory and the update runs,
+// so the set moves in one pacman transaction while Arch stays current;
+// `ryoku track stable` follows releases again afterwards. A snapshot id guides
+// a whole-system restore from the boot menu. With no argument it shows both:
+// the releases the ledger knows and the snapshots on disk.
+//
+// The snapshot path is a boot-menu restore, not a live one: Ryoku pins the
+// root subvolume on the kernel cmdline and in fstab (rootflags=subvol=@), and
+// `snapper rollback` cannot serve that layout, since it works by flipping the
+// btrfs default subvolume, which a pinned subvol= simply ignores;
+// limine-snapper-sync's own tooling states the layout is "not compatible with
+// 'snapper rollback'". So the command teaches that flow instead of running a
 // snapper command that cannot restore the system.
 func Rollback(args []string) error {
-	id := "<id>"
-	if len(args) == 0 {
-		fmt.Println("Snapshots (pick an id, or choose one under Snapshots in the Limine boot menu):")
-		if err := Snapshots(); err != nil {
-			return err
+	to := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--to" && i+1 < len(args) {
+			to = args[i+1]
+			i++
 		}
-		fmt.Println()
-	} else {
-		id = args[0]
-		fmt.Printf("==> Restoring snapshot %s\n\n", id)
 	}
+	if to != "" {
+		if !sys.IsReleaseTag(to) {
+			return fmt.Errorf("--to takes a release tag (see `ryoku rollback` for the list), got %q", to)
+		}
+		fmt.Printf("==> Moving the Ryoku set to release %s\n", to)
+		return Track(to)
+	}
+	if len(args) > 0 {
+		return restoreGuide(args[0])
+	}
+
+	fmt.Println("Two ways back:")
+	fmt.Println("  the Ryoku set (its packages and config) to a published release, live;")
+	fmt.Println("  the whole system (Arch included) to a snapshot, from the boot menu.")
+	fmt.Println()
+	printReleases()
+	fmt.Println()
+	fmt.Println("SNAPSHOTS  the whole system, on this disk")
+	if err := Snapshots(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// printReleases is the RELEASES block of `ryoku rollback`: what a packaged box
+// runs, what it can move to, and how; a checkout box is told releases do not
+// apply to it instead of being shown nothing.
+func printReleases() {
+	if sys.ResolveRepo() != "" {
+		fmt.Println("RELEASES  not on this box")
+		fmt.Printf("  this box runs a checkout of %s; releases apply to packaged installs.\n", ryokuChannel())
+		fmt.Println("  ryoku track main|unstable-dev   picks the branch `ryoku update` follows")
+		return
+	}
+	ch := sys.PackagedChannel()
+	rel := sys.ReadRelease()
+	fmt.Printf("RELEASES  repo.ryoku.dev, channel: %s\n", orDash(ch))
+	if rel.Release != "" {
+		fmt.Printf("  running    %s%s\n", withSpace(rel.Name), rel.Release)
+	}
+	l := ledger()
+	if len(l.Releases) == 0 {
+		fmt.Println("  no published releases yet")
+		return
+	}
+	w := tabwriter.NewWriter(os.Stdout, 0, 2, 3, ' ', 0)
+	for _, r := range l.Releases {
+		mark := " "
+		if r.Tag == rel.Release {
+			mark = "*"
+		}
+		fmt.Fprintf(w, "  %s %s\t%s\t%s\n", mark, r.Tag, r.Date[:min(10, len(r.Date))], r.Name)
+	}
+	w.Flush()
+	fmt.Println("  ryoku rollback --to <tag>   moves the Ryoku set to that release, no reboot")
+	fmt.Println("  ryoku track stable          follows new releases again afterwards")
+}
+
+// restoreGuide is `ryoku rollback <id>`: the boot-menu restore, step by step,
+// naming the snapshot when snapper can describe it.
+func restoreGuide(id string) error {
+	label := id
+	if rows, err := snapshotRows(); err == nil {
+		for _, r := range rows {
+			if r.number == id {
+				label = fmt.Sprintf("%s  (%s, %s %s)", id, shortSnapDate(r.date), r.kind, orDash(r.description))
+				break
+			}
+		}
+	}
+	fmt.Printf("Restoring snapshot %s\n\n", label)
 	fmt.Println("Ryoku boots the @ subvolume directly, so a live `snapper rollback` cannot")
-	fmt.Println("restore the system; the restore runs from the boot menu instead:")
-	fmt.Printf("  1. Reboot, and in the Limine menu open Snapshots -> snapshot %s.\n", id)
-	fmt.Println("  2. Boot it, then run `sudo limine-snapper-restore` in a terminal (it offers")
-	fmt.Println("     to restore the snapshot you are booted into, matching kernels included).")
-	fmt.Println("  3. Reboot back into the restored system.")
+	fmt.Println("restore the system; the restore runs from the boot menu:")
+	fmt.Printf("  1. Reboot, and in the Limine menu open Snapshots -> %s.\n", id)
+	fmt.Println("  2. In that session run:  sudo limine-snapper-restore")
+	fmt.Println("     (it restores the snapshot you booted, matching kernels included)")
+	fmt.Println("  3. Reboot into the restored system.")
 	if !sys.PkgInstalled("limine-snapper-sync") {
 		fmt.Println()
 		fmt.Println("limine-snapper-sync is not installed, so snapshots are missing from the boot")
@@ -505,26 +802,35 @@ func Rollback(args []string) error {
 	return nil
 }
 
+// Snapshots prints the snapshot table (the SNAPSHOTS block of `ryoku rollback`).
 func Snapshots() error {
 	if !sys.Has("snapper") {
 		return fmt.Errorf("snapper is not installed")
 	}
 	if !sys.Exists("/etc/snapper/configs/root") {
-		fmt.Println("Snapshots are not configured on this machine.")
-		fmt.Println("Enable them with: ryoku doctor")
+		fmt.Println("  not configured on this machine; `ryoku doctor` enables them")
 		return nil
 	}
-	// Prime sudo on the terminal (it may prompt), then capture without a tty so
-	// the parse below gets clean CSV instead of a password prompt in the output.
-	_ = sys.Run("sudo", "-v")
-	out, err := sys.RunOut("sudo", "-n", "snapper", "-c", snapperConfig, "--csvout",
-		"list", "--columns", "number,type,date,description,cleanup")
+	rows, err := snapshotRows()
 	if err != nil {
 		// fall back to snapper's own table rather than showing nothing.
 		return sys.Sudo("snapper", "-c", snapperConfig, "list")
 	}
-	printSnapshotTable(parseSnapshotRows(out))
+	printSnapshotTable(rows)
 	return nil
+}
+
+// snapshotRows lists the snapshots through snapper (root), parsed. sudo is
+// primed on the terminal first (it may prompt), then the list is captured
+// without a tty so the parse gets clean CSV instead of a password prompt.
+func snapshotRows() ([]snapshotRow, error) {
+	primeSudo()
+	out, err := sys.RunOut("sudo", "-n", "snapper", "-c", snapperConfig, "--csvout",
+		"list", "--columns", "number,type,date,description,cleanup")
+	if err != nil {
+		return nil, err
+	}
+	return parseSnapshotRows(out), nil
 }
 
 // snapshotRow is one parsed line of `snapper --csvout list`.
@@ -564,30 +870,38 @@ func parseSnapshotRows(out string) []snapshotRow {
 	return rows
 }
 
-// printSnapshotTable shows the snapshots plus a count and boot-menu footer.
+// printSnapshotTable shows the snapshots (newest last, the way snapper counts)
+// plus a count, free space, and whether the boot menu lists them.
 func printSnapshotTable(rows []snapshotRow) {
 	if len(rows) == 0 {
-		fmt.Println("No snapshots yet. `ryoku update` takes one before each update.")
+		fmt.Println("  none yet; `ryoku update` takes one before and after each update")
 		return
 	}
 	w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
-	fmt.Fprintln(w, "#\tTYPE\tDATE\tCLEANUP\tDESCRIPTION")
 	for _, s := range rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.number, s.kind, s.date, orDash(s.cleanup), orDash(s.description))
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", s.number, shortSnapDate(s.date), s.kind, orDash(s.description))
 	}
 	w.Flush()
-
-	boot := "no (run: ryoku doctor)"
-	if snapshotsInBootMenu() {
-		boot = "yes"
-	}
 	fmt.Println()
+	summary := fmt.Sprintf("  %d snapshots", len(rows))
 	if free := rootFree(); free != "" {
-		fmt.Printf("%d snapshots \u00b7 %s free on / \u00b7 boot menu: %s\n", len(rows), free, boot)
-	} else {
-		fmt.Printf("%d snapshots \u00b7 boot menu: %s\n", len(rows), boot)
+		summary += ", " + free + " free on /"
 	}
-	fmt.Println("Restore one from the Limine \"Snapshots\" boot menu, or: ryoku rollback <#>")
+	if snapshotsInBootMenu() {
+		summary += ", listed in the Limine boot menu"
+	} else {
+		summary += ", NOT in the boot menu (ryoku doctor fixes that)"
+	}
+	fmt.Println(summary)
+	fmt.Println("  ryoku rollback <#>          shows how to boot into a snapshot and restore it")
+}
+
+// shortSnapDate trims snapper's "2026-09-03 22:10:06" to the minute.
+func shortSnapDate(d string) string {
+	if len(d) >= 16 {
+		return d[:16]
+	}
+	return d
 }
 
 // snapshotsInBootMenu reports whether limine-snapper-sync is in place to list
@@ -624,6 +938,13 @@ func Status(args []string) error {
 
 	fmt.Printf("config base:   %s\n", sys.BaseConfigDir())
 	fmt.Printf("channel:       %s\n", orDash(r.Channel))
+	if r.Release != "" {
+		if r.ChannelRelease != "" && r.ChannelRelease != r.Release {
+			fmt.Printf("release:       %s%s -> %s%s\n", withSpace(r.ReleaseName), r.Release, withSpace(r.ChannelReleaseName), r.ChannelRelease)
+		} else {
+			fmt.Printf("release:       %s%s\n", withSpace(r.ReleaseName), r.Release)
+		}
+	}
 	fmt.Printf("installed:     %s\n", orDash(r.Installed))
 	if r.Available {
 		fmt.Printf("available:     %s\n", orDash(r.Latest))
@@ -673,6 +994,21 @@ type statusReport struct {
 	Backend   string       `json:"backend,omitempty"`
 	CanUpdate bool         `json:"canUpdate"`
 	Source    string       `json:"source,omitempty"`
+	// packaged boxes: the release this box runs (/etc/ryoku-release) and the
+	// one its channel serves now (release.json beside the channel's db), so
+	// the island and the Hub can say "v0.55.7 -> v0.55.9" instead of a sha.
+	Release            string `json:"release,omitempty"`
+	ReleaseName        string `json:"releaseName,omitempty"`
+	ChannelRelease     string `json:"channelRelease,omitempty"`
+	ChannelReleaseName string `json:"channelReleaseName,omitempty"`
+}
+
+// withSpace is a release name as a prefix: "Onogoro " or "" when unnamed.
+func withSpace(name string) string {
+	if name == "" {
+		return ""
+	}
+	return name + " "
 }
 
 // buildStatus is the full Updates report: the Ryoku channel (baseStatus) plus
@@ -700,6 +1036,8 @@ func buildStatus() statusReport {
 // checkout, else the [ryoku] repo package versions on a packaged install.
 func baseStatus() statusReport {
 	if r, ok := channelStatus(); ok {
+		// a checkout has no release, but it runs a named line (CODENAME)
+		r.ReleaseName = ReleaseName()
 		return r
 	}
 	installed := sys.InstalledVersion()
@@ -721,12 +1059,18 @@ func packagedStatus(installed, latest string) statusReport {
 	latestSha := shortCommit(latest)
 
 	r := statusReport{
-		Installed: installedSha,
-		Latest:    latestSha,
-		Updates:   []updateItem{}, // non-nil, so a current box marshals [] like the git path
-		Recent:    []updateItem{}, // non-nil, so the JSON stays stable when nothing is fetched
-		Channel:   ryokuChannel(),
-		Snapshots: snapshotCount(),
+		Installed:   installedSha,
+		Latest:      latestSha,
+		Updates:     []updateItem{}, // non-nil, so a current box marshals [] like the git path
+		Recent:      []updateItem{}, // non-nil, so the JSON stays stable when nothing is fetched
+		Channel:     ryokuChannel(),
+		Snapshots:   snapshotCount(),
+		Release:     sys.ReadRelease().Release,
+		ReleaseName: ReleaseName(),
+	}
+	if ch := sys.PackagedChannel(); ch != "" {
+		serves := channelServes(ch)
+		r.ChannelRelease, r.ChannelReleaseName = serves.Release, serves.Name
 	}
 	// up to date: nothing incoming, but list the recent history the installed
 	// version contains (best-effort, newest-first) so the Hub's Updates page

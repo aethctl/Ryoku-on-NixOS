@@ -370,7 +370,7 @@ Item {
             id: tapOpen
             onTapped: {
                 const cmd = (root.musicApp && root.musicApp.length > 0) ? root.musicApp : "ryotunes";
-                Quickshell.execDetached(["ryoku-music-toggle", cmd]);
+                Quickshell.execDetached(["sh", "-c", cmd]);
             }
         }
     }

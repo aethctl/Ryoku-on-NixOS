@@ -2,7 +2,40 @@
 
 ## Unreleased
 
+### Fixed
+- **Ryoport capability hints respect NixOS.** Missing virtualization or
+  passthrough tooling now points Musubi users back to the declarative NixOS
+  configuration instead of suggesting Pacman or AUR commands.
+- **Musubi provides declarative NixOS Looking Glass passthrough support.**
+  NixOS now owns kvmfr, its shared-memory configuration, device permissions,
+  libvirt, swtpm, the Ryoku QEMU hook, user group membership, Looking Glass,
+  and the VirtIO driver ISO through the system generation. Hub never installs
+  packages or rewrites persistent host configuration imperatively.
+- **NixOS blocks imperative GPU-passthrough host setup.** Musubi will
+  not install passthrough packages, rewrite `/etc`, alter groups, or enable
+  libvirt through Hub. The Looking Glass lane remains capability-gated until
+  its host stack is represented declaratively by the Ryoku NixOS module.
+- **Lockscreen themes now activate SDDM through the NixOS-owned theme helper.**
+  Ryoku Settings no longer tries to overwrite Arch-style `/usr/share/sddm` and
+  `/etc/sddm.conf.d` paths on NixOS; the selected skin is copied safely into
+  the mutable `/var/lib/ryoku/sddm-theme` payload instead.
+- **Settings and Profile report NixOS package information correctly.** The Settings header identifies Ryoku NixOS, Profile reports SYSTEM and USER Nix package counts instead of pacman and AUR counts, and the profile install-date fallback no longer reads Arch's pacman log.
+
 ### Added
+- **`ryoku-hub gpu vm` builds and runs the passthrough VM.** A new subcommand
+  generates a performance-tuned libvirt domain named `ryoku-<name>` from an
+  install ISO (host-passthrough CPU with vCPU pinning off the caps engine's
+  topology, Hyper-V enlightenments + hidden KVM for Windows, virtio disk, the
+  dGPU and its sibling functions as `managed='no'` vfio hostdevs so the existing
+  hook binds them, the kvmfr 128 MiB Looking Glass shmem via `qemu:commandline`,
+  swtpm, UEFI), then defines/starts/stops/removes it via virsh and launches
+  `looking-glass-client` on start. Readiness reuses the caps verdict. Ryoport's
+  Looking Glass lane and `ryovm lg` drive it (`backend/gpuvm.go`,
+  `backend/gpudomain.go`).
+- **Add-ons warns on a community plugin.** A plugin whose manifest is not
+  `official: true` opens with the same warning the Store and QS Bar Settings
+  print, before its placement controls (`pages/AddonsPage.qml`).
+
 - **Desktop > General gains managed shell-reload media.** Preview an image,
   animation, or muted video; use Default or Add Asset with visible format
   guidance, managed import, a persisted CUSTOM ASSET On/Off switch that retains
@@ -125,7 +158,42 @@
   installed and a board is connected, and stays silent otherwise. No EEPROM write
   per theme change (the colour is re-applied on login and on resume instead).
 
+### Changed
+- **Bar Studio drops its QS Bar and Dock sections.** The page keeps the bar-style
+  gallery and the built-in style editors (Sumi's frame and rails, Obi, Nacre); QS
+  Bar's layout, widgets, form and dock now live in QS Bar Settings, and a QS BAR
+  card under the gallery shows the live layout order (watched off shell.json) and
+  opens the panel with `ryoku-shell bar settings`
+  (`quickshell/pages/BarStudioPage.qml`, `quickshell/schema/BarStudioPage.js`).
+- **Picker style moves to the Desktop page.** The theme, wallpaper and media
+  picker layout leaves Bar Studio for a PICKERS section on the Desktop page; it
+  writes only `qsbar.pickerStyle` through the daemon settings seam, so the bar's
+  own layout and widgets under `qsbar` are never overwritten
+  (`quickshell/pages/DesktopPage.qml`).
+
 ### Fixed
+- **The Keybinds page loads again.** Yesterday's Default Apps fix bound
+  `onChosen` on the page's `AppPicker`, but the type that name resolves to from
+  `pages/` is `Ryoku.Ui.AppPicker`, whose signal is `picked`; Quickshell refused
+  the whole file and the page rendered blank. The handler is `onPicked` again
+  (`pages/KeybindsPage.qml`), and the publish gate now lints every shipped root
+  for this class (`bin/ryoku-dev-lint-qml`).
+- **A rice's fastfetch emblem survives updates.** `rice apply` copied the
+  emblem over the shipped `fastfetch/fastfetch-emblem.png`, which
+  `ryoku materialize` re-lays on every update, so the readout reset to the
+  brand mark each time. It now lands on the user-owned `ryoku-logo.<ext>` path
+  the Fastfetch page's import uses and repoints `config.jsonc` at it; a new
+  `rice emblem` subcommand re-applies the active rice's emblem once a box is on
+  the shipped one, and `ryoku doctor` runs it (`backend/rice.go`,
+  `backend/fastfetch.go`).
+- **The Hub's scheme cards and a rice's colour mode no longer fight the shell's
+  theme.** `shell.json` `theme.theme` is the colour master and the daemon shadows
+  it into `theme.json` `followWallpaper` on every load, so a MONO/LIGHT/DARK pick
+  that only wrote `theme.json` flipped back to the wallpaper palette at the next
+  sync, and picking Wallpaper again in the shell was a no-op because
+  `theme.theme` already said so: the desktop stuck on the wrong palette. Both
+  now select the theme through `ryoku-shell theme` (Wallpaper to follow, Default
+  to lock) and write the shadow after (`backend/schemes.go`, `backend/rice.go`).
 - **"Unlock with fingerprint" can be switched off on a box with no reader.** The
   switch was gated on a present sensor, so a machine with no fingerprint hardware
   showed it stuck on with no way to turn it off; it is now always operable (a

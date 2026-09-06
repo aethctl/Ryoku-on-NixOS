@@ -13,6 +13,12 @@ hl.config({
         -- undock); suppress Hyprland's own "scale changed" popup so a rescale
         -- does not flash a raw toast over the shell's OSD.
         disable_scale_notification = true,
+        -- Super+A snaps a window to a centred float and back. Without this a
+        -- dispatcher resize jumps in one frame, so the app re-lays-out mid-jump
+        -- and its UI flickers; animating it lets Hyprland texture-scale the
+        -- window into the new size and hand the app one final-size configure,
+        -- so it morphs smoothly instead.
+        animate_manual_resizes = true,
     },
     xwayland = {
         force_zero_scaling = true, -- XWayland (Chromium/Electron) crisp on HiDPI

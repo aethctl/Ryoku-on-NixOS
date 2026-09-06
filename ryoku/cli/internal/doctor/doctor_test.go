@@ -788,6 +788,40 @@ func TestGreeterThemeHealthy(t *testing.T) {
 	}
 }
 
+func TestSDDMWaylandBodyForcesQtWayland(t *testing.T) {
+	body := sddmWaylandBody()
+	for _, line := range []string{
+		"[General]",
+		"DisplayServer=wayland",
+		"GreeterEnvironment=QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24",
+		"[Wayland]",
+		"CompositorCommand=",
+	} {
+		if !strings.Contains(body, line) {
+			t.Errorf("sddmWaylandBody() missing %q:\n%s", line, body)
+		}
+	}
+}
+
+// the login-screen pointer break: the greeter and weston fall back to the cursor
+// theme literally named "default", and Ryoku shipped none. The stub must be a
+// valid index.theme that inherits the shipped Bibata set so the fallback lands
+// on a real cursor.
+func TestDefaultCursorIndexInheritsShipped(t *testing.T) {
+	body := defaultCursorIndexBody()
+	for _, line := range []string{
+		"[Icon Theme]",
+		"Inherits=" + defaultCursorTheme,
+	} {
+		if !strings.Contains(body, line) {
+			t.Errorf("defaultCursorIndexBody() missing %q:\n%s", line, body)
+		}
+	}
+	if defaultCursorTheme != "Bibata-Modern-Ice" {
+		t.Errorf("default cursor theme drifted from the shipped Bibata set: %q", defaultCursorTheme)
+	}
+}
+
 // the limine layout reconciler's decision logic lives in planLimineLayout, a
 // pure function of an observed limineLayoutState: no real /boot, no
 // efibootmgr. the config surgery (mergeLimineConf) is exercised on literal
@@ -2355,17 +2389,29 @@ func TestStrayRyokuFilesSelectsUnownedOnly(t *testing.T) {
 			return []string{"/usr/bin/ryoku-dns", "/usr/bin/ryoku-gpu"}, nil
 		case "/usr/share/polkit-1/rules.d/*ryoku*.rules":
 			return []string{"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules"}, nil
+		case "/usr/share/plymouth/themes/ryoku/*":
+			return []string{"/usr/share/plymouth/themes/ryoku/bullet.png", "/usr/share/plymouth/themes/ryoku/logo.png"}, nil
+		case "/usr/lib/systemd/system/ryoku-*":
+			return []string{"/usr/lib/systemd/system/ryoku-network-kill-guard.service"}, nil
+		case "/usr/share/ryoku/boot/*":
+			return []string{"/usr/share/ryoku/boot/default.conf"}, nil
 		}
 		return nil, nil
 	}
-	owned := func(p string) bool { return p == "/usr/bin/ryoku-gpu" } // packaged; the rest are deploy-seeded
+	// packaged; the rest are seeded unowned by the installer / a dev deploy.
+	owned := func(p string) bool {
+		return p == "/usr/bin/ryoku-gpu" || p == "/usr/share/plymouth/themes/ryoku/logo.png"
+	}
 	got := strayRyokuFiles(ryokuSystemGlobs, glob, owned)
 	want := map[string]bool{
-		"/usr/bin/ryoku-dns":                             true,
-		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules": true,
+		"/usr/bin/ryoku-dns":                                       true,
+		"/usr/share/polkit-1/rules.d/50-ryoku-dns.rules":           true,
+		"/usr/share/plymouth/themes/ryoku/bullet.png":              true,
+		"/usr/lib/systemd/system/ryoku-network-kill-guard.service": true,
+		"/usr/share/ryoku/boot/default.conf":                       true,
 	}
 	if len(got) != len(want) {
-		t.Fatalf("strayRyokuFiles = %v, want exactly the two unowned paths", got)
+		t.Fatalf("strayRyokuFiles = %v, want exactly the three unowned paths", got)
 	}
 	for _, g := range got {
 		if !want[g] {
@@ -2397,6 +2443,54 @@ func TestResolveGtkThemeName(t *testing.T) {
 		if got := resolveGtkThemeName(c.pref, c.dark); got != c.want {
 			t.Errorf("resolveGtkThemeName(%q, %v) = %q, want %q", c.pref, c.dark, got, c.want)
 		}
+	}
+}
+
+func TestUpgradeFastfetchOSLine(t *testing.T) {
+	old := `{ "type": "command", "key": "OS",     "text": "echo \"Ryoku $(ryoku version 2>/dev/null || echo dev)\"" },
+{ "type": "command", "key": "BRANCH", "text": "ryoku version --branch 2>/dev/null || echo main" },`
+	got, changed := upgradeFastfetchOSLine(old)
+	if !changed {
+		t.Fatal("the pre-release OS line must be upgraded")
+	}
+	if !strings.Contains(got, `ryoku version --pretty 2>/dev/null || echo dev`) {
+		t.Fatalf("OS line not moved to --pretty:\n%s", got)
+	}
+	if !strings.Contains(got, `ryoku version --branch 2>/dev/null || echo main`) {
+		t.Fatalf("BRANCH line must be untouched:\n%s", got)
+	}
+	if again, changed := upgradeFastfetchOSLine(got); changed || again != got {
+		t.Fatal("upgrading twice must be a no-op")
+	}
+	if _, changed := upgradeFastfetchOSLine(`{ "key": "OS", "text": "echo mine" }`); changed {
+		t.Fatal("a user-rewritten OS line must be left alone")
+	}
+	saved := `"text": "echo \"Ryoku $(ryoku version 2\u003e/dev/null || echo dev)\""`
+	got, changed = upgradeFastfetchOSLine(saved)
+	if !changed || !strings.Contains(got, `ryoku version --pretty 2\u003e/dev/null`) {
+		t.Fatalf("a Hub-saved config (JSON-escaped >) must be upgraded too:\n%s", got)
+	}
+}
+
+func TestStaleUserRyotunesSpotsTheWrapperOnly(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", filepath.Join(dir, "share"))
+	bin := filepath.Join(dir, "ryotunes")
+	os.WriteFile(bin, []byte("#!/usr/bin/env bash\nexec chromium --app=https://music.youtube.com\n"), 0o755)
+	if got := staleUserRyotunes(bin); got != "the Chromium YouTube Music wrapper" {
+		t.Fatalf("wrapper not recognised: %q", got)
+	}
+	os.WriteFile(bin, []byte("\x7fELF..."), 0o755)
+	if got := staleUserRyotunes(bin); got != "" {
+		t.Fatalf("a user's own binary must be left alone, got %q", got)
+	}
+	os.MkdirAll(filepath.Join(dir, "share", "ryoku"), 0o755)
+	os.WriteFile(filepath.Join(dir, "share", "ryoku", "ryotunes.commit"), []byte("abc\n"), 0o644)
+	if got := staleUserRyotunes(bin); got != "a locally built ryotunes" {
+		t.Fatalf("dev-deploy build not recognised: %q", got)
+	}
+	if got := staleUserRyotunes(filepath.Join(dir, "missing")); got != "" {
+		t.Fatalf("missing file must be nothing, got %q", got)
 	}
 }
 

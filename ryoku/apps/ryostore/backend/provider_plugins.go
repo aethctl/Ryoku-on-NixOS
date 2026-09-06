@@ -48,6 +48,8 @@ func (p pluginProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceS
 		metadata := map[string]any{}
 		if entry.Official {
 			metadata["official"] = true
+		} else {
+			metadata["community"] = true
 		}
 		if len(entry.Hosts) > 0 {
 			metadata["hosts"] = entry.Hosts

@@ -11,15 +11,17 @@ import (
 // /etc/locale.conf is touched.
 func stubWifi(t *testing.T, radio bool, domain, source string, ok bool, country string) {
 	t.Helper()
-	origRadio, origRegdom, origLocale := wifiRadioPresent, wifiRegdom, wifiLocaleCountry
+	origRadio, origRegdom, origLocale, origHelper := wifiRadioPresent, wifiRegdom, wifiLocaleCountry, wifiRegdomHelperPresent
 	t.Cleanup(func() {
 		wifiRadioPresent = origRadio
 		wifiRegdom = origRegdom
 		wifiLocaleCountry = origLocale
+		wifiRegdomHelperPresent = origHelper
 	})
 	wifiRadioPresent = func() bool { return radio }
 	wifiRegdom = func() (string, string, bool) { return domain, source, ok }
 	wifiLocaleCountry = func() string { return country }
+	wifiRegdomHelperPresent = func() bool { return true }
 }
 
 // A desktop with no radio must never see this reconciler at all.

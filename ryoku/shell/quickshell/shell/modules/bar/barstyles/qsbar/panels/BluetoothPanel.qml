@@ -6,6 +6,7 @@ import Quickshell.Wayland
 import Quickshell.Bluetooth
 import "../IconMap.js" as IconMap
 import Ryoku.Ui.Singletons
+import shell.services
 
 PanelWindow {
     id: btPanel
@@ -22,61 +23,84 @@ PanelWindow {
     readonly property int barBottom: root.v2BarHeight
     readonly property int gap: 6
 
-    property bool btOn: false
-    property bool scanning: false
-    property var devices: []   // [{name, mac, connected, paired}]
+    readonly property var adapter: Bluetooth.defaultAdapter
+    readonly property bool btOn: adapter !== null && adapter.enabled
+    readonly property bool scanning: btOn && adapter.discovering
+
+    readonly property var allDevices: (btOn && Bluetooth.devices) ? Bluetooth.devices.values : []
+    readonly property var devices: {
+        var out = []
+        for (var i = 0; i < allDevices.length; i++) {
+            var d = allDevices[i]
+            if (!d) continue
+            var known = d.connected || d.paired || d.bonded
+            var named = d.name && d.name.length > 0
+            if (known || named)
+                out.push(d)
+        }
+        out.sort(function(a, b) {
+            var ra = a.connected ? 0 : (a.paired || a.bonded) ? 1 : 2
+            var rb = b.connected ? 0 : (b.paired || b.bonded) ? 1 : 2
+            return ra - rb
+        })
+        return out
+    }
     readonly property var shownDevices: devices.slice(0, 8)
     readonly property int numConnected: {
         var n = 0
         for (var i = 0; i < devices.length; i++) if (devices[i].connected) n++
         return n
     }
-    property string connCmd: ""
+
+    property string pairingAddr: ""
+    property string pairError: ""
+    readonly property bool busy: pairProc.running
+
     readonly property color deviceActionFill: Qt.rgba(
         root.paper.r * 0.88,
         root.paper.g * 0.88,
         root.paper.b * 0.88,
         1.0)
 
-    function refresh() { btData.running = false; btData.running = true }
-
     function activateDevice(device) {
-        if (!device || connProc.running) return
-        var mac = String(device.mac || "")
-        if (!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac)) return
+        if (!device || btPanel.busy) return
         if (device.connected) {
-            connCmd = "bluetoothctl disconnect " + mac
-        } else if (device.paired) {
-            connCmd = "bluetoothctl connect " + mac
-        } else {
-            connCmd = "bluetoothctl trust " + mac
-                + " && bluetoothctl pair " + mac
-                + " && bluetoothctl connect " + mac
+            device.disconnect()
+            return
         }
-        connProc.running = true
+        if (device.paired || device.bonded) {
+            if (device.blocked) device.blocked = false
+            device.connect()
+            return
+        }
+        btPanel.pair(device)
+    }
+
+    function pair(device) {
+        if (!device || pairProc.running) return
+        var mac = String(device.address || "")
+        if (!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac)) return
+        btPanel.pairError = ""
+        btPanel.pairingAddr = mac
+        pairProc.command = BtLink.pairCommand(mac)
+        pairProc.running = false
+        pairProc.running = true
     }
 
     function forgetDevice(device) {
-        if (!device || connProc.running) return
-        var mac = String(device.mac || "")
-        if (!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac)) return
-        connCmd = "bluetoothctl remove " + mac
-        connProc.running = true
+        if (!device || btPanel.busy) return
+        device.forget()
     }
 
-    // The bash model carries only {name,mac,connected,paired}; battery/icon/state
-    // come live off Quickshell.Bluetooth, matched by MAC.
-    function btDeviceFor(mac) {
-        if (typeof Bluetooth === "undefined" || !Bluetooth || !Bluetooth.devices) return null
-        var m = String(mac || "").toUpperCase()
-        if (!m) return null
-        var vals = Bluetooth.devices.values
-        for (var i = 0; i < vals.length; i++) {
-            var d = vals[i]
-            if (d && String(d.address || "").toUpperCase() === m) return d
-        }
-        return null
+    function toggleScan() {
+        if (!btOn) return
+        BluetoothDiscovery.setDiscovering(btPanel, adapter, !scanning)
     }
+    function stopScan() {
+        BluetoothDiscovery.setDiscovering(btPanel, adapter, false)
+        scanStop.stop()
+    }
+
     // BlueZ phone charge is coarse/stale without provenance; suppress it (mirrors Shibumi).
     function batteryText(dev) {
         if (!dev || !dev.batteryAvailable) return ""
@@ -198,7 +222,8 @@ PanelWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: { powerProc.running = false; powerProc.running = true }
+                            enabled: btPanel.adapter !== null
+                            onClicked: btPanel.adapter.enabled = !btPanel.adapter.enabled
                         }
                     }
                     UiText {
@@ -244,9 +269,18 @@ PanelWindow {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    enabled: !btPanel.scanning
-                    onClicked: { scanProc.running = false; scanProc.running = true }
+                    onClicked: btPanel.toggleScan()
                 }
+            }
+
+            UiText {
+                visible: btPanel.pairError.length > 0
+                width: parent.width; horizontalAlignment: Text.AlignHCenter
+                text: btPanel.pairError
+                color: root.danger
+                wrapMode: Text.WordWrap
+                font.family: root.mono; font.pixelSize: 10
+                topPadding: 2; bottomPadding: 2
             }
 
             // ── device list ──
@@ -259,10 +293,12 @@ PanelWindow {
                     delegate: Rectangle {
                         id: devTile
                         required property var modelData
+                        readonly property var nativeDev: modelData
+                        readonly property string devMac: String(modelData.address || "")
+                        readonly property bool devPaired: modelData.paired || modelData.bonded
                         property bool expanded: false
-                        readonly property var nativeDev: btPanel.btDeviceFor(modelData.mac)
                         readonly property string batteryText: btPanel.batteryText(nativeDev)
-                        readonly property bool canExpand: modelData.connected || modelData.paired
+                        readonly property bool canExpand: modelData.connected || devPaired
                         readonly property bool hovered: tileHover.containsMouse || actionMa.containsMouse || infoMa.containsMouse
                         readonly property int rowHeight: 42
                         width: col.width
@@ -297,15 +333,19 @@ PanelWindow {
                                 spacing: 1
                                 UiText {
                                     width: parent.width
-                                    text: devTile.modelData.name
+                                    text: BtLink.label(devTile.modelData)
                                     color: root.ink; font.family: root.mono; font.pixelSize: 11
                                     elide: Text.ElideRight
                                 }
                                 UiText {
                                     width: parent.width
-                                    text: devTile.modelData.connected
-                                          ? (devTile.batteryText !== "" ? I18n.tr("Connected · ") + devTile.batteryText : I18n.tr("Connected"))
-                                          : (devTile.modelData.paired ? I18n.tr("Paired") : I18n.tr("Available"))
+                                    text: {
+                                        if (btPanel.pairingAddr === devTile.devMac) return I18n.tr("Pairing…")
+                                        if (devTile.modelData.state === BluetoothDeviceState.Connecting) return I18n.tr("Connecting…")
+                                        if (devTile.modelData.connected)
+                                            return devTile.batteryText !== "" ? I18n.tr("Connected · ") + devTile.batteryText : I18n.tr("Connected")
+                                        return devTile.devPaired ? I18n.tr("Paired") : I18n.tr("Available")
+                                    }
                                     color: root.ink
                                     font.family: root.mono; font.pixelSize: 10; font.weight: Font.Medium
                                     elide: Text.ElideRight
@@ -348,7 +388,7 @@ PanelWindow {
                                 color: btPanel.deviceActionFill
                                 border.color: root.sep
                                 border.width: 1
-                                opacity: connProc.running ? 0.45 : 1
+                                opacity: btPanel.busy ? 0.45 : 1
                                 UiText {
                                     id: actionLabel
                                     anchors.centerIn: parent
@@ -359,7 +399,7 @@ PanelWindow {
                                 MouseArea {
                                     id: actionMa
                                     anchors.fill: parent
-                                    enabled: !connProc.running
+                                    enabled: !btPanel.busy
                                     hoverEnabled: true
                                     cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                                     onClicked: btPanel.activateDevice(devTile.modelData)
@@ -392,11 +432,11 @@ PanelWindow {
                             Item {
                                 width: parent.width; height: 14
                                 UiText { anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter; text: I18n.tr("Address"); color: root.sumiHi; font.family: root.mono; font.pixelSize: 10; font.letterSpacing: 1 }
-                                UiText { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: String(devTile.modelData.mac || ""); color: root.ink; font.family: root.mono; font.pixelSize: 10 }
+                                UiText { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: devTile.devMac; color: root.ink; font.family: root.mono; font.pixelSize: 10 }
                             }
                             Item {
                                 width: parent.width; height: 24
-                                visible: devTile.modelData.paired
+                                visible: devTile.devPaired
                                 Rectangle {
                                     anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
@@ -405,9 +445,9 @@ PanelWindow {
                                     color: forgetMa.containsMouse ? root.fillPrimaryHover : root.fillIdle
                                     border.color: forgetMa.containsMouse ? root.seal : root.sep
                                     border.width: 1
-                                    opacity: connProc.running ? 0.45 : 1
+                                    opacity: btPanel.busy ? 0.45 : 1
                                     UiText { id: forgetLabel; anchors.centerIn: parent; text: "Forget"; color: forgetMa.containsMouse ? root.seal : root.sumiHi; font.family: root.mono; font.pixelSize: 10 }
-                                    MouseArea { id: forgetMa; anchors.fill: parent; enabled: !connProc.running; hoverEnabled: true; cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: btPanel.forgetDevice(devTile.modelData) }
+                                    MouseArea { id: forgetMa; anchors.fill: parent; enabled: !btPanel.busy; hoverEnabled: true; cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: btPanel.forgetDevice(devTile.modelData) }
                                 }
                             }
                         }
@@ -440,82 +480,30 @@ PanelWindow {
         }
     }
 
-    // ── data: power state + device list with connected/paired flags ──
     Process {
-        id: btData
-        command: ["bash", "-c",
-            "if bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'; then " +
-            "  echo ON; " +
-            "  conn=$(bluetoothctl devices Connected 2>/dev/null | awk '{print $2}'); " +
-            "  paired=$(bluetoothctl devices Paired 2>/dev/null | awk '{print $2}'); " +
-            "  bluetoothctl devices 2>/dev/null | while read -r _ mac rest; do " +
-            "    c=0; p=0; " +
-            "    printf '%s\\n' \"$conn\"   | grep -qx \"$mac\" && c=1; " +
-            "    printf '%s\\n' \"$paired\" | grep -qx \"$mac\" && p=1; " +
-            "    echo \"$c|$p|$mac|$rest\"; " +
-            "  done; " +
-            "else echo OFF; fi"
-        ]
+        id: pairProc
         running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var lines = this.text.trim().split("\n")
-                if (lines[0] !== "ON") { btPanel.btOn = false; btPanel.devices = []; return }
-                btPanel.btOn = true
-                var devs = []
-                for (var i = 1; i < lines.length; i++) {
-                    var parts = lines[i].split("|")
-                    if (parts.length < 4) continue
-                    var name = parts.slice(3).join("|").trim()
-                    if (!name || name === parts[2]) name = parts[2]   // fall back to mac
-                    devs.push({
-                        connected: parts[0] === "1",
-                        paired:    parts[1] === "1",
-                        mac:       parts[2],
-                        name:      name
-                    })
-                }
-                // connected first, then paired, then the rest
-                devs.sort(function(a, b) {
-                    var ra = a.connected ? 0 : a.paired ? 1 : 2
-                    var rb = b.connected ? 0 : b.paired ? 1 : 2
-                    return ra - rb
-                })
-                btPanel.devices = devs
+        property string collected: ""
+        stdout: StdioCollector { onStreamFinished: pairProc.collected = this.text }
+        onExited: function(code, status) {
+            if (code !== 0) {
+                var lines = pairProc.collected.trim().split("\n")
+                var msg = lines.length ? lines[lines.length - 1].trim() : ""
+                btPanel.pairError = msg.length ? msg
+                    : I18n.tr("Pairing failed. Put the device in pairing mode and try again.")
+            } else {
+                btPanel.pairError = ""
             }
+            pairProc.collected = ""
+            btPanel.pairingAddr = ""
         }
     }
 
-    // ── power on/off ──
-    Process {
-        id: powerProc
-        command: ["bash", "-c", "bluetoothctl power " + (btPanel.btOn ? "off" : "on")]
-        running: false
-        onExited: btPanel.refresh()
-    }
-
-    // ── timed discovery scan ──
-    Process {
-        id: scanProc
-        command: ["bash", "-c", "bluetoothctl --timeout 10 scan on >/dev/null 2>&1"]
-        running: false
-        onRunningChanged: { btPanel.scanning = running; if (!running) btPanel.refresh() }
-    }
-    Timer {
-        interval: 1500; repeat: true
-        running: btPanel.scanning && btPanel.visible
-        onTriggered: btPanel.refresh()
-    }
-
-    // ── connect / disconnect / pair ──
-    Process {
-        id: connProc
-        command: ["bash", "-c", btPanel.connCmd]
-        running: false
-        onExited: btPanel.refresh()
-    }
+    Timer { id: scanStop; interval: 30000; onTriggered: btPanel.stopScan() }
+    onScanningChanged: { if (scanning) scanStop.restart(); else scanStop.stop() }
 
     Process { id: btRunner; command: ["bash", "-c", root.launchBtCmd] }
 
-    onVisibleChanged: { if (visible) btPanel.refresh() }
+    onVisibleChanged: { if (!visible) { btPanel.stopScan(); btPanel.pairError = "" } }
+    Component.onDestruction: btPanel.stopScan()
 }

@@ -25,6 +25,9 @@ import (
 // `ryoku update`. Idempotent: the app is (re)placed, enabled and applied only when
 // it is missing, stale (a Marketplace version bump), or not yet in custom_apps.
 func reconcileSpicetifyMarketplace(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return noteRes("Spicetify Marketplace Doctor automation is deferred on NixOS; package and asset ownership remains declarative")
+	}
 	if !spotifyInstalled() {
 		return okRes("no Spotify installed; the Marketplace store is not needed")
 	}
@@ -79,7 +82,11 @@ func reconcileSpicetifyMarketplace(checkOnly bool) recResult {
 
 	var did []string
 	if needCli {
-		if !installSpicetifyCli() {
+		present, skipped := provision("spicetify-cli", installSpicetifyCli)
+		if skipped {
+			return okRes("spicetify-cli was removed by hand; the Marketplace stays off")
+		}
+		if !present {
 			return warnRes("Spotify is installed but spicetify-cli is missing and could not be installed").
 				withFix("install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`")
 		}

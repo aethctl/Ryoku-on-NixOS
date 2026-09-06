@@ -1019,10 +1019,17 @@ Item {
         else if (aiOc7 < aiQuotaReset7) aiOcHot = false
     }
 
-    // pacman transaction finished (streaming log tail - no helper script)
+    // Pacman transaction finished (streaming log tail - no helper script).
+    //
+    // This is Arch-only runtime integration. Musubi exposes
+    // RYOKU_UPDATE_BACKEND=nix, so never spawn a useless pacman-log watcher on
+    // NixOS.
     Process {
         id: pacTail
-        running: root.active && root.reactorMode7 && root.ownsGlobalHelpers7
+        running: root.active
+            && root.reactorMode7
+            && root.ownsGlobalHelpers7
+            && (Quickshell.env("RYOKU_UPDATE_BACKEND") || "").toLowerCase() !== "nix"
         command: ["bash", "-c", "tail -n 0 -F /var/log/pacman.log 2>/dev/null"]
         property int pkgN: 0
         onRunningChanged: if (!running) pkgN = 0

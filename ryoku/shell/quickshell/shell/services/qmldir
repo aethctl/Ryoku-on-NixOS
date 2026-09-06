@@ -28,13 +28,13 @@ singleton Camera Camera.qml
 singleton Keypresses Keypresses.qml
 singleton Toggles Toggles.qml
 singleton VoiceBars VoiceBars.qml
-singleton WallIndex WallIndex.qml
 singleton Capture Capture.qml
 singleton Clipboard Clipboard.qml
 singleton Events Events.qml
 singleton Holidays Holidays.qml
 singleton Flags Flags.qml
 singleton Keyring Keyring.qml
+singleton KeyboardLayout KeyboardLayout.qml
 singleton OsdFeed OsdFeed.qml
 singleton Polkit Polkit.qml
 singleton PowerProfiles PowerProfiles.qml

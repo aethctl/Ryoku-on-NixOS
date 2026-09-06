@@ -1,0 +1,60 @@
+{
+  "policies": {
+    "DisableTelemetry": true,
+    "DisableFirefoxStudies": true,
+    "DisablePocket": true,
+    "DontCheckDefaultBrowser": true,
+    "ExtensionSettings": {
+      "uBlock0@raymondhill.net": {
+        "installation_mode": "normal_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi"
+      },
+      "jid1-MnnxcxisBPnSXQ@jetpack": {
+        "installation_mode": "normal_installed",
+        "install_url": "https://addons.mozilla.org/firefox/downloads/latest/privacy-badger17/latest.xpi"
+      }
+    },
+    "Preferences": {
+      "gfx.webrender.all": {
+        "Value": true,
+        "Status": "default"
+      },
+      "media.ffmpeg.vaapi.enabled": {
+        "Value": true,
+        "Status": "default"
+      },
+      "media.hardware-video-decoding.enabled": {
+        "Value": true,
+        "Status": "default"
+      },
+      "media.rdd-ffmpeg.enabled": {
+        "Value": true,
+        "Status": "default"
+      },
+      "widget.dmabuf.force-enabled": {
+        "Value": true,
+        "Status": "default"
+      },
+      "toolkit.legacyUserProfileCustomizations.stylesheets": {
+        "Value": true,
+        "Status": "default"
+      },
+      "layout.frame_rate": {
+        "Value": -1,
+        "Status": "default"
+      },
+      "widget.wayland.vsync.enabled": {
+        "Value": true,
+        "Status": "default"
+      },
+      "widget.wayland.vsync.keep-firing-at-idle": {
+        "Value": true,
+        "Status": "default"
+      },
+      "widget.wayland.fractional-scale.enabled": {
+        "Value": true,
+        "Status": "default"
+      }
+    }
+  }
+}

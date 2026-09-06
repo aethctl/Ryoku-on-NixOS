@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import Quickshell.Services.UPower
 import shell.services
+import "core"
 import "Palette.js" as Palette
 
 Item {
@@ -212,38 +213,26 @@ Item {
         return keys
     }
 
-    function applyToBarLayoutControllers(actionName) {
+    function _applyLayoutToBars(exceptScreen) {
         var keys = barLayoutControllerKeys()
 
         _barLayoutSyncing = true
         try {
             for (var i = 0; i < keys.length; i++) {
+                if (exceptScreen && keys[i] === exceptScreen) continue
                 var controller = barLayoutControllers[keys[i]]
-                if (controller && controller[actionName]) controller[actionName]()
+                if (controller && controller.applyLayout) controller.applyLayout()
             }
         } finally {
             _barLayoutSyncing = false
         }
     }
 
-    function syncBarOrder(sourceScreenName, serialized) {
-        if (_barLayoutSyncing || !serialized) return
-
-        _barLayoutSyncing = true
-        try {
-            var keys = barLayoutControllerKeys()
-            for (var i = 0; i < keys.length; i++) {
-                if (keys[i] === sourceScreenName) continue
-                var controller = barLayoutControllers[keys[i]]
-                if (controller && controller.applyOrder) controller.applyOrder(serialized)
-            }
-        } finally {
-            _barLayoutSyncing = false
-        }
-    }
-
+    // Legacy combined reset: shipped order and visibility PLUS presentation.
+    // The panel's own RESET LAYOUT calls barLayoutReset(); this stays for any
+    // caller that wants the whole bar returned to shipped in one move.
     function resetAllBarLayouts() {
-        applyToBarLayoutControllers("defaultLayout")
+        barLayoutReset()
         resetBarLayoutPresentation()
     }
 
@@ -262,6 +251,365 @@ Item {
         else if ((separatorsChanged || densityChanged || widgetFillsChanged)
                 && _widgetsLoaded) saveWidgets()
     }
+
+    // ─────────────────────── bar layout as data (qsbar.layout) ───────────────
+    // The bar's widget order lives in shell.json under qsbar.layout, one document
+    // of { version, left, center, right } id arrays. Built-in ids come from the
+    // catalogue (BarCatalog); a plugin id is an installed plugin enabled on the
+    // bar. `_storedLayout` is the raw persisted document; `barLayout` is the
+    // live, normalised view every consumer reads (duplicates dropped, known
+    // widgets the layout omits appended). Visibility is separate: a built-in
+    // stays in the layout when hidden, a plugin drops out when it is not enabled
+    // on the bar.
+    BarCatalog { id: barCat }
+    BarPlugins { id: barPluginHost }
+
+    property var _storedLayout: null
+    property bool barLayoutReady: false
+    property bool _barLayoutInitialized: false
+    readonly property var barLayout: _normalizeLayout(_storedLayout)
+
+    // The set of ids that may hold a place in the bar: every built-in (always,
+    // even hidden) plus every plugin currently enabled and hosted on the bar.
+    readonly property var barPluginIds: barPluginHost.pluginIds
+    // Installed plugins whose manifest declares topbarGlyph (installed, not
+    // necessarily on the bar) - the add-widget picker's plugin group.
+    readonly property var barPluginCatalog: barPluginHost.barCapable
+    function barPluginEntryFor(id) { return barPluginHost.entryFor(id) }
+    function barPluginIsBar(id) { return barPluginHost.isEnabledBar(id) }
+
+    // A plugin enabled after the layout was written appears live and lands at the
+    // end of its section; it is not persisted until the next explicit edit, so
+    // toggling a plugin never races the daemon's shell.json writes. The bars
+    // follow barLayout itself, not barPluginIds: the normalised layout re-derives
+    // after the id set changes, and a handler on the ids ran before that
+    // re-derivation and handed the bars the old arrays (the plugin never drew).
+    onBarLayoutChanged: if (barLayoutReady) _applyLayoutToBars("")
+
+    function _eligibleIds() {
+        var m = ({})
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) m[ents[i].id] = true
+        var pids = barPluginIds
+        for (var j = 0; j < pids.length; j++) m[pids[j]] = true
+        return m
+    }
+    function _eligibleOrder() {
+        var out = []
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) out.push(ents[i].id)
+        var pids = barPluginIds
+        for (var j = 0; j < pids.length; j++) out.push(pids[j])
+        return out
+    }
+    // Built-ins have no manifest, so a missing built-in falls to the right lane;
+    // a plugin honours its manifest defaults.bar.section when it names one.
+    function _defaultSectionFor(id) {
+        if (barCat.byId(id)) return "right"
+        var e = barPluginEntryFor(id)
+        var sec = (e && e.manifest && e.manifest.defaults && e.manifest.defaults.bar)
+            ? e.manifest.defaults.bar.section : ""
+        return (sec === "left" || sec === "center" || sec === "right") ? sec : "right"
+    }
+    function _normalizeLayout(raw) {
+        var secNames = ["left", "center", "right"]
+        var out = { version: 1, left: [], center: [], right: [] }
+        var used = ({})
+        var eligible = _eligibleIds()
+        for (var s = 0; s < 3; s++) {
+            var arr = (raw && raw[secNames[s]]) || []
+            for (var i = 0; i < arr.length; i++) {
+                var id = arr[i]
+                if (eligible[id] && !used[id]) { out[secNames[s]].push(id); used[id] = true }
+            }
+        }
+        var order = _eligibleOrder()
+        for (var k = 0; k < order.length; k++) {
+            var mid = order[k]
+            if (used[mid]) continue
+            out[_defaultSectionFor(mid)].push(mid)
+            used[mid] = true
+        }
+        return out
+    }
+    function _cloneLayout(L) {
+        return {
+            version: 1,
+            left: ((L && L.left) || []).slice(),
+            center: ((L && L.center) || []).slice(),
+            right: ((L && L.right) || []).slice()
+        }
+    }
+    function _sectionIndexOf(L, id) {
+        var secNames = ["left", "center", "right"]
+        for (var s = 0; s < 3; s++) {
+            var arr = (L && L[secNames[s]]) || []
+            var idx = arr.indexOf(id)
+            if (idx >= 0) return { section: secNames[s], index: idx }
+        }
+        return { section: "", index: -1 }
+    }
+
+    // The shipped default order (design section 1). Presentation keys (separators,
+    // density, per-widget colour) are untouched by a layout reset.
+    function _shippedLayout() {
+        return {
+            version: 1,
+            left: ["launcher", "workspaces", "status", "cpu", "volume", "memory", "ai"],
+            center: ["clock"],
+            right: ["media", "quick", "network", "power", "battery", "brightness",
+                    "cputemp", "storage", "gpu", "bluetooth", "layout"]
+        }
+    }
+
+    // Convert the retired ~/.cache/quickshell_barorder_v2 string
+    // ("B:G1,B:G16,...|B:G8|B:G9,...") to id arrays via the catalogue's gid map.
+    // Empty cells ("_"/"") and the B:/E: slot-kind prefixes are dropped: the new
+    // layout carries placement only. This is the function the migration cites.
+    function _cacheToLayout(str) {
+        var parts = String(str).split("|")
+        if (parts.length !== 3) return null
+        var secNames = ["left", "center", "right"]
+        var out = { version: 1, left: [], center: [], right: [] }
+        for (var s = 0; s < 3; s++) {
+            var raw = parts[s]
+            var tokens = raw === "" ? [] : raw.split(",")
+            for (var i = 0; i < tokens.length; i++) {
+                var tok = tokens[i]
+                var gid = (tok.length >= 2 && tok.charAt(1) === ":") ? tok.substring(2) : tok
+                if (gid === "" || gid === "_") continue
+                var id = barCat.idOf(gid)
+                if (id) out[secNames[s]].push(id)
+            }
+        }
+        return out
+    }
+
+    function _commitLayout(raw, persist) {
+        barLayoutReady = true
+        _barLayoutInitialized = true
+        _storedLayout = raw ? raw : { version: 1, left: [], center: [], right: [] }
+        if (persist) _persistLayout(barLayout)
+    }
+    function _persistLayout(L) {
+        var v = { version: 1, left: L.left, center: L.center, right: L.right }
+        _cfgCtl.queued += "call settings.patch "
+            + JSON.stringify({ path: "qsbar.layout", value: v }) + "\n"
+        if (_cfgCtl.connected) _cfgCtl.flushQueued()
+        else _cfgCtl.connected = true
+    }
+
+    // First load with no qsbar.layout: migrate the cache once (or write the
+    // shipped default), persist it, then delete the cache. Runs exactly once.
+    readonly property string _barOrderCachePath: Quickshell.env("HOME") + "/.cache/quickshell_barorder_v2"
+    function _migrateBarLayout() {
+        if (_barLayoutInitialized) return
+        _barLayoutInitialized = true
+        _barCacheLoadProc.running = true
+    }
+    Process {
+        id: _barCacheLoadProc
+        command: ["cat", theme._barOrderCachePath]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var t = (this.text || "").trim()
+                var migrated = t.length > 0 ? theme._cacheToLayout(t) : null
+                theme._commitLayout(migrated ? migrated : theme._shippedLayout(), true)
+                theme._applyLayoutToBars("")
+                Quickshell.execDetached(["rm", "-f", theme._barOrderCachePath])
+            }
+        }
+    }
+
+    // ── the merged catalogue every panel/CLI reads (design section 4) ──
+    readonly property var barCatalog: _buildBarCatalog()
+    function _buildBarCatalog() {
+        var out = []
+        var L = barLayout
+        var ents = barCat.entries
+        for (var i = 0; i < ents.length; i++) {
+            var e = ents[i]
+            var si = _sectionIndexOf(L, e.id)
+            out.push({
+                id: e.id, gid: e.gid || "",
+                label: e.label || e.id, gloss: e.gloss || "",
+                category: e.category || "", desc: e.desc || "",
+                kind: "builtin", official: true, author: "", version: "",
+                shown: e.visKey ? _modForVisKey(e.visKey) : true,
+                section: si.section, index: si.index,
+                settings: e.settings || [], pluginDir: ""
+            })
+        }
+        var cap = barPluginCatalog
+        for (var j = 0; j < cap.length; j++) {
+            var p = cap[j]
+            var man = p.manifest || ({})
+            var pl = p.placement || ({})
+            var psi = _sectionIndexOf(L, p.id)
+            // `official` is the manifest's own claim; Ryoku's plugins ship it
+            // true, so anything else is a community widget and the panel parts it.
+            out.push({
+                id: p.id, gid: "",
+                label: man.name || p.id, gloss: "",
+                category: "", desc: man.description || "",
+                kind: "plugin", official: man.official === true,
+                author: man.author || "", version: man.version || "",
+                shown: pl.enabled === true && pl.host === "topbarGlyph",
+                section: psi.section, index: psi.index,
+                settings: (man.metadata && man.metadata.settings) || [],
+                pluginDir: p.dir || ""
+            })
+        }
+        return out
+    }
+
+    // ── the root API BarSettings and the qsbar IPC drive (design section 4) ──
+    signal barSettingsOpenRequested(string route)
+    function openBarSettings(route) {
+        barSettingsOpenRequested((route === undefined || route === null) ? "" : String(route))
+    }
+    function gidForId(id) { return barCat.gidOf(id) }
+    function idForGid(gid) { return barCat.idOf(gid) }
+
+    function barLayoutMove(id, section, index) {
+        if (!id || ["left", "center", "right"].indexOf(section) < 0) return
+        var L = _cloneLayout(barLayout)
+        var secs = ["left", "center", "right"]
+        for (var s = 0; s < 3; s++)
+            L[secs[s]] = L[secs[s]].filter(function (x) { return x !== id })
+        var arr = L[section]
+        var idx = (index === undefined || index === null) ? arr.length
+            : Math.max(0, Math.min(index, arr.length))
+        arr.splice(idx, 0, id)
+        _commitLayout(L, true)
+        _applyLayoutToBars("")
+    }
+
+    function barLayoutReset() {
+        _applyShippedVisibility()
+        _commitLayout(_shippedLayout(), true)
+        _applyLayoutToBars("")
+    }
+    function _applyShippedVisibility() {
+        var wl = _widgetsLoaded
+        _widgetsLoaded = false
+        modStatus = true; modMemory = true; modCpu = true; modVolume = true
+        modWeather = true; modNetwork = true; modBrightness = true; modMedia = true
+        modMpris = true; modQuick = true; modBattery = true; modLayout = true
+        modCpuTemperature = true; modGpu = true; modStorage = true
+        modClaude = false; modPower = false; modBluetooth = false
+        _widgetsLoaded = wl
+        if (wl) saveWidgets()
+    }
+
+    // Called by a BarSlot when its in-place drag reorders a lane: persist the
+    // whole layout, then re-apply to every OTHER monitor (the source already
+    // reflects the drag, so re-applying to it would repack it mid-edit).
+    function saveBarLayoutFromSlot(raw, sourceScreen) {
+        _commitLayout(raw, true)
+        _applyLayoutToBars(sourceScreen)
+    }
+
+    function barLayoutShow(id, on) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (!e.visKey) return   // launcher/workspaces/clock are always shown
+            _setVisByKey(e.visKey, on === true)
+            return
+        }
+        if (on === true) {
+            _placePlugin([id, "host", "topbarGlyph"])
+            _placePlugin([id, "enabled", "true"])
+        } else {
+            _placePlugin([id, "enabled", "false"])
+        }
+    }
+
+    function barWidgetGet(id, key) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (_isVisKeySetting(id, key)) return _modForVisKey(key)
+            return theme[key]
+        }
+        var pe = barPluginEntryFor(id)
+        if (pe && pe.placement && pe.placement.settings
+                && pe.placement.settings[key] !== undefined)
+            return pe.placement.settings[key]
+        return undefined
+    }
+    function barWidgetSet(id, key, value) {
+        var e = barCat.byId(id)
+        if (e) {
+            if (_isVisKeySetting(id, key)) { _setVisByKey(key, value === true); return }
+            theme[key] = value   // the change handler persists through saveWidgets
+            return
+        }
+        var obj = ({}); obj[key] = value
+        _placePlugin([id, "settings", JSON.stringify(obj)])
+    }
+
+    // A catalogue settings row with visKey:true (clock's Weather) toggles a
+    // widgets visibility key instead of a plain Theme property.
+    function _isVisKeySetting(id, key) {
+        var e = barCat.byId(id)
+        if (!e || !e.settings) return false
+        for (var i = 0; i < e.settings.length; i++)
+            if (e.settings[i].key === key && e.settings[i].visKey === true) return true
+        return false
+    }
+    // Direct (not bracket) property access so barCatalog's `shown` binding
+    // captures the mod* dependency and re-derives when visibility changes.
+    function _modForVisKey(visKey) {
+        switch (visKey) {
+        case "status": return modStatus
+        case "memory": return modMemory
+        case "cpu": return modCpu
+        case "volume": return modVolume
+        case "weather": return modWeather
+        case "network": return modNetwork
+        case "brightness": return modBrightness
+        case "media": return modMedia
+        case "mpris": return modMpris
+        case "quick": return modQuick
+        case "claude": return modClaude
+        case "power": return modPower
+        case "bluetooth": return modBluetooth
+        case "gpu": return modGpu
+        case "cpuTemperature": return modCpuTemperature
+        case "storage": return modStorage
+        case "battery": return modBattery
+        case "layout": return modLayout
+        }
+        return true
+    }
+    function _setVisByKey(visKey, on) {
+        switch (visKey) {
+        case "status": modStatus = on; break
+        case "memory": modMemory = on; break
+        case "cpu": modCpu = on; break
+        case "volume": modVolume = on; break
+        case "weather": modWeather = on; break
+        case "network": modNetwork = on; break
+        case "brightness": modBrightness = on; break
+        case "media": modMedia = on; break
+        case "mpris": modMpris = on; break
+        case "quick": modQuick = on; break
+        case "claude": modClaude = on; break
+        case "power": modPower = on; break
+        case "bluetooth": modBluetooth = on; break
+        case "gpu": modGpu = on; break
+        case "cpuTemperature": modCpuTemperature = on; break
+        case "storage": modStorage = on; break
+        case "battery": modBattery = on; break
+        case "layout": modLayout = on; break
+        }
+    }
+
+    readonly property string _pluginShellDir: Quickshell.env("RYOKU_SHELL_DIR")
+    readonly property string _pluginPlaceTool: (_pluginShellDir && _pluginShellDir.length > 0)
+        ? _pluginShellDir + "/quickshell/plugins/ryoku-plugins-place"
+        : "ryoku-plugins-place"
+    function _placePlugin(args) { Quickshell.execDetached([_pluginPlaceTool].concat(args)) }
 
     function activatePopupScreen(screen) {
         if (!screen || screen.name === "") return
@@ -357,6 +705,12 @@ Item {
         else if (name === "dashboard") dashboardBarX = x
         else if (name === "launcher") launcherBarX = x
         else if (name === "trayMenu") trayMenuX = x
+        else if (name.indexOf("plugin:") === 0) {
+            var next = {}
+            for (var k in pluginBarX) next[k] = pluginBarX[k]
+            next[name.substring(7)] = x
+            pluginBarX = next
+        }
     }
 
     function applyActiveBarAnchors() {
@@ -417,6 +771,7 @@ Item {
         if (except !== "storageVisible") storageVisible = false
         if (except !== "trayVisible") trayVisible = false
         if (except !== "trayMenuVisible") trayMenuVisible = false
+        if (except !== "pluginPanelVisible") pluginPanelId = ""
         hideTooltip()
         _closingPopups = false
     }
@@ -488,7 +843,7 @@ Item {
     // screen-facing edge and a shadow cast away from that edge. Keeping these
     // separate from the pill recipe lets widgets and panels retain their
     // established hierarchy.
-    readonly property int v2BarHeight: 33
+    readonly property int v2BarHeight: Math.round(33 * barScale)
     readonly property int v2NotchFrameThickness: 6
     readonly property int v2NotchFrameRadius: 14
     // Horizontal rhythm for the bar. Closely related icon buttons use the
@@ -507,6 +862,12 @@ Item {
         paper.g * (1 - v2BarBorderMix) + ink.g * v2BarBorderMix,
         paper.b * (1 - v2BarBorderMix) + ink.b * v2BarBorderMix, 1.0)
     readonly property color v2BarShadow: Qt.rgba(0, 0, 0, 0.46)
+    // Depth (barShadowEnabled) lifts the bar shell itself, not only its popouts:
+    // the resting shadow is a soft seat, the lifted one a real drop. BarSlot's two
+    // shell shadows read these, so the toggle is visible on the bar it names.
+    readonly property color barShellShadow: barShadowEnabled ? Qt.rgba(0, 0, 0, 0.66) : v2BarShadow
+    readonly property int   barShellShadowBlur: barShadowEnabled ? 20 : 9
+    readonly property int   barShellShadowOffset: barShadowEnabled ? 5 : 2
     // Popovers, tooltips and their interactive tiles share the calmer V2 shape;
     // bar-widget pills remain independently configurable below.
     readonly property int panelRadius: 6
@@ -1783,6 +2144,7 @@ Item {
     property bool modVolume:     true
     property bool modWeather:    true
     property bool modNetwork:    true
+    property bool modLayout:     true
     property string networkMode: "none"   // mirrored from NetworkWidget: wifi/ethernet/none
     // Centralized status indicators. These live on Theme so BarSlot-per-monitor
     // widgets don't each spawn their own status poller.
@@ -1800,6 +2162,12 @@ Item {
     property bool _notifBackendChecked: false
     property bool _notifRyokuShellBackend: false
     property bool _notifRyokuShellSystem: false
+    // Whether `makoctl` (the external mako DND source used in Omarchy-compat mode)
+    // is on PATH. Ryoku runs its own notification server and never ships mako, so
+    // this stays false there and the makoctl DND probe is skipped instead of
+    // failing to spawn on every status refresh (endless "binary not found" log
+    // spam). Detected once by makoDetectProc below.
+    property bool _makoAvailable: false
     readonly property string notificationsStatePath: Quickshell.env("HOME") + "/.local/state/ryoku/notifications.json"
     property bool screenRecording: false
     property int screenRecordingElapsed: 0
@@ -1865,6 +2233,7 @@ Item {
         _omarchyBackendRetryIndex = 0
         omarchyBackendProbeDebounce.restart()
         omarchyBackendConfirmTimer.restart()
+        if (!makoDetectProc.running) makoDetectProc.running = true
     }
     function parseNotificationsState(text) {
         try {
@@ -1880,7 +2249,10 @@ Item {
             notificationsStateFile.reload()
             return
         }
-        if (!dndProc.running) dndProc.running = true
+        // No Ryoku notification backend: read DND from mako, but only if it is
+        // actually installed. Without this guard the Process fails to spawn on
+        // every refresh (mako is not a Ryoku dependency), spamming the log.
+        if (_makoAvailable && !dndProc.running) dndProc.running = true
     }
     function refreshRecordingStatus() {
         if (recordingPidProc.running) {
@@ -2019,6 +2391,19 @@ Item {
         running: false
         onExited: (exitCode) => {
             if (!theme._idleRyokuShellSystem) theme.stayAwake = exitCode !== 0
+        }
+    }
+
+    // One-shot: is makoctl on PATH? Gates the DND probe above so a box without
+    // mako (every Ryoku box) never tries to spawn it. Re-runs when the backend is
+    // reprobed via resetRyokuBackendProbes(), so installing mako is picked up.
+    Process {
+        id: makoDetectProc
+        command: ["sh", "-c", "command -v makoctl"]
+        running: true
+        onExited: (exitCode) => {
+            theme._makoAvailable = exitCode === 0
+            if (theme._makoAvailable) theme.refreshNotificationStatus()
         }
     }
 
@@ -2203,6 +2588,13 @@ Item {
     // fit     = centered content-width capsule
     // dock    = centered content-width surface attached to the screen edge
     // notch   = attached content-width surface with desktop-facing side wings
+    // Scale the bar itself without changing the display's UI scale.
+    property real barScale: 1
+    function clampBarScale(value) {
+        var n = Number(value)
+        return isFinite(n) ? Math.round(Math.max(1, Math.min(2, n)) * 10) / 10 : 1
+    }
+
     property string barShellStyle: "full"
     property bool barBorderEnabled: true
     // Outer bar-shell corner radius in px, applied to the fitted shell forms.
@@ -2305,7 +2697,7 @@ Item {
         var m = String(gid || "").match(/^G(\d{1,2})$/)
         if (!m) return false
         var n = Number(m[1])
-        return n >= 1 && n <= 18
+        return n >= 1 && n <= 19
     }
     function widgetColorModeValid(mode) {
         return mode === "fill" || mode === "border" || mode === "both"
@@ -2477,7 +2869,7 @@ Item {
     }
     function serializeWidgetColorStyles() {
         var out = []
-        for (var n = 1; n <= 18; n++) {
+        for (var n = 1; n <= 19; n++) {
             var gid = "G" + n
             var style = widgetColorStyle(gid)
             if (style.color !== "inherit" || style.mode === "border")
@@ -2539,6 +2931,7 @@ Item {
     onClock12hChanged:        if (_widgetsLoaded) saveWidgets()
     onWorkspaceStyleChanged:   if (_widgetsLoaded) saveWidgets()
     onBarPositionChanged:      if (_widgetsLoaded) saveWidgets()
+    onBarScaleChanged:         if (_widgetsLoaded) saveWidgets()
     onBarShellStyleChanged:    if (_widgetsLoaded) saveWidgets()
     onBarBorderEnabledChanged: if (_widgetsLoaded) saveWidgets()
     onPanelTooltipBorderEnabledChanged: if (_widgetsLoaded) saveWidgets()
@@ -2547,6 +2940,7 @@ Item {
     onBarTemperatureSourceChanged: if (_widgetsLoaded) saveWidgets()
     onModBatteryChanged:       if (_widgetsLoaded) saveWidgets()
     onBarShadowEnabledChanged: if (_widgetsLoaded) saveWidgets()
+    onModLayoutChanged:        if (_widgetsLoaded) saveWidgets()
     onBarFrostEnabledChanged:  if (_widgetsLoaded) saveWidgets()
     onBarAutoHideChanged:      if (_widgetsLoaded) saveWidgets()
     onBarGapTopChanged:        if (_widgetsLoaded) saveWidgets()
@@ -2598,6 +2992,7 @@ Item {
                  + (barBorderEnabled ? "1" : "0") + " "                 // +43 outer bar border
                  + (panelTooltipBorderEnabled ? "1" : "0") + " "        // +44 panel + tooltip outer border
                  + barAnim                                              // +45 gap-animation mode
+                 + (modLayout ? "1" : "0")                              // +46 keyboard layout
         widgetSaveProc.command = ["bash", "-c",
             "echo '" + line + "' > '" + widgetsCachePath + "'"]
         widgetSaveProc.running = false
@@ -2793,6 +3188,8 @@ Item {
                         var ba = parseInt(parts[wsField + 45], 10)
                         if (isFinite(ba) && ba >= 0 && ba <= 8) theme.barAnim = ba
                     }
+                    if (parts.length > wsField + 46)
+                        theme.modLayout = parts[wsField + 46] !== "0"
                 }
                 theme._widgetsLoaded = true
                 theme.applyStudioSettings()
@@ -2829,6 +3226,7 @@ Item {
         q.audioBoost = audioBoost
         q.barTemperatureSource = barTemperatureSource
         q.barShellStyle = barShellStyle
+        q.barScale = barScale
         q.barBorderEnabled = barBorderEnabled
         q.panelTooltipBorderEnabled = panelTooltipBorderEnabled
         q.barCornerRadius = barCornerRadius
@@ -2843,13 +3241,18 @@ Item {
         q.widgetColorStyles = serializeWidgetColorStyles()
         q.barSeps = barSeps
         q.iconOnlyGids = iconOnlyGids
+        // Carry the live in-memory layout, never the (possibly stale) Config
+        // frame: a widget toggle firing this must not revert a just-made move
+        // that Config has not re-read yet.
+        if (barLayoutReady)
+            q.layout = { version: 1, left: barLayout.left, center: barLayout.center, right: barLayout.right }
         q.widgets = {
             "status": modStatus, "memory": modMemory, "cpu": modCpu, "volume": modVolume,
             "weather": modWeather, "network": modNetwork, "brightness": modBrightness,
             "media": modMedia, "mpris": modMpris, "quick": modQuick, "claude": modClaude,
             "power": modPower, "bluetooth": modBluetooth, "gpu": modGpu,
             "cpuTemperature": modCpuTemperature, "storage": modStorage,
-            "battery": modBattery
+            "battery": modBattery, "layout": modLayout
         }
         _cfgCtl.queued += "call settings.patch " + JSON.stringify({ path: "qsbar", value: q }) + "\n"
         if (_cfgCtl.connected) _cfgCtl.flushQueued()
@@ -2890,6 +3293,7 @@ Item {
         if (q.audioBoost !== undefined) audioBoost = q.audioBoost === true
         if (q.barTemperatureSource !== undefined && barTemperatureSourceValid(q.barTemperatureSource)) barTemperatureSource = q.barTemperatureSource
         if (q.barShellStyle !== undefined && barShellStyleValid(q.barShellStyle)) barShellStyle = q.barShellStyle
+        if (q.barScale !== undefined) barScale = clampBarScale(q.barScale)
         if (q.barBorderEnabled !== undefined) barBorderEnabled = q.barBorderEnabled
         if (q.panelTooltipBorderEnabled !== undefined) panelTooltipBorderEnabled = q.panelTooltipBorderEnabled
         if (q.barCornerRadius !== undefined) barCornerRadius = Math.max(0, Math.min(40, q.barCornerRadius))
@@ -2923,6 +3327,28 @@ Item {
             if (w.cpuTemperature !== undefined) modCpuTemperature = w.cpuTemperature
             if (w.storage        !== undefined) modStorage        = w.storage
             if (w.battery        !== undefined) modBattery        = w.battery
+            if (w.layout         !== undefined) modLayout         = w.layout
+        }
+        // Bar layout (design section 1): apply the stored document, and on the
+        // first load without one migrate the retired cache (or write the shipped
+        // default) exactly once. A normalised incoming equal to the live layout
+        // is our own persist echo, so skip re-applying it.
+        if (q.layout && q.layout.left !== undefined) {
+            var incoming = {
+                version: 1,
+                left: q.layout.left || [],
+                center: q.layout.center || [],
+                right: q.layout.right || []
+            }
+            if (JSON.stringify(_normalizeLayout(incoming)) !== JSON.stringify(barLayout)) {
+                _commitLayout(incoming, false)
+                _applyLayoutToBars("")
+            } else {
+                barLayoutReady = true
+                _barLayoutInitialized = true
+            }
+        } else {
+            _migrateBarLayout()
         }
         _widgetsLoaded = wl
     }
@@ -3103,6 +3529,29 @@ Item {
     // ── Tray context-menu state (themed menu, rendered by TrayMenu.qml) ──
     property bool trayMenuVisible: false
     onTrayMenuVisibleChanged: popupOpened("trayMenuVisible")
+
+    // ── plugin bar panels ──
+    // A bar plugin that ships entryPoints.panel opens it under its glyph in the
+    // shared PluginPanel window, one at a time, closing the built-in panels the
+    // way they close each other. The opening slot hands over its api (the
+    // service instance, settings, dir) so the panel talks to the same service
+    // the glyph does. pluginBarX carries each plugin's bar x from the slot
+    // anchors, keyed by id, replaced whole so bindings re-derive.
+    property string pluginPanelId: ""
+    property var pluginPanelApi: null
+    property var pluginBarX: ({})
+    readonly property bool pluginPanelVisible: pluginPanelId !== ""
+    onPluginPanelVisibleChanged: popupOpened("pluginPanelVisible")
+    function openPluginPanel(id, api) {
+        if (!id) return
+        pluginPanelApi = api
+        pluginPanelId = id
+    }
+    function closePluginPanel() { pluginPanelId = "" }
+    function togglePluginPanel(id, api) {
+        if (pluginPanelId === id) closePluginPanel()
+        else openPluginPanel(id, api)
+    }
     property string trayMenuService: ""  // service key of the clicked item; menu resolved live from Tray.items
     property real trayMenuX: 0           // global x to anchor the menu under the icon
     property string trayMenuTitle: ""

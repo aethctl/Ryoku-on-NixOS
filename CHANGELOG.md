@@ -57,6 +57,22 @@ for finer detail.
   example.
 
 ### Fixed
+- **Repository Git hooks now run natively on NixOS.** Hook scripts use the
+  portable `env bash` interpreter instead of assuming `/bin/bash` exists, and
+  safely treat an unset force-push override as disabled under strict shell mode.
+- **Rashin now carries its agent skill correctly on NixOS.** Musubi packages
+  the shipped `ryoku` skill tree, exports its immutable Nix-store root to the
+  Rashin service, and removes live prompts that incorrectly identify NixOS
+  systems as Arch Linux.
+- **Musubi now ships the ISO builder RyoVM expects.** `xorriso` is part of
+  the declarative Ryoport runtime so instant/cloud-init VMs can create their
+  `cidata` seed images without relying on an Arch package-manager fallback.
+- **Nix update status now reports the generation and local checkout correctly.** `ryoku-nix-update` falls back to `/etc/ryoku-release` for the installed version and no longer replaces a local development checkout's `VERSION` with the version published on its Git remote.
+- **Musubi completes the 0.58.6 runtime dependency and GPU helper sync.**
+  NixOS now ships upstream-pinned Prowl v0.15.6 for Rashin code intelligence,
+  and the shared GPU runtime helper tracks the final 0.58.6 implementation so
+  Doctor and `ryoku-gpu` agree on the `check-pin` contract.
+
 - The overview's new-workspace controls now allocate workspace ids globally, so
   clicking `+` or `NEW` on a secondary monitor creates the workspace on that
   monitor instead of jumping to an existing workspace on another output.

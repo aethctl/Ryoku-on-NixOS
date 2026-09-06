@@ -68,6 +68,10 @@ func enableILoveCandy(conf []byte) (out []byte, changed, ok bool) {
 // the user's file (pacman tracks it as a backup file) and nothing in Ryoku
 // rewrites it wholesale.
 func reconcilePacmanCandy(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Pacman configuration is not applicable on NixOS")
+	}
+
 	if !sys.Has("pacman") {
 		return okRes("pacman progress bar not applicable")
 	}

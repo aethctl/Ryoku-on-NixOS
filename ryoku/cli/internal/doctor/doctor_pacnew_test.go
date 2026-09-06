@@ -21,6 +21,11 @@ func TestClassifyPacnew(t *testing.T) {
 		{"pacman.conf with a real [options] edit", "/etc/pacman.conf", "[options]\nParallelDownloads = 5\nHoldPkg = pacman glibc\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n[ryoku]\nSigLevel = Required\nServer = x\n", stockPacman, pacnewConflict},
 		{"non-pacman modified file", "/etc/hosts", "127.0.1.1 box\n", "# stock\n", pacnewConflict},
 		{"pacman.conf real base change", "/etc/pacman.conf", liveWithRyoku, stockPacman + "[extra]\nInclude = /etc/pacman.d/mirrorlist\n", pacnewConflict},
+		{"locale.gen configured, template re-shipped with a new locale", "/etc/locale.gen",
+			"# header\n#af_ZA.UTF-8 UTF-8\nen_US.UTF-8 UTF-8\n",
+			"# header\n#af_ZA.UTF-8 UTF-8\n#en_US.UTF-8 UTF-8\n#hrx_BR.UTF-8 UTF-8\n", pacnewLocaleGen},
+		{"locale.gen with nothing active is left for review", "/etc/locale.gen",
+			"# header\n#en_US.UTF-8 UTF-8\n", "# header\n#en_US.UTF-8 UTF-8\n#hrx_BR.UTF-8 UTF-8\n", pacnewConflict},
 	}
 	for _, c := range cases {
 		if got := classifyPacnew(c.path, []byte(c.live), []byte(c.pacnew)); got != c.want {

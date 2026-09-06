@@ -23,9 +23,16 @@
       url = "git+https://codeberg.org/zacoons/imgborders.git?ref=master";
       flake = false;
     };
+
+    # Native Ryotunes 2.4.1 application used by Ryoku 0.58.6.
+    # Keep this pinned to the exact upstream release commit.
+    ryotunesSrc = {
+      url = "github:neur0map/ryotunes/7f9feedfa406516a4b4c712448af124592557f9c";
+      flake = false;
+    };
   };
 
-  outputs = { self, nixpkgs, glazepkg, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ... }:
+  outputs = { self, nixpkgs, glazepkg, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
     let
       version =
         builtins.replaceStrings
@@ -45,6 +52,7 @@
           hyprglassSrc
           bibataMaterialSrc
           imgbordersSrc
+          ryotunesSrc
           version
           ;
 
@@ -89,6 +97,8 @@
         ryoku-ryomotion = ryoku.ryomotion;
         ryoku-ryovm-helpers = ryoku.ryovmHelpers;
         ryoku-livewall = ryoku.livewall;
+        ryoku-ryogami = ryoku.ryogami;
+        ryoku-ryotunes = ryoku.ryotunes;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;
         ryoku-helpers = ryoku.helpers;
@@ -99,6 +109,7 @@
         # locked nixpkgs rather than the host's package set.
         ryoku-hyprland = pkgs.hyprland;
         ryoku-xdg-desktop-portal-hyprland = pkgs.xdg-desktop-portal-hyprland;
+        ryoku-matugen = pkgs.matugen;
 
         ryoku-hyprglass = ryoku.hyprglass;
         ryoku-imgborders = ryoku.imgborders;
@@ -151,6 +162,8 @@
         ryoku-ryomotion = ryoku.ryomotion;
         ryoku-ryovm-helpers = ryoku.ryovmHelpers;
         ryoku-livewall = ryoku.livewall;
+        ryoku-ryogami = ryoku.ryogami;
+        ryoku-ryotunes = ryoku.ryotunes;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;
 
@@ -179,6 +192,38 @@
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;
         ryoku-bundle = ryoku.bundle;
+
+        # CLI integration
+        ryoku-cli-config-base = pkgs.runCommand
+          "ryoku-cli-config-base-check"
+          { }
+          ''
+            output="$(${ryoku.cli}/bin/ryoku status)"
+
+            printf '%s\n' "$output" |
+              ${pkgs.gnugrep}/bin/grep -Fq \
+                "config base:   ${ryoku.desktopData}/share/ryoku/config"
+
+            touch "$out"
+          '';
+
+        # Installer
+        ryoku-install = ryokuInstall;
+
+        ryoku-install-parser = pkgs.runCommand
+          "ryoku-install-parser-check"
+          {
+            nativeBuildInputs = [
+              pkgs.python3
+              pkgs.nix
+            ];
+          }
+          ''
+            RYOKU_INSTALL_PARSER=${./nix/apps/ryoku-install-edit.py} \
+              python3 ${./nix/tests/test-ryoku-install-edit.py}
+
+            touch "$out"
+          '';
 
         # User-facing deployment utility
         ryoku-materialize = ryokuMaterialize;

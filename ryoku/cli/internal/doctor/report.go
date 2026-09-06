@@ -156,3 +156,18 @@ func gatherReport(findings []finding) string {
 
 	return b.String()
 }
+
+// Debug prints the shareable diagnostic bundle to stdout so a bug reporter can
+// pipe or paste it straight into an issue. Same read-only content as
+// `doctor --report` (system state and recent error logs, no secrets); it just
+// goes to stdout instead of a file. Referenced by the bug issue template.
+func Debug(args []string) error {
+	for _, a := range args {
+		if a == "-h" || a == "--help" {
+			fmt.Println("Usage: ryoku debug   # print a shareable diagnostic bundle for bug reports")
+			return nil
+		}
+	}
+	fmt.Print(gatherReport(runReconcilers(true)))
+	return nil
+}

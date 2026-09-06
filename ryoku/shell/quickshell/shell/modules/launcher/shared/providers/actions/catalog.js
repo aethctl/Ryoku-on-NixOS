@@ -6,15 +6,15 @@
 
 var CATALOG = [
     { id: "lock-screen",      name: "Lock Screen",        category: "System",     icon: "lock",        exec: ["ryoku-shell", "lock"] },
-    { id: "open-clipboard",   name: "Clipboard History",  category: "System",     icon: "clipboard",   exec: ["ryoku-shell", "clipboard"] },
-    { id: "open-sysinfo",     name: "System Info",        category: "System",     icon: "info",        exec: ["ryoku-shell", "sysinfo"] },
-    { id: "open-toolkit",     name: "Control Deck",       category: "System",     icon: "grid",        exec: ["ryoku-shell", "toolkit"] },
+    { id: "open-clipboard",   name: "Clipboard History",  category: "System",     icon: "clipboard",   exec: ["ryoku-shell", "menu", "quick-settings#clipboard"] },
+    { id: "open-sysinfo",     name: "System Info",        category: "System",     icon: "info",        exec: ["ryoku-shell", "menu", "quick-settings"] },
+    { id: "open-toolkit",     name: "Control Deck",       category: "System",     icon: "grid",        exec: ["ryoku-shell", "menu", "quick-settings"] },
     { id: "toggle-caffeine",  name: "Keep Awake",         category: "System",     icon: "coffee",      exec: ["ryoku-cmd-caffeine"] },
     { id: "toggle-game-mode", name: "Game Mode",          category: "System",     icon: "gamepad",     exec: ["ryoku-cmd-game-mode"] },
     { id: "mirror-displays",  name: "Mirror Displays",    category: "System",     icon: "monitor",     exec: ["ryoku-monitor", "toggle"] },
 
-    { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryoku-shell", "wallpaper"] },
-    { id: "pick-wallpaper",   name: "Wallpaper Picker",   category: "Appearance", icon: "image-multi", exec: ["ryoku-shell", "wallpaper-switcher"] },
+    { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryogami", "wallpaper", "next"] },
+    { id: "pick-wallpaper",   name: "Wallpaper Picker",   category: "Appearance", icon: "image-multi", exec: ["ryogami", "wallpaper", "ui"] },
     { id: "toggle-nightlight",name: "Night Light",        category: "Appearance", icon: "moon",        exec: ["ryoku-cmd-nightlight"] },
 
     { id: "screenshot",       name: "Screenshot",         category: "Tools",      icon: "camera",      exec: ["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"] },

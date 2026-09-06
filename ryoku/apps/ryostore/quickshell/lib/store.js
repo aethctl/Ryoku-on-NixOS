@@ -19,6 +19,14 @@ function isInstalled(item) {
     return Boolean(item && (item.installed || item.active || item.enabled || Number(item.installedCount || 0) > 0));
 }
 
+// pluginKind classifies a plugin by its host surface: a plugin is a BAR plugin
+// when its manifest hosts include topbarGlyph, otherwise it is a DESKTOP plugin
+// (desktopWidget / framePopout). Pure over item.metadata.hosts.
+function pluginKind(item) {
+    var hosts = (item && item.metadata && Array.isArray(item.metadata.hosts)) ? item.metadata.hosts : [];
+    return hosts.indexOf("topbarGlyph") !== -1 ? "bar" : "desktop";
+}
+
 function searchText(item) {
     if (!item)
         return "";
@@ -57,6 +65,8 @@ function filter(items, options) {
         if (opts.provider && (item.metadata && item.metadata.provider ? item.metadata.provider : "Community") !== opts.provider)
             return false;
         if (opts.tag && (item.tags || []).indexOf(opts.tag) === -1)
+            return false;
+        if (opts.pluginKind && pluginKind(item) !== opts.pluginKind)
             return false;
         return matchesQuery(item, opts.query);
     });
@@ -124,6 +134,7 @@ function collection(items, options) {
         category: opts.categoryID || "",
         installedOnly: opts.view === "library" || opts.installedOnly === true,
         provider: opts.provider || "",
+        pluginKind: opts.pluginKind || "",
         query: opts.query || ""
     });
     if (opts.view !== "library" && !opts.categoryID && !opts.query) {
@@ -180,4 +191,4 @@ function sortCategories(categories) {
 }
 
 if (typeof module !== "undefined" && module.exports)
-    module.exports = { statusLabels, isInstalled, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded };
+    module.exports = { statusLabels, isInstalled, pluginKind, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded };

@@ -27,6 +27,9 @@ import (
 // and NEVER block `ryoku update`. Idempotent: the extension is (re)placed, enabled
 // and applied only when it is missing, stale, or not yet enabled.
 func reconcileSpicetifyCanvas(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return noteRes("Spicetify Doctor automation is deferred on NixOS; Doctor will not install or replace Spotify packages imperatively")
+	}
 	if !spotifyInstalled() {
 		return okRes("no Spotify installed; the Canvas spicetify setup is not needed")
 	}
@@ -37,11 +40,14 @@ func reconcileSpicetifyCanvas(checkOnly bool) recResult {
 	// tree unpacks on first launch); the spotifyLauncherUnlaunched defer below wires
 	// the Canvas up then.
 	if onlyUnpatchableSpotify() {
+		if removedByUser("spotify-launcher") {
+			return okRes("spotify-launcher was removed by hand; leaving Spotify as it is")
+		}
 		if checkOnly {
 			return wouldRes("Spotify is installed but only as a client spicetify cannot patch; would install the writable spotify-launcher").
 				withFix("ryoku doctor")
 		}
-		if installSpotifyLauncher() {
+		if present, _ := provision("spotify-launcher", installSpotifyLauncher); present {
 			return fixedRes("installed spotify-launcher (a writable Spotify client); open Spotify once and the Canvas wires up on the next `ryoku doctor`")
 		}
 		// Install failed -> fall through; the writability warning below names the fix.
@@ -108,7 +114,11 @@ func reconcileSpicetifyCanvas(checkOnly bool) recResult {
 
 	var did []string
 	if needCli {
-		if !installSpicetifyCli() {
+		present, skipped := provision("spicetify-cli", installSpicetifyCli)
+		if skipped {
+			return okRes("spicetify-cli was removed by hand; the Canvas setup stays off")
+		}
+		if !present {
 			return warnRes("Spotify is installed but spicetify-cli is missing and could not be installed").
 				withFix("install it by hand (`sudo pacman -S spicetify-cli`, it ships in [ryoku]), then run `ryoku doctor`")
 		}

@@ -18,6 +18,9 @@ import (
 const qtCoreLib = "/usr/lib/libQt6Core.so.6"
 
 func reconcileQuickshell(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Quickshell is supplied by the Ryoku NixOS package set")
+	}
 	bin, err := exec.LookPath("qs")
 	if err != nil {
 		if _, err := exec.LookPath("quickshell"); err != nil {

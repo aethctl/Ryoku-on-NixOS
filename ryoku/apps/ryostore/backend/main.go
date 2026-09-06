@@ -3,7 +3,7 @@
 // activating them. The Quickshell front end shells out to these subcommands.
 //
 //	ryostore catalog [--refresh] [--category <id>]   normalized catalogue, JSON
-//	ryostore install <category> <id>                 install-only, no activation
+//	ryostore install <category> <id> [--from <dir>]  install-only, no activation
 //	ryostore remove <category> <id>                  receipt-owned removal
 //
 // A full catalog answers from a disk snapshot so every launch after the first is
@@ -196,6 +196,7 @@ func runCheck(w io.Writer, provs []Provider) error {
 
 func runInstall(provs []Provider, args []string) error {
 	dither := false
+	from := ""
 	var only []string
 	rest := make([]string, 0, len(args))
 	i := 0
@@ -205,6 +206,11 @@ func runInstall(provs []Provider, args []string) error {
 		switch a {
 		case "--dither":
 			dither = true
+		case "--from":
+			if i < len(args) {
+				from = args[i]
+				i++
+			}
 		case "--only":
 			if i < len(args) {
 				for _, n := range strings.Split(args[i], ",") {
@@ -226,6 +232,13 @@ func runInstall(provs []Provider, args []string) error {
 	if !ok {
 		return fmt.Errorf("unknown category %q", category)
 	}
+	if from != "" {
+		li, ok := p.(localInstaller)
+		if !ok {
+			return fmt.Errorf("category %q does not support --from", category)
+		}
+		return li.InstallFrom(context.Background(), id, from)
+	}
 	if len(only) > 0 {
 		if ci, ok := p.(componentInstaller); ok {
 			return ci.InstallComponents(context.Background(), id, only)
@@ -237,6 +250,12 @@ func runInstall(provs []Provider, args []string) error {
 		}
 	}
 	return p.Install(context.Background(), id)
+}
+
+// localInstaller is a provider that can install a product from a local
+// directory (the plugins provider, for `ryoku plugin add`).
+type localInstaller interface {
+	InstallFrom(ctx context.Context, id, dir string) error
 }
 
 // variantInstaller is a provider that offers install-time variants (the decors

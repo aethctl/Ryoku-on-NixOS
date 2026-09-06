@@ -41,4 +41,5 @@ func withAsusAuraTestState(t *testing.T, state asusAuraStatus) {
 	old := readAsusAuraStatus
 	readAsusAuraStatus = func() asusAuraStatus { return state }
 	t.Cleanup(func() { readAsusAuraStatus = old })
+	isolateProvisioned(t)
 }

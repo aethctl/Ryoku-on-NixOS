@@ -8,7 +8,6 @@ import Ryoku.Ui.Singletons
 import "Singletons"
 import "schema/DesktopPage.js" as DesktopSchema
 import "schema/BarStudioPage.js" as BarStudioSchema
-import "schema/AppearancePage.js" as AppearanceSchema
 import "schema/WindowsPage.js" as WindowsSchema
 import "schema/InputPage.js" as InputSchema
 import "schema/CursorPage.js" as CursorSchema
@@ -88,7 +87,7 @@ Rectangle {
             { key: "displays", name: "Displays" }, { key: "connections", name: "Connections" },
             { key: "input", name: "Input" }, { key: "cursor", name: "Cursor" }, { key: "gpu", name: "Graphics & Power" } ] },
         { name: "LOOK", items: [
-            { key: "appearance", name: "Appearance" }, { key: "animations", name: "Animations" }, { key: "lockscreen", name: "Lockscreen" } ] },
+            { key: "animations", name: "Animations" }, { key: "lockscreen", name: "Lockscreen" } ] },
         { name: "DESKTOP", items: [
             { key: "windows", name: "Windows" }, { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
             { key: "widgets", name: "Widgets" }, { key: "launcher", name: "App Launcher" } ] },
@@ -111,7 +110,7 @@ Rectangle {
     readonly property var jpName: ({
         "profile": "横顔", "displays": "画面", "input": "入力", "cursor": "矢印", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
-        "windows": "窓", "appearance": "外観", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
+        "windows": "窓", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
@@ -134,7 +133,6 @@ Rectangle {
         "recording": "screen record capture video screencast screenshot fps codec framerate",
         "dictation": "voice typing speech transcribe whisper microphone stt",
         "windows": "window windows rounding corners softness gaps border borders thickness colour tiling dwindle master scrolling layout opacity transparency transparent dim blur shadow glow glass wobble wobbly title bar titlebar float snap resize animation",
-        "appearance": "theme palette accent color colour wallpaper background rice scheme dark light night bluelight comfort brightness backlight",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
         "desktop": "desktop visualizer visualiser spectrum brand logo mark name widget board wallpaper",
         "launcher": "launcher spotlight command palette greeting weather home",
@@ -161,7 +159,7 @@ Rectangle {
     // anywhere. Ranking is fuzzy: exact word > substring > subsequence.
     readonly property var searchIndex: {
         var srcs = {
-            "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "appearance": AppearanceSchema.rows, "windows": WindowsSchema.rows,
+            "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windows": WindowsSchema.rows,
             "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
             "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
             "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
@@ -352,7 +350,7 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "appearance": true, "windows": true, "input": true, "cursor": true, "animations": true, "global": true,
+        "bar-studio": true, "desktop": true, "windows": true, "input": true, "cursor": true, "animations": true, "global": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "autostart": true, "environment": true
     })
@@ -391,7 +389,7 @@ Rectangle {
         return false;
     }
     function pageFile(s) {
-        var map = { "windows": "WindowsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "appearance": "AppearancePage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage" };
+        var map = { "windows": "WindowsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         return map[s] ? Qt.resolvedUrl("pages/" + map[s] + ".qml") : "";
@@ -458,7 +456,7 @@ Rectangle {
         } else {
             out.push({ role: "yours", label: "Your shell config", path: ce + "/shell.json",
                 note: "Every shell setting, with your values, in one full file you edit in place. The GUI writes it and the shell retunes live when you save a hand-edit." });
-            if (s === "desktop" || s === "appearance") {
+            if (s === "desktop") {
                 out.push({ role: "yours", label: "Widget visuals", path: ce + "/visualizer.json",
                     note: "Visualiser and desktop-widget visuals, a full file you edit in place." });
                 out.push({ role: "yours", label: "Brand mark", path: ce + "/brand.json",
@@ -838,11 +836,13 @@ Rectangle {
     Process { id: hyprRestore; onRunningChanged: if (!running && hub.quitting) Qt.quit() }
     function requestQuit() {
         if (hub.quitting) return;
-        var cleanup = ["ryoku-hub", "reload-cover", "prune"];
-        var keep = ReloadCoverModel.path(hub.committed.reloadCover);
-        if (keep !== "")
-            cleanup.push(keep);
-        Spawn.run(cleanup);
+        if (brandFV.loaded) {
+            var cleanup = ["ryoku-hub", "reload-cover", "prune"];
+            var keep = ReloadCoverModel.path(hub.committed.reloadCover);
+            if (keep !== "")
+                cleanup.push(keep);
+            Spawn.run(cleanup);
+        }
         // Bar Studio edits are already live on the desktop: an unsaved quit
         // puts the saved state back through the same channel before the Hub
         // goes, whichever way it was closed.
@@ -951,7 +951,7 @@ Rectangle {
                         spacing: 1
                         anchors.verticalCenter: parent.verticalCenter
                         Text {
-                            text: "RYOKU ARCH"; color: Tokens.ink; font.family: Tokens.ui
+                            text: "RYOKU NIXOS"; color: Tokens.ink; font.family: Tokens.ui
                             font.pixelSize: 14; font.weight: Font.Medium; font.letterSpacing: 2.4
                         }
                         Text {
@@ -991,7 +991,7 @@ Rectangle {
             Marginalia {
                 id: edition
                 anchors { left: parent.left; top: parent.top; topMargin: Tokens.s3 }
-                index: "BETA"; label: "18"
+                index: Version.editionIndex; label: Version.editionNumber
                 glyph: "column"; glyph2: ""
                 chevrons: false
             }

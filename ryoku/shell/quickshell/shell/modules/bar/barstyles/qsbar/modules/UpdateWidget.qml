@@ -32,8 +32,14 @@ Item {
                 ? " " + I18n.tr("commit") : " " + I18n.tr("commits"))
             if (Updates.channel !== "") head += " · " + Updates.channel
             lines.push(head)
-            if (Updates.installed !== "" && Updates.latest !== "" && Updates.installed !== Updates.latest)
-                lines.push(Updates.installed + " → " + Updates.latest)
+            if (Updates.installed !== "" && Updates.latest !== "" && Updates.installed !== Updates.latest) {
+                var from = Updates.installed, to = Updates.latest;
+                if (Updates.latestName !== "" && Updates.latestName !== Updates.installedName) {
+                    from = (Updates.installedName ? Updates.installedName + " " : "") + from;
+                    to = Updates.latestName + " " + to;
+                }
+                lines.push(from + " → " + to)
+            }
             var shown = Math.min(commits.length, tooltipCommitLimit)
             for (var i = 0; i < shown; i++) {
                 var c = commits[i]

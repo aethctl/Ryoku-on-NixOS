@@ -15,13 +15,29 @@ import (
 // checkout reads git, a packaged box parses the local pacman version. Any
 // unknown piece degrades gracefully rather than erroring.
 func Version(args []string) error {
-	branch := false
+	branch, pretty := false, false
 	for _, a := range args {
-		if a == "--branch" {
+		switch a {
+		case "--branch":
 			branch = true
+		case "--pretty":
+			pretty = true
 		}
 	}
 	base, sha := versionParts()
+	// --pretty: the line's name in front ("Onogoro v0.56.0-beta.19"); on a
+	// terminal the line's art above it. fastfetch and scripts read a pipe, so
+	// they get the one line.
+	if pretty {
+		name := ReleaseName()
+		if name != "" {
+			if sys.StdoutIsTTY() {
+				fmt.Print(sys.Brand(releaseArt(name)))
+				fmt.Println()
+			}
+			fmt.Printf("%s ", name)
+		}
+	}
 
 	if branch {
 		ch := ryokuChannel()
@@ -41,8 +57,28 @@ func Version(args []string) error {
 		fmt.Println(base)
 		return nil
 	}
+	// a packaged box names the release it runs (/etc/ryoku-release, written
+	// by the ryoku-desktop package at publish); the bare core version is the
+	// fallback for a box installed before releases were named.
+	if rel := sys.ReadRelease(); rel.Release != "" && sys.ResolveRepo() == "" {
+		fmt.Println(rel.Release)
+		return nil
+	}
 	fmt.Printf("v%s\n", base)
 	return nil
+}
+
+// ReleaseName is the name of the line this box runs: /etc/ryoku-release on a
+// packaged box, the checkout's CODENAME on a dev box, "" when neither says.
+func ReleaseName() string {
+	if sys.ResolveRepo() == "" {
+		return sys.ReadRelease().Name
+	}
+	b, err := os.ReadFile(filepath.Join(sys.ResolveRepo(), "CODENAME"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // versionParts returns (base semver, short sha) for the running Ryoku. On a

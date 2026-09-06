@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Wayland
-import Qt5Compat.GraphicalEffects
 
 PanelWindow {
     id: cover
@@ -12,6 +11,7 @@ PanelWindow {
     required property var targetScreen
     required property string phase
     required property bool startClose
+    required property var reloadCover
     signal mapped()
 
     screen: targetScreen
@@ -27,6 +27,13 @@ PanelWindow {
     property real diagonal: Math.sqrt(width * width + height * height)
     property real iris: diagonal
     property bool mappedReported: false
+    readonly property real mediaOpacity: {
+        if (cover.phase === "closing") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
+        if (cover.phase === "hold" || cover.phase === "failed") return 1;
+        if (cover.phase === "opening") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
+        return 0;
+    }
+
 
     function reportMapped(): void {
         if (!mappedReported && backingWindowVisible && width > 0 && height > 0) {
@@ -102,74 +109,31 @@ PanelWindow {
         }
     }
 
-    Item {
-        id: logoGlow
-        x: logo.x
-        y: logo.y
-        width: logo.width
-        height: logo.height
-        visible: logo.visible
-        opacity: logo.opacity
-        z: 1
-
-        Item {
-            id: loadingSweep
-            x: logoGlow.width
-            width: Math.max(36, logoGlow.width * 0.24)
-            height: logoGlow.height
-            clip: true
-
-            ColorOverlay {
-                x: -loadingSweep.x
-                width: logoGlow.width
-                height: logoGlow.height
-                source: logo
-                color: "#e2f0ff"
-                opacity: 0.28
-            }
-
-            NumberAnimation on x {
-                from: logoGlow.width
-                to: -loadingSweep.width
-                duration: 1200
-                running: logoGlow.visible && logo.opacity > 0
-                loops: Animation.Infinite
-            }
-        }
-    }
-
-    Image {
-        id: logo
-        anchors.centerIn: parent
-        source: "assets/logo.png"
-        sourceSize.width: Math.round(Math.min(parent.width * 0.58, 928))
-        fillMode: Image.PreserveAspectFit
-        width: sourceSize.width
-        height: width * 160 / 928
-        opacity: {
-            if (cover.phase === "closing") return Math.max(0, 1 - cover.iris / (cover.diagonal * 0.38));
-            if (cover.phase === "hold" || cover.phase === "failed") return 1;
-            if (cover.phase === "opening") return 0;
-            return 0;
-        }
+    ReloadMedia {
+        id: media
+        anchors.fill: parent
+        descriptor: cover.reloadCover
+        active: cover.backingWindowVisible
+        forceDefault: cover.phase === "failed"
+        opacity: cover.mediaOpacity
         scale: opacity < 1 ? 0.94 + opacity * 0.06 : 1
     }
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: logo.bottom
-        anchors.topMargin: 18
-        visible: cover.phase !== "failed" && logo.opacity > 0
+        anchors.top: parent.verticalCenter
+        anchors.topMargin: media.defaultLogoHeight / 2 + 18
+        visible: cover.phase !== "failed" && media.showingDefault && cover.mediaOpacity > 0
         text: "SHELL RELOADING"
         color: "#d8e8f5"
-        opacity: logo.opacity * 0.72
+        opacity: cover.mediaOpacity * 0.72
         font.family: "JetBrainsMono Nerd Font"
         font.pixelSize: 11
         font.letterSpacing: 4
     }
     Text {
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: logo.bottom
-        anchors.topMargin: 28
+        anchors.top: parent.verticalCenter
+        anchors.topMargin: media.defaultLogoHeight / 2 + 28
         visible: cover.phase === "failed"
         text: "RELOAD FAILED"
         color: "#ff735d"

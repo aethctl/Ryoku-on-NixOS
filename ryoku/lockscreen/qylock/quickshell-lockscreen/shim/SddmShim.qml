@@ -237,6 +237,8 @@ Item {
             shim.fpTyped = false;
             shim.fingerprintState = "idle";
             pam.pendingPassword = password;
+            if (password === "" && !shim.fingerprintReady)
+                return;
             pam.start();
         }
 
@@ -387,6 +389,9 @@ Item {
             if (!shim.armWhenReady)
                 return;
             shim.fingerprintState = "fail";
+            // A typed conversation that died must clear the theme's unlock flash.
+            if (shim.fpTyped || pam.pendingPassword !== "")
+                shim.sddm.loginFailed();
             shim.fpTyped = false;
             rearmTimer.restart();
         }

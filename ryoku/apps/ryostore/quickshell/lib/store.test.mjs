@@ -117,4 +117,40 @@ Store.filter(items, { query: "installed" });
 Store.groupSearch(items, "clock");
 eq(JSON.stringify(items), snapshot, "helpers do not mutate source arrays");
 
+// Plugin classification drives the Plugins subtab strip: a plugin is a BAR plugin
+// when its manifest hosts include topbarGlyph, otherwise it is a DESKTOP plugin.
+const plugins = [
+    { id: "vpn", category: "plugins", name: "VPN", metadata: { hosts: ["topbarGlyph"] } },
+    { id: "clockbar", category: "plugins", name: "Clock", metadata: { hosts: ["topbarGlyph", "desktopWidget"] } },
+    { id: "widget", category: "plugins", name: "Widget", metadata: { hosts: ["desktopWidget"] } },
+    { id: "popout", category: "plugins", name: "Popout", metadata: { hosts: ["framePopout"] } },
+    { id: "bare", category: "plugins", name: "Bare" }
+];
+eq(Store.pluginKind(plugins[0]), "bar", "topbarGlyph host is a bar plugin");
+eq(Store.pluginKind(plugins[1]), "bar", "any topbarGlyph host is a bar plugin");
+eq(Store.pluginKind(plugins[2]), "desktop", "desktopWidget host is a desktop plugin");
+eq(Store.pluginKind(plugins[3]), "desktop", "framePopout host is a desktop plugin");
+eq(Store.pluginKind(plugins[4]), "desktop", "no hosts falls back to desktop");
+eq(Store.pluginKind(undefined), "desktop", "missing item is a desktop plugin");
+eq(
+    Store.filter(plugins, { category: "plugins", pluginKind: "bar" }).map(item => item.id),
+    ["vpn", "clockbar"],
+    "BAR subtab keeps only topbarGlyph plugins"
+);
+eq(
+    Store.filter(plugins, { category: "plugins", pluginKind: "desktop" }).map(item => item.id),
+    ["widget", "popout", "bare"],
+    "DESKTOP subtab keeps everything else"
+);
+eq(
+    Store.collection(plugins, { view: "discover", categoryID: "plugins", pluginKind: "bar" }).map(Store.itemKey),
+    ["plugins:vpn", "plugins:clockbar"],
+    "plugins BAR collection filters through the pluginKind option"
+);
+eq(
+    Store.collection(plugins, { view: "discover", categoryID: "plugins" }).map(item => item.id),
+    ["vpn", "clockbar", "widget", "popout", "bare"],
+    "plugins ALL collection keeps every plugin in source order"
+);
+
 console.log("RYOSTORE-STORE-HELPERS-PASS");

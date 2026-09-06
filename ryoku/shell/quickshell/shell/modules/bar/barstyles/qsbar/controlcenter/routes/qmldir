@@ -1,9 +1,5 @@
 BarsRoute BarsRoute.qml
-AppearanceRoute AppearanceRoute.qml
-LogoRoute LogoRoute.qml
-WorkspacesRoute WorkspacesRoute.qml
-PickersRoute PickersRoute.qml
+IdentityRoute IdentityRoute.qml
+LayoutRoute LayoutRoute.qml
+WidgetsRoute WidgetsRoute.qml
 DockRoute DockRoute.qml
-DesktopRoute DesktopRoute.qml
-SystemRoute SystemRoute.qml
-SessionRoute SessionRoute.qml

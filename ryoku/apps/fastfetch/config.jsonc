@@ -33,7 +33,7 @@
     "break",
 
     { "type": "custom", "format": "\u001b[38;2;226;52;42m\u2500\u2500\u001b[0m \u001b[1;38;2;243;237;225mSYSTEM\u001b[0m \u001b[38;2;58;46;36m\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u001b[0m" },
-    { "type": "command", "key": "OS",     "text": "echo \"Ryoku $(ryoku version 2>/dev/null || echo dev)\"" },
+    { "type": "command", "key": "OS",     "text": "echo \"Ryoku $(ryoku version --pretty 2>/dev/null || echo dev)\"" },
     { "type": "command", "key": "BRANCH", "text": "ryoku version --branch 2>/dev/null || echo main" },
     { "type": "kernel",  "key": "KERNEL" },
     { "type": "command", "key": "WM",     "text": "echo \"${XDG_CURRENT_DESKTOP:-Hyprland}\"" },

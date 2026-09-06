@@ -17,6 +17,7 @@ IconText IconText.qml
 IdleInhibitorWidget IdleInhibitorWidget.qml
 IdleWidget IdleWidget.qml
 LauncherWidget LauncherWidget.qml
+LayoutWidget LayoutWidget.qml
 MediaBrowserWidget MediaBrowserWidget.qml
 MemoryWidget MemoryWidget.qml
 MprisArtwork MprisArtwork.qml

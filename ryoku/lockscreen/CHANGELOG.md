@@ -14,6 +14,46 @@
   this root installer). Honors `RYOKU_DRYRUN`; `ryoku keyring` changes it later.
 
 ### Fixed
+- **Pressing Enter on an empty password no longer strands the in-session lock
+  on a white screen, taking the reboot and shutdown buttons with it.** The
+  clockwork/orbital submit runs a windup that ends in a full-screen blast (white
+  in the shipped dark theme) held up until PAM answers, and the shell drops the
+  whole HUD -- clock, password field, reboot and shutdown -- while it is raised.
+  An empty submit reached `sddm.login(user, "")`, but the shim never feeds an
+  empty key to PAM (the sensor keeps scanning instead), so the conversation
+  never completed, `loginFailed` never fired, and the blast never fell: a white
+  surface with no controls, reported both as "stuck on a white screen" and as
+  "the reboot and shutdown buttons are white on white." An empty Enter is now a
+  no-op that keeps the field; the shim will not start a response-less
+  conversation; a conversation that dies mid-auth now reports failure; and a
+  watchdog clears the flash if auth ever goes silent, so no submit -- empty,
+  wrong, or hung -- can hold the lock (`themes/clockwork/orbital/Main.qml`,
+  `quickshell-lockscreen/shim/SddmShim.qml`).
+- **The login screen uses the same keyboard layout as the session, so a non-US
+  password is accepted.** Moving the greeter to a Wayland weston kiosk left it on
+  weston's built-in `us` map: `/etc/X11/xorg.conf.d/00-keyboard.conf` (which the
+  installer and `localectl` write for the session and console) is X11-only, and a
+  bare weston reads neither it nor the console keymap. An AZERTY password typed at
+  the login field then failed on a QWERTY map while the same password worked on a
+  tty, which has the vconsole keymap. `sddm/ryoku-greeter` now reads that file and
+  hands weston the primary layout through the libxkbcommon defaults
+  (`XKB_DEFAULT_LAYOUT`/`_VARIANT`/`_OPTIONS`), which weston honours when its own
+  config names no keymap. Delivered by the package to fresh and existing boxes.
+- **The login screen always shows a mouse pointer.** Pinning
+  `XCURSOR_THEME=Bibata-Modern-Ice` in `GreeterEnvironment` only helps clients
+  that honor it; SDDM's Wayland greeter ignores it and, like weston's own
+  pointer, falls back to the cursor theme literally named `default`. Ryoku
+  shipped no `/usr/share/icons/default`, so that fallback resolved to nothing and
+  the greeter drew no pointer at all at boot and after logout (the in-session
+  lock, drawn by the running session, was unaffected). `sddm/setup` now points
+  the `default` theme at the shipped Bibata set (only when the box has no default
+  of its own); `ryoku doctor`'s `reconcileGreeterCursor` converges existing boxes.
+- **The greeter and the in-session lock always have a cursor theme.**
+  `sddm/setup` and the doctor pin `XCURSOR_THEME=Bibata-Modern-Ice` and
+  `XCURSOR_SIZE=24` in SDDM's `GreeterEnvironment`, `sddm/ryoku-greeter` exports
+  the same for weston's own pointer, and `lock.sh` defaults them when the shell
+  daemon that spawns it carries none, so the pointer is drawn from the shipped
+  set instead of whatever the "default" theme chain resolves to (or nothing).
 - **The SDDM greeter no longer lingers after login, draining power.** SDDM ran
   the greeter on X11 while the Hyprland session is Wayland; at login SDDM's
   `sddm-helper` died mid-teardown without reaping `sddm-greeter-qt6`, so the
@@ -22,8 +62,10 @@
   was looking at, and even the default clockwork clock woke the CPU ~60x/s,
   blocking deep idle on a laptop. `sddm/setup` now writes
   `/etc/sddm.conf.d/10-ryoku-wayland.conf` (`DisplayServer=wayland`,
-  `CompositorCommand=weston --shell=kiosk`), so the greeter runs on Wayland like
-  the session and SDDM tears it down cleanly at login. Validated headlessly:
+  `GreeterEnvironment=QT_QPA_PLATFORM=wayland`,
+  `CompositorCommand=weston --shell=kiosk`), so the Qt greeter connects to
+  Weston instead of selecting xcb with no X server. The session tears it down
+  cleanly at login. Validated headlessly:
   weston hosts the greeter as a separate client, the exact separate-process
   model SDDM uses. `ryoku doctor` backports it to existing boxes; `base.packages`
   and `ryoku-desktop` ship weston. Honors `RYOKU_DRYRUN`.

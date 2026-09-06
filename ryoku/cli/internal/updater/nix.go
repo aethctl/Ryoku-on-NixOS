@@ -16,10 +16,7 @@ var nixSteps = []runStep{
 }
 
 func nixBackend() bool {
-	return strings.EqualFold(
-		strings.TrimSpace(os.Getenv("RYOKU_UPDATE_BACKEND")),
-		"nix",
-	)
+	return sys.NixBackend()
 }
 
 func nixVersion() string {

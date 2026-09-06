@@ -48,6 +48,10 @@ FocusScope {
         actionItem.contents ? "CONTENTS / " + valueText(actionItem.contents) : ""
     ].filter(Boolean).join("\n")
     readonly property bool isBundle: String(actionItem.category || "") === "bundles"
+    // A plugins-category item the registry did not mark official: the store shows
+    // it, but Ryoku neither reviews nor maintains it. Drives the warning + tag.
+    readonly property bool isCommunityPlugin: String(actionItem.category || "") === "plugins"
+            && !!(actionItem.metadata && actionItem.metadata.community === true)
     readonly property var components: (actionItem.metadata && Array.isArray(actionItem.metadata.items)) ? actionItem.metadata.items : []
     readonly property var coreComponents: components.filter(c => String(c.tier || "core") !== "optional")
     readonly property var optionalComponents: components.filter(c => String(c.tier || "core") === "optional")
@@ -320,17 +324,48 @@ FocusScope {
                 elide: Text.ElideRight
             }
 
-            Text {
-                objectName: "ryostore-detail-title"
+            Row {
                 width: parent.width
-                text: String(detail.actionItem.name || detail.actionItem.id || "")
-                color: Tokens.ink
-                font.family: Tokens.display
-                font.pixelSize: Tokens.fTitle
-                font.weight: Font.Medium
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
+                spacing: Tokens.s3
+
+                Text {
+                    id: detailTitle
+                    objectName: "ryostore-detail-title"
+                    width: parent.width - (communityTag.visible ? communityTag.width + parent.spacing : 0)
+                    text: String(detail.actionItem.name || detail.actionItem.id || "")
+                    color: Tokens.ink
+                    font.family: Tokens.display
+                    font.pixelSize: Tokens.fTitle
+                    font.weight: Font.Medium
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                }
+
+                // Sits where an OFFICIAL mark would: a small, colourless tag that
+                // names an unreviewed community plugin next to its title.
+                Rectangle {
+                    id: communityTag
+                    objectName: "ryostore-detail-community-tag"
+                    visible: detail.isCommunityPlugin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: communityTagLabel.implicitWidth + Tokens.s3 * 2
+                    height: communityTagLabel.implicitHeight + Tokens.s2
+                    radius: Tokens.radius
+                    color: "transparent"
+                    border.width: Tokens.border
+                    border.color: Tokens.line
+
+                    Text {
+                        id: communityTagLabel
+                        anchors.centerIn: parent
+                        text: I18n.tr("COMMUNITY")
+                        color: Tokens.inkDim
+                        font.family: Tokens.mono
+                        font.pixelSize: Tokens.fMicro
+                        font.letterSpacing: Tokens.trackLabel
+                    }
+                }
             }
 
             Text {
@@ -387,6 +422,48 @@ FocusScope {
                 font.pixelSize: Tokens.fMicro
                 font.letterSpacing: Tokens.trackLabel
                 wrapMode: Text.Wrap
+            }
+
+            // A community plugin is unreviewed third-party code that runs in the
+            // shell with the user's permissions, so warn before trust. House
+            // style: hairline frame, dim ink, a warning mark, no colour.
+            Rectangle {
+                objectName: "ryostore-detail-community-warning"
+                width: parent.width
+                visible: detail.isCommunityPlugin
+                implicitHeight: communityWarningRow.implicitHeight + Tokens.s3 * 2
+                height: implicitHeight
+                radius: Tokens.radius
+                color: "transparent"
+                border.width: Tokens.border
+                border.color: Tokens.line
+
+                Row {
+                    id: communityWarningRow
+                    anchors {
+                        left: parent.left; leftMargin: Tokens.s3
+                        right: parent.right; rightMargin: Tokens.s3
+                        verticalCenter: parent.verticalCenter
+                    }
+                    spacing: Tokens.s3
+
+                    Text {
+                        id: communityWarningMark
+                        text: "\uf071"
+                        color: Tokens.inkDim
+                        font.family: Tokens.mono
+                        font.pixelSize: Tokens.fBody
+                    }
+
+                    Text {
+                        width: parent.width - communityWarningMark.width - parent.spacing
+                        text: I18n.tr("Community plugin. Ryoku does not review or maintain it: it runs inside your shell with your permissions, so inspect its code before you trust it.")
+                        color: Tokens.inkDim
+                        font.family: Tokens.ui
+                        font.pixelSize: Tokens.fSmall
+                        wrapMode: Text.Wrap
+                    }
+                }
             }
         }
 

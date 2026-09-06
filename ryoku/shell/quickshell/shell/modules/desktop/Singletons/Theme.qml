@@ -93,7 +93,7 @@ Singleton {
 
     // ── studio scale, projected from the kit so the right-click menu never
     // hardcodes a spacing, a radius or a font size: it speaks the same
-    // 4-8-12-16-24-32-48 rhythm and 6px control radius as the Shell Studio. ──
+    // 4-8-12-16-24-32-48 rhythm and 6px control radius as QS Bar Settings. ──
     readonly property int s1: Ui.Tokens.s1        // 4
     readonly property int s2: Ui.Tokens.s2        // 8
     readonly property int s3: Ui.Tokens.s3        // 12

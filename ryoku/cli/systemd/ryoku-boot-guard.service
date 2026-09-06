@@ -1,0 +1,23 @@
+[Unit]
+# Runs `ryoku boot-guard` early in every boot. It does nothing unless a
+# packaged update armed it (/var/lib/ryoku/update-pending.json); then it
+# counts boots on which the desktop never came up and, on the second, puts
+# the Ryoku set back on the release the box ran before (see ryoku/cli
+# internal/updater/bootguard.go). Before the display manager so a revert
+# lands before the session that would fail starts. It does not pull in
+# network-online.target: that would hold every boot's display manager on the
+# wait-online timeout; the guard waits for the network itself (nm-online)
+# only on the boot it actually reverts.
+Description=Ryoku boot guard (reverts an update whose boots fail)
+DefaultDependencies=no
+After=local-fs.target network.target NetworkManager.service
+Before=display-manager.service
+ConditionPathExists=/var/lib/ryoku/update-pending.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ryoku boot-guard
+TimeoutStartSec=10min
+
+[Install]
+WantedBy=multi-user.target

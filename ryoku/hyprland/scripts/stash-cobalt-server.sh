@@ -133,12 +133,11 @@ case "$cmd" in
 status)
   d=$(docker_state)
   emit docker "$d"
-  # `setup` can still answer the container question: the helper reaches docker
-  # even when this session cannot, so report the real container state rather
-  # than hiding it behind "unknown".
+  # Status is background work. Only direct access may inspect the container;
+  # helper access is reserved for an explicit setup/start/stop action.
   case "$d" in
-    ready|setup) emit cobalt "$(container_state)" ;;
-    *)           emit cobalt unknown ;;
+    ready) emit cobalt "$(container_state)" ;;
+    *)     emit cobalt unknown ;;
   esac
   ;;
 up)

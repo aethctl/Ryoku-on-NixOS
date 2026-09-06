@@ -20,9 +20,9 @@ Item {
 
     readonly property var groups: [
         { name: "OVERVIEW", items: [ { key: "dashboard", name: "Dashboard" } ] },
-        { name: "FLEET", items: [ { key: "machines", name: "Machines" }, { key: "remotes", name: "Remotes" } ] }
+        { name: "FLEET", items: [ { key: "machines", name: "Machines" }, { key: "remotes", name: "Remotes" }, { key: "passthrough", name: "Looking Glass" } ] }
     ]
-    readonly property var jpName: ({ "dashboard": "一覧", "machines": "仮想", "remotes": "遠隔" })
+    readonly property var jpName: ({ "dashboard": "一覧", "machines": "仮想", "remotes": "遠隔", "passthrough": "透過" })
 
     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Tokens.line }
 
@@ -180,7 +180,7 @@ Item {
         Marginalia {
             id: edition
             anchors { left: parent.left; top: parent.top; topMargin: Tokens.s3 }
-            index: "BETA"; label: "18"
+            index: Version.editionIndex; label: Version.editionNumber
             glyph: "column"; glyph2: ""
             chevrons: false
         }

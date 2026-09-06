@@ -125,23 +125,28 @@ Item {
         root.pair(d);
     }
     function pair(d) {
-        if (!d)
+        if (!d || pairProc.running)
             return;
         root.busyAddr = d.address;
         root.errorText = "";
-        pairProc.command = ["sh", "-c",
-            'timeout 30 bluetoothctl pair "$1" && bluetoothctl trust "$1" && timeout 30 bluetoothctl connect "$1"',
-            "sh", d.address];
+        pairProc.command = BtLink.pairCommand(d.address);
         pairProc.running = false;
         pairProc.running = true;
     }
     Process {
         id: pairProc
-        stdout: StdioCollector {}
-        stderr: StdioCollector {}
+        property string collected: ""
+        stdout: StdioCollector { onStreamFinished: pairProc.collected = this.text }
         onExited: code => {
-            if (code !== 0)
-                root.errorText = qsTr("Pairing failed. Put the device in pairing mode and try again.");
+            if (code !== 0) {
+                const lines = pairProc.collected.trim().split("\n");
+                const msg = lines.length ? lines[lines.length - 1].trim() : "";
+                root.errorText = msg.length ? msg
+                    : qsTr("Pairing failed. Put the device in pairing mode and try again.");
+            } else {
+                root.errorText = "";
+            }
+            pairProc.collected = "";
             root.busyAddr = "";
         }
     }

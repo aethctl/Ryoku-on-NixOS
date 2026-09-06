@@ -117,6 +117,8 @@ Singleton {
 
     // Card time label (contract 07 sec 2.3): 24h "HH:MM"; 12h "hh:MM am/pm".
     function timeLabel(n) {
+        if (!n)
+            return "";
         var ts = root.arrivalMs[n.id];
         if (!ts)
             return "";

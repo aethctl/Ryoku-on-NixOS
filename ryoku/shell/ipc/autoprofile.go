@@ -63,15 +63,31 @@ func (a *autoProfile) step(enabled, onBattery bool, current string, avail []stri
 // or on a machine with no battery.
 func (d *daemon) watchAutoPowerSaver() {
 	var a autoProfile
+	prevAC, first := true, true
 	for {
 		if d.pp != nil {
 			st := readPowerState()
 			onBattery := st.present && st.discharging
-			if to := a.step(perfFlag("autoPowerSaverOnBattery"), onBattery, d.pp.activeProfile(), d.pp.profiles()); to != "" {
-				if err := d.pp.setProfile(to); err != nil {
-					log.Printf("ryoku-shell: auto power saver: set %q failed: %v", to, err)
+			onAC := !onBattery
+			active := d.pp.activeProfile()
+			if !first && onAC != prevAC {
+				d.pp.noteACFlip()
+			}
+			to := a.step(perfFlag("autoPowerSaverOnBattery"), onBattery, active, d.pp.profiles())
+			// On the plug edge, if autoprofile has nothing to restore, re-assert
+			// the saved profile so a firmware/ppd switch to performance on AC
+			// cannot strand the desktop on a profile the user never picked.
+			if to == "" && !first && onAC && !prevAC {
+				if saved := readPersistedProfile(); saved != "" && saved != active {
+					to = saved
 				}
 			}
+			if to != "" {
+				if err := d.pp.setProfile(to); err != nil {
+					log.Printf("ryoku-shell: auto power profile: set %q failed: %v", to, err)
+				}
+			}
+			prevAC, first = onAC, false
 		}
 		select {
 		case <-d.quit:

@@ -35,6 +35,16 @@ func StdinIsTTY() bool {
 	return errno == 0
 }
 
+// StdoutIsTTY reports whether stdout is a real terminal, via the same TCGETS
+// probe as StdinIsTTY (not fooled by /dev/null). Callers use it to decide
+// between an animated, curated view and plain passthrough for pipes and logs.
+func StdoutIsTTY() bool {
+	var t syscall.Termios
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, os.Stdout.Fd(),
+		uintptr(syscall.TCGETS), uintptr(unsafe.Pointer(&t)))
+	return errno == 0
+}
+
 func paint(code, s string) string {
 	if !useColor || s == "" {
 		return s

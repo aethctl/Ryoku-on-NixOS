@@ -26,6 +26,8 @@
 #   ssh <name>                       print the ssh command to the guest
 #   delete <name> [--disk-only]      remove the VM (or just wipe its disk)
 #   folder [name]                    print the VMs dir (or one VM dir)
+#   lg [list|create|start|stop|remove|status|<name>]  GPU-passthrough VMs via
+#                                    Looking Glass (delegates to ryoku-hub gpu vm)
 set -euo pipefail
 
 vms_dir="${RYOVM_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/ryoku/vms}"
@@ -139,6 +141,15 @@ cmd_caps() {
 # quickemu is AUR-only; spice-gtk (spicy) is in the official repos. Route both
 # through the Ryoku package helpers so the install matches every other one.
 cmd_setup() {
+	if [ -e /etc/NIXOS ]; then
+		if have quickemu && have quickget; then
+			echo "Done — quickemu is already provided by the Ryoku NixOS module."
+			return 0
+		fi
+
+		die "quickemu is managed declaratively by the Ryoku NixOS module. Rebuild your NixOS configuration to install the Ryoport engine."
+	fi
+
 	# shellcheck disable=SC2015  # pacman fallback runs if the helper is absent or fails; both are fine
 	have ryoku-pkg-add && ryoku-pkg-add --needed spice-gtk libisoburn || sudo pacman -S --needed --noconfirm spice-gtk libisoburn
 	if have ryoku-pkg-aur-add; then
@@ -717,7 +728,14 @@ cmd_instant() {
 	# the clip helper is always baked; spice-vdagent gives console clipboard.
 	# both are cheap; a user who wants nothing else still gets clipboard.
 	[ -n "$os" ] || { emit '{"phase":"error","message":"instant needs an OS (e.g. debian)"}'; exit 1; }
-	have_iso_builder || { emit '{"phase":"error","message":"no ISO builder — install xorriso: sudo pacman -S libisoburn"}'; exit 1; }
+	if ! have_iso_builder; then
+		if [ -e /etc/NIXOS ]; then
+			emit '{"phase":"error","message":"no ISO builder — xorriso is managed declaratively by the Ryoku NixOS module; rebuild your Musubi configuration"}'
+		else
+			emit '{"phase":"error","message":"no ISO builder — install xorriso/libisoburn"}'
+		fi
+		exit 1
+	fi
 	have qemu-img || { emit '{"phase":"error","message":"qemu-img is missing"}'; exit 1; }
 
 	local entry; entry="$(cloud_catalog | jq -c --arg q "$os" 'first(.[] | select(.os==$q))')"
@@ -1414,6 +1432,51 @@ cmd_mon() {
 	esac
 }
 
+# ---- lg (Looking Glass GPU-passthrough VMs) --------------------------------
+# Strictly the passthrough path: a libvirt domain named ryoku-<name>, displayed
+# through Looking Glass. Delegates to `ryoku-hub gpu vm`, which owns the caps
+# engine, the vfio hook and the tuned domain XML -- quickemu cannot pass a GPU
+# through, so this is a separate engine, never a quickemu conf. `ryovm lg <name>`
+# (a bare name) is the everyday shortcut: start the machine and open Looking
+# Glass. The `ryoport` command is a friendly alias for `ryovm lg`.
+lg_usage() {
+	cat <<'EOF'
+usage:
+  ryovm lg
+  ryovm lg list
+  ryovm lg <name>
+  ryovm lg create --name NAME --iso PATH --os OS [options]
+  ryovm lg start --name NAME
+  ryovm lg stop --name NAME
+  ryovm lg status --name NAME
+  ryovm lg remove --name NAME [--delete-disk true]
+
+Ryoport Looking Glass GPU-passthrough VMs.
+
+A bare VM name starts that machine and opens Looking Glass.
+On NixOS, GPU passthrough must first be enabled declaratively with
+programs.ryoku.gpuPassthrough.enable.
+EOF
+}
+
+cmd_lg() {
+	have ryoku-hub || die "ryoku-hub is not installed (it owns GPU passthrough)"
+	local sub="${1:-list}"
+	case "$sub" in
+		-h|--help|help)
+			lg_usage
+			;;
+		list|create|start|stop|remove|status)
+			shift || true
+			ryoku-hub gpu vm "$sub" "$@"
+			;;
+		*)
+			# a bare token is a machine name: start it and launch Looking Glass.
+			ryoku-hub gpu vm start --name "$sub"
+			;;
+	esac
+}
+
 cmd="${1:-}"; shift || true
 case "$cmd" in
 	caps)     cmd_caps "$@" ;;
@@ -1447,5 +1510,6 @@ case "$cmd" in
 	prefetch) cmd_prefetch "$@" ;;
 	paths)    cmd_paths "$@" ;;
 	mon)      cmd_mon "$@" ;;
-	*) die "usage: ryovm caps|setup|catalog|cloud-catalog|list|get|create|instant|template|templates|spawn|import|launch|console|stop|config|rename|resize|snapshot|seal|restore-seal|usb|portfwd|ssh|delete|folder|icon|prefetch|paths|mon" 2 ;;
+	lg)       cmd_lg "$@" ;;
+	*) die "usage: ryovm caps|setup|catalog|cloud-catalog|list|get|create|instant|template|templates|spawn|import|launch|console|stop|config|rename|resize|snapshot|seal|restore-seal|usb|portfwd|ssh|delete|folder|icon|prefetch|paths|mon|lg" 2 ;;
 esac

@@ -4,6 +4,22 @@ flake_root="${RYOKU_NIX_FLAKE:-/etc/nixos}"
 input="${RYOKU_NIX_INPUT:-ryoku}"
 installed="${RYOKU_NIX_VERSION:-}"
 
+# The packaged CLI normally supplies RYOKU_NIX_VERSION, but the update helper is
+# also a public command and is called directly by other Ryoku surfaces. Fall
+# back to the generation-owned release marker so every caller reports the
+# installed release consistently.
+if [ -z "$installed" ] && [ -r /etc/ryoku-release ]; then
+    installed="$(
+        sed -n '
+            /^VERSION="/ {
+                s/^VERSION="\([^"]*\)"$/\1/
+                p
+                q
+            }
+        ' /etc/ryoku-release
+    )"
+fi
+
 lock="$flake_root/flake.lock"
 
 die() {
@@ -180,39 +196,12 @@ load_source() {
                 fi
             fi
 
-            if git -C "$source_path" rev-parse --git-dir \
-                >/dev/null 2>&1
-            then
-                branch="$(
-                    git -C "$source_path" branch --show-current \
-                        2>/dev/null || true
-                )"
-
-                remote="$(
-                    git -C "$source_path" remote get-url origin \
-                        2>/dev/null || true
-                )"
-
-                slug="$(
-                    github_slug_from_remote "$remote" 2>/dev/null || true
-                )"
-
-                if [ -n "$branch" ]; then
-                    channel="$branch"
-                fi
-
-                if [ -n "$slug" ] && [ -n "$branch" ]; then
-                    source_ref="github:$slug/$branch"
-
-                    remote_version="$(
-                        fetch_github_version "$slug" "$branch" || true
-                    )"
-
-                    if [ -n "$remote_version" ]; then
-                        latest="$remote_version"
-                    fi
-                fi
-            fi
+            # A local path is authoritative for development status.
+            #
+            # It may happen to be a Git checkout with an origin remote, but that
+            # must not replace the checkout's VERSION with origin/main. Local
+            # inputs are intentionally non-updatable; Hub should describe the
+            # exact tree the user is testing.
             ;;
 
         *)

@@ -46,8 +46,8 @@ hl.bind(K(mod .. " + Space"),     hl.dsp.global("ryoku:launcher"))              
 hl.bind(K(mod .. " + K"),         hl.dsp.exec_cmd("pkill -x -f 'qs -c keys' 2>/dev/null || flock -n -o /tmp/ryoku-keys.lock qs -c keys")) -- keybind cheatsheet: toggle (press to open, press again to close)
 hl.bind(K(mod .. " + L"),         hl.dsp.exec_cmd("ryoku-shell lock"))             -- lock the screen
 hl.bind(K(mod .. " + Escape"),    hl.dsp.global("ryoku:quicksettings")) -- quick settings: power, logout, restart, shutdown, wifi
-hl.bind(K(mod .. " + W"),         hl.dsp.global("ryoku:wallpaper-menu"))      -- wallpaper + theme menu (bottom-centre frame blob: scrolling images/live, colour filter, themes)
-hl.bind(K(mod .. " + SHIFT + W"), hl.dsp.exec_cmd("ryoku-shell wallpaper random")) -- random wallpaper, random transition
+hl.bind(K(mod .. " + W"),         hl.dsp.exec_cmd("ryogami wallpaper ui"))     -- ryogami wallpaper picker (full-screen browser: hero cards, colour filters, effects); the frame-blob menu stays on the bar logo
+hl.bind(K(mod .. " + SHIFT + W"), hl.dsp.exec_cmd("ryogami wallpaper random")) -- random wallpaper, random transition
 hl.bind(K(mod .. " + SHIFT + V"), hl.dsp.exec_cmd("ryoku-summon ryovm flock -n -o /tmp/ryovm.lock qs -c ryovm")) -- ryovm: summon to current workspace
 hl.bind(K(mod .. " + V"),         hl.dsp.global("ryoku:clipboard")) -- clipboard (sidebar deep link)
 hl.bind(K(mod .. " + Tab"),       hl.dsp.global("ryoku:overview")) -- workspace overview (expo: live previews, drag windows between workspaces, cycle)
@@ -75,7 +75,7 @@ local ws_helper = (os.getenv("HOME") or "") .. "/.config/hypr/scripts/ryoku-work
 
 hl.bind(K(mod .. " + H"),          hl.dsp.exec_cmd(ws_helper .. " hide"))          -- hide the focused window in the scratchpad (press again on it to bring it back)
 hl.bind(K(mod .. " + ALT + H"),    hl.dsp.workspace.toggle_special("scratch"))     -- show or hide the scratchpad (special workspace)
-hl.bind(K(mod .. " + J"),          hl.dsp.workspace.toggle_special("music"))       -- toggle the music scratchpad (special workspace)
+hl.bind(K(mod .. " + J"),          hl.dsp.exec_cmd("ryotunes"))                    -- open Ryotunes (single-instance: a second press focuses it)
 hl.bind(K(mod .. " + mouse_up"),   hl.dsp.focus({ workspace = "r-1" }))            -- previous workspace
 hl.bind(K(mod .. " + mouse_down"), hl.dsp.focus({ workspace = "r+1" }))            -- next workspace
 for i = 1, 10 do

@@ -19,17 +19,26 @@ import (
 // A packaged install has no checkout, so these report "no channel" and the
 // caller falls back to the pacman view of the [ryoku] repo.
 
-// ryokuChannel: the branch update tracks. The live RYOKU_CHANNEL env wins; then
-// the channel `ryoku track` persisted to environment.d, which the session loads
-// only at the next login -- reading it here keeps `ryoku status`/`update` on the
-// tracked branch on a just-switched box instead of measuring against the default
-// and showing updates that never clear. Every other box follows main.
+// ryokuChannel: the branch update tracks. The channel `ryoku track` persisted
+// to environment.d is the truth; the live RYOKU_CHANNEL env is only what the
+// session captured at login, and after a switch it is stale until the next
+// login: with the env winning, `ryoku track main` left `ryoku status` and the
+// Hub (which runs it under the session env) saying unstable-dev. The env still
+// serves as a one-off override on a box that never tracked, and every other box
+// follows main.
 func ryokuChannel() string {
+	if c := sys.TrackedChannel(); c != "" {
+		return c
+	}
 	if c := strings.TrimSpace(os.Getenv("RYOKU_CHANNEL")); c != "" {
 		return c
 	}
-	if c := sys.TrackedChannel(); c != "" {
-		return c
+	// a packaged box's channel is the [ryoku] repo directory it points at:
+	// stable, testing, or a pinned release tag.
+	if sys.ResolveRepo() == "" {
+		if c := sys.PackagedChannel(); c != "" {
+			return c
+		}
 	}
 	return "main"
 }
@@ -116,17 +125,38 @@ func channelUpdate() error {
 		return err
 	}
 	if after := gitShort(repo, "HEAD"); after != before {
-		progress.logf("Advanced %s -> %s", before, after)
+		progress.logf("Advanced %s -> %s (v%s %s)", before, after, readVersion(repo), ch)
 	} else {
-		progress.logf("Already on the latest %s commit (%s)", ch, before)
+		progress.logf("Already on the latest %s (v%s, %s)", ch, readVersion(repo), before)
 	}
 
 	progress.at("deploy")
 	progress.logf("Deploying the desktop from the checkout")
-	if err := sys.Run(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
+	if err := deployRun(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
 		return fmt.Errorf("deploy from %s failed: %w", repo, err)
 	}
 	return nil
+}
+
+// deployRun renders deploy.sh as a quiet spinner on a real terminal (its
+// build/install chatter is not something a user needs to read), and streams it
+// raw for pipes, logs, and --verbose.
+func deployRun(path string) error {
+	if verboseLog || !sys.StdoutIsTTY() {
+		return sys.Run(path)
+	}
+	return renderQuiet([]string{path})
+}
+
+// readVersion reads the checkout's VERSION file (e.g. 0.50.8-beta.19), the
+// release bump every push carries, so the update names the version, not just the
+// commit. "?" when absent.
+func readVersion(repo string) string {
+	b, err := os.ReadFile(filepath.Join(repo, "VERSION"))
+	if err != nil {
+		return "?"
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // syncChannel advances a clean checkout onto origin/<ch> when that is a lossless

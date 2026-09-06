@@ -102,7 +102,7 @@ Singleton {
             'hl.config({ decoration = { screen_shader = "' + path + '" } })']);
     }
 
-    // Which surface the bar's brand logo opens: "studio" (the Shell Studio) or
+    // Which surface the bar's brand logo opens: "studio" (QS Bar Settings) or
     // "quick" (the Super+Esc quick-settings sidebar). Persisted like the shader,
     // read by the launcher widget and set by the switch in either panel.
     property alias launcherTarget: adapter.launcherTarget

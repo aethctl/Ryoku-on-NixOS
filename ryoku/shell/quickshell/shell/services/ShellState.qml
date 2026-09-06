@@ -95,10 +95,6 @@ Singleton {
     signal focusRestoreRequested()
     function restoreFocus() { root.focusRestoreRequested(); }
 
-    // Which output the wallpaper switcher targets: "" = the focused monitor,
-    // "*" = all screens, else a connector name. The bar's display list sets it
-    // before opening the switcher; the switcher clears it on close.
-    property string wallpaperSwitcherTarget: ""
 
     Variants {
         id: states
@@ -112,7 +108,6 @@ Singleton {
             // becomes an in-process flip:
             property bool launcherOpen: false           // launcher
             property bool overviewOpen: false           // overview (Super+Tab expo)
-            property bool wallpaperSwitcherOpen: false  // wallpaper-switcher
 
             // The frame bar's master reveal for this monitor. Resting policy is
             // revealed: each edge then follows its Config reveal flag, and the

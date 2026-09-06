@@ -4,7 +4,7 @@
 // rather than reimplementing them.
 //
 //	ryoku update            snapshot -> channel pull or pacman -Syu -> deploy -> reload
-//	ryoku rollback [id]     guide restoring a snapshot from the boot menu (or list them)
+//	ryoku rollback          list releases + snapshots; --to <tag> moves back to a release; [id] guides a snapshot restore
 //	ryoku snapshots         list snapper snapshots
 //	ryoku status            version, commits behind the channel, snapshot count
 //	ryoku materialize       lay the base configs into ~/.config (override-safe)
@@ -13,6 +13,7 @@
 //	ryoku deploy            DEV ONLY: build + materialize from a checkout
 //	ryoku recovery          last resort: reset to main + redeploy (overwrites configs)
 //	ryoku doctor            run convergent reconcilers (also runs inside update)
+//	ryoku debug             print a shareable diagnostic bundle for bug reports
 //
 // The concerns live in their own folders: internal/updater (update, status,
 // rollback, channel, run-state, materialize, version), internal/doctor (the
@@ -47,7 +48,17 @@ func main() {
 	case "reset":
 		err = updater.Reset(os.Args[2:])
 	case "rollback":
-		err = updater.Rollback(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package rollback is an Arch feature; use the NixOS generation rollback flow on this system")
+		} else {
+			err = updater.Rollback(os.Args[2:])
+		}
+	case "boot-guard":
+		if sys.NixBackend() {
+			err = fmt.Errorf("the Arch Ryoku boot guard is not used on NixOS; system recovery belongs to NixOS generations")
+		} else {
+			err = updater.BootGuard(os.Args[2:])
+		}
 	case "snapshots":
 		err = updater.Snapshots()
 	case "status":
@@ -59,11 +70,23 @@ func main() {
 	case "deploy":
 		err = updater.Deploy(os.Args[2:])
 	case "recovery":
-		err = cmdRecovery(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package recovery is unavailable on NixOS; recover through the configured flake and NixOS generations")
+		} else {
+			err = cmdRecovery(os.Args[2:])
+		}
 	case "track":
-		err = cmdTrack(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package channels are not used on NixOS; the Ryoku flake input is the update source")
+		} else {
+			err = cmdTrack(os.Args[2:])
+		}
+	case "plugin":
+		err = cmdPlugin(os.Args[2:])
 	case "doctor":
 		err = doctor.Run(os.Args[2:])
+	case "debug":
+		err = doctor.Debug(os.Args[2:])
 	case "keyring":
 		err = keyring.Run(os.Args[2:])
 	case "security-key":
@@ -86,8 +109,9 @@ func usage() {
 	fmt.Print(`Usage: ryoku <command>
 
   update         apply the configured Ryoku update backend and reload
-  track <chan>   switch update channel to main (stable) or unstable-dev (source)
-  rollback [id]  guide restoring a snapshot from the boot menu (no id: list them)
+  track <chan>   switch the configured Ryoku update channel
+  rollback       list available releases and snapshots
+  rollback [id]  guide restoring snapshot <id> from the boot menu
   snapshots      list snapper snapshots
   status         version, commits behind the channel, snapshot count
   version        print the running version (--branch = channel · sha)
@@ -97,9 +121,11 @@ func usage() {
   deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)
   recovery       last resort: reset to main and redeploy (overwrites configs)
   doctor         run convergent reconcilers (idempotent stateful fixes)
+  debug          print a shareable diagnostic bundle for bug reports
   keyring        show or set how the GNOME keyring unlocks at sign-in
   security-key   enroll and wire a FIDO2/U2F security key for PAM
   import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)
+  plugin <cmd>   install/remove/list/validate a shell plugin from git
 `)
 }
 

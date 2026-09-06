@@ -809,9 +809,9 @@ Item {
                 Setting {
                     path: "input.followMouse"
                     ctl: "seg"; asInt: true
-                    opts: [{ "key": 0, "label": "Off" }, { "key": 1, "label": "Normal" }, { "key": 2, "label": "Loose" }]
-                    label: I18n.tr("Follow mouse")
-                    desc: I18n.tr("How focus follows the pointer; Loose keeps typing put.")
+                    opts: [{ "key": 0, "label": I18n.tr("Ignore pointer movement") }, { "key": 1, "label": I18n.tr("Focus under pointer") }, { "key": 2, "label": I18n.tr("Click to focus") }]
+                    label: I18n.tr("Focus behavior")
+                    desc: I18n.tr("Click to focus keeps newly launched and dock-selected apps in front.")
                 }
                 Setting {
                     path: "input.leftHanded"

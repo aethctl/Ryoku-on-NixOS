@@ -46,6 +46,25 @@ The native host manifest (`~/.mozilla/native-messaging-hosts/ryoku_theme.json`
 for Firefox, `~/.config/<browser>/NativeMessagingHosts/ryoku_theme.json` for
 Chromium) is installed by the Ryoku doctor, not by this extension.
 
+## Zen (signed auto-install)
+
+Zen is a branded Firefox release: it refuses unsigned extensions
+(`xpinstall.signatures.required` is honoured only in dev builds), so the theme
+cannot be side-loaded there. A maintainer signs it once with an AMO unlisted key
+and drops the result in place:
+
+```sh
+export WEB_EXT_API_KEY='user:12345:67'   # addons.mozilla.org/developers/addon/api/key/
+export WEB_EXT_API_SECRET='...'
+sh sign.sh                               # writes ryoku-theme.xpi (git-ignored)
+```
+
+`ryoku-desktop` ships that file to `/usr/share/ryoku/browser/ryoku-theme.xpi`,
+and `ryoku doctor` (reconcile_zen) then adds it to Zen's enterprise
+`policies.json` as a normal, removable install. Without the xpi the policy omits
+the theme cleanly, so nothing breaks before it is signed. Chromium needs no
+signing: it loads the unpacked `dist/chromium` directly.
+
 ## Files
 
 - `src/background.js`: native-host bridge, theme apply (Firefox), persist, broadcast.
@@ -53,3 +72,4 @@ Chromium) is installed by the Ryoku doctor, not by this extension.
 - `src/popup.html` / `src/popup.js`: the "Recolor web content" toggle.
 - `manifest.chromium.json` (MV3) / `manifest.firefox.json` (MV2): per-engine manifests.
 - `build.sh`: copies `src/` + the matching manifest into `dist/<engine>/`.
+- `sign.sh`: AMO-signs the Firefox build into `ryoku-theme.xpi` for Zen (see above).

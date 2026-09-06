@@ -7,21 +7,17 @@ import "kit/Routes.js" as Routes
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
-// The Shell Studio: the panel the bar's logo opens. It owns everything the shell
-// exposes at a click, in nine routes down one rail: the bar (position, form,
-// surface, widgets, logo, spaces, pickers), the desk (dock, desktop widgets and
-// the spectrum) and the shell itself (the mid-work switches, and the session).
+// QS Bar Settings: the panel the bar's 力 logo opens. It is about one thing, the
+// bar, in four routes down one rail: Bar (where it sits and how its surface
+// reads), Layout (the three lanes you arrange the widgets in), Widgets (every
+// widget as a row you show, size, colour and tune) and Dock (the app dock beside
+// it). What this panel used to also carry -- logo, spaces, pickers, desktop
+// widgets, the mid-work switches, the session -- already has a home, so it left.
 //
-// It replaces a panel that had three ways to be lost: a breadcrumb, a
-// QUICK/CONFIGURE mode pair, and a landing page whose only job was to list the
-// routes the rail now always shows. It also replaces a translucent plate you
-// could read the wallpaper through with an opaque one, because a settings surface
-// that competes with the picture behind it is not a settings surface.
-//
-// State still reads and writes straight off `root` (the qsbar Theme) and the
-// shell's own services, so persistence is untouched. The chrome is paper and ink
-// from Ryoku.Ui; the bar's retinted colours appear only where they are data (the
-// silhouette, the accent swatches, the marker preview).
+// State reads and writes straight off `root` (the qsbar Theme) and the shell's
+// own services, so persistence is untouched. The chrome is paper and ink from
+// Ryoku.Ui; the bar's retinted colours appear only where they are data (the
+// silhouette, the accent swatches, the lane chips, the marker preview).
 PanelWindow {
     id: cc
     required property var root
@@ -29,15 +25,27 @@ PanelWindow {
     property var tokens: tk
     property string route: "bars"
 
-    // `open(target)` keeps its old contract: a route id shows that route, and an
-    // empty target (or the retired "quick"/"configure" words) shows the first.
+    // `open(target)` keeps its old contract for the bar-logo click and the qsbar
+    // IPC (`ipc call qsbar settings <route>`): a route id shows that route, an
+    // empty/legacy target shows the first, and a retired route id (logo, spaces,
+    // pickers, desktop, system, session, appearance) maps to its nearest new home
+    // so an old caller never lands on nothing.
     function open(target) {
-        var id = (target === undefined || target === "" || target === "quick" || target === "configure")
-            ? "bars" : target;
-        cc.route = Routes.byId(id) ? id : "bars";
+        var raw = (target === undefined || target === null) ? "" : String(target);
+        cc.route = (raw === "" || raw === "quick" || raw === "configure")
+            ? "bars" : Routes.resolve(raw);
         cc.root.controlVisible = true;
     }
     function close() { cc.root.controlVisible = false }
+
+    // A route can ask to open another and carry an argument (Layout's SETTINGS
+    // link lands Widgets on a chosen widget). The pending arg is read once by the
+    // target page on load, then cleared.
+    property var routeArg: null
+    function go(id, arg) {
+        cc.routeArg = (arg === undefined) ? null : arg;
+        cc.route = Routes.byId(id) ? id : "bars";
+    }
 
     readonly property var routeDef: Routes.byId(cc.route)
     function pageUrl() {
@@ -46,7 +54,8 @@ PanelWindow {
     }
 
     // Search index: one entry per route from the registry, plus the controls
-    // worth naming. Accepting an entry navigates to its route.
+    // worth naming, scoped to the four routes. Accepting an entry navigates to
+    // its route.
     readonly property var searchEntries: cc.buildSearchIndex()
     function buildSearchIndex() {
         var out = [];
@@ -60,38 +69,48 @@ PanelWindow {
               searchTags: ["top", "bottom", "edge"], description: "Which edge the bar docks to." },
             { id: "bars.form", name: "Bar form", route: "bars", category: "Bar",
               searchTags: ["full", "fit", "dock", "notch", "islands", "shape"], description: "The shell shape the bar takes." },
+            { id: "bars.surface", name: "Bar surface", route: "bars", category: "Bar",
+              searchTags: ["border", "corners", "frost", "shadow", "depth", "tooltip"], description: "Border, corners, frost, shadow and tooltip border." },
+            { id: "bars.gaps", name: "Bar gaps", route: "bars", category: "Bar",
+              searchTags: ["gap", "margin", "edge", "top", "bottom", "left", "right"], description: "How far the bar stays off each output edge." },
             { id: "bars.accent", name: "Accent colour", route: "bars", category: "Bar",
-              searchTags: ["colour", "color", "seal", "palette"], description: "Which palette slot the bar draws its accent from." },
-            { id: "bars.layout", name: "Edit layout", route: "bars", category: "Bar",
-              searchTags: ["arrange", "reorder", "move", "unlock"], description: "Rearrange the bar's widgets in place." },
+              searchTags: ["colour", "color", "seal", "palette", "slot"], description: "Which palette slot the bar draws its accent from." },
+            { id: "bars.motion", name: "Gap animation", route: "bars", category: "Bar",
+              searchTags: ["motion", "stream", "reactor", "animation"], description: "The stream that flows in the gaps between widgets." },
+            { id: "bars.scale", name: "Bar size", route: "bars", category: "Bar",
+              searchTags: ["scale", "size", "height", "bigger"], description: "Scale the bar without changing display scaling." },
+            { id: "layout.arrange", name: "Arrange widgets", route: "layout", category: "Layout",
+              searchTags: ["move", "reorder", "order", "left", "center", "right", "lane"], description: "Move widgets across the three lanes." },
+            { id: "layout.add", name: "Add a widget", route: "layout", category: "Layout",
+              searchTags: ["add", "hidden", "plugin", "ryostore", "more"], description: "Add a hidden built-in or an installed plugin to the bar." },
+            { id: "layout.unlock", name: "Unlock the bar", route: "layout", category: "Layout",
+              searchTags: ["unlock", "drag", "rearrange", "in place"], description: "Drag the widgets around on the bar itself." },
+            { id: "layout.reset", name: "Reset layout", route: "layout", category: "Layout",
+              searchTags: ["reset", "restore", "default"], description: "Restore the shipped order and visibility." },
             { id: "widgets.visibility", name: "Widget visibility", route: "widgets", category: "Widgets",
               searchTags: ["show", "hide", "on", "off"], description: "Which widgets the bar carries." },
+            { id: "widgets.density", name: "Widget density", route: "widgets", category: "Widgets",
+              searchTags: ["density", "icon", "compact", "full"], description: "Draw a widget icon-only or in full." },
             { id: "widgets.colour", name: "Per-widget colour", route: "widgets", category: "Widgets",
-              searchTags: ["colour", "color", "tint", "fill"], description: "Give one widget its own accent." },
-            { id: "logo.mark", name: "Launcher mark", route: "logo", category: "Logo",
-              searchTags: ["wordmark", "kanji", "glyph", "brand"], description: "The mark in the launcher pill." },
-            { id: "spaces.count", name: "Workspace count", route: "spaces", category: "Spaces",
-              searchTags: ["five", "ten", "active", "number"], description: "How many workspaces the bar shows." },
-            { id: "spaces.marker", name: "Workspace marker", route: "spaces", category: "Spaces",
-              searchTags: ["dots", "numbers", "kanji", "pacman", "aurora"], description: "The marker each workspace wears." },
-            { id: "pickers.style", name: "Picker style", route: "pickers", category: "Pickers",
-              searchTags: ["tanzaku", "hearthstone", "carousel"], description: "The layout the pickers open in." },
+              searchTags: ["colour", "color", "tint", "fill", "frame"], description: "Give one widget its own accent." },
+            { id: "widgets.launcher", name: "Launcher mark", route: "widgets", category: "Widgets",
+              searchTags: ["launcher", "logo", "wordmark", "kanji", "glyph", "brand"], description: "The mark in the launcher pill." },
+            { id: "widgets.workspaces", name: "Workspace marker", route: "widgets", category: "Widgets",
+              searchTags: ["workspace", "spaces", "marker", "dots", "numbers", "kanji", "pacman", "aurora", "count"], description: "How many workspaces the bar shows and the marker each wears." },
+            { id: "widgets.ai", name: "AI usage tools", route: "widgets", category: "Widgets",
+              searchTags: ["ai", "claude", "codex", "opencode", "usage"], description: "Which coding-agent meters the AI pill shows." },
             { id: "dock.enabled", name: "Dock", route: "dock", category: "Dock",
               searchTags: ["dock", "apps", "pinned"], description: "The app dock on the opposite edge." },
+            { id: "dock.edge", name: "Dock edge", route: "dock", category: "Dock",
+              searchTags: ["edge", "top", "bottom", "left", "right", "auto"], description: "Which edge the dock sits on." },
             { id: "dock.autohide", name: "Dock auto-hide", route: "dock", category: "Dock",
               searchTags: ["hide", "peek", "reveal"], description: "Keep the dock as a peek strip until hovered." },
-            { id: "desktop.widgets", name: "Desktop widgets", route: "desktop", category: "Desktop",
-              searchTags: ["clock", "calendar", "music", "stats", "weather", "notes"], description: "What rides the wallpaper." },
-            { id: "desktop.visualiser", name: "Spectrum", route: "desktop", category: "Desktop",
-              searchTags: ["visualiser", "visualizer", "audio", "spectrum"], description: "The audio spectrum on the desktop." },
-            { id: "system.dnd", name: "Do not disturb", route: "system", category: "System",
-              searchTags: ["dnd", "quiet", "notifications"], description: "Hold notifications back." },
-            { id: "system.reload", name: "Reload shell", route: "system", category: "System",
-              searchTags: ["restart", "refresh"], description: "Restart the shell's surfaces." },
-            { id: "session.lock", name: "Lock", route: "session", category: "Session",
-              searchTags: ["lock", "secure"], description: "Lock the session." },
-            { id: "session.shutdown", name: "Shut down", route: "session", category: "Session",
-              searchTags: ["power", "off", "poweroff"], description: "Power the machine off." }
+            { id: "dock.pinned", name: "Pinned apps", route: "dock", category: "Dock",
+              searchTags: ["pin", "pinned", "app", "add", "remove"], description: "The apps the dock always shows." },
+            { id: "community.installed", name: "Community widgets", route: "community", category: "Community",
+              searchTags: ["plugin", "plugins", "installed", "third", "party", "remove", "uninstall"], description: "Bar widgets installed from outside Ryoku." },
+            { id: "community.add", name: "Add from git or Ryostore", route: "community", category: "Community",
+              searchTags: ["git", "url", "ryostore", "store", "install", "add"], description: "Install a community bar widget." }
         ]);
     }
 
@@ -111,7 +130,7 @@ PanelWindow {
         }
     }
     visible: reveal > 0.001
-    onRevealChanged: if (reveal < 0.01) { cc.route = "bars"; searchOverlay.shown = false }
+    onRevealChanged: if (reveal < 0.01) { cc.route = "bars"; cc.routeArg = null; searchOverlay.shown = false }
 
     CcTokens { id: tk; root: cc.root }
 
@@ -205,7 +224,6 @@ PanelWindow {
                 leftMargin: tk.pad; rightMargin: tk.pad
             }
 
-
             CcHead {
                 id: head
                 anchors { top: parent.top; left: parent.left; right: parent.right }
@@ -214,6 +232,7 @@ PanelWindow {
                 title: cc.routeDef ? cc.routeDef.label : ""
                 gloss: cc.routeDef ? cc.routeDef.gloss : ""
                 desc: cc.routeDef ? cc.routeDef.desc : ""
+                index: Routes.indexOf(cc.route)
                 onClosed: cc.close()
             }
 
@@ -233,15 +252,20 @@ PanelWindow {
 
         // A page longer than the plate is cut by the plate's clip, and a row sliced
         // in half reads as a broken layout rather than "there is more below". This
-        // dissolves the cut into the paper. `clip` is rectangular and ignores the
-        // plate's radius, so the fade carries the corner itself or it squares it.
+        // dissolves the cut into the paper, and only while there IS more below:
+        // a page that fits, or one scrolled to its end, shows every row at full
+        // ink. `clip` is rectangular and ignores the plate's radius, so the fade
+        // carries the corner itself or it squares it.
         Rectangle {
             anchors { left: rail.right; right: parent.right; bottom: parent.bottom }
-            height: tk.pad * 2
+            height: tk.pad + tk.tailPad
             bottomRightRadius: tk.corner
+            visible: opacity > 0.001
+            opacity: stage.overflowBelow ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: tk.fade } }
             gradient: Gradient {
                 GradientStop { position: 0.0; color: "transparent" }
-                GradientStop { position: 0.55; color: Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, 0.85) }
+                GradientStop { position: 0.6; color: Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, 0.8) }
                 GradientStop { position: 1.0; color: Tokens.paper }
             }
         }
@@ -276,7 +300,7 @@ PanelWindow {
             }
         }
 
-        // Instrument-panel corner ticks: the studio's frame chrome, the same
+        // Instrument-panel corner ticks: the panel's frame chrome, the same
         // L-bracket vocabulary Decor's art panel and the reference sheet use. It
         // marks the plate as a registered surface. Anchored to the plate and inset
         // past its corner radius, so the frame reframes as the plate resizes on a

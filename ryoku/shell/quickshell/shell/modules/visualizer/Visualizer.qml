@@ -32,6 +32,11 @@ Item {
     readonly property bool placeable: root.placing && root.active
     readonly property bool raised: root.mode === "overlay" || root.placeable
 
+    // Keep the shared spectrum running while this look is being aimed, even under
+    // Power Saver or silence, so it stays visible to place; released when done.
+    onPlaceableChanged: Spectrum.placementHolds += root.placeable ? 1 : -1
+    Component.onDestruction: if (root.placeable) Spectrum.placementHolds -= 1
+
     // cava runs whenever the visualiser is enabled: gating on "audio playing"
     // needs a probe that is either broken or costs a periodic graph dump, while
     // cava is ~1% idle and the render already freezes on silence.

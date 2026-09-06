@@ -260,18 +260,59 @@ func validSlug(slug string) error {
 // escalateGreeter re-execs this binary under pkexec to install the skin as the
 // SDDM greeter (it has to write /usr/share/sddm + /etc). pkexec pops the
 // graphical polkit prompt; cancel -> error.
-func escalateGreeter(slug string) error {
+func greeterApplyInvocation(slug string) (string, []string, error) {
+	// NixOS owns SDDM configuration declaratively. Its mutable visual payload
+	// lives under /var/lib/ryoku and is changed only through the dedicated
+	// privileged helper.
+	//
+	// Prefer the immutable store path exported by the NixOS module. The
+	// /etc/NIXOS + PATH fallback keeps the action working in a session that
+	// predates the generation which introduced that environment variable.
+	if helper := strings.TrimSpace(os.Getenv("RYOKU_SDDM_THEME_APPLY")); helper != "" {
+		if !filepath.IsAbs(helper) {
+			return "", nil, fmt.Errorf(
+				"RYOKU_SDDM_THEME_APPLY must be an absolute path",
+			)
+		}
+		return helper, []string{slug}, nil
+	}
+
+	if fileExists("/etc/NIXOS") {
+		helper, err := exec.LookPath("ryoku-sddm-theme-apply")
+		if err != nil {
+			return "", nil, fmt.Errorf(
+				"NixOS SDDM theme helper is unavailable: %w",
+				err,
+			)
+		}
+		return helper, []string{slug}, nil
+	}
+
+	// Arch keeps the original Hub-owned privileged activation path.
 	self, err := os.Executable()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return self, []string{"lock", "apply-greeter", slug}, nil
+}
+
+func escalateGreeter(slug string) error {
+	program, args, err := greeterApplyInvocation(slug)
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("pkexec", self, "lock", "apply-greeter", slug)
+
+	pkexecArgs := append([]string{program}, args...)
+	cmd := exec.Command("pkexec", pkexecArgs...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
+
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("sign-in screen needs admin authentication: %w", err)
 	}
+
 	return nil
 }
 

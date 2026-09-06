@@ -9,6 +9,7 @@ import "../../shared/providers" as SharedProviders
 import "../../shared/lib/lifecycle.js" as Lifecycle
 import "." as HeroVariant
 import "../../../../services/lib/screens.js" as Screens
+import Ryoku.Ui.Singletons as Ui
 
 Scope {
     id: root
@@ -69,7 +70,8 @@ Scope {
 
     function scaleForScreen(screen) {
         return Math.min(1.2, (screen ? screen.height / 1080 : 1))
-            * Math.max(0.8, Math.min(1.4, Config.fontScale));
+            * Math.max(0.8, Math.min(1.4, Config.fontScale))
+            * Ui.Tokens.uiScaleFor(screen && screen.name ? String(screen.name) : "");
     }
 
     function budgetForScreen(screen) {

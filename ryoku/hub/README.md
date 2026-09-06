@@ -28,6 +28,10 @@ changing a page's look.
     cursor themes and X11 keyboard layouts for the pickers.
   - `ryoku-hub config get|set <key> [value]` persists hub UI state as TOML at
     `~/.config/ryoku/hub.toml` (last open section, update-check cadence).
+  - `ryoku-hub reload-cover import <path>` copies a supported local image,
+    animation, or video into managed user data and prints its descriptor;
+    `ryoku-hub reload-cover prune [<managed-path>]` removes every managed
+    reload-cover asset, or all but the validated managed path when given.
   - `ryoku-hub lock list|set|apply-greeter <slug>` manages installed qylock
     themes: `list` is the local inventory, `set` writes the in-session
     preference and applies the SDDM greeter, and `apply-greeter` is the

@@ -654,6 +654,44 @@ func removeFastfetchLogo() (string, error) {
 	return strings.Join(removed, "\n"), nil
 }
 
+// applyFastfetchEmblem installs src as the readout's emblem the way the Hub's
+// import does: copied to ryoku-logo.<ext> in the fastfetch dir, a user-owned
+// name no package ships, and config.jsonc repointed at it. It returns the
+// stored source. A rice used to copy its emblem over the SHIPPED
+// fastfetch-emblem.png instead, which `ryoku materialize` re-lays on every
+// update, so the rice's logo reset to the brand mark each time (docs/updates.md:
+// never write into a shipped path).
+func applyFastfetchEmblem(src string) (string, error) {
+	p, err := importFastfetchLogo(src)
+	if err != nil {
+		return "", err
+	}
+	m, err := loadFastfetch()
+	if err != nil {
+		m = defaultFastfetchModel()
+	}
+	m.Logo.Kind, m.Logo.Source, m.Logo.Dither = "image", p, false
+	b, err := buildFastfetch(m)
+	if err != nil {
+		return "", err
+	}
+	return p, atomicWrite(fastfetchConfigPath(), b, 0o644)
+}
+
+// fastfetchOnShippedEmblem reports whether the readout draws the package's own
+// fastfetch-emblem.png (or nothing Ryoku wrote): the state a rice emblem lands in
+// after materialize clobbered it, and the only state `rice emblem` repairs.
+func fastfetchOnShippedEmblem() bool {
+	m, err := loadFastfetch()
+	if err != nil {
+		return true
+	}
+	if m.Logo.Kind != "image" || m.Logo.Source == "" {
+		return true
+	}
+	return filepath.Base(ffExpandTilde(m.Logo.Source)) == "fastfetch-emblem.png"
+}
+
 func ffRepointAfterRemoval(dir string, removed []string) {
 	m, err := loadFastfetch()
 	if err != nil {

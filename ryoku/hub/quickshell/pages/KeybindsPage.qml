@@ -1481,6 +1481,8 @@ Item {
         z: 150
         onClicked: pg.closeAppPicker()
 
+        // Ryoku.Ui's AppPicker (the one this page resolves; the hub root's
+        // AppPicker.qml is not on this directory's import path) emits picked(cmd).
         AppPicker {
             id: appPicker
             anchors.centerIn: parent

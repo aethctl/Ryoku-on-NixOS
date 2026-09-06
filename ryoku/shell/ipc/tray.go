@@ -36,7 +36,7 @@ const (
 	menuIface        = "com.canonical.dbusmenu"
 	propsIface       = "org.freedesktop.DBus.Properties"
 	trayMenuDebounce = 100 * time.Millisecond // matches the reference menu-refresh debounce
-	trayIconTarget   = 24                      // preferred pixmap size, in pixels
+	trayIconTarget   = 24                     // preferred pixmap size, in pixels
 )
 
 var errUnknownProp = dbus.NewError("org.freedesktop.DBus.Error.UnknownProperty", nil)

@@ -9,3 +9,4 @@ singleton DecorStore DecorStore.qml
 singleton Ryodecors Ryodecors.qml
 singleton ProfileStore ProfileStore.qml
 singleton Spawn Spawn.qml
+singleton Version Version.qml

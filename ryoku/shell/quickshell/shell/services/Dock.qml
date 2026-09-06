@@ -25,6 +25,15 @@ Singleton {
     // binding does not track Quickshell's model).
     property int _rev: 0
     property int _primeTries: 0
+    // Icon resolution is not reactive on its own: iconFor() reads the desktop DB and
+    // the icon theme through plain function calls, so a binding that resolves before
+    // the desktop DB is scanned or the icon-theme cache is warm -- a fresh boot, or
+    // right after an app updates its .desktop/icon -- sticks on the generic
+    // application-x-executable fallback until a shell reload (the "zen icon keeps
+    // resetting to a gear" break). Bump iconRev to force every icon binding to
+    // re-resolve: on a desktop-DB change and via a bounded warm-up poll after load.
+    property int iconRev: 0
+    property int _iconTries: 0
     // True while some toplevel is in the list without its class yet (a freshly
     // opened window, before its ipc object is populated).
     function _needsPrime() {
@@ -81,6 +90,29 @@ Singleton {
             required property var modelData
             target: modelData
             function onLastIpcObjectChanged() { root._rev++; }
+        }
+    }
+
+    // A desktop-DB change -- an app installed, updated, or removed -- can add or fix
+    // the icon a pin resolves to; re-resolve every dock icon when it fires so a pin
+    // recovers its real icon live instead of waiting for a reload.
+    Connections {
+        target: DesktopEntries
+        function onApplicationsChanged() { root.iconRev++; }
+    }
+    // The icon-theme cache warms a little after the shell starts and nothing signals
+    // it, so an icon can be unresolvable at first paint and findable a moment later.
+    // Re-resolve a bounded handful of times over the first few seconds after load, so
+    // a pin that came up on the generic fallback heals itself without a reload.
+    Timer {
+        id: iconWarmup
+        interval: 400
+        repeat: true
+        running: true
+        onTriggered: {
+            root.iconRev++;
+            if (++root._iconTries >= 12)
+                iconWarmup.stop();
         }
     }
 
@@ -210,6 +242,7 @@ Singleton {
 
     // Desktop-entry icon, then class-as-icon-name; "" so callers can fall back.
     function iconFor(className) {
+        void root.iconRev;
         const desktop = DesktopEntries.heuristicLookup(className);
         const byEntry = (desktop && desktop.icon) ? Quickshell.iconPath(desktop.icon, true) : "";
         return byEntry !== "" ? byEntry : Quickshell.iconPath(String(className).toLowerCase(), true);

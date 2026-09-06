@@ -100,49 +100,45 @@ func componentDisabled(name string) bool {
 }
 
 type daemon struct {
-	mu             sync.Mutex
-	sup            map[string]bool      // components that already have a supervisor goroutine
-	proc           map[string]*exec.Cmd // current live process per component
-	wallMu         sync.Mutex           // serializes the wallpaper hot path (pick + apply)
-	paintSig       chan struct{}        // coalescing wake for the palette/border worker
-	depthSig       chan struct{}        // coalescing wake for the depth-cutout worker
-	depthForce     atomic.Bool          // a pending forced regenerate (detail change / refresh)
-	depthGen       atomic.Bool          // a pending enable: reuse a saved cutout, else generate
-	depthBusy      atomic.Bool          // a cutout generation is in flight (for status)
-	ledsSig        chan struct{}        // coalescing wake for the OpenRGB worker
-	widgetSig      chan struct{}        // coalescing wake for the widget-occupancy gate
-	liveSig        chan struct{}        // coalescing wake for the live-wallpaper fullscreen gate
-	quit           chan struct{}
-	closed         bool
-	ln             net.Listener
-	lock           *os.File // exclusive single-daemon guard, held until exit
-	failMu         sync.Mutex
-	lastFail       map[string]string        // component -> last line it died with
-	voiceMu        sync.Mutex               // serializes voice (Super+`) toggles
-	voiceOn        bool                     // dictation active; guarded by voiceMu
-	prompter       *prompter                // GNOME keyring system prompter (nil when unavailable)
-	monMu          sync.Mutex               // guards activeMon
-	activeMon      string                   // focused monitor, kept warm by watchHyprland
-	monFallback    func() string            // monitor source when the cache is cold; tests swap it
-	gateMu         sync.Mutex               // guards gateWant / gateWake
-	gateWant       map[string]bool          // component -> may run now (absent = yes)
-	gateWake       map[string]chan struct{} // wakes a parked supervisor when its gate opens
-	parkMu         sync.Mutex               // guards hiddenSince
-	hiddenSince    map[string]time.Time     // parkable palette -> when it last went hidden (absent = shown)
-	topicsMu       sync.Mutex               // guards topics
-	topics         map[string]*stateTopic   // subsystem name -> pub/sub state topic
-	callsMu        sync.Mutex               // guards calls
-	calls          map[string]callFunc      // "topic.method" -> control handler
-	clip           *clipState               // clipboard history state (nil until started)
-	tray           *trayState               // system tray watcher/host state (nil until started)
-	wall           *wallSurface             // in-shell desktop wallpaper (nil until started)
-	lastTransition int                      // previous wallpaper transition preset index (-1 = none); guarded by wallMu
-	liveMu         sync.Mutex               // guards live
-	live           *liveManager             // per-output ryoku-livewall players (nil until first use)
-	polkit         *polkitAgent             // PolicyKit1 authentication agent (nil until started)
-	settings       *settingsStore           // shell.json store (nil until startSettings); theme apply patches through it
-	pp             *powerProfilesState      // power-profiles-daemon bus state; nil until startPowerProfiles
-	keypress       *keypressManager         // evdev key stream; opens devices only while the overlay is enabled
+	mu          sync.Mutex
+	sup         map[string]bool      // components that already have a supervisor goroutine
+	proc        map[string]*exec.Cmd // current live process per component
+	paintSig    chan struct{}        // coalescing wake for the palette/border worker
+	depthSig    chan struct{}        // coalescing wake for the depth-cutout worker
+	depthForce  atomic.Bool          // a pending forced regenerate (detail change / refresh)
+	depthGen    atomic.Bool          // a pending enable: reuse a saved cutout, else generate
+	depthBusy   atomic.Bool          // a cutout generation is in flight (for status)
+	ledsSig     chan struct{}        // coalescing wake for the OpenRGB worker
+	widgetSig   chan struct{}        // coalescing wake for the widget-occupancy gate
+	quit        chan struct{}
+	closed      bool
+	ln          net.Listener
+	lock        *os.File // exclusive single-daemon guard, held until exit
+	failMu      sync.Mutex
+	lastFail    map[string]string        // component -> last line it died with
+	voiceMu     sync.Mutex               // serializes voice (Super+`) toggles
+	voiceOn     bool                     // dictation active; guarded by voiceMu
+	prompter    *prompter                // GNOME keyring system prompter (nil when unavailable)
+	monMu       sync.Mutex               // guards activeMon
+	activeMon   string                   // focused monitor, kept warm by watchHyprland
+	monFallback func() string            // monitor source when the cache is cold; tests swap it
+	gateMu      sync.Mutex               // guards gateWant / gateWake
+	gateWant    map[string]bool          // component -> may run now (absent = yes)
+	gateWake    map[string]chan struct{} // wakes a parked supervisor when its gate opens
+	parkMu      sync.Mutex               // guards hiddenSince
+	hiddenSince map[string]time.Time     // parkable palette -> when it last went hidden (absent = shown)
+	topicsMu    sync.Mutex               // guards topics
+	topics      map[string]*stateTopic   // subsystem name -> pub/sub state topic
+	callsMu     sync.Mutex               // guards calls
+	calls       map[string]callFunc      // "topic.method" -> control handler
+	clip        *clipState               // clipboard history state (nil until started)
+	tray        *trayState               // system tray watcher/host state (nil until started)
+	ryoWallMu   sync.Mutex               // guards ryoWall
+	ryoWall     ryogamiFrame             // last wallpaper frame seen from ryogami; feeds the depth worker
+	polkit      *polkitAgent             // PolicyKit1 authentication agent (nil until started)
+	settings    *settingsStore           // shell.json store (nil until startSettings); theme apply patches through it
+	pp          *powerProfilesState      // power-profiles-daemon bus state; nil until startPowerProfiles
+	keypress    *keypressManager         // evdev key stream; opens devices only while the overlay is enabled
 }
 
 func runDaemon() error {
@@ -192,19 +188,17 @@ func runDaemon() error {
 	}
 
 	d := &daemon{
-		sup:            map[string]bool{},
-		proc:           map[string]*exec.Cmd{},
-		paintSig:       make(chan struct{}, 1),
-		depthSig:       make(chan struct{}, 1),
-		ledsSig:        make(chan struct{}, 1),
-		widgetSig:      make(chan struct{}, 1),
-		liveSig:        make(chan struct{}, 1),
-		quit:           make(chan struct{}),
-		gateWant:       map[string]bool{},
-		gateWake:       map[string]chan struct{}{},
-		hiddenSince:    map[string]time.Time{},
-		lastFail:       map[string]string{},
-		lastTransition: -1,
+		sup:         map[string]bool{},
+		proc:        map[string]*exec.Cmd{},
+		paintSig:    make(chan struct{}, 1),
+		depthSig:    make(chan struct{}, 1),
+		ledsSig:     make(chan struct{}, 1),
+		widgetSig:   make(chan struct{}, 1),
+		quit:        make(chan struct{}),
+		gateWant:    map[string]bool{},
+		gateWake:    map[string]chan struct{}{},
+		hiddenSince: map[string]time.Time{},
+		lastFail:    map[string]string{},
 	}
 	d.ln = ln
 	d.lock = lock // held for the process lifetime: closing it would free the guard
@@ -218,6 +212,7 @@ func runDaemon() error {
 
 	setupQmlImportPath()
 
+	go d.runtimeJanitor()
 	d.bootstrap()
 
 	for {
@@ -344,10 +339,10 @@ func (d *daemon) bootstrap() {
 	d.prompter = startKeyringPrompter()
 	d.startSession()
 	d.startPolkit()
-	d.startWallpaper()
 	d.startUpdates()
 	go d.paintWorker()
 	go d.depthWorker()
+	go d.watchRyogami()
 	go d.watchMatugenKnobs()
 	go d.ledsWorker()
 	go d.watchHyprland()
@@ -356,13 +351,7 @@ func (d *daemon) bootstrap() {
 	go d.watchAutoPowerSaver()
 	go d.widgetGateWorker()
 	go d.idlePark()
-	go func() {
-		d.wallMu.Lock()
-		defer d.wallMu.Unlock()
-		d.wallInit()
-	}()
 	go d.startComponents()
-	go d.liveGateWorker()
 }
 
 // holdDaemonLock takes the exclusive single-daemon lock, retrying briefly: a
@@ -669,9 +658,17 @@ func (d *daemon) supervise(name string) {
 		if parkable(name) {
 			d.markHidden(name)
 		}
+		exited := make(chan struct{})
+		if name == "shell" {
+			// A shell that stays up past its crash window is the desktop coming
+			// back after a boot; record it for the boot guard (ryoku boot-guard),
+			// which reverts an update whose next boots never get here.
+			go recordBootOK(exited)
+		}
 
 		start := time.Now()
 		_ = cmd.Wait()
+		close(exited)
 		if name == "shell" && d.keypress != nil {
 			d.keypress.configure(false, d.keypress.currentMode())
 		}
@@ -910,12 +907,20 @@ func (d *daemon) dispatch(line string) string {
 			routeCmd = line
 		}
 	case "bar":
+		// The data-layout verbs (list/catalog/move/show/hide/set/position/form/
+		// defaults/settings) take a verb first; the reveal grammar takes an edge
+		// first, so the first word disambiguates the two without collision.
+		if len(args) >= 1 && barCLIVerbs[args[0]] {
+			return d.barCLI(args)
+		}
 		// bar <edge|all> <toggle|reveal|hide> drives the bar reveal state.
 		edge, action, ok := parseBarEdge(args)
 		if !ok {
-			return "err bar: expected <top|bottom|left|right|all> <toggle|reveal|hide>"
+			return "err bar: expected <top|bottom|left|right|all> <toggle|reveal|hide>, or a widget verb (list|catalog|move|show|hide|set|position|form|defaults|settings)"
 		}
 		return d.barToggle(edge, action)
+	case "dock":
+		return d.dockCLI(args)
 	}
 	if config, target, fn, ok := route(routeCmd); ok {
 		if componentDisabled(config) {
@@ -987,64 +992,27 @@ func (d *daemon) dispatch(line string) string {
 			return d.hub(args[0], args[1])
 		}
 		return "err hub: expected open [section] or close"
-	case "wallpaper-switcher":
-		// spawn the picker as a one-shot modal (like ryoshot or the hub), not a
-		// resident surface: it shows on launch and quits on close, so it holds no
-		// memory while idle. flock keeps a second press from stacking a duplicate;
-		// the goroutine reaps qs when it exits.
-		go func() {
-			_ = exec.Command("flock", append([]string{"-n", "-o", "/tmp/ryoku-wallpaper.lock", "qs"}, qsSelect("wallpaper")...)...).Run()
-		}()
-		return "ok"
 	case "depth":
 		// refresh forces a regenerate for the current wallpaper (model change);
 		// the worker no-ops when depth is off for it or the engine is absent.
 		// status reports generation progress and the current cutout to the UI.
 		// set-enabled records the per-wall opt-in (daemon-owned, persisted).
+		// clear deletes every saved cutout and the reuse index, freeing the space.
 		if len(args) >= 1 && args[0] == "refresh" {
 			d.depthForce.Store(true)
 			d.scheduleDepth()
 			return "ok"
 		}
 		if len(args) >= 1 && args[0] == "status" {
-			return depthStatusJSON(d.depthBusy.Load())
+			return d.depthStatusJSON()
 		}
 		if len(args) >= 2 && args[0] == "set-enabled" {
 			d.depthSetEnabled(args[1] == "1" || args[1] == "true")
 			return "ok"
 		}
-		return "ok"
-	case "wallpaper":
-		// Grammar: wallpaper <mode> [--screen <name>] [path]. The path (set) may
-		// contain spaces, so it is recovered verbatim from the raw line after the
-		// flag is stripped; a connector name never contains spaces.
-		rest := ""
-		if p := strings.SplitN(line, " ", 2); len(p) == 2 {
-			rest = p[1]
-		}
-		screen := ""
-		if i := strings.Index(rest, "--screen "); i >= 0 {
-			after := rest[i+len("--screen "):]
-			end := strings.IndexByte(after, ' ')
-			if end < 0 {
-				end = len(after)
-			}
-			screen = strings.TrimSpace(after[:end])
-			rest = strings.TrimSpace(rest[:i] + " " + after[end:])
-		}
-		mode := "next"
-		if f := strings.Fields(rest); len(f) > 0 {
-			mode = f[0]
-		}
-		arg := ""
-		if mode == "set" {
-			arg = strings.TrimSpace(strings.TrimPrefix(rest, "set"))
-		}
-		d.wallMu.Lock()
-		err := d.wallpaperApply(mode, arg, screen)
-		d.wallMu.Unlock()
-		if err != nil {
-			return "err wallpaper: " + err.Error()
+		if len(args) >= 1 && args[0] == "clear" {
+			d.depthClearCache()
+			return "ok"
 		}
 		return "ok"
 	case "theme":

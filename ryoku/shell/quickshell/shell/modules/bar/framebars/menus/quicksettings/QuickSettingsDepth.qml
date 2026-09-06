@@ -22,6 +22,7 @@ Item {
     readonly property bool ready: DepthCfg.DepthBackend.available
     readonly property bool installing: DepthCfg.DepthBackend.installing
     readonly property bool hasFine: DepthCfg.DepthBackend.hasModel("birefnet-general-lite")
+    readonly property bool removing: DepthCfg.DepthBackend.removing
 
     // Busy is held for a beat after a recut (minBusy) so the lock engages
     // instantly and never flickers between poll ticks. busyStuck releases the
@@ -60,6 +61,22 @@ Item {
         DepthCfg.Config.setQuality(root.draftDetail);
         poll.restart();
     }
+    function rerender() {
+        minBusy.restart();
+        root.busyStuck = false;
+        root.statusBusy = true;
+        DepthCfg.Config.refresh();
+        poll.restart();
+    }
+    // Remove the heavy model; fall back to the standard tier if it was in use so
+    // depth keeps working with the small model instead of a stale birefnet cut.
+    function removeFine() {
+        if (DepthCfg.Config.qualityLevel() === "fine") {
+            root.draftDetail = "standard";
+            DepthCfg.Config.setQuality("standard");
+        }
+        DepthCfg.DepthBackend.remove("birefnet-general-lite");
+    }
     function editWidgets() {
         const st = ShellState.forActive();
         if (st)
@@ -87,8 +104,11 @@ Item {
                 } catch (e) {}
                 const wasBusy = root.statusBusy;
                 root.statusBusy = d.busy === true;
-                if (!root.statusBusy)
+                if (!root.statusBusy) {
                     root.busyStuck = false;
+                    if (wasBusy)
+                        minBusy.stop();
+                }
                 const p = d.path || "";
                 if (p !== root.cutoutPath) {
                     root.cutoutPath = p;
@@ -383,6 +403,14 @@ Item {
                         onActivated: if (!root.installing)
                             DepthCfg.DepthBackend.install("birefnet-general-lite")
                     }
+                    ActBtn {
+                        visible: root.hasFine
+                        kind: "outlined"
+                        icon: "delete"
+                        label: root.removing ? qsTr("Removing Fine model…") : qsTr("Remove the Fine model")
+                        enabledAct: !root.removing && !root.installing
+                        onAct: root.removeFine()
+                    }
 
                     Menus.QsSection { width: parent.width; label: qsTr("Look") }
                     Field {
@@ -419,6 +447,21 @@ Item {
                         icon: "folder_open"
                         label: qsTr("Open cutouts folder")
                         onAct: DepthCfg.DepthBackend.openFolder()
+                    }
+
+                    Menus.QsSection { width: parent.width; label: qsTr("Cutout") }
+                    ActBtn {
+                        visible: DepthCfg.Config.enabled
+                        kind: "filled"
+                        icon: "cached"
+                        label: qsTr("Re-render the cutout")
+                        onAct: root.rerender()
+                    }
+                    ActBtn {
+                        kind: "ghost"
+                        icon: "delete_sweep"
+                        label: qsTr("Clear cached cutouts")
+                        onAct: DepthCfg.Config.clearCache()
                     }
                 }
             }

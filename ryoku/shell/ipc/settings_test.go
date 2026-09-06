@@ -86,8 +86,6 @@ func TestPatchClampsFloatStrengths(t *testing.T) {
 		path, val string
 		want      float64
 	}{
-		{"wallpaper.theme_filter_strength", "5", 1},
-		{"wallpaper.theme_filter_strength", "-3", 0},
 		{"theme.matugen.contrast", "9", 1},
 		{"theme.matugen.contrast", "-9", -1},
 		{"theme.attributes.window_opacity", "2", 1},

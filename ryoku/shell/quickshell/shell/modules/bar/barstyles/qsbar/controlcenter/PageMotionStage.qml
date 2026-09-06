@@ -22,6 +22,8 @@ Item {
     readonly property var item: ld.item
     // 0 until a page reports a height; the plate falls back to the rail's.
     readonly property real pageHeight: (ld.item && ld.item.implicitHeight > 0) ? ld.item.implicitHeight : 0
+    // true while the page has rows below the plate's edge; drives the bottom fade.
+    readonly property bool overflowBelow: (ld.item && ld.item.scrollRemaining !== undefined) ? ld.item.scrollRemaining > 2 : false
 
     onPageUrlChanged: seq.restart()
 

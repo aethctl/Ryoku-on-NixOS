@@ -15,6 +15,15 @@ const (
 	vaultFenceEnd   = "<!-- rashin:generated:end -->"
 )
 
+// The desktop map's "Bar and dock" section is fenced with its own markers
+// inside the generated body, so the bar guide can be located and regenerated on
+// its own. They never collide with the outer markers: the " bar" suffix sits
+// before the closing "-->", so the outer begin/end are not substrings of these.
+const (
+	vaultBarFenceBegin = "<!-- rashin:generated:begin bar -->"
+	vaultBarFenceEnd   = "<!-- rashin:generated:end bar -->"
+)
+
 // generatedFiles are the vault docs Reindex owns end to end. Everything else in
 // the vault belongs to the user or an agent.
 var generatedFiles = map[string]bool{
@@ -32,7 +41,7 @@ var generatedFiles = map[string]bool{
 const AgentsTemplate = "# Ryoku system vault\n" +
 	"\n" +
 	"This is the shared knowledge base for every coding agent on this machine\n" +
-	"(Arch Linux, Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
+	"(Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
 	"the filesystem or guessing where things live.\n" +
 	"\n" +
 	"## The one rule\n" +
@@ -40,6 +49,10 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"Read `desktop.md` before searching the filesystem. It maps every subsystem to\n" +
 	"its config path, the binary that owns it, and how to reload it. Guessing paths\n" +
 	"wastes tokens the map already spent.\n" +
+	"\n" +
+	"To change the desktop, use the `ryoku` skill (linked into your skills dir;\n" +
+	"`desktop.md` names its path): commands, never edits to shipped files. A new\n" +
+	"bar widget is a plugin, per the skill's `plugins.md`.\n" +
 	"\n" +
 	"## What is here\n" +
 	"\n" +

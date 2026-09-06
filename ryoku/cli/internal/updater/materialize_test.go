@@ -205,12 +205,17 @@ func TestMaterializeUserEditsOverlay(t *testing.T) {
 
 	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v1\n")
 	writeFile(t, filepath.Join(base, "hypr/modules/window_rules.lua"), "-- base rules\n")
-	writeFile(t, filepath.Join(base, "hypr/user.lua"), "-- seed header\n") // live-owned seed
+	writeFile(t, filepath.Join(base, "hypr/user.lua"), "-- seed header\n")                    // live-owned seed
+	writeFile(t, filepath.Join(base, "fastfetch/config.jsonc"), "\"source\": \"ryoku\"\n")    // hub-edited seed
+	writeFile(t, filepath.Join(dest, "fastfetch/config.jsonc"), "\"source\": \"my-remix\"\n") // the hub edited it in place
 
 	edits := sys.UserEditsDir()
 	writeFile(t, filepath.Join(edits, "hypr/modules/binds.lua"), "-- my binds\n") // fork
 	writeFile(t, filepath.Join(edits, "hypr/settings.lua"), "-- my settings\n")   // addition (a Hub file)
 	writeFile(t, filepath.Join(edits, "hypr/user.lua"), "-- overlay junk\n")      // live-owned: must be ignored
+	// the retired adopt step froze a fastfetch snapshot into the overlay; laying
+	// it back was "updates keep resetting my fastfetch".
+	writeFile(t, filepath.Join(edits, "fastfetch/config.jsonc"), "\"source\": \"frozen-2025\"\n")
 
 	if err := Materialize(); err != nil {
 		t.Fatalf("materialize: %v", err)
@@ -222,6 +227,9 @@ func TestMaterializeUserEditsOverlay(t *testing.T) {
 	// stale overlay copy cannot wipe the user's in-place edits (if it had clobbered,
 	// the file would read "overlay junk", which does not contain "seed header").
 	wantFile(t, filepath.Join(dest, "hypr/user.lua"), "seed header")
+	// the hub's in-place readout edit survives: the frozen overlay snapshot is
+	// never laid over a live-edited seed.
+	wantFile(t, filepath.Join(dest, "fastfetch/config.jsonc"), "my-remix")
 
 	// a later base changes the forked file: the fork still wins (the user owns it).
 	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v2 (a fix)\n")
@@ -359,8 +367,10 @@ func TestMaterializeDeliversChromiumFlags(t *testing.T) {
 		t.Fatalf("chromium-flags.conf not routed to ~/.config: got %q err %v", b, err)
 	}
 
-	// managed, not a seed: a later `ryoku update` re-lays it, restoring a drifted
-	// copy to the shipped flags.
+	// managed, not a seed: a later `ryoku update` re-lays it. A copy an older
+	// deploy left (no manifest hash) is restored to the shipped flags; a copy
+	// the user edited by hand is kept as a fork instead.
+	os.Remove(materializeStatePath())
 	writeFile(t, routed, "--password-store=basic\n")
 	if err := Materialize(); err != nil {
 		t.Fatalf("re-materialize: %v", err)
@@ -368,6 +378,12 @@ func TestMaterializeDeliversChromiumFlags(t *testing.T) {
 	if b, err := os.ReadFile(routed); err != nil || string(b) != string(src) {
 		t.Fatalf("update did not re-deliver chromium-flags.conf: got %q err %v", b, err)
 	}
+	writeFile(t, routed, string(src)+"--my-flag\n")
+	if err := Materialize(); err != nil {
+		t.Fatalf("re-materialize after edit: %v", err)
+	}
+	wantFile(t, routed, "--my-flag")
+	wantFile(t, filepath.Join(sys.UserEditsDir(), "chromium-flags.conf"), "--my-flag")
 }
 
 func TestMaterializeSkipsDirectorySymlinks(t *testing.T) {
@@ -391,5 +407,61 @@ func TestMaterializeSkipsDirectorySymlinks(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(dest, "quickshell/lockscreen/imports/QtGraphicalEffects/private")); !os.IsNotExist(err) {
 		t.Fatalf("directory symlink was materialized: %v", err)
+	}
+}
+
+func TestMaterializeKeepsHandEditsAsForks(t *testing.T) {
+	base, dest := t.TempDir(), t.TempDir()
+	t.Setenv("RYOKU_CONFIG_BASE", base)
+	t.Setenv("XDG_CONFIG_HOME", dest)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+
+	writeFile(t, filepath.Join(base, "hypr/modules/window_rules.lua"), "-- base rules v1\n")
+	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v1\n")
+	writeFile(t, filepath.Join(base, "quickshell/shell/shell.qml"), "// shell v1\n")
+	if err := Materialize(); err != nil {
+		t.Fatalf("first materialize: %v", err)
+	}
+
+	// the user edits a shipped file in place; the shell tree is Ryoku's
+	writeFile(t, filepath.Join(dest, "hypr/modules/window_rules.lua"), "-- base rules v1\n-- my rule\n")
+	writeFile(t, filepath.Join(dest, "quickshell/shell/shell.qml"), "// hacked\n")
+	writeFile(t, filepath.Join(base, "hypr/modules/window_rules.lua"), "-- base rules v2\n")
+	writeFile(t, filepath.Join(base, "hypr/modules/binds.lua"), "-- base binds v2\n")
+	if err := Materialize(); err != nil {
+		t.Fatalf("second materialize: %v", err)
+	}
+	wantFile(t, filepath.Join(dest, "hypr/modules/window_rules.lua"), "my rule")
+	wantFile(t, filepath.Join(sys.UserEditsDir(), "hypr/modules/window_rules.lua"), "my rule")
+	wantFile(t, filepath.Join(dest, "hypr/modules/binds.lua"), "base binds v2")
+	wantFile(t, filepath.Join(dest, "quickshell/shell/shell.qml"), "shell v1")
+	if _, err := os.Stat(filepath.Join(sys.UserEditsDir(), "quickshell/shell/shell.qml")); !os.IsNotExist(err) {
+		t.Fatal("the shell tree must never be forked")
+	}
+
+	// dropping the fork takes the shipped version again
+	if err := os.Remove(filepath.Join(sys.UserEditsDir(), "hypr/modules/window_rules.lua")); err != nil {
+		t.Fatal(err)
+	}
+	if err := Materialize(); err != nil {
+		t.Fatalf("third materialize: %v", err)
+	}
+	wantFile(t, filepath.Join(dest, "hypr/modules/window_rules.lua"), "base rules v2")
+}
+
+func TestManifestWithoutHashesStillPrunes(t *testing.T) {
+	state := filepath.Join(t.TempDir(), "manifest")
+	os.WriteFile(state, []byte("a/b.lua\nc.conf\n"), 0o644)
+	if rels := readManifest(state); len(rels) != 2 || rels[0] != "a/b.lua" {
+		t.Fatalf("old manifest rels: %v", rels)
+	}
+	if h := readManifestHashes(state); len(h) != 0 {
+		t.Fatalf("old manifest must carry no hashes, got %v", h)
+	}
+	if err := writeManifest(state, []string{"x"}, map[string]string{"x": "abc"}); err != nil {
+		t.Fatal(err)
+	}
+	if h := readManifestHashes(state); h["x"] != "abc" {
+		t.Fatalf("hash round trip: %v", h)
 	}
 }

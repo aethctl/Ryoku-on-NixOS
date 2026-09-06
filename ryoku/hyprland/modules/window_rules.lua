@@ -65,14 +65,6 @@ hl.window_rule({
 })
 
 hl.window_rule({
-    name   = "float-ryowalls",
-    match  = { title = "^(ryowalls)$" },
-    float  = true,
-    size   = { 1180, 760 },
-    center = true,
-})
-
-hl.window_rule({
     name   = "float-ryostore",
     match  = { title = "^(Ryostore)$" },
     float  = true,
@@ -168,12 +160,12 @@ hl.window_rule({
     immediate    = true,
 })
 
--- ryotunes is YouTube Music as a Chromium app-window (apps/ryotunes); the
--- --app mode derives its class from the URL, so match that. Float it like the
--- other music players (Spotify above).
+-- Ryotunes, the music app ([ryoku] package, neur0map/ryotunes). Float it like
+-- the other music players (Spotify above); the app sizes and centres its own
+-- floating window.
 hl.window_rule({
     name  = "float-ryotunes",
-    match = { class = "^chrome-music\\.youtube\\.com.*$" },
+    match = { class = "^ryotunes$" },
     float = true,
 })
 

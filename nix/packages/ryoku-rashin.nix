@@ -40,7 +40,8 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p \
       "$out/bin" \
-      "$out/share/ryoku/rashin"
+      "$out/share/ryoku/rashin" \
+      "$out/share/ryoku/skills"
 
     install -Dm755 \
       ryoku-rashin \
@@ -53,6 +54,10 @@ pkgs.stdenv.mkDerivation {
     install -Dm644 \
       "$TMPDIR/ryoku-repo.md" \
       "$out/share/ryoku/rashin/ryoku-repo.md"
+
+    cp -a \
+      "${repoSrc}/ryoku/rashin/skills/." \
+      "$out/share/ryoku/skills/"
 
     runHook postInstall
   '';

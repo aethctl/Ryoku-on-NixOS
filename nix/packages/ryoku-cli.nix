@@ -1,4 +1,9 @@
-{ pkgs, src, version }:
+{
+  pkgs,
+  src,
+  version,
+  desktopData,
+}:
 
 pkgs.stdenv.mkDerivation {
   pname = "ryoku-cli";
@@ -39,6 +44,7 @@ pkgs.stdenv.mkDerivation {
     makeWrapper \
       "$out/bin/.ryoku-wrapped" \
       "$out/bin/ryoku" \
+      --set RYOKU_CONFIG_BASE "${desktopData}/share/ryoku/config" \
       --set RYOKU_UPDATE_BACKEND nix \
       --set RYOKU_NIX_VERSION "${version}" \
       --set RYOKU_NIX_CHANNEL nix

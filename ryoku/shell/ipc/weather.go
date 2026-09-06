@@ -545,8 +545,8 @@ type wxState struct {
 	cfg wxConfig
 	loc *wxLocation // last resolved place, reused while the query is unchanged
 
-	wake  chan struct{}
-	quit  chan struct{}
+	wake chan struct{}
+	quit chan struct{}
 }
 
 // hasSubscribers reports whether any client is subscribed to the topic, so a

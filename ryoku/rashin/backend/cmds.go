@@ -21,18 +21,27 @@ func cmdWire(agent string) error {
 	if err := EnsureVault(); err != nil {
 		return err
 	}
-	if agent == "" {
-		n := WireAll()
+	switch agent {
+	case "":
+		n := WireAll() // WireAll also links the ryoku skill everywhere
 		if err := wireHermesIfPresent(); err == nil {
 			n++
 		}
 		fmt.Printf("wired %d agents\n", n)
 		return nil
+	case "hermes":
+		if err := WireHermesMemory(); err != nil {
+			return err
+		}
+	default:
+		if err := Wire(agent); err != nil {
+			return err
+		}
 	}
-	if agent == "hermes" {
-		return WireHermesMemory()
-	}
-	return Wire(agent)
+	// A single-agent or hermes wire still refreshes the always-created skill
+	// links (~/.agents, ~/.hermes, and every hermes profile).
+	_, _ = WireSkill()
+	return nil
 }
 
 func cmdUnwire(agent string) error {
@@ -44,6 +53,7 @@ func cmdUnwire(agent string) error {
 				}
 			}
 		}
+		UnwireSkill()
 		return nil
 	}
 	return Unwire(agent)
@@ -60,10 +70,10 @@ func cmdStatus(asJSON bool) error {
 	}
 	fmt.Printf("daemon:  %s (enabled: %v)\n", running, st.Enabled)
 	fmt.Printf("vault:   %s (%d files)\n", st.Vault.Path, st.Vault.Files)
-	fmt.Printf("hermes:  installed=%v configured=%v wired=%v %s\n",
-		st.Hermes.Installed, st.Hermes.Configured, st.Hermes.Wired, st.Hermes.Version)
+	fmt.Printf("hermes:  installed=%v configured=%v wired=%v skill=%v %s\n",
+		st.Hermes.Installed, st.Hermes.Configured, st.Hermes.Wired, st.Hermes.SkillWired, st.Hermes.Version)
 	for _, a := range st.Agents {
-		fmt.Printf("agent:   %-10s present=%-5v wired=%-5v %s\n", a.ID, a.Present, a.Wired, a.File)
+		fmt.Printf("agent:   %-10s present=%-5v wired=%-5v skill=%-5v %s\n", a.ID, a.Present, a.Wired, a.SkillWired, a.File)
 	}
 	return nil
 }

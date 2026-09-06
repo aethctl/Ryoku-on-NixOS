@@ -7,19 +7,22 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import shell.services as Services
 
-// DOCK route (台). The first-class app dock that lives on the edge opposite the
-// bar. Every look knob and the pin list read and write through the services Dock
-// singleton's `dock` store (shell.json top-level `dock`), so persistence is the
-// same path the dock surface and Bar Studio use. Reorder is the dock's own job
-// (drag), so this page only pins and unpins.
+// Dock route (台). The first-class app dock that lives on the edge opposite the
+// bar. Restyled to the same section grammar as the Bar route: it opens with a
+// live dock silhouette, then numbered sections carry the surface, behaviour and
+// look knobs, and the pinned apps sit as chips you remove or add to. Every knob
+// and the pin list read and write through the services Dock singleton's `dock`
+// store (shell.json top-level `dock`), so persistence is the same path the dock
+// surface and Bar Studio use. Reorder is the dock's own job (drag).
 Item {
     id: page
     property var root
     property var cc
     readonly property var tk: cc.tokens
-    // The content column is capped so a label and its control stay related.
     readonly property real colW: Math.min(page.width, tk.contentW)
     implicitHeight: col.implicitHeight
+
+    property bool pickerOpen: false
 
     function removePin(cls) {
         const cur = Services.Dock.pinnedOrStarter();
@@ -28,6 +31,27 @@ Item {
             if (cur[i] !== cls)
                 next.push(cur[i]);
         Services.Dock.setPinned(next);
+    }
+    function addPin(cls) {
+        const cur = Services.Dock.pinnedOrStarter();
+        if (cur.indexOf(cls) < 0)
+            Services.Dock.setPinned(cur.concat(cls));
+    }
+    // The installed apps not already pinned, as AppPicker's [{name,cmd}] where the
+    // command is the desktop id we pin by.
+    function appList() {
+        const src = (DesktopEntries.applications) ? DesktopEntries.applications.values : [];
+        const pinned = Services.Dock.pinnedOrStarter();
+        const out = [];
+        for (let i = 0; i < src.length; i++) {
+            const e = src[i];
+            if (!e || e.noDisplay) continue;
+            const cls = e.id ? String(e.id) : String(e.name || "");
+            if (cls === "" || pinned.indexOf(cls) >= 0) continue;
+            out.push({ name: e.name || cls, cmd: cls });
+        }
+        out.sort((a, b) => String(a.name).toLowerCase().localeCompare(String(b.name).toLowerCase()));
+        return out;
     }
 
     // Presentable captions for the Style chips: Chips render the option string,
@@ -47,87 +71,64 @@ Item {
         return label;
     }
 
-    // One pinned class: its icon, its name, and a remove action. Mirrors the row
-    // geometry (40 tall, hairline under, suppressed on the last) so the list reads
-    // as one printed band with the switches above it.
-    component PinRow: Item {
-        id: pr
+    // one pinned class as a chip: its icon, its name, and a remove mark.
+    component PinChip: Rectangle {
+        id: pc
         property string cls: ""
-        property bool last: false
-        readonly property string iconSrc: Services.Dock.iconFor(pr.cls)
+        readonly property string iconSrc: Services.Dock.iconFor(pc.cls)
         readonly property string appName: {
-            const e = DesktopEntries.heuristicLookup(pr.cls);
-            return (e && e.name) ? e.name : pr.cls;
+            const e = DesktopEntries.heuristicLookup(pc.cls);
+            return (e && e.name) ? e.name : pc.cls;
         }
-        width: parent ? parent.width : 0
-        // tall enough that a desktop icon clears the hairline, and inset to the
-        // card's own text column so the list reads as rows, not as a border stack
-        height: Tokens.ctlH + page.tk.gap * 2
+        implicitWidth: pcRow.implicitWidth + page.tk.gap * 1.5
+        width: implicitWidth
+        height: Tokens.ctlH + page.tk.gap / 2
+        radius: Tokens.radius
+        color: pcMa.containsMouse ? Tokens.tint10 : Tokens.tint5
+        border.width: Tokens.border
+        border.color: pcMa.containsMouse ? Tokens.lineStrong : Tokens.line
+        Behavior on color { ColorAnimation { duration: Tokens.snap } }
 
-        Image {
-            id: ico
-            anchors.left: parent.left
-            anchors.leftMargin: page.tk.pad
-            anchors.verticalCenter: parent.verticalCenter
-            width: Tokens.ctlH
-            height: Tokens.ctlH
-            source: pr.iconSrc
-            visible: pr.iconSrc !== ""
-            fillMode: Image.PreserveAspectFit
-            asynchronous: true
-            smooth: true
-        }
-        UiText {
-            anchors.left: ico.right
-            anchors.leftMargin: page.tk.gap
-            anchors.right: rm.left
-            anchors.rightMargin: page.tk.gap
-            anchors.verticalCenter: parent.verticalCenter
-            text: pr.appName
-            elide: Text.ElideRight
-            color: Tokens.ink
-            font.family: Tokens.ui
-            font.pixelSize: Tokens.fBody
-        }
-        Rectangle {
-            id: rm
-            anchors.right: parent.right
-            anchors.rightMargin: page.tk.pad
-            anchors.verticalCenter: parent.verticalCenter
-            width: Tokens.ctlH
-            height: Tokens.ctlH
-            radius: Tokens.radius
-            color: rmMa.containsMouse ? Tokens.tint5 : "transparent"
-            Behavior on color { ColorAnimation { duration: Tokens.snap } }
+        Row {
+            id: pcRow
+            anchors.centerIn: parent
+            spacing: page.tk.gap / 2
+            Image {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Tokens.fRow
+                height: Tokens.fRow
+                source: pc.iconSrc
+                visible: pc.iconSrc !== ""
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
+                smooth: true
+            }
+            UiText {
+                anchors.verticalCenter: parent.verticalCenter
+                text: pc.appName
+                color: Tokens.inkDim
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+            }
             IconText {
-                anchors.centerIn: parent
+                anchors.verticalCenter: parent.verticalCenter
                 text: "close"
-                color: rmMa.containsMouse ? Tokens.ink : Tokens.inkFaint
-                font.pixelSize: Tokens.fBody
-            }
-            MouseArea {
-                id: rmMa
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                onClicked: page.removePin(pr.cls)
+                color: pcMa.containsMouse ? Tokens.ink : Tokens.inkFaint
+                font.pixelSize: Tokens.fSmall
             }
         }
-        Rectangle {
-            visible: !pr.last
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.leftMargin: page.tk.pad
-            anchors.right: parent.right
-            anchors.rightMargin: page.tk.pad
-            height: 1
-            color: Tokens.lineSoft
+        MouseArea {
+            id: pcMa
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: page.removePin(pc.cls)
         }
     }
-    // A live schematic of the screen with the dock on it: the studio plate covers
-    // the real dock (and with edge=left it sits right underneath this panel), so
-    // without this a click on an edge chip changes something you cannot see. It
-    // draws the resolved edge, the icon run, and whether labels ride along.
+
+    // A live schematic of the screen with the dock on it: the panel plate covers
+    // the real dock, so without this a click on an edge chip changes something you
+    // cannot see. It draws the resolved edge, the icon run, and the picked style.
     component DockPreview: Rectangle {
         id: dp
         readonly property string edge: {
@@ -250,15 +251,18 @@ Item {
                 }
             }
         }
-
     }
 
+    // what is still below the plate's edge; the stage reads it for the fade.
+    readonly property real scrollRemaining: Math.max(0, flick.contentHeight - flick.height - flick.contentY)
 
     Flickable {
         id: flick
         anchors.fill: parent
         contentWidth: width
-        contentHeight: col.implicitHeight
+        // a page that overflows gets a tail, so its last row can scroll clear
+        // of the bottom fade instead of living inside it.
+        contentHeight: col.implicitHeight + (col.implicitHeight > height && page.tk ? page.tk.tailPad : 0)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
@@ -266,17 +270,18 @@ Item {
             id: col
             width: page.colW
             spacing: page.tk.sectionGap
-            // the preview rides above the card, like the bar's silhouette does on
-            // the Bars route: one glance answers "where will it be".
+
+            // the preview rides above the sections, like the bar's silhouette does
+            // on the Bar route: one glance answers "where will it be".
             DockPreview { width: page.colW }
 
-
+            // ── 01 DOCK ──
             Entrance {
                 width: page.colW
                 index: 0
                 SettingCard {
                     width: page.colW
-                    title: I18n.tr("DOCK")
+                    title: "01 DOCK"
                     kana: "\u53f0"
 
                     SettingRow {
@@ -284,7 +289,7 @@ Item {
                         anchors.right: parent.right
                         controlWidth: 54
                         label: I18n.tr("Dock")
-                        desc: I18n.tr("An app dock on its own surface, for every bar style.")
+                        desc: I18n.tr("Its own surface, any bar style")
                         source: "shell.json"
                         Sw {
                             anchors.right: parent.right
@@ -316,7 +321,7 @@ Item {
                         divider: true
                         block: true
                         label: I18n.tr("Style")
-                        desc: I18n.tr("How the dock is drawn.")
+                        desc: I18n.tr("How it is drawn")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Chips {
@@ -328,12 +333,24 @@ Item {
                             onChose: (label) => Services.Dock.setCfg("style", page.styleKey(label))
                         }
                     }
+                }
+            }
+
+            // ── 02 BEHAVIOUR ──
+            Entrance {
+                width: page.colW
+                index: 1
+                SettingCard {
+                    width: page.colW
+                    title: "02 BEHAVIOUR"
+                    kana: "\u632f\u821e"
+
                     SettingRow {
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        divider: true
                         controlWidth: 54
                         label: I18n.tr("Auto-hide")
+                        desc: I18n.tr("A peek strip until hovered")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Sw {
@@ -349,6 +366,7 @@ Item {
                         divider: true
                         controlWidth: 54
                         label: I18n.tr("Magnify")
+                        desc: I18n.tr("Grow the icon under the pointer")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Sw {
@@ -362,6 +380,33 @@ Item {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         divider: true
+                        controlWidth: 54
+                        label: I18n.tr("Media chip")
+                        desc: I18n.tr("Only while audio plays")
+                        source: "shell.json"
+                        enabled: Services.Dock.cfg("enabled", false)
+                        Sw {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            on: Services.Dock.cfg("media", false)
+                            onToggled: (v) => Services.Dock.setCfg("media", v)
+                        }
+                    }
+                }
+            }
+
+            // ── 03 SURFACE ──
+            Entrance {
+                width: page.colW
+                index: 2
+                SettingCard {
+                    width: page.colW
+                    title: "03 SURFACE"
+                    kana: "\u8868\u9762"
+
+                    SettingRow {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
                         controlWidth: 54
                         label: I18n.tr("Frost")
                         source: "shell.json"
@@ -379,6 +424,7 @@ Item {
                         divider: true
                         controlWidth: 54
                         label: I18n.tr("Depth")
+                        desc: I18n.tr("Soft shadow")
                         source: "shell.json"
                         enabled: Services.Dock.cfg("enabled", false)
                         Sw {
@@ -403,40 +449,24 @@ Item {
                             onToggled: (v) => Services.Dock.setCfg("labels", v)
                         }
                     }
-                    SettingRow {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        divider: true
-                        controlWidth: 54
-                        label: I18n.tr("Media chip")
-                        desc: I18n.tr("Only while audio plays")
-                        source: "shell.json"
-                        enabled: Services.Dock.cfg("enabled", false)
-                        Sw {
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            on: Services.Dock.cfg("media", false)
-                            onToggled: (v) => Services.Dock.setCfg("media", v)
-                        }
-                    }
                 }
             }
 
+            // ── 04 PINNED APPS ──
             Entrance {
                 width: page.colW
-                index: 1
+                index: 3
                 SettingCard {
                     width: page.colW
-                    title: I18n.tr("PINNED APPS")
+                    title: "04 PINNED APPS"
                     kana: "\u56fa\u5b9a"
 
                     // A fact the title cannot carry: the dock owns the ordering.
                     UiText {
-                    width: parent.width
+                        width: parent.width
                         leftPadding: page.tk.pad
                         rightPadding: page.tk.pad
                         topPadding: page.tk.gap
-                        bottomPadding: page.tk.gap
                         text: I18n.tr("The dock reorders these by drag.")
                         color: Tokens.inkFaint
                         font.family: Tokens.ui
@@ -446,14 +476,58 @@ Item {
                         maximumLineCount: 2
                     }
 
-                    Repeater {
-                        id: pinRepeater
-                        model: Services.Dock.pinnedOrStarter()
-                        delegate: PinRow {
-                            required property var modelData
-                            required property int index
-                            cls: modelData
-                            last: index === pinRepeater.count - 1
+                    Flow {
+                        width: parent.width - page.tk.pad * 2
+                        x: page.tk.pad
+                        topPadding: page.tk.gap
+                        bottomPadding: page.tk.gap
+                        spacing: page.tk.gap / 2
+
+                        Repeater {
+                            model: Services.Dock.pinnedOrStarter()
+                            delegate: PinChip {
+                                required property var modelData
+                                cls: modelData
+                            }
+                        }
+
+                        // the add affordance, in the chip vocabulary.
+                        Rectangle {
+                            height: Tokens.ctlH + page.tk.gap / 2
+                            implicitWidth: addRow.implicitWidth + page.tk.gap * 1.5
+                            width: implicitWidth
+                            radius: Tokens.radius
+                            color: addMa.containsMouse ? Tokens.tint10 : "transparent"
+                            border.width: Tokens.border
+                            border.color: addMa.containsMouse ? Tokens.lineStrong : Tokens.line
+                            Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                            Row {
+                                id: addRow
+                                anchors.centerIn: parent
+                                spacing: page.tk.gap / 2
+                                UiText {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "+"
+                                    color: Tokens.inkDim
+                                    font.family: Tokens.ui
+                                    font.pixelSize: Tokens.fRow
+                                }
+                                UiText {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: I18n.tr("ADD")
+                                    color: addMa.containsMouse ? Tokens.ink : Tokens.inkDim
+                                    font.family: Tokens.mono
+                                    font.pixelSize: Tokens.fTiny
+                                    font.letterSpacing: Tokens.trackLabel
+                                }
+                            }
+                            MouseArea {
+                                id: addMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: page.pickerOpen = true
+                            }
                         }
                     }
                 }
@@ -461,5 +535,31 @@ Item {
         }
     }
 
-    CcScrollRail { root: page.root; flick: flick; z: 5 }
+    CcScrollRail { root: page.root; tk: page.tk; flick: flick; z: 5 }
+
+    // ── add-app picker: a filterable desktop-entry list, centred over the body ──
+    Item {
+        anchors.fill: parent
+        visible: opacity > 0.001
+        opacity: page.pickerOpen ? 1 : 0
+        z: 60
+        Behavior on opacity { NumberAnimation { duration: page.tk.fade } }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.32)
+            MouseArea { anchors.fill: parent; onClicked: page.pickerOpen = false }
+        }
+        Loader {
+            anchors.centerIn: parent
+            active: page.pickerOpen
+            sourceComponent: AppPicker {
+                title: I18n.tr("Pin an app")
+                apps: page.appList()
+                onPicked: (cmd) => { page.addPin(cmd); page.pickerOpen = false }
+                onDismissed: page.pickerOpen = false
+                Component.onCompleted: open()
+            }
+        }
+    }
 }

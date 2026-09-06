@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -23,7 +24,26 @@ func csFixtureServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/colorschemes/registry.json" {
-			_, _ = w.Write([]byte(csRegistry))
+			// ADW's preview lives on the fixture itself, so the install can
+			// fetch it; kanso's is repointed at a path the fixture 404s, so
+			// that install exercises the unreachable path (scheme lands, no
+			// art) without touching the network.
+			reg := strings.Replace(csRegistry, `"surface":"#242424",`,
+				`"surface":"#242424","preview":"`+"http://"+r.Host+`/colorschemes/ADW/preview.png",`, 1)
+			reg = strings.Replace(reg, "https://raw.githubusercontent.com/HANCORE-linux/omarchy-kanso-theme/master/preview.png",
+				"http://"+r.Host+"/colorschemes/hancore-kanso/missing.png", 1)
+			// ADW carries two wallpapers: one the fixture serves, one it 404s.
+			reg = strings.Replace(reg, `"surface":"#242424",`,
+				`"surface":"#242424","wallpapers":["http://`+r.Host+`/walls/one.jpg","http://`+r.Host+`/walls/gone.jpg"],`, 1)
+			_, _ = w.Write([]byte(reg))
+			return
+		}
+		if r.URL.Path == "/colorschemes/ADW/preview.png" {
+			_, _ = w.Write([]byte("\x89PNG\r\n\x1a\nfixture"))
+			return
+		}
+		if r.URL.Path == "/walls/one.jpg" {
+			_, _ = w.Write([]byte("\xff\xd8wallpaper"))
 			return
 		}
 		http.NotFound(w, r)
@@ -42,9 +62,10 @@ func testColorschemeProvider(t *testing.T, srv *httptest.Server, active string) 
 			dir:    filepath.Join(root, "cache"),
 			memo:   map[string]memoEntry{},
 		},
-		base:       srv.URL,
-		libraryDir: filepath.Join(root, "themes"),
-		activeName: func() string { return active },
+		base:         srv.URL,
+		libraryDir:   filepath.Join(root, "themes"),
+		wallpaperDir: filepath.Join(root, "walls"),
+		activeName:   func() string { return active },
 	}
 }
 
@@ -72,7 +93,9 @@ func TestColorschemeLoadNormalizes(t *testing.T) {
 	if kanso.Metadata["provider"] != "HANCORE-linux" {
 		t.Fatalf("kanso provider = %v", kanso.Metadata["provider"])
 	}
-	if kanso.Art != "https://raw.githubusercontent.com/HANCORE-linux/omarchy-kanso-theme/master/preview.png" {
+	// An absolute preview URL passes through untouched (the fixture repoints
+	// it at itself; the point is that it is not resolved against the base).
+	if !strings.HasSuffix(kanso.Art, "/colorschemes/hancore-kanso/missing.png") || !strings.HasPrefix(kanso.Art, "http://") {
 		t.Fatalf("kanso art (absolute preview) = %q", kanso.Art)
 	}
 	if len(kanso.Tags) != 1 || kanso.Tags[0] != "dark" {
@@ -83,7 +106,50 @@ func TestColorschemeLoadNormalizes(t *testing.T) {
 	}
 }
 
+func TestColorschemeInstallWritesPreviewArt(t *testing.T) {
+	t.Setenv("RYOKU_EXTRAS_BASE", "")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	p := testColorschemeProvider(t, csFixtureServer(t), "")
+	ctx := context.Background()
+
+	if err := p.Install(ctx, "noctalia-adw"); err != nil {
+		t.Fatal(err)
+	}
+	art, err := os.ReadFile(filepath.Join(p.libraryDir, "noctalia-adw", "preview.png"))
+	if err != nil {
+		t.Fatalf("preview.png not written beside the scheme: %v", err)
+	}
+	if !strings.HasSuffix(string(art), "fixture") {
+		t.Fatalf("preview.png is not the catalogue art: %q", art)
+	}
+
+	// The reachable wallpaper lands in the library under the scheme's name; the
+	// 404 one is simply absent. Remove takes the landed one back out.
+	walls, _ := filepath.Glob(filepath.Join(p.wallpaperDir, "noctalia-adw-*"))
+	if len(walls) != 1 || filepath.Base(walls[0]) != "noctalia-adw-1.jpg" {
+		t.Fatalf("wallpapers landed = %v, want [noctalia-adw-1.jpg]", walls)
+	}
+	if err := p.Remove(ctx, "noctalia-adw"); err != nil {
+		t.Fatal(err)
+	}
+	if walls, _ := filepath.Glob(filepath.Join(p.wallpaperDir, "noctalia-adw-*")); len(walls) != 0 {
+		t.Fatalf("remove left wallpapers behind: %v", walls)
+	}
+
+	// An unreachable preview must not fail the install: the scheme still lands,
+	// the folder simply carries no art and the picker draws the palette pills.
+	if err := p.Install(ctx, "hancore-kanso"); err != nil {
+		t.Fatal(err)
+	}
+	matches, _ := filepath.Glob(filepath.Join(p.libraryDir, "hancore-kanso", "preview.*"))
+	if len(matches) != 0 {
+		t.Fatalf("unreachable preview produced a file: %v", matches)
+	}
+}
+
 func TestColorschemeInstallRemoveAndActive(t *testing.T) {
+	t.Setenv("RYOKU_EXTRAS_BASE", "")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	p := testColorschemeProvider(t, csFixtureServer(t), "hancore-kanso")
 	ctx := context.Background()
 

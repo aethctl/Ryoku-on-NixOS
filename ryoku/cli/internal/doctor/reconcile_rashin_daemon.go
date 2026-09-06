@@ -3,6 +3,7 @@ package doctor
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"ryoku-cli/internal/sys"
@@ -76,23 +77,36 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	if !rashinUnitEnabled() {
 		return okRes("rashin daemon is opt-in and not enabled")
 	}
+
+	if sys.Exists("/etc/NIXOS") {
+		return reconcileRashinDaemonNixOS(checkOnly)
+	}
+
 	user := doctorUser()
 	state := rashinUnitState{enabled: true, linger: rashinLingerOn(user), failed: rashinUnitFailed()}
 	enableLinger, clearFailed := rashinDaemonActions(state)
-	if !enableLinger && !clearFailed {
-		return okRes("rashin daemon enabled with boot-start")
+	wireSkill := rashinSkillLinksMissing()
+	if !enableLinger && !clearFailed && !wireSkill {
+		return okRes("rashin daemon enabled with boot-start; the ryoku skill is wired")
 	}
 	if checkOnly {
-		if clearFailed {
+		switch {
+		case clearFailed:
 			return wouldRes("the rashin daemon is enabled but wedged off (failed); the dashboard is down").
 				withFix("ryoku doctor reloads the hardened unit and restarts it")
+		case enableLinger:
+			return wouldRes("rashin is enabled but only starts at login; a headless boot leaves the dashboard down").
+				withFix("ryoku doctor enables lingering so it starts at boot")
+		default:
+			return wouldRes("rashin is enabled but the ryoku agent skill is not wired into every agent").
+				withFix("ryoku doctor runs `ryoku-rashin wire`")
 		}
-		return wouldRes("rashin is enabled but only starts at login; a headless boot leaves the dashboard down").
-			withFix("ryoku doctor enables lingering so it starts at boot")
 	}
-	// daemon-reload so the just-delivered hardened unit is the one systemd runs.
-	_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
 	var did []string
+	if enableLinger || clearFailed {
+		// daemon-reload so the just-delivered hardened unit is the one systemd runs.
+		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+	}
 	if enableLinger {
 		if user == "" {
 			return failRes("cannot enable rashin boot-start: no login user in the environment").
@@ -108,6 +122,162 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
 		did = append(did, "cleared the wedged failed state")
 	}
-	_ = exec.Command("systemctl", "--user", "start", rashinUserUnit).Run()
-	return fixedRes("converged the rashin daemon: " + strings.Join(did, " and ") + ", reloaded the hardened unit")
+	if enableLinger || clearFailed {
+		_ = exec.Command("systemctl", "--user", "start", rashinUserUnit).Run()
+		did = append(did, "reloaded the hardened unit")
+	}
+	if wireSkill {
+		// wire is idempotent and cheap: it drops the ryoku skill symlink into
+		// every agent's skills dir and refreshes the vault pointers.
+		_ = exec.Command("ryoku-rashin", "wire").Run()
+		did = append(did, "wired the ryoku agent skill")
+	}
+	return fixedRes("converged the rashin daemon: " + strings.Join(did, " and "))
+}
+
+// reconcileRashinDaemonNixOS repairs transient runtime state only.
+//
+// The Ryoku NixOS module owns the user unit. Persistent login-manager policy,
+// including lingering/headless user-manager startup, must remain declarative
+// rather than being changed through `sudo loginctl enable-linger`.
+func reconcileRashinDaemonNixOS(checkOnly bool) recResult {
+	failed := rashinUnitFailed()
+	wireSkill := rashinSkillLinksMissing()
+
+	if !failed && !wireSkill {
+		return okRes(
+			"rashin daemon is managed by the Ryoku NixOS module; runtime state is healthy",
+		)
+	}
+
+	if checkOnly {
+		switch {
+		case failed:
+			return wouldRes(
+				"the declarative rashin service is enabled but in a failed state",
+			).withFix(
+				"ryoku doctor clears the failed state and restarts the service",
+			)
+
+		default:
+			return wouldRes(
+				"rashin is enabled but the ryoku agent skill is not wired into every agent",
+			).withFix(
+				"ryoku doctor runs `ryoku-rashin wire`",
+			)
+		}
+	}
+
+	var did []string
+
+	if failed {
+		_ = exec.Command(
+			"systemctl",
+			"--user",
+			"reset-failed",
+			rashinUserUnit,
+		).Run()
+
+		_ = exec.Command(
+			"systemctl",
+			"--user",
+			"restart",
+			rashinUserUnit,
+		).Run()
+
+		did = append(
+			did,
+			"restarted the declarative rashin service",
+		)
+	}
+
+	if wireSkill {
+		_ = exec.Command(
+			"ryoku-rashin",
+			"wire",
+		).Run()
+
+		did = append(
+			did,
+			"wired the ryoku agent skill",
+		)
+	}
+
+	return fixedRes(
+		"repaired the NixOS rashin runtime: " +
+			strings.Join(did, " and "),
+	)
+}
+
+// reconcileProwlAgent surfaces a rashin box that lost its prowl-agent binary.
+// ryoku-rashin now depends on prowl-agent (its `index` builds the vault code map
+// and its `wire` installs Prowl's agent skills), so a box that enabled rashin
+// before that dependency shipped can run without it. `pacman -Syu` delivers it
+// going forward; this reports the gap for a box still stuck without it. Reported,
+// never auto-run: installing a package is the user's call.
+func reconcileProwlAgent(checkOnly bool) recResult {
+	enabled := rashinUnitEnabled()
+	present := sys.Has("prowl-agent")
+	if !prowlAgentNeeded(enabled, present) {
+		if !enabled {
+			return okRes("rashin daemon is opt-in and not enabled")
+		}
+		return okRes("prowl-agent is present for the rashin agent index")
+	}
+	if sys.Exists("/etc/NIXOS") {
+		return warnRes(
+			"rashin is enabled but prowl-agent is missing from the active NixOS generation; the vault code index and agent skills will not refresh",
+		).withFix(
+			"add prowl-agent declaratively to the Ryoku NixOS runtime and rebuild",
+		)
+	}
+
+	return warnRes("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh").
+		withFix("sudo pacman -S prowl-agent")
+}
+
+// prowlAgentNeeded reports whether a box should be told to install prowl-agent:
+// rashin is enabled but the binary is absent. Split out so the decision is
+// unit-testable without a live systemd or PATH.
+func prowlAgentNeeded(rashinEnabled, prowlPresent bool) bool {
+	return rashinEnabled && !prowlPresent
+}
+
+// rashinSkillSource resolves the shipped `ryoku` skill dir the same way
+// ryoku-rashin wire does: an override, the packaged tree, then a dev checkout.
+// Returns "" when the skill is not installed, so a box without it stays quiet.
+func rashinSkillSource() string {
+	var roots []string
+	if v := strings.TrimSpace(os.Getenv("RYOKU_RASHIN_SKILLS")); v != "" {
+		roots = append(roots, v)
+	}
+	roots = append(roots, "/usr/share/ryoku/skills")
+	if repo := sys.ResolveRepo(); repo != "" {
+		roots = append(roots, filepath.Join(repo, "ryoku", "rashin", "skills"))
+	}
+	for _, r := range roots {
+		if sys.Exists(filepath.Join(r, "ryoku", "SKILL.md")) {
+			return filepath.Join(r, "ryoku")
+		}
+	}
+	return ""
+}
+
+// rashinSkillLinksMissing reports whether the skill is installed but an
+// always-created link (~/.agents, ~/.hermes) is absent or points elsewhere.
+// Cheap: a couple of Lstat calls.
+func rashinSkillLinksMissing() bool {
+	src := rashinSkillSource()
+	if src == "" {
+		return false // skill not installed; nothing to wire
+	}
+	for _, link := range []string{
+		filepath.Join(sys.Home(), ".agents", "skills", "ryoku"),
+		filepath.Join(sys.Home(), ".hermes", "skills", "ryoku"),
+	} {
+		if !symlinkPointsAt(link, src) {
+			return true
+		}
+	}
+	return false
 }

@@ -15,11 +15,13 @@ let
   ryokuHelpers = ryokuPkgs.ryoku-helpers;
   ryokuSystemBridge = ryokuPkgs.ryoku-nixos-system-bridge;
   ryokuDesktopData = ryokuPkgs.ryoku-desktop-data;
+  ryokuRyogami = ryokuPkgs.ryoku-ryogami;
 
   # Hyprland plugins are ABI-sensitive, so the compositor, portal and
   # plugin bundle must all come from Ryoku's own locked package set.
   ryokuHyprland = ryokuPkgs.ryoku-hyprland;
   ryokuHyprlandPortal = ryokuPkgs.ryoku-xdg-desktop-portal-hyprland;
+  ryokuMatugen = ryokuPkgs.ryoku-matugen;
   ryokuHyprPlugins = ryokuPkgs.ryoku-hypr-plugins;
   ryokuCursorMaterial = ryokuPkgs.ryoku-cursor-material;
   ryokuMapleMonoNF = ryokuPkgs.ryoku-maple-mono-nf;
@@ -161,7 +163,7 @@ EOF
       exit 2
     fi
 
-    passwd_line="$(${pkgs.glibc.bin}/bin/getent passwd "$uid" || true)"
+    passwd_line="$(${pkgs.getent}/bin/getent passwd "$uid" || true)"
     home="$(printf '%s\n' "$passwd_line" | ${pkgs.coreutils}/bin/cut -d: -f6)"
 
     if [ -z "$home" ]; then
@@ -450,6 +452,15 @@ EOF
     nautilus-python
 
     # ─────────────────────────────────────────────────────────
+    # Ryoport / local virtual machines
+    # ─────────────────────────────────────────────────────────
+
+    quickemu
+    qemu
+    spice-gtk
+    xorriso
+
+    # ─────────────────────────────────────────────────────────
     # Ryoku command dependencies
     # ─────────────────────────────────────────────────────────
 
@@ -470,7 +481,7 @@ EOF
 
     jq
     imagemagick
-    matugen
+    ryokuMatugen
     ffmpeg
     openssl
     nvibrant
@@ -612,6 +623,11 @@ EOF
 
 in
 {
+  imports = [
+    (import ./gpu-passthrough.nix { inherit self; })
+    ./release-identity.nix
+  ];
+
   options.programs.ryoku = {
     enable = lib.mkEnableOption "Ryoku desktop";
 
@@ -778,6 +794,23 @@ in
               program === "${ryokuSystemBridge}/bin/ryoku-wifi-backend" ||
               program === "${ryokuSystemBridge}/bin/ryoku-wifi-regdom" ||
               program === "${ryokuSystemBridge}/bin/ryoku-docker") {
+              return polkit.Result.YES;
+          }
+      });
+
+      // Ryoku NixOS SDDM theme activation.
+      //
+      // SDDM configuration remains declarative. Settings may only
+      // replace the mutable theme payload through this helper.
+      polkit.addRule(function (action, subject) {
+          var program = action.lookup("program");
+
+          if (action.id === "org.freedesktop.policykit.exec" &&
+              (program === "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply" ||
+               program === "/run/current-system/sw/bin/ryoku-sddm-theme-apply") &&
+              subject.local &&
+              subject.active &&
+              subject.isInGroup("wheel")) {
               return polkit.Result.YES;
           }
       });
@@ -999,6 +1032,8 @@ in
       RYOKU_UPDATE_BACKEND = "nix";
       RYOKU_NIX_FLAKE = cfg.updateFlake;
       RYOKU_NIX_INPUT = cfg.updateInput;
+      RYOKU_SDDM_THEME_APPLY =
+        "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
       RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
 
       # Ryowalls and Ryoshot normally use Arch's /usr/share
@@ -1132,6 +1167,11 @@ in
 
       path = runtimePackages;
 
+      environment = {
+        RYOKU_RASHIN_SKILLS =
+          "${ryokuRashin}/share/ryoku/skills";
+      };
+
       unitConfig = {
         StartLimitIntervalSec = 0;
       };
@@ -1233,6 +1273,66 @@ in
       };
     };
 
+    # Ryogami owns wallpaper cataloguing, palette application,
+    # live wallpapers and the wallpaper picker in current Ryoku.
+    #
+    # Upstream installs /usr/bin/ryogami and a user unit under
+    # /usr/lib/systemd/user. NixOS owns both declaratively.
+    systemd.user.services.ryogami = {
+      description = "Ryogami wallpaper daemon";
+
+      wantedBy = [
+        "hyprland-session.target"
+      ];
+
+      partOf = [
+        "hyprland-session.target"
+      ];
+
+      requires = [
+        "ryoku-materialize.service"
+      ];
+
+      after = [
+        "hyprland-session.target"
+        "ryoku-materialize.service"
+      ];
+
+      # The daemon shells out to the normal Ryoku desktop tools,
+      # while hyprctl must come from Ryoku's ABI-matched compositor.
+      path =
+        runtimePackages
+        ++ [ ryokuHyprland ];
+
+      environment = {
+        RYOKU_WAIFU2X_MODELS = waifu2xModels;
+
+        QML_IMPORT_PATH =
+          "${qmlRoot}:${qtQmlPath}";
+
+        QML2_IMPORT_PATH =
+          "${qmlRoot}:${qtQmlPath}";
+      };
+
+      unitConfig = {
+        StartLimitIntervalSec = 60;
+        StartLimitBurst = 5;
+      };
+
+      serviceConfig = {
+        ExecStart =
+          "${ryokuRyogami}/bin/ryogami";
+
+        Restart = "always";
+        RestartSec = 2;
+
+        # Match upstream: the renderer/helper processes may finish
+        # independently when Ryogami itself is reloaded.
+        KillMode = "process";
+        Slice = "session.slice";
+      };
+    };
+
     systemd.user.services.ryoku-shell = {
 
       requires = [
@@ -1268,6 +1368,8 @@ in
         RYOKU_UPDATE_BACKEND = "nix";
         RYOKU_NIX_FLAKE = cfg.updateFlake;
         RYOKU_NIX_INPUT = cfg.updateInput;
+        RYOKU_SDDM_THEME_APPLY =
+          "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
         RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
 

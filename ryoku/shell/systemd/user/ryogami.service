@@ -1,0 +1,24 @@
+[Unit]
+# ryogami renders every wallpaper surface (image + live) and serves the
+# wallpaper topic the shell subscribes to, so it is supervised beside the shell
+# daemon on the same session target.
+Description=Ryogami wallpaper daemon
+PartOf=hyprland-session.target
+After=hyprland-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+# a config that cannot load would otherwise restart forever; stop and let
+# doctor report it instead (start-rate keys belong in [Unit]).
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+ExecStart=/usr/bin/ryogami
+Restart=always
+RestartSec=2
+# Kill only the daemon on stop, not its cgroup: it reaps its own render
+# surfaces and the ryoku-depth helper it shells out to must outlive a reload.
+KillMode=process
+Slice=session.slice
+
+[Install]
+WantedBy=hyprland-session.target

@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-// addDepthModule appends "depth" to a quick-settings rail that is exactly the
-// pre-depth default, preserves every sibling and top-level key, and no-ops on a
-// customized or already-migrated rail.
+// addDepthModule appends "depth" to any quick-settings rail carrying the base Home
+// module, preserves every sibling and top-level key, and no-ops on a rail already
+// carrying depth or one with no Home module.
 func TestAddDepthModule(t *testing.T) {
 	full := []byte(`{"frameBars":{"menus":{"quick-settings":{"anchor":"left","minWidth":410,"modules":["home","notifications","weather","capture"]},"weather":{"anchor":"right"}},"style":"slate-frame"},"weatherLocation":"Oslo"}`)
 	out, changed, err := addDepthModule(full)
@@ -37,15 +37,29 @@ func TestAddDepthModule(t *testing.T) {
 		t.Errorf("re-running on a migrated store must be a no-op: changed=%v err=%v", changed, err)
 	}
 
-	// a rail still on the retired three (pre-capture) is left for the capture
-	// reconciler, and any customized rail is untouched.
-	for _, custom := range []string{
-		`{"frameBars":{"menus":{"quick-settings":{"modules":["home","notifications","weather"]}}}}`,
-		`{"frameBars":{"menus":{"quick-settings":{"modules":["home","notifications","weather","capture","media"]}}}}`,
+	// any home-carrying rail gains depth, whatever its era: the capture reconciler
+	// runs first, so a [home, notifications, weather] rail is already +capture by
+	// the time this runs, and a custom superset still gains it.
+	for _, rail := range []struct {
+		in   string
+		want []string
+	}{
+		{`{"frameBars":{"menus":{"quick-settings":{"modules":["home","notifications","weather"]}}}}`, []string{"home", "notifications", "weather", "depth"}},
+		{`{"frameBars":{"menus":{"quick-settings":{"modules":["home","notifications","weather","capture","media"]}}}}`, []string{"home", "notifications", "weather", "capture", "media", "depth"}},
 	} {
-		if _, changed, err := addDepthModule([]byte(custom)); err != nil || changed {
-			t.Errorf("a non-matching rail must be untouched: changed=%v err=%v (%s)", changed, err, custom)
+		out, changed, err := addDepthModule([]byte(rail.in))
+		if err != nil || !changed {
+			t.Errorf("a home-carrying rail must gain depth: changed=%v err=%v (%s)", changed, err, rail.in)
+			continue
 		}
+		if got := captureModules(t, out); !sameStrings(got, rail.want) {
+			t.Errorf("modules = %v, want %v", got, rail.want)
+		}
+	}
+
+	// a rail with no base Home module is foreign; leave it alone.
+	if _, changed, err := addDepthModule([]byte(`{"frameBars":{"menus":{"quick-settings":{"modules":["notifications","weather"]}}}}`)); err != nil || changed {
+		t.Errorf("a rail without home must be untouched: changed=%v err=%v", changed, err)
 	}
 
 	if _, changed, err := addDepthModule([]byte(`{"bars":{}}`)); err != nil || changed {

@@ -105,9 +105,15 @@ mv -T "$stage" "$link"
 
 # Point consumers at the fixed name once (migrating off a timestamped name), and
 # only when it is not already set, so palette changes never churn the setting.
-if [ "$cur" != "$name" ] && command -v gsettings >/dev/null 2>&1; then
-  gsettings set org.gnome.desktop.interface icon-theme "$name"
-fi
+# Select the theme only over the shipped defaults (or a stale generation name);
+# an icon theme the user picked stays theirs across logins and palette changes.
+case $cur in
+  ""|"$name"|Papirus|Papirus-Dark|Papirus-Light|Adwaita|hicolor|ryoku-folders-*)
+    if [ "$cur" != "$name" ] && command -v gsettings >/dev/null 2>&1; then
+      gsettings set org.gnome.desktop.interface icon-theme "$name"
+    fi
+    ;;
+esac
 
 # Keep only the live and immediately-previous generations; a reader that resolved
 # the old target before the swap still finds it. Drop older gens and dead builds.

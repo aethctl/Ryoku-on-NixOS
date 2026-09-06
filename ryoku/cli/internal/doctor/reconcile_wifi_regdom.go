@@ -63,6 +63,13 @@ var setWifiRegdom = func(country string) error {
 	return sys.Sudo("ryoku-wifi-regdom", "set", country)
 }
 
+// wifiRegdomHelperPresent reports whether the ryoku-wifi-regdom helper is on
+// PATH. A var so a test drives the apply path without the helper installed.
+var wifiRegdomHelperPresent = func() bool {
+	_, err := exec.LookPath("ryoku-wifi-regdom")
+	return err == nil
+}
+
 // iwRegCountry pulls the two-letter domain from the first `country XX:` line of
 // `iw reg get` output, "00" when the block reports the worldwide default. pure,
 // so the parse is unit-testable without iw.
@@ -140,7 +147,7 @@ func reconcileWifiRegdom(checkOnly bool) recResult {
 		return wouldRes("the wireless regulatory domain is unset (00), so the kernel keeps 5 GHz channels disabled; the system locale points at %s", country).
 			withFix("ryoku-wifi-regdom set " + country)
 	}
-	if _, err := exec.LookPath("ryoku-wifi-regdom"); err != nil {
+	if !wifiRegdomHelperPresent() {
 		return warnRes("the wireless regulatory domain is unset (00) and ryoku-wifi-regdom is not installed to set it from the locale country %s", country).
 			withFix("ryoku-wifi-regdom set " + country)
 	}

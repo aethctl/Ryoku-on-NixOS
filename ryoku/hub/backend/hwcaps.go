@@ -273,13 +273,21 @@ func buildChecks(in capInputs, host, pass *GPU) (checks []Check, hardFail bool) 
 		add(Check{ID: "ram", Level: "warn", Label: "Memory", Value: itoa(in.ramFreeMB) + " MB free", Hint: "A VM wants 8 GB+; close apps or lower the VM's RAM."})
 	}
 
+	qemuHint := "A plain VM needs QEMU: pacman -S qemu-desktop."
+	passthroughHint := "Only for the GPU-passthrough VM; plain VMs need none of it. Looking Glass + kvmfr are AUR: yay -S looking-glass looking-glass-module-dkms."
+
+	if fileExists("/etc/NIXOS") {
+		qemuHint = "QEMU is part of the declarative Ryoku NixOS runtime; rebuild the Musubi configuration if it is missing."
+		passthroughHint = "GPU passthrough is managed declaratively on NixOS; enable programs.ryoku.gpuPassthrough and rebuild."
+	}
+
 	switch miss := toolingMissing(in.tooling); {
 	case len(miss) == 0:
 		add(Check{ID: "tooling", Level: "ok", Label: "Virtualization stack", Value: "installed"})
 	case !in.tooling.qemu:
-		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: "A plain VM needs QEMU: pacman -S qemu-desktop."})
+		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: qemuHint})
 	default:
-		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: "Only for the GPU-passthrough VM; plain VMs need none of it. Looking Glass + kvmfr are AUR: yay -S looking-glass looking-glass-module-dkms."})
+		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: passthroughHint})
 	}
 	if in.tooling.libvirt {
 		if in.inLibvirtGroup {

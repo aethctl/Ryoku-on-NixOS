@@ -43,7 +43,7 @@ Singleton {
         return (typeof v === "number" && v > 0 && v <= 8) ? v : 1.0;
     }
 
-    // The two persisted user preferences the Shell Studio's System route flips.
+    // The two persisted user preferences the Super+Escape quick settings flips.
     // Perf is the shell's only reader of performance.json, so its write lives
     // here too rather than a second copy in a route: setting a key rewrites the
     // file (atomic, watched) and every derived switch above re-folds from it.

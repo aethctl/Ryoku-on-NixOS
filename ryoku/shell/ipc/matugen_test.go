@@ -931,10 +931,10 @@ func writePNG(t *testing.T, path string) {
 }
 
 // TestSyncFollowWallpaper pins theme.theme as the single colour master and its
-// shadow key: only the Wallpaper variant turns theme.json's followWallpaper on
-// (the live path gates on it, and nothing else could), while Default (the mono
-// base) and every named theme turn it off. Other keys in the file are somebody
-// else's and must survive.
+// shadow key: colours follow the wallpaper by default, so the plain base
+// (Default or Wallpaper) turns theme.json's followWallpaper ON, while a named
+// static theme -- or an explicit Light/Dark curated lock -- turns it off. Other
+// keys in the file are somebody else's and must survive.
 func TestSyncFollowWallpaper(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -972,12 +972,18 @@ func TestSyncFollowWallpaper(t *testing.T) {
 		t.Errorf("named theme: followWallpaper = %v, want false", got["followWallpaper"])
 	}
 
-	// Default is the monochrome base, not a wallpaper follower: it turns the
-	// shadow key OFF so the shell renders its compiled mono palette (the shipped
-	// default and the Appearance MONO card), never the wallpaper's colours.
+	// Default is the plain base and now follows the wallpaper: with no static
+	// theme and no Light/Dark lock, the shadow key stays on.
+	syncFollowWallpaper("Default")
+	if got := read(); got["followWallpaper"] != true {
+		t.Errorf("Default: followWallpaper = %v, want true (follows by default)", got["followWallpaper"])
+	}
+
+	// An explicit Light/Dark curated lock still pins a fixed palette.
+	writeFile(t, path, `{"scheme":"dark","themeApps":true}`)
 	syncFollowWallpaper("Default")
 	if got := read(); got["followWallpaper"] != false {
-		t.Errorf("Default: followWallpaper = %v, want false", got["followWallpaper"])
+		t.Errorf("Default + dark lock: followWallpaper = %v, want false", got["followWallpaper"])
 	}
 }
 
@@ -1163,5 +1169,51 @@ func writeSolidColourPNG(t *testing.T, path string, r, g, b uint8) {
 	defer f.Close()
 	if err := png.Encode(f, solidRGBA(16, 16, r, g, b)); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// applyHyprBorder is the only runtime path that lands the wallpaper border on
+// the live compositor: a hyprctl reload re-runs decoration.lua, which reverts
+// col.active_border to the value it parses at config time (the shipped red
+// fallback when hypr-colors.lua is stale), so the paint worker must eval the
+// palette border after every reload. The eval reads color4 (active) and
+// background (inactive) from the colors.json just written. A regression that
+// drops the call -- as the wallpaper-backend move to the daemon once did --
+// strands the window border on red.
+func TestApplyHyprBorderEvalsPaletteBorder(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
+
+	colorsPath := matugenColorsPath()
+	if err := os.MkdirAll(filepath.Dir(colorsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(colorsPath, []byte(`{"color4":"#12ab34","background":"#010203"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var got [][]string
+	orig := runCommand
+	t.Cleanup(func() { runCommand = orig })
+	runCommand = func(name string, args ...string) error {
+		got = append(got, append([]string{name}, args...))
+		return nil
+	}
+
+	applyHyprBorder()
+
+	if len(got) != 1 {
+		t.Fatalf("want exactly one hyprctl eval, got %v", got)
+	}
+	if got[0][0] != "hyprctl" || got[0][1] != "eval" {
+		t.Fatalf("not a hyprctl eval: %v", got[0])
+	}
+	line := strings.Join(got[0], " ")
+	if !strings.Contains(line, `["col.active_border"]="rgb(12ab34)"`) {
+		t.Fatalf("active border not evalled from color4: %q", line)
+	}
+	if !strings.Contains(line, `["col.inactive_border"]="rgb(010203)"`) {
+		t.Fatalf("inactive border not evalled from background: %q", line)
 	}
 }

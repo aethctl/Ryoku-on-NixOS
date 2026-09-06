@@ -38,7 +38,31 @@ free --si | awk '/Swap:/{ if ($2 > 0) printf "%d%%\n", $3 / $2 * 100; else print
 printf '%s\n' "$bat"
 hyprctl version 2>/dev/null | grep -oP 'Hyprland \K[0-9][0-9.]*' | head -1
 hyprctl monitors 2>/dev/null | grep -c '^Monitor'
-pacman -Qen 2>/dev/null | wc -l
-pacman -Qm 2>/dev/null | wc -l
+system_pkgs=0
+if [ -r /etc/ryoku/nix-system-package-count ]; then
+    system_pkgs=$(tr -cd '0-9' < /etc/ryoku/nix-system-package-count)
+    [ -n "$system_pkgs" ] || system_pkgs=0
+fi
+
+user_pkgs=0
+profile_manifest="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/profile/manifest.json"
+
+if [ ! -r "$profile_manifest" ]; then
+    profile_manifest="$HOME/.nix-profile/manifest.json"
+fi
+
+if [ -r "$profile_manifest" ] && command -v jq >/dev/null 2>&1; then
+    user_pkgs=$(
+        jq -r '
+            if (.elements | type) == "object"
+            then [.elements[] | select(.active != false)] | length
+            else 0
+            end
+        ' "$profile_manifest" 2>/dev/null || printf '0\n'
+    )
+fi
+
+printf '%s\n' "$system_pkgs"
+printf '%s\n' "$user_pkgs"
 printf '%s\n' "${XCURSOR_THEME:--}${XCURSOR_SIZE:+ · $XCURSOR_SIZE}"
 printf '%s\n' "$palette"

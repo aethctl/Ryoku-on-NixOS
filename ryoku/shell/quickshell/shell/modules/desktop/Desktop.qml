@@ -15,6 +15,7 @@ import Ryoku.PluginKit
 import shell.services as Services
 import "../depth"
 import "../depth/Singletons" as DepthCfg
+import "../wallpaper" as WallpaperMod
 
 // desktop widgets layer: WlrLayer.Bottom (below windows), instantiated once per
 // monitor by the main shell, carrying the clock. only clicks on bare wallpaper
@@ -32,6 +33,11 @@ Scope {
     property string wallpaperUrl: ""
     property string wallpaperFit: "Cover"
     property string depthUrl: ""
+    property var wallpaperTransition: null
+    property string videoUrl: ""
+    // The ryogami-live yield flag (default "ryogami" engine): hide the painter
+    // while the C player owns the background layer.
+    property bool wallpaperLive: false
     readonly property var depthState: Services.ShellState.forScreen(root.screen)
     // compose mode frees every widget for dragging (like visualiser placement),
     // so a locked clock can still be nestled into the subject; Done restores it.
@@ -169,18 +175,42 @@ Scope {
             guides.flash(v, h);
         }
 
-        // The wallpaper is painted in a separate Wayland surface, which Qt cannot
-        // sample across scene graphs. Mirror the same image into this scene as an
-        // offscreen texture so ShaderEffectSource can capture the pixels beneath a
-        // frosted widget. WidgetGlass hides this source after taking its crop.
+        // The base wallpaper painter: the reveal backdrop composites each new
+        // frame over the old one through the preset the daemon attached to the
+        // frame (a GPU mask shader), decoding capped at surface resolution.
+        // Live clips play inside this same surface (QtMultimedia + optional
+        // interpolation), so the backdrop no longer yields to a second Wayland
+        // client: it keeps the still decoded and swaps to the video itself.
+        WallpaperMod.Backdrop {
+            id: backdrop
+            anchors.fill: parent
+            readonly property real screenDpr: (root.screen && root.screen.devicePixelRatio) ? root.screen.devicePixelRatio : 1
+            dpr: screenDpr
+            // Keep the still decoded while a video plays: the frame path is
+            // always a paintable still now, and holding it means the reveal
+            // off a video has its old texture instead of a black cut.
+            url: root.wallpaperUrl
+            fit: root.wallpaperFit
+            transition: root.wallpaperTransition
+            videoUrl: root.videoUrl
+            live: root.wallpaperLive
+        }
+
+        // Mirror of the same image for glass widgets: Qt cannot sample another
+        // scene graph, so ShaderEffectSource captures the pixels beneath a
+        // frosted widget from this offscreen copy. WidgetGlass hides this
+        // source after taking its crop. Hidden while a video plays: the glass
+        // samples the still, and a live clip would freeze the capture.
         Image {
             id: glassBackdrop
             anchors.fill: parent
             source: root.wallpaperUrl
             cache: false
             asynchronous: true
-            visible: (Config.calendarEnabled && Config.calendarStyle === "glass")
-                || (Config.musicEnabled && Config.musicStyle === "glass")
+            sourceSize.width: Math.ceil(width * backdrop.screenDpr)
+            sourceSize.height: Math.ceil(height * backdrop.screenDpr)
+            visible: root.videoUrl === "" && ((Config.calendarEnabled && Config.calendarStyle === "glass")
+                || (Config.musicEnabled && Config.musicStyle === "glass"))
             fillMode: {
                 switch (root.wallpaperFit) {
                 case "Contain": return Image.PreserveAspectFit;

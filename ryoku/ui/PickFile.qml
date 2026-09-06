@@ -27,12 +27,22 @@ Item {
     signal picked(string path)
     signal canceled()
 
-    function open() { fp.currentFolder = fp.startFolder; fp.active = true; }
+    function open() {
+        fp.currentFolder = fp.startFolder;
+        fp.active = true;
+        fp.forceActiveFocus();
+    }
     function goHome(sub) { fp.currentFolder = "file://" + fp.home + (sub.length ? "/" + sub : ""); }
 
     anchors.fill: parent
     visible: fp.active
     z: 200
+    focus: fp.active
+    onActiveChanged: if (fp.active) fp.forceActiveFocus()
+    Keys.onEscapePressed: (event) => {
+        fp.canceled();
+        event.accepted = true;
+    }
 
     FolderListModel {
         id: fm

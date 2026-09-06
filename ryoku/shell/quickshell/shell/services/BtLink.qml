@@ -123,4 +123,29 @@ Singleton {
             : (d.deviceName && d.deviceName.length) ? d.deviceName
             : (d.address || qsTr("Unknown"));
     }
+
+
+    // Device1.Pair registers no agent, so BlueZ cannot authorise a bond; this
+    // bluetoothctl brings its own for the call. Its exit code is unreliable,
+    // so success is read from the output. Exit 0 paired+connected, 1 pair
+    // failed, 2 connect failed.
+    function pairCommand(mac) {
+        const m = String(mac || "");
+        const script = `
+mac="$1"
+pout=$(bluetoothctl --agent NoInputNoOutput --timeout 25 pair "$mac" 2>&1)
+if grep -qiE 'Pairing successful|already[ -]?paired|Paired: yes|AlreadyExists' <<<"$pout"; then
+    bluetoothctl trust "$mac" >/dev/null 2>&1
+    cout=$(bluetoothctl --timeout 20 connect "$mac" 2>&1)
+    if grep -qiE 'Connection successful|Connected: yes|already connected' <<<"$cout"; then
+        exit 0
+    fi
+    grep -iE 'Failed|not available|error|refused|timed out' <<<"$cout" | tail -1
+    exit 2
+fi
+grep -iE 'Failed|not available|error|timed out|refused|Authentication|Protocol' <<<"$pout" | tail -1
+exit 1
+`;
+        return ["bash", "-c", script, "bash", m];
+    }
 }

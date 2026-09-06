@@ -8,11 +8,12 @@ import (
 )
 
 // The Depth tab is a quick-settings module. New installs get it from the catalog
-// default, but a machine that persisted the pre-depth rail
-// [home, notifications, weather, capture] would never see it. This appends
-// "depth" to exactly that rail; a customized rail (or one already carrying depth)
-// is left alone. Runs after reconcileCaptureModule so a rail two releases behind
-// gains capture first, then depth.
+// default, but a machine that persisted a pre-depth rail would never see it, and
+// that rail varies by install era ([home, notifications, weather], then +capture).
+// This appends "depth" to any persisted rail that carries the base Home module
+// and lacks it; a rail already carrying depth, or a foreign one, is left alone.
+// Runs after reconcileCaptureModule so a two-releases-behind rail gains capture
+// first, then depth, in the same pass.
 func reconcileDepthModule(checkOnly bool) recResult {
 	path := filepath.Join(sys.ConfigHome(), "ryoku", "shell.json")
 	raw, err := os.ReadFile(path)
@@ -42,9 +43,9 @@ func reconcileDepthModule(checkOnly bool) recResult {
 	return fixedRes("added the depth tab to the quick-settings rail after Capture")
 }
 
-// addDepthModule appends "depth" to a shell store whose quick-settings module
-// rail is exactly [home, notifications, weather, capture], preserving every other
-// key as its own raw bytes.
+// addDepthModule appends "depth" to the quick-settings module rail of a shell
+// store whose rail carries the base Home module and lacks depth, preserving every
+// other key as its own raw bytes.
 func addDepthModule(raw []byte) ([]byte, bool, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil {
@@ -78,16 +79,23 @@ func addDepthModule(raw []byte) ([]byte, bool, error) {
 	if err := json.Unmarshal(qs["modules"], &modules); err != nil {
 		return nil, false, nil
 	}
-	want := []string{"home", "notifications", "weather", "capture"}
-	if len(modules) != len(want) {
-		return nil, false, nil
-	}
-	for i := range want {
-		if modules[i] != want[i] {
+	hasHome := false
+	for _, m := range modules {
+		if m == "depth" {
 			return nil, false, nil
 		}
+		if m == "home" {
+			hasHome = true
+		}
 	}
-	next, err := json.Marshal(append(want, "depth"))
+	// Any genuine quick-settings rail (one carrying the base Home module) gains the
+	// Depth tab; an empty or foreign rail is left alone. Runs after the capture
+	// reconciler, so a [home, notifications, weather] rail gains capture first and
+	// then depth in the same pass.
+	if !hasHome {
+		return nil, false, nil
+	}
+	next, err := json.Marshal(append(modules, "depth"))
 	if err != nil {
 		return nil, false, err
 	}

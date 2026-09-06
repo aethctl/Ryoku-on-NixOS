@@ -10,6 +10,7 @@ import (
 // ends. Hermetic: no spicetify binary is run and no client tree is read.
 func stubSpicetifyTarget(t *testing.T, path string, writable bool) {
 	t.Helper()
+	isolateProvisioned(t)
 	ow, oi, oc, op := spicetifyClientWritable, spotifyInstalled, spicetifyCanvasSource, spotifyLauncherPending
 	occ, oe, oul := spicetifyCliPresent, spicetifyExtensionEnabled, spotifyLauncherUnlaunched
 	oup, oil := onlyUnpatchableSpotify, installSpotifyLauncher

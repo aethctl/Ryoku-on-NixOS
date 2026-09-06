@@ -386,13 +386,14 @@ func syncFollowWallpaper(themeName string) {
 	if b, err := os.ReadFile(path); err == nil {
 		_ = json.Unmarshal(b, &doc)
 	}
-	// Only the Wallpaper variant drives the live pipeline. Default is the
-	// monochrome base (the shell's compiled palette -- the shipped default and
-	// the Appearance MONO card), and every named theme owns a fixed palette;
-	// none of them follow the wallpaper, so their shadow key is off. This matches
-	// the fresh-install state (theme.theme "Default", no theme.json -> Match
-	// wallpaper off) instead of fighting it the moment the picker is touched.
-	follow := themeName == "Wallpaper"
+	// Colours follow the wallpaper by default. Only a named static theme, or an
+	// explicit Light / Dark curated lock, pins a fixed palette; the plain base
+	// (Default or Wallpaper) always follows, so a fresh desktop -- and any box
+	// that lands back on Default -- tracks the wallpaper instead of the shipped
+	// brand palette. theme.theme is the master; this is its shadow.
+	scheme, _ := doc["scheme"].(string)
+	locked := scheme == "light" || scheme == "dark"
+	follow := !staticName(themeName) && !locked
 	if cur, ok := doc["followWallpaper"].(bool); ok && cur == follow {
 		return
 	}
@@ -549,6 +550,13 @@ func (d *daemon) matugenApply(img string) error {
 	if err := writeJSONFile(matugenColorsPath(), matugenColorsJSON(pal)); err != nil {
 		return fmt.Errorf("matugen colors.json: %w", err)
 	}
+
+	// Retint the Material pointer now, parallel with the template fan-out below,
+	// so it tracks the wallpaper as promptly as the bar instead of waiting on
+	// matugen's post_hook (which runs only after every template has rendered). It
+	// reads the colors.json just written; a no-op unless the Material cursor is
+	// selected, and its own lock makes the post_hook's later run idempotent.
+	go func() { _ = runCommand("ryoku-cursor-material-recolor") }()
 
 	// And the tonal ramps behind those roles, from the same run.
 	if tones != nil {
@@ -995,6 +1003,7 @@ func matugenCarrier(pal map[string]string) map[string]any {
 			g, _ = strconv.ParseInt(stripped[2:4], 16, 0)
 			b, _ = strconv.ParseInt(stripped[4:6], 16, 0)
 		}
+		h, s, l := rgbToHSL(r, g, b)
 		co := map[string]any{
 			"hex":          hex,
 			"hex_stripped": stripped,
@@ -1002,6 +1011,10 @@ func matugenCarrier(pal map[string]string) map[string]any {
 			"green":        strconv.FormatInt(g, 10),
 			"blue":         strconv.FormatInt(b, 10),
 			"rgb":          fmt.Sprintf("%d, %d, %d", r, g, b),
+			"hue":          strconv.Itoa(h),
+			"saturation":   strconv.Itoa(s),
+			"lightness":    strconv.Itoa(l),
+			"hsl":          fmt.Sprintf("hsl(%d, %d%%, %d%%)", h, s, l),
 		}
 		entry := map[string]any{"default": co, "dark": co, "light": co}
 		for key, val := range co {
@@ -1014,6 +1027,42 @@ func matugenCarrier(pal map[string]string) map[string]any {
 		put(k+"_argb", "#ff"+strings.TrimPrefix(v, "#"))
 	}
 	return map[string]any{"colors": colors}
+}
+
+// rgbToHSL converts an 8-bit sRGB triple to HSL as hue in degrees [0,360) and
+// saturation/lightness in whole percent, the units CSS hsl() and Obsidian's
+// --accent-h/s/l expect. The carrier is hex/rgb only in matugen json mode, so a
+// template that needs the accent as an HSL triple (Obsidian derives its whole
+// accent chain from --accent-h/s/l) gets it from here rather than a hook.
+func rgbToHSL(r, g, b int64) (int, int, int) {
+	rf, gf, bf := float64(r)/255, float64(g)/255, float64(b)/255
+	max := math.Max(rf, math.Max(gf, bf))
+	min := math.Min(rf, math.Min(gf, bf))
+	l := (max + min) / 2
+	if max == min {
+		return 0, 0, int(math.Round(l * 100)) // achromatic: hue and saturation undefined
+	}
+	d := max - min
+	var s float64
+	if l > 0.5 {
+		s = d / (2 - max - min)
+	} else {
+		s = d / (max + min)
+	}
+	var h float64
+	switch max {
+	case rf:
+		h = (gf - bf) / d
+		if gf < bf {
+			h += 6
+		}
+	case gf:
+		h = (bf-rf)/d + 2
+	default:
+		h = (rf-gf)/d + 4
+	}
+	h /= 6
+	return int(math.Round(h * 360)), int(math.Round(s * 100)), int(math.Round(l * 100))
 }
 
 // templateGroup maps a matugen template block name to its roster key, so one
@@ -1093,8 +1142,61 @@ func matugenRenderTemplates(shell map[string]string, k matugenKnobs) {
 	// silently undid it.
 	if k.ThemeRyokuApps && themeAppsEnabled() {
 		matugenRenderFiltered(filepath.Join(dir, "apps.toml"), carrierPath, enabled)
+		// matugen wrote the shared snippet target; poke each vault's symlink so
+		// Obsidian's watcher, which never sees the out-of-vault target change,
+		// reloads the new palette without a restart.
+		if enabled("obsidian") {
+			nudgeObsidian()
+		}
 	} else {
 		blankGtk(matugenConfigHome())
+	}
+}
+
+// nudgeObsidian re-links the palette snippet inside every registered Obsidian
+// vault so the vault's file watcher fires and Obsidian reloads the freshly
+// rendered CSS. matugen writes one shared snippet target outside every vault
+// (~/.config/matugen/generated/obsidian.css); the vault holds a symlink to it,
+// and inotify on the vault's snippets directory does not follow the link, so
+// Obsidian never learns the target changed. A symlink recreated atomically
+// (temp name then rename) fires IN_MOVED_* inside the vault, which the watcher
+// does see, and leaves a symlink so the doctor's snippet check stays satisfied.
+// Only a vault whose ryoku.css is already a symlink is touched; a regular file
+// there is the user's own and left alone. Best-effort throughout: a missing
+// registry or a link that will not recreate is skipped, never surfaced, so a
+// palette apply never fails on Obsidian's account.
+func nudgeObsidian() {
+	b, err := os.ReadFile(filepath.Join(matugenConfigHome(), "obsidian", "obsidian.json"))
+	if err != nil {
+		return
+	}
+	var doc struct {
+		Vaults map[string]struct {
+			Path string `json:"path"`
+		} `json:"vaults"`
+	}
+	if json.Unmarshal(b, &doc) != nil {
+		return
+	}
+	generated := filepath.Join(matugenConfigHome(), "matugen", "generated", "obsidian.css")
+	for _, v := range doc.Vaults {
+		vault := strings.TrimSpace(v.Path)
+		if vault == "" {
+			continue
+		}
+		link := filepath.Join(vault, ".obsidian", "snippets", "ryoku.css")
+		fi, err := os.Lstat(link)
+		if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+			continue // no link yet (doctor not run) or a user's own file
+		}
+		tmp := link + ".ryoku-tmp"
+		_ = os.Remove(tmp)
+		if os.Symlink(generated, tmp) != nil {
+			continue
+		}
+		if os.Rename(tmp, link) != nil {
+			_ = os.Remove(tmp)
+		}
 	}
 }
 
@@ -1177,6 +1279,48 @@ func matugenReload(mode string) {
 // restarting or absent bar never stalls the paint worker.
 func nudgePalette() {
 	go ipcCall("shell", "theme", "reload", "")
+}
+
+// applyHyprBorder pushes the window-border colours to the live compositor via
+// `hyprctl eval`. Under Hyprland's Lua config provider a `hyprctl reload` re-runs
+// decoration.lua but reverts col.active_border to the value parsed at login (the
+// fallback), so the border never followed the wallpaper; eval is the only path
+// that lands a runtime change. Reads the same roles the hypr-colors template uses
+// (color4 active, background inactive) from the palette just written to
+// colors.json, so it must run AFTER the caller's config reload, whose revert it undoes.
+func applyHyprBorder() {
+	b, err := os.ReadFile(matugenColorsPath())
+	if err != nil {
+		return
+	}
+	var c struct {
+		Color4     string `json:"color4"`
+		Background string `json:"background"`
+	}
+	if json.Unmarshal(b, &c) != nil {
+		return
+	}
+	var parts []string
+	if rgb := hyprRGB(c.Color4); rgb != "" {
+		parts = append(parts, `["col.active_border"]=`+strconv.Quote(rgb))
+	}
+	if rgb := hyprRGB(c.Background); rgb != "" {
+		parts = append(parts, `["col.inactive_border"]=`+strconv.Quote(rgb))
+	}
+	if len(parts) == 0 {
+		return
+	}
+	_ = runCommand("hyprctl", "eval", "hl.config({general={"+strings.Join(parts, ",")+"}})")
+}
+
+// hyprRGB turns a #rrggbb palette colour into Hyprland's rgb(rrggbb) literal, or
+// "" for a non-hex value so a missing role is skipped rather than mis-set.
+func hyprRGB(hex string) string {
+	h := strings.TrimPrefix(hex, "#")
+	if len(h) != 6 {
+		return ""
+	}
+	return "rgb(" + h + ")"
 }
 
 // matugenNudgeGtk lands gtk-theme on `want`, flipping through a placeholder first

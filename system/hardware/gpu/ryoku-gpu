@@ -92,7 +92,13 @@ aq_value_for() {
 # ── config snippet (Lua, hl API) ──────────────────────────────────────────────
 
 emit_snippet() {
-  local value="$1" primary="$2"
+  local value="$1" primary="$2" forced_marker=""
+  # A pin forced onto a laptop is deliberate: mark it so `check-pin` (and the
+  # ryoku doctor behind it) never reverts an override the user asked for.
+  if [[ ${RYOKU_GPU_FORCE:-0} == "1" ]]; then
+    forced_marker="-- ryoku-gpu-forced: RYOKU_GPU_FORCE=1 override; check-pin leaves this pin alone
+"
+  fi
   cat <<EOF
 -- Managed by ryoku-gpu. Pins Hyprland's primary render device to the strongest
 -- GPU so the desktop renders on it instead of a weak integrated one. The leftmost
@@ -100,7 +106,7 @@ emit_snippet() {
 -- keep working through render-offload (reverse PRIME). The env is read once at
 -- compositor start, so a change takes effect on the next Hyprland login.
 -- ryoku-gpu-primary: $primary
-hl.env("AQ_DRM_DEVICES", "$value")
+${forced_marker}hl.env("AQ_DRM_DEVICES", "$value")
 
 -- Reverse PRIME composites the cursor on the primary GPU but scans it out on the
 -- GPU the monitor is wired to. Hyprland's hardware cursor plane cannot reliably
@@ -251,6 +257,34 @@ cmd_install_udev() {
   echo "ryoku-gpu: installed stable GPU symlinks via $UDEV_RULE"
 }
 
+# check-pin audits the written pin against today's policy, for `ryoku doctor`.
+# Machines pinned by an older release (or before a mode switch) keep the stale
+# hl.env line forever: on a laptop it keeps the whole desktop rendering on the
+# discrete GPU, which then can never runtime-suspend (~10 W and the idle-heat
+# floor). Prints exactly one verdict line:
+#   ok               no pin, or a pin today's policy would also write
+#   forced           pin carries the RYOKU_GPU_FORCE marker; user intent, kept
+#   stale-pin SLOT   policy says unpinned; `ryoku-gpu disable` clears it
+cmd_check_pin() {
+  local dest="${1:-$GPU_CONF_DEFAULT}"
+  if [[ ! -r $dest ]] || ! grep -Eq '^[[:space:]]*hl\.env\("AQ_DRM_DEVICES"' "$dest"; then
+    echo ok
+    return 0
+  fi
+  if grep -q -- '-- ryoku-gpu-forced' "$dest"; then
+    echo forced
+    return 0
+  fi
+  analyze
+  if beneficial; then
+    echo ok
+    return 0
+  fi
+  local slot
+  slot="$(sed -n 's/^-- ryoku-gpu-primary: //p' "$dest" | head -n1)"
+  echo "stale-pin ${slot:-unknown}"
+}
+
 cmd_status() {
   cmd_detect
   echo
@@ -338,6 +372,7 @@ Commands:
   persist [PATH]  Write the Hyprland pin (Lua) to PATH, to ~/.config/hypr/gpu.lua
                   by default, or to stdout when PATH is '-'.
   disable [PATH]  Reset the pin file to a managed comment-only placeholder.
+  check-pin [PATH] Audit the pin against policy: ok | forced | stale-pin SLOT.
   install-udev    Install 90-ryoku-gpu.rules for boot-stable GPU symlinks (root).
   status          Show detection plus the current pin and udev-rule state.
   mode <m> [PATH]  Set host graphics mode: hybrid | performance | passthrough.
@@ -356,6 +391,7 @@ case "${1:-status}" in
   install-udev) cmd_install_udev ;;
   status) cmd_status ;;
   disable | clear) cmd_disable "${2:-}" ;;
+  check-pin) cmd_check_pin "${2:-}" ;;
   mode) cmd_mode "${2:-}" "${3:-}" ;;
   -h | --help | help) usage ;;
   *)

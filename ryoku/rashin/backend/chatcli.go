@@ -142,19 +142,40 @@ func emitSkillsFrame() {
 	type skill struct{ name, desc string }
 	var found []skill
 	seen := map[string]bool{}
-	_ = filepath.WalkDir(filepath.Join(home, "skills"), func(p string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() || d.Name() != "SKILL.md" {
-			return nil
-		}
+	addSkill := func(p string) {
 		name, desc := skillMeta(p)
 		if name == "" {
 			name = filepath.Base(filepath.Dir(p))
 		}
 		if name == "" || seen[name] {
-			return nil
+			return
 		}
 		seen[name] = true
 		found = append(found, skill{name, desc})
+	}
+	// A skill is <skills>/<name>/SKILL.md, or one of a bundle at
+	// <skills>/<bundle>/skills/<name>/SKILL.md. Symlinked dirs are read through:
+	// wire links the shipped ryoku skill in, and WalkDir would skip it.
+	_ = filepath.WalkDir(filepath.Join(home, "skills"), func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			if info, statErr := os.Stat(p); statErr == nil && info.IsDir() {
+				if _, e := os.Stat(filepath.Join(p, "SKILL.md")); e == nil {
+					addSkill(filepath.Join(p, "SKILL.md"))
+				}
+				bundled, _ := filepath.Glob(filepath.Join(p, "skills", "*", "SKILL.md"))
+				for _, cand := range bundled {
+					addSkill(cand)
+				}
+			}
+			return nil
+		}
+		if d.IsDir() || d.Name() != "SKILL.md" {
+			return nil
+		}
+		addSkill(p)
 		return nil
 	})
 	sort.Slice(found, func(i, j int) bool { return found[i].name < found[j].name })

@@ -3,6 +3,7 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import ".."
 import "../schema/DesktopPage.js" as DesktopSchema
+import "../Singletons"
 
 // Desktop: what sits on the desktop itself. The brand mark, the weather source
 // the widgets and bar read, the widget board, and the audio visualiser.
@@ -14,8 +15,24 @@ Item {
 
     readonly property string pTitle: I18n.tr("Desktop")
     readonly property string pEyebrow: I18n.tr("DESKTOP")
-    readonly property string pBlurb: I18n.tr("What sits on your desktop: the brand mark and the audio visualiser.")
+    readonly property string pBlurb: I18n.tr("What sits on your desktop: the brand mark, the pickers, and the audio visualiser.")
     function focusKey(k) { sp.focusKey(k) }
+
+    // ── Pickers ───────────────────────────────────────────────────────────────
+    // The theme/wallpaper/media picker layout lives at qsbar.pickerStyle, a nested
+    // leaf under the bar's own map. Read and write it through the daemon settings
+    // seam so a write patches only that key and never rebuilds the whole qsbar
+    // object, which would clobber the bar layout and widgets the panel writes; it
+    // applies live like every daemon-backed key.
+    readonly property var pickerOptions: ["tanzaku", "hearthstone", "carousel"]
+    readonly property string pickerStyle: {
+        Settings.revision;
+        const v = Settings.get("qsbar.pickerStyle");
+        return (v === undefined || v === null || v === "") ? "tanzaku" : v;
+    }
+    function setPickerStyle(k) {
+        if (k) Settings.patch("qsbar.pickerStyle", k);
+    }
 
     SchemaPage {
         id: sp
@@ -41,6 +58,35 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             visible: sp.tab === "Visualizer"
+        }
+
+        // ── PICKERS: how the theme, wallpaper and media pickers are laid out.
+        // Folded flat off the General subtab so the shared extras slot leaves no
+        // gap on Visualizer, the way the visualiser preview folds off General.
+        SettingCard {
+            id: pickersCard
+            anchors.left: parent.left
+            anchors.right: parent.right
+            title: I18n.tr("PICKERS")
+            kana: "選"
+            visible: sp.tab === "General"
+            height: visible ? implicitHeight : 0
+
+            SettingRow {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                block: true
+                label: I18n.tr("Picker style")
+                desc: I18n.tr("How the theme, wallpaper and media pickers are laid out.")
+                source: "shell.json"
+                Seg {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    options: pg.pickerOptions
+                    current: pg.pickerStyle
+                    onChose: key => pg.setPickerStyle(key)
+                }
+            }
         }
     }
 

@@ -167,6 +167,11 @@ fi
 # SDDM own the VT and tear it down cleanly at login. weston --shell=kiosk is
 # SDDM's default kiosk compositor (base.packages ships weston); the greeter
 # connects to it as a separate Wayland client.
+# The greeter has no session env, so XCURSOR_* is pinned to the shipped Bibata
+# set (ryoku-cursors): without a theme Qt falls back to "default", and where that
+# resolves to nothing the login screen has no visible pointer. Keep this body
+# identical to sddmWaylandBody() in ryoku/cli/internal/doctor/doctor.go, which
+# converges existing boxes onto it.
 WAYLAND_CONF="/etc/sddm.conf.d/10-ryoku-wayland.conf"
 GREETER_BIN="/usr/share/ryoku/lockscreen/ryoku-greeter"
 # the wrapper runs weston at each output's top mode; plain weston (preferred) if
@@ -181,9 +186,34 @@ priv mkdir -p /etc/sddm.conf.d
 write_root "$WAYLAND_CONF" <<EOF
 [General]
 DisplayServer=wayland
+GreeterEnvironment=QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24
 
 [Wayland]
 CompositorCommand=$COMPOSITOR
 EOF
+
+# --- 6. give the "default" cursor theme a real target ------------------------
+# The greeter's Qt client and weston both fall back to the freedesktop cursor
+# theme literally named "default" -- the greeter because SDDM's Wayland mode does
+# not propagate a cursor theme, weston because none is set in its config. Ryoku
+# ships no /usr/share/icons/default, so that fallback resolves to nothing and the
+# login screen has no pointer at all at boot and after logout. Point "default" at
+# the shipped Bibata set (ryoku-cursors). Only when the box has no default of its
+# own; a user or another package that owns one is left untouched. Mirror this in
+# reconcileGreeterCursor() (ryoku/cli/internal/doctor/doctor.go), which converges
+# existing boxes.
+DEFAULT_CURSOR_DIR="/usr/share/icons/default"
+if [[ -e $DEFAULT_CURSOR_DIR/index.theme || -d $DEFAULT_CURSOR_DIR/cursors ]]; then
+  echo "  default cursor theme already established; leaving it"
+else
+  echo "  default cursor theme -> Inherits=Bibata-Modern-Ice"
+  priv mkdir -p "$DEFAULT_CURSOR_DIR"
+  write_root "$DEFAULT_CURSOR_DIR/index.theme" <<'EOF'
+[Icon Theme]
+Name=Default
+Comment=Ryoku default cursor
+Inherits=Bibata-Modern-Ice
+EOF
+fi
 
 echo "SDDM wiring complete."

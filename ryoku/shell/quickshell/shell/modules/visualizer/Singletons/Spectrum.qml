@@ -21,6 +21,9 @@ Singleton {
     property bool active: false
     property int bars: 64
     property int fps: 30
+    // Instances being placed (Super+Alt+M) hold this up so the spectrum keeps
+    // running while it is aimed: you cannot position a frozen, invisible line.
+    property int placementHolds: 0
 
     // 0..1 per band (length == bars) + mean energy across all bands.
     property var levels: root.flat(0.02)
@@ -36,7 +39,8 @@ Singleton {
 
     // Visible, permitted, and something actually playing: the same three
     // questions AudioBars asks, so the two analysers cannot drift apart again.
-    readonly property bool analysing: root.active && !Perf.visualizerFrozen
+    // A live placement overrides the freeze so the look stays visible to aim.
+    readonly property bool analysing: root.active && (!Perf.visualizerFrozen || root.placementHolds > 0)
 
     Process {
         id: cavaProc

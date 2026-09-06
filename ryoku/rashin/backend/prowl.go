@@ -48,21 +48,27 @@ func findProwl() (string, bool) {
 	return p, err == nil
 }
 
-// prowlRepo picks the repo the dashboard reports on: an explicit override,
-// else the Ryoku checkout when it carries an index.
+// prowlRepo picks the repo the code index answers on: a dev checkout that
+// carries a .prowl index (the deploy-recorded checkout, honouring
+// RYOKU_RASHIN_REPO and ~/.local/state/ryoku/repo, then the conventional
+// locations), else the vault's config mirror when it carries one. So the prowl
+// MCP server and search_code work on a packaged box with no checkout too.
 func prowlRepo() string {
-	if v := os.Getenv("RYOKU_RASHIN_REPO"); v != "" {
-		if dirExists(filepath.Join(v, ".prowl")) {
-			return v
-		}
+	cands := []string{}
+	if repo := recordedCheckout(); repo != "" {
+		cands = append(cands, repo)
 	}
-	for _, cand := range []string{
+	cands = append(cands,
 		filepath.Join(home(), "Work", "ryoku-arch"),
 		filepath.Join(home(), "ryoku-arch"),
-	} {
+	)
+	for _, cand := range cands {
 		if dirExists(filepath.Join(cand, ".prowl")) {
 			return cand
 		}
+	}
+	if m := sourceMirrorDir(); dirExists(filepath.Join(m, ".prowl")) {
+		return m
 	}
 	return ""
 }

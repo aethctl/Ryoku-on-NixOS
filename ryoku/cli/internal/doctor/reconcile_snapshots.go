@@ -3,6 +3,7 @@ package doctor
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 
 	"ryoku-cli/internal/sys"
@@ -20,6 +21,9 @@ const snapshotDrainBatch = 20
 // snapshots leak past number cleanup), and drain leaked timeline snapshots.
 // Draining runs only under a number-only config (TIMELINE_CREATE="no").
 func reconcileSnapperCleanup(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Snapper timer and cleanup policy is managed declaratively on NixOS")
+	}
 	if !sys.Exists("/etc/snapper/configs/root") {
 		return okRes("root snapshots not configured, nothing to prune")
 	}
@@ -34,6 +38,10 @@ func reconcileSnapperCleanup(checkOnly bool) recResult {
 	if numberOnly {
 		leaked = leakedTimelineSnapshots()
 	}
+	// Untagged Ryoku snapshots (GPU passthrough, config import) carry no cleanup
+	// algorithm, so number cleanup never reclaims them and they pile up. Retag
+	// them so the cap applies. Leaks under any config, so computed unconditionally.
+	orphans := untaggedRyokuSnapshots()
 
 	if checkOnly {
 		switch {
@@ -46,6 +54,9 @@ func reconcileSnapperCleanup(checkOnly bool) recResult {
 		case len(leaked) > 0:
 			return wouldRes("%d leaked timeline snapshot(s) that number cleanup never reclaims", len(leaked)).
 				withFix("ryoku doctor (deletes them in batches, then runs snapper cleanup number)")
+		case len(orphans) > 0:
+			return wouldRes("%d untagged Ryoku snapshot(s) that number cleanup never reclaims", len(orphans)).
+				withFix("ryoku doctor (tags them for number cleanup, then prunes to NUMBER_LIMIT)")
 		}
 		return okRes("snapshot cleanup is healthy")
 	}
@@ -68,6 +79,11 @@ func reconcileSnapperCleanup(checkOnly bool) recResult {
 		}
 		if failed > 0 {
 			fixes = append(fixes, fmt.Sprintf("%d timeline snapshot(s) could not be deleted (retry: sudo snapper -c root cleanup number)", failed))
+		}
+	}
+	if len(orphans) > 0 {
+		if tagged := retagSnapshotsNumber(orphans); tagged > 0 {
+			fixes = append(fixes, fmt.Sprintf("tagged %d untagged Ryoku snapshot(s) for number cleanup", tagged))
 		}
 	}
 	// catch the numbered pile up now, not at the next timer tick.
@@ -133,6 +149,50 @@ func parseLeakedTimeline(csv string) []string {
 	return out
 }
 
+// untaggedRyokuSnapshots lists Ryoku-made snapshots with no cleanup algorithm
+// (GPU passthrough, config import), read-only and non-prompting. Only Ryoku's
+// own snapshots are touched, never a user's hand-made ones.
+func untaggedRyokuSnapshots() []string {
+	out, err := sys.RunOut("sudo", "-n", "snapper", "-c", "root", "--csvout",
+		"list", "--columns", "number,cleanup,description")
+	if err != nil {
+		return nil
+	}
+	return parseUntaggedRyoku(out)
+}
+
+// parseUntaggedRyoku returns the numbers of Ryoku snapshots with an empty
+// cleanup algorithm, skipping the header and base snapshot 0. SplitN keeps a
+// comma inside a description in the last field.
+func parseUntaggedRyoku(csv string) []string {
+	var out []string
+	for _, line := range strings.Split(csv, "\n") {
+		fields := strings.SplitN(strings.TrimSpace(line), ",", 3)
+		if len(fields) < 3 {
+			continue
+		}
+		num, cleanup, desc := strings.TrimSpace(fields[0]), strings.TrimSpace(fields[1]), fields[2]
+		if num == "" || num == "0" || !allDigits(num) {
+			continue
+		}
+		if cleanup == "" && strings.Contains(desc, "ryoku") {
+			out = append(out, num)
+		}
+	}
+	return out
+}
+
+// retagSnapshotsNumber assigns the number cleanup algorithm to each snapshot so
+// the next `snapper cleanup number` prunes it under NUMBER_LIMIT.
+func retagSnapshotsNumber(numbers []string) (tagged int) {
+	for _, n := range numbers {
+		if err := sys.Sudo("snapper", "-c", "root", "modify", "-c", "number", n); err == nil {
+			tagged++
+		}
+	}
+	return tagged
+}
+
 // drainSnapshots deletes numbers in batches, tolerating a failed batch so the
 // rest still drain.
 func drainSnapshots(numbers []string, size int) (deleted, failed int) {
@@ -178,6 +238,10 @@ func allDigits(s string) bool {
 // /.snapshots, which turns updatedb into an hours-long crawl on a
 // snapshot-heavy box. No updatedb.conf means locate is not installed.
 func reconcileUpdatedbPrune(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("system updatedb configuration is not mutated imperatively by Doctor on NixOS")
+	}
+
 	const path = "/etc/updatedb.conf"
 	if !sys.Exists(path) {
 		return okRes("no /etc/updatedb.conf (locate not installed)")
@@ -200,27 +264,62 @@ func reconcileUpdatedbPrune(checkOnly bool) recResult {
 	return fixedRes("added /.snapshots to updatedb PRUNEPATHS so plocate skips snapshots")
 }
 
-// addUpdatedbPrunePath ensures path is in PRUNEPATHS, extending an existing
-// line or appending one; changed=false when already listed.
+// updatedbPrunePathsLine accepts both the package's `PRUNEPATHS = "..."` and
+// Ryoku's earlier compact spelling. Keeping the original prefix and suffix
+// preserves package comments and avoids rewriting unrelated configuration.
+var updatedbPrunePathsLine = regexp.MustCompile(`^(\s*PRUNEPATHS\s*=\s*)"([^"]*)"(\s*(?:#.*)?)$`)
+
+// addUpdatedbPrunePath ensures path is in the sole PRUNEPATHS assignment. A
+// previous Ryoku version appended a compact second assignment to stock configs;
+// merge every assignment so an update repairs that invalid configuration.
 func addUpdatedbPrunePath(conf, path string) (string, bool) {
 	lines := strings.Split(conf, "\n")
+	first := -1
+	var prefix, suffix string
+	paths := make([]string, 0)
+	seen := make(map[string]bool)
+	duplicates := make(map[int]bool)
+
 	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "PRUNEPATHS=") {
+		match := updatedbPrunePathsLine.FindStringSubmatch(line)
+		if match == nil {
 			continue
 		}
-		val := strings.Trim(strings.TrimPrefix(trimmed, "PRUNEPATHS="), `"`)
-		for _, f := range strings.Fields(val) {
-			if f == path {
-				return conf, false
+		if first < 0 {
+			first, prefix, suffix = i, match[1], match[3]
+		} else {
+			duplicates[i] = true
+		}
+		for _, existing := range strings.Fields(match[2]) {
+			if !seen[existing] {
+				seen[existing] = true
+				paths = append(paths, existing)
 			}
 		}
-		lines[i] = `PRUNEPATHS="` + strings.Join(append(strings.Fields(val), path), " ") + `"`
-		return strings.Join(lines, "\n"), true
 	}
-	out := conf
-	if out != "" && !strings.HasSuffix(out, "\n") {
-		out += "\n"
+
+	if first < 0 {
+		out := conf
+		if out != "" && !strings.HasSuffix(out, "\n") {
+			out += "\n"
+		}
+		return out + `PRUNEPATHS="` + path + `"` + "\n", true
 	}
-	return out + `PRUNEPATHS="` + path + `"` + "\n", true
+	if !seen[path] {
+		paths = append(paths, path)
+	}
+	next := prefix + `"` + strings.Join(paths, " ") + `"` + suffix
+	out := make([]string, 0, len(lines)-len(duplicates))
+	for i, line := range lines {
+		if duplicates[i] {
+			continue
+		}
+		if i == first {
+			out = append(out, next)
+			continue
+		}
+		out = append(out, line)
+	}
+	merged := strings.Join(out, "\n")
+	return merged, merged != conf
 }

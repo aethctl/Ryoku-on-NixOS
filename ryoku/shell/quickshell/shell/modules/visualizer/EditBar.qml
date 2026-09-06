@@ -57,15 +57,28 @@ Item {
 
     anchors.fill: parent
 
+    // The bar and the tray are laid out at their natural width, then scaled to
+    // fit the surface: every control sits in one row (about 1900 logical px),
+    // and a scaled display is narrower in logical px than in pixels (1600 at
+    // 1.6x on a 2560-wide panel), so the row ran off both edges and the
+    // right-hand controls were unreachable. Scaling keeps one layout and every
+    // hit target in place; the origin is the edge the bar hangs from, so the
+    // scaled plate keeps its inset and stays centred.
+    function fit(w) { return Math.min(1, (bar.width - 2 * Tokens.s5) / Math.max(1, w)); }
+
     // --- the look tray --------------------------------------------------------
     Rectangle {
         id: tray
         property bool open: false
 
         x: Math.round((bar.width - width) / 2)
-        y: bar.atTop ? plate.y + plate.height + Tokens.s3 : plate.y - height - Tokens.s3
+        // measured against the plate's SCALED extent, so the gap stays a token
+        y: bar.atTop ? plate.y + plate.height * plate.scale + Tokens.s3
+                     : plate.y + plate.height * (1 - plate.scale) - height - Tokens.s3
         width: gal.width + 2 * Tokens.s4
         height: gal.height + 2 * Tokens.s4
+        scale: bar.fit(width)
+        transformOrigin: bar.atTop ? Item.Top : Item.Bottom
         radius: Tokens.radius
         color: Qt.alpha(Tokens.paper, 0.94)
         border.width: Tokens.border
@@ -98,6 +111,8 @@ Item {
         y: bar.atTop ? Tokens.s5 : Math.round(bar.height - height - Tokens.s5)
         width: col.width + 2 * Tokens.s5
         height: col.height + 2 * Tokens.s4
+        scale: bar.fit(width)
+        transformOrigin: bar.atTop ? Item.Top : Item.Bottom
         radius: Tokens.radius
         color: Qt.alpha(Tokens.paper, 0.94)
         border.width: Tokens.border

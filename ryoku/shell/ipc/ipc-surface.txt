@@ -171,7 +171,6 @@ visualizer
 visualizer-overlay
 voice
 wallpaper
-wallpaper-switcher
 warning
 wave
 weather

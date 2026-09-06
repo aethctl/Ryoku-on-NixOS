@@ -128,6 +128,10 @@ func gatherLimineLayoutState() limineLayoutState {
 }
 
 func reconcileLimineLayout(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("bootloader layout is managed declaratively on NixOS")
+	}
+
 	st := gatherLimineLayoutState()
 	outcome, actions := planLimineLayout(st)
 	switch outcome {
@@ -337,13 +341,35 @@ func stripLiminePlaceholderBody(conf string) string {
 // tool) put in the prelude -- quiet, remember_last_entry, interface_resolution,
 // macros -- survives.
 var limineBrandedKeys = []string{
-	"timeout:", "default_entry:", "interface_branding:",
+	"timeout:", "default_entry:", "remember_last_entry:", "interface_branding:",
 	"interface_branding_color:", "interface_branding_colour:",
 	"interface_help_color:", "interface_help_colour:",
 	"interface_help_color_bright:", "interface_help_colour_bright:",
 	"hash_mismatch_panic:", "term_background:", "backdrop:", "wallpaper:",
 	"term_palette:", "term_palette_bright:", "term_foreground:",
 	"term_foreground_bright:", "term_background_bright:",
+}
+
+// limineForcedKeys are the only globals set over a user's value: the boot
+// identity, and the flag a snapshot entry needs to boot at all. Everything
+// else is seeded when absent and never reset.
+var limineForcedKeys = []string{"interface_branding:", "hash_mismatch_panic:"}
+
+func limineLineKey(trimmed string) string {
+	if i := strings.IndexByte(trimmed, ':'); i >= 0 {
+		return strings.ToLower(trimmed[:i+1])
+	}
+	return ""
+}
+
+func limineForcedKey(trimmed string) bool {
+	k := limineLineKey(trimmed)
+	for _, f := range limineForcedKeys {
+		if k == f {
+			return true
+		}
+	}
+	return false
 }
 
 // mergeLimineConf builds the migrated /boot/limine.conf: the canonical Ryoku
@@ -362,27 +388,50 @@ func mergeLimineConf(espConf, shadowConf string) string {
 	prelude, body := splitLimineConf(base)
 	body = stripLiminePlaceholderBody(body)
 
-	var kept []string
+	baseBranded := map[string]string{}
+	var extras []string
 	for _, line := range strings.Split(prelude, "\n") {
 		t := strings.TrimSpace(line)
 		if t == "" || strings.HasPrefix(t, "#") {
-			continue // comments restate the old header; the new one replaces them
+			continue // blank lines and header comments are restated below
 		}
 		if limineBrandedKey(t) {
+			if k := limineLineKey(t); baseBranded[k] == "" {
+				baseBranded[k] = line
+			}
 			continue
 		}
-		kept = append(kept, line)
+		extras = append(extras, line)
 	}
-
-	header := limineBranding
 
 	var b strings.Builder
 	b.WriteString("# Ryoku limine config -- branding globals + generated entries. managed by\n")
 	b.WriteString("# limine-mkinitcpio-hook / limine-snapper-sync (entries) and ryoku (globals).\n")
-	b.WriteString(header)
-	if len(kept) > 0 {
-		b.WriteString("\n")
-		b.WriteString(strings.Join(kept, "\n"))
+	emitted := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimRight(limineBranding, "\n"), "\n") {
+		t := strings.TrimSpace(line)
+		if limineBrandedKey(t) {
+			k := limineLineKey(t)
+			emitted[k] = true
+			if !limineForcedKey(t) {
+				if bl, ok := baseBranded[k]; ok {
+					b.WriteString(bl + "\n")
+					continue
+				}
+			}
+		}
+		b.WriteString(line + "\n")
+	}
+	for _, k := range limineBrandedKeys {
+		kk := strings.ToLower(k)
+		if !emitted[kk] {
+			if bl, ok := baseBranded[kk]; ok {
+				b.WriteString(bl + "\n")
+			}
+		}
+	}
+	if len(extras) > 0 {
+		b.WriteString(strings.Join(extras, "\n"))
 		b.WriteString("\n")
 	}
 	if body != "" {
@@ -396,7 +445,6 @@ func mergeLimineConf(espConf, shadowConf string) string {
 	out, _ = limineEnsureAutoboot(out)
 	return out
 }
-
 func limineBrandedKey(trimmedLine string) bool {
 	l := strings.ToLower(trimmedLine)
 	for _, k := range limineBrandedKeys {
@@ -551,6 +599,10 @@ func registerRyokuBootEntry() error {
 // bootloader, and it stands aside for the layout migration while a legacy entry
 // is still there to convert.
 func reconcileLimineBootEntry(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("firmware boot-entry management is outside Ryoku Doctor on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") || !sys.Exists(limineToolEFI) {
 		return okRes("not a limine-managed boot on this box")
 	}
@@ -623,6 +675,10 @@ func writeBootFile(path, contents string) error {
 // flat placeholder the way the installer's finalize does, and run one sync so
 // the snapshots show up now, not at the next snapper event.
 func reconcileLimineUKITree(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine UKI management is an Arch-specific repair and is not applied on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") {
 		return okRes("not a limine-managed boot on this box")
 	}
@@ -734,6 +790,10 @@ func limineDropFlat(conf string) (string, bool) {
 }
 
 func reconcileLimineOSName(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine snapshot naming is not applicable to the NixOS boot configuration")
+	}
+
 	const path = "/etc/default/limine"
 	cur := readFileSafe(path)
 	if cur == "" {
@@ -840,16 +900,12 @@ func limineNodeName(trimmed string) string {
 	return strings.TrimSpace(strings.TrimPrefix(strings.TrimLeft(trimmed, "/"), "+"))
 }
 
-// limineFirstKernelPath returns the Limine entry-path ("<dir>/<kernel>") of the
-// first bootable kernel nested under the top-level OS directory, or "" when the
-// menu is flat (the OS entry is a bootable leaf with no "//" child). Limine's
-// numeric default_entry counts TOP-LEVEL entries only, so on the
-// limine-mkinitcpio-hook 1.37 layout -- where the OS entry is a collapsed
-// directory and the kernel is a "//linux" sub-entry -- a bare index lands on the
-// sibling "/EFI fallback", which chainloads Limine again and re-shows the menu:
-// the countdown loop. An entry path (CONFIG.md: default_entry may be a path like
-// "OSes/Arch Linux") addresses the kernel leaf directly and autoboots.
-func limineFirstKernelPath(conf string) string {
+// limineKernelPaths: the entry paths of the kernels under the OS directory,
+// in menu order. A numeric default_entry counts top-level entries only, so on
+// the collapsed layout a bare index lands on the EFI fallback and loops the
+// countdown; a path addresses the kernel and autoboots.
+func limineKernelPaths(conf string) []string {
+	var out []string
 	dir, inDir := "", false
 	for _, l := range strings.Split(conf, "\n") {
 		t := strings.TrimLeft(l, " \t")
@@ -859,53 +915,75 @@ func limineFirstKernelPath(conf string) string {
 		case 2:
 			if inDir {
 				if child := limineNodeName(t); child != "" && !strings.EqualFold(child, "Snapshots") {
-					return dir + "/" + child
+					out = append(out, dir+"/"+child)
 				}
 			}
 		}
 	}
+	return out
+}
+
+func limineFirstKernelPath(conf string) string {
+	if paths := limineKernelPaths(conf); len(paths) > 0 {
+		return paths[0]
+	}
 	return ""
 }
 
-// limineEnsureAutoboot rewrites the global prelude so the countdown boots a real
-// kernel and remembers the last one: default_entry becomes the entry path to the
-// first nested kernel (autoboot-safe past the collapsed OS directory; "1" on a
-// still-flat menu), and remember_last_entry: yes is ensured so the box autoboots
-// the last kernel used (e.g. a CachyOS kernel picked once). Pure and idempotent:
-// changed=false when the prelude already says exactly this.
-func limineEnsureAutoboot(conf string) (string, bool) {
-	want := limineFirstKernelPath(conf)
-	if want == "" {
-		want = "1"
+// limineDefaultKernelPath prefers linux-cachyos: the entry tool lists linux
+// first, which made a CachyOS install boot the stock kernel (#140).
+func limineDefaultKernelPath(conf string) string {
+	paths := limineKernelPaths(conf)
+	for _, p := range paths {
+		if strings.Contains(strings.ToLower(p), "cachyos") {
+			return p
+		}
 	}
+	if len(paths) > 0 {
+		return paths[0]
+	}
+	return ""
+}
+
+// limineEnsureAutoboot rewrites default_entry only when it is absent or a bare
+// index (the countdown loop); a path or title is the user's and stays.
+func limineEnsureAutoboot(conf string) (string, bool) {
 	prelude, body := splitLimineConf(conf)
+	current := strings.TrimSpace(limineDefaultEntry(conf))
+	prefer := limineDefaultKernelPath(conf)
+
+	wantDefault := current
+	if current == "" || limineIsNumeric(current) {
+		if prefer != "" {
+			wantDefault = prefer
+		} else {
+			wantDefault = "1"
+		}
+	}
+
 	var out []string
-	changed, setDefault, hasRemember := false, false, false
+	changed := false
+	haveDefault, haveRemember := false, false
 	for _, l := range strings.Split(prelude, "\n") {
 		t := strings.TrimSpace(l)
 		switch {
 		case strings.HasPrefix(t, "default_entry:"):
-			setDefault = true
-			nl := "default_entry: " + want
+			haveDefault = true
+			nl := "default_entry: " + wantDefault
 			out = append(out, nl)
 			changed = changed || l != nl
 		case strings.HasPrefix(t, "remember_last_entry:"):
-			hasRemember = true
-			if t == "remember_last_entry: yes" {
-				out = append(out, l)
-			} else {
-				out = append(out, "remember_last_entry: yes")
-				changed = true
-			}
+			haveRemember = true
+			out = append(out, l) // an existing value is the user's, keep it
 		default:
 			out = append(out, l)
 		}
 	}
-	if !setDefault {
-		out = append(out, "default_entry: "+want)
+	if !haveDefault {
+		out = append(out, "default_entry: "+wantDefault)
 		changed = true
 	}
-	if !hasRemember {
+	if !haveRemember {
 		out = append(out, "remember_last_entry: yes")
 		changed = true
 	}
@@ -914,6 +992,18 @@ func limineEnsureAutoboot(conf string) (string, bool) {
 		return newPrelude, changed
 	}
 	return newPrelude + "\n" + body, changed
+}
+
+func limineIsNumeric(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // reconcileLimineAutoboot makes the countdown autoboot the kernel instead of
@@ -926,6 +1016,10 @@ func limineEnsureAutoboot(conf string) (string, bool) {
 // kernel. Runs on every `ryoku update`, so existing boxes heal without a
 // reinstall; idempotent once the prelude is right.
 func reconcileLimineAutoboot(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine autoboot configuration is not applicable on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") {
 		return okRes("not a limine-managed boot on this box")
 	}

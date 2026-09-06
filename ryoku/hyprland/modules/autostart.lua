@@ -21,11 +21,18 @@ hl.on("hyprland.start", function()
     -- sees every hl.env() name, a systemd or D-Bus launched one sees only what
     -- is pushed here, and a hand-kept list drifts the moment env.lua, the Hub,
     -- or user.lua adds one.
+    -- restart, not start: the user manager outlives a session (linger, a
+    -- relogin after a compositor crash), and a daemon it still holds from the
+    -- previous one answers `start` with "already active" while its surfaces are
+    -- bound to the dead compositor, so the login lands on bare Hyprland with no
+    -- shell. daemon-reload first, so a unit materialize just re-laid is the one
+    -- that runs, and reset-failed so a unit that hit its start limit last
+    -- session can start at all.
     -- Portals restart last, once the desktop is up: they are only
     -- PartOf=graphical-session.target and nothing stops that target, so a
     -- previous session's frontend survives and every ScreenCast request it
     -- proxies times out instead of reaching the backend.
-    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user start hyprland-session.target; systemctl --user start ryoku-shell; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
+    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start hyprland-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
     -- Polkit authentication is answered by the shell's own agent (the island
     -- that matches the rest of the desktop), so the stock Qt agent must not
     -- take the session's single agent slot. Stopping it is idempotent and

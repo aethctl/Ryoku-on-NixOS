@@ -14,7 +14,6 @@ import shell.services
 import "modules/visualizer/Singletons" as VizCfg
 import "components"
 import "modules/wallpaper"
-import "modules/wallpaper/switcher"
 import "modules/desktop"
 import "modules/visualizer"
 import "modules/bar"
@@ -54,7 +53,7 @@ ShellRoot {
     // Construct the shared services (ShellState's per-monitor state now, heavier
     // providers as surfaces migrate) at load rather than on the first keybind.
     ServiceLoader {
-        services: [ShellState, ScreenTime, Keypresses]
+        services: [ShellState, ScreenTime, Keypresses, KeyboardLayout]
     }
 
     readonly property string reloadStatePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-reload-cover.json"
@@ -102,9 +101,6 @@ ShellRoot {
             root.finishReloadCover();
         }
     }
-    Process {
-        id: reloadFinish
-    }
     Timer {
         id: reloadHold
         interval: 1500
@@ -115,6 +111,10 @@ ShellRoot {
             reloadFinish.command = [root.reloadCoverBin, "finish", root.reloadToken];
             reloadFinish.running = true;
         }
+    }
+
+    Process {
+        id: reloadFinish
     }
 
     // Power Saver strips compositor blur and shadow too (the heaviest present-time
@@ -172,6 +172,9 @@ ShellRoot {
                 wallpaperUrl: wallpaper.wallpaperUrl
                 wallpaperFit: wallpaper.fit
                 depthUrl: wallpaper.depthUrl
+                wallpaperTransition: wallpaper.transition
+                videoUrl: wallpaper.videoUrl
+                wallpaperLive: wallpaper.live
             }
             Visualizer {
                 screen: perScreen.modelData
@@ -215,12 +218,6 @@ ShellRoot {
                 active: perScreen.st ? perScreen.st.overviewOpen : false
                 onRequestClose: if (perScreen.st) perScreen.st.overviewOpen = false
             }
-            Switcher {
-                screen: perScreen.modelData
-                active: perScreen.st ? perScreen.st.wallpaperSwitcherOpen : false
-                onRequestClose: if (perScreen.st) perScreen.st.wallpaperSwitcherOpen = false
-            }
-
             // Shell-wide per-monitor surfaces: the three OSDs, the notification
             // popup column, the capture/region/camera overlays, and the
             // session-confirm dialog. Each binds this screen's modelData; the
@@ -236,6 +233,9 @@ ShellRoot {
             OsdWindow {
                 modelData: perScreen.modelData
                 kind: "brightness"
+            }
+            KeyboardOsdWindow {
+                modelData: perScreen.modelData
             }
             NotificationPopups {
                 modelData: perScreen.modelData
@@ -299,15 +299,6 @@ ShellRoot {
                 st.overviewOpen = !st.overviewOpen;
         }
     }
-    CustomShortcut {
-        name: "wallpaper-switcher"
-        description: "Toggle the wallpaper switcher on the active monitor"
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                st.wallpaperSwitcherOpen = !st.wallpaperSwitcherOpen;
-        }
-    }
     // On/off is the persisted key, so the keybind, the Hub switch and the next
     // restart all read the same answer. Only the layer is per-monitor memory.
     CustomShortcut {
@@ -348,14 +339,13 @@ ShellRoot {
 
     // Bring the durable services online and prewarm the slow scans so the first
     // open of each surface is instant. Ported from pill/shell.qml 170-194:
-    // device restore + ddc prewarm, wallpaper index warm, and re-arming the
-    // persisted Keep-Awake / Game Mode external inhibitors.
+    // device restore + ddc prewarm and re-arming the persisted Keep-Awake /
+    // Game Mode external inhibitors.
     Component.onCompleted: {
         Devices.restore();
         root.syncCaffeine(Flags.keepAwake ? "start" : "stop");
         if (Flags.gameMode)
             root.syncGameMode("start");
-        WallIndex.refresh();
         Devices.probeDisplays();
     }
 

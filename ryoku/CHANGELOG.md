@@ -14,6 +14,18 @@
   (`hyprland/monitors_user.lua.example`).
 
 ### Fixed
+- `rashin/`: **resident agents no longer assume every Ryoku system is Arch.**
+  Live prompts, vault pointers and the shipped skill use platform-neutral Ryoku
+  wording so the same agent contract accurately describes Musubi on NixOS.
+- **Google Chrome loads pages and shares the keyring, like Chromium.** Ryoku
+  pinned native Wayland and the GNOME keyring for Chromium (`chromium-flags.conf`)
+  and for Electron apps (`ELECTRON_OZONE_PLATFORM_HINT`), but Google Chrome reads
+  a different file, `chrome-flags.conf`, which nothing shipped -- so Chrome alone
+  fell back to Xwayland, where on an NVIDIA card it renders pages blank while
+  Discord and Chromium (both native Wayland) work. The one flags source now lays
+  as both `chromium-flags.conf` and `chrome-flags.conf`, so Chrome gets
+  `--ozone-platform=wayland` and `--password-store=gnome-libsecret` too. Delivered
+  to fresh and existing boxes by the package and `materialize`.
 - **Animations no longer break the desktop on a non-default preset.** Ryoku's
   signature window curves (`ryokuBloom`, `ryokuSettle`, plus `easeOutQuint`,
   `quick`, `almostLinear`, `ryokuWobble`) were defined only by the `ryoku`

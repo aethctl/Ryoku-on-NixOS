@@ -79,6 +79,10 @@ func efibootmgrVerbose() string {
 // the exact command instead. not an alongside box, or no efibootmgr, = nothing
 // to watch. never writes NVRAM.
 func reconcileAlongsideBootEntry(_ bool) recResult {
+	if sys.NixBackend() {
+		return okRes("UEFI boot-entry ownership is managed outside Ryoku Doctor on NixOS")
+	}
+
 	if !isAlongsideSystem(readFileSafe("/etc/fstab"), sys.Exists(alongsideHopPath)) {
 		return okRes("not an alongside install (no shared ESP at /efi with our stage-1 hop)")
 	}

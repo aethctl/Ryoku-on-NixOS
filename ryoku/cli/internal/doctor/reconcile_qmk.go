@@ -40,6 +40,9 @@ func probeQMKStatus() qmkStatus {
 // drives the keyboard as the seat user; a udev reload applies the ACL to a board
 // that was already plugged in when the tool arrived.
 func reconcileQMK(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("QMK HID support and udev policy are managed declaratively on NixOS")
+	}
 	st := readQMKStatus()
 	if !st.supported {
 		return okRes("this machine has no QMK/VIA keyboard for lighting")

@@ -20,6 +20,7 @@ Rectangle {
     property string query: ""
     property bool searchOpen: false
     property string providerFilter: ""
+    property string pluginFilter: ""
     property string selectedKey: ""
     property var previewItem: null
     property var detailItem: null
@@ -62,6 +63,7 @@ Rectangle {
         query: query,
         provider: app.themesBrowse && app.providerFilter !== "" && app.providerFilter !== "__mine__" ? app.providerFilter : "",
         installedOnly: app.themesBrowse && app.providerFilter === "__mine__",
+        pluginKind: app.pluginsBrowse ? app.pluginFilter : "",
         seed: app.discoverSeed
     })
     readonly property var selectedItem: itemForKey(selectedKey, collection)
@@ -94,6 +96,14 @@ Rectangle {
         }
         return out;
     }
+    // The Plugins category browses through the same strip: ALL / BAR / DESKTOP,
+    // where BAR is the plugins hosted on the bar (topbarGlyph) and DESKTOP is
+    // everything else. The filter narrows the collection by StoreLogic.pluginKind.
+    readonly property bool pluginsBrowse: app.categoryID === "plugins" && app.view === "discover" && !app.searchOpen
+    readonly property var pluginTabs: [
+        { "key": "bar", "label": "BAR" },
+        { "key": "desktop", "label": "DESKTOP" }
+    ]
     readonly property var themeProviders: {
         var seen = ({});
         var out = [];
@@ -206,6 +216,7 @@ Rectangle {
         }
         app.pendingRoute = "";
         app.providerFilter = "";
+        app.pluginFilter = "";
         detailClear.stop();
         detailOpen = false;
         detailItem = null;
@@ -388,14 +399,17 @@ Rectangle {
         id: providerTabs
         objectName: "ryostore-provider-tabs"
         anchors { left: parent.left; top: header.bottom; right: parent.right }
-        readonly property bool shown: app.themesBrowse || app.decorBrowse
+        readonly property bool shown: app.themesBrowse || app.decorBrowse || app.pluginsBrowse
         height: shown ? implicitHeight : 0
         visible: shown
-        providers: app.themesBrowse ? app.themeProviders : app.decorTabs
-        active: app.themesBrowse ? app.providerFilter : app.categoryID
-        // Themes filters one catalogue, so it offers All and the installed
-        // library; Decor's plates are whole catalogues, so it offers neither.
-        allLabel: app.themesBrowse ? "ALL" : ""
+        providers: app.themesBrowse ? app.themeProviders
+                   : (app.pluginsBrowse ? app.pluginTabs : app.decorTabs)
+        active: app.themesBrowse ? app.providerFilter
+                : (app.pluginsBrowse ? app.pluginFilter : app.categoryID)
+        // Themes and Plugins each browse one catalogue, so both offer an All
+        // plate; Themes also offers the installed library, while Decor's plates
+        // are whole catalogues so it offers neither.
+        allLabel: app.themesBrowse || app.pluginsBrowse ? "ALL" : ""
         trailingLabel: app.themesBrowse ? "MY THEMES" : ""
         trailingKey: app.themesBrowse ? "__mine__" : ""
         installableCount: app.themesBrowse ? app.themeInstallable : 0
@@ -403,6 +417,12 @@ Rectangle {
         onPicked: filter => {
             if (app.decorBrowse) {
                 app.openRoute(filter);
+                Qt.callLater(function() { productGrid.forceActiveFocus(); });
+                return;
+            }
+            if (app.pluginsBrowse) {
+                app.pluginFilter = filter;
+                app.reconcileSelection(0);
                 Qt.callLater(function() { productGrid.forceActiveFocus(); });
                 return;
             }

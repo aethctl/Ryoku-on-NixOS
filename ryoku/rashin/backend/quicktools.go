@@ -42,7 +42,7 @@ func quickToolSchemas() []map[string]any {
 		}
 	}
 	return []map[string]any{
-		fn("system_query", "Read live system state on this Ryoku (Arch) machine.",
+		fn("system_query", "Read live system state on this Ryoku machine.",
 			map[string]any{"topic": map[string]any{
 				"type":        "string",
 				"enum":        []string{"packages", "updates", "service", "processes", "disk", "kernel", "gpu", "network"},

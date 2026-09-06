@@ -1,50 +1,37 @@
 .pragma library
 
-// The Shell Studio's routes, in rail order. One entry per page: its Latin name,
-// its kanji seal (a real word, per the desktop's language, never decoration), the
-// one-line summary the head prints, and the words search matches on.
+// QS Bar Settings routes, in rail order. One entry per page: its Latin name, its
+// kanji seal (a real word, per the desktop's language, never decoration), the
+// one-line summary the head prints (kept to a few words: it has one line), the
+// words search matches on, and the rail section it sits in.
 //
-// The rail groups these into BAR / DESK / SHELL (see CcRail); this file stays the
-// single source of what a route is called. Plugins and diagnostics are
-// deliberately absent: Ryoku owns plugins through the shell plugin runtime plus
-// ryostore, and health through `ryoku doctor`.
+// The panel is about one thing, the bar, so the rail's first group is five
+// routes: where the bar sits (Bar), the mark and workspaces that make it this
+// user's (Identity), how its widgets are arranged (Layout), what each widget is
+// and does (Widgets), and the dock that rides beside it (Dock). A second, parted
+// group holds Community: every installed bar plugin that is not Ryoku's own, so
+// a widget someone else wrote is never mixed in with the shipped set. What this
+// panel used to also carry -- pickers, desktop widgets, the mid-work switches,
+// the session -- already has a home (the Hub, or quick settings).
 var ROUTES = [
-    { id: "bars",     label: "Bar",      gloss: "\u5e2f",       file: "BarsRoute",
-      desc: "Where the bar sits, what shape it takes, how its surface reads.",
-      icon: "view_agenda",
-      keywords: "position top bottom form full fit dock notch islands surface border panel tooltip corners depth frost gap accent colour layout edit restore animation drift" },
-    { id: "widgets",  label: "Widgets",  gloss: "\u90e8\u54c1", file: "AppearanceRoute",
-      desc: "Which widgets the bar carries, and how each one is drawn.",
-      icon: "brush",
-      keywords: "widget icon fill colour visibility hide show compact density split island ai claude codex opencode temperature sensor" },
-    { id: "logo",     label: "Logo",     gloss: "\u5370",       file: "LogoRoute",
-      desc: "The mark in the launcher pill: a wordmark or a glyph.",
-      icon: "flag",
-      keywords: "launcher ryoku kanji wordmark brand mark glyph icon distro arch nixos debian" },
-    { id: "spaces",   label: "Spaces",   gloss: "\u9593",       file: "WorkspacesRoute",
-      desc: "How many workspaces the bar shows, and the marker each one wears.",
-      icon: "grid_view",
-      keywords: "workspace space active five ten marker dots numbers glyph kanji rings aurora pacman" },
-    { id: "pickers",  label: "Pickers",  gloss: "\u9078",       file: "PickersRoute",
-      desc: "The layout the wallpaper and screenshot pickers open in.",
-      icon: "image",
-      keywords: "picker wallpaper theme screenshot video carousel hearthstone tanzaku layout" },
-    { id: "dock",     label: "Dock",     gloss: "\u53f0",       file: "DockRoute",
-      desc: "The app dock on the edge opposite the bar.",
-      icon: "dock_to_bottom",
+    { id: "bars",    label: "Bar",     gloss: "\u5e2f", file: "BarsRoute", section: "bar",
+      desc: "Position, shape, surface, gaps and motion.",
+      keywords: "position top bottom form full fit dock notch islands surface border corners frost shadow depth tooltip gap gaps accent colour scale size motion animation auto hide" },
+    { id: "identity", label: "Identity", gloss: "\u5370", file: "IdentityRoute", section: "bar",
+      desc: "The launcher mark and the workspaces.",
+      keywords: "identity logo mark wordmark word glyph icon kanji launcher brand ryoku arch hyprland workspaces spaces count marker style numbers kanji rings preview" },
+    { id: "layout",  label: "Layout",  gloss: "\u914d\u7f6e", file: "LayoutRoute", section: "bar",
+      desc: "Where each widget sits on the bar.",
+      keywords: "arrange order move reorder left center centre right lane add widget plugin unlock drag reset layout hide show" },
+    { id: "widgets", label: "Widgets", gloss: "\u90e8\u54c1", file: "WidgetsRoute", section: "bar",
+      desc: "Show, size, colour and tune each widget.",
+      keywords: "widget show hide on off density icon compact colour fill ai claude codex opencode volume boost clock weather sensor temperature plugin settings" },
+    { id: "dock",    label: "Dock",    gloss: "\u53f0", file: "DockRoute", section: "bar",
+      desc: "The app dock opposite the bar.",
       keywords: "dock app pinned pin edge autohide auto hide magnify frost depth shadow label media chip peek" },
-    { id: "desktop",  label: "Desktop",  gloss: "\u5353\u4e0a", file: "DesktopRoute",
-      desc: "What rides the wallpaper: the widgets and the audio spectrum.",
-      icon: "desktop_windows",
-      keywords: "desktop widget clock calendar music all-in-one stats weather notes visualiser visualizer spectrum place" },
-    { id: "system",   label: "System",   gloss: "\u5236\u5fa1", file: "SystemRoute",
-      desc: "The switches you reach for mid-work, and the shell's own actions.",
-      icon: "tune",
-      keywords: "do not disturb dnd keep awake caffeine game mode night light low power reduce motion reload shell settings wallpaper switch" },
-    { id: "session",  label: "Session",  gloss: "\u7d42",       file: "SessionRoute",
-      desc: "Lock, sleep, restart, power off.",
-      icon: "power_settings_new",
-      keywords: "lock session suspend sleep reboot restart shutdown power off logout" }
+    { id: "community", label: "Community", gloss: "\u6709\u5fd7", file: "CommunityRoute", section: "community",
+      desc: "Bar widgets installed from outside Ryoku.",
+      keywords: "community plugin plugins installed third party store ryostore git add remove widget" }
 ];
 
 function byId(id) {
@@ -67,4 +54,40 @@ function indexOf(id) {
     for (var i = 0; i < ROUTES.length; i++)
         if (ROUTES[i].id === id) return i;
     return -1;
+}
+
+// the routes of one rail section, in order.
+function inSection(section) {
+    var out = [];
+    for (var i = 0; i < ROUTES.length; i++)
+        if (ROUTES[i].section === section) out.push(ROUTES[i]);
+    return out;
+}
+
+// Retired route ids, mapped to their nearest new home, so an old caller (a
+// keybind, a saved link, `bar settings <route>`) never lands on nothing:
+//   logo, spaces      -> Identity (the mark and the workspaces, one route again)
+//   widgets, appearance -> the Widgets route (renamed from the old Appearance)
+//   pickers           -> the Hub's Desktop page owns picker style now; nearest here is Widgets
+//   desktop           -> the Hub owns desktop widgets now; nearest here is Widgets
+//   system, session   -> quick settings (Super+Escape); nearest here is Bar
+//   plugins           -> the Community route
+function resolve(id) {
+    if (byId(id)) return id;
+    switch (id) {
+    case "logo":
+    case "spaces":
+        return "identity";
+    case "appearance":
+    case "pickers":
+    case "desktop":
+        return "widgets";
+    case "plugins":
+        return "community";
+    case "system":
+    case "session":
+        return "bars";
+    default:
+        return "bars";
+    }
 }

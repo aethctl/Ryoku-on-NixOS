@@ -2,6 +2,8 @@ package updater
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
@@ -28,7 +30,9 @@ var ryokuDropIn = regexp.MustCompile(`^[0-9]+-ryoku-[^/]*\.conf$`)
 // (keyboard.lua; hypr/user.lua, seeded with a header so a hand-edit sticks;
 // fastfetch/config.jsonc, which has no include mechanism, so direct edits
 // are the only way to customize the readout).
-// Slash-separated paths, relative to the config base.
+// Slash-separated paths, relative to the config base. Every entry here is also
+// in sys.LiveOwnedConfig: a seed is edited in place, so the user_edits overlay
+// must never re-lay a frozen copy over it.
 var generatedSeed = map[string]bool{
 	"hypr/monitors.lua":        true,
 	"hypr/gpu.lua":             true,
@@ -83,7 +87,20 @@ func Materialize() error {
 	// (fresh install) and never get overwritten, so an update leaves the
 	// user's display, GPU pin, and keyboard layout alone. Only clobbered
 	// files enter the manifest, so a later prune can never remove a seed either.
+	//
+	// A shipped file whose live bytes match neither what the last update laid
+	// nor what this one ships was edited by hand; it becomes a fork under the
+	// overlay instead of being thrown away.
+	laidHashes := readManifestHashes(state)
+	overlaid := map[string]bool{}
+	if rels, err := sys.UserEditFiles(); err == nil {
+		for _, rel := range rels {
+			overlaid[rel] = true
+		}
+	}
 	managed := make([]string, 0, len(current))
+	hashes := make(map[string]string, len(current))
+	var kept []string
 	for _, rel := range current {
 		dst := filepath.Join(dest, rel)
 		if generatedSeed[rel] {
@@ -93,6 +110,23 @@ func Materialize() error {
 				}
 			}
 			continue
+		}
+		shipped, err := os.ReadFile(filepath.Join(base, rel))
+		if err != nil {
+			return fmt.Errorf("read %s: %w", rel, err)
+		}
+		hashes[rel] = hashBytes(shipped)
+		if forkable(rel) && !overlaid[rel] {
+			if laid, ok := laidHashes[rel]; ok {
+				if live, err := os.ReadFile(dst); err == nil {
+					if h := hashBytes(live); h != laid && h != hashes[rel] {
+						if err := sys.CopyFile(dst, filepath.Join(sys.UserEditsDir(), rel)); err != nil {
+							return fmt.Errorf("keep your edit of %s: %w", rel, err)
+						}
+						kept = append(kept, rel)
+					}
+				}
+			}
 		}
 		if err := sys.CopyFile(filepath.Join(base, rel), dst); err != nil {
 			return fmt.Errorf("copy %s: %w", rel, err)
@@ -158,18 +192,39 @@ func Materialize() error {
 		pruneEmptyParents(dest, filepath.Dir(rel))
 	}
 
-	if err := writeManifest(state, managed); err != nil {
-		return fmt.Errorf("record manifest: %w", err)
-	}
 	if err := overlayUserEdits(dest); err != nil {
 		return err
+	}
+	for _, rel := range managed {
+		if live, err := os.ReadFile(filepath.Join(dest, rel)); err == nil {
+			hashes[rel] = hashBytes(live)
+		}
+	}
+	if err := writeManifest(state, managed, hashes); err != nil {
+		return fmt.Errorf("record manifest: %w", err)
 	}
 	wirePlumberAfter, _ := os.ReadFile(filepath.Join(dest, wirePlumberPolicyRel))
 	if wpConfigPruned || !bytes.Equal(wirePlumberBefore, wirePlumberAfter) {
 		_ = exec.Command("systemctl", "--user", "try-restart", "wireplumber.service").Run()
 	}
 	fmt.Printf("materialized %d files -> %s\n", len(managed), dest)
+	if len(kept) > 0 {
+		fmt.Printf("kept your edits to %d shipped file(s) as forks under %s (a fork wins over updates; delete it to take Ryoku's version again):\n", len(kept), sys.UserEditsDir())
+		for _, rel := range kept {
+			fmt.Printf("  %s\n", rel)
+		}
+	}
 	return nil
+}
+
+// The quickshell tree is the shell itself; a stale fork there breaks it.
+func forkable(rel string) bool {
+	return !strings.HasPrefix(rel, "quickshell/") && !sys.IsLiveOwnedConfig(rel)
+}
+
+func hashBytes(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // walkRel: every regular file under root, as slash-separated paths relative
@@ -208,6 +263,8 @@ func pruneEmptyParents(root, rel string) {
 	}
 }
 
+// Manifest lines are "path<TAB>sha256"; an older line without a hash still
+// prunes, it just cannot tell a hand edit apart.
 func readManifest(path string) []string {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -216,17 +273,36 @@ func readManifest(path string) []string {
 	var out []string
 	for _, line := range strings.Split(string(b), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
-			out = append(out, line)
+			rel, _, _ := strings.Cut(line, "\t")
+			out = append(out, rel)
 		}
 	}
 	return out
 }
 
-func writeManifest(path string, rels []string) error {
+func readManifestHashes(path string) map[string]string {
+	out := map[string]string{}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		if rel, h, ok := strings.Cut(strings.TrimSpace(line), "\t"); ok && rel != "" && h != "" {
+			out[rel] = h
+		}
+	}
+	return out
+}
+
+func writeManifest(path string, rels []string, hashes map[string]string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(path, []byte(strings.Join(rels, "\n")+"\n"), 0o644)
+	lines := make([]string, 0, len(rels))
+	for _, rel := range rels {
+		lines = append(lines, rel+"\t"+hashes[rel])
+	}
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644)
 }
 
 // overlayUserEdits lays the user's override tree over the freshly materialized

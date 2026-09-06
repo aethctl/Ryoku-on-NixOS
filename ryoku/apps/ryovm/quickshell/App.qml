@@ -17,7 +17,7 @@ Rectangle {
     implicitHeight: 760
     color: Tokens.paper
 
-    property string section: "dashboard"     // dashboard | machines | remotes
+    property string section: "dashboard"     // dashboard | machines | remotes | passthrough
     property bool settingsOpen: false
 
     focus: true
@@ -37,11 +37,14 @@ Rectangle {
     Shortcut { sequence: "Ctrl+1"; onActivated: app.section = "dashboard" }
     Shortcut { sequence: "Ctrl+2"; onActivated: app.section = "machines" }
     Shortcut { sequence: "Ctrl+3"; onActivated: app.section = "remotes" }
+    Shortcut { sequence: "Ctrl+4"; onActivated: app.section = "passthrough" }
     Shortcut { sequence: "Ctrl+N"; onActivated: app.openAddRemote("") }
 
     // the dashboard and the remotes page both read live remote health, so the
     // probe timers run for either; the yard-only view lets them rest.
     Binding { target: Remotes; property: "active"; value: app.section === "remotes" || app.section === "dashboard" }
+    // the passthrough lane polls the looking-glass engine only while shown.
+    Binding { target: Lg; property: "poll"; value: app.section === "passthrough" }
 
     function requestQuit() {
         if (Vm.downloading && !quitArm.running) {
@@ -61,7 +64,7 @@ Rectangle {
 
     Component.onCompleted: {
         var s = Quickshell.env("RYOPORT_SECTION");
-        if (s === "dashboard" || s === "machines" || s === "remotes") app.section = s;
+        if (s === "dashboard" || s === "machines" || s === "remotes" || s === "passthrough") app.section = s;
         var m = Quickshell.env("RYOVM_START_MODE");
         if (m === "catalog" || m === "instant") app.section = "machines";
         app.refocus();
@@ -116,6 +119,15 @@ Rectangle {
             Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             onNewRemote: app.openAddRemote("")
             onEditRemote: (a) => app.openAddRemote(a)
+        }
+
+        PassthroughPage {
+            id: passthrough
+            anchors.fill: parent
+            active: app.section === "passthrough"
+            opacity: active ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
         }
     }
 

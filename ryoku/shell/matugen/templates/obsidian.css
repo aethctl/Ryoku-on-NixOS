@@ -1,7 +1,8 @@
 /* Ryoku palette -> Obsidian. Rendered by matugen; do not edit. Linked into each
    vault's snippets by ryoku doctor and enabled as the "ryoku" CSS snippet. */
 
-.theme-dark, .theme-light {
+body.theme-dark.theme-dark.theme-dark,
+body.theme-light.theme-light.theme-light {
 
     /* Material 3 RGB helpers */
     --mat-bg-rgb:             {{colors.background.default.red}}, {{colors.background.default.green}}, {{colors.background.default.blue}};
@@ -39,6 +40,16 @@
     --interactive-accent-rgb:       {{colors.primary.default.red}}, {{colors.primary.default.green}}, {{colors.primary.default.blue}};
     --text-accent:                  {{colors.primary.default.hex}};
     --text-accent-hover:            {{colors.primary_container.default.hex}};
+
+    /* Accent HSL triple. Obsidian's core builds --color-accent and the
+       theme-facing --color-accent-hsl from --accent-h/s/l, and popular themes
+       read that triple directly rather than --interactive-accent, so the
+       wallpaper accent has to land here to reach every accent surface. */
+    --accent-h: {{colors.primary.default.hue}};
+    --accent-s: {{colors.primary.default.saturation}}%;
+    --accent-l: {{colors.primary.default.lightness}}%;
+    --color-accent-hsl:       var(--accent-h), var(--accent-s), var(--accent-l);
+    --interactive-accent-hsl: var(--color-accent-hsl);
 
     /* Hover and active modifiers */
     --background-modifier-hover:          rgba(var(--mat-on-surface-rgb), 0.06);

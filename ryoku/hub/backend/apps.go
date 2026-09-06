@@ -22,7 +22,7 @@ type appCandidate struct {
 type appRole struct {
 	Role       string         `json:"role"`
 	Label      string         `json:"label"`
-	Fallback   string         `json:"fallback"` // the shipped default when unset
+	Fallback   string         `json:"fallback"`        // the shipped default when unset
 	Combo      string         `json:"combo,omitempty"` // shipped combo bound to `ryoku-app <role>`
 	Candidates []appCandidate `json:"candidates"`
 }
@@ -35,7 +35,7 @@ var appRoleDefs = []struct {
 }{
 	{"browser", "Browser", "chromium", [][2]string{
 		{"Firefox", "firefox"}, {"Chromium", "chromium"}, {"Chrome", "google-chrome-stable"},
-		{"Brave", "brave"}, {"Vivaldi", "vivaldi-stable"}, {"Zen", "zen-browser"},
+		{"Brave", "brave"}, {"Vivaldi", "vivaldi-stable"}, {"Zen", "zen|zen-browser"},
 		{"LibreWolf", "librewolf"}, {"Qutebrowser", "qutebrowser"},
 	}},
 	{"terminal", "Terminal", "kitty", [][2]string{
@@ -71,14 +71,36 @@ func binOf(cmd string) string {
 	return ""
 }
 
+// resolveCandidate picks the concrete command for a candidate whose spec may
+// list pipe-separated alternative binaries (e.g. "zen|zen-browser", the tarball
+// name and the AUR package name): the first alternative whose binary is on PATH,
+// else the first. installed reports whether any alternative was found.
+func resolveCandidate(spec string) (cmd string, installed bool) {
+	alts := strings.Split(spec, "|")
+	for _, alt := range alts {
+		if _, err := exec.LookPath(binOf(alt)); err == nil {
+			return alt, true
+		}
+	}
+	return alts[0], false
+}
+
 func appRoles() []appRole {
 	out := make([]appRole, 0, len(appRoleDefs))
 	combos := roleCombos()
 	for _, d := range appRoleDefs {
-		r := appRole{Role: d.Role, Label: d.Label, Fallback: d.Fallback, Combo: combos[d.Role]}
+		fallback := d.Fallback
+		// Browser default follows ryoku-app: Zen when installed (under either the
+		// tarball name `zen` or the AUR `zen-browser`), else the shipped Chromium.
+		if d.Role == "browser" {
+			if cmd, ok := resolveCandidate("zen|zen-browser"); ok {
+				fallback = cmd
+			}
+		}
+		r := appRole{Role: d.Role, Label: d.Label, Fallback: fallback, Combo: combos[d.Role]}
 		for _, c := range d.Cands {
-			_, err := exec.LookPath(binOf(c[1]))
-			r.Candidates = append(r.Candidates, appCandidate{Label: c[0], Cmd: c[1], Installed: err == nil})
+			cmd, installed := resolveCandidate(c[1])
+			r.Candidates = append(r.Candidates, appCandidate{Label: c[0], Cmd: cmd, Installed: installed})
 		}
 		out = append(out, r)
 	}

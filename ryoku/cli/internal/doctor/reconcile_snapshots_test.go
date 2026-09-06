@@ -3,7 +3,6 @@ package doctor
 import (
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -46,6 +45,20 @@ func TestParseLeakedTimelineSkipsNonNumbered(t *testing.T) {
 	}
 }
 
+func TestParseUntaggedRyoku(t *testing.T) {
+	csv := "number,cleanup,description\n" +
+		"0,,current\n" + // base snapshot, skipped
+		"25,,ryoku gpu passthrough enable\n" + // untagged ryoku -> retag
+		"44,,ryoku config import 2026\n" + // untagged ryoku -> retag
+		"90,,my manual keep\n" + // untagged but not ryoku -> leave alone
+		"91,number,ryoku-update\n" + // already tagged -> leave alone
+		"92,timeline,ryoku-update\n" // timeline, handled elsewhere
+	got := parseUntaggedRyoku(csv)
+	if want := []string{"25", "44"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("parseUntaggedRyoku = %v, want %v", got, want)
+	}
+}
+
 func TestChunk(t *testing.T) {
 	nums := make([]string, 45)
 	for i := range nums {
@@ -67,23 +80,47 @@ func TestAddUpdatedbPrunePath(t *testing.T) {
 	cases := []struct {
 		name        string
 		in          string
+		want        string
 		wantChanged bool
-		wantHas     string
 	}{
-		{"append when absent", "PRUNENAMES=\".git\"\n", true, `PRUNEPATHS="/.snapshots"`},
-		{"extend existing", "PRUNEPATHS=\"/tmp /var/tmp\"\n", true, `PRUNEPATHS="/tmp /var/tmp /.snapshots"`},
-		{"already present", "PRUNEPATHS=\"/tmp /.snapshots\"\n", false, ""},
+		{
+			name:        "append when absent",
+			in:          "PRUNENAMES=\".git\"\n",
+			want:        "PRUNENAMES=\".git\"\nPRUNEPATHS=\"/.snapshots\"\n",
+			wantChanged: true,
+		},
+		{
+			name:        "extend compact existing assignment",
+			in:          "PRUNEPATHS=\"/tmp /var/tmp\"\n",
+			want:        "PRUNEPATHS=\"/tmp /var/tmp /.snapshots\"\n",
+			wantChanged: true,
+		},
+		{
+			name:        "extend stock spaced assignment in place",
+			in:          "# plocate defaults\nPRUNEPATHS = \"/tmp /var/tmp\"\n",
+			want:        "# plocate defaults\nPRUNEPATHS = \"/tmp /var/tmp /.snapshots\"\n",
+			wantChanged: true,
+		},
+		{
+			name:        "repair duplicate assignment without losing configured paths",
+			in:          "PRUNEPATHS = \"/tmp\"\nPRUNEPATHS=\"/.snapshots /var/cache\"\n",
+			want:        "PRUNEPATHS = \"/tmp /.snapshots /var/cache\"\n",
+			wantChanged: true,
+		},
+		{
+			name:        "already present",
+			in:          "PRUNEPATHS=\"/tmp /.snapshots\"\n",
+			want:        "PRUNEPATHS=\"/tmp /.snapshots\"\n",
+			wantChanged: false,
+		},
 	}
 	for _, c := range cases {
 		out, changed := addUpdatedbPrunePath(c.in, "/.snapshots")
 		if changed != c.wantChanged {
 			t.Errorf("%s: changed = %v, want %v", c.name, changed, c.wantChanged)
 		}
-		if c.wantChanged && !strings.Contains(out, c.wantHas) {
-			t.Errorf("%s: output %q missing %q", c.name, out, c.wantHas)
-		}
-		if !c.wantChanged && out != c.in {
-			t.Errorf("%s: unchanged output should equal input, got %q", c.name, out)
+		if out != c.want {
+			t.Errorf("%s: output = %q, want %q", c.name, out, c.want)
 		}
 	}
 }

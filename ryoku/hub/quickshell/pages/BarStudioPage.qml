@@ -10,19 +10,17 @@ import "../barstudio"
 import Ryoku.FrameBars
 import "../barstudio/BarStudioModel.js" as Model
 
-// Bar Studio (DESKTOP). Pick an edge, then edit that rail. It edits only the
-// essentials that provably change the running desktop: the frame's draw toggle
-// and opacity, each rail's on/off and thickness, and the widgets in its three
-// zones (add via a per-zone drawer, remove, reorder). The retired chrome knobs
-// (widget/window radius, border, the two-look style) and the rail auto-hide had
-// no usable runtime effect, so they are gone; the bounded menus and the
-// stash/system surfaces keep their persisted values (every edit clones the whole
-// frameBars object, so no subtree it does not touch is ever dropped) but are not
-// edited here.
+// Bar Studio (DESKTOP). Choose which bar the desktop draws, and tune the
+// built-in styles. QS Bar is a folder style that keeps its own layout, widgets,
+// form and dock in QS Bar Settings (the bar logo opens it, or the OPEN QS BAR
+// SETTINGS card here); this page shows only a live summary of its order. Sumi is
+// edited in place: the frame's draw toggle and opacity, each rail's on/off and
+// thickness, and the widgets in its three zones (add via a per-zone drawer,
+// remove, reorder). Obi and Nacre carry their own small editors.
 //
-// Everything stages through the shared draft (hub.stageLive), which applies to
-// the RUNNING desktop as you work and rides the Hub's Save and Revert like every
-// other framed page.
+// Everything Sumi stages through the shared draft (hub.stageLive), which applies
+// to the RUNNING desktop as you work and rides the Hub's Save and Revert like
+// every other framed page.
 Item {
     id: page
     property var hub
@@ -149,166 +147,35 @@ Item {
         page.fedit("obi", o);
     }
 
-    // ── QS Bar (Hancore top bar) settings ────────────────────────────────────
-    // Stored in the `qsbar` map in shell.json and applied live by the bar's
-    // Theme; an absent key keeps the bar's own default.
-    function qval(key, fall) {
-        const q = page.fval("qsbar", ({}));
-        return q && q[key] !== undefined ? q[key] : fall;
+    // ── QS Bar layout summary ─────────────────────────────────────────────────
+    // The QS Bar's layout, widgets, form and dock are arranged in QS Bar Settings
+    // now (the bar logo opens it, or `ryoku-shell bar settings`). This page keeps
+    // only a read-only summary of the order, watched off shell.json so it tracks a
+    // move made from the panel or the CLI without a Hub reload.
+    property var qsbarLayout: ({})
+    readonly property string qsbarLayoutSummary: {
+        const layout = page.qsbarLayout || ({});
+        const lane = a => Array.isArray(a) ? a.join(" \u00b7 ") : "";
+        const lanes = [lane(layout.left), lane(layout.center), lane(layout.right)].filter(s => s.length > 0);
+        return lanes.join("  |  ");
     }
-    function qset(key, v) {
-        const q = Object.assign({}, page.fval("qsbar", ({})));
-        q[key] = v;
-        page.fedit("qsbar", q);
-    }
-    function qwid(id, fall) {
-        const q = page.fval("qsbar", ({}));
-        const w = q && q.widgets ? q.widgets : ({});
-        return w[id] !== undefined ? w[id] : fall;
-    }
-    function qwidset(id, v) {
-        const q = Object.assign({}, page.fval("qsbar", ({})));
-        const w = Object.assign({}, q.widgets || ({}));
-        w[id] = v;
-        q.widgets = w;
-        page.fedit("qsbar", q);
-    }
-
-    // ── Dock (its own shell surface) settings ─────────────────────────────────
-    // The dock is a shell surface for every bar style now, so its knobs live in
-    // the top-level `dock` object in shell.json, not the qsbar map. An absent key
-    // keeps the Dock service's own default.
-    function dval(key, fall) {
-        const d = page.fval("dock", ({}));
-        return d && d[key] !== undefined ? d[key] : fall;
-    }
-    function dset(key, v) {
-        const d = Object.assign({}, page.fval("dock", ({})));
-        d[key] = v;
-        page.fedit("dock", d);
-    }
-
-    // Dock pinned apps: the dock.pinned list of window class ids, in user order.
-    property bool dockPickerOpen: false
-    function dockPins() {
-        const v = page.dval("pinned", []);
-        return Array.isArray(v) ? v.slice() : Array.from(v || []);
-    }
-    function addDockApp(id) {
-        if (!id) return;
-        const a = page.dockPins();
-        if (a.indexOf(id) === -1) page.dset("pinned", a.concat([id]));
-    }
-    function removeDockApp(id) {
-        page.dset("pinned", page.dockPins().filter(x => x !== id));
-    }
-
-    // The dock look choice. The shell owns every render; the Hub only writes the
-    // key, so this list mirrors the Dock singleton's styleOptions registry (shell
-    // services/Dock.qml) the way qsbarForms mirrors the bar's forms.
-    readonly property var dockStyleOptions: [
-        { key: "islands", label: "Islands" },
-        { key: "rail", label: "Rail" },
-        { key: "ledger", label: "Ledger" },
-        { key: "tanzaku", label: "Tanzaku" },
-        { key: "seal", label: "Seal" }
-    ]
-    function dockStyleLabel(key) {
-        for (let i = 0; i < page.dockStyleOptions.length; i++)
-            if (page.dockStyleOptions[i].key === key) return page.dockStyleOptions[i].label;
-        return page.dockStyleOptions[0].label;
-    }
-    function dockStyleKey(label) {
-        for (let i = 0; i < page.dockStyleOptions.length; i++)
-            if (page.dockStyleOptions[i].label === label) return page.dockStyleOptions[i].key;
-        return "islands";
-    }
-
-    // The gap animation is stored as an int mode in the qsbar map. Bar Studio
-    // exposes a labelled subset of the usable presets; each label maps to the
-    // mode int the running bar reads. Off is the sentinel 0.
-    readonly property var qsbarAnimModes: [
-        { v: 0, label: qsTr("Off") },
-        { v: 1, label: qsTr("Stream") },
-        { v: 2, label: qsTr("Surge") },
-        { v: 3, label: qsTr("Bolt") },
-        { v: 7, label: qsTr("Reactor") },
-        { v: 8, label: qsTr("Quotes") }
-    ]
-    function qsbarAnimLabel(v) {
-        for (let i = 0; i < page.qsbarAnimModes.length; i++)
-            if (page.qsbarAnimModes[i].v === v) return page.qsbarAnimModes[i].label;
-        return page.qsbarAnimModes[0].label;
-    }
-    function qsbarAnimValue(label) {
-        for (let i = 0; i < page.qsbarAnimModes.length; i++)
-            if (page.qsbarAnimModes[i].label === label) return page.qsbarAnimModes[i].v;
-        return 0;
-    }
-
-    // The bar form is one Theme property, `barShellStyle`: "islands" is the split
-    // pills, the rest are unified shell surfaces. Selecting a form writes the
-    // value into the qsbar map like every other setting, so the user picks a
-    // shape directly and the bar's Theme persists it to shell.json.
-    readonly property var qsbarForms: ["islands", "full", "fit", "dock", "notch"]
-    function qsbarForm() {
-        return page.qval("barShellStyle", "full");
-    }
-    function qsbarSetForm(f) {
-        page.qset("barShellStyle", f);
-    }
-    // Border and corner radius apply to every bar form.
-    function qsbarBorder() {
-        return page.qval("barBorderEnabled", true);
-    }
-    function qsbarSetBorder(on) {
-        const q = Object.assign({}, page.fval("qsbar", ({})));
-        q.barBorderEnabled = on;
-        page.fedit("qsbar", q);
-    }
-    function qsbarSetCorner(px) {
-        const q = Object.assign({}, page.fval("qsbar", ({})));
-        q.barCornerRadius = px;
-        page.fedit("qsbar", q);
-    }
-
-    readonly property var qsbarWidgets: [
-        { id: "status", label: qsTr("Status"), def: true, desc: qsTr("Arch updates, tray and notifications.") },
-        { id: "cpu", label: qsTr("CPU"), def: true, desc: qsTr("CPU load and history.") },
-        { id: "memory", label: qsTr("Memory"), def: true, desc: qsTr("Memory use.") },
-        { id: "volume", label: qsTr("Volume"), def: true, desc: qsTr("Output volume and mixer.") },
-        { id: "network", label: qsTr("Network"), def: true, desc: qsTr("Wi-Fi and Ethernet.") },
-        { id: "battery", label: qsTr("Battery"), def: true, desc: qsTr("Battery level and charge state.") },
-        { id: "brightness", label: qsTr("Brightness"), def: true, desc: qsTr("Backlight level.") },
-        { id: "weather", label: qsTr("Weather"), def: true, desc: qsTr("Current conditions.") },
-        { id: "media", label: qsTr("Media"), def: true, desc: qsTr("Now-playing controls.") },
-        { id: "mpris", label: qsTr("Now playing"), def: true, desc: qsTr("The now-playing pill.") },
-        { id: "quick", label: qsTr("Quick toggles"), def: true, desc: qsTr("Idle inhibitor, media and theme.") },
-        { id: "claude", label: qsTr("AI usage"), def: false, desc: qsTr("Coding-agent usage meter.") },
-        { id: "power", label: qsTr("Power profile"), def: false, desc: qsTr("Power-profile pill.") },
-        { id: "bluetooth", label: qsTr("Bluetooth"), def: false, desc: qsTr("Bluetooth pill.") },
-        { id: "gpu", label: qsTr("GPU"), def: true, desc: qsTr("GPU load.") },
-        { id: "cpuTemperature", label: qsTr("CPU temperature"), def: true, desc: qsTr("CPU temperature.") },
-        { id: "storage", label: qsTr("Storage"), def: true, desc: qsTr("Root filesystem usage.") }
-    ]
-    readonly property var qsbarColors: ["color01", "color02", "color03", "color04", "color05", "color06", "color07", "foreground"]
-    property var qsbarPalette: ({})
     FileView {
-        id: qsbarColorsFile
-        path: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/ryoku/colors.json"
+        id: shellJsonFile
+        path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/ryoku/shell.json"
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
         onLoaded: {
-            try { page.qsbarPalette = JSON.parse(qsbarColorsFile.text() || "{}"); }
-            catch (e) { page.qsbarPalette = ({}); }
+            try {
+                const cfg = JSON.parse(shellJsonFile.text() || "{}");
+                page.qsbarLayout = (cfg.qsbar && cfg.qsbar.layout) ? cfg.qsbar.layout : ({});
+            } catch (e) {
+                page.qsbarLayout = ({});
+            }
         }
     }
-    function qsbarSwatch(id) {
-        const p = page.qsbarPalette;
-        if (!p) return Tokens.inkDim;
-        if (id === "foreground") return p.foreground || Tokens.ink;
-        return p["color" + parseInt(id.slice(-2), 10)] || Tokens.inkDim;
+    function openQsBarSettings() {
+        Quickshell.execDetached(["ryoku-shell", "bar", "settings"]);
     }
 
     CatalogLabels { id: labels }
@@ -363,7 +230,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: qsTr("The frame's chrome, its left rail, and the widgets on it. Every change lands live on the desktop, and Save keeps it.")
+            text: qsTr("Choose which bar the desktop draws, and tune the built-in styles. QS Bar keeps its layout, widgets and dock in QS Bar Settings; Sumi's frame and rails are set below. Changes land live, and Save keeps them.")
             color: Tokens.inkMuted
             font.family: Tokens.ui
             font.pixelSize: Tokens.fBody
@@ -459,12 +326,53 @@ Item {
                 }
             }
 
+            // ── QS BAR: its layout, widgets, form and dock live in QS Bar Settings
+            SettingCard {
+                id: qsbarSect
+                width: col.width
+                visible: page.activeStyle === "qsbar"
+                title: qsTr("QS BAR")
+                kana: "帯"
+
+                Item {
+                    width: parent.width
+                    height: qsbarBody.height + Tokens.s3 + Tokens.s4
+                    Column {
+                        id: qsbarBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
+                        spacing: Tokens.s3
+                        Text {
+                            width: parent.width
+                            text: qsTr("The QS Bar arranges its own layout, widgets, form and dock in QS Bar Settings. The bar logo opens it, or the button below.")
+                            color: Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fBody
+                            wrapMode: Text.WordWrap
+                        }
+                        Text {
+                            width: parent.width
+                            visible: page.qsbarLayoutSummary.length > 0
+                            text: page.qsbarLayoutSummary
+                            color: Tokens.inkDim
+                            font.family: Tokens.mono
+                            font.pixelSize: Tokens.fSmall
+                            wrapMode: Text.WordWrap
+                        }
+                        Btn {
+                            text: qsTr("OPEN QS BAR SETTINGS")
+                            onAct: page.openQsBarSettings()
+                        }
+                    }
+                }
+            }
+
             // A folder style owns its own frame, rails and widgets inside its
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
                 width: col.width
-                visible: !page.sumiActive
+                visible: !page.sumiActive && page.activeStyle !== "qsbar"
                 title: qsTr("LAYOUT")
 
                 Text {
@@ -524,614 +432,6 @@ Item {
                         anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
                         config: page.fval("nacre", ({}))
                         onStaged: value => page.fedit("nacre", value)
-                    }
-                }
-            }
-
-            // ── QS BAR: the Hancore top bar's controls ───────────────────────
-            SettingCard {
-                id: qsbarSect
-                width: col.width
-                visible: page.activeStyle === "qsbar"
-                title: qsTr("QS BAR")
-
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    block: true
-                    label: qsTr("Form")
-                    desc: qsTr("Split islands, or the unified shell as full, fit, dock or notch.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: page.qsbarForms
-                        current: page.qsbarForm()
-                        onChose: key => page.qsbarSetForm(key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Bar border")
-                    desc: qsTr("Draw the outer border around the bar.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.qsbarBorder()
-                        onToggled: value => page.qsbarSetBorder(value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 58
-                    label: qsTr("Corner radius")
-                    unit: "px"
-                    value: String(page.qval("barCornerRadius", 6))
-                    desc: qsTr("Round the bar's corners.")
-                    source: "shell.json"
-                    Step {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        from: 0; to: 40
-                        value: page.qval("barCornerRadius", 6)
-                        onModified: value => page.qsbarSetCorner(value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Panel + tooltip border")
-                    desc: qsTr("Draw the outer border around popouts and tooltips.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.qval("panelTooltipBorderEnabled", true)
-                        onToggled: value => page.qset("panelTooltipBorderEnabled", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Depth")
-                    desc: qsTr("Soft shadow behind pills, panels and tooltips.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.qval("barShadowEnabled", false)
-                        onToggled: value => page.qset("barShadowEnabled", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Frost")
-                    desc: qsTr("Make the bar surfaces translucent.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.qval("barFrostEnabled", false)
-                        onToggled: value => page.qset("barFrostEnabled", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Auto-hide")
-                    desc: qsTr("Hide the bar and free its space; reveal it on a slow hover along the edge.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.qval("barAutoHide", false)
-                        onToggled: value => page.qset("barAutoHide", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 58
-                    label: qsTr("Gap: top")
-                    unit: "px"
-                    value: String(page.qval("barGapTop", 3))
-                    desc: qsTr("Hold the bar off the top edge of the screen.")
-                    source: "shell.json"
-                    Step {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        from: -12; to: 64
-                        value: page.qval("barGapTop", 3)
-                        onModified: value => page.qset("barGapTop", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 58
-                    label: qsTr("Gap: bottom")
-                    unit: "px"
-                    value: String(page.qval("barGapBottom", 0))
-                    desc: qsTr("Reserve extra room below the bar.")
-                    source: "shell.json"
-                    Step {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        from: -12; to: 64
-                        value: page.qval("barGapBottom", 0)
-                        onModified: value => page.qset("barGapBottom", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 58
-                    label: qsTr("Gap: left")
-                    unit: "px"
-                    value: String(page.qval("barGapLeft", 0))
-                    desc: qsTr("Inset the bar from the left edge.")
-                    source: "shell.json"
-                    Step {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        from: 0; to: 64
-                        value: page.qval("barGapLeft", 0)
-                        onModified: value => page.qset("barGapLeft", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 58
-                    label: qsTr("Gap: right")
-                    unit: "px"
-                    value: String(page.qval("barGapRight", 0))
-                    desc: qsTr("Inset the bar from the right edge.")
-                    source: "shell.json"
-                    Step {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        from: 0; to: 64
-                        value: page.qval("barGapRight", 0)
-                        onModified: value => page.qset("barGapRight", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    block: true
-                    label: qsTr("Gap animation")
-                    desc: qsTr("The stream that flows between the islands, reactive to playback.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: page.qsbarAnimModes.map(m => m.label)
-                        current: page.qsbarAnimLabel(page.qval("barAnim", 1))
-                        onChose: key => page.qset("barAnim", page.qsbarAnimValue(key))
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 130
-                    label: qsTr("Position")
-                    desc: qsTr("Which screen edge the bar sits on.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["top", "bottom"]
-                        current: page.qval("barPosition", "top")
-                        onChose: key => page.qset("barPosition", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 170
-                    label: qsTr("Workspaces")
-                    desc: qsTr("Only the active workspace, or a fixed 1-5 / 1-10 row.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["active", "5", "10"]
-                        current: page.qval("workspaceMode", "active")
-                        onChose: key => page.qset("workspaceMode", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 190
-                    label: qsTr("Workspace marker")
-                    desc: qsTr("How the workspace indicators are drawn.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["default", "numbers", "magic", "kanji", "rings", "aurora"]
-                        current: page.qval("workspaceStyle", "default")
-                        onChose: key => page.qset("workspaceStyle", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 190
-                    label: qsTr("Accent colour")
-                    desc: qsTr("Which wallpaper colour tints the bar and its stream.")
-                    source: "shell.json"
-                    Row {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: Tokens.s1
-                        Repeater {
-                            model: page.qsbarColors
-                            delegate: Rectangle {
-                                required property string modelData
-                                readonly property bool on: page.qval("barColor", "color01") === modelData
-                                width: 20
-                                height: 20
-                                radius: Tokens.radius
-                                color: page.qsbarSwatch(modelData)
-                                border.width: on ? 2 : Tokens.border
-                                border.color: on ? Tokens.bone : Tokens.line
-                                HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                TapHandler { onTapped: page.qset("barColor", modelData) }
-                            }
-                        }
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 210
-                    label: qsTr("AI tool")
-                    desc: qsTr("Which coding-agent usage meter the AI pill shows.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["claude", "codex", "opencode"]
-                        current: page.qval("aiTool", "claude")
-                        onChose: key => page.qset("aiTool", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    block: true
-                    label: qsTr("Temperature source")
-                    desc: qsTr("Which sensor the CPU-temperature widget reads.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["cpu", "core", "gpu", "nvme", "memory"]
-                        current: page.qval("barTemperatureSource", "cpu")
-                        onChose: key => page.qset("barTemperatureSource", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    block: true
-                    label: qsTr("Picker style")
-                    desc: qsTr("How the theme, wallpaper and media pickers are laid out.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["tanzaku", "hearthstone", "carousel"]
-                        current: page.qval("pickerStyle", "tanzaku")
-                        onChose: key => page.qset("pickerStyle", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 130
-                    label: qsTr("Logo")
-                    desc: qsTr("The launcher mark: the RYOKU wordmark or the 力 kanji.")
-                    source: "shell.json"
-                    Seg {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["text", "icon"]
-                        current: page.qval("launcherLogoMode", "text")
-                        onChose: key => page.qset("launcherLogoMode", key)
-                    }
-                }
-                Repeater {
-                    model: page.qsbarWidgets
-                    delegate: SettingRow {
-                        required property var modelData
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        divider: true
-                        controlWidth: 54
-                        label: modelData.label
-                        desc: modelData.desc
-                        source: "shell.json"
-                        Sw {
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            on: page.qwid(modelData.id, modelData.def)
-                            onToggled: value => page.qwidset(modelData.id, value)
-                        }
-                    }
-                }
-            }
-
-            // ── DOCK: an app dock as its own shell surface, for every style ──
-            SettingCard {
-                id: dockSect
-                width: col.width
-                title: qsTr("DOCK")
-
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    controlWidth: 54
-                    label: qsTr("Dock")
-                    desc: qsTr("Show an app dock as its own shell surface, for every bar style.")
-                    source: "shell.json"
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("enabled", false)
-                        onToggled: value => page.dset("enabled", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    block: true
-                    label: qsTr("Edge")
-                    desc: qsTr("Which screen edge the dock sits on. Auto picks the edge opposite the bar.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Seg {
-                        anchors.left: parent.left
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: ["auto", "top", "bottom", "left", "right"]
-                        current: page.dval("edge", "auto")
-                        onChose: key => page.dset("edge", key)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    block: true
-                    label: qsTr("Style")
-                    desc: qsTr("How the dock is drawn: split pills, one plate, numbered cells, hanging strips, or colour-means-running.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Chips {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        options: page.dockStyleOptions.map(o => o.label)
-                        current: page.dockStyleLabel(page.dval("style", "islands"))
-                        onChose: key => page.dset("style", page.dockStyleKey(key))
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Auto-hide")
-                    desc: qsTr("Hide the dock to a peek strip and reveal it on hover; off keeps it shown and reserves its space.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("autohide", true)
-                        onToggled: value => page.dset("autohide", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Frost")
-                    desc: qsTr("Make the dock island translucent.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("frost", true)
-                        onToggled: value => page.dset("frost", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Depth")
-                    desc: qsTr("Soft shadow behind the dock island.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("shadow", true)
-                        onToggled: value => page.dset("shadow", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Magnify")
-                    desc: qsTr("Grow icons under the cursor. Off in Power Saver.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("magnify", true)
-                        onToggled: value => page.dset("magnify", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Hover labels")
-                    desc: qsTr("Show the app name above an icon on hover.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("labels", true)
-                        onToggled: value => page.dset("labels", value)
-                    }
-                }
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 54
-                    label: qsTr("Media chip")
-                    desc: qsTr("Show a now-playing chip at the end of the dock.")
-                    source: "shell.json"
-                    enabled: page.dval("enabled", false)
-                    Sw {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        on: page.dval("media", false)
-                        onToggled: value => page.dset("media", value)
-                    }
-                }
-                Item {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    enabled: page.dval("enabled", false)
-                    opacity: enabled ? 1 : 0.4
-                    height: dockAppsCol.implicitHeight + Tokens.s3 * 2
-                    Column {
-                        id: dockAppsCol
-                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-                        spacing: Tokens.s2
-                        Item {
-                            width: parent.width
-                            height: 26
-                            Text {
-                                anchors.left: parent.left
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: qsTr("Dock apps")
-                                color: Tokens.ink
-                                font.family: Tokens.ui
-                                font.pixelSize: 13
-                            }
-                            Rectangle {
-                                anchors.right: parent.right
-                                anchors.verticalCenter: parent.verticalCenter
-                                width: addTxt.width + 22
-                                height: 26
-                                radius: Tokens.radius
-                                color: addHov.hovered ? Tokens.paperLift : "transparent"
-                                border.width: Tokens.border
-                                border.color: Tokens.line
-                                Text {
-                                    id: addTxt
-                                    anchors.centerIn: parent
-                                    text: qsTr("+ Add app")
-                                    color: Tokens.ink
-                                    font.family: Tokens.ui
-                                    font.pixelSize: 12
-                                }
-                                HoverHandler { id: addHov }
-                                TapHandler { onTapped: page.dockPickerOpen = true }
-                            }
-                        }
-                        Flow {
-                            width: parent.width
-                            spacing: Tokens.s2
-                            visible: page.dockPins().length > 0
-                            Repeater {
-                                model: page.dockPins()
-                                delegate: Rectangle {
-                                    id: chip
-                                    required property string modelData
-                                    readonly property var entry: DesktopEntries.heuristicLookup(chip.modelData)
-                                    height: 28
-                                    radius: Tokens.radius
-                                    width: chipRow.implicitWidth + 16
-                                    color: Tokens.paperLift
-                                    border.width: Tokens.border
-                                    border.color: Tokens.line
-                                    Row {
-                                        id: chipRow
-                                        anchors.centerIn: parent
-                                        spacing: 6
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: (chip.entry && chip.entry.name) ? chip.entry.name : chip.modelData
-                                            color: Tokens.ink
-                                            font.family: Tokens.ui
-                                            font.pixelSize: 12
-                                        }
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: "\u2715"
-                                            color: chipX.hovered ? Tokens.ink : Tokens.inkFaint
-                                            font.pixelSize: 11
-                                            HoverHandler { id: chipX }
-                                            TapHandler { onTapped: page.removeDockApp(chip.modelData) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Text {
-                            visible: page.dockPins().length === 0
-                            text: qsTr("No apps pinned. Add one, or right-click a running app in the dock.")
-                            color: Tokens.inkFaint
-                            font.family: Tokens.ui
-                            font.pixelSize: 11
-                        }
                     }
                 }
             }
@@ -1358,18 +658,4 @@ Item {
         }
     }
 
-    Loader {
-        id: dockPicker
-        anchors.fill: parent
-        z: 100
-        active: page.dockPickerOpen
-        source: active ? Qt.resolvedUrl("../AppPicker.qml") : ""
-        onLoaded: if (item) item.title = qsTr("Add dock app")
-    }
-    Connections {
-        target: dockPicker.item
-        ignoreUnknownSignals: true
-        function onChosenApp(appId, appName) { page.addDockApp(appId); page.dockPickerOpen = false; }
-        function onDismissed() { page.dockPickerOpen = false; }
-    }
 }

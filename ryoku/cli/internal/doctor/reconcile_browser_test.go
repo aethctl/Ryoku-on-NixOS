@@ -88,3 +88,34 @@ func TestReconcileBrowserTheme(t *testing.T) {
 		t.Fatalf("check-only must not rewrite the manifest")
 	}
 }
+
+// TestReconcileBrowserThemeZen guards the Zen path: Zen keeps its profiles under
+// ~/.config/zen (not ~/.zen) but resolves native-messaging manifests from the
+// classic ~/.mozilla dir, so a Zen-only box gets the host there.
+func TestReconcileBrowserThemeZen(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	browserMkdir(t, filepath.Join(home, ".config", "zen"))
+
+	if r := reconcileBrowserTheme(false); r.status != recFixed {
+		t.Fatalf("zen install: status=%s want fixed", r.status.label())
+	}
+	launcher := filepath.Join(home, ".local", "share", "ryoku", "ryoku-browser-host")
+	m := browserReadManifest(t, filepath.Join(home, ".mozilla", "native-messaging-hosts", "ryoku_theme.json"))
+	if m["name"] != browserHostName || m["path"] != launcher {
+		t.Fatalf("zen manifest wrong: %v", m)
+	}
+	if _, ok := m["allowed_extensions"]; !ok {
+		t.Fatalf("zen manifest missing allowed_extensions: %v", m)
+	}
+	// Zen resolves manifests from ~/.mozilla, so the XDG dir must not be created.
+	if _, err := os.Stat(filepath.Join(home, ".config", "zen", "native-messaging-hosts")); err == nil {
+		t.Fatalf("must not create ~/.config/zen/native-messaging-hosts")
+	}
+	if r2 := reconcileBrowserTheme(false); r2.status != recOK {
+		t.Fatalf("zen second run: status=%s want ok (idempotent)", r2.status.label())
+	}
+}

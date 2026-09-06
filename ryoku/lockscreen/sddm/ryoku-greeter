@@ -16,6 +16,30 @@
 # rather than a blank login screen.
 set -u
 
+# weston draws the pointer itself (DRM backend) from the XCursor theme named in
+# its environment, and SDDM starts the compositor with none: pin the shipped
+# Bibata set (ryoku-cursors) so the login screen has a visible pointer whatever
+# the "default" theme chain resolves to. Matches GreeterEnvironment in
+# /etc/sddm.conf.d/10-ryoku-wayland.conf for the greeter client.
+export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
+export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
+
+# weston reads no X11 keyboard config, so without this the greeter is on the
+# us map and an AZERTY password fails. The layout localectl recorded goes in
+# through the libxkbcommon defaults.
+kb_conf=/etc/X11/xorg.conf.d/00-keyboard.conf
+if [ -r "$kb_conf" ]; then
+  xkb_opt() { sed -n "s/.*Option[[:space:]]*\"$1\"[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$kb_conf" | head -n1; }
+  layout=$(xkb_opt XkbLayout); layout=${layout%%,*}
+  if [ -n "$layout" ]; then
+    export XKB_DEFAULT_LAYOUT="$layout"
+    variant=$(xkb_opt XkbVariant); variant=${variant%%,*}
+    [ -n "$variant" ] && export XKB_DEFAULT_VARIANT="$variant"
+    options=$(xkb_opt XkbOptions)
+    [ -n "$options" ] && export XKB_DEFAULT_OPTIONS="$options"
+  fi
+fi
+
 # exec plain weston (preferred mode); the login screen must always start.
 weston_plain() { exec weston --shell=kiosk "$@"; }
 

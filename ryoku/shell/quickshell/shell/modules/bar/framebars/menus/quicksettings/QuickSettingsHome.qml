@@ -164,11 +164,11 @@ Item {
             }
 
             // Surface switch: sets which panel the bar's brand logo opens -- this
-            // Super+Esc quick settings, or the bar-logo Shell Studio. The lit
+            // Super+Esc quick settings, or the bar-logo QS Bar Settings. The lit
             // segment is the current target; picking the other retargets the logo.
             Menus.QsSeg {
                 width: parent.width
-                options: [{ id: "studio", label: "SHELL STUDIO" }, { id: "quick", label: "QUICK SETTINGS" }]
+                options: [{ id: "studio", label: "QS BAR SETTINGS" }, { id: "quick", label: "QUICK SETTINGS" }]
                 current: Config.launcherTarget === "quick" ? "quick" : "studio"
                 onChose: (id) => Config.setLauncherTarget(id)
             }

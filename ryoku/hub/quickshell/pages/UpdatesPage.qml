@@ -230,7 +230,7 @@ Item {
                 || (pg.nixBackend && !Updates.canUpdate))
             return;
 
-        Spawn.run(["kitty", "-e", "sh", "-c", "RYOKU_UPDATE_UI=hub exec ryoku update"]);
+        Spawn.run(["kitty", "-e", "sh", "-c", "exec ryoku update"]);
     }
 
     // idle list: incoming commits when behind, else the recent history the
@@ -347,6 +347,17 @@ Item {
                             color: Tokens.ink; font.family: Tokens.ui
                             font.pixelSize: Tokens.fMicro; font.weight: Font.Medium
                             font.letterSpacing: Tokens.trackMark
+                        }
+
+                        // the release line this box runs, and the next one when
+                        // the channel has moved on ("Onogoro -> Amaterasu").
+                        Text {
+                            visible: Updates.currentName !== ""
+                            text: "Ryoku " + Updates.currentName
+                                  + (Updates.available && Updates.latestName !== "" && Updates.latestName !== Updates.currentName
+                                     ? "  \u2192  " + Updates.latestName : "")
+                            color: Tokens.ink; font.family: Tokens.display
+                            font.pixelSize: Tokens.fHero; font.weight: Font.Medium
                         }
 
                         // installed -> latest bump. a version is file-truth, so mono.

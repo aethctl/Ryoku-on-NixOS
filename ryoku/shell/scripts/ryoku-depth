@@ -176,36 +176,62 @@ pick_python() {
     return 1
 }
 
-cmd_install() {
+# Create the engine venv. A system Python 3.11-3.13 is the fast path; otherwise
+# uv provisions a managed 3.13, because Arch's system python rolls ahead of
+# onnxruntime's wheels (a bare 3.14 box has no usable interpreter for rembg).
+ensure_venv() {
+    [[ -x "$venv/bin/python" ]] && return 0
     local py
-    py="$(pick_python)" || {
-        printf 'ryoku-depth: rembg needs Python 3.11-3.13; none found\n' >&2
-        return 1
-    }
+    if py="$(pick_python)"; then
+        printf 'Creating engine environment (%s)...\n' "$py"
+        "$py" -m venv "$venv"
+        return 0
+    fi
+    if command -v uv >/dev/null 2>&1; then
+        printf 'Provisioning Python 3.13 via uv...\n'
+        uv python install 3.13 && uv venv --python 3.13 "$venv"
+        [[ -x "$venv/bin/python" ]] && return 0
+    fi
+    printf 'ryoku-depth: needs Python 3.11-3.13 or uv (install it: sudo pacman -S uv)\n' >&2
+    return 1
+}
+
+# Install into the venv with whatever built it: a stdlib venv carries pip, a
+# uv venv does not (uv drives it externally).
+venv_pip() {
+    if [[ -x "$venv/bin/pip" ]]; then
+        "$venv/bin/pip" install --quiet "$@"
+        return
+    fi
+    uv pip install --quiet --python "$venv/bin/python" "$@"
+}
+
+cmd_install() {
     local want=("$@")
     [[ ${#want[@]} -eq 0 ]] && want=("$default_model")
 
     mkdir -p "$state" "$models"
-    if [[ ! -x "$venv/bin/python" ]]; then
-        printf 'Creating engine environment (%s)...\n' "$py"
-        "$py" -m venv "$venv"
-    fi
+    ensure_venv || return 1
+
     printf 'Installing rembg (CPU)...\n'
-    "$venv/bin/pip" install --quiet --upgrade pip
-    "$venv/bin/pip" install --quiet "rembg[cpu]"
+    [[ -x "$venv/bin/pip" ]] && venv_pip --upgrade pip
+    if ! venv_pip "rembg[cpu]"; then
+        printf 'ryoku-depth: could not install rembg (no onnxruntime wheel for this Python?)\n' >&2
+        return 1
+    fi
 
     local m
     for m in "${want[@]}"; do
         is_curated "$m" || continue
         printf 'Downloading model %s...\n' "$m"
-        # Prefer GPU (CUDA), fall back to CPU; onnxruntime skips a provider it lacks.
+        # Prefer GPU (CUDA), fall back to CPU; a CPU-only runtime just uses CPU.
         "$venv/bin/python" - "$m" <<'PY'
 import sys
 from rembg import new_session
 model = sys.argv[1]
 try:
     new_session(model, providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
-except TypeError:  # rembg too old for providers=
+except Exception:
     new_session(model)
 PY
     done
@@ -215,6 +241,29 @@ PY
     fi
     printf 'ryoku-depth: install finished but the engine is still unavailable\n' >&2
     return 1
+}
+
+cmd_remove() {
+    local m="${1:-}"
+    [[ -n $m ]] || {
+        printf 'usage: ryoku-depth remove <model>\n' >&2
+        return 2
+    }
+    is_curated "$m" || {
+        printf 'ryoku-depth: not a curated model: %s\n' "$m" >&2
+        return 2
+    }
+    local f found=0
+    while IFS= read -r -d '' f; do
+        rm -f "$f"
+        found=1
+    done < <(find "$models" -name "$m.onnx" -print0 2>/dev/null)
+    if [[ $found -eq 1 ]]; then
+        printf 'removed %s\n' "$m"
+    else
+        printf '%s was not installed\n' "$m"
+    fi
+    return 0
 }
 
 case "${1:-}" in
@@ -231,8 +280,12 @@ install)
     shift
     cmd_install "$@"
     ;;
+remove)
+    shift
+    cmd_remove "$@"
+    ;;
 *)
-    printf 'usage: ryoku-depth check | models | cutout <in> <out.png> [--model <id>] | install [model...]\n' >&2
+    printf 'usage: ryoku-depth check | models | cutout <in> <out.png> [--model <id>] | install [model...] | remove <model>\n' >&2
     exit 2
     ;;
 esac

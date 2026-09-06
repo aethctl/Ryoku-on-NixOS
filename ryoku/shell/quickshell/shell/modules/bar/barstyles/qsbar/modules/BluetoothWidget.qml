@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Bluetooth
 import Quickshell.Io
 import "../IconMap.js" as IconMap
 
@@ -8,12 +9,21 @@ Item {
     required property var root
     readonly property color contentColor: root.widgetContentColor("G15", root.ink)
 
-    property bool btOn:       false
-    property bool connected:  false
-    property int  numConnected: 0
-    // Whether a Bluetooth controller physically exists (see btProc). Drives the
-    // auto-show below so the pill only ever appears on hardware it can control.
-    property bool hasAdapter: false
+    // BlueZ over D-Bus; a bluetoothctl poll here leaked a process per tick (#143).
+    readonly property var adapter: Bluetooth.defaultAdapter
+    readonly property bool hasAdapter: adapter !== null
+    readonly property bool btOn: hasAdapter && adapter.enabled
+    readonly property int numConnected: {
+        if (!btOn || !Bluetooth.devices)
+            return 0
+        var vals = Bluetooth.devices.values
+        var n = 0
+        for (var i = 0; i < vals.length; i++)
+            if (vals[i] && vals[i].connected)
+                n++
+        return n
+    }
+    readonly property bool connected: numConnected > 0
 
     readonly property string iconN: !btOn
         ? "bluetooth_disabled"
@@ -24,8 +34,7 @@ Item {
         : (btOn ? "Bluetooth on" : "Bluetooth off")
 
     // The widget's own toggle is authoritative, and a machine with no controller
-    // keeps a clean bar either way. This used to be `modBluetooth || hasAdapter`,
-    // which meant the toggle did nothing on any machine that has Bluetooth.
+    // keeps a clean bar either way.
     readonly property bool shown: root.modBluetooth && hasAdapter
     visible: implicitWidth > 0.5
     implicitWidth: shown ? row.implicitWidth + 18 : 0
@@ -57,48 +66,6 @@ Item {
             font.family: root.mono
             font.pixelSize: 12
         }
-    }
-
-    Process {
-        id: btProc
-        command: ["bash", "-c",
-            "SHOW=$(bluetoothctl show 2>/dev/null); " +
-            "if [ -z \"$SHOW\" ]; then echo NONE; " +
-            "elif printf '%s' \"$SHOW\" | grep -q 'Powered: yes'; then " +
-            "  COUNT=$(bluetoothctl devices Connected 2>/dev/null | wc -l); " +
-            "  printf 'ON\\t%s\\n' \"$COUNT\"; " +
-            "else echo OFF; fi"
-        ]
-        running: false
-        stdout: SplitParser {
-            onRead: function(line) { btProc.result = line.trim() }
-        }
-        onExited: {
-            var r = btProc.result
-            if (r === "NONE" || r === "") {
-                rootMod.hasAdapter = false; rootMod.btOn = false
-                rootMod.connected = false; rootMod.numConnected = 0
-            } else if (r === "OFF") {
-                rootMod.hasAdapter = true; rootMod.btOn = false
-                rootMod.connected = false; rootMod.numConnected = 0
-            } else if (r.startsWith("ON\t")) {
-                rootMod.hasAdapter = true; rootMod.btOn = true
-                var count = parseInt(r.split("\t")[1]) || 0
-                rootMod.numConnected = count
-                rootMod.connected = count > 0
-            }
-            btProc.result = ""
-        }
-        property string result: ""
-    }
-
-    // Poll fast while the pill is shown or the panel is open; slowly otherwise so
-    // an adapter added later (e.g. a USB dongle) still surfaces the pill without a
-    // shell reload. Always running so the initial detection happens even while hidden.
-    Timer {
-        interval: rootMod.shown ? 5000 : 30000
-        running: true; repeat: true; triggeredOnStart: true
-        onTriggered: { btProc.result = ""; btProc.running = false; btProc.running = true }
     }
 
     TooltipMixin { id: tip; root: rootMod.root; owner: rootMod; text: rootMod.tooltipText }
