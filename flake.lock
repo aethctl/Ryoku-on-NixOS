@@ -102,13 +102,13 @@
       "locked": {
         "lastModified": 1788674941,
         "narHash": "sha256-JbZiGfAdZDIZ6eQ4vglejzhYEpFs7LZNasoORn1Qxl4=",
-        "owner": "neur0map",
+        "owner": "ryoku-dev",
         "repo": "ryotunes",
         "rev": "2e2652192d629632fe6bc5a5232bba82c77d41e2",
         "type": "github"
       },
       "original": {
-        "owner": "neur0map",
+        "owner": "ryoku-dev",
         "repo": "ryotunes",
         "rev": "2e2652192d629632fe6bc5a5232bba82c77d41e2",
         "type": "github"

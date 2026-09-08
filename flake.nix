@@ -27,7 +27,7 @@
     # Native Ryotunes 2.5.1 application used by Ryoku 0.59.7.
     # Keep this pinned to the exact upstream release commit.
     ryotunesSrc = {
-      url = "github:neur0map/ryotunes/2e2652192d629632fe6bc5a5232bba82c77d41e2";
+      url = "github:ryoku-dev/ryotunes/2e2652192d629632fe6bc5a5232bba82c77d41e2";
       flake = false;
     };
   };

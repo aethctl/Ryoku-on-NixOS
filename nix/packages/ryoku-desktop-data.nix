@@ -309,7 +309,7 @@ LUA
   '';
   meta = {
     description = "Ryoku desktop configuration, assets, applications and integration data";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };

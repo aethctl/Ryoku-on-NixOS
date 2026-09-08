@@ -160,7 +160,7 @@ let
 
       meta = {
         inherit description;
-        homepage = "https://github.com/neur0map/ryoku-arch";
+        homepage = "https://github.com/ryoku-dev/ryoku-arch";
         license = pkgs.lib.licenses.gpl3Only;
         platforms = [ "x86_64-linux" ];
       };
@@ -190,7 +190,7 @@ let
   qml = pkgs.runCommand "ryoku-qml-modules" {
     meta = {
       description = "Combined Ryoku Qt/QML module tree";
-      homepage = "https://github.com/neur0map/ryoku-arch";
+      homepage = "https://github.com/ryoku-dev/ryoku-arch";
       license = pkgs.lib.licenses.gpl3Only;
       platforms = [ "x86_64-linux" ];
     };
@@ -219,7 +219,7 @@ let
 
     meta = {
       description = "Complete Ryoku desktop runtime bundle";
-      homepage = "https://github.com/neur0map/ryoku-arch";
+      homepage = "https://github.com/ryoku-dev/ryoku-arch";
       license = pkgs.lib.licenses.gpl3Only;
       platforms = [ "x86_64-linux" ];
     };

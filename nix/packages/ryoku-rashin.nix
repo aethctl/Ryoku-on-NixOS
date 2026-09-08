@@ -64,7 +64,7 @@ pkgs.stdenv.mkDerivation {
 
   meta = {
     description = "Ryoku Rashin local agent OS daemon and dashboard";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Plus;
     platforms = [ "x86_64-linux" ];
   };

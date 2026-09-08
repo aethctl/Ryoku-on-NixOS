@@ -39,7 +39,7 @@ pkgs.stdenv.mkDerivation {
 
   meta = {
     description = "RyoStore catalogue and installation backend";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Plus;
     platforms = [ "x86_64-linux" ];
   };

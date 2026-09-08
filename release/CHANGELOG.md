@@ -428,7 +428,7 @@
   wallust in its official-repo dependency check.
 - **`ryomotion` ships from the `[ryoku]` repo**: Ryoku Motion, the screen-demo
   recorder and editor, built from the OpenScreen fork
-  (github.com/neur0map/ryomotion) and rebranded to Ryo Motion. The PKGBUILD
+  (github.com/ryoku-dev/ryomotion) and rebranded to Ryo Motion. The PKGBUILD
   builds the Electron app from a pinned commit, fetching the fork's pinned node
   22 at build time (its npm 10 runs the electron/esbuild/sharp install scripts a
   newer npm blocks by default) and rebranding name, binary, and appId with

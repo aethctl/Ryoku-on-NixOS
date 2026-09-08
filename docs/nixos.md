@@ -26,7 +26,7 @@ Add Ryoku as an input:
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     ryoku = {
-      url = "github:neur0map/ryoku-arch";
+      url = "github:ryoku-dev/ryoku-arch";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

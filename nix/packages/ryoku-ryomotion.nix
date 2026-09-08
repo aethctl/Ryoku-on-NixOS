@@ -79,7 +79,7 @@ pkgs.buildNpmPackage {
   version = "1.5.0";
 
   src = pkgs.fetchFromGitHub {
-    owner = "neur0map";
+    owner = "ryoku-dev";
     repo = "ryomotion";
     rev = "60ea129dabfed8c4936aa6264dc43452c1ed8ab5";
     sha256 = "0jbdj8idwi8mwkny9z4cxy5b6fw4k4i4rm7qy941gv18yp00w7m7";
@@ -218,7 +218,7 @@ pkgs.buildNpmPackage {
 
   meta = {
     description = "Ryo Motion screen-demo recorder and editor";
-    homepage = "https://github.com/neur0map/ryomotion";
+    homepage = "https://github.com/ryoku-dev/ryomotion";
     license = lib.licenses.mit;
 
     mainProgram = "ryomotion";

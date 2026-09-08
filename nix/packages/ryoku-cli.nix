@@ -54,7 +54,7 @@ pkgs.stdenv.mkDerivation {
 
   meta = {
     description = "Ryoku desktop command-line control utility";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };

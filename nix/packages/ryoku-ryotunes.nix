@@ -240,7 +240,7 @@ EOF
       "Native Ryoku music client with daemon, CLI and QML frontend";
 
     homepage =
-      "https://github.com/neur0map/ryotunes";
+      "https://github.com/ryoku-dev/ryotunes";
 
     license = pkgs.lib.licenses.gpl3Plus;
 

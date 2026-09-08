@@ -117,7 +117,7 @@ pkgs.stdenv.mkDerivation {
     description =
       "Ryogami wallpaper daemon and wallpaper picker for Ryoku";
     homepage =
-      "https://github.com/neur0map/ryoku-arch";
+      "https://github.com/ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.mit;
     platforms = [ "x86_64-linux" ];
   };
