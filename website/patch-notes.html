@@ -35,8 +35,8 @@
         <p>The real NixOS release history. No generated summaries, no guessed features — these notes are kept from the releases as they were written.</p>
       </div>
       <dl class="subpage-meta reveal visible">
-        <div><dt>Current</dt><dd>0.60.1-beta.19</dd></div>
-        <div><dt>Previous</dt><dd>Musubi 0.58.6-beta.19</dd></div>
+        <div><dt>Current</dt><dd>0.63.1-beta.19</dd></div>
+        <div><dt>Previous</dt><dd>0.60.1-beta.19</dd></div>
         <div><dt>Order</dt><dd>Newest first</dd></div>
         <div><dt>Archive</dt><dd>Persistent</dd></div>
       </dl>
@@ -46,16 +46,87 @@
       <aside class="docs-sidebar">
         <div class="docs-sidebar-title">RELEASES // INDEX</div>
         <nav>
-          <a href="#v0-60-1-beta-19"><span>01</span>0.60.1-beta.19</a>
-          <a href="#v0-58-6-beta-19"><span>02</span>Musubi 0.58.6-beta.19</a>
+          <a href="#v0-63-1-beta-19"><span>01</span>Musubi 0.63.1-beta.19</a>
+          <a href="#v0-60-1-beta-19"><span>02</span>0.60.1-beta.19</a>
+          <a href="#v0-58-6-beta-19"><span>03</span>Musubi 0.58.6-beta.19</a>
           <a href="#archive-format"><span>+</span>Archive format</a>
         </nav>
         <a class="button" href="index.html">← Back to site</a>
       </aside>
 
       <div class="docs-content patch-notes-content">
-        <article id="v0-60-1-beta-19" class="release-entry release-entry-full">
+        <article id="v0-63-1-beta-19" class="release-entry release-entry-full">
           <div class="eyebrow">LATEST // CURRENT NIXOS PORT</div>
+          <header class="release-head">
+            <h2 class="release-version">MUSUBI<br>0.63.1</h2>
+            <div class="release-date">結び<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">This update brings Ryoku on NixOS up to <strong>v0.63.1-beta.19</strong>, completing the latest upstream sync while preserving the NixOS-specific adaptations required to keep Ryoku fully declarative and functional. This is a much larger update than the previous patch, with major changes to wallpaper effects, audio, translations, Ryotunes, RyoStore, Ryoku Settings and several parts of the desktop.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li>Added <strong>Ryostage</strong>, Ryoku's new wallpaper staging system which replaces the old Depth and Parallax systems.</li>
+              <li>Added support for both Ryostage segmentation models:
+                <ul>
+                  <li><strong>U2NetP</strong> — smaller and faster model for quicker processing.</li>
+                  <li><strong>BiRefNet General Lite</strong> — much larger model for higher quality cutouts.</li>
+                </ul>
+              </li>
+              <li>Added the new <strong>10-band Ryoku Equalizer</strong>, including support for EQ presets, individual band controls, enabling/disabling the EQ and automatic audio sink retargeting.</li>
+              <li>Added a fully declarative <strong>Ryoku EQ systemd user service</strong> for NixOS.</li>
+              <li>Added Ryoku's new <strong>shared internationalisation system</strong>, including the full upstream translation catalogue and language metadata.</li>
+              <li>Added the new <code>ryoku-i18n</code> tooling to NixOS while keeping all translation data inside the immutable Nix store.</li>
+              <li>Added the new upstream <strong>Stage controls and editor</strong>, including wallpaper foreground layers, positioning, angles, outlines and Stage widgets.</li>
+              <li>Added the latest upstream <strong>Ryoku Settings / Hub</strong> changes, including improvements to plugins, profile information, updates and translated UI elements.</li>
+              <li>Added the latest <strong>RyoStore</strong> backend and interface changes.</li>
+              <li>Added the latest <strong>Ryoport</strong> interface and backend changes.</li>
+              <li>Added the latest upstream <strong>Hyprland integration changes</strong>, including updated workspace, keybind and window-rule behaviour.</li>
+              <li>Updated <strong>Ryotunes to v1.0.6</strong>, replacing the previous legacy v2.5.1 build and bringing the latest native QML client, daemon, CLI and playback changes to Ryoku on NixOS.</li>
+              <li>Added the latest upstream Ryotunes integration used by the Ryoku CLI and Doctor.</li>
+              <li>Added the latest upstream Doctor checks including Stage, language and other new system reconciliation logic while retaining the NixOS-specific Doctor backend.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Ryotunes packaging for the new v1 release layout.</li>
+              <li>Fixed the Ryotunes native QML client runtime path on NixOS while retaining the declarative <code>ryotunesd</code> service.</li>
+              <li>Fixed Ryotunes launching normal desktop helpers from its daemon by exposing the required NixOS runtime environment without reverting to mutable Arch-style paths.</li>
+              <li>Fixed shared translations not having a stable system-wide location on NixOS by exposing the immutable catalogue through <code>RYOKU_I18N_DIR</code>.</li>
+              <li>Fixed the Ryoku CLI not automatically seeing the new shared translation catalogue.</li>
+              <li>Fixed the shell, Hub and other Ryoku components not having a common NixOS translation path.</li>
+              <li>Fixed Ryostage's upstream mutable Python/venv installation model for NixOS. Required Python libraries are now supplied declaratively instead.</li>
+              <li>Fixed Ryostage model discovery on NixOS while retaining compatibility with existing Depth/Parallax model caches.</li>
+              <li>Fixed the new equalizer relying on Arch system paths by providing the required PipeWire, PulseAudio, systemd and helper tools through its Nix runtime.</li>
+              <li>Preserved the NixOS-specific Docker/Stash behaviour while updating it to the new translated upstream UI.</li>
+              <li>Preserved all existing NixOS-specific CLI, updater, Doctor, Ryogami, Ryotunes and system integration behaviour during the upstream rebase.</li>
+              <li>Fixed remaining references to the old <code>neur0map</code> Ryoku repositories following the upstream move to <strong>Ryoku-dev</strong>.</li>
+              <li>Synced previously missed lockscreen and shared UI changes discovered during the final upstream integrity audit.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Changes</h3></div>
+            <ul class="notes-list">
+              <li><strong>Depth and Parallax have been retired upstream</strong> and replaced by Ryostage.</li>
+              <li><code>ryoku-depth</code> has been removed and the old Parallax engine has transitioned to the new <code>ryostage</code> command.</li>
+              <li><strong>awww has been removed</strong> from the Ryoku Nix runtime. Wallpaper rendering and transitions are now handled by <strong>Ryogami</strong>.</li>
+              <li>Ryostage model installation is declarative on NixOS. The upstream command is still supported, but NixOS does not create a mutable Python environment behind the user's back.</li>
+              <li>Equalizer startup is managed declaratively through NixOS rather than installing the upstream <code>/usr/bin/pipewire</code> systemd unit.</li>
+              <li>Translation catalogues now live in the shared <code>ryoku/i18n</code> tree instead of the older <code>ryoku/ui/translations</code> layout.</li>
+              <li>Ryoku on NixOS now tracks the new <strong>Ryoku-dev</strong> organisation for Ryoku and Ryotunes. Unrelated upstream repositories such as <code>neur0map/glazepkg</code> remain unchanged.</li>
+              <li>Ryotunes is now pinned to the exact <strong>v1.0.6</strong> source used alongside this Ryoku release rather than following a moving latest version.</li>
+              <li>The old separate <code>ryotunes-qml.desktop</code> launcher has been removed in line with upstream Ryotunes. The standard Ryotunes launcher is now the canonical application entry.</li>
+              <li>RyoStore, Ryoport, Hyprland, the lockscreen and shared Ryoku UI have all been synchronised against the exact <strong>v0.63.1-beta.19</strong> upstream source.</li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-60-1-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // 0.60.1</div>
           <header class="release-head">
             <h2 class="release-version">0.60.1<br>BETA.19</h2>
             <div class="release-date">RYOKU ON NIXOS<br>UPDATE PATCH NOTES</div>
@@ -165,7 +236,8 @@
             <strong>Adding the next release</strong>
             Put the newest release above the current one, add its version to the release index, and leave every older release untouched underneath it.
           </div>
-          <div class="release-template">CURRENT ANCHOR // patch-notes.html#v0-60-1-beta-19</div>
+          <div class="release-template">CURRENT ANCHOR // patch-notes.html#v0-63-1-beta-19</div>
+          <div class="release-template">PREVIOUS ANCHOR // patch-notes.html#v0-60-1-beta-19</div>
           <div class="release-template">MUSUBI ANCHOR // patch-notes.html#v0-58-6-beta-19</div>
         </section>
       </div>
