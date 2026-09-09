@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell.Bluetooth
+import Quickshell.Io
 import shell.services
 import Ryoku.Ui.Singletons
 
@@ -57,8 +58,8 @@ Item {
     // No adapter and a powered-off adapter share one Material glyph; the label
     // carries the distinction the reference draws between them.
     readonly property string stateIcon: root.adapterEnabled ? "bluetooth" : "bluetooth_disabled"
-    readonly property string stateLabel: !root.hasAdapter ? qsTr("Bluetooth Hardware Missing")
-        : root.adapterEnabled ? qsTr("Bluetooth") : qsTr("Bluetooth Disabled")
+    readonly property string stateLabel: !root.hasAdapter ? I18n.tr("Bluetooth Hardware Missing")
+        : root.adapterEnabled ? I18n.tr("Bluetooth") : I18n.tr("Bluetooth Disabled")
 
     // Translate the device's own BlueZ icon hint to the nearest Material Symbol,
     // falling back to the plain bluetooth glyph like the reference does.
@@ -111,34 +112,46 @@ Item {
         if (!d)
             return a;
         if (d.paired && !d.connected)
-            a.push({ label: qsTr("Connect"), act: "connect" });
+            a.push({ label: I18n.tr("Connect"), act: "connect" });
         if (d.paired && d.connected)
-            a.push({ label: qsTr("Disconnect"), act: "disconnect" });
+            a.push({ label: I18n.tr("Disconnect"), act: "disconnect" });
         if (d.paired && !d.trusted)
-            a.push({ label: qsTr("Trust"), act: "trust" });
+            a.push({ label: I18n.tr("Trust"), act: "trust" });
         if (d.paired && d.trusted)
-            a.push({ label: qsTr("Untrust"), act: "untrust" });
+            a.push({ label: I18n.tr("Untrust"), act: "untrust" });
         if (!d.paired)
-            a.push({ label: qsTr("Pair"), act: "pair" });
+            a.push({ label: I18n.tr("Pair"), act: "pair" });
         if (d.paired)
-            a.push({ label: qsTr("Forget"), act: "forget" });
+            a.push({ label: I18n.tr("Forget"), act: "forget" });
         return a;
     }
 
-    // Each action maps to a method or writable property that exists on the
-    // Quickshell BluetoothDevice, so nothing here is faked.
+    // Trust, untrust, disconnect and forget are plain Quickshell
+    // BluetoothDevice members. Connect and pair are not: Device1.Pair and
+    // Device1.Connect register no agent for BlueZ to authorise through, and
+    // Connect on a bond BlueZ holds but the device has forgotten fails at once
+    // with nothing clearing it (#144/#156). Both go through the one link
+    // script instead, which brings an agent, retries, and rebuilds a dead bond.
     function runDeviceAction(d, act) {
         if (!d)
             return;
         switch (act) {
-        case "connect": d.connect(); break;
+        case "connect":
+        case "pair": root.link(d); break;
         case "disconnect": d.disconnect(); break;
         case "trust": d.trusted = true; break;
         case "untrust": d.trusted = false; break;
-        case "pair": d.pair(); break;
         case "forget": d.forget(); break;
         }
     }
+    function link(d) {
+        if (!d || linkProc.running)
+            return;
+        linkProc.command = BtLink.linkCommand(d.address);
+        linkProc.running = false;
+        linkProc.running = true;
+    }
+    Process { id: linkProc }
 
     RevealerRow {
         id: row
@@ -164,7 +177,7 @@ Item {
                 Text {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("Paired Devices")
+                    text: I18n.tr("Paired Devices")
                     color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
                     font.family: Theme.fontPrimary
                     font.pixelSize: Theme.fontLg
@@ -174,7 +187,7 @@ Item {
                     width: parent.width
                     visible: root.pairedDevices.length === 0
                     horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("No Paired Devices")
+                    text: I18n.tr("No Paired Devices")
                     color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
                     font.family: Theme.fontPrimary
                     font.pixelSize: Theme.fontMd
@@ -198,7 +211,7 @@ Item {
                 Text {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("Discovered Devices")
+                    text: I18n.tr("Discovered Devices")
                     color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
                     font.family: Theme.fontPrimary
                     font.pixelSize: Theme.fontLg
@@ -208,7 +221,7 @@ Item {
                     width: parent.width
                     visible: root.discoveredDevices.length === 0
                     horizontalAlignment: Text.AlignHCenter
-                    text: qsTr("No Devices Found")
+                    text: I18n.tr("No Devices Found")
                     color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
                     font.family: Theme.fontPrimary
                     font.pixelSize: Theme.fontMd

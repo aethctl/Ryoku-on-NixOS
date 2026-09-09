@@ -1,16 +1,12 @@
 { pkgs, src }:
 
 let
-  # Depth uses the rembg Python API directly. Keep the runtime inside Nix
-  # instead of creating a mutable pip environment on NixOS.
-  depthPython = pkgs.python3.withPackages (ps: [
-    ps.rembg
-  ]);
-
-  # Parallax uses the same foreground-removal stack as Depth plus a
-  # deterministic scipy/Pillow inpaint pass. Keep the Python runtime
-  # declarative on NixOS; only downloaded model data belongs in user state.
-  parallaxPython = pkgs.python3.withPackages (ps: [
+  # Ryostage replaces the old separate Depth and Parallax Python runtimes.
+  #
+  # Upstream normally provisions a mutable Python venv on first use. NixOS
+  # supplies the complete runtime declaratively instead; only downloaded model
+  # weights belong in writable user state.
+  stagePython = pkgs.python3.withPackages (ps: [
     ps.rembg
     ps.numpy
     ps.pillow
@@ -55,36 +51,66 @@ pkgs.stdenvNoCC.mkDerivation {
     install_helpers \
       system/extras/ryoku-cmd-present
 
-    # Depth foreground cutout helper.
+    # ------------------------------------------------------------------
+    # Ryostage
+    # ------------------------------------------------------------------
     #
-    # Upstream provisions rembg into a user venv. NixOS instead supplies
-    # rembg declaratively and keeps only downloaded model data in user state.
+    # Keep upstream's public engine and command surface intact, but intercept
+    # `install`: Arch provisions rembg in a user venv, while NixOS already owns
+    # rembg/numpy/Pillow/scipy in the immutable store. On NixOS, install means
+    # downloading the requested model weights only.
     install -Dm755 \
-      ryoku/shell/scripts/ryoku-depth \
-      "$out/libexec/ryoku-depth"
+      ryoku/shell/scripts/ryostage \
+      "$out/libexec/ryostage"
 
-    cat > "$out/bin/ryoku-depth" <<'SH'
-#!/usr/bin/env bash
+    cat > "$out/bin/ryostage" <<'SH'
+#!@BASH@
 set -euo pipefail
 
 real="@REAL@"
 python="@PYTHON@"
+bash_bin="@BASH@"
 
-export PATH="@DEPTH_BIN@:$PATH"
+export PATH="@STAGE_BIN@:@FINDUTILS_BIN@:@COREUTILS_BIN@:$PATH"
+export PYTHONNOUSERSITE=1
 
-if [[ ''${1:-} != install ]]; then
-  exec "$real" "$@"
-fi
-
-shift
-
-state="''${XDG_STATE_HOME:-$HOME/.local/state}/ryoku/depth"
+xdg_state="''${XDG_STATE_HOME:-$HOME/.local/state}"
+state="$xdg_state/ryoku/ryostage"
 models="$state/models"
+migration_marker="$state/.nix-legacy-models-adopted"
+
+mkdir -p "$models"
 
 export REMBG_HOME="$models"
 export U2NET_HOME="$models"
 
-mkdir -p "$models"
+# The pre-Stage Nix port stored model weights in depth/models and
+# parallax/models, but did not create upstream's mutable venv. Upstream's
+# migration therefore cannot detect those caches. Adopt their model data once,
+# while keeping the old copies untouched for rollback.
+if [[ ! -e "$migration_marker" ]]; then
+  for legacy in \
+    "$xdg_state/ryoku/depth/models" \
+    "$xdg_state/ryoku/parallax/models"
+  do
+    [[ -d "$legacy" ]] || continue
+
+    cp -a --reflink=auto --no-clobber \
+      "$legacy/." \
+      "$models/" \
+      2>/dev/null || true
+  done
+
+  touch "$migration_marker"
+fi
+
+# All commands except install use upstream unchanged. The Nix Python runtime is
+# first in PATH, so ryostage's runtime probes find it instead of creating a venv.
+if [[ ''${1:-} != install ]]; then
+  exec "$bash_bin" "$real" "$@"
+fi
+
+shift
 
 if (( $# == 0 )); then
   set -- u2netp
@@ -95,10 +121,15 @@ for model in "$@"; do
     u2netp|birefnet-general-lite)
       ;;
     *)
-      printf 'ryoku-depth: unsupported model: %s\n' "$model" >&2
+      printf 'ryostage: unsupported model: %s\n' "$model" >&2
       exit 2
       ;;
   esac
+
+  if [[ -n "$(find "$models" -name "$model.onnx" -print -quit 2>/dev/null)" ]]; then
+    printf '%s already installed\n' "$model"
+    continue
+  fi
 
   printf 'Downloading model %s...\n' "$model"
 
@@ -122,113 +153,92 @@ try:
         new_session(model, providers=providers)
     else:
         new_session(model)
-except TypeError:
+except (TypeError, ValueError):
     new_session(model)
 PY
 done
 
-exec "$real" check
+exec "$bash_bin" "$real" check
 SH
 
-    substituteInPlace "$out/bin/ryoku-depth" \
-      --replace-fail '@REAL@' "$out/libexec/ryoku-depth" \
-      --replace-fail '@PYTHON@' "${depthPython}/bin/python3" \
-      --replace-fail '@DEPTH_BIN@' "${depthPython}/bin"
-
-    chmod 755 "$out/bin/ryoku-depth"
-
-    # Parallax wallpaper cutout/inpaint engine.
-    #
-    # Upstream creates a mutable pip venv. NixOS provides the complete Python
-    # runtime declaratively instead, while REMBG_HOME remains writable so model
-    # files can be downloaded to user state.
-    install -Dm755 \
-      ryoku/shell/scripts/ryoku-parallax-engine \
-      "$out/libexec/ryoku-parallax-engine"
-
-    cat > "$out/bin/ryoku-parallax-engine" <<'SH'
-#!/usr/bin/env bash
-set -euo pipefail
-
-real="@REAL@"
-python="@PYTHON@"
-
-export PATH="@PARALLAX_BIN@:@FINDUTILS_BIN@:@COREUTILS_BIN@:$PATH"
-
-state="''${XDG_STATE_HOME:-$HOME/.local/state}/ryoku/parallax"
-models="$state/models"
-
-export REMBG_HOME="$models"
-export U2NET_HOME="$models"
-
-mkdir -p "$models"
-
-# On Arch, `install` provisions a pip venv. The Nix package already contains
-# rembg, numpy, Pillow and scipy, so install means only fetching model data.
-if [[ ''${1:-} == install ]]; then
-  shift
-
-  if (( $# == 0 )); then
-    set -- u2netp
-  fi
-
-  for model in "$@"; do
-    case "$model" in
-      u2netp|birefnet-general-lite)
-        ;;
-      *)
-        printf 'ryoku-parallax-engine: unsupported model: %s\n' "$model" >&2
-        exit 2
-        ;;
-    esac
-
-    printf 'Downloading model %s...\n' "$model"
-
-    "$python" - "$model" <<'PYMODEL'
-import sys
-from rembg import new_session
-
-model = sys.argv[1]
-
-try:
-    new_session(
-        model,
-        providers=[
-            "CUDAExecutionProvider",
-            "CPUExecutionProvider",
-        ],
-    )
-except Exception:
-    new_session(model)
-PYMODEL
-  done
-
-  exec "$real" check
-fi
-
-exec "$real" "$@"
-SH
-
-    substituteInPlace "$out/bin/ryoku-parallax-engine" \
-      --replace-fail '@REAL@' "$out/libexec/ryoku-parallax-engine" \
-      --replace-fail '@PYTHON@' "${parallaxPython}/bin/python3" \
-      --replace-fail '@PARALLAX_BIN@' "${parallaxPython}/bin" \
+    substituteInPlace "$out/bin/ryostage" \
+      --replace-fail '@REAL@' "$out/libexec/ryostage" \
+      --replace-fail '@PYTHON@' "${stagePython}/bin/python3" \
+      --replace-fail '@BASH@' "${pkgs.bash}/bin/bash" \
+      --replace-fail '@STAGE_BIN@' "${stagePython}/bin" \
       --replace-fail '@FINDUTILS_BIN@' "${pkgs.findutils}/bin" \
       --replace-fail '@COREUTILS_BIN@' "${pkgs.coreutils}/bin"
 
-    chmod 755 "$out/bin/ryoku-parallax-engine"
+    chmod 755 "$out/bin/ryostage"
+
+    # ------------------------------------------------------------------
+    # Ryoku equalizer
+    # ------------------------------------------------------------------
+    #
+    # Upstream expects normal FHS commands such as pactl, pw-cli and
+    # systemctl. Keep the upstream implementation intact and give it a
+    # deterministic Nix runtime PATH.
+    install -Dm755 \
+      ryoku/shell/scripts/ryoku-eq \
+      "$out/libexec/ryoku-eq"
+
+    patchShebangs "$out/libexec/ryoku-eq"
+
+    cat > "$out/bin/ryoku-eq" <<'SH'
+#!@BASH@
+set -euo pipefail
+
+export PATH="@EQ_PATH@:$PATH"
+exec "@REAL@" "$@"
+SH
+
+    substituteInPlace "$out/bin/ryoku-eq" \
+      --replace-fail '@BASH@' "${pkgs.bash}/bin/bash" \
+      --replace-fail '@REAL@' "$out/libexec/ryoku-eq" \
+      --replace-fail '@EQ_PATH@' "${pkgs.lib.makeBinPath [
+        pkgs.jq
+        pkgs.pulseaudio
+        pkgs.pipewire
+        pkgs.systemd
+        pkgs.coreutils
+      ]}"
+
+    chmod 755 "$out/bin/ryoku-eq"
 
     # Settings -> language integration.
+    #
+    # Keep the upstream tools/ layout intact because sync.py resolves
+    # langs.json and catalog/ relative to its own location.
+    mkdir -p \
+      "$out/libexec/ryoku-i18n/tools" \
+      "$out/libexec/ryoku-i18n/catalog"
+
+    install -Dm644 \
+      ryoku/i18n/langs.json \
+      "$out/libexec/ryoku-i18n/langs.json"
+
+    install -Dm644 \
+      ryoku/i18n/catalog/*.json \
+      "$out/libexec/ryoku-i18n/catalog/"
+
     install -Dm755 \
-      ryoku/ui/i18n-sync.py \
-      "$out/bin/ryoku-i18n"
+      ryoku/i18n/tools/sync.py \
+      "$out/libexec/ryoku-i18n/tools/sync.py"
+
+    printf '#!%s\nexec "%s" "%s" "$@"\n' \
+      "${pkgs.bash}/bin/bash" \
+      "${pkgs.python3}/bin/python3" \
+      "$out/libexec/ryoku-i18n/tools/sync.py" \
+      > "$out/bin/ryoku-i18n"
+
+    chmod 755 "$out/bin/ryoku-i18n"
 
     runHook postInstall
   '';
 
   meta = {
     description = "Runtime helper commands used by the Ryoku desktop";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/Ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };

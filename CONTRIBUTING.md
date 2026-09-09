@@ -121,9 +121,9 @@ branch: squashing collapses commits and drops their notes.
 
 ## Reporting bugs and ideas
 
-- Bugs: open a [Bug issue](https://github.com/neur0map/ryoku-arch/issues/new/choose)
+- Bugs: open a [Bug issue](https://github.com/Ryoku-dev/ryoku-arch/issues/new/choose)
   with system details and steps to reproduce.
 - Ideas, questions, and feature suggestions:
-  [Discussions](https://github.com/neur0map/ryoku-arch/discussions).
+  [Discussions](https://github.com/Ryoku-dev/ryoku-arch/discussions).
 - Security reports: see [`SECURITY.md`](SECURITY.md). Do not file them as public
   issues.

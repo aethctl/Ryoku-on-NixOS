@@ -78,11 +78,11 @@ Singleton {
     function setupReset() {
         setupModel.clear();
         var defs = [
-            { key: "runtime", label: qsTr("Container runtime installed") },
-            { key: "service", label: qsTr("Start the container service") },
-            { key: "access",  label: qsTr("Grant your user container access") },
-            { key: "image",   label: qsTr("Download the cobalt image") },
-            { key: "start",   label: qsTr("Start cobalt") }
+            { key: "runtime", label: I18n.tr("Container runtime installed") },
+            { key: "service", label: I18n.tr("Start the container service") },
+            { key: "access",  label: I18n.tr("Grant your user container access") },
+            { key: "image",   label: I18n.tr("Download the cobalt image") },
+            { key: "start",   label: I18n.tr("Start cobalt") }
         ];
         for (var i = 0; i < defs.length; i++)
             // stepState, not state: an Item delegate already has `state`, and a
@@ -116,7 +116,7 @@ Singleton {
         // Nothing here can install a package, so a missing runtime is the one
         // step the wizard has to hand back rather than fix.
         if (root.dockerState === "missing") {
-            setupFail("runtime", qsTr("Docker is not installed. `ryoku update` installs it."));
+            setupFail("runtime", I18n.tr("Docker is not installed. `ryoku update` installs it."));
             return;
         }
         setupMark("runtime", "done");
@@ -137,15 +137,15 @@ Singleton {
             setupMark("service", "done");
             const accessMsg =
                 Quickshell.env("RYOKU_DOCKER_HOST_MANAGED") === "1"
-                    ? qsTr("Ryoku uses its scoped container helper; command-line Docker access stays host-managed")
-                    : qsTr("Plain `docker` on the command line starts working at your next login");
+                    ? I18n.tr("Ryoku uses its scoped container helper; command-line Docker access stays host-managed")
+                    : I18n.tr("Plain `docker` on the command line starts working at your next login");
             setupMark("access", "done", accessMsg);
             setupMark("image", "running");
             root.setupOwnsEngine = true;
             root.setEngine(true);
         } else if (t[0] === "ERROR") {
             var k = root.setupStep >= 0 ? setupModel.get(root.setupStep).key : "service";
-            setupFail(k, t[1] || qsTr("failed"));
+            setupFail(k, t[1] || I18n.tr("failed"));
         }
     }
 
@@ -161,7 +161,7 @@ Singleton {
             // denied polkit prompt) would otherwise leave the wizard spinning.
             if (code !== 0 && root.setupState === "running" && !root.setupOwnsEngine)
                 root.setupFail(root.setupStep >= 0 ? setupModel.get(root.setupStep).key : "service",
-                    qsTr("The container helper could not complete setup"));
+                    I18n.tr("The container helper could not complete setup"));
         }
     }
 
@@ -195,7 +195,7 @@ Singleton {
         if (u.length === 0)
             return;
         queueModel.append({ kind: "download", arg: u, mode: mode || root.dlMode,
-            name: "link", state: "queued", pct: 0, msg: "", saved: false });
+            name: I18n.tr("link"), state: "queued", pct: 0, msg: "", saved: false });
         pumpQueue();
     }
 
@@ -239,7 +239,7 @@ Singleton {
             queueModel.setProperty(i, "saved", true);
             queueModel.setProperty(i, "state", "done");
         } else if (t[0] === "ERROR") {
-            queueModel.setProperty(i, "msg", t[1] || "failed");
+            queueModel.setProperty(i, "msg", t[1] || I18n.tr("failed"));
             queueModel.setProperty(i, "state", "error");
         }
     }
@@ -307,7 +307,7 @@ Singleton {
             // the long wait rather than being overwritten by it.
             if (root.setupOwnsEngine && t[1] === "pulling")
                 root.setupMark("image", "running",
-                    qsTr("First run only. The image is a few hundred megabytes."));
+                    I18n.tr("First run only. The image is a few hundred megabytes."));
         } else if (t[0] === "READY") {
             root.cobaltState = "running";
             root.cobaltMsg = "";
@@ -324,10 +324,10 @@ Singleton {
             root.cobaltMsg = "";
         } else if (t[0] === "ERROR") {
             root.cobaltState = "error";
-            root.cobaltMsg = t[1] || "failed";
+            root.cobaltMsg = t[1] || I18n.tr("failed");
             if (root.setupOwnsEngine)
                 root.setupFail(root.setupStep >= 0 ? setupModel.get(root.setupStep).key : "start",
-                    t[1] || qsTr("failed"));
+                    t[1] || I18n.tr("failed"));
         }
     }
 
@@ -359,7 +359,7 @@ Singleton {
                     queueModel.setProperty(root.activeJob, "state", "error");
                     if (!queueModel.get(root.activeJob).msg)
                         queueModel.setProperty(root.activeJob, "msg",
-                            code === 0 ? "nothing downloaded" : "failed");
+                            code === 0 ? I18n.tr("nothing downloaded") : I18n.tr("failed"));
                 }
             }
             root.activeJob = -1;

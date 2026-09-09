@@ -2,6 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Ryoku.Ui.Singletons
 
 Singleton {
     id: root
@@ -70,7 +71,10 @@ Singleton {
     }
 
     function install(item, dither, components) {
-        if (!item || busyKey !== "")
+        // A paused item stays listed but never downloads: install and update are
+        // refused here so no UI path (button, keyboard, or accessibility) can
+        // start a fetch. Remove is a separate flow and stays allowed.
+        if (!item || busyKey !== "" || item.downloadPaused === true)
             return;
         busyKey = itemKey(item);
         installStage = "FETCHING";
@@ -109,7 +113,7 @@ Singleton {
         var q = [];
         var src = Array.isArray(list) ? list : [];
         for (var i = 0; i < src.length; i++)
-            if (src[i] && src[i].installed !== true)
+            if (src[i] && src[i].installed !== true && src[i].downloadPaused !== true)
                 q.push(src[i]);
         _queue = q;
         _pumpQueue();
@@ -140,7 +144,7 @@ Singleton {
         onExited: code => {
             root.loading = false;
             if (code !== 0) {
-                root.error = root._catalogError.trim() || "Catalogue failed";
+                root.error = root._catalogError.trim() || I18n.tr("Catalogue failed");
                 if (root._clearBusyAfterRefresh) {
                     root._clearBusyAfterRefresh = false;
                     root.busyKey = "";
@@ -169,7 +173,7 @@ Singleton {
                     root.busyKey = "";
                 }
             } catch (e) {
-                root.error = "Invalid catalogue: " + e;
+                root.error = I18n.tr("Invalid catalogue: %1").arg(e);
                 if (root._clearBusyAfterRefresh) {
                     root._clearBusyAfterRefresh = false;
                     root.busyKey = "";
@@ -186,7 +190,7 @@ Singleton {
         onExited: code => {
             if (code !== 0) {
                 root.installStage = "FAILED";
-                root.installError = root._installError.trim() || "Installation failed";
+                root.installError = root._installError.trim() || I18n.tr("Installation failed");
                 root.installErrorKey = root.busyKey;
                 root.busyKey = "";
                 root._queue = [];

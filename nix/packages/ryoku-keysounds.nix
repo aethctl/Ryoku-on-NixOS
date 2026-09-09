@@ -127,7 +127,7 @@ pkgs.hyprlandPlugins.mkHyprlandPlugin {
       "Ryoku Hyprland keyboard sound plugin and switch profiles";
 
     homepage =
-      "https://github.com/neur0map/ryoku-arch";
+      "https://github.com/Ryoku-dev/ryoku-arch";
 
     license = [
       pkgs.lib.licenses.gpl3Plus

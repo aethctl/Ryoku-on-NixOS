@@ -7,7 +7,7 @@ import shell.services as Svc
 import Ryoku.Ui.Singletons as Ui
 
 /**
- * Good-night face: a minimal greeting card — a vertical rule, a time-of-day
+ * Good-night face: a minimal greeting card: a vertical rule, a time-of-day
  * greeting stacked in two lines, the weekday in an angular faux-kana stroke
  * alphabet (self-contained, no font dependency, "Japanese style but readable"),
  * the date and the time, closed by a second rule. Drawn on its own dark panel as
@@ -29,10 +29,10 @@ Item {
     // greeting by hour, split into two stacked words (GOOD / <part>).
     readonly property string greetWord: {
         var h = Now.date.getHours();
-        if (h >= 5 && h < 12) return "Morning";
-        if (h >= 12 && h < 17) return "Afternoon";
-        if (h >= 17 && h < 21) return "Evening";
-        return "Night";
+        if (h >= 5 && h < 12) return Ui.I18n.tr("Morning");
+        if (h >= 12 && h < 17) return Ui.I18n.tr("Afternoon");
+        if (h >= 17 && h < 21) return Ui.I18n.tr("Evening");
+        return Ui.I18n.tr("Night");
     }
 
     implicitWidth: box.width * face.s
@@ -62,7 +62,7 @@ Item {
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: Ui.I18n.tr(face.greetWord).toUpperCase(); color: face.ink
+                    text: face.greetWord.toUpperCase(); color: face.ink
                     font.family: "Inter Display"; font.weight: Font.Medium
                     font.pixelSize: 26; font.letterSpacing: 10
                 }

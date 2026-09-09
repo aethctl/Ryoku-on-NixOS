@@ -1,6 +1,7 @@
 import Quickshell
 import shell.services
 import QtQuick
+import Ryoku.Ui.Singletons
 
 Item {
     id: rootMod
@@ -35,7 +36,7 @@ Item {
 
                 Image {
                     anchors.centerIn: parent
-                    source: modelData.iconPath ? "file://" + modelData.iconPath : (modelData.iconName ? Quickshell.iconPath(modelData.iconName, true) : "")
+                    source: modelData.iconPath ? "file://" + modelData.iconPath : (modelData.iconName ? Icons.path(modelData.iconName, true) : "")
                     sourceSize.width: 14
                     sourceSize.height: 14
                     width: 14
@@ -75,8 +76,9 @@ Item {
                 return n
             }
             readonly property int totalCount:  Tray.items.length
-            readonly property string tooltipText: totalCount + (totalCount === 1 ? " app" : " apps")
-                                                  + (hiddenCount > 0 ? " · " + hiddenCount + " hidden" : "")
+            readonly property string tooltipText: (totalCount === 1 ? I18n.tr("%1 app").arg(totalCount)
+                                                                     : I18n.tr("%1 apps").arg(totalCount))
+                                                  + (hiddenCount > 0 ? I18n.tr(" · %1 hidden").arg(hiddenCount) : "")
 
             TooltipMixin { id: tip; root: rootMod.root; owner: toggleBtn; text: toggleBtn.tooltipText }
 

@@ -68,21 +68,21 @@ PanelWindow {
             device.disconnect()
             return
         }
-        if (device.paired || device.bonded) {
-            if (device.blocked) device.blocked = false
-            device.connect()
-            return
-        }
-        btPanel.pair(device)
+        if (device.blocked) device.blocked = false
+        // Paired and unpaired take the same path: Device1.Connect on an
+        // existing bond fails at once when BlueZ holds keys the device has
+        // forgotten, and nothing here cleared that. BtLink.linkCommand pairs
+        // if needed, retries, and rebuilds a bond that will not connect.
+        btPanel.link(device)
     }
 
-    function pair(device) {
+    function link(device) {
         if (!device || pairProc.running) return
         var mac = String(device.address || "")
         if (!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(mac)) return
         btPanel.pairError = ""
         btPanel.pairingAddr = mac
-        pairProc.command = BtLink.pairCommand(mac)
+        pairProc.command = BtLink.linkCommand(mac)
         pairProc.running = false
         pairProc.running = true
     }
@@ -112,14 +112,14 @@ PanelWindow {
     }
     function typeLabel(dev) {
         var ic = String(dev && dev.icon ? dev.icon : "").toLowerCase()
-        if (ic === "input-gaming") return "Controller"
-        if (ic === "audio-headphones") return "Headphones"
-        if (ic === "audio-headset") return "Headset"
-        if (ic === "audio-card") return "Speaker"
-        if (ic === "input-mouse") return "Mouse"
-        if (ic === "input-keyboard") return "Keyboard"
-        if (ic === "phone") return "Phone"
-        return ic ? ic : "Device"
+        if (ic === "input-gaming") return I18n.tr("Controller")
+        if (ic === "audio-headphones") return I18n.tr("Headphones")
+        if (ic === "audio-headset") return I18n.tr("Headset")
+        if (ic === "audio-card") return I18n.tr("Speaker")
+        if (ic === "input-mouse") return I18n.tr("Mouse")
+        if (ic === "input-keyboard") return I18n.tr("Keyboard")
+        if (ic === "phone") return I18n.tr("Phone")
+        return ic ? ic : I18n.tr("Device")
     }
 
     property real reveal: root.bluetoothVisible ? 1 : 0
@@ -343,7 +343,7 @@ PanelWindow {
                                         if (btPanel.pairingAddr === devTile.devMac) return I18n.tr("Pairing…")
                                         if (devTile.modelData.state === BluetoothDeviceState.Connecting) return I18n.tr("Connecting…")
                                         if (devTile.modelData.connected)
-                                            return devTile.batteryText !== "" ? I18n.tr("Connected · ") + devTile.batteryText : I18n.tr("Connected")
+                                            return devTile.batteryText !== "" ? I18n.tr("Connected · %1").arg(devTile.batteryText) : I18n.tr("Connected")
                                         return devTile.devPaired ? I18n.tr("Paired") : I18n.tr("Available")
                                     }
                                     color: root.ink
@@ -446,7 +446,7 @@ PanelWindow {
                                     border.color: forgetMa.containsMouse ? root.seal : root.sep
                                     border.width: 1
                                     opacity: btPanel.busy ? 0.45 : 1
-                                    UiText { id: forgetLabel; anchors.centerIn: parent; text: "Forget"; color: forgetMa.containsMouse ? root.seal : root.sumiHi; font.family: root.mono; font.pixelSize: 10 }
+                                    UiText { id: forgetLabel; anchors.centerIn: parent; text: I18n.tr("Forget"); color: forgetMa.containsMouse ? root.seal : root.sumiHi; font.family: root.mono; font.pixelSize: 10 }
                                     MouseArea { id: forgetMa; anchors.fill: parent; enabled: !btPanel.busy; hoverEnabled: true; cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor; onClicked: btPanel.forgetDevice(devTile.modelData) }
                                 }
                             }
@@ -484,13 +484,17 @@ PanelWindow {
         id: pairProc
         running: false
         property string collected: ""
-        stdout: StdioCollector { onStreamFinished: pairProc.collected = this.text }
+        // stderr as well as stdout: a failure in the script itself only lands
+        // there, and losing it leaves the user the generic message with no way
+        // to tell what went wrong.
+        stdout: StdioCollector { onStreamFinished: pairProc.collected += this.text }
+        stderr: StdioCollector { onStreamFinished: pairProc.collected += this.text }
         onExited: function(code, status) {
             if (code !== 0) {
                 var lines = pairProc.collected.trim().split("\n")
                 var msg = lines.length ? lines[lines.length - 1].trim() : ""
                 btPanel.pairError = msg.length ? msg
-                    : I18n.tr("Pairing failed. Put the device in pairing mode and try again.")
+                    : I18n.tr("Could not connect. Put the device in pairing mode and try again.")
             } else {
                 btPanel.pairError = ""
             }

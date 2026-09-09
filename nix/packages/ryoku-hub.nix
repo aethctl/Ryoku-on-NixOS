@@ -36,7 +36,7 @@ pkgs.stdenv.mkDerivation {
   '';
   meta = {
     description = "Ryoku Settings and Hub backend";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/Ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };

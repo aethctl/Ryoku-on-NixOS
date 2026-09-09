@@ -57,7 +57,7 @@ pkgs.stdenvNoCC.mkDerivation {
       "NixOS-native privileged system bridges used by Ryoku";
 
     homepage =
-      "https://github.com/neur0map/ryoku-arch";
+      "https://github.com/Ryoku-dev/ryoku-arch";
 
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];

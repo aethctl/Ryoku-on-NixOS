@@ -1,0 +1,7 @@
+StageBackdrop StageBackdrop.qml
+StageLayer StageLayer.qml
+StageOutline StageOutline.qml
+StageWidgetsEditor StageWidgetsEditor.qml
+StageAddPanel StageAddPanel.qml
+StagePreviewCard StagePreviewCard.qml
+StageAngleDial StageAngleDial.qml

@@ -45,6 +45,7 @@ pkgs.stdenv.mkDerivation {
       "$out/bin/.ryoku-wrapped" \
       "$out/bin/ryoku" \
       --set RYOKU_CONFIG_BASE "${desktopData}/share/ryoku/config" \
+      --set RYOKU_I18N_DIR "${desktopData}/share/ryoku/i18n" \
       --set RYOKU_UPDATE_BACKEND nix \
       --set RYOKU_NIX_VERSION "${version}" \
       --set RYOKU_NIX_CHANNEL nix
@@ -54,7 +55,7 @@ pkgs.stdenv.mkDerivation {
 
   meta = {
     description = "Ryoku desktop command-line control utility";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/Ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };
