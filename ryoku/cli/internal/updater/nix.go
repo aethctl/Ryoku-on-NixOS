@@ -83,7 +83,7 @@ func nixUpdate() error {
 	progress.logf("Checking the Ryoku Nix update channel")
 
 	progress.at("generation")
-	progress.logf("Updating only the Ryoku flake input")
+	progress.logf("Updating the Ryoku Nix source")
 
 	if err := sys.Run("ryoku-nix-update", "update"); err != nil {
 		e := fmt.Errorf("Ryoku Nix update failed: %w", err)

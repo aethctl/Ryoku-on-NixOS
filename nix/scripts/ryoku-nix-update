@@ -113,6 +113,8 @@ input_node() {
 source_type=""
 source_ref=""
 source_path=""
+source_remote=""
+source_branch=""
 channel="nix"
 latest="$installed"
 can_update=false
@@ -197,12 +199,38 @@ load_source() {
                 fi
             fi
 
-            # A local path is authoritative for development status.
-            #
-            # It may happen to be a Git checkout with an origin remote, but that
-            # must not replace the checkout's VERSION with origin/main. Local
-            # inputs are intentionally non-updatable; Hub should describe the
-            # exact tree the user is testing.
+            # A path input remains authoritative, but a clean Git checkout can
+            # safely participate in the normal updater. Status never mutates it:
+            # it only discovers origin/current-branch and, for GitHub origins,
+            # reads that branch's VERSION. `update` does the guarded fast-forward.
+            if git -C "$source_path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                source_remote="$(
+                    git -C "$source_path" remote get-url origin 2>/dev/null || true
+                )"
+                source_branch="$(
+                    git -C "$source_path" symbolic-ref --quiet --short HEAD 2>/dev/null || true
+                )"
+
+                if [ -n "$source_branch" ]; then
+                    channel="local:$source_branch"
+                fi
+
+                if [ -n "$source_remote" ] && [ -n "$source_branch" ]; then
+                    if [ -z "$(git -C "$source_path" status --porcelain --untracked-files=normal)" ]; then
+                        can_update=true
+                    fi
+
+                    slug="$(github_slug_from_remote "$source_remote" 2>/dev/null || true)"
+                    if [ -n "$slug" ]; then
+                        remote_version="$(
+                            fetch_github_version "$slug" "$source_branch" || true
+                        )"
+                        if [ -n "$remote_version" ]; then
+                            latest="$remote_version"
+                        fi
+                    fi
+                fi
+            fi
             ;;
 
         *)
@@ -324,30 +352,69 @@ resolve_host() {
 update_nix() {
     load_source
 
+    local_checkout=false
+
     if [ "$source_type" = "path" ]; then
-        cat >&2 <<MSG
-ryoku-nix-update: this system uses a local Ryoku flake path:
+        local_checkout=true
 
-  $source_path
+        git -C "$source_path" rev-parse --is-inside-work-tree >/dev/null 2>&1 ||
+            die "local Ryoku path is not a Git checkout: $source_path"
 
-The Hub will track that Nix port's VERSION, but it will not mutate
-a development checkout automatically.
+        dirty="$(git -C "$source_path" status --porcelain --untracked-files=normal)"
+        [ -z "$dirty" ] ||
+            die "local Ryoku checkout has uncommitted changes; commit or stash them before updating"
 
-Update the checkout intentionally, then rebuild the NixOS generation.
-MSG
-        return 1
-    fi
+        source_remote="$(
+            git -C "$source_path" remote get-url origin 2>/dev/null || true
+        )"
+        source_branch="$(
+            git -C "$source_path" symbolic-ref --quiet --short HEAD 2>/dev/null || true
+        )"
 
-    [ -n "$latest" ] ||
-        die "could not resolve the latest Ryoku Nix version"
+        [ -n "$source_remote" ] ||
+            die "local Ryoku checkout has no origin remote"
+        [ -n "$source_branch" ] ||
+            die "local Ryoku checkout is detached; switch to a branch before updating"
 
-    if [ "$installed" = "$latest" ]; then
-        printf 'Ryoku for NixOS is already %s.\n' "$installed"
-        return 0
-    fi
+        printf 'Checking local Ryoku checkout: %s (%s)\n' \
+            "$source_path" "$source_branch"
 
-    if ! version_is_newer "$installed" "$latest"; then
-        die "refusing to move from $installed to non-newer version $latest"
+        # Fetch only the checked-out branch. Nothing is merged until we prove a
+        # fast-forward is possible, so a diverged development branch is never
+        # rewritten or rebased behind the user's back.
+        git -C "$source_path" fetch --prune origin \
+            "+refs/heads/$source_branch:refs/remotes/origin/$source_branch"
+
+        before="$(git -C "$source_path" rev-parse HEAD)"
+        target="refs/remotes/origin/$source_branch"
+        remote_head="$(git -C "$source_path" rev-parse "$target")"
+
+        if [ "$before" = "$remote_head" ]; then
+            printf 'Local Ryoku checkout is already at origin/%s.\n' "$source_branch"
+        elif git -C "$source_path" merge-base --is-ancestor "$before" "$target"; then
+            printf 'Fast-forwarding local Ryoku checkout.\n'
+            git -C "$source_path" merge --ff-only "$target"
+        elif git -C "$source_path" merge-base --is-ancestor "$target" "$before"; then
+            printf 'Local Ryoku checkout is ahead of origin/%s; keeping local commits.\n' "$source_branch"
+        else
+            die "local Ryoku checkout diverged from origin/$source_branch; resolve it manually"
+        fi
+
+        if [ -f "$source_path/VERSION" ]; then
+            latest="$(trim_version < "$source_path/VERSION")"
+        fi
+    else
+        [ -n "$latest" ] ||
+            die "could not resolve the latest Ryoku Nix version"
+
+        if [ "$installed" = "$latest" ]; then
+            printf 'Ryoku for NixOS is already %s.\n' "$installed"
+            return 0
+        fi
+
+        if ! version_is_newer "$installed" "$latest"; then
+            die "refusing to move from $installed to non-newer version $latest"
+        fi
     fi
 
     host="$(resolve_host)"
@@ -384,11 +451,14 @@ MSG
 
     trap cleanup EXIT INT TERM
 
-    printf 'Ryoku for NixOS: %s -> %s\n' \
-        "$installed" \
-        "$latest"
-
-    printf 'Updating flake input: %s\n' "$input"
+    if [ "$local_checkout" = true ]; then
+        printf 'Refreshing Ryoku local flake input: %s\n' "$input"
+    else
+        printf 'Ryoku for NixOS: %s -> %s\n' \
+            "$installed" \
+            "$latest"
+        printf 'Updating flake input: %s\n' "$input"
+    fi
 
     "$sudo_bin" "$nix_bin" flake update \
         "$input" \
