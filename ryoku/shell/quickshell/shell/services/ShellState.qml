@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import Quickshell
 import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import "lib/screens.js" as Screens
 
 // Shared per-monitor open/close state for every shell surface: the single source
@@ -50,9 +51,9 @@ Singleton {
     property string sessionAction: ""            // "" | "logout" | "reboot" | "shutdown"
     property string sessionActionMonitor: ""
     readonly property var sessionCopy: ({
-        "logout":   { message: "Are you sure you want to log out?",  positive: "Logout" },
-        "reboot":   { message: "Are you sure you want to reboot?",   positive: "Reboot" },
-        "shutdown": { message: "Are you sure you want to shut down?", positive: "Shutdown" }
+        "logout":   { message: I18n.tr("Are you sure you want to log out?"),  positive: I18n.tr("Logout") },
+        "reboot":   { message: I18n.tr("Are you sure you want to reboot?"),   positive: I18n.tr("Reboot") },
+        "shutdown": { message: I18n.tr("Are you sure you want to shut down?"), positive: I18n.tr("Shutdown") }
     })
     readonly property string sessionMessage: root.sessionAction !== "" ? root.sessionCopy[root.sessionAction].message : ""
     readonly property string sessionPositive: root.sessionAction !== "" ? root.sessionCopy[root.sessionAction].positive : ""
@@ -122,11 +123,6 @@ Singleton {
             // the layer back, so the spectrum drops behind windows again unless the
             // overlay is what the user chose.
             property bool visualizerPlacing: false
-
-            // Depth "compose" mode on this monitor: shows the wallpaper cutout at
-            // full strength and raises the depth bar while the clock is dragged
-            // into the subject's negative space (docs/depth.md).
-            property bool depthComposing: false
 
             // A place for the on-screen-display and notification surfaces to
             // signal activity when they migrate (Phase 5).

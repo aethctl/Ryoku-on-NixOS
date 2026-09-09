@@ -7,7 +7,7 @@ import Ryoku.Ui.Singletons
 // shadowed this menu's own, leaving every widget toggle reading undefined.
 import shell.services as Services
 import "../visualizer/Singletons" as VizCfg
-import "../depth/Singletons" as DepthCfg
+import "../stage/Singletons" as StageCfg
 
 // The desktop right-click menu, built on the shared DesktopMenu chrome in the
 // quick-settings sidebar idiom. Two scopes:
@@ -128,6 +128,45 @@ Item {
         const d = ["off", "canvas", "custom"];
         Config.set("musicVideo", d[(d.indexOf(Config.musicVideo) + 1) % d.length]);
     }
+    // The three editors and the visualizer's own editor (docs/stage.md, "The
+    // desktop right-click menu"). Sessions open on the monitor the menu is on.
+    function activeMonitor() {
+        const st = Services.ShellState.forActive();
+        return (st && st.modelData) ? st.modelData.name : "";
+    }
+    function editWidgets() {
+        StageCfg.StageSession.enterWidgets(menu.activeMonitor());
+        menu.close();
+    }
+    // Every Depth and Parallax setting lives on the Stage tab of Super+Esc;
+    // "#stage" deep-links the panel there (FrameMenuManager.openSurface).
+    function depthSettings() {
+        Services.ShellState.requestSurfaceActive("quick-settings#stage", undefined);
+        menu.close();
+    }
+    function customizeVisualizer() {
+        const st = Services.ShellState.forActive();
+        if (!st)
+            return;
+        if (!VizCfg.Config.enabled)
+            VizCfg.Config.setEnabled(true);
+        st.visualizerPlacing = true;
+        menu.close();
+    }
+    // Depth off drops Parallax with it; Parallax on turns Depth on with it.
+    readonly property string stageEffect: StageCfg.StageBackend.effect
+    readonly property bool stageBusy: StageCfg.StageBackend.busy
+    readonly property int stagePct: StageCfg.StageBackend.percent
+    function toggleDepth() {
+        StageCfg.StageBackend.setEffect(menu.stageEffect === "off" ? "depth" : "off");
+    }
+    function toggleParallax() {
+        StageCfg.StageBackend.setEffect(menu.stageEffect === "parallax" ? "depth" : "parallax");
+    }
+    function changeWallpaper() {
+        Services.ShellState.requestSurfaceActive("wallpaper", null);
+        menu.close();
+    }
 
     DesktopMenu {
         id: shell
@@ -137,70 +176,19 @@ Item {
         // ── desktop scope ──────────────────────────────────────────────
         MenuRow {
             visible: !menu.isWidget
-            label: I18n.tr("Clock")
-            value: Config.clockEnabled ? "On" : "Off"
-            on: Config.clockEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("clockEnabled", !Config.clockEnabled)
+            label: I18n.tr("Edit widgets")
+            onTriggered: menu.editWidgets()
         }
         MenuRow {
             visible: !menu.isWidget
-            label: I18n.tr("Calendar")
-            value: Config.calendarEnabled ? "On" : "Off"
-            on: Config.calendarEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("calendarEnabled", !Config.calendarEnabled)
+            label: I18n.tr("Customize visualizer")
+            onTriggered: menu.customizeVisualizer()
         }
         MenuRow {
             visible: !menu.isWidget
-            label: I18n.tr("Music")
-            value: Config.musicEnabled ? "On" : "Off"
-            on: Config.musicEnabled
+            label: I18n.tr("Change wallpaper")
             closeOnTrigger: false
-            onTriggered: Config.set("musicEnabled", !Config.musicEnabled)
-        }
-        MenuRow {
-            visible: !menu.isWidget
-            label: I18n.tr("All-in-one")
-            value: Config.aioEnabled ? "On" : "Off"
-            on: Config.aioEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("aioEnabled", !Config.aioEnabled)
-        }
-        MenuRow {
-            visible: !menu.isWidget
-            label: I18n.tr("System stats")
-            value: Config.statsEnabled ? "On" : "Off"
-            on: Config.statsEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("statsEnabled", !Config.statsEnabled)
-        }
-        MenuRow {
-            visible: !menu.isWidget
-            label: I18n.tr("Weather")
-            value: Config.weatherEnabled ? "On" : "Off"
-            on: Config.weatherEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("weatherEnabled", !Config.weatherEnabled)
-        }
-        MenuRow {
-            visible: !menu.isWidget
-            label: I18n.tr("Notes")
-            value: Config.notesEnabled ? "On" : "Off"
-            on: Config.notesEnabled
-            closeOnTrigger: false
-            onTriggered: Config.set("notesEnabled", !Config.notesEnabled)
-        }
-        // The spectrum is a wallpaper surface with no pointer of its own, so the
-        // desktop menu is where you reach for it.
-        MenuRow {
-            visible: !menu.isWidget && menu.vizOn
-            label: I18n.tr("Move visualiser")
-            onTriggered: {
-                const st = Services.ShellState.forActive();
-                if (st)
-                    st.visualizerPlacing = true;
-            }
+            onTriggered: menu.changeWallpaper()
         }
 
         // ── widget scope ───────────────────────────────────────────────
@@ -265,14 +253,6 @@ Item {
             closeOnTrigger: false
             onTriggered: Config.toggle(menu.scope + "Locked")
         }
-        MenuRow {
-            visible: menu.isWidget && DepthCfg.Config.enabled
-            label: I18n.tr("In front of subject")
-            value: DepthCfg.Config.isFront(menu.scope) ? "On" : "Off"
-            on: DepthCfg.Config.isFront(menu.scope)
-            closeOnTrigger: false
-            onTriggered: DepthCfg.Config.toggleFront(menu.scope)
-        }
 
         // Size + Opacity: discoverable equivalents of the corner-drag resize and
         // Ryoku Settings' opacity, targeting whichever widget the menu is open
@@ -322,17 +302,17 @@ Item {
                     readonly property real cw: (width - 2 * Theme.s1) / 3
                     MenuChip {
                         width: modeRow.cw; height: Theme.ctlH
-                        label: "Auto"; selected: menu.colorMode === "auto"
+                        label: I18n.tr("Auto"); selected: menu.colorMode === "auto"
                         onClicked: menu.setColorMode("auto")
                     }
                     MenuChip {
                         width: modeRow.cw; height: Theme.ctlH
-                        label: "Solid"; selected: menu.colorMode === "solid"
+                        label: I18n.tr("Solid"); selected: menu.colorMode === "solid"
                         onClicked: menu.setColorMode("solid")
                     }
                     MenuChip {
                         width: modeRow.cw; height: Theme.ctlH
-                        label: "Gradient"; selected: menu.colorMode === "gradient"
+                        label: I18n.tr("Gradient"); selected: menu.colorMode === "gradient"
                         onClicked: menu.setColorMode("gradient")
                     }
                 }
@@ -362,7 +342,7 @@ Item {
                 readonly property real cellSize: Theme.s6
                 readonly property real span: placer.cellSize * 3 + Theme.s1 * 2
                 MenuChip {
-                    label: "Auto"
+                    label: I18n.tr("Auto")
                     width: placer.span
                     height: Theme.ctlH
                     selected: menu.curAnchor === "auto"
@@ -397,6 +377,39 @@ Item {
             visible: menu.isWidget
             label: I18n.tr("Hide")
             onTriggered: Config.set(menu.scope + "Enabled", false)
+        }
+
+        // ── the two Stage switches, side by side (docs/stage.md) ────────
+        // The menu's own choice chips: a bone plate when the effect is on, a
+        // quiet tile when off, the state spelled out in the label.
+        MenuSection {}
+        Row {
+            id: stageRow
+            visible: !menu.isWidget
+            width: parent.width
+            spacing: Theme.s1
+            readonly property real cw: (width - Theme.s1) / 2
+            MenuChip {
+                width: stageRow.cw
+                height: Theme.ctlH + 6
+                selected: menu.stageEffect !== "off"
+                label: I18n.tr("Depth") + " \u00b7 " + (menu.stageBusy ? (menu.stagePct + "%")
+                    : menu.stageEffect !== "off" ? I18n.tr("On") : I18n.tr("Off"))
+                onClicked: menu.toggleDepth()
+            }
+            MenuChip {
+                width: stageRow.cw
+                height: Theme.ctlH + 6
+                selected: menu.stageEffect === "parallax"
+                label: I18n.tr("Parallax") + " \u00b7 " + (menu.stageEffect === "parallax" ? I18n.tr("On") : I18n.tr("Off"))
+                onClicked: menu.toggleParallax()
+            }
+        }
+
+        MenuRow {
+            visible: !menu.isWidget
+            label: I18n.tr("Depth settings…")
+            onTriggered: menu.depthSettings()
         }
 
         // ── globals ────────────────────────────────────────────────────

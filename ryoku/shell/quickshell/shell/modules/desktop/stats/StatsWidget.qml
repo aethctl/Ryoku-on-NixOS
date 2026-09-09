@@ -6,7 +6,7 @@ import "../Singletons"
 
 // System stats panel for the wallpaper: a CPU area chart, ticked metric rows, a
 // dual-line network chart, a disk-usage bar and a block of temps/battery. It is
-// a 1:1 copy of the design preview (/tmp/refimg/p3_stats.qml) — every
+// a 1:1 copy of the design preview (/tmp/refimg/p3_stats.qml): every
 // coordinate, font, size and weight is verbatim; sample values are swapped for
 // live feeds, and text ink follows the wallpaper luminance under the widget so
 // it reads on any backdrop.
@@ -129,8 +129,8 @@ Item {
 
         Column {
             y: 150; width: parent.width; spacing: 0
-            Row1 { label: Ui.I18n.tr("CPU"); value: (Sysinfo.cpu*100).toFixed(1)+"%"; tick: "#8fb7c9" }
-            Row1 { label: Ui.I18n.tr("GPU"); value: StatsFeed.gpuPct+"%"; tick: "#8fb7c9" }
+            Row1 { label: "CPU"; value: (Sysinfo.cpu*100).toFixed(1)+"%"; tick: "#8fb7c9" }
+            Row1 { label: "GPU"; value: StatsFeed.gpuPct+"%"; tick: "#8fb7c9" }
             Row1 { label: Ui.I18n.tr("Memory"); value: Sysinfo.memUsedGiB.toFixed(1)+" GiB" }
             Row1 { label: Ui.I18n.tr("GPU Power"); value: StatsFeed.gpuPowerW.toFixed(0)+" W" }
         }

@@ -3,6 +3,145 @@
 ## Unreleased
 
 ### Changed
+- **`ryoku update` reaps the Hub so a new settings page appears without a
+  relogin.** Ryoku Settings is a session-resident quickshell instance the shell
+  daemon does not own, so an update left it running on the old QML and a
+  just-shipped page (like the bar's silent-drift toggle) only showed after a
+  relogin. The shell stop now closes it too (`internal/updater/update.go`).
+- **`ryoku doctor` adds `QML_XHR_ALLOW_FILE_READ` to the SDDM greeter env
+  (#162).** The greeter theme's bundled I18n reads the shipped catalog with a
+  `file://` request, which Qt6 blocks without this flag, so existing boxes
+  converge onto a login screen that localises without the shell's Quickshell
+  singletons (`internal/doctor/doctor.go`).
+- **Neovim config seeds once, like ghostty, so updates stop resetting it.**
+  `ryoku update` no longer overwrites `~/.config/nvim` every run: it lays the
+  LazyVim starting point on a fresh install and then leaves the tree to the
+  user, so edits, plugins and LazyVim's own state persist across updates
+  (`internal/updater/materialize.go`, `internal/sys/useredits.go`).
+- **`ryoku update` tracks Ryotunes on its own release channel; `ryoku doctor`
+  reports it.** Ryotunes is released independently as a prebuilt Arch package on
+  ryoku-dev/ryotunes' GitHub releases, so `ryoku update` now installs a new build
+  directly through `internal/ryotunesrelease` (fresh release read, sha256 +
+  pacman name/version/arch verification, `pacman -U`, upgrade-only) on both the
+  git and packaged channels, outside the `[ryoku]` set -- a box with no other
+  changes still picks it up, and a newer external build is never downgraded.
+  `ryoku doctor` and `ryoku status --json` report a pending release without
+  installing it (`internal/ryotunesrelease.Check`), an offline check is never
+  rendered as up to date, and Ryotunes is dropped from the explicit `[ryoku]`
+  update set so the repo's base build cannot overwrite a newer one
+  (`internal/updater/ryotunes.go`, `internal/updater/ryokuset.go`,
+  `internal/doctor/reconcile_ryotunes.go`).
+- **`ryoku update` moves the Ryoku packages, and nothing else.** It was a full
+  `pacman -Syu`, so a Ryoku update decided when a box changed kernel, rebuilt
+  its DKMS modules and rewrote its boot image, and `ryoku rollback` could never
+  put that half back. It now refreshes the databases, reads the installed
+  packages the `[ryoku]` repo serves, and installs exactly those by name
+  (`pacman -S --needed ryoku/<pkg>...`, never `-Su`). The base system and its
+  kernel come from Arch or CachyOS, whichever the box installed, and
+  `sudo pacman -Syu` is what moves them: expected, supported, never blocked by
+  a hook. Every run reports what that lane is holding, `ryoku status` prints it
+  as `system:`, and `ryoku update --system` runs both lanes in one command (the
+  full `-Syu`, `yay -Sua`, `flatpak update`). The refresh now happens before
+  the set is read, so a rollback onto a frozen release only asks for packages
+  that release served, and targets are repo-qualified so pacman takes our build
+  of a name that also exists in `extra` and moves it down as readily as up
+  (`internal/updater/ryokuset.go`, `internal/updater/update.go`).
+- **`available` in `ryoku status --json` is about the Ryoku lane alone.**
+  Pending Arch packages used to set it, so the Hub's update button offered a run
+  that would have moved none of them; they are now reported as `systemUpdates`
+  beside the existing `packages` list.
+- **The boot default is decided by the box, never by a kernel's name.**
+  `limineDefaultKernelPath` preferred any entry containing "cachyos", so a plain
+  install that added `linux-cachyos` from the Extras toggle had `default_entry`
+  repointed at a kernel it never chose as primary. The pick is now
+  `/etc/ryoku/default-kernel` (what the installer recorded), then the kernel this
+  session booted (`/usr/lib/modules/<release>/pkgbase`), then menu order. No
+  kernel name and no brand is preferred anywhere
+  (`internal/doctor/reconcile_limine.go`).
+
+### Added
+- **`ryoku doctor` reclaims the boot partition a kernel update needs, and says so
+  when it cannot.** Two checks, both aimed at the failure behind "pacman -Syu
+  never updates the kernel": `initramfs GPU trim` adds `ryoku-gpu-trim` to
+  `/etc/mkinitcpio.conf.d/ryoku.conf` and rebuilds the images once, which drops
+  the denylisted nouveau driver and its GSP firmware from every kernel image
+  (measured on an NVIDIA box: 254 MiB to 147 MiB per image, `/boot` 54% to 43%);
+  `boot partition headroom` reports the free space against the largest image and
+  warns when there is no room for a rebuild, because in that state mkinitcpio
+  builds the image and the hook cannot copy it in while pacman still reports
+  success, so the box keeps booting the previous kernel against a module tree
+  the upgrade deleted (#140). Nothing on a full `/boot` is safe to delete
+  unasked (every candidate is a running kernel's image or a snapshot's only
+  matching kernel), so that one names the wall and what to remove
+  (`internal/doctor/reconcile_initramfs.go`,
+  `internal/doctor/reconcile_boot_space.go`).
+- **`ryoku doctor` removes a boot menu entry that boots nothing.** The installer
+  writes one flat entry so a fresh box boots before limine-entry-tool ever runs;
+  when that tool adopts it as the tree root, any OTHER flat entry an earlier
+  installer left is stranded, and `limineDropFlat` only clears those in the
+  retired standalone `/+` layout. A box installed as plain Arch that a
+  CachyOS-variant installer once touched therefore kept offering
+  "Ryoku Linux (CachyOS)", pointing at a vmlinuz that is not on the ESP:
+  selecting it drops to the Limine console. The new `boot menu dead entries`
+  check removes a top-level entry by evidence, never by name: it has no
+  generated children, it names its image on this ESP, and that image is not
+  there. A directory with children, an unresolvable volume (a `guid()`
+  chainload into another disk) and an image that exists are all left alone, and
+  a `default_entry` that named a removed entry is repointed
+  (`internal/doctor/reconcile_limine_entries.go`).
+
+### Changed
+- `update`: `--overwrite` now also covers `/usr/lib/initcpio/install/ryoku-*`, so
+  the install hook an offline install seeds unowned is adopted by the package
+  instead of aborting the first `-Syu` with "exists in filesystem"
+  (`internal/updater/update.go`).
+- **The Depth and Parallax tabs fold into one Stage tab, and the doctor migrates a
+  persisted rail.** Depth and Parallax became one feature, so `quick-settings stage
+  tab` replaces the retired `depth`/`parallax` modules of a persisted quick-settings
+  rail with a single `stage` where the first of them sat (and appends `stage` to an
+  older rail that had neither), while `ryostage cache` reclaims a leftover
+  `~/.local/state/ryoku/{depth,parallax}` runtime tree once the unified `ryostage`
+  cache exists (`internal/doctor/reconcile_stage_module.go`).
+- **`ryoku track unstable-dev` means testing packages, `ryoku track main` means
+  stable.** A branch name now selects a package channel: `unstable-dev` is the
+  `testing` channel (rebuilt on every push to `unstable-dev`, delivered as signed
+  packages through `ryoku update`), `main` is `stable` (named releases); both are
+  aliases for `ryoku track testing | stable`, and `stable | testing | v<tag>`
+  still work. A box whose updates come from a source checkout is migrated onto
+  packages by the switch: the recorded repo pointer and the `RYOKU_CHANNEL` line
+  in `environment.d`/`hypr/user.lua` are dropped (the `~/ryoku-arch` clone stays
+  on disk but no longer drives updates), `ryoku-desktop` is installed from the
+  channel when absent, and `ryoku status`/`version`/`doctor` then report the
+  packaged channel (`testing`) instead of the stale `unstable-dev`. Building from
+  a checkout is now explicit: `ryoku track <main|unstable-dev> --source`
+  (`track.go`, `internal/updater/release.go`, `internal/updater/channel.go`,
+  `internal/sys/repo.go`, `internal/sys/release.go`,
+  `internal/doctor/reconcile_channel.go`, `bin/ryoku-track`).
+- **ghostty's config is the user's, and an existing one is migrated.** Materialize
+  seeds `ghostty/config` (user-owned, overlay-able through `user_edits`) and
+  `ghostty/ryoku-colors` (matugen-owned, so the overlay never re-lays a frozen
+  copy), and the new `ghostty theme include` check converts a box that predates
+  the split: a config that is nothing but the old generated palette becomes the
+  include wrapper with its colours preserved, a config with the user's own
+  settings keeps every byte and only gains the include, and once that migration
+  has run a removed include is treated as the user's choice and never re-added
+  (`internal/doctor/reconcile_ghostty.go`, `internal/updater/materialize.go`,
+  `internal/sys/useredits.go`).
+- **`ryoku doctor` never puts back an app you deleted.** The applications Ryoku
+  ships left `ryoku-desktop`'s depends (pacman rebuilt them on every upgrade), so
+  the doctor now owns their delivery: `shipped app packages` installs an app the
+  box has never had in one pacman transaction, records it in
+  `~/.local/state/ryoku/provisioned`, and from then on treats its absence as the
+  user's decision. It also re-marks present apps as explicitly installed so an
+  orphan sweep cannot delete them, and the Ryotunes check no longer reinstalls
+  the package (`internal/doctor/reconcile_shipped_apps.go`,
+  `reconcile_ryotunes.go`). The two spicetify reconcilers are gone with Spotify.
+  git and packaged channels -- a box with no other changes still picks it up, and
+  a newer external build is never downgraded. `ryoku doctor` and
+  `ryoku status --json` report a pending release without installing it
+  (`internal/ryotunesrelease.Check`), and an offline check is never rendered as
+  up to date (`internal/updater/ryotunes.go`,
+  `internal/doctor/reconcile_ryotunes.go`).
 - **An edit to a shipped file survives the update as a fork.** `ryoku
   materialize` re-lays every shipped config on each update, so a hand edit
   to, say, `hypr/modules/window_rules.lua` was thrown away. The manifest now
@@ -241,7 +380,7 @@
   catalogue's per-file sha256/size/mode, docs and preview media `install:
   false`) and `registry-entry.json` (a complete, community `plugins/registry.json`
   row with `hosts` and the `bar-widget`/`desktop-widget` tag), under git.
-  `share <id>` exports if needed, then lays it into a fork of `neur0map/ryostore`
+  `share <id>` exports if needed, then lays it into a fork of `ryoku-dev/ryostore`
   as `plugins/<id>/`, upserts the registry entry, pushes `plugin/<id>` and opens
   the pull request with the catalogue's checklist (as the plugin's author when
   git has no identity); without `gh` it opens the submission form prefilled

@@ -5,14 +5,14 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "ryoku-ryotunes";
-  version = "2.5.1";
+  version = "1.0.6";
 
   src = ryotunesSrc;
 
   # Ryotunes 2.5 gained additional workspace crates plus pinned
   # librespot git dependencies. Keep the complete Cargo vendor tree
   # fixed to the exact 2.5.1 source.
-  cargoHash = "sha256-1NzCCVxFsvlofTVQEC7QhBf5skLfUbcQ8Q9BghDoBvk=";
+  cargoHash = "sha256-0P4XWRsk9wVBwVHSkJFXsXxF/3QP6QmAjamHTWyPETA=";
 
   # The legacy Tauri frontend is still shipped as an explicit fallback,
   # so build its Svelte/Vite payload even though the native QML client is
@@ -189,10 +189,6 @@ EOF
       "$out/share/applications/ryotunes.desktop"
 
     install -Dm644 \
-      packaging/linux/ryotunes-qml.desktop \
-      "$out/share/applications/ryotunes-qml.desktop"
-
-    install -Dm644 \
       packaging/linux/dev.ryoku.ryotunes.metainfo.xml \
       "$out/share/metainfo/dev.ryoku.ryotunes.metainfo.xml"
 
@@ -240,7 +236,7 @@ EOF
       "Native Ryoku music client with daemon, CLI and QML frontend";
 
     homepage =
-      "https://github.com/neur0map/ryotunes";
+      "https://github.com/Ryoku-dev/ryotunes";
 
     license = pkgs.lib.licenses.gpl3Plus;
 

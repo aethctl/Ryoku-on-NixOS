@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"ryoku-cli/internal/sys"
+
+	i18n "ryoku-i18n"
 )
 
 // ---- reconciler: deliver the hardened rashin daemon to boxes that enabled it -
@@ -72,10 +74,10 @@ func doctorUser() string {
 
 func reconcileRashinDaemon(checkOnly bool) recResult {
 	if !sys.Has("ryoku-rashin") {
-		return okRes("ryoku-rashin not installed")
+		return okRes(i18n.T("ryoku-rashin not installed"))
 	}
 	if !rashinUnitEnabled() {
-		return okRes("rashin daemon is opt-in and not enabled")
+		return okRes(i18n.T("rashin daemon is opt-in and not enabled"))
 	}
 
 	if sys.Exists("/etc/NIXOS") {
@@ -87,19 +89,19 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	enableLinger, clearFailed := rashinDaemonActions(state)
 	wireSkill := rashinSkillLinksMissing()
 	if !enableLinger && !clearFailed && !wireSkill {
-		return okRes("rashin daemon enabled with boot-start; the ryoku skill is wired")
+		return okRes(i18n.T("rashin daemon enabled with boot-start; the ryoku skill is wired"))
 	}
 	if checkOnly {
 		switch {
 		case clearFailed:
-			return wouldRes("the rashin daemon is enabled but wedged off (failed); the dashboard is down").
-				withFix("ryoku doctor reloads the hardened unit and restarts it")
+			return wouldRes(i18n.T("the rashin daemon is enabled but wedged off (failed); the dashboard is down")).
+				withFix(i18n.T("ryoku doctor reloads the hardened unit and restarts it"))
 		case enableLinger:
-			return wouldRes("rashin is enabled but only starts at login; a headless boot leaves the dashboard down").
-				withFix("ryoku doctor enables lingering so it starts at boot")
+			return wouldRes(i18n.T("rashin is enabled but only starts at login; a headless boot leaves the dashboard down")).
+				withFix(i18n.T("ryoku doctor enables lingering so it starts at boot"))
 		default:
-			return wouldRes("rashin is enabled but the ryoku agent skill is not wired into every agent").
-				withFix("ryoku doctor runs `ryoku-rashin wire`")
+			return wouldRes(i18n.T("rashin is enabled but the ryoku agent skill is not wired into every agent")).
+				withFix(i18n.T("ryoku doctor runs `ryoku-rashin wire`"))
 		}
 	}
 	var did []string
@@ -109,30 +111,30 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	}
 	if enableLinger {
 		if user == "" {
-			return failRes("cannot enable rashin boot-start: no login user in the environment").
+			return failRes(i18n.T("cannot enable rashin boot-start: no login user in the environment")).
 				withFix("sudo loginctl enable-linger <you>")
 		}
 		if err := sys.Sudo("loginctl", "enable-linger", user); err != nil {
-			return failRes("could not enable lingering for the rashin daemon: %v", err).
+			return failRes(i18n.T("could not enable lingering for the rashin daemon: %v"), err).
 				withFix("sudo loginctl enable-linger " + user)
 		}
-		did = append(did, "enabled boot-start (lingering)")
+		did = append(did, i18n.T("enabled boot-start (lingering)"))
 	}
 	if clearFailed {
 		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
-		did = append(did, "cleared the wedged failed state")
+		did = append(did, i18n.T("cleared the wedged failed state"))
 	}
 	if enableLinger || clearFailed {
 		_ = exec.Command("systemctl", "--user", "start", rashinUserUnit).Run()
-		did = append(did, "reloaded the hardened unit")
+		did = append(did, i18n.T("reloaded the hardened unit"))
 	}
 	if wireSkill {
 		// wire is idempotent and cheap: it drops the ryoku skill symlink into
 		// every agent's skills dir and refreshes the vault pointers.
 		_ = exec.Command("ryoku-rashin", "wire").Run()
-		did = append(did, "wired the ryoku agent skill")
+		did = append(did, i18n.T("wired the ryoku agent skill"))
 	}
-	return fixedRes("converged the rashin daemon: " + strings.Join(did, " and "))
+	return fixedRes(i18n.T("converged the rashin daemon: ") + strings.Join(did, " and "))
 }
 
 // reconcileRashinDaemonNixOS repairs transient runtime state only.
@@ -220,19 +222,16 @@ func reconcileProwlAgent(checkOnly bool) recResult {
 	present := sys.Has("prowl-agent")
 	if !prowlAgentNeeded(enabled, present) {
 		if !enabled {
-			return okRes("rashin daemon is opt-in and not enabled")
+			return okRes(i18n.T("rashin daemon is opt-in and not enabled"))
 		}
-		return okRes("prowl-agent is present for the rashin agent index")
+		return okRes(i18n.T("prowl-agent is present for the rashin agent index"))
 	}
-	if sys.Exists("/etc/NIXOS") {
-		return warnRes(
-			"rashin is enabled but prowl-agent is missing from the active NixOS generation; the vault code index and agent skills will not refresh",
-		).withFix(
-			"add prowl-agent declaratively to the Ryoku NixOS runtime and rebuild",
-		)
+	if sys.NixBackend() {
+		return warnRes(i18n.T("rashin is enabled but prowl-agent is missing from the active NixOS generation; the vault code index and agent skills will not refresh")).
+			withFix(i18n.T("add prowl-agent declaratively to the Ryoku NixOS runtime and rebuild"))
 	}
 
-	return warnRes("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh").
+	return warnRes(i18n.T("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh")).
 		withFix("sudo pacman -S prowl-agent")
 }
 

@@ -41,7 +41,7 @@ pkgs.stdenv.mkDerivation {
 
   meta = {
     description = "Ryoku lightweight Wayland video wallpaper daemon";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/Ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Plus;
     platforms = [ "x86_64-linux" ];
   };

@@ -12,12 +12,11 @@ pragma ComponentBehavior: Bound
 import Quickshell
 import shell.services
 import "modules/visualizer/Singletons" as VizCfg
+import "modules/stage/Singletons" as StageCfg
 import "components"
 import "modules/wallpaper"
 import "modules/desktop"
 import "modules/visualizer"
-import "modules/parallax"
-import "modules/parallax/Singletons" as ParallaxCfg
 import "modules/bar"
 import "modules/dock"
 import "modules/launcher"
@@ -29,6 +28,7 @@ import "modules/osd"
 import "modules/notifications"
 import "modules/capture"
 import "modules/confirm"
+import Ryoku.Ui.Singletons
 
 /**
  * The single resident Ryoku shell instance.
@@ -174,7 +174,6 @@ ShellRoot {
                 wallpaperUrl: wallpaper.wallpaperUrl
                 wallpaperPath: wallpaper.wallpaperPath
                 wallpaperFit: wallpaper.fit
-                depthUrl: wallpaper.depthUrl
                 wallpaperTransition: wallpaper.transition
                 videoUrl: wallpaper.videoUrl
                 wallpaperLive: wallpaper.live
@@ -182,26 +181,18 @@ ShellRoot {
                 videoVolume: wallpaper.videoVolume
             }
 
-            // The parallax composition lives at WlrLayer.Background, below
-            // this slice: its own surface draws the wallpaper + layers while
-            // the desktop window above only carries widgets and chrome.
-            ParallaxBackground {
-                screen: perScreen.modelData
-                wallpaperUrl: wallpaper.wallpaperUrl
-                wallpaperPath: wallpaper.wallpaperPath
-                wallpaperFit: wallpaper.fit
-                videoUrl: wallpaper.videoUrl
-                wallpaperLive: wallpaper.live
-            }
+            // Stage now renders entirely inside the desktop surface (one stack:
+            // backdrop, layers, widgets), so there is no separate Background
+            // surface here (docs/stage.md).
             Visualizer {
                 id: perScreenViz
                 screen: perScreen.modelData
                 mode: !VizCfg.Config.enabled ? "off"
                     : (perScreen.st && perScreen.st.visualizerOverlay ? "overlay" : "desktop")
                 placing: perScreen.st ? perScreen.st.visualizerPlacing : false
-                suppressed: ParallaxCfg.Config.enabled
-                    && ParallaxCfg.Config.wallActiveForPath(wallpaper.wallpaperPath)
-                    && VizCfg.Config.enabled && !perScreenViz.placing
+                // The desktop hosts the visualizer behind the cut-outs while the
+                // stage is on; this surface steps aside (cava keeps running).
+                suppressed: desktop.hostsVisualizer
                 onPlacingDone: if (perScreen.st) perScreen.st.visualizerPlacing = false
             }
 
@@ -220,6 +211,9 @@ ShellRoot {
             DockSurface {
                 id: perScreenDock
                 screen: perScreen.modelData
+                // Edit widgets steps the dock back so the whole desktop is the canvas.
+                visible: Dock.cfg("enabled", false)
+                    && !(StageCfg.StageSession.widgets && StageCfg.StageSession.monitor === perScreen.modelData.name)
             }
 
             // The dock's right-click context menu: a full-screen overlay on the
@@ -280,7 +274,7 @@ ShellRoot {
                 action: ShellState.sessionActionMonitor === perScreen.modelData.name ? ShellState.sessionAction : ""
                 message: ShellState.sessionMessage
                 positiveLabel: ShellState.sessionPositive
-                negativeLabel: "Cancel"
+                negativeLabel: I18n.tr("Cancel")
                 onConfirmed: a => { SessionActions.run(a); ShellState.clearSessionAction(); }
                 onCancelled: ShellState.clearSessionAction()
             }
@@ -295,7 +289,7 @@ ShellRoot {
     // dispatch form this Hyprland takes; the old `dispatch global ryoku:x` errors).
     CustomShortcut {
         name: "barToggle"
-        description: "Toggle the Ryoku frame bar on the active monitor"
+        description: I18n.tr("Toggle the Ryoku frame bar on the active monitor")
         onPressed: {
             const st = ShellState.forActive();
             if (st)
@@ -304,7 +298,7 @@ ShellRoot {
     }
     CustomShortcut {
         name: "launcher"
-        description: "Toggle the app launcher on the active monitor"
+        description: I18n.tr("Toggle the app launcher on the active monitor")
         onPressed: {
             const st = ShellState.forActive();
             if (st)
@@ -313,7 +307,7 @@ ShellRoot {
     }
     CustomShortcut {
         name: "overview"
-        description: "Toggle the workspace overview on the active monitor"
+        description: I18n.tr("Toggle the workspace overview on the active monitor")
         onPressed: {
             const st = ShellState.forActive();
             if (st)
@@ -324,12 +318,12 @@ ShellRoot {
     // restart all read the same answer. Only the layer is per-monitor memory.
     CustomShortcut {
         name: "visualizer"
-        description: "Cycle the desktop audio visualiser off and on"
+        description: I18n.tr("Cycle the desktop audio visualiser off and on")
         onPressed: VizCfg.Config.setEnabled(!VizCfg.Config.enabled)
     }
     CustomShortcut {
         name: "visualizer-overlay"
-        description: "Toggle the audio visualiser overlay over windows"
+        description: I18n.tr("Toggle the audio visualiser overlay over windows")
         onPressed: {
             const st = ShellState.forActive();
             if (st)
@@ -338,7 +332,7 @@ ShellRoot {
     }
     CustomShortcut {
         name: "visualizer-place"
-        description: "Grab the audio visualiser's ring or orb and drag it into place"
+        description: I18n.tr("Grab the audio visualiser's ring or orb and drag it into place")
         onPressed: {
             const st = ShellState.forActive();
             if (st)
@@ -553,37 +547,37 @@ ShellRoot {
     // spawn. binds.lua dispatches global:ryoku:<name> straight here.
     CustomShortcut {
         name: "quicksettings"
-        description: "Open quick settings on the active monitor"
+        description: I18n.tr("Open quick settings on the active monitor")
         onPressed: ShellState.requestSurfaceActive("quick-settings", undefined)
     }
     CustomShortcut {
         name: "wallpaper-menu"
-        description: "Open the wallpaper and theme menu on the active monitor"
+        description: I18n.tr("Open the wallpaper and theme menu on the active monitor")
         onPressed: ShellState.requestSurfaceActive("wallpaper", undefined)
     }
     CustomShortcut {
         name: "clipboard"
-        description: "Open the clipboard history on the active monitor"
+        description: I18n.tr("Open the clipboard history on the active monitor")
         onPressed: ShellState.requestSurfaceActive("quick-settings#clipboard", undefined)
     }
     CustomShortcut {
         name: "stash"
-        description: "Open the feature sidebar on the active monitor"
+        description: I18n.tr("Open the feature sidebar on the active monitor")
         onPressed: ShellState.requestSurfaceActive("stash", undefined)
     }
     CustomShortcut {
         name: "screenshot"
-        description: "Open the capture tab in quick settings on the active monitor"
+        description: I18n.tr("Open the capture tab in quick settings on the active monitor")
         onPressed: ShellState.requestSurfaceActive("quick-settings#capture", undefined)
     }
     CustomShortcut {
         name: "compress"
-        description: "Open the feature sidebar's file picker to compress media"
+        description: I18n.tr("Open the feature sidebar's file picker to compress media")
         onPressed: ShellState.requestSurfaceActive("stash#compress", undefined)
     }
     CustomShortcut {
         name: "install"
-        description: "Open the feature sidebar's file picker to install a package"
+        description: I18n.tr("Open the feature sidebar's file picker to install a package")
         onPressed: ShellState.requestSurfaceActive("stash#install", undefined)
     }
 

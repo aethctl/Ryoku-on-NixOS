@@ -41,11 +41,11 @@ FocusScope {
     readonly property string errorText: installErrorKey === actionKey ? installError : ""
     readonly property string transitionMode: reducedMotion ? "immediate" : "shared"
     readonly property string metadataText: [
-        actionItem.author ? "AUTHOR / " + actionItem.author : "",
-        actionItem.version ? "VERSION / " + actionItem.version : "",
-        actionItem.size ? "SIZE / " + actionItem.size : "",
-        actionItem.compatibility ? "COMPATIBILITY / " + valueText(actionItem.compatibility) : "",
-        actionItem.contents ? "CONTENTS / " + valueText(actionItem.contents) : ""
+        actionItem.author ? I18n.tr("AUTHOR / %1").arg(actionItem.author) : "",
+        actionItem.version ? I18n.tr("VERSION / %1").arg(actionItem.version) : "",
+        actionItem.size ? I18n.tr("SIZE / %1").arg(actionItem.size) : "",
+        actionItem.compatibility ? I18n.tr("COMPATIBILITY / %1").arg(valueText(actionItem.compatibility)) : "",
+        actionItem.contents ? I18n.tr("CONTENTS / %1").arg(valueText(actionItem.contents)) : ""
     ].filter(Boolean).join("\n")
     readonly property bool isBundle: String(actionItem.category || "") === "bundles"
     // A plugins-category item the registry did not mark official: the store shows
@@ -113,28 +113,28 @@ FocusScope {
     }
 
     function triggerInstall() {
-        if (item && busyKey === "" && StoreLogic.primaryAction(actionItem) !== "INSTALLED") {
+        if (item && busyKey === "" && StoreLogic.primaryAction(actionItem) !== "INSTALLED" && !StoreLogic.isDownloadPaused(actionItem)) {
             lastComponents = null;
             installRequested(actionItem, ditherOn, null);
         }
     }
 
     function triggerInstallAll() {
-        if (item && busyKey === "") {
+        if (item && busyKey === "" && !StoreLogic.isDownloadPaused(actionItem)) {
             lastComponents = allNames;
             installRequested(actionItem, false, allNames);
         }
     }
 
     function triggerInstallSelected() {
-        if (item && busyKey === "" && selectedNames.length > 0) {
+        if (item && busyKey === "" && selectedNames.length > 0 && !StoreLogic.isDownloadPaused(actionItem)) {
             lastComponents = selectedNames;
             installRequested(actionItem, false, selectedNames);
         }
     }
 
     function triggerRetry() {
-        if (item && busyKey === "" && errorText !== "")
+        if (item && busyKey === "" && errorText !== "" && !StoreLogic.isDownloadPaused(actionItem))
             retryRequested(actionItem, ditherOn, lastComponents);
     }
 
@@ -478,7 +478,7 @@ FocusScope {
                 objectName: "ryostore-detail-selected"
                 width: parent.width
                 visible: detail.isBundle && detail.components.length > 0
-                text: detail.selectedNames.length + " / " + detail.components.length + I18n.tr(" SELECTED")
+                text: I18n.tr("%1 / %2 SELECTED").arg(detail.selectedNames.length).arg(detail.components.length)
                 color: Tokens.inkDim
                 font.family: Tokens.mono
                 font.pixelSize: Tokens.fMicro
@@ -492,6 +492,18 @@ FocusScope {
                 installStage: detail.installStage
                 installErrorKey: detail.installErrorKey
                 installError: detail.installError
+            }
+
+            Text {
+                objectName: "ryostore-detail-pause"
+                width: parent.width
+                visible: StoreLogic.isDownloadPaused(detail.actionItem)
+                text: I18n.tr("Under construction.") + " " + StoreLogic.downloadPauseReason(detail.actionItem)
+                color: Tokens.inkDim
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
             }
 
             Text {
@@ -524,10 +536,10 @@ FocusScope {
                     objectName: "ryostore-detail-install-selected"
                     visible: detail.isBundle
                     text: detail.busyKey === detail.actionKey && detail.installStage !== ""
-                            ? detail.installStage
+                            ? I18n.tr(detail.installStage)
                             : I18n.tr("INSTALL SELECTED")
                     primary: true
-                    armed: detail.item !== null && detail.busyKey === "" && detail.selectedNames.length > 0
+                    armed: detail.item !== null && detail.busyKey === "" && detail.selectedNames.length > 0 && !StoreLogic.isDownloadPaused(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstallSelected()
@@ -538,7 +550,7 @@ FocusScope {
                     objectName: "ryostore-detail-install-all"
                     visible: detail.isBundle
                     text: I18n.tr("INSTALL ALL")
-                    armed: detail.item !== null && detail.busyKey === ""
+                    armed: detail.item !== null && detail.busyKey === "" && !StoreLogic.isDownloadPaused(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstallAll()
@@ -549,11 +561,12 @@ FocusScope {
                     objectName: "ryostore-detail-install"
                     visible: !detail.isBundle
                     text: detail.busyKey === detail.actionKey && detail.installStage !== ""
-                            ? detail.installStage
-                            : StoreLogic.primaryAction(detail.actionItem)
+                            ? I18n.tr(detail.installStage)
+                            : I18n.tr(StoreLogic.primaryAction(detail.actionItem))
                     primary: true
                     armed: detail.item !== null && detail.busyKey === ""
                             && StoreLogic.primaryAction(detail.actionItem) !== "INSTALLED"
+                            && !StoreLogic.isDownloadPaused(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstall()
@@ -564,7 +577,7 @@ FocusScope {
                     objectName: "ryostore-detail-retry"
                     text: I18n.tr("RETRY")
                     visible: detail.errorText !== ""
-                    armed: visible && detail.busyKey === ""
+                    armed: visible && detail.busyKey === "" && !StoreLogic.isDownloadPaused(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerRetry()
@@ -689,7 +702,7 @@ FocusScope {
                             width: Math.round(screenshotRow.height * 16 / 9)
                             height: screenshotRow.height
                             Accessible.role: Accessible.Button
-                            Accessible.name: "Screenshot " + String(index + 1) + " of " + detail.screenshotCount
+                            Accessible.name: I18n.tr("Screenshot %1 of %2").arg(index + 1).arg(detail.screenshotCount)
                             Accessible.onPressAction: detail.openLightbox(thumb.index)
 
                             ProductMedia {
@@ -757,7 +770,7 @@ FocusScope {
             armed: visible
             onAct: detail.stepLightbox(-1)
             Accessible.role: Accessible.Button
-            Accessible.name: "Previous screenshot"
+            Accessible.name: I18n.tr("Previous screenshot")
             Accessible.onPressAction: detail.stepLightbox(-1)
         }
 
@@ -768,7 +781,7 @@ FocusScope {
             armed: visible
             onAct: detail.stepLightbox(1)
             Accessible.role: Accessible.Button
-            Accessible.name: "Next screenshot"
+            Accessible.name: I18n.tr("Next screenshot")
             Accessible.onPressAction: detail.stepLightbox(1)
         }
     }

@@ -59,6 +59,9 @@ Item {
     property bool installed: true
     property bool daemonEnabled: false
     property bool running: false
+    // the port the daemon reports, not a literal: a user who changed it in
+    // ~/.config/ryoku/rashin.json still gets a link that resolves.
+    property int port: 3600
     property bool vaultExists: false
     property int vaultFiles: 0
     property bool hermesInstalled: false
@@ -70,8 +73,8 @@ Item {
     property int agentsWired: 0
 
     readonly property string wiredSummary: pg.agentsPresent > 0
-        ? pg.agentsWired + " / " + pg.agentsPresent + " wired"
-        : "none yet"
+        ? I18n.tr("%1 / %2 wired").arg(pg.agentsWired).arg(pg.agentsPresent)
+        : I18n.tr("none yet")
 
     // live Hermes setup progress, mirrored from the daemon's setup.json.
     property string setupPhase: ""
@@ -94,6 +97,8 @@ Item {
                     pg.installed = true;
                     pg.daemonEnabled = o.enabled === true;
                     pg.running = o.running === true;
+                    if (typeof o.port === "number" && o.port > 0)
+                        pg.port = o.port;
                     var v = o.vault || ({});
                     pg.vaultExists = v.exists === true;
                     pg.vaultFiles = (typeof v.files === "number") ? v.files : 0;
@@ -155,9 +160,26 @@ Item {
     function runSetup() {
         Spawn.run(["kitty", "--class", "ryoku-rashin-setup", "-e", "ryoku-rashin", "setup"]);
     }
+    // Open the dashboard the daemon actually serves. Two things used to send a
+    // user to a browser error they read as a 404: the port was hardcoded here
+    // while the daemon reads it from its own config, and the button opened the
+    // URL even with nothing listening. Take the port from `status --json` and
+    // start the daemon first when it is down; `ryoku-rashin serve` returns once
+    // the socket is up, so the browser never races it.
     function openDashboard() {
-        Spawn.run(["xdg-open", "http://127.0.0.1:3600"]);
+        var url = "http://127.0.0.1:" + pg.port;
+        if (pg.running) {
+            Spawn.run(["xdg-open", url]);
+            return;
+        }
+        openProc.command = ["sh", "-c",
+            "ryoku-rashin serve --if-enabled >/dev/null 2>&1 & "
+            + "for i in 1 2 3 4 5 6 7 8 9 10; do "
+            + "ryoku-rashin status --json 2>/dev/null | grep -q '\"running\":true' && break; sleep 0.3; done; "
+            + "xdg-open " + url];
+        openProc.running = true;
     }
+    Process { id: openProc; onExited: pg.refresh() }
 
     // ── reusable poster parts ────────────────────────────────────────────────
 
@@ -392,9 +414,7 @@ Item {
             // ── tagline ──────────────────────────────────────────────────────
             Text {
                 width: parent.width
-                text: I18n.tr("The optional local agent OS. A resident Hermes agent keeps a living map of this ")
-                    + I18n.tr("machine - hardware, packages, every config beside the binary that owns it - so your ")
-                    + I18n.tr("coding agents read the terrain instead of rediscovering it. Nothing ever leaves the box.")
+                text: I18n.tr("The optional local agent OS. A resident Hermes agent keeps a living map of this machine - hardware, packages, every config beside the binary that owns it - so your coding agents read the terrain instead of rediscovering it. Nothing ever leaves the box.")
                 color: hx.ink; font.family: pg.fMono; font.pixelSize: 14
                 wrapMode: Text.WordWrap; lineHeight: 1.5
             }
@@ -429,7 +449,7 @@ Item {
                         Text {
                             width: parent.width
                             text: pg.installed
-                                ? (pg.running ? I18n.tr("Running \u00b7 127.0.0.1:3600")
+                                ? (pg.running ? I18n.tr("Running \u00b7 127.0.0.1:%1").arg(pg.port)
                                    : (pg.daemonEnabled ? I18n.tr("Enabled \u00b7 starting\u2026") : I18n.tr("Off \u00b7 switch on to start it with the desktop")))
                                 : I18n.tr("Not installed \u00b7 install ryoku-rashin")
                             color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; elide: Text.ElideRight
@@ -466,7 +486,7 @@ Item {
                         }
                         Text {
                             width: parent.width
-                            text: pg.hermesConfigured ? (pg.hermesModel || "configured") : "-"
+                            text: pg.hermesConfigured ? (pg.hermesModel || I18n.tr("configured")) : "-"
                             color: hx.ink; font.family: pg.fDisplay
                             font.pixelSize: pg.hermesConfigured ? 30 : 26
                             elide: Text.ElideRight
@@ -474,7 +494,7 @@ Item {
                         Text {
                             width: parent.width
                             text: pg.hermesConfigured
-                                ? ("via " + (pg.hermesProvider || "hermes") + (pg.hermesVersion ? I18n.tr("  \u00b7  Hermes v") + pg.hermesVersion : ""))
+                                ? (I18n.tr("via %1").arg(pg.hermesProvider || "hermes") + (pg.hermesVersion ? I18n.tr("  \u00b7  Hermes v%1").arg(pg.hermesVersion) : ""))
                                 : (pg.hermesInstalled ? I18n.tr("run setup to choose a model") : I18n.tr("set up Hermes to choose a model"))
                             color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; elide: Text.ElideRight
                         }
@@ -497,29 +517,29 @@ Item {
                     readonly property real cellW: (width - columnSpacing * (columns - 1)) / columns
 
                     FnCard {
-                        width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: "VAULT"; accent: hx.teal
+                        width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: I18n.tr("VAULT"); accent: hx.teal
                         desc: I18n.tr("The living map your agents read - every config beside the binary that owns it.")
-                        stat: pg.vaultExists ? (pg.vaultFiles + " files") : ""
+                        stat: pg.vaultExists ? I18n.tr("%1 files").arg(pg.vaultFiles) : ""
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "02"; kanji: "\u8a18\u61b6"; name: "MEMORY"; accent: hx.orange
+                        width: fnGrid.cellW; index: "02"; kanji: "\u8a18\u61b6"; name: I18n.tr("MEMORY"); accent: hx.orange
                         desc: I18n.tr("What Hermes remembers, carried across every session.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: "SKILLS"; accent: hx.slate
+                        width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: I18n.tr("SKILLS"); accent: hx.slate
                         desc: I18n.tr("Toolsets Hermes wields on demand - search, files, the web, more.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: "AGENTS"; accent: hx.tan
+                        width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: I18n.tr("AGENTS"); accent: hx.tan
                         desc: I18n.tr("Your coding agents, wired to one shared map of the machine.")
                         stat: pg.agentsPresent > 0 ? pg.wiredSummary : ""
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: "CHAT"; accent: hx.red
+                        width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: I18n.tr("CHAT"); accent: hx.red
                         desc: I18n.tr("Talk to Hermes - in the dashboard, or run it in any terminal.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: "CODE"; accent: hx.teal
+                        width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: I18n.tr("CODE"); accent: hx.teal
                         desc: I18n.tr("prowl-agent code intelligence - cited answers over your repos.")
                     }
                 }
@@ -545,9 +565,7 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: I18n.tr("Set up Hermes once: it installs the agent if you don't have it, wires it to the ")
-                        + I18n.tr("vault, and points your other coding agents at the same map. An existing Hermes install ")
-                        + I18n.tr("is left untouched.")
+                    text: I18n.tr("Set up Hermes once: it installs the agent if you don't have it, wires it to the vault, and points your other coding agents at the same map. An existing Hermes install is left untouched.")
                     color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
 

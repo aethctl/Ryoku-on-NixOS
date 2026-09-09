@@ -350,7 +350,6 @@ EOF
 
       "cliphist"
       "yt-dlp"
-      "awww"
       "zenity"
       "tesseract"
       "zbar"
@@ -1044,6 +1043,7 @@ in
       RYOKU_NIX_SYSTEM_BRIDGE = "1";
       RYOKU_DOCKER_HOST_MANAGED = "1";
       RYOKU_UPDATE_BACKEND = "nix";
+      RYOKU_I18N_DIR = "${ryokuDesktopData}/share/ryoku/i18n";
       RYOKU_NIX_FLAKE = cfg.updateFlake;
       RYOKU_NIX_INPUT = cfg.updateInput;
       RYOKU_NIX_SUDO =
@@ -1148,6 +1148,27 @@ in
 
         Restart = "on-failure";
         RestartSec = "1s";
+      };
+    };
+
+    # Ryoku's 10-band PipeWire equalizer is started on demand by
+    # `ryoku-eq`. The generated filter configuration remains user state,
+    # while the service executable itself stays immutable in the Nix store.
+    systemd.user.services.ryoku-eq = {
+      description = "Ryoku equalizer (PipeWire smart filter)";
+
+      after = [ "pipewire.service" ];
+      partOf = [ "pipewire.service" ];
+
+      unitConfig.ConditionPathExists = "%t/ryoku/eq/filter-chain.conf";
+
+      serviceConfig = {
+        Type = "simple";
+        ExecStart =
+          "${pkgs.pipewire}/bin/pipewire -c %t/ryoku/eq/filter-chain.conf";
+        Restart = "on-failure";
+        RestartSec = 2;
+        Slice = "session.slice";
       };
     };
 

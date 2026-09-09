@@ -2,8 +2,97 @@
 
 ## Unreleased
 
+### Added
+
+- **The qsbar music widget opens a now-playing card, with a 10-band equalizer.**
+  Clicking the widget (its title, its spectrum glyph, or anywhere on it in the
+  `full` style) opens the record and the track: artwork with the playback spectrum
+  ringing it, title/artist/album, the output device and the source player, a
+  seekable progress bar, and the transport. The old compact card is what grew into
+  it, so it keeps the same anchor, reveal and dismissal, and it now draws the
+  spectrum from the shell's one `AudioBars` analyser instead of spawning a private
+  cava that ignored the Power Saver policy.
+
+  Under the track is the equalizer: ISO octave bands from 31 Hz to 16 kHz, +/-12 dB
+  each, the eight presets (Flat, Bass, Treble, Vocal, Pop, Rock, Jazz, Classic),
+  and an ON/OFF bypass. `scripts/ryoku-eq` renders ten `bq_peaking` biquads into a
+  `libpipewire-module-filter-chain` graph and runs it as a WirePlumber **smart
+  filter**, which is spliced between every playback stream and the real device: no
+  second output device to pick, already-playing streams included, and players that
+  name the default sink themselves (mpv, so also Ryotunes) caught too. Bands are
+  live node params, so a slider changes the sound mid-note; `Flat` or OFF releases
+  the filter entirely, so a desktop that never opens the card carries no extra
+  node. Releasing it is done the way WirePlumber intends, and not by killing the
+  process: a player that loses its sink mid-track does not wait for it to come
+  back (mpv, so also Ryotunes, treats it as the end of the file and skips on), so
+  the filter is marked disabled, which relinks every stream straight to the
+  device, and the process is stopped only once the graph says nothing is feeding
+  it. The filter runs in the `ryoku-eq.service` user unit, state lives in
+  `~/.config/ryoku/equalizer.json` and is watched, so a curve set from a shell or
+  a second monitor's card shows up in the one in front of you. The `Equalizer`
+  service is what the card binds to, and `Audio.qml` hides the filter pair from
+  the mixer's device and app lists
+  (`services/Equalizer.qml`, `panels/MprisPanel.qml`, `docs/bar.md`).
+
+- **`deploy.sh` lays the `ryoku-gpu-trim` initramfs hook.** The shipped HOOKS
+  drop-in names it, and mkinitcpio aborts on a hook it cannot find, so a dev
+  checkout needs the file before `ryoku-boot-apply` rebuilds the images. It also
+  keeps the denylisted nouveau driver, and the ~107 MiB of GSP firmware it
+  pulls, out of every kernel image. `--overwrite` in the `ryotunes` step grew
+  the matching `/usr/lib/initcpio/install/ryoku-*` glob.
+
+- **Depth and Parallax are one feature now: Stage.** The old Depth (a still
+  subject cut in front of the widgets) and the unreleased Parallax (the subject
+  and extra layers drifting with the cursor over a recoloured backdrop) are the
+  two effects of one **Stage** tab, backed by one engine (`scripts/ryostage`),
+  one settings file (`~/.config/ryoku/stage.json`), one per-wallpaper registry
+  (`stage-walls.json`) and one artifact folder (`~/Pictures/Stage/<stem>/`). The
+  doctor migrates every old settings file, state cache and quick-settings rail in
+  place (`ipc/stage.go`, `modules/stage/`, `docs/stage.md`).
+
+### Removed
+- **The Spotify Canvas relay is gone.** The music daemon no longer runs a
+  loopback HTTP listener for the retired spicetify extension. The per-song
+  backdrop still plays a clip you keep in `~/.config/ryoku/canvas/<id>.<ext>`
+  (`ipc/music.go`).
+
+- **Ryogami's dead `awww` settings are gone.** `paper.engine` and the thirteen
+  `paper.awww.*` transition keys (type, duration, fps, step, angle, wave size,
+  position, bezier, invertY, filter, fill colour) were read into `Config.qml`
+  properties nothing had bound since the cutover: transitions come from
+  `transition.shader` and the built-in engine. Nothing wrote the keys, so no
+  config migrates (`ryogami/wall-ui/qml/Config.qml`).
+
 ### Fixed
-- **NixOS no longer starts the reactor's Pacman log watcher.** The QS Bar particle stream now respects `RYOKU_UPDATE_BACKEND=nix` instead of tailing `/var/log/pacman.log` on Musubi.
+- **The now-playing spectrum follows the wallpaper.** With Follow System on, the
+  bar retinted on a wallpaper change but the qsbar spectrum kept its old
+  gradient: `cavaPalette` was an imperative snapshot taken when the panel
+  loaded, and its canvas only repainted when that snapshot changed. It is a
+  binding on the live wallpaper slots now, with a named theme's own `cava_theme`
+  gradient still winning when one is set
+  (`quickshell/shell/modules/bar/barstyles/qsbar/panels/MprisPanel.qml`).
+- **A retint no longer wipes your ghostty config.** `matugen/apps.toml` rendered
+  the palette straight onto `~/.config/ghostty/config`, ghostty's own config
+  file, so every wallpaper change, theme switch and update overwrote whatever
+  the user had put there (and overwrote a `user_edits/ghostty/config` fork right
+  after materialize laid it down, which is why the documented workaround did not
+  work either). matugen now writes only the palette, to
+  `~/.config/ghostty/ryoku-colors`, and the shipped `config` pulls it in with
+  `config-file = ryoku-colors` plus an optional `user.conf` for overrides: the
+  same split kitty has always used (`matugen/apps.toml`,
+  `matugen/templates/ghostty.conf`, `apps/ghostty/`, `deploy.sh`).
+- **The power profile you pick is remembered again.** Two defects sent every
+  session back to performance. Game mode's own `powerprofilesctl set
+  performance` looked exactly like a user pick, so it was written to
+  `power-profile.json`, and a game-mode session ended by a relogin never wrote
+  the old profile back, leaving the store corrupted for good. And restore read
+  ppd's active profile once at daemon start: when ppd published its platform
+  default a beat later, the desktop landed on that default and banked it. The
+  daemon now ignores profile changes while game mode holds the profile,
+  re-asserts the saved pick over a late ppd default for the first seconds of a
+  session, and banks a pick made through the shell's own call the moment it
+  succeeds, so the menu, the bar widget and the battery popout all persist
+  (`ipc/powerprofiles.go`, `ipc/autoprofile.go`).
 - **The reload cover renders a `~`-based custom asset (#146).** The reload
   cover built its media URL as a bare `"file://" + path`, so a `reloadCover`
   path carrying a leading `~` (a hand-edited or ported `brand.json`) became
@@ -149,6 +238,17 @@
   imported logo or a decor picked in the Hub. Both are now seeded once and
   never re-laid, the same generatedSeed set `ryoku materialize` honours on a
   packaged box (`deploy.sh`).
+- **KDE apps can follow the wallpaper palette through kdeglobals.** Dolphin,
+  Ark, Gwenview and Kate resolve their colours through KColorScheme and
+  `~/.config/kdeglobals`, which the qt6ct palette never reached, so under the
+  KDE platform theme they painted at Qt's defaults: white file names on a white
+  view in icon and compact mode, and rows striping light and dark in details.
+  The palette now renders KDE's colour groups and the daemon merges them into
+  kdeglobals, claiming only the colour groups so the fonts, icon theme and
+  widget style a user set there survive. Ryoku keeps `qt6ct` as the platform
+  theme, so a user gets these colours by installing `plasma-integration` and
+  setting `QT_QPA_PLATFORMTHEME=kde`. The qt5ct and Kvantum outputs nothing
+  consumed are gone (`matugen/templates/kdeglobals`, `ipc/matugen.go`).
 
 ### Added
 - **The update island and the Hub's Updates page name the release line.**

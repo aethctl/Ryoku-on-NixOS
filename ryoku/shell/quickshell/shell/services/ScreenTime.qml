@@ -2,6 +2,8 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Ryoku.Ui.Singletons
+import shell.services
 
 /**
  * Local screen-time tracking. Every few seconds it asks Hyprland for the
@@ -41,7 +43,7 @@ Singleton {
                 cls: a.cls,
                 seconds: a.seconds,
                 name: (entry && entry.name) ? entry.name : root.prettyClass(a.cls),
-                icon: (entry && entry.icon) ? Quickshell.iconPath(entry.icon, true) : ""
+                icon: (entry && entry.icon) ? Icons.path(entry.icon, true) : ""
             };
         });
     }
@@ -81,10 +83,10 @@ Singleton {
         const h = Math.floor(sec / 3600);
         const m = Math.floor((sec % 3600) / 60);
         if (h > 0)
-            return h + "h " + m + "m";
+            return I18n.tr("%1h %2m").arg(h).arg(m);
         if (m > 0)
-            return m + "m";
-        return sec + "s";
+            return I18n.tr("%1m").arg(m);
+        return I18n.tr("%1s").arg(sec);
     }
     function isRealApp(c) {
         return !!c && !/^(ryoku|quickshell|org\.quickshell)/i.test(c);

@@ -92,6 +92,17 @@ LUA
       exit 1
     fi
 
+    # ── Shared translation catalog ─────────────────────────────
+    #
+    # Upstream installs this at /usr/share/ryoku/i18n. Nix keeps the
+    # same layout inside the immutable desktop-data output and exposes
+    # it through RYOKU_I18N_DIR.
+    mkdir -p "$out/share/ryoku/i18n"
+
+    install -m0644       ryoku/i18n/langs.json       "$out/share/ryoku/i18n/langs.json"
+
+    install -m0644       ryoku/i18n/catalog/*.json       "$out/share/ryoku/i18n/"
+
     # ── Main Quickshell shell ──────────────────────────────────
 
     mkdir -p "$cfg/quickshell"
@@ -309,7 +320,7 @@ LUA
   '';
   meta = {
     description = "Ryoku desktop configuration, assets, applications and integration data";
-    homepage = "https://github.com/neur0map/ryoku-arch";
+    homepage = "https://github.com/Ryoku-dev/ryoku-arch";
     license = pkgs.lib.licenses.gpl3Only;
     platforms = [ "x86_64-linux" ];
   };

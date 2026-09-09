@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Bluetooth
 import Quickshell.Services.Pipewire
+import Ryoku.Ui.Singletons
+import shell.services
 
 // audio graph for the mixer: classifies Pipewire nodes into output devices,
 // input devices, and per-app playback streams; switches the default sink/source
@@ -25,12 +27,22 @@ Singleton {
         return (n && typeof PwNodeType !== "undefined") ? PwNodeType.toString(n.type) : "";
     }
 
+    // The equalizer's filter pair (see ryoku-eq). WirePlumber splices it in front
+    // of the real device and never treats it as a default node, so it is plumbing
+    // rather than a device or an app: listing it would show the speakers twice in
+    // the mixer and offer a "Ryoku Equalizer" output nobody should pick. Matched on
+    // node.name, a constant, so this never reads an untracked property.
+    function isShellFilter(n) {
+        return ((n && n.name) + "").indexOf("ryoku_equalizer") === 0;
+    }
+
     // a real, switchable output/input device (not a stream).
-    function isOutput(n) { return !!(n && n.isSink && !n.isStream && n.audio); }
-    function isInput(n) { return !!(n && !n.isSink && !n.isStream && n.audio); }
+    function isOutput(n) { return !!(n && n.isSink && !n.isStream && n.audio && !root.isShellFilter(n)); }
+    function isInput(n) { return !!(n && !n.isSink && !n.isStream && n.audio && !root.isShellFilter(n)); }
     // an application feeding the graph (playback, not capture). per-app here.
     function isPlayStream(n) {
-        return !!(n && n.isStream && n.audio && root.typeOf(n).indexOf("In") < 0);
+        return !!(n && n.isStream && n.audio && root.typeOf(n).indexOf("In") < 0
+            && !root.isShellFilter(n));
     }
 
     // an application capturing from the graph -- a screen recorder, a call, a
@@ -135,7 +147,7 @@ Singleton {
         if (!n)
             return "";
         var p = n.properties || ({});
-        return n.description || n.nickname || p["node.description"] || n.name || "Audio device";
+        return n.description || n.nickname || p["node.description"] || n.name || I18n.tr("Audio device");
     }
 
     // a GlyphIcon name for a device, from its bluez-ness / icon hint / port.
@@ -229,8 +241,8 @@ Singleton {
         if (!root.btProfile.length)
             return "";
         if (root.isHeadset())
-            return "Headset";
-        return root.btProfile.indexOf("a2dp") >= 0 ? "Hi-Fi" : root.btProfile;
+            return I18n.tr("Headset");
+        return root.btProfile.indexOf("a2dp") >= 0 ? I18n.tr("Hi-Fi") : root.btProfile;
     }
 
     // flip the active bluez card between a2dp playback and headset mode.
@@ -275,14 +287,14 @@ Singleton {
 
     function streamName(n) {
         var p = (n && n.properties) ? n.properties : ({});
-        return p["application.name"] || p["media.name"] || (n ? n.description : "") || "Application";
+        return p["application.name"] || p["media.name"] || (n ? n.description : "") || I18n.tr("Application");
     }
 
     function streamIcon(n) {
         var p = (n && n.properties) ? n.properties : ({});
         var named = (p["application.icon-name"] || "") + "";
         if (named.length) {
-            var direct = Quickshell.iconPath(named, true);
+            var direct = Icons.path(named, true);
             if (direct.length)
                 return direct;
         }
@@ -291,12 +303,12 @@ Singleton {
             var e = (typeof DesktopEntries !== "undefined" && DesktopEntries.heuristicLookup)
                 ? DesktopEntries.heuristicLookup(bin) : null;
             if (e && e.icon)
-                return Quickshell.iconPath(e.icon, "application-x-executable");
-            var byBin = Quickshell.iconPath(bin, true);
+                return Icons.path(e.icon, "application-x-executable");
+            var byBin = Icons.path(bin, true);
             if (byBin.length)
                 return byBin;
         }
-        return Quickshell.iconPath("application-x-executable", true);
+        return Icons.path("application-x-executable", true);
     }
 
     Process {
