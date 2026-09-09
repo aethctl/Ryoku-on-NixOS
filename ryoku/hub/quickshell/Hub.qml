@@ -1228,7 +1228,7 @@ Rectangle {
                                     spacing: Tokens.s2
                                     Text {
                                         id: navLead
-                                        visible: navItem.sel
+                                        visible: navItem.sel && navItem.modelData.key !== "nixos-info"
                                         text: "//"
                                         color: Tokens.inkOnBoneDim
                                         font.family: Tokens.mono; font.pixelSize: 11
