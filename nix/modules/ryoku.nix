@@ -460,6 +460,7 @@ EOF
     fastfetch
     yazi
     neovim
+    tree-sitter
     nautilus
     nautilus-python
 

@@ -62,6 +62,11 @@ for finer detail.
   example.
 
 ### Fixed
+- **Neovim parser installation works natively on NixOS.** Ryoku now ships the
+  `tree-sitter` CLI alongside Neovim, so `nvim-treesitter` can build its
+  language parsers without trying to execute a missing or foreign runtime
+  binary.
+
 - **Existing NixOS installs now migrate to the unified Ryostage controls.**
   Materialization folds persisted `depth` and `parallax` Quick Settings modules
   into the current `stage` tab instead of leaving upgraded systems with retired
