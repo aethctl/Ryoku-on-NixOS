@@ -86,8 +86,12 @@ pkgs.writeShellApplication {
 
     ${ryoku.cli}/bin/ryoku materialize
 
-    # NixOS updates bypass `ryoku update`, so carry the 0.48.8 Depth
-    # quick-settings migration during materialization.
+    # Keep persisted Quick Settings state in step with Ryostage.
+    #
+    # Older NixOS installs may still carry the retired `depth` and
+    # `parallax` modules because their shell.json survives generation
+    # switches. Fold those entries into the unified `stage` module while
+    # preserving the rest of the user's rail and its ordering.
     shell_store="$config_home/ryoku/shell.json"
 
     if [ -f "$shell_store" ]; then
@@ -98,15 +102,50 @@ pkgs.writeShellApplication {
           2>/dev/null || true
       )"
 
-      if [ "$modules" = '["home","notifications","weather","capture"]' ]; then
-        tmp="$shell_store.ryoku-nix-tmp"
+      if [ -n "$modules" ] && [ "$modules" != "null" ]; then
+        migrated="$(
+          jq -c '
+            if type != "array" then
+              .
+            elif any(.[]; . == "stage" or . == "depth" or . == "parallax") then
+              reduce .[] as $module (
+                { modules: [], stageAdded: false };
 
-        jq \
-          '.frameBars.menus["quick-settings"].modules += ["depth"]' \
-          "$shell_store" > "$tmp"
+                if
+                  $module == "stage"
+                  or $module == "depth"
+                  or $module == "parallax"
+                then
+                  if .stageAdded then
+                    .
+                  else
+                    .modules += ["stage"] |
+                    .stageAdded = true
+                  end
+                else
+                  .modules += [$module]
+                end
+              ) |
+              .modules
+            elif index("home") then
+              . + ["stage"]
+            else
+              .
+            end
+          ' <<< "$modules"
+        )"
 
-        chmod --reference="$shell_store" "$tmp"
-        mv -f -- "$tmp" "$shell_store"
+        if [ "$migrated" != "$modules" ]; then
+          tmp="$shell_store.ryoku-nix-tmp"
+
+          jq \
+            --argjson modules "$migrated" \
+            '.frameBars.menus["quick-settings"].modules = $modules' \
+            "$shell_store" > "$tmp"
+
+          chmod --reference="$shell_store" "$tmp"
+          mv -f -- "$tmp" "$shell_store"
+        fi
       fi
     fi
 

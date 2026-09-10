@@ -62,6 +62,10 @@ for finer detail.
   example.
 
 ### Fixed
+- **Existing NixOS installs now migrate to the unified Ryostage controls.**
+  Materialization folds persisted `depth` and `parallax` Quick Settings modules
+  into the current `stage` tab instead of leaving upgraded systems with retired
+  controls.
 - **NixOS privileged actions now use the real security wrappers.** The Ryoku
   shell exposes NixOS's setuid `pkexec`/`sudo` wrappers through its otherwise
   immutable service PATH, and the Nix updater calls the configured sudo wrapper
