@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- `ryostore/`: **Chroma is available as a built-in bar style.** RyoStore lists it as installed and protects it from install or removal operations.
 - `ryovm/`: **a Looking Glass lane for GPU-passthrough VMs.** Ryoport grows a
   fourth section (rail + `Ctrl+4`) that manages passthrough machines: point it
   at an install ISO and pick the guest, and it defines a tuned `ryoku-<name>`

@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Chroma is available as a built-in Matugen bar style.** It adds the Chroma top bar with wallpaper-driven colours, native workspace and media controls, and playback-only spectrum visualisation.
 
 - **The qsbar music widget opens a now-playing card, with a 10-band equalizer.**
   Clicking the widget (its title, its spectrum glyph, or anywhere on it in the
