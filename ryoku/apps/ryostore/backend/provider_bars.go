@@ -79,6 +79,15 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 		Active:      active == "qsbar",
 		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
 	})
+	items = append(items, Item{
+		ID: "chroma", Category: "barstyles", Name: "Chroma",
+		Summary:     "Matugen signal bar",
+		Description: "Chroma Shell's modular top bar, rebuilt on Ryoku's native services and live palette.",
+		Tags:        []string{"top", "horizontal", "built-in", "matugen"},
+		Installed:   true,
+		Active:      active == "chroma",
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	})
 
 	entries, state, registryErr := loadProductRegistry(ctx, p.cache, "barstyles", refresh)
 	if registryErr != nil && !barStyleRegistryUnavailable(registryErr) {
@@ -132,7 +141,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -147,7 +156,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)
