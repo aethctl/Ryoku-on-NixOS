@@ -158,7 +158,13 @@ pkgs.writeShellApplication {
       fastfetch/config.jsonc \
       kitty/current-theme.conf
     do
-      [ -f "$config_home/$file" ] && chmod u+w "$config_home/$file"
+      path="$config_home/$file"
+
+      # Home Manager commonly manages config as symlinks into /nix/store.
+      # Only normal materialized files should have their mode changed.
+      if [ -f "$path" ] && [ ! -L "$path" ]; then
+        chmod u+w "$path"
+      fi
     done
 
     # ----------------------------------------------------------
