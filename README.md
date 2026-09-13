@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="2048" height="2048" alt="ryoku-logo-monochrome-transparent" src="https://github.com/user-attachments/assets/7e79aa01-adb8-43f6-a57d-b0a0bd78b377" />
+<img width="2400" height="1400" alt="ryoku-logo-monochrome-transparent-banner" src="https://github.com/user-attachments/assets/675039ab-74eb-4311-960f-0c93586598ad" />
 
 <br />
 
