@@ -9,8 +9,8 @@
 ### 力と美のために
 **For the sake of power and beauty.**
 
-Ryoku is a cohesive Hyprland desktop built around motion, clarity and control.
-This repository brings that same desktop to NixOS with a native declarative system layer.
+Ryoku is a hand built Hyprland desktop built for Power, Beauty and Declarative setups.
+This repository is an official port of [**RyokuArch**](https://github.com/Ryoku-dev/ryoku-arch) that brings that same desktop to NixOS with a native declarative system layer.
 
 <br />
 
@@ -46,14 +46,14 @@ The result is one Ryoku desktop with two different foundations:
     <td width="50%" valign="top">
       <b>Ryoku on NixOS</b><br /><br />
       Nix packages and NixOS modules<br />
-      Declarative services and system integration<br />
+      Declarative packaging and integration<br />
       NixOS generations and rollback
     </td>
   </tr>
 </table>
 
 The shell, Hub, Ryostore, launcher, theming, lockscreen, bar styles and visual
-language remain Ryoku.
+language remain identical to RyokuArch.
 
 ---
 
@@ -88,7 +88,7 @@ you already own.
   </tr>
 </table>
 
-Ryoku does not repartition disks, replace your bootloader, choose your kernel, or
+Ryoku does not repartition disks, replace your bootloader, change your kernel, or
 take ownership of hardware-specific graphics configuration.
 
 ---
@@ -105,7 +105,7 @@ The NixOS port does not reinterpret Ryoku. It preserves it.
 
 Wallpaper-driven colour, quiet typography, animated surfaces and the surrounding
 frame all belong to the same visual system. The desktop is designed to feel like
-one product rather than a collection of unrelated widgets.
+one product rather than a collection of unrelated widgets or amalgamation of config files.
 
 ---
 
@@ -116,12 +116,12 @@ one product rather than a collection of unrelated widgets.
     <td width="50%">
       <img src="docs/readme/assets/ui/desktop.webp" alt="Ryoku desktop" width="100%" />
       <br />
-      <sub><b>Desktop.</b> Minimal at rest, with the shell kept close to the edges.</sub>
+      <sub><b>Desktop.</b> Aesthetic by default and heavily customisable.</sub>
     </td>
     <td width="50%">
       <img src="docs/readme/assets/ui/launcher.webp" alt="Ryoku launcher" width="100%" />
       <br />
-      <sub><b>Launcher.</b> Apps, commands, files, packages, calculator and more from one surface.</sub>
+      <sub><b>App Launcher.</b> Apps, commands, files, packages, calculator and more in one launcher.</sub>
     </td>
   </tr>
   <tr>
@@ -140,12 +140,12 @@ one product rather than a collection of unrelated widgets.
     <td width="50%">
       <img src="docs/readme/assets/ui/profile.webp" alt="Ryoku profile page" width="100%" />
       <br />
-      <sub><b>Profile.</b> User-facing configuration kept inside the same design language.</sub>
+      <sub><b>Profile.</b> User-facing customizable configuration bundled in one sleek page</sub>
     </td>
     <td width="50%">
       <img src="docs/readme/assets/ui/batgirl.webp" alt="Ryoku themed desktop" width="100%" />
       <br />
-      <sub><b>One wallpaper.</b> The shell, frame and surfaces retint around the active theme.</sub>
+      <sub><b>Matugen.</b> No matter the wallpaper, components recolour themselves around it</sub>
     </td>
   </tr>
 </table>
@@ -196,15 +196,14 @@ that share the same visual and interaction language.
   <tr>
     <td width="33%" valign="top">
       <b>Ryostore</b><br />
-      Themes, bar styles, Fastfetch presets, lockscreen content and other desktop
-      extensions from one shared catalogue.
+      Themes, bar styles, Fastfetch presets, lockscreens, plugins and decor all available from one shared catalogue.
     </td>
     <td width="33%" valign="top">
       <b>Ryotunes</b><br />
       Native playback and music integration designed around the Ryoku desktop.
     </td>
     <td width="33%" valign="top">
-      <b>Ryo Motion</b><br />
+      <b>RyoMotion</b><br />
       Screen recording and editing integrated with Ryoku's capture workflow.
     </td>
   </tr>
@@ -245,16 +244,10 @@ Run the installer as your normal user:
 nix run github:aethctl/Ryoku-on-NixOS/main#install
 ```
 
-Preview the proposed integration first:
-
-```bash
-nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run
-```
-
 The installer:
 
 - adds Ryoku to your existing flake,
-- creates the installer-managed `ryoku.nix`,
+- creates the installer-managed ryoku.nix,
 - updates the flake lock,
 - builds the new NixOS generation,
 - switches only after the build succeeds,
@@ -315,13 +308,9 @@ Ryoku on NixOS is the NixOS port of
 Ryoku was created by [**Neur0map**](https://github.com/neur0map). The NixOS port
 keeps upstream desktop behavior close while adapting system integration to NixOS.
 
-Ryoku's alpha series began as a fork of Omarchy. From the beta series onward,
-the project was rebuilt into an independent codebase. The shell also contains
-credited adaptations from projects including Caelestia and DankMaterialShell.
-
 Full attribution is available in [`NOTICE`](NOTICE).
 
-Ryoku is released under the [GNU GPL v3](LICENSE).
+**Ryoku is released under the [GNU GPL v3](LICENSE).**
 
 ---
 
