@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/assets/brand/ryoku-logo.png" alt="Ryoku" width="240" />
+<img src="docs/readme/assets/brand/ryoku-logo.png" alt="Ryoku" width="220" />
 
 <br />
 
