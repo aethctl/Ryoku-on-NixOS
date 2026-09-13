@@ -1,5 +1,10 @@
 # Kernels
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 Ryoku ships and boots the stock Arch `linux` kernel. The Hub's Extras section can
 add the CachyOS kernel as an opt-in alternative. This page is what to weigh
 before flipping it, what it does and does not change, and how it is wired.

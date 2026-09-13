@@ -1,5 +1,10 @@
 # Installing on real hardware
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 VMs install clean. Metal is where installers die, and the failures cluster into
 a handful of classes that a live-USB installer has to handle or explain. This is
 the durable home of that research: per class, the symptom a user sees, the cause,

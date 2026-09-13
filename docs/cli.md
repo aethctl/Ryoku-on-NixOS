@@ -1,5 +1,10 @@
 # The `ryoku` command
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 The user-facing control CLI (`ryoku/cli/`, one Go program). It is the front door
 to updates, rollback, status, and the shell; it orchestrates pacman, yay, and
 snapper rather than reimplementing them. This is the per-command reference: what

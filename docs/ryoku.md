@@ -1,5 +1,10 @@
 # What Ryoku is
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 Ryoku (力, "power") is a hand-built Arch Linux distribution: a complete,
 opinionated Hyprland desktop plus the installer and system definition that
 reproduce it on any machine. The whole thing lives in this one repository and is

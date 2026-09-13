@@ -1,231 +1,179 @@
 # Repository structure
 
-Three pillars, one job each. Everything else is documentation or tooling.
+Ryoku on NixOS keeps the shared Ryoku desktop and the NixOS implementation in the
+same tree.
 
-- `ryoku/` the desktop that a user runs.
-- `system/` the machine the desktop runs on.
-- `installation/` how that machine is built.
+The important split is simple:
 
-The golden rule: **every path has one purpose and appears once.** If you need
-something that already exists, reference it; do not copy it.
+```text
+ryoku/        shared Ryoku desktop and applications
+nix/          NixOS packaging, module, installer and integration
+flake.nix     public Nix entry point
+docs/         project documentation
+tests/        validation and integration tests
+website/      Ryoku on NixOS website
+```
 
-## `ryoku/` the desktop
+The desktop remains Ryoku. The `nix/` tree is the adapter that makes it behave
+like a native NixOS system.
 
-Deploys into the user's home (`~/.config`, `~/.local/...`) one way. Source of
-truth for the live desktop.
+## `ryoku/`: shared desktop
 
-- `apps/` one directory per application, holding that app's native config only:
-  `kitty/`, `fish/`, `fastfetch/` (plus the `ryoku-fastfetch` launcher), `nvim/`
-  (LazyVim), `yazi/`, `starship/`, `nautilus/`, `npm/` (`npmrc`), `pip/`
-  (`pip.conf`), `hyprland-preview-share-picker/` (the screen-share source
-  chooser xdph launches). `mimeapps.list` sets the default apps and ships to
-  `/usr/share/applications/mimeapps.list`, the lowest XDG layer, so a user's own
-  `~/.config/mimeapps.list` (what "Set as default" writes) always wins;
-  `chromium-flags.conf` pins Chromium's keyring and Wayland backend.
-- `hyprland/` the Hyprland config, authored in **Lua**. `hyprland.lua` is the
-  entry point and `require`s each module. `keyboard.lua`, `gpu.lua`,
-  `monitors.lua` are hardware-managed seeds, and `monitors_user.lua.example` shows
-  how to hand-pin a display that autoscale must leave alone. `modules/` is one concern per file
-  (`env`, `input`, `displays`, `decoration`, `animations`, `binds`, `ryoshot`,
-  `window_rules`, `fullscreen`, `autostart`). `scripts/` holds the leaf shell helpers the UI
-  calls directly: the `ryoku-cmd-*` screen tools (lens, OCR, color, QR, webcam
-  mirror, screen record, night light, caffeine) plus the stash sidebar's
-  download, compress, and install helpers and `ryoku-sysinfo`. `hypridle.conf`
-  is the idle daemon's native config. `plugins/` holds the one compositor
-  plugin Ryoku authors, `keysounds` (C++ against the Hyprland plugin API, with
-  its `hyprpm.toml` recipe and the sample generator; see
-  `docs/hyprland-plugins.md`); it ships as a package, not with the config. The
-  rest of the directory deploys to `~/.config/hypr/`.
-- `lockscreen/` `qylock/` (the lock theme and its quickshell lockscreen),
-  `install-qylock`, and `sddm/` (the greeter setup).
-- `shell/` the desktop shell subsystem: `quickshell/` (the QML UI. Every surface
-  runs in-process in a single `qs -c shell` instance under `shell/`, drawn per
-  monitor from one scene (`shell.qml`): `modules/` is one directory per surface
-  (`bar` the four-edge frame bars with the bounded menu manager, rail status
-  popout cards (`bar/popouts/`), the Super+Escape control sidebar and pluggable
-  bar styles (`bar/barstyles/`, see `docs/barstyles.md`); then `dock` the app
-  dock on the edge opposite the bar (its own surface, shared by every bar style),
-  `launcher`, `overview` (Super+Tab), `wallpaper`,
-  `visualizer` (a click-through spectrum layer that renders through the shared
-  `Ryoku.Ui` spectrum field, keeping only its per-frame band math in its own
-  `Motion.qml`), `osd`, `notifications`, `capture`, `confirm`, and `desktop` the
-  wallpaper clock and enabled third-party widgets); `services/` holds the shared
-  singletons every surface reads, `components/` the shared UI primitives, and
-  `utils/` the shared JS. Beside it are `ryoshot`, `welcome` (the first-run
-  guided tour), and `plugins` (the third-party shell plugin runtime:
-  `discover.sh` merges the catalogue with the user's `plugins.json`, the widget
-  host carries desktop placements, and `kit/` is the `Ryoku.PluginKit` QML module
-  a plugin imports for the signature look; see `docs/plugins.md`)),
-  `plugin/` (`Ryoku.Blobs`, the C++/QML SDF metaball module the frame renders
-  with; `build.sh` builds it, and it ships prebuilt), `matugen/` (palette
-  templates rendered on every wallpaper change), `qt6ct/` (the Qt icon theme, `qt6ct.conf`),
-  `systemd/` (the user session target), `ipc/` (`ryoku-shell`, the Go shell
-  daemon that supervises the Quickshell components, owns wallpaper/clipboard/
-  lock and the GNOME keyring password prompt (it registers as the keyring system
-  prompter; see `ipc/prompter.go` and `ipc/secretexchange.go`), and serves the
-  control socket). `deploy.sh` and `dev-*.sh` are the live
-  dev-loop tools.
-- `ui/` `Ryoku.Ui`, the shared QML module the shell, the Hub and the apps all
-  import for one look: the design tokens (`Singletons/Tokens.qml`), the shared
-  primitives, and the wallpaper palette. It also hosts the desktop spectrum
-  renderer, so the wallpaper and the Hub preview draw one geometry:
-  `SpectrumField.qml` with the analytic `shaders/spectrum.frag(.qsb)` pass draws
-  every look, `Singletons/VizStyles.qml` is the single catalogue of the eleven
-  looks, and `lib/spectrum.js` (with `spectrum.test.mjs` beside it) is the pure
-  band math, `lib/place.js` (with `place.test.mjs`) the placement math for a box that turns
-  and leans.
-  Installs to `/usr/lib/qt6/qml/Ryoku/Ui`.
-- `cli/` the user-facing control CLI, one Go program (`ryoku`): `update`,
-  `rollback`, `snapshots`, `status`, `materialize` (lay the base configs into
-  `~/.config`), and `reload`. It orchestrates pacman, yay, and snapper; it does
-  not reimplement them. `main.go` is a thin dispatcher over the concerns under
-  `internal/`: `updater` (update, status, rollback, channel, run-state,
-  materialize, version), `doctor` (the convergent reconcilers, report, and
-  `--explain`), and `sys` (the shared exec/package/path/terminal primitives,
-  defined once). Per-command reference, user- vs developer-facing, in
-  `docs/cli.md`.
-- `hub/` Ryoku Settings, the central control-center GUI (`Super + ,`): `backend/`
-  (`ryoku-hub`, the Go data plane that reads the keybind legend from the live
-  Hyprland config, generates the `settings.lua` overlay (in `user_edits`) from JSON, and
-  persists hub state as TOML; it also speaks the OpenRGB SDK, so the Lighting tab
-  drives keyboards and mice per device) and `quickshell/` (the native Qt6/QML app,
-  a `FloatingWindow` with a grouped nav rail and global fuzzy search, with live
-  editors for displays, appearance, device lighting, lockscreen, animations,
-  input, keybinds, window and layer
-  rules, autostart, environment, the shell, and the desktop widgets). The product is "Ryoku Settings"; the binary and
-  config keep the internal `hub` name. Deployed to `~/.config/quickshell/hub`;
-  built by the shell's `deploy.sh`.
-- `rashin/` Ryoku Rashin, the optional agent OS (off by default): `backend/`
-  (`ryoku-rashin`, one Go program that maintains the markdown knowledge vault at
-  `~/.local/share/ryoku/rashin/`, serves the embedded dashboard on
-  `127.0.0.1:3600`, and bridges the Hermes agent over ACP) with its hand-authored
-  web dashboard embedded under `backend/web/` (no build step), and the `rashin`
-  terminal command (the same binary under a second name: natural language to a
-  ready-to-run command plan on the fish prompt, with a `conf.d/rashin.fish`
-  weave). The Hub's `RashinPage.qml` is the control surface (enable, one-click
-  Hermes setup, open dashboard); built by the shell's `deploy.sh`. See
-  `docs/rashin.md` and `docs/rashin-terminal.md`.
-- `assets/` `brand/` the 力 logo and icons, `wallpapers/` the shipped wallpaper
-  set (installs to `~/Pictures/Wallpapers`), and `ryodecors/` the decor art the
-  `Decor`/`Placard` components render (installs to `~/Pictures/ryodecors`, kept
-  current by `ryoku doctor`; bake more with `bin/art/ryodither`).
+`ryoku/` contains the user-facing Ryoku desktop shared with upstream.
 
-## `system/` the machine
+Major areas include:
 
-System-level definition installed into the target.
+- `apps/`: Ryoku applications and application-specific configuration
+- `cli/`: the `ryoku` command
+- `hub/`: Ryoku Hub backend and settings integration
+- `hyprland/`: Hyprland configuration and Ryoku compositor integration
+- `lockscreen/`: lockscreen and greeter assets
+- `shell/`: the Quickshell desktop, modules, services and UI surfaces
 
-- `boot/` the boot chain: `limine/`, `mkinitcpio/`, `plymouth/`.
-- `hardware/` hardware policy and helper scripts (shipped to `/usr/bin` by
-  `ryoku-desktop`): `gpu/` (`ryoku-gpu`, `ryoku-gpu-detect`, `ryoku-gpu-mux`,
-  udev rule), `display/` (`ryoku-monitor`), `audio/` (`ryoku-mic`, the mic-gain
-  normalizer), `drivers/` (per-vendor
-  `nvidia`/`intel`/`amd`/`vulkan` install scripts), `power/` (`ryoku-hw-laptop`,
-  the shared laptop detector; `ryoku-idle`, the laptop-gated `hypridle` launcher;
-  `ryoku-power`, the battery charge ceiling and PCIe link power). What actually
-  moves power draw and temperature, measured, is in `docs/power.md`.
-- `containers/` the container runtime policy behind the stash Cobalt engine:
-  `ryoku-docker` (the one privileged door, shipped to `/usr/bin`) and its polkit
-  rule. Its own directory rather than a corner of `hardware/`, because a
-  container runtime is not hardware. It provisions `docker.service`, the `docker`
-  group, and the single `ryoku-cobalt` container, and exposes no docker
-  passthrough on purpose: the polkit grant is passwordless, so every action is a
-  fixed argument vector.
-- `extras/` the helpers behind the Hub's Extras section, shipped to `/usr/bin` by
-  `ryoku-desktop`: `ryostore-install` (installs, removes, and reports the
-  optional bundles from the `ryostore` catalogue), the `ryoku-pkg-*` routing
-  wrappers (repo, AUR, remove, multilib), and `ryoku-cmd-present`.
-- `packages/` the package sets: `base.packages` (every machine, pacstrapped),
-  `hardware.packages` (per-profile microcode and GPU drivers), `dev.packages`
-  (language toolchains, pacstrapped), `aur.packages` (built post-install).
+NixOS should preserve this shared desktop wherever practical instead of forking
+the UI merely because the package manager is different.
 
-## `installation/` the build
+## `nix/`: NixOS implementation
 
-- `tui/` the Go terminal installer (Bubble Tea). Collects choices, writes the
-  `RYOKU_*` contract, gates BIOS/Secure Boot/live-medium/wipe/online, and drives
-  the backend.
-- `backend/` `ryoku-install` (the orchestrator) and `lib/` (one file per step:
-  `preflight`, `disk`, `luks`, `filesystem`, `pacstrap`, `mirrors`, `chroot`,
-  `deploy`, `network`, `drivers`, `bootloader`, `aur`, `snapshots`). It reads
-  `system/packages/`, adds the `[ryoku]` package repository, and installs the
-  desktop onto the target. `alongside` dual-boots with ANY existing OS (Windows or
-  another Linux) by creating a 2 GiB XBOOTLDR boot partition + root in free space
-  and sharing the disk's existing ESP: Limine lands in its own `/EFI/ryoku`, no
-  other vendor's directory is touched.
-- `iso/` the archiso profile. `build.sh` bakes the repo payload into the image,
-  prebuilds the Go binaries, and runs `mkarchiso` (reproducible for a fixed
-  commit). `profiledef.sh`, `packages.x86_64` (live-only set), and `airootfs/`
-  complete the live image.
-- `tests/` install verification: `container-install.sh` (packaged install in a
-  container), `install-vm.py` (real unattended install in QEMU), and
-  `iso-stage-check.sh` (the staged ISO tree is byte-reproducible).
+`nix/` contains the Nix-native implementation of Ryoku.
 
-## The distribution model
+```text
+nix/
+├── apps/
+├── modules/
+└── packages/
+```
 
-- The desktop ships as signed pacman packages from the `[ryoku]` repository
-  (`release/packages/`). `ryoku-desktop` is the umbrella: it version-pins the
-  monorepo components (`ryoku-shell`, `ryoku-hub`, `ryoku-rashin`, `ryoku-blobs`,
-  `ryoku`, and the Hyprland plugins `hypr-dynamic-cursors`, `ryoku-hypr-plugins`,
-  `hyprglass`, `imgborders`, `ryoku-keysounds`) and also depends on
-  `ryoku-keyring` and the `gpk` package manager, and lays the base config under
-  `/usr/share/ryoku/config`.
-- The installer adds the `[ryoku]` repo, imports the keyring, and installs
-  `ryoku-desktop`; per-user config is then copied into `~/.config` by
-  `ryoku materialize`, which clobbers Ryoku-owned files and prunes dropped ones
-  but never touches user files.
-- It only ever flows **repo to system**. A change starts in the repo, is built
-  into a package, and is installed; nothing is harvested back from a live machine.
+### `nix/apps/`
 
-## Shared, not duplicated
+User-facing Nix applications and integration helpers.
 
-When two subsystems need the same thing, it lives once and both reference it:
-`ryoku-hw-laptop` is the single laptop/desktop detector used by both GPU policy
-and the idle policy. Reuse the helper; never re-implement its logic.
+Important entries include:
 
-## `ryoku-shell-installer/` the no-ISO installer
+- the NixOS installer exposed as `.#install`
+- the development runner exposed as `.#ryoku-dev`
+- the materializer exposed as `.#ryoku-materialize`
 
-The standalone way in: a curl-able `install.sh` bootstrap plus the
-`ryoku-shell-install` Go TUI that converts an existing Arch machine into a
-Ryoku one: config backup with a generated `restore.sh`, rival-shell and
-daemon migration, `[ryoku]` repo trust, the desktop set, SDDM/qylock wiring,
-`ryoku materialize`. After it runs once the machine updates through
-`ryoku update` like any other. The binary and its checksum are committed so
-raw.githubusercontent.com serves them with no release infrastructure.
+The installer integrates Ryoku into an existing flake-based NixOS system rather
+than installing or repartitioning NixOS itself.
 
-## `release/` packaging
+### `nix/modules/`
 
-- `packages/` one directory per pacman package in the `[ryoku]` repo, each a
-  `PKGBUILD`. 27 in all, in four groups by why they exist:
-  - built from the checked-out monorepo: the components (`ryoku-shell`,
-    `ryoku-hub`, `ryoku-rashin`, `ryoku`, `ryoku-blobs`, `ryomotion`), the
-    `ryoku-desktop` umbrella, `ryoku-keyring`, and the `gpk` package manager.
-  - Hyprland plugins: `hypr-dynamic-cursors`, `ryoku-hypr-plugins`, `hyprglass`,
-    `imgborders`, `ryoku-keysounds`; each lays an `.abi` receipt beside its
-    `.so` (see `docs/hyprland-plugins.md`).
-  - rebuilt from upstream so `ryoku update` can reach them, because it is pacman
-    and pacman never touches the AUR: `asusctl`, `awww`, `spicetify-cli`,
-    `spicetify-marketplace`,
-    `hyprland-preview-share-picker`, `limine-mkinitcpio-hook`,
-    `limine-snapper-sync`, `otf-space-grotesk`, `ryoku-cursors`,
-    `ryoku-cursor-material`.
-  - hardware support, same reasoning: `xpadneo-dkms` (Xbox pads over Bluetooth,
-    which the in-kernel `xpad` does not do), `game-devices-udev` (hidraw
-    permissions and battery reporting for 27 vendors' pads),
-    `broadcom-bt-firmware` (the `.hcd` patchram blobs the default
-    `linux-firmware` set omits, without which a Broadcom adapter never comes up),
-    and `dualsensectl` (DualSense lightbar, LEDs and mic; opt-in, since most
-    machines have no DualSense).
-- `repo/` builds the signed `[ryoku]` repo from those PKGBUILDs: `build-repo.sh`
-  runs `makepkg`, signs every artifact with the release key, and `repo-add`s the
-  signed `ryoku.db` into `out/`, laid out exactly as the public mirror serves it.
+The NixOS module is the declarative machine-facing integration layer.
 
-## Tooling
+It enables the Ryoku package set, compositor/session integration, services,
+hardware-facing helpers, fonts, portals and materialization required by the
+desktop.
 
-- `bin/` repo tooling: the release version helpers (`ryoku-release-version`,
-  `ryoku-release-bump`), the CI/hook checks (`ryoku-dev-scan-slop`,
-  `ryoku-dev-audit-shell-binds`), and `art/` for art authoring (`ryodither` bakes
-  an image or gif into a 1-bit bone-on-transparent decor; `tiling-demos`
-  generates the Appearance tiling-layout preview loops).
-- `tests/` standalone CI check scripts (install chroot-safety, shell tool
-  availability).
-- `.github/` the workflows and issue/PR templates; `.githooks/` the commit gates.
-- `VERSION` the base semver; `.woke.yml` the inclusive-language config.
+The public module is exported as:
+
+```nix
+ryoku.nixosModules.default
+```
+
+and is enabled with:
+
+```nix
+programs.ryoku.enable = true;
+```
+
+### `nix/packages/`
+
+One Nix expression per packaged Ryoku component or integration layer.
+
+The package set includes the shell, Hub, Ryostore, Ryotunes, Ryogami, Ryo
+Motion, QML modules, helper tools, desktop data, Hyprland components and the
+combined Ryoku bundle.
+
+The exact public package outputs are defined in `flake.nix`.
+
+## `flake.nix`: public Nix interface
+
+The root flake is the supported Nix entry point for the port.
+
+It exposes:
+
+- `nixosModules.default`
+- `packages.x86_64-linux.*`
+- `apps.x86_64-linux.install`
+- `apps.x86_64-linux.ryoku-dev`
+- `apps.x86_64-linux.ryoku-materialize`
+- `checks.x86_64-linux.*`
+- the development shell
+
+The flake intentionally keeps ABI-sensitive Hyprland components on Ryoku's
+locked package set so the compositor, portal and plugins stay compatible.
+
+## `docs/`: documentation
+
+Start with [`docs/README.md`](README.md).
+
+The documentation tree contains both shared desktop documentation and inherited
+Arch reference material. Arch-specific pages are retained because they are useful
+for upstream parity work, but they are not NixOS system-management instructions.
+
+The NixOS-specific guide is [`nixos.md`](nixos.md).
+
+## `tests/`: validation
+
+`tests/` contains focused checks for Ryoku behavior and integration.
+
+The Nix flake also exposes buildable checks through:
+
+```bash
+nix flake check
+```
+
+For iterative work, prefer the narrowest relevant package/check before running a
+full validation pass.
+
+## `website/`: public site
+
+The website contains the NixOS port's public landing, install and patch-note
+pages.
+
+Installation commands shown there should match the canonical installer entry
+point:
+
+```bash
+nix run github:aethctl/Ryoku-on-NixOS/main#install
+```
+
+## Inherited Arch directories
+
+This repository tracks upstream Ryoku closely, so some top-level trees remain
+Arch-oriented, including installation, release and system-management machinery.
+
+They are kept for upstream parity and source history. They are **not** the NixOS
+implementation.
+
+On NixOS:
+
+- packages belong under `nix/packages/`
+- system integration belongs in `nix/modules/`
+- user-facing Nix entry points belong in `nix/apps/`
+- the root `flake.nix` exposes the supported public interface
+
+Do not duplicate an existing shared desktop component into `nix/` unless the
+host platform genuinely requires a different implementation.
+
+## Practical rule
+
+When deciding where a change belongs:
+
+```text
+Does it change the Ryoku desktop itself?
+    yes -> ryoku/
+
+Does it only make that desktop work correctly on NixOS?
+    yes -> nix/
+
+Is it documentation?
+    yes -> docs/
+
+Is it a validation of existing behavior?
+    yes -> tests/
+```
+
+The goal is to keep platform adaptation at the boundary while the desktop itself
+stays shared.
