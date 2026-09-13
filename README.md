@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/assets/art/hero.png" alt="Ryoku on NixOS" width="60%" />
+<img width="2048" height="2048" alt="ryoku-logo-monochrome-transparent" src="https://github.com/user-attachments/assets/7e79aa01-adb8-43f6-a57d-b0a0bd78b377" />
 
 <br />
 
@@ -231,7 +231,7 @@ app bundles are the main area that still needs Nix-native adaptation.
 
 <div align="center">
 
-<img src="docs/readme/assets/art/beta.png" alt="Ryoku beta" width="70%" />
+<img src="docs/readme/assets/art/hero.png" alt="Ryoku on NixOS" width="50%" />
 
 </div>
 
