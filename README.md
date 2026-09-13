@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="2400" height="1400" alt="ryoku-logo-monochrome-transparent-banner" src="ryoku/assets/brand/ryoku-logo-monochrome-transparent-banner.png" />
+<img width="2400" height="1400" alt="ryoku-logo-monochrome-transparent-banner" src="ryoku/assets/brand/ryoku-logo-monochrome-transparent-fixed.png" />
 
 <br />
 
