@@ -1,5 +1,10 @@
 # What ships preinstalled
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 Ryoku is opinionated on purpose. A fresh install is not a bare Arch box you
 spend a weekend furnishing; it boots straight into a finished desktop with the
 apps, tools, and toolchains already in place. This page is the honest inventory:

@@ -1,5 +1,10 @@
 # Updates and delivery
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 How a change in this repo reaches a running machine, and the contract that keeps
 a user's install a mirror of a dev checkout. Read this before adding a config
 file, a `shell.json` key, or anything a user must receive.

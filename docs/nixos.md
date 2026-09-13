@@ -1,24 +1,104 @@
-# NixOS
+# Ryoku on NixOS
 
-Ryoku's canonical distribution is Arch Linux, but the Ryoku desktop can also be deployed on an existing NixOS system through this repository's flake and NixOS module.
+Ryoku on NixOS is the NixOS implementation of the Ryoku desktop.
 
-The NixOS integration packages the Ryoku shell, Hub, QML modules, desktop configuration and helper tools. It does not reproduce Arch-specific system management such as pacman, the AUR, mkinitcpio or Limine.
+The desktop experience is shared with Ryoku on Arch: Hyprland, the Ryoku shell,
+Hub, Ryostore, theming, launcher, lockscreen, media surfaces and the wider Ryoku
+UI all remain Ryoku. The difference is how the operating system underneath is
+managed.
 
-## Status
+On NixOS, Ryoku uses Nix packages, NixOS modules and normal NixOS generations
+instead of Pacman, the AUR, mkinitcpio or an Arch-specific boot stack.
 
-The NixOS port currently targets:
+## Requirements
+
+Ryoku on NixOS currently targets:
 
 - `x86_64-linux`
-- a recent NixOS system with flakes enabled
+- an existing flake-based NixOS installation
 - Hyprland on Wayland
+- a reasonably recent NixOS package set
 
-Development and validation are performed against `nixos-unstable`.
+The installer integrates Ryoku into the system you already have. It does **not**
+repartition disks, replace the bootloader, choose a kernel, or take ownership of
+the host's graphics-driver configuration.
 
-The module manages Ryoku's desktop dependencies and user services, but it does not repartition the machine or replace the host's bootloader, kernel, graphics-driver configuration or existing NixOS system definition.
+## Recommended installation
 
-## Add Ryoku to a NixOS flake
+Run the installer as your normal user:
 
-Add Ryoku as an input:
+```bash
+nix run github:aethctl/Ryoku-on-NixOS/main#install
+```
+
+The installer requests elevated privileges only when it needs to write system
+configuration or build/switch the NixOS generation.
+
+For a preview first:
+
+```bash
+nix run github:aethctl/Ryoku-on-NixOS/main#install -- \
+```
+
+A dry run prints the proposed `flake.nix` changes and generated `ryoku.nix`
+without modifying the system.
+
+### Custom flake path or host
+
+The installer defaults to `/etc/nixos` and automatically selects the current
+host when it can.
+
+For another flake location or a multi-host configuration:
+
+```bash
+nix run github:aethctl/Ryoku-on-NixOS/main#install -- \
+  --flake /path/to/nixos#hostname
+```
+
+Useful installer options:
+
+```text
+--flake PATH[#HOST]   NixOS flake to configure
+--source REF          Ryoku flake reference
+--dry-run             Show proposed changes without writing them
+-y, --yes             Skip confirmation
+-h, --help            Show help
+```
+
+## What the installer changes
+
+The installer adds Ryoku as a flake input, imports the Ryoku NixOS module, and
+creates an installer-managed `ryoku.nix` containing:
+
+```nix
+{ ... }:
+
+{
+  programs.ryoku.enable = true;
+}
+```
+
+Before changing the live configuration it stores backups under:
+
+```text
+/var/backups/ryoku-nixos/
+```
+
+It then:
+
+1. updates the flake lock,
+2. builds the new NixOS generation,
+3. switches only after the build succeeds,
+4. materializes the user-facing Ryoku configuration.
+
+If locking, building, or switching fails, the installer restores the backed-up
+configuration files.
+
+## Manual flake integration
+
+The installer is the recommended route, but Ryoku can also be added manually.
+
+Add the NixOS port as an input:
 
 ```nix
 {
@@ -26,14 +106,14 @@ Add Ryoku as an input:
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
     ryoku = {
-      url = "github:Ryoku-dev/ryoku-arch";
+      url = "github:aethctl/Ryoku-on-NixOS";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 }
 ```
 
-Import the module and enable Ryoku:
+Then import the module in the target NixOS configuration:
 
 ```nix
 {
@@ -53,136 +133,178 @@ Import the module and enable Ryoku:
 }
 ```
 
-Replace `my-host` with the name of your own NixOS configuration.
+Replace `my-host` with the host name used by your own flake.
 
-## Build and deploy
-
-Apply the system configuration:
+Build and switch normally:
 
 ```bash
 sudo nixos-rebuild switch --flake .#my-host
 ```
 
-After the first successful rebuild, materialize the user-facing Ryoku configuration:
+For a manual integration, the packaged materializer is also exposed as:
 
 ```bash
-ryoku-materialize
+nix run github:aethctl/Ryoku-on-NixOS/main#ryoku-materialize
 ```
 
-The first materialization preserves existing configuration and Ryoku QML data under:
+Normal installer-managed systems run materialization automatically after a
+successful switch.
+
+## What the NixOS module owns
+
+The NixOS module provides the machine-facing integration needed by the Ryoku
+desktop, including:
+
+- Ryoku packages and runtime dependencies
+- the Ryoku Hyprland/portal package set
+- PipeWire and WirePlumber integration
+- NetworkManager and Bluetooth integration
+- polkit and keyring support
+- power and hardware-information helpers
+- required fonts and desktop assets
+- Ryoku user services
+- NixOS-native system bridges
+- user configuration materialization
+
+Ryoku-owned services are expressed declaratively rather than copied into a
+user-local systemd tree.
+
+The compositor and ABI-sensitive Hyprland components come from Ryoku's locked
+package set so the shell, plugins and compositor remain compatible with each
+other.
+
+## Materialized user configuration
+
+NixOS owns the packaged source of truth, while Ryoku materializes the
+user-facing configuration that the desktop expects at runtime.
+
+Initial user data that needs preserving is backed up under:
 
 ```text
 ~/.local/state/ryoku/nix/backups/
 ```
 
-The original backup path is recorded in:
+The original backup location is recorded in:
 
 ```text
 ~/.local/state/ryoku/nix/initial-backup-path
 ```
 
-Log out after the first materialization and start the Hyprland session.
-
-## What the NixOS module owns
-
-The module manages the machine-facing Ryoku integration, including:
-
-- Ryoku packages and runtime command dependencies
-- Hyprland and XDG portal integration
-- PipeWire and WirePlumber
-- NetworkManager
-- Bluetooth
-- polkit and GNOME Keyring
-- power-profile and power-information services
-- required fonts
-- `hyprland-session.target`
-- `ryoku-shell.service`
-- `ryoku-ai-usage.service`
-- `ryoku-ai-usage.timer`
-
-Ryoku-owned systemd units are defined declaratively on NixOS instead of being copied into `~/.config/systemd/user`. This avoids user-local Arch units shadowing the NixOS definitions.
+User-owned overrides remain separate from the packaged base so normal updates do
+not require editing files in the Nix store.
 
 ## Session environment
 
-The NixOS deployment imports the live Hyprland session environment into the systemd user manager. The Ryoku shell waits for a valid Wayland socket before starting, so values such as `WAYLAND_DISPLAY` and `HYPRLAND_INSTANCE_SIGNATURE` come from the active compositor session.
+The NixOS deployment imports the active Hyprland environment into the systemd
+user manager.
 
-Do not add a second manual Ryoku shell `exec-once` when using the module.
+Values such as:
 
-## Package counts
+```text
+WAYLAND_DISPLAY
+HYPRLAND_INSTANCE_SIGNATURE
+```
 
-On NixOS the Hub displays:
+come from the live compositor session.
+
+Do not add a second manual Ryoku shell `exec-once` when the NixOS module already
+manages `ryoku-shell.service`.
+
+## Updating
+
+Use the normal Ryoku command:
+
+```bash
+ryoku update
+```
+
+On NixOS, this uses Ryoku's Nix-specific update backend. It advances the
+configured Ryoku flake input, builds the resulting NixOS generation, and then
+switches to it.
+
+It does **not** run Pacman or the AUR.
+
+Systems using a local `path:` Ryoku input are intentionally not mutated by the
+updater. Update the checkout yourself and rebuild the host flake normally.
+
+Because updates produce ordinary NixOS generations, standard NixOS rollback
+mechanisms remain available.
+
+## Package reporting
+
+The Hub reports NixOS packages as:
 
 ```text
 SYSTEM · USER · TOTAL
 ```
 
-`SYSTEM` counts direct packages in `environment.systemPackages`.
+`SYSTEM` is based on direct packages declared for the system.
 
-`USER` counts packages installed through the user's imperative `nix profile`.
+`USER` represents packages installed through the user's imperative Nix profile.
 
-The full Nix store closure is deliberately not used because it includes transitive dependencies rather than only packages the user selected.
+The complete Nix store closure is intentionally not shown because it contains
+transitive dependencies that the user did not directly select.
 
-Arch keeps its existing explicit/AUR package display.
+## Ryostore
 
-## Updating
+Most Ryostore content is desktop-level content and is shared between the Arch and
+NixOS implementations: themes, bar styles, shell components, Fastfetch presets,
+lockscreen content and similar products do not need separate catalogues.
 
-Installed Ryoku systems update through the Ryoku CLI:
+App/package bundles are the main exception because package installation is
+platform-specific. Those need Nix-native definitions before they can provide the
+same experience on NixOS.
 
-    ryoku update
-
-On NixOS this uses Ryoku's Nix-specific update backend. It updates only the
-configured Ryoku flake input, builds the resulting NixOS system, and switches to
-the new generation.
-
-The Arch package transaction path is not used on NixOS. Systems using a local
-`path:` Ryoku input are intentionally not modified automatically; update the
-development checkout manually and rebuild the host flake instead.
-
-## Development
-
-The flake also exposes:
-
-```bash
-nix run .#ryoku-dev
-nix develop
-```
-
-The development runner is for working directly from a Ryoku checkout. Normal installed systems should use the NixOS module and systemd-managed shell.
+Ryoku therefore keeps one shared Ryostore catalogue rather than maintaining a
+separate NixOS store.
 
 ## Arch and NixOS
 
-The goal of the NixOS port is desktop feature parity, not to make NixOS impersonate Arch Linux.
+The goal is **desktop parity, not package-manager parity**.
 
-On NixOS:
+The same Ryoku desktop can sit on top of two different system-management models:
 
-- packages come from Nix rather than pacman or the AUR
-- services are expressed through NixOS modules
-- Ryoku does not manage mkinitcpio
-- Ryoku does not install or configure Limine
-- Ryoku does not replace the host bootloader
-- Ryoku does not repartition disks
-- the host keeps its existing kernel and graphics-driver policy
-- NixOS generations remain the system rollback mechanism
+| Ryoku on Arch | Ryoku on NixOS |
+| --- | --- |
+| Pacman / AUR | Nix / NixOS modules |
+| Arch package transactions | NixOS generations |
+| Arch service/package integration | Declarative NixOS integration |
+| Arch boot/initramfs tooling | Host NixOS boot policy |
+| Snapshot/update flow from Arch | Standard NixOS rollback generations |
 
-## One-command installation
+The UI and desktop product remain Ryoku; the operating-system integration follows
+the conventions of the host platform.
 
-For an existing flake-based NixOS system:
+## Development
 
-~~~bash
-nix run github:Aetherelic/Ryoku-on-NixOS/main#install
-~~~
+From a local checkout:
 
-The installer detects the NixOS host, backs up the existing flake configuration,
-adds the Ryoku module, builds the new generation before switching, and
-materializes the desktop after a successful switch.
+```bash
+nix develop
+```
 
-It does not modify bootloader, kernel, disk, or partition settings.
+Run the development environment with:
 
-For a non-default flake or multi-host configuration:
+```bash
+nix run .#ryoku-dev
+```
 
-~~~bash
-nix run github:Aetherelic/Ryoku-on-NixOS/main#install -- \
-  --flake /path/to/nixos#hostname
-~~~
+Useful flake outputs include:
 
-Use `--dry-run` to inspect the proposed configuration without changing files.
+```text
+.#install
+.#ryoku-dev
+.#ryoku-materialize
+```
+
+The flake also exposes the individual Ryoku packages and checks used to build and
+validate the NixOS port.
+
+## Related documentation
+
+- [`README.md`](../README.md): project overview and installation entry point
+- [`structure.md`](structure.md): repository layout
+- [`development.md`](development.md): development conventions
+- [`store.md`](store.md): Ryostore architecture
+- [`plugins.md`](plugins.md): plugin system
+- [`barstyles.md`](barstyles.md): bar-style architecture

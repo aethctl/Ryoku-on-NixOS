@@ -1,5 +1,10 @@
 # Development
 
+> [!NOTE]
+> **Arch reference:** this page documents Ryoku's Arch implementation. It is kept
+> in the NixOS repository for upstream parity and developer reference. For NixOS
+> installation, updates and system-management behavior, see [`nixos.md`](nixos.md).
+
 The loop, the gates, and how to add things without breaking the rules.
 
 ## The loop
