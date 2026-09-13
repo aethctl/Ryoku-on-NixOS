@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/assets/art/hero.png" alt="Ryoku on NixOS" width="100%" />
+<img src="docs/readme/assets/art/hero.png" alt="Ryoku on NixOS" width="60%" />
 
 <br />
 
@@ -59,7 +59,7 @@ language remain Ryoku.
 
 <div align="center">
 
-<img src="docs/readme/assets/art/power.png" alt="Power" width="100%" />
+<img src="docs/readme/assets/art/power.png" alt="Power" width="70%" />
 
 </div>
 
@@ -95,7 +95,7 @@ take ownership of hardware-specific graphics configuration.
 
 <div align="center">
 
-<img src="docs/readme/assets/art/beauty.png" alt="Beauty" width="100%" />
+<img src="docs/readme/assets/art/beauty.png" alt="Beauty" width="70%" />
 
 </div>
 
@@ -231,7 +231,7 @@ app bundles are the main area that still needs Nix-native adaptation.
 
 <div align="center">
 
-<img src="docs/readme/assets/art/beta.png" alt="Ryoku beta" width="100%" />
+<img src="docs/readme/assets/art/beta.png" alt="Ryoku beta" width="70%" />
 
 </div>
 
