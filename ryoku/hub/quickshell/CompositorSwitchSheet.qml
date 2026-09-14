@@ -44,7 +44,10 @@ Item {
     readonly property string targetName: sh.report ? sh.report.target : (sh.target ? sh.target.name : "")
     readonly property string activeName: sh.report ? sh.report.active : (sh.current ? sh.current.name : "")
     readonly property bool leaving: sh.activeName !== "" && sh.activeName !== sh.targetName
-    readonly property bool available: !!sh.report && sh.report.available === true
+    // A checkout box has no packages, so a deployed provider is switchable too:
+    // the CLI recognises it and tells the user to pick the session.
+    readonly property bool deployed: !!sh.report && sh.report.deployed === true
+    readonly property bool available: !!sh.report && (sh.report.available === true || sh.report.deployed === true)
     readonly property var unhonored: sh.report && sh.report.unhonored ? sh.report.unhonored : []
 
     anchors.fill: parent
@@ -256,7 +259,7 @@ Item {
                     id: unavailText
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: Tokens.s3; rightMargin: Tokens.s3 }
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("The %1 package is not available on this channel yet, so this switch cannot be made from here.").arg(sh.report ? sh.report.package : "")
+                    text: I18n.tr("The %1 package is not available on this channel yet, and it is not deployed from a checkout, so this switch cannot be made from here.").arg(sh.report ? sh.report.package : "")
                     color: Tokens.alert
                     font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall
@@ -265,7 +268,9 @@ Item {
             }
 
             Column {
-                visible: sh.leaving
+                // Nothing to keep or remove without packages: on a checkout both
+                // compositors ride the deployed trees.
+                visible: sh.leaving && !sh.deployed
                 width: parent.width
                 spacing: Tokens.s2
                 CompositorSwitchSheetHead {

@@ -180,6 +180,15 @@ func cmdWmUse(args []string) {
 
 	pkg := "ryoku-desktop-" + name
 	if !packageAvailable(pkg) {
+		// A checkout box runs deployed trees, not packages, so there is nothing
+		// to install and nothing missing: the provider and its config are
+		// already in place and the greeter has the session. Saying "not
+		// available" there would be a dead end for the exact box that can
+		// switch most easily.
+		if deployedProvider(name) {
+			fmt.Printf(i18n.T("%s is deployed from your checkout; pick it at the greeter to switch.\n"), name)
+			return
+		}
 		die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
 	}
 	// A plain pacman transaction (no SNAP_PAC_SKIP) so snap-pac snapshots it and
@@ -194,6 +203,22 @@ func cmdWmUse(args []string) {
 		removePreviousCompositor(active)
 	}
 	fmt.Printf(i18n.T("Installed %s; %s is the compositor at the next login.\n"), pkg, name)
+}
+
+// deployedProvider reports whether a provider is usable without its package:
+// its binary answers caps and its config tree exists, which is what a checkout
+// deploy leaves behind. Both must hold, since a provider with no config tree
+// would start a bare compositor.
+func deployedProvider(name string) bool {
+	if _, err := wm.OpenNamed(name).Caps(); err != nil {
+		return false
+	}
+	dir := wm.ConfigDir(name)
+	if dir == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(sys.ConfigHome(), dir))
+	return err == nil
 }
 
 // printWmPreviousChoice states the tradeoff in the terms that are actually

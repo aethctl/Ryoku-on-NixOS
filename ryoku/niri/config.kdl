@@ -12,6 +12,11 @@
 // The LAST include wins for a value set twice, so order is the override chain:
 // machine seeds, then the desktop's generated config, then your own file.
 
+// The login bootstrap, run once when niri starts. It carries no settings
+// values, so it sits above the override chain rather than in its tail, and
+// before user.kdl so your file stays the last word.
+include "autostart.kdl"
+
 // Seeded once, then owned by this machine. keyboard.kdl is yours to edit; gpu
 // and monitors are rewritten at runtime on a GPU reset or a hotplug.
 include "keyboard.kdl"

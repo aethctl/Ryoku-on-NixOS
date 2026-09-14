@@ -639,6 +639,38 @@ fi
 mv "$staging" "$cfg/$wm_dir"
 fi
 
+# A checkout box has every provider's binary on PATH, so lay every provider's
+# payload too: without its config tree an inactive compositor cannot be logged
+# into, and the greeter would offer a session that starts a bare desktop.
+#
+# Same ownership rule as the active swap above, so an inactive tree does not go
+# stale as the repo gains files: shipped files are Ryoku-owned and the repo copy
+# wins, while a seed or a hand-edited file that already exists is kept. Each
+# provider then authors its own generated config, because a missing include is
+# fatal on a compositor with no optional-include escape.
+for d in "$here/../wm"/*/; do
+  other=${d%/}; other=${other##*/}
+  [[ $other == "$wm_name" ]] && continue
+  [[ -d "$here/../$other" ]] || continue
+  other_conf=$("$bindir/ryoku" wm config "$other" 2>/dev/null || true)
+  other_dir=$(jq -r '.dir // empty' <<<"$other_conf" 2>/dev/null)
+  [[ -n $other_dir ]] || continue
+  mapfile -t other_seeds < <(jq -r '.seeds[]? | sub("^[^/]+/"; "")' <<<"$other_conf" 2>/dev/null)
+  mkdir -p "$cfg/$other_dir"
+  for f in "${other_seeds[@]}"; do
+    # Keep a seed the machine already owns; cp below would overwrite it.
+    { [[ -e "$cfg/$other_dir/$f" || -L "$cfg/$other_dir/$f" ]]; } && cp -a "$cfg/$other_dir/$f" "$cfg/$other_dir/$f.keep"
+  done
+  cp -a "$here/../$other/." "$cfg/$other_dir/"
+  for f in "${other_seeds[@]}"; do
+    [[ -e "$cfg/$other_dir/$f.keep" ]] && mv "$cfg/$other_dir/$f.keep" "$cfg/$other_dir/$f"
+  done
+  if [[ -x "$bindir/ryoku-wm-$other" ]]; then
+    "$bindir/ryoku-wm-$other" apply "$cfg/ryoku/desktop.json" >/dev/null 2>&1 || true
+  fi
+  say "laid the $other config tree -> $cfg/$other_dir"
+done
+
 wireplumber_policy="$cfg/wireplumber/wireplumber.conf.d/51-ryoku-bluetooth.conf"
 wireplumber_before=
 [[ -f $wireplumber_policy ]] && wireplumber_before=$(<"$wireplumber_policy")

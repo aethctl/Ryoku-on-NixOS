@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	wm "ryoku-wm"
 )
@@ -37,6 +38,21 @@ func runWm(args []string) error {
 }
 
 func wmPackage(name string) string { return "ryoku-desktop-" + name }
+
+// wmDeployed reports whether a provider works without its package: its binary
+// answers caps and its config tree exists. Both must hold, since a provider
+// with no config tree would bring up a bare compositor.
+func wmDeployed(name string) bool {
+	if _, err := wm.OpenNamed(name).Caps(); err != nil {
+		return false
+	}
+	dir := wm.ConfigDir(name)
+	if dir == "" {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(configHome(), dir))
+	return err == nil
+}
 
 // wmProvider is one row of `wm list`. Package and configDir travel with the row
 // so the Hub can build the switch and the keep-or-remove cleanup from data,
@@ -76,12 +92,17 @@ func wmList() error {
 // not run, so unhonored is empty and the Hub says "install the package to see
 // the exact list", the same degradation `ryoku wm use` prints.
 type wmPreviewReport struct {
-	Target       string         `json:"target"`
-	Active       string         `json:"active"`
-	Package      string         `json:"package"`
-	ConfigDir    string         `json:"configDir"`
-	Installed    bool           `json:"installed"`
-	Available    bool           `json:"available"`
+	Target    string `json:"target"`
+	Active    string `json:"active"`
+	Package   string `json:"package"`
+	ConfigDir string `json:"configDir"`
+	Installed bool   `json:"installed"`
+	Available bool   `json:"available"`
+	// Deployed means the target works without its package: its provider answers
+	// and its config tree is in place, which is what a checkout deploy leaves.
+	// Such a box switches by picking the session at the greeter, so the sheet
+	// must offer that instead of reporting a package it will never use.
+	Deployed     bool           `json:"deployed"`
 	KeybindCount int            `json:"keybindCount"`
 	Exact        bool           `json:"exact"`
 	Provider     string         `json:"provider,omitempty"`
@@ -101,6 +122,7 @@ func wmPreview(name string) error {
 		ConfigDir:    wm.ConfigDir(name),
 		Installed:    pkgInstalled(wmPackage(name)),
 		Available:    pkgAvailable(wmPackage(name)),
+		Deployed:     wmDeployed(name),
 		KeybindCount: storeKeybindCount(store),
 		Unhonored:    []wm.Unhonored{},
 	}
