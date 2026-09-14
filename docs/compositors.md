@@ -143,6 +143,10 @@ while another compositor is active.
 
 ## Adding a window manager
 
+This is the checklist. `docs/adding-a-window-manager.md` is the same job written
+out as a walkthrough, including the traps that cost time on the second
+compositor; read that one if you are doing this rather than reviewing it.
+
 1. `ryoku/wm/<name>/`, a `package main` implementing the nine verbs. Mirror
    the nearest existing provider rather than inventing a second shape. Pin the
    compositor's own dialect in a test: the argv or request a provider emits is

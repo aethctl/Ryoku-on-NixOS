@@ -11,6 +11,8 @@ New here? Read these in order, then keep them open while you work:
 - `docs/structure.md` the repo map: where everything lives and the one job it has.
 - `docs/compositors.md` the window-manager seam: the provider contract, what
   each compositor can do, and how to add another.
+- `docs/adding-a-window-manager.md` the walkthrough for putting Ryoku on a
+  compositor it has never met.
 - `docs/conventions.md` how code and configuration are written here.
 - `docs/ui-ux.md` the desktop's look and motion, and how to build or replicate it.
 - `docs/development.md` the workflow: deploy, test, the commit gates, and research.
