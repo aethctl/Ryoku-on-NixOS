@@ -37,7 +37,7 @@ Item {
     property var hub
 
     // gated so nothing paints stale before the first `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // ── hub access ──────────────────────────────────────────────────────────
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
@@ -573,7 +573,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Keyboard layout and remaps, pointer and touchpad behaviour, and key repeat for the Hyprland session. Edits preview live; nothing is written until you save.")
+            text: I18n.tr("Keyboard layout and remaps, pointer and touchpad behaviour, and key repeat for your session. Edits preview live; nothing is written until you save.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

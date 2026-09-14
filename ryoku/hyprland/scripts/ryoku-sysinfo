@@ -29,6 +29,30 @@ if [ ! -s "$cf" ]; then
 fi
 codename=$(cat "$cf")
 
+# Focused display geometry from the seam's output state, which reports the same
+# fields under any compositor. When that helper is unavailable the kernel's DRM
+# state still names the current mode's resolution, so the field never blanks;
+# refresh has no neutral file source and stays empty there.
+disp_res=""
+disp_hz=""
+if command -v ryoku-hub >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    read -r disp_res disp_hz < <(
+        ryoku-hub outputs 2>/dev/null | jq -r '
+            ((first(.[] | select(.focused)) // .[0]) // {})
+            | [ (if (.width // 0) > 0 then "\(.width)x\(.height)" else "" end),
+                (if (.refresh // 0) > 0 then "\(.refresh)Hz" else "" end) ]
+            | @tsv' 2>/dev/null
+    ) || true
+fi
+if [ -z "$disp_res" ]; then
+    for m in /sys/class/drm/card*-*/modes; do
+        c="${m%/modes}"
+        [ "$(cat "$c/enabled" 2>/dev/null)" = enabled ] || continue
+        IFS= read -r disp_res < "$m" 2>/dev/null || disp_res=""
+        [ -n "$disp_res" ] && break
+    done
+fi
+
 whoami
 cat /etc/hostname 2>/dev/null || hostname
 grep -m1 'PRETTY_NAME' /etc/os-release 2>/dev/null | cut -d'"' -f2
@@ -44,31 +68,22 @@ free | awk '/Mem:/{print int($3/$2*100)}'
 df -h / | awk 'NR==2{print $3" / "$2}'
 df / | awk 'NR==2{print int($3/($3+$4)*100)}'
 awk '{h=int($1/3600); m=int(($1%3600)/60); print h"h "m"m"}' /proc/uptime
-system_pkgs=0
-if [ -r /etc/ryoku/nix-system-package-count ]; then
-    system_pkgs=$(tr -cd '0-9' < /etc/ryoku/nix-system-package-count)
-    [ -n "$system_pkgs" ] || system_pkgs=0
+if [ -e /etc/NIXOS ]; then
+    system_pkgs=0
+    if [ -r /etc/ryoku/nix-system-package-count ]; then
+        system_pkgs=$(tr -cd '0-9' < /etc/ryoku/nix-system-package-count)
+        [ -n "$system_pkgs" ] || system_pkgs=0
+    fi
+    user_pkgs=0
+    profile_manifest="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/profile/manifest.json"
+    [ -r "$profile_manifest" ] || profile_manifest="$HOME/.nix-profile/manifest.json"
+    if [ -r "$profile_manifest" ] && command -v jq >/dev/null 2>&1; then
+        user_pkgs=$(jq -r 'if (.elements | type) == "object" then [.elements[] | select(.active != false)] | length else 0 end' "$profile_manifest" 2>/dev/null || printf '0\n')
+    fi
+    printf '%s\n' "$((system_pkgs + user_pkgs))"
+else
+    pacman -Qq 2>/dev/null | wc -l
 fi
-
-user_pkgs=0
-profile_manifest="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/profile/manifest.json"
-
-if [ ! -r "$profile_manifest" ]; then
-    profile_manifest="$HOME/.nix-profile/manifest.json"
-fi
-
-if [ -r "$profile_manifest" ] && command -v jq >/dev/null 2>&1; then
-    user_pkgs=$(
-        jq -r '
-            if (.elements | type) == "object"
-            then [.elements[] | select(.active != false)] | length
-            else 0
-            end
-        ' "$profile_manifest" 2>/dev/null || printf '0\n'
-    )
-fi
-
-printf '%s\n' "$((system_pkgs + user_pkgs))"
-hyprctl monitors 2>/dev/null | awk '/x.*@/{match($0,/([0-9]+x[0-9]+)/,a); print a[1]; exit}'
-hyprctl monitors 2>/dev/null | awk '/x.*@/{match($0,/@([0-9]+)/,a); print a[1]"Hz"; exit}'
+printf '%s\n' "$disp_res"
+printf '%s\n' "$disp_hz"
 echo "$codename"

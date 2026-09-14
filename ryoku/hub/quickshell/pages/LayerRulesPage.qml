@@ -24,7 +24,7 @@ Item {
     // the live rules array from the draft: { namespace, action, value } entries.
     readonly property var rules: pg.hub ? (pg.hub.hyprVal("wm.hyprland.layerRules") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // the seven layer-shell tweaks. Only ignorealpha carries a value (a 0..1
     // threshold); dimaround and the rest emit a plain bool on the compositor
@@ -116,7 +116,7 @@ Item {
                 font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter
             }
             Text {
-                text: I18n.tr("APPS & KEYS"); color: Tokens.inkMuted; font.family: Tokens.ui
+                text: I18n.tr("COMPOSITOR"); color: Tokens.inkMuted; font.family: Tokens.ui
                 font.pixelSize: 9; font.weight: Font.Medium; font.letterSpacing: Tokens.trackMark
                 anchors.verticalCenter: parent.verticalCenter
             }

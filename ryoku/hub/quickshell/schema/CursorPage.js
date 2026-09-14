@@ -53,51 +53,5 @@ var rows = [{
         "desc": "The pointer vanishes on a keypress and returns when moved",
         "ctl": "sw",
         "src": "desktop.json"
-    },{
-        "tab": "Motion",
-        "group": "MOTION",
-        "key": "wm.hyprland.plugins.dynamicCursors.enabled",
-        "label": "Realistic cursor motion",
-        "desc": "The pointer tilts, turns, or stretches as it moves, applies on Save",
-        "ctl": "sw",
-        "src": "desktop.json",
-        "caps": "plugins"
-    },{
-        "tab": "Motion",
-        "group": "MOTION",
-        "key": "wm.hyprland.plugins.dynamicCursors.mode",
-        "label": "Style",
-        "desc": "Which deformation the motion uses",
-        "ctl": "seg",
-        "src": "desktop.json",
-        "caps": "plugins",
-        "opts": [
-            "rotate",
-            "tilt",
-            "stretch"
-        ],
-        "when": { "wm.hyprland.plugins.dynamicCursors.enabled": [true] }
-    },{
-        "tab": "Motion",
-        "group": "MOTION",
-        "key": "wm.hyprland.plugins.dynamicCursors.shake",
-        "label": "Shake to find (magnify)",
-        "desc": "Shaking the mouse briefly grows the pointer so you can find it",
-        "ctl": "sw",
-        "src": "desktop.json",
-        "caps": "plugins",
-        "when": { "wm.hyprland.plugins.dynamicCursors.enabled": [true] }
-    },{
-        "tab": "Motion",
-        "group": "MOTION",
-        "key": "wm.hyprland.plugins.dynamicCursors.magnify",
-        "label": "Magnify on shake",
-        "desc": "How much the cursor grows when you shake it to find it",
-        "ctl": "step",
-        "src": "desktop.json",
-        "caps": "plugins",
-        "lo": 1.0,
-        "hi": 10.0,
-        "when": { "wm.hyprland.plugins.dynamicCursors.enabled": [true], "wm.hyprland.plugins.dynamicCursors.shake": [true] }
     }
 ];

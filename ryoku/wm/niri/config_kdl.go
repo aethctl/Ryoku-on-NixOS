@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -115,17 +117,69 @@ type Struts struct {
 	Bottom int `json:"bottom"`
 }
 
+// Proportions is a list of column-width proportions. It carries as a plain
+// comma-separated string ("0.33, 0.5, 0.67") rather than a JSON array so the Hub
+// edits it as one text field and compares it as one scalar; niri still gets a
+// proportion line per entry. Unmarshal also tolerates the array form and a
+// trailing percent, so an older store or a "50%" entry still parses.
+type Proportions []float64
+
+func (p Proportions) MarshalJSON() ([]byte, error) {
+	parts := make([]string, len(p))
+	for i, v := range p {
+		parts[i] = kdlNum(v)
+	}
+	return json.Marshal(strings.Join(parts, ", "))
+}
+
+func (p *Proportions) UnmarshalJSON(b []byte) error {
+	b = bytes.TrimSpace(b)
+	if len(b) == 0 || string(b) == "null" {
+		*p = nil
+		return nil
+	}
+	if b[0] == '[' {
+		var nums []float64
+		if err := json.Unmarshal(b, &nums); err != nil {
+			return err
+		}
+		*p = nums
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err != nil {
+		return err
+	}
+	*p = parseProportions(s)
+	return nil
+}
+
+func parseProportions(s string) Proportions {
+	var out Proportions
+	for _, tok := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' || r == '\t' }) {
+		scale := 1.0
+		if strings.HasSuffix(tok, "%") {
+			tok = strings.TrimSuffix(tok, "%")
+			scale = 0.01
+		}
+		if v, err := strconv.ParseFloat(tok, 64); err == nil {
+			out = append(out, v*scale)
+		}
+	}
+	return out
+}
+
 // Niri holds the wm.niri.* exclusives: niri behaviours with no neutral key. This
 // is the niri twin of wm.hyprland.*, so the Hub can surface them without every
 // other compositor pretending to have them.
 type Niri struct {
-	PreferNoCSD        bool      `json:"preferNoCsd"`
-	HotkeyOverlaySkip  bool      `json:"hotkeyOverlaySkip"`
-	ScreenshotPath     string    `json:"screenshotPath"`
-	PresetColumnWidths []float64 `json:"presetColumnWidths"`
-	Struts             Struts    `json:"struts"`
-	HotCorners         bool      `json:"hotCorners"`
-	OverviewZoom       float64   `json:"overviewZoom"`
+	PreferNoCSD        bool        `json:"preferNoCsd"`
+	HotkeyOverlaySkip  bool        `json:"hotkeyOverlaySkip"`
+	ScreenshotPath     string      `json:"screenshotPath"`
+	PresetColumnWidths Proportions `json:"presetColumnWidths"`
+	Struts             Struts      `json:"struts"`
+	HotCorners         bool        `json:"hotCorners"`
+	OverviewZoom       float64     `json:"overviewZoom"`
 }
 
 // niriStore is the typed store the generator consumes. Niri stays out of the flat

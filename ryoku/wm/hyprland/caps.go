@@ -35,6 +35,8 @@ var capsManifest = []wm.Capability{
 	wm.CapOutputPower,
 	wm.CapKeyboardLayoutSwitch,
 	wm.CapMonitorConfig,
+	wm.CapOutputMirror,
+	wm.CapOutputHdr,
 	wm.CapWindowFloat,
 	wm.CapTiledLayout,
 	wm.CapSessionExit,

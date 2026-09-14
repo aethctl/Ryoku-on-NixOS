@@ -105,15 +105,6 @@ Item {
         onEdited: (k, v) => { if (pg.hub) pg.hub.edit(k, v); }
         onPickRequested: (r) => { if (pg.hub) pg.hub.openPick(r); }
         onTimezonePickRequested: (r) => tzMap.open()
-
-        // the compositor switch lives here, on the system-wide page, as its own
-        // full-width section above the settings rows; it is a session-level
-        // operation, not a schema row.
-        CompositorControl {
-            id: wmPicker
-            anchors { left: parent.left; right: parent.right }
-            onChose: (target, current) => wmSheet.open(target, current)
-        }
     }
 
     TimezoneMap {
@@ -122,11 +113,5 @@ Item {
         currentZone: pg.currentTimezone
         onApplied: (z) => pg.applyTimezone(z)
         onCanceled: tzMap.close()
-    }
-
-    CompositorSwitchSheet {
-        id: wmSheet
-        anchors.fill: parent
-        onClosed: wmPicker.reload()
     }
 }

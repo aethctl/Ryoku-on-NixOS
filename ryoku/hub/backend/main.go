@@ -55,6 +55,11 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
 			os.Exit(1)
 		}
+	case "outputs":
+		if err := runOutputs(args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
+			os.Exit(1)
+		}
 	case "lock":
 		if err := runLock(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
@@ -158,6 +163,11 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop plugins remove <id>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub wm list")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub wm preview <name>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub outputs [list]")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub outputs apply <json>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub outputs profiles")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub outputs save <name> <json>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub outputs load|rm <name>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub lock list")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub lock set <slug>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub gpu caps|mode")

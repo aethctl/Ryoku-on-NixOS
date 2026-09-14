@@ -132,7 +132,7 @@ func resync(emit func(wm.Frame), wants func(wm.FrameKind) bool) {
 		return
 	}
 	if wants(wm.FrameOutputs) {
-		emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: monitorOutputs(mons)})
+		emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: monitorOutputs(mons, false)})
 	}
 	if wants(wm.FrameFocus) {
 		if focused := focusedName(mons); focused != "" {
@@ -157,16 +157,25 @@ func resync(emit func(wm.Frame), wants func(wm.FrameKind) bool) {
 }
 
 type hyprMonitor struct {
-	ID              int     `json:"id"`
-	Name            string  `json:"name"`
-	Width           int     `json:"width"`
-	Height          int     `json:"height"`
-	Scale           float64 `json:"scale"`
-	Focused         bool    `json:"focused"`
-	Make            string  `json:"make"`
-	Model           string  `json:"model"`
-	PhysicalWidth   int     `json:"physicalWidth"`
-	Disabled        bool    `json:"disabled"`
+	ID              int      `json:"id"`
+	Name            string   `json:"name"`
+	Width           int      `json:"width"`
+	Height          int      `json:"height"`
+	Scale           float64  `json:"scale"`
+	Focused         bool     `json:"focused"`
+	Make            string   `json:"make"`
+	Model           string   `json:"model"`
+	PhysicalWidth   int      `json:"physicalWidth"`
+	Disabled        bool     `json:"disabled"`
+	X               int      `json:"x"`
+	Y               int      `json:"y"`
+	RefreshRate     float64  `json:"refreshRate"`
+	Transform       int      `json:"transform"`
+	VRR             bool     `json:"vrr"`
+	AvailableModes  []string `json:"availableModes"`
+	MirrorOf              string  `json:"mirrorOf"`
+	ColorManagementPreset string  `json:"colorManagementPreset"`
+	SdrBrightness         float64 `json:"sdrBrightness"`
 	ActiveWorkspace struct {
 		ID   int    `json:"id"`
 		Name string `json:"name"`
@@ -187,10 +196,12 @@ func readMonitors() ([]hyprMonitor, error) {
 	return mons, nil
 }
 
-func monitorOutputs(mons []hyprMonitor) []wm.Output {
+// full adds the editor detail (position, rotation, VRR, physical modes) the
+// display page needs and the lean watch frame omits.
+func monitorOutputs(mons []hyprMonitor, full bool) []wm.Output {
 	outputs := make([]wm.Output, 0, len(mons))
 	for _, m := range mons {
-		outputs = append(outputs, wm.Output{
+		o := wm.Output{
 			Name:            m.Name,
 			Width:           m.Width,
 			Height:          m.Height,
@@ -201,9 +212,73 @@ func monitorOutputs(mons []hyprMonitor) []wm.Output {
 			Model:           m.Model,
 			PhysicalWidth:   m.PhysicalWidth,
 			Disabled:        m.Disabled,
-		})
+		}
+		if full {
+			o.X = m.X
+			o.Y = m.Y
+			o.Transform = m.Transform
+			o.VRR = m.VRR
+			modes := make([]string, 0, len(m.AvailableModes))
+			for _, am := range m.AvailableModes {
+				modes = append(modes, hyprModeString(am))
+			}
+			o.Modes = modes
+			o.Mode = currentHyprMode(m, modes)
+			o.Mirror = mirrorName(m.MirrorOf)
+			o.ColorMode = hyprColorMode(m.ColorManagementPreset)
+			o.SdrBrightness = m.SdrBrightness
+		}
+		outputs = append(outputs, o)
 	}
 	return outputs
+}
+
+// hyprModeString strips Hyprland's trailing "Hz" so an advertised mode reads the
+// same as niri's "WxH@rate" and round-trips cleanly back to hl.monitor.
+func hyprModeString(s string) string {
+	s = strings.TrimSpace(s)
+	if n := len(s); n >= 2 && strings.EqualFold(s[n-2:], "Hz") {
+		s = strings.TrimSpace(s[:n-2])
+	}
+	return s
+}
+
+// currentHyprMode picks the advertised mode matching the monitor's live width,
+// height and refresh, so the editor's current mode is one the picker also lists.
+func currentHyprMode(m hyprMonitor, modes []string) string {
+	prefix := fmt.Sprintf("%dx%d@", m.Width, m.Height)
+	want := int(m.RefreshRate + 0.5)
+	for _, s := range modes {
+		if !strings.HasPrefix(s, prefix) {
+			continue
+		}
+		if f, err := strconv.ParseFloat(s[len(prefix):], 64); err == nil && int(f+0.5) == want {
+			return s
+		}
+	}
+	return fmt.Sprintf("%dx%d@%d", m.Width, m.Height, want)
+}
+
+// mirrorName drops Hyprland's "none" sentinel so an un-mirrored output reads as
+// the empty string the neutral shape uses.
+func mirrorName(s string) string {
+	if s == "" || s == "none" {
+		return ""
+	}
+	return s
+}
+
+// hyprColorMode folds Hyprland's colour-management preset onto the neutral colour
+// mode the editor shows: an HDR preset is hdr, sRGB/auto/none are srgb, anything
+// else is a wide-gamut profile.
+func hyprColorMode(preset string) string {
+	switch preset {
+	case "hdr", "hdredid":
+		return "hdr"
+	case "", "srgb", "auto":
+		return "srgb"
+	}
+	return "wide"
 }
 
 func focusedName(mons []hyprMonitor) string {
@@ -350,7 +425,7 @@ func runState() error {
 	active, all := readKeyboard()
 	snap := wm.Snapshot{
 		FocusedOutput:   focusedName(mons),
-		Outputs:         monitorOutputs(mons),
+		Outputs:         monitorOutputs(mons, true),
 		Workspaces:      readWorkspaces(mons),
 		Windows:         readWindows(mons),
 		KeyboardLayout:  active,

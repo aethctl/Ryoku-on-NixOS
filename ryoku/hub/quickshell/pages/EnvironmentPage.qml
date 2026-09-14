@@ -21,7 +21,7 @@ Item {
     // the live env array from the draft: a list of { key, value } entries.
     readonly property var envRows: pg.hub ? (pg.hub.hyprVal("desktop.env") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // hyprEdit swaps the whole array, so the Repeater rebinds and rebuilds the
     // delegate owning a focused field. rows therefore commit on editing-finished
@@ -82,7 +82,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Environment variables for the Hyprland session, layered over the base. Add a NAME and value (e.g. MOZ_ENABLE_WAYLAND = 1); they take full effect at next login.")
+            text: I18n.tr("Environment variables for your desktop session, layered over the base. Add a NAME and value (e.g. MOZ_ENABLE_WAYLAND = 1); they take full effect at next login.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

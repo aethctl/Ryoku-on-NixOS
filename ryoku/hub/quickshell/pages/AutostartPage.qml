@@ -23,7 +23,7 @@ Item {
     // the live autostart array from the draft: a list of { command } entries.
     readonly property var cmdRows: pg.hub ? (pg.hub.hyprVal("desktop.autostart") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // hyprEdit swaps the whole array, so the Repeater rebinds and rebuilds the
     // delegate owning a focused field. rows therefore commit on editing-finished
@@ -84,7 +84,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Commands Hyprland runs once at login, after the base Ryoku autostart (e.g. a tray applet or a sync client). Saved to your config; new commands start at your next login.")
+            text: I18n.tr("Commands your session runs once at login, after the base Ryoku autostart (e.g. a tray applet or a sync client). Saved to your config; new commands start at your next login.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

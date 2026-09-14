@@ -15,7 +15,7 @@ signature, or an `isNiri`-style test anywhere else. Consumers ask what the
 compositor *can do*, never which one it is.
 
 A provider is one binary, `ryoku-wm-<name>`, shipped by
-`ryoku-desktop-<name>`. It implements seven verbs:
+`ryoku-desktop-<name>`. It implements nine verbs:
 
 |Verb|Answers|
 |---|---|
@@ -25,13 +25,24 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 |`act <id>`|one neutral action (`window.close`, `workspace.focus`, ...)|
 |`apply <store>`|write the compositor's config from the neutral settings store|
 |`defaults`|the provider's baseline subtree of that store|
+|`schema`|the settings rows only this compositor has, for the Hub to render|
+|`outputs <layout>`|apply a display layout|
 |`session`|the `wayland-session` desktop entry|
 
 `apply --preview` writes nothing and reports what it could not honour. That
 report is what `ryoku wm use` and the Hub show before a switch, so the cost of
-moving is known in advance rather than discovered afterwards.
+moving is known in advance rather than discovered afterwards. The Hub also
+renders it as the "what this compositor cannot do" list, so a setting that is
+hidden reads as explained rather than missing.
 
-Hyprland adds an eighth verb, `plugins`. niri has no plugin system and says so
+`schema` is what keeps the Hub free of compositor vocabulary. A provider
+declares its own exclusive rows and the Hub renders them through the one
+renderer every settings page uses, so two compositors cannot drift apart
+visually and adding a third needs no Hub edit. The `ctl` field is the shared
+control vocabulary; a row whose control needs a bespoke editor names the page
+that draws it.
+
+Hyprland adds a tenth verb, `plugins`. niri has no plugin system and says so
 in `caps` instead of shipping a verb that would fail.
 
 ## Capabilities
@@ -132,7 +143,7 @@ while another compositor is active.
 
 ## Adding a window manager
 
-1. `ryoku/wm/<name>/`, a `package main` implementing the seven verbs. Mirror
+1. `ryoku/wm/<name>/`, a `package main` implementing the nine verbs. Mirror
    the nearest existing provider rather than inventing a second shape. Pin the
    compositor's own dialect in a test: the argv or request a provider emits is
    its contract, and getting it wrong usually fails silently.
@@ -140,12 +151,24 @@ while another compositor is active.
    its config directory, and its seeds. That file is the only place allowed to
    know any of it.
 3. `ryoku/<name>/`, the shipped config payload.
-4. `release/packages/ryoku-desktop-<name>/`, providing the compositor virtual so
+4. Its `schema`, listing the settings only this compositor has. That is the
+   whole of its Hub presence: the rows appear on the Window Manager page with
+   no Hub edit, and anything it cannot express is reported by `apply` instead
+   of being shown as a control that does nothing.
+5. `release/packages/ryoku-desktop-<name>/`, providing the compositor virtual so
    it is mutually exclusive with the others, and depending on the compositor plus
    whatever it needs for Xwayland and screencasting.
-5. Offer it in the installers' compositor question.
+6. Offer it in the installers' compositor question.
 
 What you do not do is add a branch anywhere else. If the desktop needs to know
 something new about a compositor, that is a new capability or a new field on
 `caps`, not a name test. The isolation gate enforces this, and it is the reason a
 second compositor was an addition rather than a fork.
+
+The one thing this does not cover is rich bespoke tooling. Hyprland's plugin
+manager, animation curve workshop and layer-rule editor are interactions no
+settings row can describe, so they remain capability-gated pages in the Hub that
+read their rows from the provider. A compositor arriving with tooling of its own
+would want to ship its own Hub pages, the way `ryoku/wm/hyprland/qml/` already
+ships a QML module; that needs the Hub's component vocabulary published as a
+module first.

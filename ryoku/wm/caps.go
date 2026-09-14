@@ -31,6 +31,12 @@ const (
 	CapOutputPower           Capability = "outputPower"
 	CapKeyboardLayoutSwitch  Capability = "keyboardLayoutSwitch"
 	CapMonitorConfig         Capability = "monitorConfig"
+	// CapOutputMirror and CapOutputHdr describe per-output behaviours some
+	// compositors offer and others cannot: cloning one output onto another, and
+	// an HDR/wide-gamut colour pipeline. Named for the behaviour so the Hub gates
+	// the control on the capability, never on which compositor is running.
+	CapOutputMirror          Capability = "outputMirror"
+	CapOutputHdr             Capability = "outputHdr"
 	CapWindowFloat           Capability = "windowFloat"
 	CapTiledLayout           Capability = "tiledLayout"
 	CapSessionExit           Capability = "sessionExit"
@@ -46,7 +52,8 @@ func All() []Capability {
 		CapFocusGrab,
 		CapScreenShader, CapPlugins, CapLiveConfigEval, CapConfigReload,
 		CapAnimations, CapCursorSet, CapNativeOverview, CapOutputPower,
-		CapKeyboardLayoutSwitch, CapMonitorConfig, CapWindowFloat,
+		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
+		CapOutputHdr, CapWindowFloat,
 		CapTiledLayout, CapSessionExit,
 	}
 }

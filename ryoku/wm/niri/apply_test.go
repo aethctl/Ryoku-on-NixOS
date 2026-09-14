@@ -390,3 +390,30 @@ func TestScrollFactorsEmitted(t *testing.T) {
 	}
 	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
 }
+
+// The Hub edits preset column widths as one text field, so the store carries a
+// comma-separated string; an older store or a hand-edit may still carry the JSON
+// array, and a user may type percents. All three must reach niri as one
+// proportion line per width, or the setting silently drops on the next save.
+func TestPresetColumnWidthsStringAndArray(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		value string
+	}{
+		{"string", `"0.4, 0.6"`},
+		{"array", `[0.4, 0.6]`},
+		{"percent", `"40%, 60%"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := niriHome(t)
+			store := writeStore(t, `{"desktop":{},"wm":{"niri":{"presetColumnWidths":`+tc.value+`}}}`)
+			capApply(t, store)
+			settings := readGen(t, dir, "settings.kdl")
+			for _, want := range []string{"proportion 0.4", "proportion 0.6"} {
+				if !strings.Contains(settings, want) {
+					t.Errorf("%s: settings.kdl missing %q\n%s", tc.name, want, settings)
+				}
+			}
+		})
+	}
+}

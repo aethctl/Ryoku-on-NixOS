@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	wm "ryoku-wm"
@@ -59,17 +61,29 @@ type niriWorkspace struct {
 }
 
 type niriOutput struct {
-	Name         string  `json:"name"`
-	Make         string  `json:"make"`
-	Model        string  `json:"model"`
-	PhysicalSize *[2]int `json:"physical_size"`
+	Name         string     `json:"name"`
+	Make         string     `json:"make"`
+	Model        string     `json:"model"`
+	PhysicalSize *[2]int    `json:"physical_size"`
+	Modes        []niriMode `json:"modes"`
+	CurrentMode  *int       `json:"current_mode"`
+	VRREnabled   bool       `json:"vrr_enabled"`
 	Logical      *struct {
-		X      int     `json:"x"`
-		Y      int     `json:"y"`
-		Width  int     `json:"width"`
-		Height int     `json:"height"`
-		Scale  float64 `json:"scale"`
+		X         int     `json:"x"`
+		Y         int     `json:"y"`
+		Width     int     `json:"width"`
+		Height    int     `json:"height"`
+		Scale     float64 `json:"scale"`
+		Transform string  `json:"transform"`
 	} `json:"logical"`
+}
+
+// niri reports refresh in millihertz; the editor speaks "WxH@Hz".
+type niriMode struct {
+	Width       int  `json:"width"`
+	Height      int  `json:"height"`
+	RefreshRate int  `json:"refresh_rate"`
+	IsPreferred bool `json:"is_preferred"`
 }
 
 type niriKeyboard struct {
@@ -166,7 +180,7 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		s.emitFocus(emit, wants)
 		// No output event exists, so this is where a hotplug surfaces.
 		if wants(wm.FrameOutputs) {
-			if outs, err := readOutputs(s.workspaces); err == nil {
+			if outs, err := readOutputs(s.workspaces, false); err == nil {
 				emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: outs})
 			}
 		}
@@ -425,7 +439,7 @@ func formatInt(n int) string { return strconv.Itoa(n) }
 
 // readOutputs reads the output list and marks the focused one from the
 // workspaces already held, so no second query is needed to resolve focus.
-func readOutputs(workspaces []niriWorkspace) ([]wm.Output, error) {
+func readOutputs(workspaces []niriWorkspace, full bool) ([]wm.Output, error) {
 	raw, err := request("Outputs")
 	if err != nil {
 		return nil, err
@@ -445,15 +459,17 @@ func readOutputs(workspaces []niriWorkspace) ([]wm.Output, error) {
 	}
 	out := make([]wm.Output, 0, len(byName))
 	for _, o := range byName {
-		out = append(out, outputFrame(o, focused, active))
+		out = append(out, outputFrame(o, focused, active, full))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
 }
 
 // A disabled output has no logical rectangle, which is also how its size stops
-// being meaningful, so the mode is only read for an enabled one.
-func outputFrame(o niriOutput, focused string, active map[string]string) wm.Output {
+// being meaningful, so the mode is only read for an enabled one. full adds the
+// editor detail (physical modes, position, rotation, VRR) the display page needs
+// and the lean watch frame omits.
+func outputFrame(o niriOutput, focused string, active map[string]string, full bool) wm.Output {
 	out := wm.Output{
 		Name:            o.Name,
 		Make:            o.Make,
@@ -470,7 +486,60 @@ func outputFrame(o niriOutput, focused string, active map[string]string) wm.Outp
 		out.Height = o.Logical.Height
 		out.Scale = o.Logical.Scale
 	}
+	if !full {
+		return out
+	}
+	if o.Logical != nil {
+		out.X = o.Logical.X
+		out.Y = o.Logical.Y
+		out.Transform = niriTransformToWayland(o.Logical.Transform)
+	}
+	out.VRR = o.VRREnabled
+	for _, m := range o.Modes {
+		out.Modes = append(out.Modes, niriModeString(m))
+	}
+	if o.CurrentMode != nil && *o.CurrentMode >= 0 && *o.CurrentMode < len(o.Modes) {
+		out.Mode = niriModeString(o.Modes[*o.CurrentMode])
+	}
 	return out
+}
+
+// niriModeString renders a niri mode as the "WxH@Hz" the editor uses, keeping the
+// fractional refresh niri reports so a picked mode round-trips to the exact one.
+func niriModeString(m niriMode) string {
+	return fmt.Sprintf("%dx%d@%g", m.Width, m.Height, float64(m.RefreshRate)/1000)
+}
+
+// niriTransformToWayland maps niri's logical transform name onto the wayland
+// transform integer the neutral output shape carries. An unknown name reads as
+// normal, the safe default for a rotation the editor cannot show.
+func niriTransformToWayland(s string) int {
+	switch normTransform(s) {
+	case "90":
+		return 1
+	case "180":
+		return 2
+	case "270":
+		return 3
+	case "flipped":
+		return 4
+	case "flipped90":
+		return 5
+	case "flipped180":
+		return 6
+	case "flipped270":
+		return 7
+	}
+	return 0
+}
+
+// normTransform folds niri's spellings ("Normal", "_90", "Flipped-90") to a bare
+// token, so the mapping does not depend on which form this niri version emits.
+func normTransform(s string) string {
+	s = strings.ToLower(s)
+	s = strings.ReplaceAll(s, "_", "")
+	s = strings.ReplaceAll(s, "-", "")
+	return s
 }
 
 func readWindows() ([]niriWindow, error) {
@@ -527,7 +596,7 @@ func runState() error {
 	if s.windows, err = readWindows(); err != nil {
 		return err
 	}
-	outs, err := readOutputs(s.workspaces)
+	outs, err := readOutputs(s.workspaces, true)
 	if err != nil {
 		return err
 	}

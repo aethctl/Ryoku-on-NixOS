@@ -62,7 +62,7 @@ Rectangle {
     // restore silently drags the user back to wherever they were last -- the
     // handoff looked like it did nothing. Deep links come through here and latch.
     function navigate(target) {
-        if (!target || hub.pageFile(target) === "")
+        if (!target || hub.pageFile(target) === "" || !hub.sectionAvailable(target))
             return;
         hub.navigated = true;
         hub.section = target;
@@ -80,23 +80,33 @@ Rectangle {
 
     // The full catalogue. `wired` marks the pages whose content and
     // persistence are ported; the rest render an honest porting plate rather
-    // than a settings page that cannot save. The rail lists every section,
-    // grouped by task, so nothing hides -- findability first. The rail scrolls;
-    // the "Advanced" switch at its foot only reveals the deep per-page knobs
-    // inside a schema page, never whole sections, so a page stays calm until asked.
+    // than a settings page that cannot save. `needs` is what the active window
+    // manager must offer for a page to mean anything: a behavioural capability
+    // (`cap`), a provider being present at all (`provider`), or the page holding
+    // at least one row the provider actually backs (`rows`, tested against the
+    // effective set of Hub rows plus the provider's own). A page with no `needs`
+    // is compositor-neutral and always shows. The rail lists every section it
+    // can back, grouped by task, so a control is never shown that nothing would
+    // write. The rail scrolls; the "Advanced" switch at its foot only reveals the
+    // deep per-page knobs inside a schema page, never whole sections, so a page
+    // stays calm until asked. Compositor-owned pages sit together under one group
+    // so a compositor's settings live in one place, not sprinkled through the list.
     readonly property var groups: [
         { name: "OVERVIEW", items: [ { key: "profile", name: "Profile" }, { key: "global", name: "General" }, { key: "updates", name: "Updates" } ] },
         { name: "DEVICES", items: [
-            { key: "displays", name: "Displays" }, { key: "connections", name: "Connections" },
+            { key: "displays", name: "Displays", needs: { cap: "monitorConfig" } }, { key: "connections", name: "Connections" },
             { key: "input", name: "Input" }, { key: "cursor", name: "Cursor" }, { key: "gpu", name: "Graphics & Power" } ] },
         { name: "LOOK", items: [
             { key: "animations", name: "Animations" }, { key: "lockscreen", name: "Lockscreen" } ] },
+        { name: "COMPOSITOR", items: [
+            { key: "windowmanager", name: "Window Manager", needs: { provider: true } }, { key: "plugins", name: "Plugins", needs: { cap: "plugins" } },
+            { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
-            { key: "windows", name: "Windows" }, { key: "plugins", name: "Plugins" }, { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
+            { key: "windows", name: "Windows" }, { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
             { key: "widgets", name: "Widgets" }, { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
-            { key: "windowrules", name: "Window Rules", adv: true }, { key: "layerrules", name: "Layer Rules", adv: true } ] },
+            { key: "windowrules", name: "Window Rules", adv: true } ] },
         { name: "SYSTEM", items: [
             { key: "performance", name: "Performance" }, { key: "autostart", name: "Autostart", adv: true }, { key: "environment", name: "Environment", adv: true },
             { key: "recording", name: "Recording" }, { key: "dictation", name: "Dictation" }, { key: "fastfetch", name: "Fastfetch", adv: true },
@@ -119,7 +129,7 @@ Rectangle {
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
-        "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込"
+        "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
     })
 
     // Extra search vocabulary per section: the words a user actually types that
@@ -138,6 +148,7 @@ Rectangle {
         "recording": "screen record capture video screencast screenshot fps codec framerate",
         "dictation": "voice typing speech transcribe whisper microphone stt",
         "windows": "window windows rounding corners softness gaps border borders thickness colour tiling dwindle master scrolling layout opacity transparency transparent dim blur shadow glow glass wobble wobbly title bar titlebar float snap resize animation",
+        "windowmanager": "compositor window manager wm wayland switch change swap tiling scrolling layout gaps session provider hyprland niri",
         "plugins": "plugin plugins hyprland compositor hyprpm title bar titlebar hyprbars glass hyprglass image border imgborders cursor motion dynamic cursors focus flash hyprfocus key sound sounds keyboard keysounds typing click clicky thock creamy cherry mx topre mechvibes switch version abi mismatch rebuild build update add git repository install",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
         "desktop": "desktop visualizer visualiser spectrum brand logo mark name widget board wallpaper",
@@ -201,12 +212,17 @@ Rectangle {
             for (var ii = 0; ii < groups[gi].items.length; ii++) {
                 var it = groups[gi].items[ii];
                 nameOf[it.key] = it.name;
+                // a page the active provider cannot back is hidden in the rail, so
+                // the deep-link path through a search hit must be closed here too.
+                if (!hub.needsMet(it)) continue;
                 out.push({ section: it.key, sectionName: it.name, group: "", tab: "", label: it.name, desc: "", kw: sectionKeywords[it.key] || "", key: "", isPage: true });
             }
         // Updates left the rail for the top-right corner button, so it has no
         // page row here; its one setting still surfaces in search, named right.
         nameOf["updates"] = "Updates";
         for (var k in srcs) {
+            // rows on a filtered page never surface either, or the gate is cosmetic.
+            if (!hub.sectionAvailable(k)) continue;
             var rows = srcs[k] || [];
             for (var ri = 0; ri < rows.length; ri++) {
                 var r = rows[ri];
@@ -219,6 +235,21 @@ Rectangle {
                 var optkw = r.opts ? r.opts.filter(function (o) { return typeof o === "string" && /^[a-z0-9][a-z0-9 ._/-]*$/.test(o); }).join(" ") : "";
                 out.push({ section: k, sectionName: nameOf[k] || k, group: cleanGroup(r.group), tab: r.tab || "", label: r.label, desc: r.desc || "", kw: optkw, key: r.key || "", isPage: false });
             }
+        }
+        // The active provider's own settings are real rows too: fold them in so
+        // search still reaches a migrated setting (a tiling knob, a plugin toggle,
+        // a bezier curve) at the page it now lives on. Each carries its own `page`
+        // tag; a row on a filtered page is skipped, the same as the Hub's own rows.
+        var prows = ProviderSchema.rows || [];
+        for (var pi = 0; pi < prows.length; pi++) {
+            var pr = prows[pi];
+            if (!isSetting(pr)) continue;
+            var psec = pr.page || "windowmanager";
+            if (!hub.sectionAvailable(psec)) continue;
+            if (pr.caps && !Settings.supports(pr.caps)) continue;
+            if (!Settings.modelsKey(pr.key)) continue;
+            var poptkw = pr.opts ? pr.opts.filter(function (o) { return typeof o === "string" && /^[a-z0-9][a-z0-9 ._/-]*$/.test(o); }).join(" ") : "";
+            out.push({ section: psec, sectionName: nameOf[psec] || psec, group: cleanGroup(pr.group), tab: pr.tab || "", label: pr.label, desc: pr.desc || "", kw: poptkw, key: pr.key || "", isPage: false });
         }
         return out;
     }
@@ -362,7 +393,7 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "windows": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true,
+        "bar-studio": true, "desktop": true, "windows": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "autostart": true, "environment": true
     })
@@ -403,10 +434,56 @@ Rectangle {
                 if (groups[g].items[i].key === s) return groups[g].items[i].wired === true;
         return false;
     }
+    // What a catalogue item's `needs` demands of the active window manager: a
+    // behavioural capability (`cap`), a provider being present at all (`provider`),
+    // or the page holding at least one row the provider actually backs (`rows`).
+    // No `needs` -> the page is compositor-neutral and always available. This is
+    // the page-level twin of SchemaPage's per-row gate, so a page is never shown
+    // when nothing on it can be written; the rail, router, deep link and search
+    // all run it, so a filtered page is unreachable, not merely hidden.
+    function needsMet(item) {
+        var n = item ? item.needs : undefined;
+        if (!n) return true;
+        if (n.cap !== undefined && !Settings.supports(n.cap)) return false;
+        if (n.provider === true && Settings.provider === "") return false;
+        if (n.rows === true && !hub.hasModeledRow(item.key)) return false;
+        return true;
+    }
+    function itemFor(s) {
+        for (var g = 0; g < groups.length; g++)
+            for (var i = 0; i < groups[g].items.length; i++)
+                if (groups[g].items[i].key === s) return groups[g].items[i];
+        return null;
+    }
+    function sectionAvailable(s) { var it = hub.itemFor(s); return it ? hub.needsMet(it) : true; }
+    // Whether the active provider backs at least one setting on this page, tested
+    // against the effective row set under the same supports + modelsKey gate the
+    // rows themselves pass. A keyless row (a header or an action) is not a setting
+    // the provider models, so it never keeps an otherwise-empty page alive.
+    function hasModeledRow(s) {
+        var rows = hub.effectiveRows(s);
+        for (var i = 0; i < rows.length; i++) {
+            var r = rows[i];
+            if (!r || !r.key) continue;
+            if (r.caps && !Settings.supports(r.caps)) continue;
+            if (Settings.modelsKey(r.key)) return true;
+        }
+        return false;
+    }
+    // The rows that back a page: the Hub's static schema for it plus the active
+    // provider's own schema rows for the same page, so a row that has migrated
+    // into the provider still counts. One source, so the gate and the page never
+    // read a different row set.
+    function effectiveRows(s) {
+        var base = hub.sectionRows[s] || [];
+        var prov = ProviderSchema.rowsFor(s);
+        return (prov && prov.length) ? base.concat(prov) : base;
+    }
     function pageFile(s) {
         var map = { "windows": "WindowsPage", "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
+        map.windowmanager = "WindowManagerPage";
         return map[s] ? Qt.resolvedUrl("pages/" + map[s] + ".qml") : "";
     }
     function openPick(r) { picker.openFor(r); }
@@ -638,7 +715,7 @@ Rectangle {
         hub.draft = JSON.parse(JSON.stringify(hub.committed));
         hub.restoreLiveUnsaved();
         hub.hyprDraft = JSON.parse(JSON.stringify(hub.hyprCommitted));
-        if (hub.hyprLoaded) { hyprRestore.command = ["ryoku-hub", "desktop", "restore"]; hyprRestore.running = true; }
+        if (hub.wmLoaded) { hyprRestore.command = ["ryoku-hub", "desktop", "restore"]; hyprRestore.running = true; }
         hub.revertPage();
         hub.requestReloadCoverPrune(hub.committed.reloadCover);
     }
@@ -713,7 +790,7 @@ Rectangle {
                 if (hub.navigated)
                     return;
                 var s = this.text.trim();
-                if (s && hub.pageFile(s) !== "") hub.section = s;
+                if (s && hub.pageFile(s) !== "" && hub.sectionAvailable(s)) hub.section = s;
             }
         }
     }
@@ -806,7 +883,7 @@ Rectangle {
     property var hyprCommitted: ({})
     property var hyprDraft: ({})
     property var hyprDefaults: ({})
-    property bool hyprLoaded: false
+    property bool wmLoaded: false
 
     // A bespoke page (e.g. Appearance > Theme) that owns its own edits can route
     // them through the shared action bar: it raises pageDirty while it holds
@@ -826,8 +903,8 @@ Rectangle {
                 try {
                     var o = JSON.parse(this.text);
                     hub.hyprCommitted = o;
-                    if (hub.pristine || !hub.hyprLoaded) hub.hyprDraft = JSON.parse(JSON.stringify(o));
-                    hub.hyprLoaded = true;
+                    if (hub.pristine || !hub.wmLoaded) hub.hyprDraft = JSON.parse(JSON.stringify(o));
+                    hub.wmLoaded = true;
                 } catch (e) { console.log("hub: hypr get parse failed: " + e); }
             }
         }
@@ -846,7 +923,7 @@ Rectangle {
     // running compositor (throttled) so "previewing live" is honest; revert and
     // an unsaved quit restore the compositor to what is on disk.
     property bool quitting: false
-    onHyprDraftChanged: if (hub.hyprLoaded) hyprPreviewThrottle.restart()
+    onHyprDraftChanged: if (hub.wmLoaded) hyprPreviewThrottle.restart()
     Timer {
         id: hyprPreviewThrottle
         interval: 140
@@ -870,7 +947,7 @@ Rectangle {
         // puts the saved state back through the same channel before the Hub
         // goes, whichever way it was closed.
         var restored = hub.restoreLiveUnsaved();
-        if (hub.hyprLoaded && hub.hyprChanges().length) {
+        if (hub.wmLoaded && hub.hyprChanges().length) {
             hub.quitting = true;
             hyprRestore.command = ["ryoku-hub", "desktop", "restore"];
             hyprRestore.running = true;
@@ -923,7 +1000,7 @@ Rectangle {
         cur[parts[parts.length - 1]] = v;
     }
     function hyprChanges() {
-        if (!hub.hyprLoaded) return [];
+        if (!hub.wmLoaded) return [];
         var out = [];
         hub.walkHypr("", hub.hyprCommitted, hub.hyprDraft, out);
         return out;
@@ -1168,12 +1245,13 @@ Rectangle {
 
                         Item {
                             // the header shows only while the group has a visible
-                            // item: with Advanced off and every section in it
-                            // power-user (adv), the whole group (e.g. Tools) folds
-                            // away instead of leaving a bare header. The open
-                            // section always counts, so you never lose your place.
+                            // item: a section the active provider cannot back, or a
+                            // power-user (adv) section with Advanced off, drops out,
+                            // and a group whose every item drops out folds its header
+                            // away instead of leaving a bare label. The open section
+                            // always counts, so you never lose your place.
                             readonly property bool anyShown: grp.modelData.items.some(function (i) {
-                                return !i.adv || hub.advanced || hub.section === i.key;
+                                return hub.needsMet(i) && (!i.adv || hub.advanced || hub.section === i.key);
                             })
                             width: parent.width
                             height: !anyShown ? 0 : (grp.modelData.name === "" ? Tokens.s4 : 30)
@@ -1214,12 +1292,14 @@ Rectangle {
                             Item {
                                 id: navItem
                                 required property var modelData
-                                // Advanced off hides the power-user sections from
-                                // the rail (search still reaches them); the open
-                                // section stays put so turning it off never strands
-                                // you on a page the rail no longer lists.
-                                readonly property bool shown: !modelData.adv || hub.advanced
-                                    || hub.section === modelData.key
+                                // Advanced off hides the power-user (adv) sections
+                                // from the rail while search still reaches them; a
+                                // section the active provider cannot back is hidden
+                                // outright and unreachable. The open section stays put
+                                // so turning Advanced off never strands you on a page
+                                // the rail no longer lists.
+                                readonly property bool shown: hub.needsMet(modelData)
+                                    && (!modelData.adv || hub.advanced || hub.section === modelData.key)
                                 width: nav.width
                                 height: shown ? 34 : 0
                                 visible: shown
@@ -1515,6 +1595,9 @@ Rectangle {
     function activateSearch(i) {
         var r = hub.searchResults[i];
         if (!r) return;
+        // a filtered page never enters searchResults, but guard the jump anyway so
+        // the search path can never reach one even if the index changes.
+        if (!hub.sectionAvailable(r.section)) return;
         hub.section = r.section;
         hub.pendingFocusKey = (r.isPage || !r.key) ? "" : r.key;
         hub.query = "";

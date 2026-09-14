@@ -20,9 +20,51 @@
 #   ryoku-workspace scratch          show the scratchpad, or hide it and hand
 #                                    keyboard focus back to what is on screen
 #
+# The desktop grid and the scratchpad are fixed-workspace-model, special-workspace
+# behaviours. A compositor that drives its own workspaces has neither, so each
+# command stands down there instead of dispatching at a socket that will not answer.
+#
 set -euo pipefail
 
 PER=10
+
+ryoku_bin="${RYOKU_BIN-$(command -v ryoku || true)}"
+
+# Capabilities and the workspace model come from the seam's status, which names
+# what the live compositor can do, never which compositor it is.
+wm_can() {  # capability -> 0 when the live compositor honours it
+  [[ -n $ryoku_bin && -x $ryoku_bin ]] || return 1
+  case ",$("$ryoku_bin" wm status 2>/dev/null | sed -n 's/^Capabilities: //p' | tr -d '[:space:]')," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
+
+wm_model() {  # the live compositor's workspace model (fixed | dynamic | empty)
+  [[ -n $ryoku_bin && -x $ryoku_bin ]] || return 0
+  "$ryoku_bin" wm status 2>/dev/null | sed -n 's/^Workspace model: //p' | tr -d '[:space:]'
+}
+
+# The grid is numbered slots a user thinks of by position, which needs a fixed
+# workspace model; a dynamic-workspace compositor grows and shrinks its set, so
+# the grid stands down rather than acting on ids that do not line up.
+require_grid() {
+  if [[ "$(wm_model)" == fixed ]]; then
+    return 0
+  fi
+  echo "ryoku-workspace: this window manager manages its own workspaces; the desktop grid is fixed-model only" >&2
+  exit 0
+}
+
+# hide/scratch stash a window on a special (scratchpad) workspace; a compositor
+# without one has nowhere to put it.
+require_scratchpad() {
+  if wm_can specialWorkspace; then
+    return 0
+  fi
+  echo "ryoku-workspace: this window manager has no scratchpad" >&2
+  exit 0
+}
 
 active_ws() { hyprctl activeworkspace -j | jq -r '.id' 2>/dev/null || echo 0; }
 
@@ -53,9 +95,10 @@ target_ws() {
 cmd=${1:-}
 case "$cmd" in
   desktop)
-    current_desktop
+    if [[ "$(wm_model)" == fixed ]]; then current_desktop; else echo 0; fi
     ;;
   focus)
+    require_grid
     ws=$(target_ws "${2:?slot 1..$PER required}")
     # focusing a workspace already moves focus to the monitor that owns it, so
     # a workspace on a secondary monitor stays put. This is a lua-config
@@ -64,10 +107,12 @@ case "$cmd" in
     hyprctl dispatch "hl.dsp.focus({ workspace = $ws })" >/dev/null
     ;;
   move)
+    require_grid
     ws=$(target_ws "${2:?slot 1..$PER required}")
     hyprctl dispatch "hl.dsp.window.move({ workspace = $ws })" >/dev/null
     ;;
   movesilent)
+    require_grid
     ws=$(target_ws "${2:?slot 1..$PER required}")
     addr=$(hyprctl activewindow -j | jq -r '.address')
     hyprctl dispatch "hl.dsp.window.move({
@@ -77,6 +122,7 @@ case "$cmd" in
     })" >/dev/null
     ;;
   hide)
+    require_scratchpad
     ws=$(hyprctl activewindow -j 2>/dev/null | jq -r '.workspace.name // empty' || true)
     [[ -z $ws ]] && exit 0
     back=$(active_ws)
@@ -97,6 +143,7 @@ case "$cmd" in
     fi
     ;;
   scratch)
+    require_scratchpad
     # activeworkspace reports the normal workspace under an open overlay, so this
     # is what is on screen either way.
     back=$(active_ws)

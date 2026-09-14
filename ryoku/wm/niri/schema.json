@@ -1,0 +1,120 @@
+[
+  {
+    "tab": "Layout",
+    "group": "COLUMNS",
+    "key": "wm.niri.presetColumnWidths",
+    "label": "Preset column widths",
+    "desc": "Widths the column-width switch cycles through, as screen proportions, comma separated",
+    "ctl": "text",
+    "src": "desktop.json",
+    "eg": "0.33, 0.5, 0.67",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "STRUTS",
+    "key": "wm.niri.struts.left",
+    "label": "Left strut",
+    "desc": "Empty space niri keeps clear at the left screen edge, in pixels",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 256,
+    "unit": "px",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "STRUTS",
+    "key": "wm.niri.struts.right",
+    "label": "Right strut",
+    "desc": "Empty space niri keeps clear at the right screen edge, in pixels",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 256,
+    "unit": "px",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "STRUTS",
+    "key": "wm.niri.struts.top",
+    "label": "Top strut",
+    "desc": "Empty space niri keeps clear at the top screen edge, in pixels",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 256,
+    "unit": "px",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "STRUTS",
+    "key": "wm.niri.struts.bottom",
+    "label": "Bottom strut",
+    "desc": "Empty space niri keeps clear at the bottom screen edge, in pixels",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 256,
+    "unit": "px",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAMES",
+    "key": "wm.niri.preferNoCsd",
+    "label": "Server-side window frames",
+    "desc": "Ask apps to drop their own title bars so niri draws the frame",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.overviewZoom",
+    "label": "Overview zoom",
+    "desc": "How far the overview pulls back, lower fits more workspaces on screen",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "lo": 0.1,
+    "hi": 0.75,
+    "unit": "%",
+    "pct": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.hotCorners",
+    "label": "Hot corners",
+    "desc": "Push the pointer into a screen corner to open the overview",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "STARTUP",
+    "key": "wm.niri.hotkeyOverlaySkip",
+    "label": "Skip hotkey overlay",
+    "desc": "Don't show the keybind cheat sheet when the session starts",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "SCREENSHOTS",
+    "key": "wm.niri.screenshotPath",
+    "label": "Screenshot path",
+    "desc": "Where niri saves screenshots; date tokens like %Y %m %d expand to the moment it is taken",
+    "ctl": "text",
+    "src": "desktop.json",
+    "eg": "~/Pictures/Screenshots/Screenshot %Y-%m-%d.png",
+    "page": "windowmanager"
+  }
+]

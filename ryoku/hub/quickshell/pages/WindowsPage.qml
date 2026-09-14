@@ -25,7 +25,7 @@ Item {
     // promise the page could not keep.
     readonly property string pBlurb: I18n.tr("How your windows look and behave: shape, transparency, borders, and motion.")
 
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
     function cv(path) { return pg.hub ? pg.hub.hyprCommittedVal(path) : undefined }
 
@@ -34,14 +34,6 @@ Item {
     // when they lived on the Appearance page.
     function gateOk(key, d) {
         switch (key) {
-        case "wm.hyprland.dwindle.preserveSplit": case "wm.hyprland.dwindle.smartSplit": case "wm.hyprland.dwindle.smartResizing":
-        case "wm.hyprland.dwindle.defaultSplitRatio": case "wm.hyprland.dwindle.forceSplit": case "wm.hyprland.dwindle.useActiveForSplits":
-            return d["desktop.appearance.layout"] === "dwindle";
-        case "wm.hyprland.master.mfact": case "wm.hyprland.master.newStatus": case "wm.hyprland.master.newOnTop":
-        case "wm.hyprland.master.orientation": case "wm.hyprland.master.smartResizing":
-            return d["desktop.appearance.layout"] === "master";
-        case "wm.hyprland.plugins.hyprscrolling.columnWidth": case "wm.hyprland.plugins.hyprscrolling.followFocus":
-            return d["desktop.appearance.layout"] === "scrolling";
         case "desktop.appearance.dimStrength": return d["desktop.appearance.dimInactive"] === true;
         case "desktop.appearance.wobblyWindows": case "desktop.appearance.windowStyle": return d["desktop.appearance.animations"] === true;
         case "desktop.appearance.glowRange": case "desktop.appearance.glowColor": return d["desktop.appearance.glowEnabled"] === true;

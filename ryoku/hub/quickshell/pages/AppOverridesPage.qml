@@ -25,7 +25,7 @@ Item {
     // objects, each carrying the 10-field schema seeded by addApp().
     readonly property var overrides: pg.hub ? (pg.hub.hyprVal("desktop.appOverrides") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // hyprEdit swaps the whole array by identity, so the Repeater rebinds and
     // rebuilds the card owning a focused field. Fields therefore commit on
@@ -108,7 +108,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Give one app its own look, layered on top of the global Appearance. Add it (or pick from an open window), match it by its window class and an optional title, then override only what you want: everything left on Inherit keeps following the global. Changes apply as a Hyprland window rule when you save. Example: make a browser fully opaque, or a terminal square-cornered.")
+            text: I18n.tr("Give one app its own look, layered on top of the global Appearance. Add it (or pick from an open window), match it by its window class and an optional title, then override only what you want: everything left on Inherit keeps following the global. Changes apply as a window rule when you save. Example: make a browser fully opaque, or a terminal square-cornered.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

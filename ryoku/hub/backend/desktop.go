@@ -81,13 +81,17 @@ func wmSplit() (string, map[string]bool) {
 
 func runDesktop(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("desktop needs get|defaults|save|preview|restore|set-rebind|cursors|layouts|variants|plugins|scheme|anim-preset")
+		return fmt.Errorf("desktop needs get|defaults|schema|unhonored|save|preview|restore|set-rebind|cursors|layouts|variants|plugins|scheme|anim-preset")
 	}
 	switch args[0] {
 	case "get":
 		return getDesktop()
 	case "defaults":
 		return forwardDefaults()
+	case "schema":
+		return forwardSchema()
+	case "unhonored":
+		return forwardUnhonored()
 	case "save":
 		if len(args) < 2 {
 			return fmt.Errorf("desktop save needs a JSON argument")
@@ -184,6 +188,40 @@ func forwardDefaults() error {
 		fmt.Println()
 	}
 	return nil
+}
+
+// forwardSchema hands the active provider's exclusive settings rows through so
+// the Hub's window-manager page draws them without knowing which compositor
+// authored them. An empty array when no provider answers, so the page stays
+// quiet rather than erroring.
+func forwardSchema() error {
+	if !desktopClient().Available() {
+		return printJSON([]json.RawMessage{})
+	}
+	rows, err := desktopClient().Schema()
+	if err != nil {
+		return err
+	}
+	return printJSON(rows)
+}
+
+// forwardUnhonored hands the active provider's "cannot honour" list through for
+// the window-manager page's cannot-do section: the settings a dry-run apply of
+// the current store would drop, the same losses a switch preview shows. Ungated
+// and store-driven; empty when no provider answers.
+func forwardUnhonored() error {
+	if !desktopClient().Available() {
+		return printJSON([]wm.Unhonored{})
+	}
+	rep, err := desktopClient().DryRun(desktopStorePath())
+	if err != nil {
+		return err
+	}
+	out := rep.Unhonored
+	if out == nil {
+		out = []wm.Unhonored{}
+	}
+	return printJSON(out)
 }
 
 // saveDesktop persists the draft the GUI sent and applies it live.

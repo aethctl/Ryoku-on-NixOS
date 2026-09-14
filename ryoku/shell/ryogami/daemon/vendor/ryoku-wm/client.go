@@ -210,6 +210,31 @@ func (c *Client) Defaults() ([]byte, error) {
 	return c.run("defaults")
 }
 
+// Schema is the provider's exclusive settings rows, in the shape the Hub's
+// settings renderer consumes. Each row stays raw: the field set is the
+// provider's to define (a control the Hub knows how to draw), and the Hub emits
+// it back untouched. Empty with no error when a provider declares none, so a
+// compositor with no exclusive settings simply contributes no window-manager
+// page rows.
+func (c *Client) Schema() ([]json.RawMessage, error) {
+	if c.bin == "" {
+		return nil, ErrNoProvider
+	}
+	out, err := c.run("schema")
+	if err != nil {
+		return nil, err
+	}
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return []json.RawMessage{}, nil
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(out, &rows); err != nil {
+		return nil, fmt.Errorf("schema: %w", err)
+	}
+	return rows, nil
+}
+
 // Session is the wayland-session desktop-entry body for this provider, for the
 // installer and the greeter setup to write when the compositor package ships
 // none. Raw bytes: the entry is the provider's to author.
@@ -307,4 +332,27 @@ func (c *Client) run(args ...string) ([]byte, error) {
 		return nil, fmt.Errorf("%s %s: %w: %s", c.bin, strings.Join(args, " "), err, msg)
 	}
 	return stdout.Bytes(), nil
+}
+
+// ApplyOutputs hands the provider an output layout the display editor built. It
+// persists to the compositor's config and applies live where the compositor
+// allows, and reports anything it could not express the same way Apply does. The
+// layout is passed by path, like Apply, so a long apply can re-read it. Gated on
+// CapMonitorConfig: a provider that cannot configure outputs has no display page.
+func (c *Client) ApplyOutputs(layoutPath string) (ApplyReport, error) {
+	var rep ApplyReport
+	if c.bin == "" {
+		return rep, ErrNoProvider
+	}
+	if !c.Can(CapMonitorConfig) {
+		return rep, fmt.Errorf("%w: output layout", ErrUnsupported)
+	}
+	out, err := c.run("outputs", layoutPath)
+	if err != nil {
+		return rep, err
+	}
+	if err := json.Unmarshal(out, &rep); err != nil {
+		return rep, fmt.Errorf("%s outputs: %w", c.bin, err)
+	}
+	return rep, nil
 }

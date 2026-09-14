@@ -17,6 +17,8 @@
 # hypr/modules/lid.lua): on lid close with an external present, disable the
 # internal panel; on open, re-enable it and re-run autoscale. Guarded so the
 # internal is never disabled when it is the only display (no zero-monitor trap).
+# Where the compositor manages the lid itself, the `lid` subcommand stands down
+# and leaves the panel to it.
 #
 # Laptop-only: a `daemon` start on a desktop exits at once (like ryoku-idle).
 # Env overrides mirror ryoku-hw-laptop, for tests.
@@ -33,6 +35,18 @@ LID_STATE_GLOB="${RYOKU_LID_STATE_GLOB:-/proc/acpi/button/lid/*/state}"
 INTERNAL_RE='^(eDP|LVDS|DSI|Virtual|Writeback)'
 
 log() { printf 'ryoku-clamshell: %s\n' "$*"; }
+
+# The window manager is reached only through the seam, asked by capability and
+# never by name.
+ryoku_bin="${RYOKU_BIN-$(command -v ryoku || true)}"
+
+wm_can() {  # capability -> 0 when the live compositor honours it
+  [[ -n $ryoku_bin && -x $ryoku_bin ]] || return 1
+  case ",$("$ryoku_bin" wm status 2>/dev/null | sed -n 's/^Capabilities: //p' | tr -d '[:space:]')," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
 
 hw_laptop() {
   if command -v ryoku-hw-laptop >/dev/null 2>&1; then
@@ -169,6 +183,14 @@ internal_names() {   # $1 = "all" to include disabled outputs
 
 cmd_lid() {
   local action="${1:-}"
+  # Switching the internal panel off on lid close is a live per-output config
+  # change with no neutral seam action (the seam powers or lays out every output
+  # as a set). A compositor with its own lid handling owns this, so stand down
+  # there instead of dispatching at a socket that will not answer.
+  if ! wm_can liveConfigEval; then
+    log "this window manager handles the lid itself; nothing to switch"
+    return 0
+  fi
   command -v hyprctl >/dev/null 2>&1 || return 0
   case "$action" in
     close)

@@ -34,6 +34,25 @@ type Output struct {
 	Model         string `json:"model,omitempty"`
 	PhysicalWidth int    `json:"physicalWidth,omitempty"`
 	Disabled      bool   `json:"disabled,omitempty"`
+	// Editor detail, filled only by a full state read (runState) for the display
+	// page, never by a watch frame: the panel's current and advertised modes, its
+	// logical position, wayland transform and VRR state. Mode is the physical
+	// "WxH@Hz" the editor sizes tiles from, since Width and Height above are the
+	// logical rectangle on a fractional-scale compositor. All omitempty, so a lean
+	// watch output stays byte-identical to before.
+	X         int      `json:"x,omitempty"`
+	Y         int      `json:"y,omitempty"`
+	Transform int      `json:"transform,omitempty"`
+	VRR       bool     `json:"vrr,omitempty"`
+	Mode      string   `json:"mode,omitempty"`
+	Modes     []string `json:"modes,omitempty"`
+	// Mirror, ColorMode and SdrBrightness are the mirror-and-colour readback the
+	// editor pre-fills from, present only where the provider supports the
+	// CapOutputMirror / CapOutputHdr behaviours (empty otherwise), so opening the
+	// page never clobbers a live HDR or mirror on the next Apply.
+	Mirror        string  `json:"mirror,omitempty"`
+	ColorMode     string  `json:"colorMode,omitempty"`
+	SdrBrightness float64 `json:"sdrBrightness,omitempty"`
 }
 
 type Workspace struct {
@@ -108,4 +127,28 @@ type ApplyReport struct {
 type Unhonored struct {
 	Key    string `json:"key"`
 	Reason string `json:"reason"`
+}
+
+// OutputLayout is one output's requested configuration for ApplyOutputs. Only
+// the fields both compositors can express live here; a provider still reports
+// anything it cannot honour through the ApplyReport, exactly as store apply does.
+type OutputLayout struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	// Mode is "WxH@Hz"; empty asks for the panel's preferred (automatic) mode.
+	Mode string `json:"mode,omitempty"`
+	// Scale 0 asks the compositor to choose the scale itself.
+	Scale     float64 `json:"scale,omitempty"`
+	X         int     `json:"x,omitempty"`
+	Y         int     `json:"y,omitempty"`
+	Transform int     `json:"transform,omitempty"`
+	VRR       bool    `json:"vrr,omitempty"`
+	// Mirror is another output's name to clone this one onto, governed by
+	// CapOutputMirror. ColorMode ("srgb"|"wide"|"hdr") and SdrBrightness are the
+	// colour pipeline, governed by CapOutputHdr. A provider without the behaviour
+	// reports the field unhonored rather than dropping it silently, so a profile
+	// carried across a compositor switch says what it could not keep.
+	Mirror        string  `json:"mirror,omitempty"`
+	ColorMode     string  `json:"colorMode,omitempty"`
+	SdrBrightness float64 `json:"sdrBrightness,omitempty"`
 }

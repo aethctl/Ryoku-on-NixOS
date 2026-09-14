@@ -44,8 +44,13 @@ ShellRoot {
     property var moveStart: null
     property var resizing: null
     property var hoverWindow: null
-    // Visible windows for the window-pick target, on the outputs' active workspaces.
+    // Visible windows for the window-pick target, on the outputs' active
+    // workspaces. Empty without windowGeometry: a compositor that does not report
+    // window positions cannot place a pick rect, so window mode drops out and only
+    // region and output selection remain.
     readonly property var windowRects: {
+        if (!Wm.caps.windowGeometry)
+            return [];
         var active = ({});
         var outs = Wm.outputs;
         for (var i = 0; i < outs.length; i++)
@@ -80,7 +85,9 @@ ShellRoot {
     readonly property bool testRect: Quickshell.env("RYOSHOT_TESTRECT") === "1"
     readonly property string mode: Quickshell.env("RYOSHOT_MODE") === "monitor" ? "monitor" : "region"
     // The hover target starts from the launch mode and Space cycles it, so one
-    // keybind reaches a region, a window or a whole monitor.
+    // keybind reaches a region or a whole monitor; over a region it also snaps to
+    // the window under the pointer wherever the compositor reports window geometry
+    // (see windowRects).
     property string target: mode
     // RYOSHOT_OPEN=<path>: skip selection and open that image straight in the
     // beautify editor (the capture card's "Beautify after" hands the saved shot

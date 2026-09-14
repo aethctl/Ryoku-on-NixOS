@@ -29,7 +29,7 @@ Item {
     // the live custom-bind array from the draft: a list of { keys, action, value }.
     readonly property var customRows: pg.hubReady ? (pg.hub.hyprVal("desktop.keybinds") || []) : []
     // gated so the editor empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hubReady ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hubReady ? pg.hub.wmLoaded === true : false
     readonly property int dirtyCount: pg.hubReady ? (pg.hub.dirty || 0) : 0
 
     // the compositor's own hand-edit config path from the provider; empty with

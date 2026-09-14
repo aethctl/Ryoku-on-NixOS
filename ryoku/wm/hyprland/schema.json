@@ -1,0 +1,1793 @@
+[
+  {
+    "tab": "Layout",
+    "group": "TILING",
+    "key": "wm.hyprland.plugins.hyprscrolling.columnWidth",
+    "label": "Column width",
+    "desc": "Share of the screen each column takes, scrolling layout only",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "lo": 0.1,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "scrolling"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "TILING",
+    "key": "wm.hyprland.plugins.hyprscrolling.followFocus",
+    "label": "Scroll to follow focus",
+    "desc": "The strip scrolls to keep focus in view, scrolling layout only",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "scrolling"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.preserveSplit",
+    "label": "Preserve split",
+    "desc": "Keep the split direction when windows close and reopen",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.smartSplit",
+    "label": "Smart split",
+    "desc": "Split toward the corner of the window the cursor is nearest",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.smartResizing",
+    "label": "Smart resizing",
+    "desc": "Resize toward the direction of the mouse rather than a fixed edge",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.defaultSplitRatio",
+    "label": "Default split ratio",
+    "desc": "Size a new split gives the new window, 1.0 is even",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "lo": 0.1,
+    "hi": 1.9,
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.forceSplit",
+    "label": "Force split side",
+    "desc": "Where a new window always lands: follow the cursor, or force one side",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "opts": [
+      "follow",
+      "left/top",
+      "right/bottom"
+    ],
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "DWINDLE",
+    "key": "wm.hyprland.dwindle.useActiveForSplits",
+    "label": "Split from active",
+    "desc": "Base a new split on the active window, not the one under the cursor",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "dwindle"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "MASTER",
+    "key": "wm.hyprland.master.mfact",
+    "label": "Master size",
+    "desc": "Share of the screen the master window takes",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "lo": 0.1,
+    "hi": 0.9,
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "master"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "MASTER",
+    "key": "wm.hyprland.master.newStatus",
+    "label": "New window role",
+    "desc": "Whether a new window becomes master, a slave, or inherits",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "opts": [
+      "master",
+      "slave",
+      "inherit"
+    ],
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "master"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "MASTER",
+    "key": "wm.hyprland.master.newOnTop",
+    "label": "New on top",
+    "desc": "Put a new slave at the top of the stack instead of the bottom",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "master"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "MASTER",
+    "key": "wm.hyprland.master.orientation",
+    "label": "Master side",
+    "desc": "Which side the master column sits on",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "opts": [
+      "left",
+      "right",
+      "top",
+      "bottom",
+      "center"
+    ],
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "master"
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "MASTER",
+    "key": "wm.hyprland.master.smartResizing",
+    "label": "Smart resizing",
+    "desc": "Resize toward the direction of the mouse rather than a fixed edge",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "tiledLayout",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "desktop.appearance.layout": [
+        "master"
+      ]
+    }
+  },
+  {
+    "tab": "Title bars",
+    "group": "TITLE BARS",
+    "key": "wm.hyprland.plugins.hyprbars.enabled",
+    "label": "Window title bars",
+    "desc": "Adds a bar with the window's title above it, applies on Save",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Title bars",
+    "group": "TITLE BARS",
+    "key": "wm.hyprland.plugins.hyprbars.height",
+    "label": "Bar height",
+    "desc": "Vertical space the title bar takes on each window",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 12,
+    "hi": 48,
+    "unit": "px",
+    "when": {
+      "wm.hyprland.plugins.hyprbars.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Title bars",
+    "group": "TITLE BARS",
+    "key": "wm.hyprland.plugins.hyprbars.textSize",
+    "label": "Title text size",
+    "desc": "How big the window's name renders in the bar",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 8,
+    "hi": 20,
+    "unit": "px",
+    "when": {
+      "wm.hyprland.plugins.hyprbars.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Title bars",
+    "group": "TITLE BARS",
+    "key": "wm.hyprland.plugins.hyprbars.blur",
+    "label": "Blur the bar",
+    "desc": "The bar goes translucent and blurs whatever sits behind it",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "when": {
+      "wm.hyprland.plugins.hyprbars.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Title bars",
+    "group": "TITLE BARS",
+    "key": "wm.hyprland.plugins.hyprbars.buttons",
+    "label": "Close and maximise buttons",
+    "desc": "Coloured dots on the bar: red closes, green goes fullscreen",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "when": {
+      "wm.hyprland.plugins.hyprbars.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.enabled",
+    "label": "Liquid glass windows",
+    "desc": "Blur with glass-like refraction on windows, applies on Save",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.preset",
+    "label": "Preset",
+    "desc": "Starting glass character, from nearly clear to heavy frosting",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "opts": [
+      "clear",
+      "subtle",
+      "high_contrast",
+      "glass"
+    ],
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.blurStrength",
+    "label": "Blur strength",
+    "desc": "How heavily the glass frosts what is behind the window",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 5,
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.opacity",
+    "label": "Glass opacity",
+    "desc": "How visible the glass pane is over the window",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.brightness",
+    "label": "Glass brightness",
+    "desc": "Brightness of the glass effect",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 2,
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.theme",
+    "label": "Glass theme",
+    "desc": "Light or dark base for the glass tint",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "opts": [
+      "dark",
+      "light"
+    ],
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Glass",
+    "group": "GLASS",
+    "key": "wm.hyprland.plugins.hyprglass.tint",
+    "label": "Glass tint",
+    "desc": "Color washed over the glass",
+    "ctl": "color",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.hyprglass.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.enabled",
+    "label": "Image border around windows",
+    "desc": "Tiles a picture around each window as its frame, applies on Save",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.image",
+    "label": "Border image",
+    "desc": "The picture tiled around windows, takes effect on Save",
+    "eg": "~/Pictures/frame.png",
+    "ctl": "text",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.scale",
+    "label": "Border scale",
+    "desc": "Grows or shrinks the tiled picture around each window",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0.5,
+    "hi": 3,
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.smooth",
+    "label": "Smooth scaling",
+    "desc": "Filters the picture when scaled, off keeps hard pixel edges",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.blur",
+    "label": "Blur border image",
+    "desc": "Blur what shows through a transparent border image",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.sizes",
+    "label": "Border sizes",
+    "desc": "Edge thicknesses as left,right,top,bottom in pixels",
+    "eg": "4,4,4,4",
+    "ctl": "text",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Image borders",
+    "group": "IMAGE",
+    "key": "wm.hyprland.plugins.imgborders.insets",
+    "label": "Border insets",
+    "desc": "How far the image tucks under the window, left,right,top,bottom",
+    "eg": "0,0,0,0",
+    "ctl": "text",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "adv": true,
+    "when": {
+      "wm.hyprland.plugins.imgborders.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Cursor motion",
+    "group": "MOTION",
+    "key": "wm.hyprland.plugins.dynamicCursors.enabled",
+    "label": "Realistic cursor motion",
+    "desc": "The pointer tilts, turns, or stretches as it moves, applies on Save",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Cursor motion",
+    "group": "MOTION",
+    "key": "wm.hyprland.plugins.dynamicCursors.mode",
+    "label": "Style",
+    "desc": "Which deformation the motion uses",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "opts": [
+      "rotate",
+      "tilt",
+      "stretch"
+    ],
+    "when": {
+      "wm.hyprland.plugins.dynamicCursors.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Cursor motion",
+    "group": "MOTION",
+    "key": "wm.hyprland.plugins.dynamicCursors.shake",
+    "label": "Shake to find (magnify)",
+    "desc": "Shaking the mouse briefly grows the pointer so you can find it",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "when": {
+      "wm.hyprland.plugins.dynamicCursors.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Cursor motion",
+    "group": "MOTION",
+    "key": "wm.hyprland.plugins.dynamicCursors.magnify",
+    "label": "Magnify on shake",
+    "desc": "How much the cursor grows when you shake it to find it",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 1,
+    "hi": 10,
+    "when": {
+      "wm.hyprland.plugins.dynamicCursors.enabled": [
+        true
+      ],
+      "wm.hyprland.plugins.dynamicCursors.shake": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Focus flash",
+    "group": "FOCUS FLASH",
+    "key": "wm.hyprland.plugins.hyprfocus.enabled",
+    "label": "Animate the focused window",
+    "desc": "Short effect on the window that takes focus; applies on Save only",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Focus flash",
+    "group": "FOCUS FLASH",
+    "key": "wm.hyprland.plugins.hyprfocus.mode",
+    "label": "Style",
+    "desc": "Flash dips opacity, Bounce shrinks and springs, Slide nudges it",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "opts": [
+      "flash",
+      "bounce",
+      "slide"
+    ],
+    "when": {
+      "wm.hyprland.plugins.hyprfocus.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Focus flash",
+    "group": "FOCUS FLASH",
+    "key": "wm.hyprland.plugins.hyprfocus.opacity",
+    "label": "Flash opacity",
+    "desc": "Opacity the flash dips to, lower is deeper; Flash style only",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "when": {
+      "wm.hyprland.plugins.hyprfocus.enabled": [
+        true
+      ],
+      "wm.hyprland.plugins.hyprfocus.mode": [
+        "flash"
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Focus flash",
+    "group": "FOCUS FLASH",
+    "key": "wm.hyprland.plugins.hyprfocus.bounce",
+    "label": "Bounce strength",
+    "desc": "Scale the window shrinks to, lower bounces harder; Bounce style only",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0.5,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "when": {
+      "wm.hyprland.plugins.hyprfocus.enabled": [
+        true
+      ],
+      "wm.hyprland.plugins.hyprfocus.mode": [
+        "bounce"
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Focus flash",
+    "group": "FOCUS FLASH",
+    "key": "wm.hyprland.plugins.hyprfocus.slide",
+    "label": "Slide height",
+    "desc": "How far the window hops, in pixels; Slide style only",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 150,
+    "unit": "px",
+    "when": {
+      "wm.hyprland.plugins.hyprfocus.enabled": [
+        true
+      ],
+      "wm.hyprland.plugins.hyprfocus.mode": [
+        "slide"
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Key sounds",
+    "group": "KEY SOUNDS",
+    "key": "wm.hyprland.plugins.keysounds.enabled",
+    "label": "Keyboard sounds",
+    "desc": "Plays a sound on every key press, in every app, applies on Save",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "page": "plugins"
+  },
+  {
+    "tab": "Key sounds",
+    "group": "KEY SOUNDS",
+    "key": "wm.hyprland.plugins.keysounds.profile",
+    "label": "Sound profile",
+    "desc": "Which switch you hear, real recordings; a Mechvibes pack of your own becomes a profile with ryoku-keysounds-import",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "opts": [
+      "cherry-mx-blue",
+      "cherry-mx-brown",
+      "cherry-mx-black",
+      "cherry-mx-red",
+      "topre",
+      "creamy",
+      "nk-cream",
+      "holy-panda",
+      "tealios",
+      "crystal-purple",
+      "oreo"
+    ],
+    "when": {
+      "wm.hyprland.plugins.keysounds.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Key sounds",
+    "group": "KEY SOUNDS",
+    "key": "wm.hyprland.plugins.keysounds.volume",
+    "label": "Volume",
+    "desc": "How loud the samples play, relative to how they were made",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "lo": 0,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "when": {
+      "wm.hyprland.plugins.keysounds.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "Key sounds",
+    "group": "KEY SOUNDS",
+    "key": "wm.hyprland.plugins.keysounds.release",
+    "label": "Key release sound",
+    "desc": "Also play a softer sample when a key comes back up",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "plugins",
+    "when": {
+      "wm.hyprland.plugins.keysounds.enabled": [
+        true
+      ]
+    },
+    "page": "plugins"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves[name=<selected>].x0",
+    "label": "Bezier curve P1 x (first control point, X)",
+    "desc": "Time of the first handle, 0 to 1: shapes the ease at the start",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 1,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves[name=<selected>].y0",
+    "label": "Bezier curve P1 y (first control point, Y)",
+    "desc": "Progress at the first handle; below 0 pulls back before moving",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": -1,
+    "hi": 2,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves[name=<selected>].x1",
+    "label": "Bezier curve P2 x (second control point, X)",
+    "desc": "Time of the second handle, 0 to 1: shapes the ease at the end",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0,
+    "hi": 1,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves[name=<selected>].y1",
+    "label": "Bezier curve P2 y (second control point, Y)",
+    "desc": "Progress at the second handle; above 1 overshoots, then settles",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": -1,
+    "hi": 2,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves",
+    "label": "Saved curves",
+    "desc": "Curve overrides saved by name; every animation using one follows it",
+    "ctl": "list",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves (append)",
+    "label": "New (add curve)",
+    "desc": "Adds a curve with a stock ease shape and selects it for editing",
+    "ctl": "action",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "CURVES",
+    "key": "wm.hyprland.anim.curves (remove by name)",
+    "label": "Delete / Reset (curve)",
+    "desc": "Deletes a custom curve; on a built-in, drops your override instead",
+    "ctl": "action",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "(action bar)",
+    "key": "wm.hyprland.anim.items = [] ; anim.curves = []",
+    "label": "Reset to defaults",
+    "desc": "Clears every animation override and custom curve; Save makes it stick",
+    "ctl": "action",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=borderangle].enabled",
+    "label": "Border gradient spin · enabled",
+    "desc": "Spins the window border gradient; can keep the GPU drawing nonstop",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=borderangle].speed",
+    "label": "Border gradient spin · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=borderangle].bezier",
+    "label": "Border gradient spin · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsIn].enabled",
+    "label": "Window open · enabled",
+    "desc": "Motion when a window opens; off, new windows just appear",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsIn].speed",
+    "label": "Window open · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsIn].bezier",
+    "label": "Window open · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsIn].style",
+    "label": "Window open · style",
+    "desc": "Slide in, pop from 80% scale, or gnomed; Default leaves it to Hyprland",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "popin",
+      "gnomed"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeOut].enabled",
+    "label": "Window close fade · enabled",
+    "desc": "Fade-out of closing windows; off, they cut out at full opacity",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeOut].speed",
+    "label": "Window close fade · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeOut].bezier",
+    "label": "Window close fade · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fade].enabled",
+    "label": "Fades (group) · enabled",
+    "desc": "All window fading as one group: open, close, dim, shadow",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fade].speed",
+    "label": "Fades (group) · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fade].bezier",
+    "label": "Fades (group) · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=border].enabled",
+    "label": "Border color · enabled",
+    "desc": "Blends the border color on focus change instead of snapping",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=border].speed",
+    "label": "Border color · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=border].bezier",
+    "label": "Border color · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=workspaces].enabled",
+    "label": "Workspace switch · enabled",
+    "desc": "Motion when switching workspaces; off, the switch is a hard cut",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=workspaces].speed",
+    "label": "Workspace switch · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=workspaces].bezier",
+    "label": "Workspace switch · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=workspaces].style",
+    "label": "Workspace switch · style",
+    "desc": "Slide horizontally or vertically, fade, or slide and fade combined",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "slidevert",
+      "fade",
+      "slidefade",
+      "slidefadevert"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=global].enabled",
+    "label": "All animations (root) · enabled",
+    "desc": "Root of the whole tree; rows configured below still override it",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=global].speed",
+    "label": "All animations (root) · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=global].bezier",
+    "label": "All animations (root) · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsOut].enabled",
+    "label": "Window close · enabled",
+    "desc": "Motion when a window closes; off, windows vanish instantly",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsOut].speed",
+    "label": "Window close · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsOut].bezier",
+    "label": "Window close · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsOut].style",
+    "label": "Window close · style",
+    "desc": "Slide out, shrink to 80%, or gnomed; Default leaves it to Hyprland",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "popin",
+      "gnomed"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=layers].enabled",
+    "label": "Shell layers · enabled",
+    "desc": "Motion for shell surfaces: launcher, panels, menus, notifications",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=layers].speed",
+    "label": "Shell layers · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=layers].bezier",
+    "label": "Shell layers · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=layers].style",
+    "label": "Shell layers · style",
+    "desc": "Slide, pop from 90% scale, or fade; Default leaves it to Hyprland",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "popin",
+      "fade"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeIn].enabled",
+    "label": "Window open fade · enabled",
+    "desc": "Fade-in of opening windows; off, they appear at full opacity",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeIn].speed",
+    "label": "Window open fade · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeIn].bezier",
+    "label": "Window open fade · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=specialWorkspace].enabled",
+    "label": "Special workspace · enabled",
+    "desc": "Motion when the special (scratchpad) workspace shows or hides",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=specialWorkspace].speed",
+    "label": "Special workspace · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=specialWorkspace].bezier",
+    "label": "Special workspace · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=specialWorkspace].style",
+    "label": "Special workspace · style",
+    "desc": "How the scratchpad slides or fades; vert variants move vertically",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "slidevert",
+      "fade",
+      "slidefade",
+      "slidefadevert"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windows].enabled",
+    "label": "Windows (group) · enabled",
+    "desc": "Window open, close, and move as one; the specific rows override it",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windows].speed",
+    "label": "Windows (group) · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windows].bezier",
+    "label": "Windows (group) · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windows].style",
+    "label": "Windows (group) · style",
+    "desc": "Slide in, pop from 80% scale, or gnomed; Default leaves it to Hyprland",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "popin",
+      "gnomed"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersIn].enabled",
+    "label": "Shell layer fade-in · enabled",
+    "desc": "Fade-in of shell surfaces as they appear (launcher, panels, menus)",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersIn].speed",
+    "label": "Shell layer fade-in · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersIn].bezier",
+    "label": "Shell layer fade-in · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersOut].enabled",
+    "label": "Shell layer fade-out · enabled",
+    "desc": "Fade-out of shell surfaces as they close (launcher, panels, menus)",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersOut].speed",
+    "label": "Shell layer fade-out · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=fadeLayersOut].bezier",
+    "label": "Shell layer fade-out · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsMove].enabled",
+    "label": "Window move · enabled",
+    "desc": "Motion while windows are moved, dragged, or resized",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "caps": "animations",
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsMove].speed",
+    "label": "Window move · speed",
+    "desc": "Duration in tenths of a second: 10 is one second, higher is slower",
+    "ctl": "step",
+    "src": "desktop.json",
+    "caps": "animations",
+    "lo": 0.1,
+    "hi": 10,
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsMove].bezier",
+    "label": "Window move · bezier curve",
+    "desc": "Easing curve it follows; edit or add shapes in the Curves section",
+    "ctl": "pick",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "ryokuWobble",
+      "dynamic-cursors-magnification",
+      "ryokuTheme",
+      "ryokuBloom",
+      "almostLinear",
+      "ryokuSettle",
+      "quick",
+      "easeOutQuint",
+      "linear",
+      "default"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "ANIMATIONS",
+    "key": "wm.hyprland.anim.items[leaf=windowsMove].style",
+    "label": "Window move · style",
+    "desc": "Slide, pop, or gnomed while moving; Default leaves it to Hyprland",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "caps": "animations",
+    "opts": [
+      "",
+      "slide",
+      "popin",
+      "gnomed"
+    ],
+    "page": "animations"
+  },
+  {
+    "tab": "",
+    "group": "OTHER",
+    "key": "wm.hyprland.layerRules",
+    "label": "Custom layer rules",
+    "desc": "Blur, dim, or restyle shell surfaces per namespace; applied only on Save",
+    "ctl": "list",
+    "src": "desktop.json",
+    "caps": "layerRules",
+    "page": "layerrules"
+  },
+  {
+    "tab": "",
+    "group": "OTHER",
+    "key": "wm.hyprland.layerRules[i].namespace",
+    "label": "Namespace",
+    "desc": "Layer-shell name to match, e.g. launcher; no match means no effect",
+    "ctl": "text",
+    "src": "desktop.json",
+    "caps": "layerRules",
+    "page": "layerrules"
+  },
+  {
+    "tab": "",
+    "group": "OTHER",
+    "key": "wm.hyprland.layerRules[i].action",
+    "label": "Action",
+    "desc": "What the rule does to matched surfaces; changing it resets the value",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "caps": "layerRules",
+    "opts": [
+      "blur",
+      "blurpopups",
+      "ignorealpha",
+      "noanim",
+      "dimaround",
+      "xray",
+      "abovelock"
+    ],
+    "page": "layerrules"
+  },
+  {
+    "tab": "",
+    "group": "OTHER",
+    "key": "wm.hyprland.layerRules[i].value",
+    "label": "Value",
+    "desc": "Only Ignore alpha takes a value: alpha cutoff 0.0 to 1.0, seeded to 0.5",
+    "ctl": "text",
+    "src": "desktop.json",
+    "caps": "layerRules",
+    "unit": "alpha",
+    "page": "layerrules"
+  }
+]

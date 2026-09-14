@@ -22,7 +22,7 @@ Item {
     // the live rule array from the draft: a list of { class, title, action, value }.
     readonly property var ruleRows: pg.hub ? (pg.hub.hyprVal("desktop.windowRules") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
-    readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
+    readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
     // the 25 rule keywords, key -> visible label. carried verbatim from the old
     // page: the keys are the exact strings the Go backend's genWindowRule

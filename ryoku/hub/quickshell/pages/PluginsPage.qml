@@ -7,6 +7,7 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import ".."
 import "../schema/PluginsPage.js" as Schema
+import "../Singletons"
 
 // Plugins: every Hyprland compositor plugin on this machine in one place. One
 // tab per plugin; above its settings sits a status card from
@@ -23,7 +24,7 @@ Item {
     property var hub
 
     readonly property string pTitle: I18n.tr("Plugins")
-    readonly property string pEyebrow: I18n.tr("DESKTOP")
+    readonly property string pEyebrow: I18n.tr("COMPOSITOR")
     readonly property string pBlurb: pg.managedByNix
         ? I18n.tr("Hyprland compositor plugins provided by the active NixOS Ryoku generation. Enable and configure them here; Nix owns their binaries and ABI.")
         : I18n.tr("Hyprland compositor plugins: what is installed, whether it runs on this Hyprland, their settings, and new ones from any git repository.")
@@ -114,7 +115,10 @@ Item {
         }
         return m;
     }
-    readonly property var settingsSchema: Schema.sheetRows.concat(pg.extraRows)
+    readonly property var settingsSchema: {
+        ProviderSchema.revision;
+        return ProviderSchema.rowsFor("plugins").concat(pg.extraRows);
+    }
 
     // draft/committed are flat maps off the hypr store (dotted keys), the shape
     // the settings sheet reads. draft depends on hyprVal, so an edit rebuilds it.

@@ -41,12 +41,16 @@ func main() {
 		err = runWatch(os.Args[2:])
 	case "apply":
 		err = runApply(os.Args[2:])
+	case "outputs":
+		err = runOutputs(os.Args[2:])
 	case "state":
 		err = runState()
 	case "defaults":
 		err = runDefaults()
 	case "session":
 		err = runSession()
+	case "schema":
+		err = runSchema()
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -69,8 +73,10 @@ func usage() {
   act <id> [args]  perform a neutral action
   state            one state snapshot (JSON)
   session          the wayland-session desktop entry
+  schema           exclusive settings rows the Hub renders (JSON)
   watch            stream state frames (newline-delimited JSON)
   apply <store>    write the compositor config from the neutral store
+  outputs <file>   apply an output layout from the neutral display store
 
 Consumers should go through wm.Client rather than exec this directly.
 `)
