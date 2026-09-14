@@ -151,6 +151,7 @@ func reconcilers() []reconciler {
 		{i18n.T("dock config store"), reconcileDockStore},
 		{i18n.T("retired shell menus"), reconcileRetiredMenus},
 		{i18n.T("retired wallpaper keys"), reconcileRetiredWallpaperKeys},
+		{i18n.T("window width cycle"), reconcileWidthCycle},
 		{i18n.T("ryogami wallpaper daemon"), reconcileRyogamiWallpaper},
 		{i18n.T("ryowalls app leftovers"), reconcileRyowallsRemoval},
 		{i18n.T("quick-settings capture tab"), reconcileCaptureModule},

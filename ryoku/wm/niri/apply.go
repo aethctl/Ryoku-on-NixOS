@@ -104,16 +104,47 @@ func unhonored(storePath string) []wm.Unhonored {
 	out = append(out, unhonoredWindowRules(ns.Desktop["windowRules"])...)
 	out = append(out, unhonoredAppOverrides(ns.Desktop["appOverrides"])...)
 	out = append(out, unhonoredDesktopMisc(ns.Desktop)...)
+	out = append(out, presetWidthsUnhonored(ns)...)
 	out = append(out, unhonoredForeign(ns.WM)...)
 	return out
 }
 
+// presetWidthsUnhonored names a stored preset-width cycle that cannot drive
+// Super+R: it needs at least two widths, and loadStore has already fallen back
+// to the default so the bind still steps. Reported only when the user actually
+// set fewer than two, so an unset store (which keeps the default) says nothing.
+func presetWidthsUnhonored(ns neutralStore) []wm.Unhonored {
+	raw, ok := ns.WM["niri"]
+	if !ok {
+		return nil
+	}
+	var m map[string]json.RawMessage
+	if json.Unmarshal(raw, &m) != nil {
+		return nil
+	}
+	stored, present := m["presetColumnWidths"]
+	if !present {
+		return nil
+	}
+	var p Proportions
+	if json.Unmarshal(stored, &p) != nil || len(p) >= 2 {
+		return nil
+	}
+	return []wm.Unhonored{{
+		Key:    "wm.niri.presetColumnWidths",
+		Reason: "A width cycle needs at least two widths, so the default is used.",
+	}}
+}
+
 // desktopHandled are the desktop.* keys this provider either emits or reports at
-// a finer grain; a top-level key outside this set is reported whole.
+// a finer grain; a top-level key outside this set is reported whole. windows is
+// honoured at runtime by the watch stream rather than the config file, so it
+// belongs here even though apply writes nothing for it.
 var desktopHandled = map[string]bool{
 	"appearance": true, "input": true, "cursor": true, "env": true,
 	"windowRules": true, "appOverrides": true, "autostart": true,
 	"keybinds": true, "keybindRebinds": true, "unbinds": true, "apps": true,
+	"windows": true,
 }
 
 var appearanceEmitted = map[string]bool{

@@ -61,6 +61,21 @@ func capApply(t *testing.T, args ...string) wm.ApplyReport {
 	return rep
 }
 
+// niri honours desktop.windows at runtime through the watch, not the config
+// file, so apply must not list it among the losses a switch would cost. A
+// regression here would tell a user the setting vanishes when it does not.
+func TestWindowsHonoured(t *testing.T) {
+	store := writeStore(t, `{"desktop":{"windows":{"tameMaximizeOnOpen":false}}}`)
+	for _, u := range unhonored(store) {
+		if strings.HasPrefix(u.Key, "desktop.windows") {
+			t.Fatalf("desktop.windows must be honoured, got unhonored %q: %q", u.Key, u.Reason)
+		}
+	}
+	if !defaultStore().Windows.TameMaximizeOnOpen {
+		t.Fatal("the correction must default on, so the reported behaviour is fixed out of the box")
+	}
+}
+
 func readGen(t *testing.T, dir, name string) string {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(dir, name))
@@ -416,6 +431,43 @@ func TestPresetColumnWidthsStringAndArray(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A width cycle needs at least two widths; with one, Super+R has nothing to step
+// to. A one-width store falls back to the default cycle in the generated config
+// and is named unhonored so the user sees why; a real cycle is emitted as given
+// and reported nowhere. Both are validated by the real niri.
+func TestPresetColumnWidthsCycleFloor(t *testing.T) {
+	reported := func(rep wm.ApplyReport) bool {
+		for _, u := range rep.Unhonored {
+			if u.Key == "wm.niri.presetColumnWidths" {
+				return true
+			}
+		}
+		return false
+	}
+
+	dirOne := niriHome(t)
+	repOne := capApply(t, writeStore(t, `{"wm":{"niri":{"presetColumnWidths":"0.5"}}}`))
+	genOne := readGen(t, dirOne, "settings.kdl")
+	if !strings.Contains(genOne, "proportion 0.33333") || !strings.Contains(genOne, "proportion 0.66667") {
+		t.Fatalf("a one-width preset must fall back to the default cycle:\n%s", genOne)
+	}
+	if !reported(repOne) {
+		t.Fatalf("a one-width preset must be reported unhonored; got %+v", repOne.Unhonored)
+	}
+	validateGen(t, dirOne, "settings.kdl", "rebinds.kdl")
+
+	dirTwo := niriHome(t)
+	repTwo := capApply(t, writeStore(t, `{"wm":{"niri":{"presetColumnWidths":"0.4, 0.6"}}}`))
+	genTwo := readGen(t, dirTwo, "settings.kdl")
+	if !strings.Contains(genTwo, "proportion 0.4") || !strings.Contains(genTwo, "proportion 0.6") {
+		t.Fatalf("a valid two-width cycle must be emitted as given:\n%s", genTwo)
+	}
+	if reported(repTwo) {
+		t.Fatalf("a valid cycle must not be reported unhonored: %+v", repTwo.Unhonored)
+	}
+	validateGen(t, dirTwo, "settings.kdl", "rebinds.kdl")
 }
 
 // The niri surface the Window Manager page controls must reach the config: every

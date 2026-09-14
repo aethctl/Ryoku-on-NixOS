@@ -130,6 +130,13 @@ type EnvVar struct {
 	Value string `json:"value"`
 }
 
+// Windows is the neutral window-behaviour block. TameMaximizeOnOpen keeps a
+// window an app opens maximised inside the gaps instead of edge to edge;
+// Hyprland does it by refusing the client's maximise request outright.
+type Windows struct {
+	TameMaximizeOnOpen bool `json:"tameMaximizeOnOpen"`
+}
+
 // WindowRule = one user rule: optional class/title match + one action.
 type WindowRule struct {
 	Class  string `json:"class"`
@@ -279,6 +286,7 @@ type Overrides struct {
 	Master         Master            `json:"master"`
 	Input          Input             `json:"input"`
 	Cursor         Cursor            `json:"cursor"`
+	Windows        Windows           `json:"windows"`
 	Env            []EnvVar          `json:"env"`
 	WindowRules    []WindowRule      `json:"windowRules"`
 	Autostart      []Autostart       `json:"autostart"`
@@ -339,6 +347,7 @@ func defaultOverrides() Overrides {
 			SwipeInvert: true, SwipeCreateNew: true, SwipeDistance: 300,
 		},
 		Cursor:       Cursor{Theme: "Bibata-Modern-Ice", Size: 24, InactiveTimeout: 0, HideOnKeyPress: false},
+		Windows:      Windows{TameMaximizeOnOpen: true},
 		Env:          []EnvVar{},
 		WindowRules:  []WindowRule{},
 		Autostart:    []Autostart{},

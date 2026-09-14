@@ -56,6 +56,9 @@ func genLua(o Overrides, follow bool) string {
 	if ap := genApps(o); ap != "" {
 		b.WriteString(ap)
 	}
+	if tm := genTameMaximizeOnOpen(o); tm != "" {
+		b.WriteString(tm)
+	}
 	for i, r := range o.WindowRules {
 		if rl := genWindowRule(i, r); rl != "" {
 			b.WriteString(rl)
@@ -454,6 +457,19 @@ var windowRuleField = map[string]string{
 	"nodim": "no_dim", "noanim": "no_anim", "noblur": "no_blur",
 	"noshadow": "no_shadow", "nofocus": "no_focus", "stayfocused": "stay_focused",
 	"keepaspectratio": "keep_aspect_ratio",
+}
+
+// genTameMaximizeOnOpen refuses the maximise request an app makes as it opens,
+// for every window, so it lands as an ordinary tile inside the gaps rather than
+// edge to edge. It rides Hyprland's own suppress_event, so unlike niri there is
+// nothing to undo after the fact and a maximise the user asks for later still
+// takes. Emitted before the user's own rules so a per-app rule can still win.
+func genTameMaximizeOnOpen(o Overrides) string {
+	if !o.Windows.TameMaximizeOnOpen {
+		return ""
+	}
+	return fmt.Sprintf("hl.window_rule({ name = %s, match = { class = %s }, suppress_event = %s })\n",
+		luaStr("ryoku-tame-maximize-on-open"), luaStr(".*"), luaStr("maximize"))
 }
 
 func genWindowRule(i int, r WindowRule) string {

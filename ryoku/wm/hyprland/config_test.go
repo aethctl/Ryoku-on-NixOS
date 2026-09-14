@@ -41,3 +41,27 @@ func TestDefaultFollowMouseMatchesShippedInput(t *testing.T) {
 		t.Fatalf("default settings.lua overrides input.lua:\n%s", config)
 	}
 }
+
+// Hyprland tames a maximise-on-open by refusing the client's request outright, a
+// catch-all suppress_event rule. This is the whole of the Hyprland side, so it
+// is pinned by the exact line and by its presence in the full config when the
+// setting is on and its absence when off.
+func TestGenTameMaximizeOnOpen(t *testing.T) {
+	on := defaultOverrides() // TameMaximizeOnOpen defaults on
+	want := `hl.window_rule({ name = "ryoku-tame-maximize-on-open", match = { class = ".*" }, suppress_event = "maximize" })` + "\n"
+	if got := genTameMaximizeOnOpen(on); got != want {
+		t.Fatalf("rule on:\n got %q\nwant %q", got, want)
+	}
+	if !strings.Contains(genLua(on, false), "ryoku-tame-maximize-on-open") {
+		t.Fatal("the full config must carry the tame rule when the setting is on")
+	}
+
+	off := defaultOverrides()
+	off.Windows.TameMaximizeOnOpen = false
+	if got := genTameMaximizeOnOpen(off); got != "" {
+		t.Fatalf("rule off must emit nothing, got %q", got)
+	}
+	if strings.Contains(genLua(off, false), "suppress_event") {
+		t.Fatalf("the full config must carry no suppress rule when the setting is off:\n%s", genLua(off, false))
+	}
+}

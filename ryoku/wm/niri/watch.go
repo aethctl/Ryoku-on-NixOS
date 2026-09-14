@@ -97,6 +97,14 @@ type session struct {
 	workspaces []niriWorkspace
 	windows    []niriWindow
 	keyboard   niriKeyboard
+	// outputs is kept only so the maximise correction can size a window against
+	// its own output; a plain watch never reads it.
+	outputs []wm.Output
+	// ready gates the correction: everything replayed before it is a window that
+	// was already up, never an open this watch owns.
+	ready bool
+	// tamer is nil unless the open-maximise correction is on for this stream.
+	tamer *tamer
 }
 
 // runWatch streams every frame kind, or only the ones named in args. A narrowed
@@ -147,7 +155,12 @@ func consume(conn net.Conn, emit func(wm.Frame), wants func(wm.FrameKind) bool) 
 	}
 
 	s := &session{}
-	ready := false
+	// The correction rides this stream, set up once per connect. It needs the
+	// window events it hinges on, so a watch that skips those skips it; whether
+	// it acts is read from the store on each open.
+	if wants(wm.FrameWindows) {
+		s.tamer = newTamer()
+	}
 	for scan.Scan() {
 		var event map[string]json.RawMessage
 		if json.Unmarshal(scan.Bytes(), &event) != nil {
@@ -158,8 +171,8 @@ func consume(conn net.Conn, emit func(wm.Frame), wants func(wm.FrameKind) bool) 
 		}
 		// The replay ends with the events niri sends once per connect, so the
 		// first of those marks a complete picture.
-		if !ready && (event["ConfigLoaded"] != nil || event["OverviewOpenedOrClosed"] != nil) {
-			ready = true
+		if !s.ready && (event["ConfigLoaded"] != nil || event["OverviewOpenedOrClosed"] != nil) {
+			s.ready = true
 			emit(wm.Frame{Kind: wm.FrameReady})
 		}
 	}
@@ -178,10 +191,15 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		s.workspaces = e.Workspaces
 		s.emitWorkspaces(emit, wants)
 		s.emitFocus(emit, wants)
-		// No output event exists, so this is where a hotplug surfaces.
-		if wants(wm.FrameOutputs) {
+		// No output event exists, so this is where a hotplug surfaces. The
+		// correction needs the output sizes too, so read them when it is on even
+		// if this watch would not otherwise emit them.
+		if wants(wm.FrameOutputs) || s.tamer != nil {
 			if outs, err := readOutputs(s.workspaces, false); err == nil {
-				emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: outs})
+				s.outputs = outs
+				if wants(wm.FrameOutputs) {
+					emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: outs})
+				}
 			}
 		}
 
@@ -209,6 +227,9 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		s.windows = e.Windows
 		s.emitWindows(emit, wants)
 		s.emitWorkspaces(emit, wants)
+		for _, w := range e.Windows {
+			s.tameWindow(w.ID, w.Layout.WindowSize[0], w.Layout.WindowSize[1])
+		}
 
 	case "WindowOpenedOrChanged":
 		var e struct {
@@ -220,6 +241,7 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		s.upsert(e.Window)
 		s.emitWindows(emit, wants)
 		s.emitWorkspaces(emit, wants)
+		s.tameWindow(e.Window.ID, e.Window.Layout.WindowSize[0], e.Window.Layout.WindowSize[1])
 
 	case "WindowClosed":
 		var e struct {
@@ -231,6 +253,9 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		s.remove(e.ID)
 		s.emitWindows(emit, wants)
 		s.emitWorkspaces(emit, wants)
+		if s.tamer != nil {
+			s.tamer.forget(e.ID)
+		}
 
 	case "WindowFocusChanged":
 		var e struct {
@@ -241,6 +266,35 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		}
 		s.focusWindow(e.ID)
 		s.emitWindows(emit, wants)
+
+	case "WindowLayoutsChanged":
+		// niri reports a resize or a maximise here, not through
+		// WindowOpenedOrChanged, so this is where a client's set_maximized lands
+		// a moment after the window mapped. Fold the new size into the held
+		// window and let the correction weigh it.
+		var e struct {
+			Changes [][]json.RawMessage `json:"changes"`
+		}
+		if json.Unmarshal(body, &e) != nil {
+			return
+		}
+		for _, ch := range e.Changes {
+			if len(ch) != 2 {
+				continue
+			}
+			var id uint64
+			if json.Unmarshal(ch[0], &id) != nil {
+				continue
+			}
+			var lay struct {
+				WindowSize [2]int `json:"window_size"`
+			}
+			if json.Unmarshal(ch[1], &lay) != nil {
+				continue
+			}
+			s.setWindowSize(id, lay.WindowSize)
+			s.tameWindow(id, lay.WindowSize[0], lay.WindowSize[1])
+		}
 
 	case "KeyboardLayoutsChanged":
 		var e struct {
@@ -261,6 +315,70 @@ func (s *session) apply(name string, body json.RawMessage, emit func(wm.Frame), 
 		}
 		s.keyboard.CurrentIdx = e.Idx
 		s.emitKeyboard(emit, wants)
+	}
+}
+
+// tameWindow runs the open-maximise correction for one window update. Before the
+// session is ready every window is one that was already up, so it is only
+// recorded; after, a genuine open is stamped and the one an app maximised for
+// itself is reset to an ordinary column.
+func (s *session) tameWindow(id uint64, w, h int) {
+	if s.tamer == nil {
+		return
+	}
+	if !s.ready {
+		s.tamer.seen(id)
+		return
+	}
+	s.tamer.open(id)
+	out, ok := s.outputForWindow(id)
+	if !ok {
+		return
+	}
+	if s.tamer.wantsClear(out, id, w, h) {
+		s.tamer.cleared(id)
+		clearClientMaximized(id)
+	}
+}
+
+// outputForWindow resolves the output a held window sits on, so its size can be
+// measured against the right screen. Empty when the window or its output is not
+// held yet, which reads as "cannot judge, leave it".
+func (s *session) outputForWindow(id uint64) (wm.Output, bool) {
+	ws := uint64(0)
+	found := false
+	for _, win := range s.windows {
+		if win.ID == id {
+			ws, found = win.WorkspaceID, true
+			break
+		}
+	}
+	if !found {
+		return wm.Output{}, false
+	}
+	name := ""
+	for _, w := range s.workspaces {
+		if w.ID == ws {
+			name = w.Output
+			break
+		}
+	}
+	for _, o := range s.outputs {
+		if o.Name == name {
+			return o, true
+		}
+	}
+	return wm.Output{}, false
+}
+
+// setWindowSize folds a WindowLayoutsChanged size into the held window, so the
+// geometry a later frame reports stays current after a resize or a maximise.
+func (s *session) setWindowSize(id uint64, size [2]int) {
+	for i := range s.windows {
+		if s.windows[i].ID == id {
+			s.windows[i].Layout.WindowSize = size
+			return
+		}
 	}
 }
 

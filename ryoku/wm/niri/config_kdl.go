@@ -114,6 +114,13 @@ type Keybind struct {
 	Release bool   `json:"release,omitempty"`
 }
 
+// Windows is the neutral window-behaviour block. TameMaximizeOnOpen resets a
+// window an app opens maximised back to an ordinary tile with the gaps kept, so
+// it never lands edge to edge; off, apps open themselves maximised.
+type Windows struct {
+	TameMaximizeOnOpen bool `json:"tameMaximizeOnOpen"`
+}
+
 type Struts struct {
 	Left   int `json:"left"`
 	Right  int `json:"right"`
@@ -201,6 +208,7 @@ type niriStore struct {
 	Appearance     Appearance        `json:"appearance"`
 	Input          Input             `json:"input"`
 	Cursor         Cursor            `json:"cursor"`
+	Windows        Windows           `json:"windows"`
 	Env            []EnvVar          `json:"env"`
 	WindowRules    []WindowRule      `json:"windowRules"`
 	AppOverrides   []AppOverride     `json:"appOverrides"`
@@ -233,6 +241,7 @@ func defaultStore() niriStore {
 			ShadowEnabled: true, ShadowRange: 45, ShadowColor: "#000000",
 			ShadowSpread: 0, ShadowOffsetX: 0, ShadowOffsetY: 5,
 		},
+		Windows: Windows{TameMaximizeOnOpen: true},
 		Input: Input{
 			KbLayout: "us", NumlockByDefault: false, FollowMouse: 0,
 			Sensitivity: 0, AccelProfile: "", LeftHanded: false,
@@ -296,6 +305,12 @@ func loadStore(path string) niriStore {
 	if raw, ok := ns.WM["niri"]; ok {
 		_ = json.Unmarshal(raw, &s.Niri)
 	}
+	// A preset-width cycle needs at least two widths; with one, Super+R has
+	// nothing to step to and does nothing. Fall back to the default so the bind
+	// always works. unhonored names the substitution so the user sees it.
+	if len(s.Niri.PresetColumnWidths) < 2 {
+		s.Niri.PresetColumnWidths = defaultStore().Niri.PresetColumnWidths
+	}
 	return s
 }
 
@@ -332,6 +347,12 @@ func configHome() string {
 		return d
 	}
 	return filepath.Join(os.Getenv("HOME"), ".config")
+}
+
+// storePath is the neutral settings store this provider reads for the runtime
+// behaviours that never reach the config file, like taming a maximised open.
+func storePath() string {
+	return filepath.Join(configHome(), "ryoku", "desktop.json")
 }
 
 // userEditsNiriDir is the niri slice of the user overlay tree. The generated KDL

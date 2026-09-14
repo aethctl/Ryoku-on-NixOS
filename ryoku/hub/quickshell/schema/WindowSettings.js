@@ -60,6 +60,14 @@ var rows = [{
         "unit": "px"
     },{
         "tab": "Layout",
+        "group": "OPENING WINDOWS",
+        "key": "desktop.windows.tameMaximizeOnOpen",
+        "label": "Tame apps that open maximised",
+        "desc": "Apps that ask to open maximised are placed as an ordinary window inside your gaps, not edge to edge. Turn it off to let them open maximised",
+        "ctl": "sw",
+        "src": "desktop.json"
+    },{
+        "tab": "Layout",
         "group": "BEHAVIOUR",
         "key": "desktop.appearance.resizeOnBorder",
         "label": "Drag to resize at window edges",
