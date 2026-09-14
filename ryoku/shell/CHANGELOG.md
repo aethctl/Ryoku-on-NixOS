@@ -5,6 +5,102 @@
 ### Added
 - **Chroma is available as a built-in Matugen bar style.** It adds the Chroma top bar with wallpaper-driven colours, native workspace and media controls, and playback-only spectrum visualisation.
 
+- **Kairos, a third built-in bar style: one dynamic island carrying the clock.**
+  A single near-black pill floats at the top centre showing the time, and opens
+  on hover into that clock over a rolling date wheel: the centred day is the
+  selected one and the days either side turn away in perspective, scrollable by
+  drag, wheel and the arrow keys. Each morph is one animated progress value, the
+  clock's size steps to whole pixels (measured at a fixed size, so the resting
+  width can never fight the growth) and the wheel's visuals are interpolated from
+  each day's distance to the centre, so nothing switches at a threshold. The
+  island owns its surface (near-black over the wallpaper, with a cached drop
+  shadow) and reserves the resting band, so tiled windows clear it; the strip
+  around it stays click-through. Pick it with `ryoku-shell barstyle kairos` or
+  from Ryoku Settings' Bar Studio
+  (`modules/bar/barstyles/kairos`, `services/BarProducts.qml`).
+
+- **Kairos grows a music pill when a track plays.** A cover bubble appears just
+  left of the clock -- a track only ever brings up the bubble, never a panel of
+  its own. Hovering it peeks the island open far enough for the transport, and a
+  click opens the full now-playing panel, which closes again as soon as the
+  pointer leaves it -- no click needed. The panel's backdrop is the cover blurred
+  into an even ambient wash,
+  inset so the pill's near-black reads as a bezel around it, behind a low tint of
+  the shell's accent, so it recolours with the wallpaper palette (matugen) and
+  with a named scheme; over it sit the title, artist, album, player, a progress
+  bar with elapsed and total time, and prev/play/next wired to the player. The
+  clock stays the centre island: it rests on the screen's centre line and expands
+  there, symmetric, drawing over the music bubble, while the music grows leftward
+  from just beside it. Each island keeps its own hover target and hover-intent
+  timer, the shadows sit a little deeper under both, and each pill carries a
+  hairline rim so its rounded frame reads on a dark wallpaper where the
+  pure-black fill would otherwise vanish into the desktop
+  (`barstyles/kairos/components/{Island,MusicSurface}.qml`).
+
+- **Kairos also ships an app launcher, and Super+Space grows the island into it.**
+  The pill morphs from the RESTING island -- never from its hover size -- into the
+  clock, the app search and the app list, and its window is mapped at full size so
+  the surface never resizes mid-morph; the morph is armed only once that surface is
+  on screen, so the growth is always visible. While it is open the bar island rests
+  underneath it, and the input mask is the pill rather than the window, so the
+  desktop around the island stays usable. Select it as **Kairos** in Ryoku
+  Settings' App Launcher (`modules/launcher/variants/kairos`, `catalog.json`).
+
+- **Kairos has its own island settings, opened from the gear in the clock pill.**
+  The top-right gear on the expanded clock island opens a surface that belongs to
+  the style alone -- a near-black plate styled like the island, with three routes:
+  Island (size, top offset), Clock (12-hour, seconds, date wheel) and Music (the
+  now-playing bubble and its hover peek). Every control writes the `kairos` key in
+  `shell.json` through the shell daemon and applies live; Ryoku Settings is
+  untouched (`barstyles/kairos/settings/`, `services/Config.qml`).
+
+- **Kairos quick settings grow out of the island itself.** A tune icon beside the
+  gear extends the expanded clock island into the style's own quick settings; one
+  surface, one pill, one `Motion.morph`, so open and close read as the island
+  stretching rather than another window appearing. It carries Wi-Fi and Bluetooth
+  tiles, a weather card (the music card's place), Display and Sound fader rows and
+  the notification list; each tile opens a page in place -- Wi-Fi networks with a
+  password prompt, Bluetooth connected/saved/nearby pairing, Sound output/input
+  volume and devices, and Display brightness, scale, resolution and Night Light.
+  Pages push in from the side rather than cutting. Dismiss by clicking outside,
+  moving the pointer away, Escape, or the tune icon; Ryoku Settings is untouched
+  (`barstyles/kairos/quicksettings/`, `components/Island.qml`).
+
+- **Rashin works with any coding agent now, not just Hermes.** The Hub's Rashin
+  page and the dashboard both list your detected agents with a one-click Wire
+  (it drops a pointer, the ryoku skill, and prowl-agent's code-intelligence
+  skill into that agent), show every path Rashin exposes -- the skill, each
+  vault map, prowl-agent -- and offer a Copy snippet to point an agent Rashin
+  doesn't wire directly. The Super+S chat can run a coding agent other than
+  Hermes when its ACP adapter is installed; Hermes stays the recommended
+  default. `ryoku-rashin paths` and `ryoku-rashin agent` do the same in a
+  terminal.
+
+- **The Super+S chat header picks the agent and its model in one place.** The
+  chip shows what is answering -- the agent, plus its model when it has one
+  ("Hermes · gpt-5.6-luna", or just "Oh My Pi" for an agent that carries its own
+  model). Tapping it opens a two-level picker: choose the agent (Hermes, Oh My
+  Pi, and any other whose adapter is installed; the rest show "needs adapter"),
+  and, for agents that expose a model list, the model. Switching the agent takes
+  effect on your next message, and the chip no longer shows a stale model after
+  a switch.
+
+- **The Super+S needle opens with a clearer start.** Instead of a wall of text,
+  the empty chat now leads with a heading, a one-line explainer, and three
+  tap-to-fill example prompts, so it is obvious what to do first.
+
+- **The needle guides first-time setup instead of failing.** On a box with no
+  AI configured yet, the Super+S chat now shows a "Connect an AI" prompt with an
+  Open setup button (straight to Ryoku Settings' Rashin page) rather than the
+  example prompts, so a first ask never dead-ends on an error.
+
+- **Quick asks are no longer locked to Hermes.** The launcher fast lane can run
+  against any of ten built-in providers (OpenRouter, OpenAI, Groq, DeepSeek,
+  Mistral, Together, xAI, Cerebras, Ollama, local). `ryoku-rashin backend
+  <provider>[:model]` picks one (`backend auto` follows Hermes), and keys can
+  live in `~/.config/ryoku/rashin.env` instead of Hermes's own `.env`, so quick
+  asks work without a Hermes provider configured.
+
 - **The qsbar music widget opens a now-playing card, with a 10-band equalizer.**
   Clicking the widget (its title, its spectrum glyph, or anywhere on it in the
   `full` style) opens the record and the track: artwork with the playback spectrum
@@ -65,6 +161,29 @@
   config migrates (`ryogami/wall-ui/qml/Config.qml`).
 
 ### Fixed
+- **Turning on the Cobalt download engine no longer adds you to the `docker`
+  group.** Docker group membership is passwordless root for every process in
+  your session, so a GUI toggle should never grant it. The engine already does
+  all its container work as root through a tightly-scoped polkit helper, so the
+  membership was pure convenience and is gone: enabling Cobalt now grants your
+  session no docker access of its own. If you want plain `docker` on the command
+  line you can still add yourself by hand. Fresh installs were never in the
+  group; this only affects boxes that had switched Cobalt on.
+- **The bar AI usage pill works with OpenCode again, and refreshes faster.** The
+  `opencode-usage` collector read a long-gone `opencode.db`; current OpenCode
+  keeps per-message JSON under `storage/message/<session>/*.json`. It now walks
+  that (and the legacy `session/message` path), falling back to the old sqlite
+  only if present, so the OpenCode chip fills from real sessions. The collector
+  timer also runs 45s after boot and every 5 min instead of 2 min/10 min, so the
+  pill is fresher (`bin/opencode-usage`, `systemd/user/ryoku-ai-usage.timer`).
+- **A dev/checkout build now installs the translation catalog, so the Hub's
+  language and regional-format pickers list every shipped language instead of
+  just Auto and the two English locales.** `deploy.sh` and `dev-run.sh` copied
+  the UI module but never the i18n catalog, so on a source build `I18n` found no
+  `langs.json` and fell back to an empty language table. Both now run
+  `ryoku/i18n/tools/install.sh`, landing `langs.json` and the catalogs at
+  `~/.local/share/ryoku/i18n` (a packaged system already ships them to
+  `/usr/share/ryoku/i18n`).
 - **The now-playing spectrum follows the wallpaper.** With Follow System on, the
   bar retinted on a wallpaper change but the qsbar spectrum kept its old
   gradient: `cavaPalette` was an imperative snapshot taken when the panel

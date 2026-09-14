@@ -223,6 +223,8 @@ sed "s|^ExecStart=.*|ExecStart=$bindir/ryoku-rashin serve --if-enabled|" \
   "$here/../rashin/systemd/ryoku-rashin.service" > "$cfg/systemd/user/ryoku-rashin.service"
 systemctl --user daemon-reload 2>/dev/null || true
 say "installed rashin systemd user unit"
+# Rashin is on by default: bring it up at boot now unless the user opted out.
+"$bindir/ryoku-rashin" ensure 2>/dev/null || true
 say "building ryoku CLI"
 (cd "$here/../cli" && go build -o ryoku .)
 install -m755 "$here/../cli/ryoku" "$bindir/ryoku"
@@ -371,6 +373,14 @@ fi
 # instead, which Qt finds unaided.
 say "installing Ryoku.Ui module"
 "$here/../ui/install.sh" "$qmldir"
+
+# Install the translation catalog + langs.json where every surface's I18n looks
+# first on a dev box (~/.local/share/ryoku/i18n). Without this the shell and Hub
+# fall back to an empty language table -- the Hub's language and regional-format
+# pickers then show only Auto and the two English locales. A packaged system
+# gets the same files at /usr/share/ryoku/i18n from the ryoku-desktop PKGBUILD.
+say "installing Ryoku i18n catalog"
+"$here/../i18n/tools/install.sh"
 
 # Seed the decor art the Decor/Placard components render into ~/Pictures/ryodecors
 # (beside Wallpapers and livewalls): the dev-loop equivalent of the installer seed
@@ -573,9 +583,14 @@ if [[ -d $cfg/hypr ]]; then
     [[ -e "$staging/$rel" ]] && continue   # shipped -> Ryoku-owned, repo copy wins
     mkdir -p "$staging/$(dirname "$rel")"
     cp -a "$f" "$staging/$rel"
-  done < <(find "$cfg/hypr" -type f -print0)
+    # -type l too: a user who symlinks a user-owned file (monitors_user.lua,
+    # user.lua) from a dotfiles repo owns it; -type f alone would drop the link
+    # and the redeploy would lose their file. cp -a carries the symlink itself.
+  done < <(find "$cfg/hypr" \( -type f -o -type l \) -print0)
   for f in "${seeds[@]}"; do
-    [[ -e "$cfg/hypr/$f" ]] && cp -a "$cfg/hypr/$f" "$staging/$f"
+    # -e follows the link and misses a dangling one (repo not mounted yet), so
+    # test -L as well; without it a symlinked seed is replaced by the default.
+    { [[ -e "$cfg/hypr/$f" || -L "$cfg/hypr/$f" ]]; } && cp -a "$cfg/hypr/$f" "$staging/$f"
   done
 fi
 # cp -a carries the repo's older mtimes; bump the entry so an mtime-watching

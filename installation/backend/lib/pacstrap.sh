@@ -41,7 +41,7 @@ ryoku_ensure_keyring() {
 ryoku_pacstrap() {
   local base_file="$RYOKU_REPO/system/packages/base.packages"
   local hw_file="$RYOKU_REPO/system/packages/hardware.packages"
-  [[ -f $base_file ]] || die "missing package list: $base_file"
+  [[ -f $base_file ]] || die 'missing package list: %s' "$base_file"
 
   local -a pkgs=()
   mapfile -t pkgs < <(grep -vE '^[[:space:]]*(#|$)' "$base_file")
@@ -52,7 +52,7 @@ ryoku_pacstrap() {
     intel) sections=(intel) ;;
     amd-nvidia) sections=(amd intel nvidia) ;;
     vm) sections=(vm) ;;
-    *) die "unknown RYOKU_PROFILE: $RYOKU_PROFILE (want amd-nvidia|amd|intel|vm)" ;;
+    *) die 'unknown RYOKU_PROFILE: %s (want amd-nvidia|amd|intel|vm)' "$RYOKU_PROFILE" ;;
   esac
 
   local -a hw=()
@@ -78,12 +78,15 @@ ryoku_pacstrap() {
     (( ${#cachy[@]} )) && pkgs+=("${cachy[@]}")
   fi
 
-  # Broadcom wifi (BCM43xx) needs the out-of-tree broadcom-wl driver; the
-  # in-kernel b43/brcmsmac often can't associate. add it only when a Broadcom
-  # network controller (PCI vendor 14e4) is present. guard lspci's absence.
+  # Broadcom wifi (BCM43xx) needs the out-of-tree wl driver; the in-kernel
+  # b43/brcmsmac often can't associate. Arch dropped the prebuilt broadcom-wl,
+  # so use broadcom-wl-dkms: the dkms hook builds wl.ko against the target's
+  # linux-headers during this pacstrap (base ships dkms, base-devel and the
+  # headers, so it works offline too). Add it only when a Broadcom network
+  # controller (PCI vendor 14e4) is present. guard lspci's absence.
   if command -v lspci >/dev/null 2>&1 && [[ -n "$(lspci -d 14e4: 2>/dev/null)" ]]; then
-    log "detected a Broadcom device (14e4:*); adding broadcom-wl to the pacstrap set"
-    pkgs+=(broadcom-wl)
+    log "detected a Broadcom device (14e4:*); adding broadcom-wl-dkms to the pacstrap set"
+    pkgs+=(broadcom-wl-dkms)
   fi
 
   # hook kept for a set the offline path may want folded into this transaction;
@@ -93,7 +96,7 @@ ryoku_pacstrap() {
   fi
 
   ryoku_ensure_keyring
-  log "installing ${#pkgs[@]} packages (profile=$RYOKU_PROFILE)"
+  log 'installing %d packages (profile=%s)' "${#pkgs[@]}" "$RYOKU_PROFILE"
   ryoku_pacstrap_install "${pkgs[@]}"
 
   log "writing /etc/fstab"
@@ -142,11 +145,20 @@ ryoku_pacstrap_install() {
       return 0
     fi
     [[ $olog == /dev/null ]] || cat -- "$olog"
-    local conflict=""
+    local conflict="" corrupt="" conflict_msg=""
     [[ $olog == /dev/null ]] \
       || conflict=$(grep -aoE "[^ ]+ exists in filesystem" "$olog" 2>/dev/null | tail -n1) || conflict=""
+    [[ $olog == /dev/null ]] \
+      || corrupt=$(grep -aoE "File [^ ]+ is corrupted" "$olog" 2>/dev/null | tail -n1) || corrupt=""
     rm -f -- "$olog" 2>/dev/null || true
-    die "the offline install could not lay the base system from the ISO's baked package set.${conflict:+ File conflict: $conflict.} No network or mirror is involved (every package is on the disc), so this is either a defect in the baked closure or something the installer put at a path a package owns. Report the file conflict above with /var/log/ryoku-install.log; re-running the installer will not help."
+    # A corrupt package is not a closure defect: off the network the bad bytes
+    # came from the download or the USB write, and the fix is a fresh medium,
+    # not a bug report.
+    if [[ -n $corrupt ]]; then
+      die 'the offline install stopped on %s, which fails its recorded checksum. Every package lives on the disc, so the copy that reached the installer is bad: the ISO download or the USB write, most likely. Check the ISO checksum against the release page, rewrite the install medium, and run the installer again. If the checksum already matches, report it with /var/log/ryoku-install.log.' "$corrupt"
+    fi
+    [[ -n $conflict ]] && conflict_msg=$(tf ' File conflict: %s.' "$conflict")
+    die 'the offline install could not lay the base system from the ISO'\''s baked package set.%s No network or mirror is involved (every package is on the disc), so this is either a defect in the baked closure or something the installer put at a path a package owns. Report the file conflict above with /var/log/ryoku-install.log; re-running the installer will not help.' "$conflict_msg"
   fi
 
   # online install: a wifi drop or corrupt download kills pacstrap with raw
@@ -166,9 +178,10 @@ ryoku_pacstrap_install() {
   fi
 
   [[ $paclog == /dev/null ]] || cat -- "$paclog"
-  local failinfo=""
+  local failinfo="" failinfo_msg=""
   [[ $paclog == /dev/null ]] \
     || failinfo=$(grep -aoE "failed retrieving file '?[^' ]+'? from [^ ]+" "$paclog" 2>/dev/null | tail -n1) || failinfo=""
   rm -f -- "$paclog" 2>/dev/null || true
-  die "pacstrap failed after retrying across mirror tiers (tried: ${RYOKU_MIRROR_TIERS_TRIED:-tier 1 (reflector)}).${failinfo:+ Last mirror error: $failinfo.} Check the connection (Wi-Fi can drop under sustained download) and re-run the installer."
+  [[ -n $failinfo ]] && failinfo_msg=$(tf ' Last mirror error: %s.' "$failinfo")
+  die 'pacstrap failed after retrying across mirror tiers (tried: %s).%s Check the connection (Wi-Fi can drop under sustained download) and re-run the installer.' "${RYOKU_MIRROR_TIERS_TRIED:-tier 1 (reflector)}" "$failinfo_msg"
 }

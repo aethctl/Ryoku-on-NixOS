@@ -3,6 +3,17 @@
 ## Unreleased
 
 ### Changed
+- **The login pointer shows on NVIDIA machines.** The greeter client pushes a
+  themed cursor surface and weston's kiosk shell has no cursor of its own; on
+  NVIDIA the DRM backend hands that surface to the hardware cursor plane and
+  the driver accepts it without ever displaying it, so the login screen had a
+  working pointer with nothing drawn (`ryoku/lockscreen/sddm/ryoku-greeter`).
+  The greeter now detects an NVIDIA DRM card and runs weston on the pixman
+  renderer, which skips plane assignment entirely: the sprite is composited
+  into the scanout and always shows. A login screen is transient, so software
+  rendering there costs nothing worth missing; every other GPU keeps the GL
+  path. The plain-weston fallbacks (`sddm/setup`, the doctor reconciler) make
+  the same call for the boxes that have not landed the wrapper yet.
 - **`sddm/setup` ships unlock-on-login by default instead of stripping the
   keyring.** The old wiring unconditionally deleted `pam_gnome_keyring` from
   `/etc/pam.d/sddm`, citing a "passwordless Default_keyring" that nothing in the
@@ -14,6 +25,27 @@
   this root installer). Honors `RYOKU_DRYRUN`; `ryoku keyring` changes it later.
 
 ### Fixed
+- **The in-session lock shows a usable mouse cursor with any theme.** The lock
+  is spawned by the shell daemon, whose imported env can predate the login-time
+  `hyprctl setcursor` (autostart.lua), and a downloaded theme carries no cursor
+  workaround of its own, so the lock could come up with no visible pointer.
+  `lock.sh` now re-asserts `hyprctl setcursor` from the same theme/size the lock
+  client uses, best-effort, before launching (`qylock/quickshell-lockscreen/lock.sh`).
+- **A downloaded lockscreen theme now shows its preview in the Hub.** The Hub
+  looked for `preview.gif` only at the skin root, where shipped themes keep it,
+  but a RyoStore download lands it under `assets/preview.gif` (its product
+  manifest maps it there), so downloaded skins showed a blank tile with no
+  Preview button. `lockSkinFor` now checks both paths (`hub/backend/lock.go`).
+- **The login screen lands on a chosen monitor instead of whichever trained
+  first.** With two displays weston's kiosk shell dropped the greeter on the
+  connector that came up first (a DP a beat before an HDMI), so the login
+  appeared on the wrong screen, or only on one. `ryoku-greeter` now pins the
+  greeter (`sddm-greeter-qt6`) to a resolved output via kiosk-shell `app-ids`:
+  an internal laptop panel (`eDP`/`LVDS`/`DSI`) when present, or the connector
+  set in `/etc/ryoku/greeter.conf` (`PRIMARY=<name>`, `APPID=<id>`) or the
+  `RYOKU_GREETER_PRIMARY` / `RYOKU_GREETER_APPID` env. Idle blanking is disabled
+  in the generated config so a display no longer powers off at the login screen
+  (`sddm/ryoku-greeter`).
 - **The SDDM greeter stops logging a Quickshell plugin error on every boot
   (#162).** Its theme imported the shell's `Ryoku.Ui.Singletons`, whose
   singletons load `Quickshell.Io`, a plugin the plain `sddm-greeter-qt6` process

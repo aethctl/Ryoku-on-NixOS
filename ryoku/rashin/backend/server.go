@@ -128,8 +128,38 @@ func Serve(cfg Config) error {
 	mux.HandleFunc("GET /api/agents", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, DetectAgents())
 	})
-	mux.HandleFunc("POST /api/agents/wire", agentMutation(Wire))
+	mux.HandleFunc("POST /api/agents/wire", agentMutation(func(id string) error {
+		if err := Wire(id); err != nil {
+			return err
+		}
+		wireProwlSkills() // parity with `ryoku-rashin wire`: pointer + skill + prowl
+		return nil
+	}))
 	mux.HandleFunc("POST /api/agents/unwire", agentMutation(Unwire))
+	mux.HandleFunc("GET /api/quick", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, quickInfo(LoadConfig()))
+	})
+	mux.HandleFunc("POST /api/quick", func(w http.ResponseWriter, r *http.Request) {
+		if err := cmdBackend([]string{r.URL.Query().Get("provider")}); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writeJSON(w, quickInfo(LoadConfig()))
+	})
+	mux.HandleFunc("GET /api/manifest", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, BuildManifest(LoadConfig()))
+	})
+	mux.HandleFunc("GET /api/chat/agent", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, chatBackendInfos(LoadConfig()))
+	})
+	mux.HandleFunc("POST /api/chat/agent", func(w http.ResponseWriter, r *http.Request) {
+		if err := setChatAgent(r.URL.Query().Get("id")); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		hub.resetConn() // switch takes effect on the next turn
+		writeJSON(w, chatBackendInfos(LoadConfig()))
+	})
 
 	mux.HandleFunc("GET /api/hermes/skills", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, SkillsReportNow())
@@ -283,6 +313,7 @@ func haveSystemd() bool {
 func cmdEnable(atBoot bool) error {
 	cfg := LoadConfig()
 	cfg.Enabled = true
+	cfg.OptedOut = false
 	if err := SaveConfig(cfg); err != nil {
 		return err
 	}
@@ -331,6 +362,7 @@ func cmdEnable(atBoot bool) error {
 func cmdDisable() error {
 	cfg := LoadConfig()
 	cfg.Enabled = false
+	cfg.OptedOut = true
 	if err := SaveConfig(cfg); err != nil {
 		return err
 	}
@@ -340,6 +372,29 @@ func cmdDisable() error {
 	stopSpawnedDaemon()
 	fmt.Println("rashin disabled")
 	return nil
+}
+
+// cmdEnsure is the default-on convergence for installers and `ryoku doctor`:
+// enable at boot unless the user opted out. Idempotent and quiet.
+func cmdEnsure() error {
+	cfg := LoadConfig()
+	if cfg.OptedOut {
+		fmt.Println("rashin left off by choice")
+		return nil
+	}
+	if cfg.Enabled && rashinActive() {
+		return nil
+	}
+	return cmdEnable(true)
+}
+
+// rashinActive: is the user unit running? False when systemd is absent.
+func rashinActive() bool {
+	if !haveSystemd() || !unitKnown() {
+		return false
+	}
+	out, _ := exec.Command("systemctl", "--user", "is-active", rashinUnit).Output()
+	return strings.TrimSpace(string(out)) == "active"
 }
 
 // stopSpawnedDaemon SIGTERMs a daemon started by the pre-systemd spawn path.

@@ -178,8 +178,24 @@ GREETER_BIN="/usr/share/ryoku/lockscreen/ryoku-greeter"
 # the package has not landed it yet.
 if [[ -x $GREETER_BIN ]]; then
   COMPOSITOR="$GREETER_BIN"
+elif grep -qs 0x10de /sys/class/drm/card*/device/vendor; then
+  # NVIDIA's KMS accepts the hardware cursor plane and never displays it under
+  # weston (#184): the login pointer only shows through weston's software
+  # cursor path (the pixman renderer). Mirrors the wrapper script for the
+  # window before the package lands it.
+  COMPOSITOR="weston --shell=kiosk --renderer=pixman"
 else
   COMPOSITOR="weston --shell=kiosk"
+fi
+SESSION_WRAPPER="/usr/share/ryoku/lockscreen/ryoku-wayland-session"
+# SessionCommand waits for the greeter (weston) to release the GPU before the
+# session compositor probes KMS, so a hybrid-GPU laptop does not miss its iGPU
+# and fall back to a black headless dGPU (issue #174). SDDM's own default until
+# the wrapper lands. This body stays identical to sddmWaylandBody() (doctor.go).
+if [[ -x $SESSION_WRAPPER ]]; then
+  SESSION_CMD="$SESSION_WRAPPER"
+else
+  SESSION_CMD="/usr/share/sddm/scripts/wayland-session"
 fi
 echo "  greeter display server -> wayland ($WAYLAND_CONF)"
 priv mkdir -p /etc/sddm.conf.d
@@ -190,6 +206,7 @@ GreeterEnvironment=QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURS
 
 [Wayland]
 CompositorCommand=$COMPOSITOR
+SessionCommand=$SESSION_CMD
 EOF
 
 # --- 6. give the "default" cursor theme a real target ------------------------

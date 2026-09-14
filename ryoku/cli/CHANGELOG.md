@@ -3,6 +3,21 @@
 ## Unreleased
 
 ### Changed
+- **The Rashin AI assistant is on by default now.** The needle (Super+S) and its
+  dashboard used to sit dormant until you found the switch in the Hub; a fresh
+  box now brings the daemon up at boot. `ryoku-rashin disable` turns it off for
+  good (recorded as `optedOut`, so an update never flips it back on), `enable`
+  turns it back on. A new `ryoku-rashin ensure` is the quiet default-on
+  convergence the installer, `ryoku materialize`, and `ryoku doctor` run.
+- **`ryoku doctor` keeps the assistant healthy.** It brings Rashin up at boot
+  unless you opted out, and enables the AI usage collector timer that feeds the
+  bar pill (`internal/doctor/reconcile_rashin_daemon.go`).
+- **`ryoku doctor` installs the fingerprint unlock module on a box with a
+  reader.** The lock and greeter PAM stacks load `pam_fprintd_grosshack.so`, but
+  it was never shipped, so touch-to-unlock did nothing (fprintd enroll/verify in
+  Settings still worked). A new reconciler installs `pam-fprint-grosshack` (AUR)
+  when a fingerprint reader is present and the module is missing, and is silent
+  on a machine without a reader (`internal/doctor/reconcile_fingerprint.go`).
 - **`ryoku update` reaps the Hub so a new settings page appears without a
   relogin.** Ryoku Settings is a session-resident quickshell instance the shell
   daemon does not own, so an update left it running on the old QML and a
@@ -167,6 +182,44 @@
   repair failed user-service state and agent skill links, but it no longer
   enables systemd lingering or recommends pacman for missing prowl-agent on
   NixOS.
+- **"Apply system-wide" for the keyboard layout no longer just says FAILED.**
+  Setting the login screen, TTYs, and disk-passphrase keymap rebuilds the boot
+  image, which needs root; run from the Hub there is no terminal for the sudo
+  password prompt, so it failed every time. It now escalates once through the
+  desktop's password prompt (pkexec) instead, so the whole apply goes through in
+  one go (`internal/keyboard`).
+- **Hybrid-GPU laptops no longer boot to a black screen through the login
+  screen.** On a machine with two GPUs (an AMD/Intel iGPU plus an NVIDIA dGPU),
+  SDDM could start your session on one virtual terminal while the Wayland login
+  greeter was still shutting down on another and still holding a GPU. The
+  compositor then found that card busy, dropped it -- usually the very iGPU the
+  displays hang off -- and came up headless on the other: a black, blank screen.
+  A tiny wait for the greeter to finish letting go of the GPU before the session
+  starts fixes it, wired in as SDDM's session command so it covers every Wayland
+  session; `ryoku doctor` adds it to existing machines and it is a no-op on a
+  single-GPU box (`ryoku/lockscreen/sddm/ryoku-wayland-session`, doctor's SDDM
+  greeter reconciler).
+- **`ryoku status` no longer reports `snapshots: 0` on a machine that has them.**
+  The count came from a `sudo` call that fails whenever no credential is cached
+  (every GUI poll, and any cold terminal), and the empty result parsed as a real
+  `0` -- "no safety net" when the safety net was fine. The count now runs snapper
+  unprivileged first (working with no sudo at all once access is granted), falls
+  back to a cached-credential `sudo -n` that never prompts, and treats snapper's
+  exit-0 "No permissions." as the failure it is. A read it genuinely cannot make
+  now prints `snapshots: unavailable`, never a misleading `0`; `--json` carries a
+  `snapshotsKnown` flag so the Hub and the bar island can tell the two apart
+  (`internal/updater/update.go`). `ryoku doctor` grants the primary user snapper
+  read access (`ALLOW_USERS` + `SYNC_ACL`), so the count shows without any sudo
+  (`internal/doctor` snapshot read access reconciler).
+- **A symlinked config file (dotfiles) is no longer overwritten with Ryoku's
+  default.** If you symlink a seeded file like `hypr/user.lua` or
+  `hypr/keyboard.lua` from a dotfiles repo, `ryoku materialize` kept the link --
+  unless its target was momentarily unavailable (the repo not mounted yet at
+  that point), in which case the existence check followed the dead link, read
+  the slot as empty, and laid the shipped default over your symlink, losing it.
+  It now tests the link itself, so a symlinked seed is always left alone; a fresh
+  install with nothing there still seeds normally (`internal/updater/materialize.go`,
+  `sys.PathPresent`). `ryoku deploy` carries symlinked user files the same way.
 - **`ryotunes` opened the old Tauri app after the package update.** The launcher
   defers to the native client only while `ryotunesd.socket` exists, and nothing
   enabled that user unit on a fresh install. The doctor now enables it

@@ -82,10 +82,28 @@ func (d *daemon) broadcast(name string, data interface{}) {
 	d.events.publish(string(b))
 }
 
+// daemonLive reports whether a daemon is answering on the socket.
+func daemonLive(sock string) bool {
+	c, err := net.Dial("unix", sock)
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
+}
+
 func runDaemon() error {
 	cfg := loadConfig()
 	sock := socketPath()
 	_ = os.MkdirAll(filepath.Dir(sock), 0o755)
+	// A bare `ryogami` in a terminal must not steal the session daemon's
+	// socket: the interloper restores the saved wallpaper over the live one
+	// and dies with the terminal, leaving the picker with no daemon at all.
+	// When a daemon answers the socket, bow out; a stale socket left by a
+	// dead daemon falls through to the rebind.
+	if daemonLive(sock) {
+		return fmt.Errorf("a daemon is already running on %s", sock)
+	}
 	_ = os.Remove(sock)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {

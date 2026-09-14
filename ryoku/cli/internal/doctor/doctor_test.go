@@ -796,10 +796,41 @@ func TestSDDMWaylandBodyForcesQtWayland(t *testing.T) {
 		"GreeterEnvironment=QT_QPA_PLATFORM=wayland,XCURSOR_THEME=Bibata-Modern-Ice,XCURSOR_SIZE=24,QML_XHR_ALLOW_FILE_READ=1",
 		"[Wayland]",
 		"CompositorCommand=",
+		"SessionCommand=",
 	} {
 		if !strings.Contains(body, line) {
 			t.Errorf("sddmWaylandBody() missing %q:\n%s", line, body)
 		}
+	}
+}
+
+// the greeter compositor fallback must pin weston's software cursor path on
+// NVIDIA: the driver accepts the hardware cursor plane without displaying it,
+// so the login pointer vanishes (#184).
+func TestGreeterCompositorSoftwareCursorOnNVIDIA(t *testing.T) {
+	wrapper, vendorGlob := greeterCompositorBin, nvidiaVendorGlob
+	defer func() { greeterCompositorBin, nvidiaVendorGlob = wrapper, vendorGlob }()
+
+	dir := t.TempDir()
+	vendor := filepath.Join(dir, "card0", "device", "vendor")
+	if err := os.MkdirAll(filepath.Dir(vendor), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(vendor, []byte("0x8086\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	nvidiaVendorGlob = filepath.Join(dir, "card*", "device", "vendor")
+
+	greeterCompositorBin = "/nonexistent/greeter"
+	if got := greeterCompositor(); got != "weston --shell=kiosk" {
+		t.Errorf("greeterCompositor() on Intel = %q", got)
+	}
+
+	if err := os.WriteFile(vendor, []byte("0x10de\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := greeterCompositor(); got != "weston --shell=kiosk --renderer=pixman" {
+		t.Errorf("greeterCompositor() on NVIDIA = %q", got)
 	}
 }
 

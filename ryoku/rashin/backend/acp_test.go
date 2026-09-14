@@ -118,6 +118,9 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 		t.Fatalf("Initialize: %v", err)
 	}
 
+	// A fresh session always emits one models event carrying the agent name.
+	expectEvent(t, conn.Events(), "models")
+
 	// One user turn with streaming chunks and a tool call.
 	conn.Prompt("hello", nil)
 	prompt := fa.read()
@@ -216,7 +219,7 @@ func TestACPV2ImagesModelsSessions(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- conn.Initialize("/tmp/vault") }()
 	init := fa.read()
-	fa.respond(*init.ID, map[string]any{"protocolVersion": 1})
+	fa.respond(*init.ID, map[string]any{"protocolVersion": 1, "agentCapabilities": map[string]any{"loadSession": true, "promptCapabilities": map[string]any{"image": true}}})
 	newSess := fa.read()
 	fa.respond(*newSess.ID, map[string]any{
 		"sessionId": "s1",
@@ -318,5 +321,6 @@ func TestACPV2ImagesModelsSessions(t *testing.T) {
 	if err := <-loadDone; err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
+	expectEvent(t, conn.Events(), "models")
 	expectEvent(t, conn.Events(), "replay_end")
 }

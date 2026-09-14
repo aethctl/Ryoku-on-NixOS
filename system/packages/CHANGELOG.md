@@ -3,6 +3,21 @@
 ## Unreleased
 
 ### Added
+- `aur.packages`: **fingerprint unlock at the lock and login screens.** The
+  qylock lock and the SDDM greeter authenticate through a PAM stack that loads
+  `pam_fprintd_grosshack.so` (scans the sensor while the password field is live),
+  but the module was never packaged, so touch-to-unlock silently did nothing
+  even though fprintd enroll/verify in Ryoku Settings worked. `pam-fprint-grosshack`
+  now ships here for new installs; `ryoku doctor`'s fingerprint-module reconciler
+  backfills existing boxes with a reader (this set is not revisited by
+  `ryoku update`).
+- `hardware.packages`: **Intel gets the iHD VA-API video-decode driver.**
+  `intel-media-driver` joins the `[intel]` section so the live video wallpaper
+  and media players hardware-decode on Gen8+ Intel instead of burning a CPU
+  core in software. AMD's VA-API already ships in `mesa` and NVIDIA decodes via
+  NVDEC through `nvidia-utils`, so only Intel needed a package. It bakes into
+  the offline ISO closure.
+
 - `base.packages`: **Bash and Zsh receive Fish-like editing.** `blesh`, `zsh`,
   `zsh-autosuggestions`, `zsh-syntax-highlighting` and
   `zsh-history-substring-search` ship with every machine so any account shell

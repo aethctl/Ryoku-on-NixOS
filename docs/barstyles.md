@@ -1,12 +1,17 @@
 # Bar styles
 
-Ryoku ships two bar styles, and a single key decides which one runs. The default
-is **QS Bar** (`qsbar`), a full-colour top bar. The other is **Sumi**, the
-monochrome left rail. Sumi is not a folder: the shell paints it from the built-in
-frame scene in `shell.qml`, so it has no scene file of its own. QS Bar lives under
-`ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar/`, ships its own bar,
-popouts, control centre and settings, and loads once per monitor. Store-installed
-styles land under the same folder contract.
+Ryoku ships three bar styles, and a single key decides which one runs. The default
+is **QS Bar** (`qsbar`), a full-colour top bar. **Sumi** is the monochrome left
+rail, and **Kairos** is a single island at the top centre that carries the clock:
+hovering opens it into a rolling date wheel, a track that plays adds a cover
+bubble beside it that peeks open on hover and opens the now-playing panel on a
+click (moving the pointer off it closes it again), and Super+Space grows the same
+island into its own app launcher
+(`docs/launcher.md`). Sumi is not a folder: the shell paints it from the built-in
+frame scene in `shell.qml`, so it has no scene file of its own. QS Bar and Kairos
+live under `ryoku/shell/quickshell/shell/modules/bar/barstyles/`, ship their own
+bar, and load once per monitor. Store-installed styles land under the same folder
+contract.
 
 **QS Bar wears colour on purpose, and it is the one place the desktop does.** It
 is a Quickshell "Rise" bar ported onto Ryoku's data plane, and it keeps that
@@ -40,14 +45,17 @@ file. Built-in folder styles ship inside the shell, one row each:
 
 ```qml
 // BarProducts.qml
-readonly property var builtins: ({ "qsbar": "barstyles/qsbar/Scene.qml" })
+readonly property var builtins: ({
+    "qsbar": "barstyles/qsbar/Scene.qml",
+    "kairos": "barstyles/kairos/Scene.qml"
+})
 ```
 
 `BarProducts.sceneUrl(id)` is the one lookup the shell needs, and it returns:
 
 - `""` for `"sumi"`, an empty id, or a style that has failed to load. An empty
   scene is the built-in frame scene (Sumi), which `shell.qml` paints itself.
-- the built-in's relative `Scene.qml` for `"qsbar"`.
+- the built-in's relative `Scene.qml` for a built-in id (`"qsbar"`, `"kairos"`).
 - a `file://` path drawn from `~/.local/state/ryoku/store/barstyles.json` for a
   store-installed folder style. The store writes that index and a `revision.json`;
   `BarProducts` watches both and reloads live.
@@ -545,6 +553,40 @@ controls -- so a quick panel and the settings app read as one language and the
 studio owns no second vocabulary. It is a quick panel, not a second Hub: it edits
 the keys you reach for mid-work and sends the rest to Ryoku Settings. A style with
 no settings omits all of this.
+
+## Kairos Settings
+
+Kairos carries its own island settings, opened from the gear in the top-right of
+the expanded clock island and only by that gear. It is a small surface styled
+like the island -- near-black, hairline rim, the same accent -- with three routes
+over the same `shell.json` namespace:
+
+| Route | Holds |
+|---|---|
+| Island | clock island size, top offset |
+| Clock | 12-hour time, seconds, the date wheel |
+| Music | the now-playing bubble and its hover peek |
+
+Every control writes the `kairos` key in `shell.json` through the shell daemon
+(the sole writer) and applies live through `Config.kairos`; Ryoku Settings is
+untouched. A style with no settings omits this, and only the active style's
+`Scene` instantiates the surface, so it exists only while Kairos is the bar.
+
+### Kairos quick settings
+
+Left of the gear, the **tune** icon grows the expanded clock island into the
+style's own quick settings. This is not a second window: the island's own pill
+morphs to the panel size on the same surface, with the clock and date wheel
+fading out and the panel fading in, so open and close read as one body (the same
+`Motion.morph` the clock uses). It carries the radio tiles, a weather card in
+place of a media card, Display and Sound fader rows, and the notification list;
+each tile opens a page in place -- **Wi-Fi** (networks, password, disconnect),
+**Bluetooth** (connected/saved/nearby, pair and disconnect), **Sound** (output
+and input volume, mute, device pick) and **Display** (per-output brightness,
+scale, resolution and Night Light). It is written and drawn inside the island
+(`barstyles/kairos/quicksettings/`) and dismissed by clicking anywhere outside
+it, by moving the pointer away, by Escape, or by tapping the tune icon again; it
+never replaces Ryoku Settings.
 
 ## Frame menus
 

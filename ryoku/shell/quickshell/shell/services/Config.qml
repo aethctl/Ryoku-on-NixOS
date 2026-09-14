@@ -45,6 +45,7 @@ Singleton {
     property alias obi: adapter.obi
     property alias nacre: adapter.nacre
     property alias qsbar: adapter.qsbar
+    property alias kairos: adapter.kairos
 
     // dock: the first-class app dock surface (modules/dock). A top-level store,
     // not a bar-style key, because the dock is now style-agnostic -- neither qsbar
@@ -194,6 +195,7 @@ Singleton {
             property var obi: ({})
             property var nacre: NacreConfig.defaultConfig()
             property var qsbar: ({})
+            property var kairos: ({})
             property var dock: ({
                 "enabled": false,
                 "edge": "auto",

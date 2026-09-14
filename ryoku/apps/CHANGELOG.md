@@ -4,6 +4,19 @@
 
 ### Added
 - `ryostore/`: **Chroma is available as a built-in bar style.** RyoStore lists it as installed and protects it from install or removal operations.
+- `ryostore/`: **Kairos joins the built-in bar styles in the catalogue.** The
+  bar-style provider now lists the shell's island-clock style beside Sumi and QS
+  Bar, so Ryoku Settings' Bar Studio shows it as an installed, selectable card
+  and `ryostore install` / `remove` refuse it as built-in
+  (`backend/provider_bars.go`).
+- `ryostore/`: **a Remove button on every installed item.** RyoStore could only
+  install; taking something back off meant leaving the app. The product dossier
+  and the showroom hero now show a REMOVE action whenever an item is installed
+  (any category -- theme, decor, lock, bundle, plugin -- since every provider
+  backend already implements remove), wired to `ryostore remove <category> <id>`
+  through a new `Store.remove` that reuses the install lifecycle and refreshes
+  the catalogue when it is done (`Singletons/Store.qml`, `ProductDetail.qml`,
+  `ShowroomStage.qml`, `App.qml`).
 - `ryovm/`: **a Looking Glass lane for GPU-passthrough VMs.** Ryoport grows a
   fourth section (rail + `Ctrl+4`) that manages passthrough machines: point it
   at an install ISO and pick the guest, and it defines a tuned `ryoku-<name>`
@@ -27,6 +40,12 @@
   instead of being parsed as passthrough VM names, and the instant-VM path no
   longer tells NixOS users to install `libisoburn` with Pacman when an ISO
   builder is unavailable.
+- `fastfetch/`: **the greeting reports the real shell again.** The wrapper
+  bounded fastfetch with `timeout 8`, but fastfetch's shell module walks the
+  parent chain and skips known wrappers (`time`, `sudo`, ...) without knowing
+  `timeout`, so every greeting read "Shell: timeout". Each branch now `exec`s
+  fastfetch, which replaces the wrapper process and leaves the user's shell as
+  the direct parent.
 - `ryostore/`: **An installed theme now carries the store's preview image, so
   the Color-scheme picker shows it.** The install wrote `scheme.json` and
   `meta.json` and nothing else, while Ryogami's Themes tab looked for

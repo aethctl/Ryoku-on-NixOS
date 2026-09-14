@@ -24,6 +24,16 @@ Singleton {
     // Session model picker: the models hermes offers, and the current one.
     property var models: []
     property string currentModel: ""
+    // The active chat backend's display name (Hermes, Oh My Pi, ...), shown on
+    // the chip when the agent advertises no model, so it never shows a stale one.
+    property string currentAgent: ""
+    // All chat-capable agents (id, name, available, recommended, active) for the
+    // "what's answering" picker; switching agent is a live backend change.
+    property var backends: []
+    // Whether the needle can actually answer (agent configured or a direct
+    // provider resolves). Starts true so a working box never flashes the
+    // first-run setup prompt while status loads.
+    property bool ready: true
 
     // Emitted whenever the transcript changes so the view can scroll to end.
     signal touched()
@@ -33,6 +43,8 @@ Singleton {
             root.newChat();
         root.lastSeen = Date.now();
         root.loadModels();
+        root.loadReady();
+        root.loadBackends();
     }
 
     function noteClosed() {
@@ -125,6 +137,23 @@ Singleton {
     }
 
     function loadModels() { modelsProc.running = true; }
+    function loadReady() { readyProc.running = true; }
+    function loadBackends() { backendsProc.running = true; }
+
+    // Switch the chat backend (agent) live: the daemon drops its session so the
+    // next turn runs the chosen agent. Reflect the pick at once; the turn's
+    // models event then confirms the model (or none) the agent exposes.
+    function setBackend(id) {
+        if (!id)
+            return;
+        for (var i = 0; i < root.backends.length; i++)
+            if (root.backends[i].id === id)
+                root.currentAgent = String(root.backends[i].name || id);
+        root.currentModel = "";
+        root.models = [];
+        Quickshell.execDetached(["ryoku-rashin", "agent", "use", String(id)]);
+        backendsReload.restart();
+    }
 
     function setModel(id) {
         if (!id || id === root.currentModel)
@@ -229,8 +258,8 @@ Singleton {
                     break;
                 case "models":
                     root.models = f.models || [];
-                    if (f.current)
-                        root.currentModel = String(f.current);
+                    root.currentModel = f.current ? String(f.current) : "";
+                    root.currentAgent = f.agent ? String(f.agent) : "";
                     break;
                 case "done":
                     var imgs = f.images || [];
@@ -288,10 +317,47 @@ Singleton {
                 try { f = JSON.parse(String(line)); } catch (e) { return; }
                 if (f && f.type === "models") {
                     root.models = f.models || [];
-                    if (f.current) root.currentModel = String(f.current);
+                    root.currentModel = f.current ? String(f.current) : "";
+                    root.currentAgent = f.agent ? String(f.agent) : "";
                 }
             }
         }
+    }
+
+    Process {
+        id: readyProc
+        command: ["ryoku-rashin", "status", "--json"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var f;
+                try { f = JSON.parse(String(line)); } catch (e) { return; }
+                if (f && typeof f.ready === "boolean")
+                    root.ready = f.ready;
+            }
+        }
+    }
+
+    Process {
+        id: backendsProc
+        command: ["ryoku-rashin", "agent", "--json"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var arr;
+                try { arr = JSON.parse(String(line)); } catch (e) { return; }
+                if (Array.isArray(arr))
+                    root.backends = arr;
+            }
+        }
+    }
+
+    // After a live switch the config lands a moment later; refresh the active
+    // marker in the picker once it has settled.
+    Timer {
+        id: backendsReload
+        interval: 300
+        onTriggered: root.loadBackends()
     }
 
     // Restore the conversation the persistent daemon session still holds, so a

@@ -20,7 +20,11 @@ const usage = `ryoku-rashin: the Ryoku agent OS daemon
   status [--json]        report daemon, vault, hermes, and wiring state
   enable [--at-boot]     start the daemon now and at every login; --at-boot
                          adds user lingering so it starts with the machine
-  disable                stop the daemon and turn autostart off
+  disable                stop the daemon and turn autostart off (opt out of the default)
+  ensure                 default-on convergence: enable at boot unless the user opted out
+  backend [provider[:model]]  view or set the fast-lane assistant backend ('auto' follows hermes)
+  paths [--json]         show every skill/vault/prowl path (and a paste snippet for any agent)
+  agent [use <id>]       list agents + chat backends, or set which agent drives the chat
 
 Invoked as 'rashin', a bare argument is a terminal ask; status/enable/disable/
 setup/index still work as subcommands.
@@ -67,6 +71,14 @@ func main() {
 		err = cmdEnable(len(os.Args) > 2 && os.Args[2] == "--at-boot")
 	case "disable":
 		err = cmdDisable()
+	case "ensure":
+		err = cmdEnsure()
+	case "backend":
+		err = cmdBackend(os.Args[2:])
+	case "paths":
+		err = cmdPaths(pathsFormat(os.Args[2:]))
+	case "agent":
+		err = cmdAgent(os.Args[2:])
 	default:
 		fmt.Print(usage)
 		os.Exit(2)
@@ -88,6 +100,14 @@ func dispatchRashin(args []string) error {
 			return cmdEnable(len(args) > 1 && args[1] == "--at-boot")
 		case "disable":
 			return cmdDisable()
+		case "ensure":
+			return cmdEnsure()
+		case "backend":
+			return cmdBackend(args[1:])
+		case "paths":
+			return cmdPaths(pathsFormat(args[1:]))
+		case "agent":
+			return cmdAgent(args[1:])
 		case "setup":
 			return cmdSetup()
 		case "index":
@@ -102,4 +122,18 @@ func argOr(i int, def string) string {
 		return os.Args[i]
 	}
 	return def
+}
+
+// pathsFormat maps the `paths` flags to cmdPaths' format: --json, --snippet, or
+// the human default.
+func pathsFormat(args []string) string {
+	for _, a := range args {
+		switch a {
+		case "--json":
+			return "json"
+		case "--snippet":
+			return "snippet"
+		}
+	}
+	return ""
 }
