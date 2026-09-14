@@ -16,11 +16,16 @@ Singleton {
     id: root
 
     property int probedId: -1
-    readonly property int activeId: Hyprland.focusedWorkspace
-        ? Hyprland.focusedWorkspace.id
-        : (probedId >= 1 ? probedId : 1)
+    readonly property int activeId: Compositor.isNiri && Compositor.activeWorkspaceIndex > 0
+        ? Compositor.activeWorkspaceIndex
+        : Hyprland.focusedWorkspace
+            ? Hyprland.focusedWorkspace.id
+            : (probedId >= 1 ? probedId : 1)
 
-    function probe() { proc.running = true; }
+    function probe() {
+        if (!Compositor.isNiri)
+            proc.running = true
+    }
 
     Process {
         id: proc
@@ -44,7 +49,7 @@ Singleton {
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            if (!Hyprland.focusedWorkspace && root.watched[event.name])
+            if (!Compositor.isNiri && !Hyprland.focusedWorkspace && root.watched[event.name])
                 Qt.callLater(root.probe);
         }
     }

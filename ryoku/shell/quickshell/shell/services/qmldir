@@ -6,6 +6,7 @@ singleton Scheme Scheme.qml
 singleton Config Config.qml
 singleton Motion Motion.qml
 singleton Perf Perf.qml
+singleton Compositor Compositor.qml
 singleton Workspaces Workspaces.qml
 singleton Media Media.qml
 singleton Music Music.qml
