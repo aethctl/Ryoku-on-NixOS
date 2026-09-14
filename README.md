@@ -262,7 +262,7 @@ For custom flake paths, multi-host setups and manual integration, see the
 
 | Area | What it contains |
 | --- | --- |
-| `ryoku/` | Shared Ryoku desktop, shell, applications, Hyprland integration and assets |
+| `ryoku/` | Shared Ryoku desktop, shell, applications, compositor providers and assets |
 | `nix/` | Nix packages, NixOS module, installer, system bridge and Nix-specific integration |
 | `flake.nix` | Public Nix entry point for modules, packages, apps, checks and development |
 | `docs/` | Shared desktop docs, NixOS docs and upstream Arch reference material |

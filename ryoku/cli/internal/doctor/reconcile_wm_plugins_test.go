@@ -77,4 +77,29 @@ func TestPlanWmPlugins(t *testing.T) {
 			t.Fatalf("result = %v %q fix=%q", r.status, r.detail, r.remedy)
 		}
 	})
+
+	t.Run("managed plugins never invoke the local builder", func(t *testing.T) {
+		r := planWmPlugins(wmPluginState{
+			capable: true,
+			listed:  true,
+			managed: true,
+			enabled: 3,
+		}, false, noRepair)
+		if r.status != recOK {
+			t.Fatalf("status = %v, want ok", r.status)
+		}
+	})
+
+	t.Run("managed session mismatch warns without rebuilding locally", func(t *testing.T) {
+		r := planWmPlugins(wmPluginState{
+			capable:   true,
+			listed:    true,
+			managed:   true,
+			enabled:   2,
+			unhealthy: []string{"keysounds (stale)"},
+		}, false, noRepair)
+		if r.status != recWarn || !strings.Contains(r.detail, "keysounds") || !strings.Contains(r.remedy, "generation") {
+			t.Fatalf("result = %v %q fix=%q", r.status, r.detail, r.remedy)
+		}
+	})
 }

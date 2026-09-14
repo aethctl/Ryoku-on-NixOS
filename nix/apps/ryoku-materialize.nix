@@ -60,6 +60,7 @@ pkgs.writeShellApplication {
       # Preserve any existing Ryoku user units before NixOS takes
       # ownership of these names.
       for unit in \
+        ryoku-session.target \
         hyprland-session.target \
         ryoku-shell.service \
         ryoku-rashin.service \
@@ -85,6 +86,15 @@ pkgs.writeShellApplication {
     export RYOKU_CONFIG_BASE="$base"
 
     ${ryoku.cli}/bin/ryoku materialize
+
+    # niri treats either missing generated include as a fatal config error.
+    # Seed both together on the first Niri-capable generation; later applies
+    # remain owned by the provider and are not overwritten here.
+    if [ ! -f "$config_home/niri/settings.kdl" ] ||
+       [ ! -f "$config_home/niri/rebinds.kdl" ]; then
+      ${ryoku.wmNiri}/bin/ryoku-wm-niri apply \
+        "$config_home/ryoku/desktop.json" >/dev/null
+    fi
 
     # Keep persisted Quick Settings state in step with Ryostage.
     #
@@ -155,6 +165,13 @@ pkgs.writeShellApplication {
       hypr/gpu.lua \
       hypr/keyboard.lua \
       hypr/user.lua \
+      niri/monitors.kdl \
+      niri/gpu.kdl \
+      niri/keyboard.kdl \
+      niri/monitors_user.kdl \
+      niri/user.kdl \
+      niri/settings.kdl \
+      niri/rebinds.kdl \
       fastfetch/config.jsonc \
       kitty/current-theme.conf
     do
@@ -218,6 +235,7 @@ pkgs.writeShellApplication {
     # ----------------------------------------------------------
 
     rm -f -- \
+      "$user_units/ryoku-session.target" \
       "$user_units/hyprland-session.target" \
       "$user_units/ryoku-shell.service" \
       "$user_units/ryoku-rashin.service" \

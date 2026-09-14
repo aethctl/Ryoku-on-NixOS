@@ -18,11 +18,14 @@ let
   ryokuRyogami = ryokuPkgs.ryoku-ryogami;
   ryokuQuickshell = ryokuNixpkgs.quickshell;
   ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
+  ryokuWmHyprland = ryokuPkgs.ryoku-wm-hyprland;
+  ryokuWmNiri = ryokuPkgs.ryoku-wm-niri;
 
   # Hyprland plugins are ABI-sensitive, so the compositor, portal and
   # plugin bundle must all come from Ryoku's own locked package set.
   ryokuHyprland = ryokuPkgs.ryoku-hyprland;
   ryokuHyprlandPortal = ryokuPkgs.ryoku-xdg-desktop-portal-hyprland;
+  ryokuNiri = ryokuNixpkgs.niri;
   ryokuMatugen = ryokuPkgs.ryoku-matugen;
   ryokuHyprPlugins = ryokuPkgs.ryoku-hypr-plugins;
   ryokuCursorMaterial = ryokuPkgs.ryoku-cursor-material;
@@ -429,6 +432,10 @@ EOF
 
     ryokuQuickshell
     ryokuHyprPlugins
+    ryokuWmHyprland
+    ryokuWmNiri
+    ryokuNiri
+    xwayland-satellite
 
     # ─────────────────────────────────────────────────────────
     # Qt / QML
@@ -562,7 +569,7 @@ EOF
     );
 
   # The Ryoku service can be requested before the display manager's
-  # Hyprland process has exported WAYLAND_DISPLAY into systemd.
+  # compositor process has exported WAYLAND_DISPLAY into systemd.
   #
   # Rather than starting the daemon with WAYLAND_DISPLAY="", wait for
   # the manager environment to contain a real, live Wayland socket and
@@ -609,6 +616,7 @@ EOF
           for key in \
             DISPLAY \
             HYPRLAND_INSTANCE_SIGNATURE \
+            NIRI_SOCKET \
             XDG_CURRENT_DESKTOP \
             XDG_SESSION_DESKTOP \
             XDG_SESSION_TYPE \
@@ -629,7 +637,7 @@ EOF
       done
 
       printf '%s\n' \
-        "ryoku-shell: timed out waiting for the Hyprland Wayland socket" >&2
+        "ryoku-shell: timed out waiting for the compositor Wayland socket" >&2
 
       exit 1
     '';
@@ -725,6 +733,11 @@ in
       portalPackage = lib.mkForce ryokuHyprlandPortal;
 
       xwayland.enable = true;
+    };
+
+    programs.niri = {
+      enable = true;
+      package = lib.mkForce ryokuNiri;
     };
 
     xdg.portal = {
@@ -1084,8 +1097,8 @@ in
       ++ optionalPkg "noto-fonts-cjk-sans"
       ++ optionalPkg "material-symbols";
 
-    systemd.user.targets.hyprland-session = {
-      description = "Ryoku Hyprland session";
+    systemd.user.targets.ryoku-session = {
+      description = "Ryoku graphical session";
 
       wants = [
         "graphical-session-pre.target"
@@ -1122,11 +1135,11 @@ in
       description = "Ryoku idle and session lock daemon";
 
       wantedBy = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       partOf = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       requires = [
@@ -1178,15 +1191,15 @@ in
         "Reset the Bluetooth controller once the Ryoku audio session is ready";
 
       wantedBy = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       partOf = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       after = [
-        "hyprland-session.target"
+        "ryoku-session.target"
         "wireplumber.service"
       ];
 
@@ -1275,7 +1288,7 @@ in
       ];
 
       wantedBy = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       restartTriggers = [
@@ -1383,11 +1396,11 @@ in
       description = "Ryogami wallpaper daemon";
 
       wantedBy = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       partOf = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       requires = [
@@ -1395,7 +1408,7 @@ in
       ];
 
       after = [
-        "hyprland-session.target"
+        "ryoku-session.target"
         "ryoku-materialize.service"
       ];
 
@@ -1442,15 +1455,15 @@ in
       description = "Ryoku shell daemon";
 
       wantedBy = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       partOf = [
-        "hyprland-session.target"
+        "ryoku-session.target"
       ];
 
       after = [
-        "hyprland-session.target"
+        "ryoku-session.target"
         "ryoku-materialize.service"
       ];
 

@@ -2,10 +2,10 @@
 
 Ryoku on NixOS is the NixOS implementation of the Ryoku desktop.
 
-The desktop experience is shared with Ryoku on Arch: Hyprland, the Ryoku shell,
-Hub, Ryostore, theming, launcher, lockscreen, media surfaces and the wider Ryoku
-UI all remain Ryoku. The difference is how the operating system underneath is
-managed.
+The desktop experience is shared with Ryoku on Arch: Hyprland or Niri, the
+Ryoku shell, Hub, Ryostore, theming, launcher, lockscreen, media surfaces and
+the wider Ryoku UI all remain Ryoku. The difference is how the operating system
+underneath is managed.
 
 On NixOS, Ryoku uses Nix packages, NixOS modules and normal NixOS generations
 instead of Pacman, the AUR, mkinitcpio or an Arch-specific boot stack.
@@ -16,7 +16,7 @@ Ryoku on NixOS currently targets:
 
 - `x86_64-linux`
 - an existing flake-based NixOS installation
-- Hyprland on Wayland
+- Hyprland or Niri on Wayland
 - a reasonably recent NixOS package set
 
 The installer integrates Ryoku into the system you already have. It does **not**
@@ -156,7 +156,7 @@ The NixOS module provides the machine-facing integration needed by the Ryoku
 desktop, including:
 
 - Ryoku packages and runtime dependencies
-- the Ryoku Hyprland/portal package set
+- the Ryoku Hyprland and Niri provider/portal package sets
 - PipeWire and WirePlumber integration
 - NetworkManager and Bluetooth integration
 - polkit and keyring support
@@ -169,9 +169,15 @@ desktop, including:
 Ryoku-owned services are expressed declaratively rather than copied into a
 user-local systemd tree.
 
-The compositor and ABI-sensitive Hyprland components come from Ryoku's locked
-package set so the shell, plugins and compositor remain compatible with each
-other.
+Both compositor sessions and their Ryoku providers come from Ryoku's locked
+package set. ABI-sensitive Hyprland plugins therefore remain compatible with
+the Hyprland build in the same generation.
+
+At the display manager, choose either **Hyprland** or **Niri**. Both
+sessions use the same Ryoku shell and neutral desktop settings. The Hub's
+Window Manager page previews settings that the other compositor cannot express
+before changing the preferred compositor; on NixOS both implementations are
+already deployed, so no mutable package transaction is needed.
 
 ## Materialized user configuration
 
@@ -195,14 +201,15 @@ not require editing files in the Nix store.
 
 ## Session environment
 
-The NixOS deployment imports the active Hyprland environment into the systemd
-user manager.
+The NixOS deployment imports the active compositor environment into the
+systemd user manager.
 
 Values such as:
 
 ```text
 WAYLAND_DISPLAY
 HYPRLAND_INSTANCE_SIGNATURE
+NIRI_SOCKET
 ```
 
 come from the live compositor session.

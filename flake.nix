@@ -106,6 +106,8 @@
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;
         ryoku-desktop-data = ryoku.desktopData;
+        ryoku-wm-hyprland = ryoku.wmHyprland;
+        ryoku-wm-niri = ryoku.wmNiri;
 
         # Ryoku owns its compositor ABI. These come from Ryoku's
         # locked nixpkgs rather than the host's package set.
@@ -192,6 +194,8 @@
 
         # Desktop integration
         ryoku-desktop-data = ryoku.desktopData;
+        ryoku-wm-hyprland = ryoku.wmHyprland;
+        ryoku-wm-niri = ryoku.wmNiri;
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;
         ryoku-bundle = ryoku.bundle;

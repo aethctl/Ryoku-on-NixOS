@@ -31,66 +31,10 @@ pkgs.stdenvNoCC.mkDerivation {
         'os.getenv("HOME") .. "/.local/lib/qt6/qml"' \
         'os.getenv("HOME") .. "/.local/lib/qt6/qml:/run/current-system/sw/lib/qt-6/qml"'
 
-    # ----------------------------------------------------------
-    # NixOS session bridge
-    #
-    # Ryoku's user services are managed by systemd.  Processes
-    # started there do not automatically inherit the environment
-    # of the Hyprland process launched by the display manager.
-    #
-    # Import the real compositor environment only after Hyprland
-    # has created its Wayland socket, then start Ryoku's session
-    # target.
-    # ----------------------------------------------------------
+    # ── Niri ──────────────────────────────────────────────────
 
-    cat > "$cfg/hypr/ryoku-nix-session.sh" <<'SESSION'
-#!/usr/bin/env bash
-set -eu
-
-systemctl --user import-environment \
-  DISPLAY \
-  WAYLAND_DISPLAY \
-  HYPRLAND_INSTANCE_SIGNATURE \
-  XDG_CURRENT_DESKTOP \
-  XDG_SESSION_DESKTOP \
-  XDG_SESSION_TYPE \
-  XDG_RUNTIME_DIR \
-  PATH
-
-if command -v dbus-update-activation-environment >/dev/null 2>&1; then
-  dbus-update-activation-environment --systemd \
-    DISPLAY \
-    WAYLAND_DISPLAY \
-    HYPRLAND_INSTANCE_SIGNATURE \
-    XDG_CURRENT_DESKTOP \
-    XDG_SESSION_DESKTOP \
-    XDG_SESSION_TYPE \
-    XDG_RUNTIME_DIR \
-    PATH
-fi
-
-systemctl --user start hyprland-session.target
-SESSION
-
-    chmod +x "$cfg/hypr/ryoku-nix-session.sh"
-
-    # Append a tiny Nix-specific startup module to the materialized
-    # Ryoku Hyprland configuration.
-    #
-    # Upstream's configuration is Lua, so locate its normal startup
-    # module and add an exec there without replacing the desktop.
-    if [ -f "$cfg/hypr/modules/autostart.lua" ]; then
-      cat >> "$cfg/hypr/modules/autostart.lua" <<'LUA'
-
--- NixOS: export the live Hyprland environment to systemd before
--- starting Ryoku's user services.
-hl.exec_cmd("~/.config/hypr/ryoku-nix-session.sh")
-LUA
-    else
-      printf '%s
-'         "Expected Ryoku Hyprland autostart module is missing." >&2
-      exit 1
-    fi
+    mkdir -p "$cfg/niri"
+    cp -a ryoku/niri/. "$cfg/niri/"
 
     # ── Shared translation catalog ─────────────────────────────
     #

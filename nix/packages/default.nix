@@ -19,6 +19,16 @@ let
     inherit pkgs src;
   };
 
+  wmHyprland = import ./ryoku-wm-provider.nix {
+    inherit pkgs src;
+    provider = "hyprland";
+  };
+
+  wmNiri = import ./ryoku-wm-provider.nix {
+    inherit pkgs src;
+    provider = "niri";
+  };
+
   cli = import ./ryoku-cli.nix {
     inherit
       pkgs
@@ -240,6 +250,8 @@ let
       qmkHid
       waifu2x
       desktopData
+      wmHyprland
+      wmNiri
       helpers
       nixosSystemBridge
       qml
@@ -264,6 +276,8 @@ in
     qmkHid
     waifu2x
     desktopData
+    wmHyprland
+    wmNiri
     helpers
     nixosSystemBridge
     hyprglass

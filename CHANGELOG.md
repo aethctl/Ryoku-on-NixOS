@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Port upstream's provider-based Niri implementation to NixOS, including the
+  Niri session, GNOME portal backend, Xwayland satellite, generated KDL config,
+  compositor-neutral systemd session target, and Ryoku WM provider binaries.
+- Preserve declarative NixOS ownership of ABI-sensitive Hyprland plugins while
+  using the shared compositor plugin health checks.
+
 Notable changes to the repository as a whole. Each tree keeps its own changelog
 for finer detail.
 

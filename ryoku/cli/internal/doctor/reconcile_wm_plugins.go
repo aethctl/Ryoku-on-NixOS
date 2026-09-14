@@ -22,7 +22,9 @@ import (
 type wmPluginState struct {
 	capable   bool
 	listed    bool     // the provider answered
+	managed   bool     // the distribution owns plugin binaries declaratively
 	stale     []string // enabled, installed, rebuildable, built for another build
+	unhealthy []string // enabled managed plugin not healthy in the running session
 	enabled   int
 	toolchain bool
 	missing   []string
@@ -42,6 +44,7 @@ var gatherWmPlugins = func() wmPluginState {
 	var roster struct {
 		Toolchain struct {
 			OK      bool     `json:"ok"`
+			Managed bool     `json:"managed"`
 			Missing []string `json:"missing"`
 		} `json:"toolchain"`
 		Plugins []struct {
@@ -50,23 +53,33 @@ var gatherWmPlugins = func() wmPluginState {
 			Installed   bool   `json:"installed"`
 			Current     bool   `json:"current"`
 			Rebuildable bool   `json:"rebuildable"`
+			Status      string `json:"status"`
 		} `json:"plugins"`
 	}
 	if json.Unmarshal(out, &roster) != nil {
 		return s
 	}
 	s.listed = true
+	s.managed = roster.Toolchain.Managed
 	s.toolchain, s.missing = roster.Toolchain.OK, roster.Toolchain.Missing
 	for _, p := range roster.Plugins {
 		if !p.Enabled {
 			continue
 		}
 		s.enabled++
+		if s.managed {
+			switch p.Status {
+			case "stale", "missing", "failed":
+				s.unhealthy = append(s.unhealthy, p.ID+" ("+p.Status+")")
+			}
+			continue
+		}
 		if p.Installed && !p.Current && p.Rebuildable {
 			s.stale = append(s.stale, p.ID)
 		}
 	}
 	sort.Strings(s.stale)
+	sort.Strings(s.unhealthy)
 	return s
 }
 
@@ -93,6 +106,16 @@ func planWmPlugins(s wmPluginState, checkOnly bool, repair func() (map[string]st
 	}
 	if !s.listed {
 		return noteRes(i18n.T("plugin builds not checked (no headers or the provider did not answer)"))
+	}
+	if s.managed {
+		if len(s.unhealthy) == 0 {
+			if s.enabled == 0 {
+				return okRes(i18n.T("the distribution manages compositor plugin binaries; no plugin enabled"))
+			}
+			return okRes(i18n.T("%d enabled compositor plugin(s) are provided by the active system generation"), s.enabled)
+		}
+		return warnRes(i18n.T("enabled system-managed compositor plugin(s) do not match the running session: %s"), strings.Join(s.unhealthy, ", ")).
+			withFix(i18n.T("rebuild or update the system generation, then start a new compositor session"))
 	}
 	if len(s.stale) == 0 {
 		if s.enabled == 0 {
