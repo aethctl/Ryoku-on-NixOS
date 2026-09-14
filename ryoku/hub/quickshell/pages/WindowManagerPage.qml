@@ -122,7 +122,6 @@ Item {
             width: parent.width
             spacing: Tokens.s5
             visible: sp.tab === pg.switchTab
-            height: visible ? implicitHeight : 0
 
             CompositorControl {
                 id: wmPicker

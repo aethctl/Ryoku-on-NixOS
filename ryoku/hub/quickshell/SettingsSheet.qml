@@ -212,14 +212,13 @@ Item {
             width: Math.min(flick.width - 14, 1000)
             spacing: Tokens.s4
 
-            Item {
+            // A Column, not an Item measured by childrenRect: it sizes itself
+            // from its visible children, so a page that hides its block on a
+            // tab costs no height and no spacing gap, and one that shows it
+            // needs no height of its own.
+            Column {
                 id: leadSlot
                 width: col.width
-                // childrenRect counts a block the page hides on this tab, so the
-                // slot is judged by height too: an empty one must not spend a
-                // spacing gap above the first card.
-                height: childrenRect.height
-                visible: children.length > 0 && height > 0
             }
 
             Repeater {
@@ -762,7 +761,10 @@ Item {
 
     Column {
         anchors.centerIn: parent
-        visible: sheet.rows.length === 0
+        // Only a search can come up empty. A tab that carries no settings rows
+        // at all is showing its page's own blocks, and "nothing matches" would
+        // be answering a question nobody asked.
+        visible: sheet.rows.length === 0 && sheet.query !== ""
         spacing: Tokens.s2
         Text {
             text: I18n.tr("NO MATCH")
