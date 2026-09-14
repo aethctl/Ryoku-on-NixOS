@@ -100,8 +100,6 @@ func componentDisabled(name string) bool {
 }
 
 type daemon struct {
-	compositor  compositorBackend
-	compState   *compositorState
 	mu          sync.Mutex
 	sup         map[string]bool      // components that already have a supervisor goroutine
 	proc        map[string]*exec.Cmd // current live process per component
@@ -144,22 +142,25 @@ type daemon struct {
 }
 
 func runDaemon() error {
-	backend, err := currentCompositorBackend()
-	if err != nil {
-		return err
-	}
-	backend.Prepare()
+	// Bind hyprctl and the event watcher to the running compositor before
+	// anything forks or the take-over check reads the signature: a systemd
+	// Restart= can launch us under a stale one (see hyprsig.go).
+	ensureLiveHyprSignature()
 	path := sockPath()
 	if c, err := net.DialTimeout("unix", path, 300*time.Millisecond); err == nil {
 		c.Close()
-		myID := backend.Identity()
-		incID, ok := daemonIdentity(path)
-		if !ok {
-			if sig, sigOK := daemonSignature(path); sigOK && sig != "" {
-				incID, ok = compositorHyprland+":"+sig, true
-			}
-		}
-		if !shouldTakeOver(myID, incID, ok) {
+		// A daemon is already listening. Take over only a stale one: an
+		// incumbent left from a previous Hyprland instance, whose
+		// HYPRLAND_INSTANCE_SIGNATURE differs from this session's. A stale
+		// daemon supervises its quickshell children against the dead compositor
+		// socket, so workspaces freeze and monitor-aware commands fail; the fresh
+		// login-time daemon must displace it and rebind to the live session.
+		// A same-session incumbent, an older one that cannot report its
+		// signature, or our own missing signature are left alone, so a genuine
+		// double-start still refuses.
+		mySig := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
+		incSig, ok := daemonSignature(path)
+		if !shouldTakeOver(mySig, incSig, ok) {
 			return fmt.Errorf("a daemon is already running at %s", path)
 		}
 		quitStaleDaemon(path)
@@ -187,7 +188,6 @@ func runDaemon() error {
 	}
 
 	d := &daemon{
-		compositor:  backend,
 		sup:         map[string]bool{},
 		proc:        map[string]*exec.Cmd{},
 		paintSig:    make(chan struct{}, 1),
@@ -200,7 +200,6 @@ func runDaemon() error {
 		hiddenSince: map[string]time.Time{},
 		lastFail:    map[string]string{},
 	}
-	d.compState = newCompositorState(d.registerTopic("compositor"), backend.Name())
 	d.ln = ln
 	d.lock = lock // held for the process lifetime: closing it would free the guard
 
@@ -239,8 +238,8 @@ func runDaemon() error {
 // unidentified one (an older binary that cannot answer, ok=false), or our own
 // missing signature (mySig=="") all leave the incumbent in place, so a genuine
 // double-start still refuses to run.
-func shouldTakeOver(myID, incID string, ok bool) bool {
-	return ok && myID != "" && incID != myID
+func shouldTakeOver(mySig, incSig string, ok bool) bool {
+	return ok && mySig != "" && incSig != mySig
 }
 
 // daemonSignature asks the daemon at path for the Hyprland instance signature it
@@ -248,14 +247,14 @@ func shouldTakeOver(myID, incID string, ok bool) bool {
 // (an older daemon that predates the signature command), so the caller treats
 // the incumbent as unidentified and does not displace it. An empty signature
 // from a current daemon is a valid answer (ok=true, sig="").
-func daemonQuery(path, command string) (string, bool) {
+func daemonSignature(path string) (sig string, ok bool) {
 	conn, err := net.DialTimeout("unix", path, 300*time.Millisecond)
 	if err != nil {
 		return "", false
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(time.Second))
-	if _, err := fmt.Fprintln(conn, command); err != nil {
+	if _, err := fmt.Fprintln(conn, "signature"); err != nil {
 		return "", false
 	}
 	buf := make([]byte, 4096)
@@ -265,14 +264,6 @@ func daemonQuery(path, command string) (string, bool) {
 		return "", false
 	}
 	return resp, true
-}
-
-func daemonIdentity(path string) (string, bool) {
-	return daemonQuery(path, "identity")
-}
-
-func daemonSignature(path string) (string, bool) {
-	return daemonQuery(path, "signature")
 }
 
 // quitStaleDaemon tells the incumbent to quit and waits, bounded, for it to
@@ -335,7 +326,6 @@ func setupQmlImportPath() {
 // wallpaper surface and the first wallpaper, then the persistent Quickshell
 // components.
 func (d *daemon) bootstrap() {
-	d.startCompositorCalls()
 	d.startSettings()
 	d.startKeypress()
 	d.startClipboard()
@@ -355,9 +345,7 @@ func (d *daemon) bootstrap() {
 	go d.watchRyogami()
 	go d.watchMatugenKnobs()
 	go d.ledsWorker()
-	if d.compositor != nil {
-		d.compositor.Start(d)
-	}
+	go d.watchHyprland()
 	go d.watchAudio()
 	go d.watchPowerSounds()
 	go d.watchAutoPowerSaver()
@@ -1133,18 +1121,6 @@ func (d *daemon) dispatch(line string) string {
 		return d.status()
 	case "ping":
 		return "ok"
-	case "compositor":
-		if d.compositor == nil {
-			return ""
-		}
-		return d.compositor.Name()
-	case "compositor-state":
-		return d.compState.json()
-	case "identity":
-		if d.compositor == nil {
-			return ""
-		}
-		return d.compositor.Identity()
 	case "signature":
 		// The Hyprland instance this daemon was launched under. A newly starting
 		// daemon reads it to tell a stale incumbent (a previous session's) from

@@ -81,18 +81,12 @@ func (d *daemon) setMonitor(s string) {
 	d.monMu.Lock()
 	d.activeMon = s
 	d.monMu.Unlock()
-	if d.compState != nil {
-		d.compState.setFocusedOutput(s)
-	}
 }
 
 func (d *daemon) clearMonitor() {
 	d.monMu.Lock()
 	d.activeMon = ""
 	d.monMu.Unlock()
-	if d.compState != nil {
-		d.compState.setFocusedOutput("")
-	}
 }
 
 func (d *daemon) cachedMonitor() string {
@@ -111,17 +105,9 @@ func (d *daemon) activeMonitor() string {
 	}
 	fb := d.monFallback
 	if fb == nil {
-		if d.compositor != nil {
-			fb = d.compositor.FocusedOutput
-		} else {
-			fb = queryActiveMonitor
-		}
+		fb = queryActiveMonitor
 	}
-	monitor := fb()
-	if monitor != "" {
-		d.setMonitor(monitor)
-	}
-	return monitor
+	return fb()
 }
 
 // consumeHyprEvents reads the event stream until EOF, keeping the cache current:

@@ -11,31 +11,16 @@ Rectangle {
 
     readonly property int workspaceCount: {
         let highest = Math.max(5, Workspaces.activeId)
-        if (Compositor.isNiri) {
-            const list = Compositor.workspaces || []
-            for (let i = 0; i < list.length; ++i) {
-                const workspace = list[i]
-                if (!workspace || workspace.output !== Compositor.focusedOutput)
-                    continue
-                const index = Number(workspace.index)
-                if (index > 0 && index <= 10)
-                    highest = Math.max(highest, index)
-            }
-        } else {
-            const list = Hyprland.workspaces ? Hyprland.workspaces.values : []
-            for (let i = 0; i < list.length; ++i) {
-                const id = Number(list[i] && list[i].id)
-                if (id > 0 && id <= 10)
-                    highest = Math.max(highest, id)
-            }
+        const list = Hyprland.workspaces ? Hyprland.workspaces.values : []
+        for (let i = 0; i < list.length; ++i) {
+            const id = Number(list[i] && list[i].id)
+            if (id > 0 && id <= 10)
+                highest = Math.max(highest, id)
         }
         return Math.min(10, highest)
     }
 
     function occupied(id) {
-        if (Compositor.isNiri)
-            return Compositor.workspaceHasWindows(id, Compositor.focusedOutput)
-
         const toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : []
         for (let i = 0; i < toplevels.length; ++i) {
             const data = toplevels[i] && toplevels[i].lastIpcObject || ({})
@@ -46,10 +31,7 @@ Rectangle {
     }
 
     function focus(id) {
-        if (Compositor.isNiri)
-            Compositor.focusWorkspace(id)
-        else
-            Hyprland.dispatch("hl.dsp.focus({ workspace = " + id + " })")
+        Hyprland.dispatch("hl.dsp.focus({ workspace = " + id + " })")
     }
 
     implicitWidth: row.implicitWidth + Theme.paddingMd * 2
@@ -152,11 +134,8 @@ Rectangle {
     }
 
     WheelHandler {
-        onWheel: event => {
-            if (Compositor.isNiri)
-                Compositor.focusRelative(event.angleDelta.y > 0 ? -1 : 1)
-            else
-                Hyprland.dispatch(event.angleDelta.y > 0 ? "workspace r-1" : "workspace r+1")
-        }
+        onWheel: event => Hyprland.dispatch(
+            event.angleDelta.y > 0 ? "workspace r-1" : "workspace r+1"
+        )
     }
 }
