@@ -16,6 +16,7 @@ const (
 type compositorBackend interface {
 	Name() string
 	Identity() string
+	FocusedOutput() string
 	Prepare()
 	Start(*daemon)
 }
@@ -32,6 +33,10 @@ func (hyprlandCompositor) Identity() string {
 		return ""
 	}
 	return compositorHyprland + ":" + sig
+}
+
+func (hyprlandCompositor) FocusedOutput() string {
+	return queryActiveMonitor()
 }
 
 func (hyprlandCompositor) Prepare() {

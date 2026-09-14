@@ -73,3 +73,88 @@ type unexpectedNiriRequest struct {
 func (e *unexpectedNiriRequest) Error() string {
 	return "unexpected niri request: " + e.got
 }
+
+func TestQueryNiriFocusedOutput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "niri-focused.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		reader := bufio.NewReader(conn)
+		line, _ := reader.ReadString('\n')
+		if strings.TrimSpace(line) == `"FocusedOutput"` {
+			_, _ = conn.Write([]byte("{\"Ok\":{\"FocusedOutput\":{\"name\":\"DP-2\"}}}\n"))
+		}
+	}()
+
+	if got := queryNiriFocusedOutput(path); got != "DP-2" {
+		t.Fatalf("queryNiriFocusedOutput() = %q, want DP-2", got)
+	}
+}
+
+func TestNiriWindowAllowsMissingMetadata(t *testing.T) {
+	d := &daemon{}
+	d.compState = newCompositorState(newStateTopic(), compositorNiri)
+
+	event := []byte(`{"WindowsChanged":{"windows":[{"id":9,"title":null,"app_id":null,"pid":null,"workspace_id":null,"is_focused":false,"is_floating":false,"is_urgent":false}]}}`)
+	if err := d.consumeNiriEvent(event); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := d.compState.snapshot()
+	if len(snapshot.Windows) != 1 {
+		t.Fatalf("window count = %d, want 1", len(snapshot.Windows))
+	}
+	window := snapshot.Windows[0]
+	if window.Title != "" || window.AppID != "" || window.PID != 0 || window.WorkspaceID != "" {
+		t.Fatalf("optional metadata was not normalized: %+v", window)
+	}
+}
+
+func TestConsumeNiriState(t *testing.T) {
+	d := &daemon{}
+	d.compState = newCompositorState(newStateTopic(), compositorNiri)
+
+	workspaceEvent := []byte(`{"WorkspacesChanged":{"workspaces":[{"id":4,"idx":2,"name":null,"output":"DP-2","is_urgent":false,"is_active":false,"is_focused":false,"active_window_id":null},{"id":1,"idx":1,"name":null,"output":"DP-1","is_urgent":false,"is_active":true,"is_focused":false,"active_window_id":null},{"id":3,"idx":1,"name":null,"output":"DP-2","is_urgent":false,"is_active":true,"is_focused":true,"active_window_id":2}]}}`)
+	if err := d.consumeNiriEvent(workspaceEvent); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot := d.compState.snapshot()
+	if snapshot.FocusedOutput != "DP-2" || snapshot.FocusedWorkspaceID != "3" {
+		t.Fatalf("focused state = output %q workspace %q", snapshot.FocusedOutput, snapshot.FocusedWorkspaceID)
+	}
+	if got := d.cachedMonitor(); got != "DP-2" {
+		t.Fatalf("cached monitor = %q, want DP-2", got)
+	}
+
+	windowEvent := []byte(`{"WindowsChanged":{"windows":[{"id":2,"title":"zsh","app_id":"kitty","pid":136786,"workspace_id":3,"is_focused":true,"is_floating":false,"is_urgent":false},{"id":4,"title":"Firefox","app_id":"firefox","pid":138290,"workspace_id":3,"is_focused":false,"is_floating":false,"is_urgent":false}]}}`)
+	if err := d.consumeNiriEvent(windowEvent); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot = d.compState.snapshot()
+	if snapshot.FocusedWindowID != "2" || len(snapshot.Windows) != 2 {
+		t.Fatalf("window state = focused %q count %d", snapshot.FocusedWindowID, len(snapshot.Windows))
+	}
+
+	if err := d.consumeNiriEvent([]byte(`{"WorkspaceActivated":{"id":4,"focused":true}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.consumeNiriEvent([]byte(`{"WindowFocusChanged":{"id":4}}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshot = d.compState.snapshot()
+	if snapshot.FocusedWorkspaceID != "4" || snapshot.FocusedWindowID != "4" {
+		t.Fatalf("incremental state = workspace %q window %q", snapshot.FocusedWorkspaceID, snapshot.FocusedWindowID)
+	}
+}

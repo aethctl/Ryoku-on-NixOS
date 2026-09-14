@@ -101,6 +101,7 @@ func componentDisabled(name string) bool {
 
 type daemon struct {
 	compositor  compositorBackend
+	compState   *compositorState
 	mu          sync.Mutex
 	sup         map[string]bool      // components that already have a supervisor goroutine
 	proc        map[string]*exec.Cmd // current live process per component
@@ -199,6 +200,7 @@ func runDaemon() error {
 		hiddenSince: map[string]time.Time{},
 		lastFail:    map[string]string{},
 	}
+	d.compState = newCompositorState(d.registerTopic("compositor"), backend.Name())
 	d.ln = ln
 	d.lock = lock // held for the process lifetime: closing it would free the guard
 
@@ -1135,6 +1137,8 @@ func (d *daemon) dispatch(line string) string {
 			return ""
 		}
 		return d.compositor.Name()
+	case "compositor-state":
+		return d.compState.json()
 	case "identity":
 		if d.compositor == nil {
 			return ""
