@@ -100,6 +100,7 @@ func componentDisabled(name string) bool {
 }
 
 type daemon struct {
+	compositor  compositorBackend
 	mu          sync.Mutex
 	sup         map[string]bool      // components that already have a supervisor goroutine
 	proc        map[string]*exec.Cmd // current live process per component
@@ -142,10 +143,11 @@ type daemon struct {
 }
 
 func runDaemon() error {
-	// Bind hyprctl and the event watcher to the running compositor before
-	// anything forks or the take-over check reads the signature: a systemd
-	// Restart= can launch us under a stale one (see hyprsig.go).
-	ensureLiveHyprSignature()
+	backend, err := currentCompositorBackend()
+	if err != nil {
+		return err
+	}
+	backend.Prepare()
 	path := sockPath()
 	if c, err := net.DialTimeout("unix", path, 300*time.Millisecond); err == nil {
 		c.Close()
@@ -188,6 +190,7 @@ func runDaemon() error {
 	}
 
 	d := &daemon{
+		compositor:  backend,
 		sup:         map[string]bool{},
 		proc:        map[string]*exec.Cmd{},
 		paintSig:    make(chan struct{}, 1),
@@ -345,7 +348,9 @@ func (d *daemon) bootstrap() {
 	go d.watchRyogami()
 	go d.watchMatugenKnobs()
 	go d.ledsWorker()
-	go d.watchHyprland()
+	if d.compositor != nil {
+		d.compositor.Start(d)
+	}
 	go d.watchAudio()
 	go d.watchPowerSounds()
 	go d.watchAutoPowerSaver()
