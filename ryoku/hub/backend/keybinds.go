@@ -11,11 +11,13 @@ import (
 )
 
 // The keybind legend: the shared binds parsed from binds.lua (the live
-// ryoku/hyprland/modules/binds.lua) followed by the active provider's own
-// compositor-exclusive binds, appended as one section under the compositor's
-// name. Each half reads its single source at request time so neither drifts: the
-// shared set from the file the desktop loads, the exclusives from the provider
-// that owns them.
+// ryoku/hyprland/modules/binds.lua), struck against what the active provider
+// says it cannot honour, then followed by that provider's own
+// compositor-exclusive binds as one section under the compositor's name. Each
+// part reads its single source at request time so none drifts: the shared set
+// from the file the desktop loads, the honesty pass and the exclusives both from
+// the provider that owns them, so the sheet never claims a chord the running
+// compositor does not perform.
 
 type bind struct {
 	Keys       []string `json:"keys"`
@@ -46,8 +48,75 @@ func keybinds() legend {
 	if b, err := os.ReadFile(bindsPath()); err == nil {
 		l = parseBinds(string(b))
 	}
+	filterLegend(&l, unhonoredChords())
 	appendCompositorBinds(&l)
 	return l
+}
+
+// reUnhonoredChord pulls the chord out of the key the provider stamps on a
+// shared bind it cannot honour: "desktop.keybinds (default SUPER + SHIFT + P)".
+// The chord it carries is the legend's own combo, so a match strikes the row.
+var reUnhonoredChord = regexp.MustCompile(`^desktop\.keybinds \(default (.+)\)$`)
+
+// unhonoredChords maps each shared chord the active provider cannot honour to
+// its reason, off the same dry-run report the window-manager page's cannot-do
+// section renders. Empty for a provider that honours every shared bind (Hyprland
+// over its own config answers an empty list), or when no provider answers, so
+// the legend then passes through untouched.
+func unhonoredChords() map[string]string {
+	c := desktopClient()
+	if !c.Available() {
+		return nil
+	}
+	rep, err := c.DryRun(desktopStorePath())
+	if err != nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, u := range rep.Unhonored {
+		if m := reUnhonoredChord.FindStringSubmatch(u.Key); m != nil {
+			out[m[1]] = u.Reason
+		}
+	}
+	return out
+}
+
+// filterLegend strikes the shared legend against the chords the running
+// compositor cannot honour, so the sheet never advertises a bind that does
+// nothing. A keyboard chord the compositor has no concept of (pin, scratchpad)
+// leaves the sheet outright. A pointer gesture stays: holding the modifier and
+// dragging is the compositor's own interaction rather than a rebindable key, so
+// the row keeps its caps but reads the provider's reason instead of an action it
+// no longer fires. A category emptied by the strike is dropped, never left as a
+// bare header.
+func filterLegend(l *legend, reasons map[string]string) {
+	if len(reasons) == 0 {
+		return
+	}
+	var cats []category
+	for _, cat := range l.Categories {
+		var kept []bind
+		for _, b := range cat.Binds {
+			reason, ok := reasons[b.Combo]
+			if !ok {
+				kept = append(kept, b)
+				continue
+			}
+			if !strings.Contains(b.Combo, "mouse") {
+				continue
+			}
+			b.Desc = capitalize(reason)
+			b.Rebindable = false
+			kept = append(kept, b)
+		}
+		if len(kept) > 0 {
+			cats = append(cats, category{Name: cat.Name, Binds: kept})
+		}
+	}
+	if cats == nil {
+		cats = []category{}
+	}
+	l.Categories = cats
 }
 
 // appendCompositorBinds folds the active provider's compositor-exclusive binds
@@ -66,21 +135,25 @@ func appendCompositorBinds(l *legend) {
 	if err != nil || len(rows) == 0 {
 		return
 	}
-	if cat, ok := compositorSection(rows, capitalize(c.Detection().Name), *l); ok {
+	if cat, ok := compositorSection(rows, capitalize(c.Detection().Name), l); ok {
 		l.Categories = append(l.Categories, cat)
 	}
 }
 
-// compositorSection turns the provider's exclusive rows into one named legend
-// section, keeping only the chords the shared legend does not already carry so a
-// chord never reads twice. ok is false when nothing survives, so the caller adds
-// no empty group. Each row's chord is prettified into keycaps the same way the
-// shared binds are, so the section reads identically to the rest of the legend.
-func compositorSection(rows []json.RawMessage, name string, base legend) (category, bool) {
-	seen := map[string]bool{}
-	for _, cat := range base.Categories {
-		for _, b := range cat.Binds {
-			seen[b.Combo] = true
+// compositorSection turns the provider's own rows into one named legend section.
+// A chord the shared legend already carries keeps its place in its own group and
+// takes the provider's description instead: the shared text comes from one
+// compositor's config, so on another it can name a mechanic that does not exist
+// there (a resize submap where the chord actually cycles preset widths). Only a
+// chord the shared legend has no row for lands in the named section, so a chord
+// still never reads twice. ok is false when nothing survives, so the caller adds
+// no empty group.
+func compositorSection(rows []json.RawMessage, name string, base *legend) (category, bool) {
+	shared := map[string]*bind{}
+	for ci := range base.Categories {
+		for bi := range base.Categories[ci].Binds {
+			b := &base.Categories[ci].Binds[bi]
+			shared[b.Combo] = b
 		}
 	}
 	var binds []bind
@@ -89,10 +162,16 @@ func compositorSection(rows []json.RawMessage, name string, base legend) (catego
 			Chord string `json:"chord"`
 			Desc  string `json:"desc"`
 		}
-		if json.Unmarshal(raw, &e) != nil || e.Chord == "" || seen[e.Chord] {
+		if json.Unmarshal(raw, &e) != nil || e.Chord == "" {
 			continue
 		}
-		seen[e.Chord] = true
+		if b, ok := shared[e.Chord]; ok {
+			if b != nil && e.Desc != "" {
+				b.Desc = capitalize(e.Desc)
+			}
+			continue
+		}
+		shared[e.Chord] = nil
 		binds = append(binds, bind{
 			Keys:       splitCombo(e.Chord),
 			Combo:      e.Chord,
@@ -123,15 +202,16 @@ func sectionName(s string) string {
 	return strings.TrimSuffix(s, ".")
 }
 
-// parseBinds walks binds.lua a line at a time. section comments (`-- Apps`)
-// open a category; each hl.bind adds an entry, description = the trailing
-// comment if present, else derived from the dispatcher. the 1..0 workspace
-// loop collapses into two range entries.
+// parseBinds walks binds.lua a line at a time. A section comment (`-- Apps`) set
+// off by a blank line above it opens a category; each hl.bind adds an entry,
+// description = the trailing comment if present, else derived from the
+// dispatcher. the 1..0 workspace loop collapses into two range entries.
 func parseBinds(src string) legend {
 	var cats []category
 	cur := -1
 	inLoop := false
 	prevComment := false
+	prevBlank := true
 
 	add := func(b bind) {
 		if cur < 0 {
@@ -146,27 +226,33 @@ func parseBinds(src string) legend {
 
 		if strings.HasPrefix(trimmed, "for ") {
 			inLoop = true
+			prevComment, prevBlank = false, false
 			continue
 		}
 		if inLoop && trimmed == "end" {
 			inLoop = false
+			prevComment, prevBlank = false, false
 			continue
 		}
 
 		if !strings.Contains(trimmed, "hl.bind(") {
 			m := reHeader.FindStringSubmatch(trimmed)
-			// Only the line that OPENS a comment block titles a category: the
-			// continuation lines of a section's explanation are prose, and taking
-			// each one made empty categories and left the real binds under the
-			// last sentence of the paragraph above them.
-			if m != nil && !prevComment {
+			// A real section header opens a category; a comment that is prose
+			// does not. Two prose shapes fooled the parser here: the continuation
+			// lines of a multi-line header (caught by prevComment), and an
+			// explanatory note dropped between two binds. A header always sits at
+			// the top of its block, one blank line below the binds above it, so a
+			// comment that follows code with no gap is that note, not a header.
+			if m != nil && !prevComment && prevBlank {
 				cats = append(cats, category{Name: sectionName(m[1])})
 				cur = len(cats) - 1
 			}
 			prevComment = m != nil
+			prevBlank = trimmed == ""
 			continue
 		}
 		prevComment = false
+		prevBlank = false
 
 		comment := ""
 		if m := reTrail.FindStringSubmatch(line); m != nil {

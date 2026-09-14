@@ -53,15 +53,18 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + Q", action: "close-window", noRepeat: true},
 		{chord: "SUPER + F", action: "fullscreen-window"},
 		{chord: "SUPER + SHIFT + P", reason: "niri has no pin-window action."},
-		{chord: "SUPER + A", action: "toggle-window-floating"},
+		// A description here replaces whatever the shared legend says for the
+		// chord, because that text is written for another compositor's mechanic:
+		// the resize submap and the fixed float size do not exist here.
+		{chord: "SUPER + A", action: "toggle-window-floating", desc: "float the window, or tile it back"},
 		// Hyprland spends this chord on a resize submap, which niri has no
 		// equivalent for. niri's own answer to resizing is stepping the column
 		// through preset widths, so the freed chord goes to the thing that
 		// makes the preset-widths setting reachable at all.
-		{chord: "SUPER + R", action: "switch-preset-column-width"},
+		{chord: "SUPER + R", action: "switch-preset-column-width", desc: "step the column through its preset widths"},
 		// Without a bind, tabbed columns cannot be entered, and the tab-indicator
 		// settings would size a strip a user can never see. T for tabs.
-		{chord: "SUPER + T", action: "toggle-column-tabbed-display"},
+		{chord: "SUPER + T", action: "toggle-column-tabbed-display", desc: "stack the column into a tabbed strip"},
 		{chord: "SUPER + P", action: spawnArgs("ryoku-monitor", "toggle")},
 
 		{chord: "SUPER + Left", action: "focus-column-left"},
@@ -101,7 +104,7 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + SHIFT + V", action: spawnSh("ryoku-summon ryovm flock -n -o /tmp/ryovm.lock qs -c ryovm")},
 		{chord: "SUPER + V", action: spawnArgs("ryoku-shell", "clipboard")},
 		{chord: "SUPER + Tab", action: "toggle-overview"},
-		{chord: "SUPER + ALT + Tab", action: "toggle-overview"},
+		{chord: "SUPER + ALT + Tab", reason: "niri has no desktop blocks to step through, so this would only open the same overview as SUPER + Tab."},
 		{chord: "SUPER + M", action: spawnArgs("ryoku-shell", "visualizer")},
 		{chord: "SUPER + SHIFT + M", action: spawnArgs("ryoku-shell", "visualizer-overlay")},
 		{chord: "SUPER + ALT + M", action: spawnArgs("ryoku-shell", "visualizer-place")},

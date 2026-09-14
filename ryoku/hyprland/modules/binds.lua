@@ -31,6 +31,7 @@ hl.bind(K(mod .. " + B"),         hl.dsp.exec_cmd("ryoku-app browser"))         
 hl.bind(K(mod .. " + N"),         hl.dsp.exec_cmd("ryoku-app editor"))             -- editor
 hl.bind(K(mod .. " + O"),         hl.dsp.exec_cmd("ryoku-app notes"))              -- notes
 hl.bind(K(mod .. " + ALT + E"),   hl.dsp.exec_cmd("kitty -e yazi"))               -- yazi file manager
+hl.bind(K(mod .. " + J"),         hl.dsp.exec_cmd("ryotunes"))                     -- open Ryotunes (single-instance: a second press focuses it)
 
 -- Shell surfaces and tools
 hl.bind(K(mod .. " + Space"),     hl.dsp.global("ryoku:launcher"))                 -- open the app launcher
@@ -69,7 +70,6 @@ hl.bind(K(mod .. " + H"),          hl.dsp.exec_cmd(ws_helper .. " hide"))       
 -- hand keyboard focus back to a visible window, or the next bar panel to close
 -- refocuses the hidden one and pops the scratchpad open with it.
 hl.bind(K(mod .. " + ALT + H"),    hl.dsp.exec_cmd(ws_helper .. " scratch"))       -- show or hide the scratchpad (special workspace)
-hl.bind(K(mod .. " + J"),          hl.dsp.exec_cmd("ryotunes"))                    -- open Ryotunes (single-instance: a second press focuses it)
 hl.bind(K(mod .. " + mouse_up"),   hl.dsp.focus({ workspace = "r-1" }))            -- previous workspace
 hl.bind(K(mod .. " + mouse_down"), hl.dsp.focus({ workspace = "r+1" }))            -- next workspace
 for i = 1, 10 do

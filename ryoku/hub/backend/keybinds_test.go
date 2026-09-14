@@ -202,19 +202,20 @@ func TestDescribeRyokuApp(t *testing.T) {
 	}
 }
 
-// The provider's exclusive binds become one named section, its keycaps prettified
-// and its copy capitalised like the shared legend, minus any chord the shared
-// legend already carries (which would otherwise read twice).
+// The provider's own binds become one named section, its keycaps prettified and
+// its copy capitalised like the shared legend. A chord the shared legend already
+// carries stays in its own group and takes the provider's wording, since the
+// shared text describes another compositor's mechanic.
 func TestCompositorSection(t *testing.T) {
 	base := legend{Categories: []category{
-		{Name: "Windows", Binds: []bind{{Combo: "SUPER + Q"}, {Combo: "SUPER + F"}}},
+		{Name: "Windows", Binds: []bind{{Combo: "SUPER + Q"}, {Combo: "SUPER + F", Desc: "Fullscreen the Hyprland way"}}},
 	}}
 	rows := []json.RawMessage{
 		json.RawMessage(`{"chord":"SUPER + D","desc":"maximise the column"}`),
-		json.RawMessage(`{"chord":"SUPER + F","desc":"already a shared chord"}`),
+		json.RawMessage(`{"chord":"SUPER + F","desc":"fullscreen the window"}`),
 		json.RawMessage(`{"chord":"SUPER + CTRL + R","desc":"reset the window height"}`),
 	}
-	cat, ok := compositorSection(rows, "Niri", base)
+	cat, ok := compositorSection(rows, "Niri", &base)
 	if !ok {
 		t.Fatal("expected a section")
 	}
@@ -222,7 +223,10 @@ func TestCompositorSection(t *testing.T) {
 		t.Errorf("section name = %q, want Niri", cat.Name)
 	}
 	if len(cat.Binds) != 2 {
-		t.Fatalf("got %d binds, want 2 (the shared SUPER + F chord is dropped)", len(cat.Binds))
+		t.Fatalf("got %d binds, want 2 (the shared SUPER + F chord stays in Windows)", len(cat.Binds))
+	}
+	if got := base.Categories[0].Binds[1].Desc; got != "Fullscreen the window" {
+		t.Errorf("shared row desc = %q, want the provider's wording", got)
 	}
 	if !reflect.DeepEqual(cat.Binds[0].Keys, []string{"Super", "D"}) {
 		t.Errorf("keycaps = %v, want [Super D]", cat.Binds[0].Keys)
@@ -240,7 +244,92 @@ func TestCompositorSection(t *testing.T) {
 func TestCompositorSectionAbsentWhenAllShared(t *testing.T) {
 	base := legend{Categories: []category{{Name: "Windows", Binds: []bind{{Combo: "SUPER + D"}}}}}
 	rows := []json.RawMessage{json.RawMessage(`{"chord":"SUPER + D","desc":"x"}`)}
-	if _, ok := compositorSection(rows, "Niri", base); ok {
+	if _, ok := compositorSection(rows, "Niri", &base); ok {
 		t.Error("section must be absent when no exclusive bind survives dedup")
+	}
+}
+
+// The honesty pass strikes the shared legend against the chords the running
+// compositor cannot honour. A keyboard chord it has no concept of (pin,
+// scratchpad) leaves the sheet; a pointer gesture stays but reads the provider's
+// reason instead of an action it never fires; a chord the provider says nothing
+// about is untouched; and a category emptied by the strike is dropped.
+func TestFilterLegendStrikesUnhonored(t *testing.T) {
+	l := legend{Categories: []category{
+		{Name: "Windows", Binds: []bind{
+			{Keys: []string{"Super", "Q"}, Combo: "SUPER + Q", Desc: "Close active window"},
+			{Keys: []string{"Super", "Shift", "P"}, Combo: "SUPER + SHIFT + P", Desc: "Pin a floating window", Rebindable: true},
+		}},
+		{Name: "Move/resize with the mouse", Binds: []bind{
+			{Keys: []string{"Super", "LMB"}, Combo: "SUPER + mouse:272", Desc: "Move window"},
+		}},
+		{Name: "Scratch", Binds: []bind{
+			{Keys: []string{"Super", "H"}, Combo: "SUPER + H", Desc: "Hide in the scratchpad", Rebindable: true},
+		}},
+	}}
+	filterLegend(&l, map[string]string{
+		"SUPER + SHIFT + P": "niri has no pin-window action.",
+		"SUPER + mouse:272": "niri moves windows with Mod and drag natively.",
+		"SUPER + H":         "niri has no scratchpad workspace.",
+	})
+
+	w := find(l, "Windows")
+	if w == nil || len(w.Binds) != 1 || w.Binds[0].Combo != "SUPER + Q" {
+		t.Fatalf("Windows should keep only SUPER + Q, dropping the pin chord: %+v", w)
+	}
+	m := find(l, "Move/resize with the mouse")
+	if m == nil || len(m.Binds) != 1 {
+		t.Fatalf("the pointer gesture must survive the strike: %+v", m)
+	}
+	if m.Binds[0].Desc != "Niri moves windows with Mod and drag natively." {
+		t.Errorf("mouse desc = %q, want the provider's reason", m.Binds[0].Desc)
+	}
+	if m.Binds[0].Rebindable {
+		t.Error("a native gesture is not rebindable")
+	}
+	if find(l, "Scratch") != nil {
+		t.Error("a category emptied by the strike must be dropped, not left as a bare header")
+	}
+}
+
+// A provider that honours every shared bind reports no keybind losses, so the
+// chord map is empty and the whole legend passes through. This is Hyprland over
+// its own config: nothing vanishes from its sheet.
+func TestFilterLegendKeepsEverythingWhenNothingUnhonored(t *testing.T) {
+	l := parseBinds(sampleBinds)
+	before := 0
+	for _, c := range l.Categories {
+		before += len(c.Binds)
+	}
+	filterLegend(&l, map[string]string{})
+	after := 0
+	for _, c := range l.Categories {
+		after += len(c.Binds)
+	}
+	if before == 0 || before != after {
+		t.Errorf("an empty loss list must not drop a single bind: before=%d after=%d", before, after)
+	}
+}
+
+// An explanatory note dropped between two binds is prose, not a section header:
+// it follows a bind with no blank line above it, so it neither opens a category
+// nor siphons the binds below it. Regression for the scratchpad comment that
+// became a category titled with its own first line.
+func TestInlineCommentIsNotACategory(t *testing.T) {
+	l := parseBinds(`-- Workspaces
+hl.bind(K(mod .. " + H"), hl.dsp.exec_cmd("x hide")) -- hide the focused window
+-- Through the helper, not toggle_special directly: hiding the scratchpad has to
+-- hand keyboard focus back to a visible window, or the next bar panel to close
+-- refocuses the hidden one and pops the scratchpad open with it.
+hl.bind(K(mod .. " + ALT + H"), hl.dsp.exec_cmd("x scratch")) -- show or hide the scratchpad
+`)
+	if len(l.Categories) != 1 {
+		t.Fatalf("the inline note must not open a category: got %d: %+v", len(l.Categories), l.Categories)
+	}
+	if l.Categories[0].Name != "Workspaces" {
+		t.Errorf("category = %q, want Workspaces", l.Categories[0].Name)
+	}
+	if n := len(l.Categories[0].Binds); n != 2 {
+		t.Fatalf("both H binds belong to Workspaces, none siphoned into a prose category: got %d", n)
 	}
 }
