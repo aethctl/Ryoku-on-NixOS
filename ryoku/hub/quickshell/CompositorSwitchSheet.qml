@@ -43,6 +43,12 @@ Item {
     }
     function close() { sh.active = false; sh.closed(); }
     function cap(name) { return name && name.length ? name.charAt(0).toUpperCase() + name.slice(1) : (name || ""); }
+    // The reclaimed size, named the way pacman's own removal summary does.
+    function humanSize(bytes) {
+        var b = Number(bytes) || 0;
+        if (b >= 1073741824) return (b / 1073741824).toFixed(2) + " GiB";
+        return (b / 1048576).toFixed(2) + " MiB";
+    }
 
     readonly property string targetName: sh.report ? sh.report.target : (sh.target ? sh.target.name : "")
     readonly property string activeName: sh.report ? sh.report.active : (sh.current ? sh.current.name : "")
@@ -52,6 +58,13 @@ Item {
     readonly property bool deployed: !!sh.report && sh.report.deployed === true
     readonly property bool available: !!sh.report && (sh.report.available === true || sh.report.deployed === true)
     readonly property var unhonored: sh.report && sh.report.unhonored ? sh.report.unhonored : []
+    // What leaving the active compositor reclaims, computed by the backend for
+    // the outgoing compositor's own packages. Removable drives the keep-or-remove
+    // question: it is true whenever any of those packages are installed, so a
+    // checkout box that never installed the meta-package is still offered the
+    // choice its compositor packages make real.
+    readonly property var reclaim: sh.report && sh.report.reclaim ? sh.report.reclaim : null
+    readonly property bool reclaimRemovable: !!sh.reclaim && sh.reclaim.removable === true
     property bool switching: false
     property bool switched: false
     property string failure: ""
@@ -94,21 +107,24 @@ Item {
     function confirm() {
         if (!sh.available || sh.loading || sh.switching || !sh.target)
             return;
-        // One switch path either way: the CLI owns the transaction order, so
-        // the Hub never spells a pacman command of its own. Removal drops the
-        // package only; the old compositor's config tree holds hand-written
-        // files the user owns, and deleting it would lose them.
-        if (sh.deployed) {
+        // The CLI owns the transaction order, so the Hub never spells a pacman
+        // command of its own. Removal drops the outgoing compositor's packages
+        // only; its config tree holds hand-written files the user owns, and the
+        // switch leaves them in place.
+        var removing = sh.keep === "remove" && sh.reclaimRemovable;
+        // The in-process path is only safe when nothing privileged happens: a
+        // deployed target installs nothing, and keeping the old compositor
+        // removes nothing. Anything that runs pacman gets a terminal for its
+        // progress and its sudo prompt.
+        if (sh.deployed && !removing) {
             sh.switching = true;
             switchProc.command = ["ryoku", "wm", "use", sh.target.name, "--keep-previous"];
             switchProc.running = false;
             switchProc.running = true;
             return;
         }
-        // A package install needs a terminal: pacman's progress and its sudo
-        // prompt have nowhere to go in a sheet.
         var line = "ryoku wm use " + sh.shq(sh.target.name)
-            + (sh.keep === "remove" ? " --remove-previous" : " --keep-previous");
+            + (removing ? " --remove-previous" : " --keep-previous");
         line += "; echo; read -n1 -rsp " + sh.shq(I18n.tr("Done. Press any key to close.")) + "; echo";
         Spawn.run(["kitty", "--class", "ryoku-wm-switch", "-e", "sh", "-c", line]);
         sh.close();
@@ -326,27 +342,13 @@ Item {
                 }
             }
 
-            // A checkout has no packages to keep or remove, so the choice is
-            // absent rather than disabled. Say why: an option that silently
-            // disappears reads as a missing feature.
+            // The keep-or-remove question, shown whenever leaving the active
+            // compositor would reclaim something. The count and size are the
+            // outgoing compositor's own installed packages, so the choice is
+            // offered on a checkout box too, where the meta-package is absent but
+            // the compositor packages are not.
             Column {
-                visible: sh.leaving && sh.deployed
-                width: parent.width
-                spacing: Tokens.s2
-                CompositorSwitchSheetHead {
-                    width: parent.width
-                    text: I18n.tr("LEAVING %1").arg(sh.cap(sh.activeName).toUpperCase())
-                }
-                Body {
-                    width: parent.width
-                    text: I18n.tr("Nothing to uninstall: %1 runs from your checkout rather than a package, so both compositors stay available and switching back costs nothing.").arg(sh.cap(sh.activeName))
-                }
-            }
-
-            Column {
-                // Nothing to keep or remove without packages: on a checkout both
-                // compositors ride the deployed trees.
-                visible: sh.leaving && !sh.deployed
+                visible: sh.leaving && sh.reclaimRemovable
                 width: parent.width
                 spacing: Tokens.s2
                 CompositorSwitchSheetHead {
@@ -360,14 +362,33 @@ Item {
                 }
                 Body {
                     width: parent.width
+                    // The count and size are read null-safe: the block is hidden
+                    // while the report loads, but its bindings still evaluate.
                     text: sh.keep === "remove"
-                        ? I18n.tr("Remove %1. Frees that space and removes its session entry; switching back later means installing it again.").arg(sh.cap(sh.activeName))
-                        : I18n.tr("Keep %1 installed. Switch back instantly with no download, at the cost of its packages staying on disk.").arg(sh.cap(sh.activeName))
+                        ? I18n.tr("Remove %1: frees %2 packages (%3) and drops its session entry; switching back later reinstalls them.").arg(sh.cap(sh.activeName)).arg(sh.reclaim ? sh.reclaim.count : 0).arg(sh.humanSize(sh.reclaim ? sh.reclaim.size : 0))
+                        : I18n.tr("Keep %1 installed: switch back with no download, at the cost of %2 packages (%3) staying on disk.").arg(sh.cap(sh.activeName)).arg(sh.reclaim ? sh.reclaim.count : 0).arg(sh.humanSize(sh.reclaim ? sh.reclaim.size : 0))
                 }
                 Body {
                     width: parent.width
                     text: I18n.tr("Either way your wm.%1.* settings and its config files stay put, so a switch back restores them.").arg(sh.activeName)
                     faint: true
+                }
+            }
+
+            // Nothing of the outgoing compositor is installed to reclaim: the
+            // block still appears and says so, because an option that silently
+            // disappears reads as a missing feature.
+            Column {
+                visible: sh.leaving && !sh.reclaimRemovable
+                width: parent.width
+                spacing: Tokens.s2
+                CompositorSwitchSheetHead {
+                    width: parent.width
+                    text: I18n.tr("LEAVING %1").arg(sh.cap(sh.activeName).toUpperCase())
+                }
+                Body {
+                    width: parent.width
+                    text: I18n.tr("Nothing to remove: none of %1's packages are installed to reclaim here, so both compositors stay available and switching back costs nothing.").arg(sh.cap(sh.activeName))
                 }
             }
         }

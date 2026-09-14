@@ -177,31 +177,35 @@ func cmdWmUse(args []string) {
 	report, applyErr := wm.OpenNamed(name).DryRun(store)
 	printWmSwitchPreview(name, active, store, report, applyErr)
 
+	// The keep-or-remove tradeoff in the terms that are actually true: what
+	// leaving the active compositor reclaims, or that there is nothing to remove.
+	printWmPreviousChoice(active, name, keepPrevious)
+
 	pkg := "ryoku-desktop-" + name
-	// A checkout box runs deployed trees, not packages, so there is nothing to
-	// install, nothing missing, and nothing to keep or remove: both compositors
-	// ride the same checkout. Mentioning packages there would describe work
-	// that is not going to happen.
+	// A checkout box runs deployed trees, so switching to one installs nothing;
+	// picking the session at the greeter is the whole move. A package box installs
+	// the target first, as a plain pacman transaction (no SNAP_PAC_SKIP) so
+	// snap-pac snapshots it and `ryoku rollback` can undo the switch.
 	if deployedProvider(name) {
 		fmt.Printf(i18n.T("%s is ready. Log out and pick %s at the greeter.\n"), name, name)
-		return
+	} else {
+		if !packageAvailable(pkg) {
+			die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
+		}
+		if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+			die(i18n.T("could not install %s: %v"), pkg, err)
+		}
+		fmt.Printf(i18n.T("Installed %s; %s is the compositor at the next login.\n"), pkg, name)
 	}
-	printWmPreviousChoice(active, keepPrevious)
-	if !packageAvailable(pkg) {
-		die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
+
+	// Removing the outgoing compositor's packages is a second transaction on
+	// purpose: the switch is complete once the target is ready, so a refusal or
+	// failure here leaves a working desktop rather than a half-switched one. It
+	// runs whether the target came from a package or a checkout, because the old
+	// compositor is a pacman package set either way.
+	if !keepPrevious && active != "" && active != name {
+		removePreviousCompositor(active, name)
 	}
-	// A plain pacman transaction (no SNAP_PAC_SKIP) so snap-pac snapshots it and
-	// `ryoku rollback` can undo the switch.
-	if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
-		die(i18n.T("could not install %s: %v"), pkg, err)
-	}
-	// Removal is a second transaction on purpose: the switch is complete once
-	// the target is installed, so a failure to remove the old compositor leaves
-	// a working desktop rather than a half-switched one.
-	if !keepPrevious && active != "" {
-		removePreviousCompositor(active)
-	}
-	fmt.Printf(i18n.T("Installed %s; %s is the compositor at the next login.\n"), pkg, name)
 }
 
 // deployedProvider reports whether a provider is usable without its package:
@@ -220,27 +224,60 @@ func deployedProvider(name string) bool {
 	return err == nil
 }
 
-// printWmPreviousChoice states the tradeoff in the terms that are actually
-// true, because the settings surviving either way is what makes removal safe.
-func printWmPreviousChoice(active string, keep bool) {
-	if active == "" {
+// printWmPreviousChoice states the tradeoff in the terms that are actually true:
+// how many packages leaving the active compositor reclaims and how much space,
+// or that nothing of it is installed to remove. The settings surviving either
+// way is what makes a removal safe, and is stated by the preview above.
+func printWmPreviousChoice(active, incoming string, keep bool) {
+	if active == "" || active == incoming {
+		return
+	}
+	rs, err := wm.Reclaim(active, incoming)
+	if err != nil || !rs.Removable {
+		fmt.Printf(i18n.T("  Nothing to remove: no installed %s packages can be reclaimed, so switching back costs nothing.\n"), active)
 		return
 	}
 	if keep {
-		fmt.Printf(i18n.T("  Keeping %s installed: switching back needs no download, and its packages and config stay on disk.\n"), active)
+		fmt.Printf(i18n.T("  Keeping %s: switch back with no download, at the cost of %d packages (%s) staying on disk.\n"), active, rs.Count, humanSize(rs.Size))
 		return
 	}
-	fmt.Printf(i18n.T("  Removing %s: frees its packages and drops its session entry, and switching back later installs it again.\n"), active)
+	fmt.Printf(i18n.T("  Removing %s: frees %d packages (%s) and drops its session entry; switching back later reinstalls them.\n"), active, rs.Count, humanSize(rs.Size))
 }
 
-// removePreviousCompositor drops the old compositor package, leaving its config
-// tree and its wm.<name>.* settings alone so a switch back restores the desktop
-// rather than a default one.
-func removePreviousCompositor(active string) {
-	pkg := "ryoku-desktop-" + active
-	if err := sys.Sudo("pacman", "-Rns", "--noconfirm", pkg); err != nil {
-		fmt.Printf(i18n.T("Switched, but %s could not be removed: %v\n"), pkg, err)
+// removePreviousCompositor removes the outgoing compositor's packages after a
+// switch to incoming, in one pacman transaction over exactly the reviewed set,
+// leaving its config tree and its wm.<name>.* settings alone so a switch back
+// restores the desktop rather than a default one. It refuses rather than remove
+// anything pacman's own plan no longer agrees with, so a switch can never
+// cascade past what the preview showed.
+func removePreviousCompositor(active, incoming string) {
+	rs, err := wm.Reclaim(active, incoming)
+	if err != nil {
+		fmt.Printf(i18n.T("Switched, but %s could not be measured for removal: %v\n"), active, err)
+		return
 	}
+	if !rs.Removable {
+		return // nothing installed to reclaim
+	}
+	if err := wm.VerifyRemoval(rs); err != nil {
+		fmt.Printf(i18n.T("Switched, but %s was kept: %v\n"), active, err)
+		return
+	}
+	rmArgs := append([]string{"pacman", "-Rns", "--noconfirm"}, rs.Targets...)
+	if err := sys.Sudo(rmArgs...); err != nil {
+		fmt.Printf(i18n.T("Switched, but %s could not be removed: %v\n"), active, err)
+		return
+	}
+	fmt.Printf(i18n.T("Removed %s: reclaimed %d packages (%s).\n"), active, rs.Count, humanSize(rs.Size))
+}
+
+// humanSize names a byte count the way pacman's own removal summary does, so a
+// reclaimed size reads the same in `ryoku wm use` as in pacman.
+func humanSize(n int64) string {
+	if n >= 1<<30 {
+		return fmt.Sprintf("%.2f GiB", float64(n)/(1<<30))
+	}
+	return fmt.Sprintf("%.2f MiB", float64(n)/(1<<20))
 }
 
 func knownProvider(name string) bool {

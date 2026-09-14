@@ -19,7 +19,7 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 
 |Verb|Answers|
 |---|---|
-|`caps`|the capability manifest, the workspace model, and which files it owns|
+|`caps`|the capability manifest, the workspace model, which files it owns, and the packages it is made of|
 |`state`|one snapshot: outputs, workspaces, windows, keyboard|
 |`watch`|the same as a stream of frames, one JSON object per line|
 |`act <id>`|one neutral action (`window.close`, `workspace.focus`, ...)|
@@ -141,9 +141,18 @@ plain pacman transaction, which is what lets `ryoku rollback` undo the switch.
 The Hub offers the same flow on its Global page.
 
 Keeping the old compositor installed means switching back needs no download, at
-the cost of its packages staying on disk. Removing it frees that space and drops
-its session entry. Either way the settings survive, which is what makes removal
-safe. Keeping is the default because it is the reversible choice.
+the cost of its packages staying on disk. Removing it reclaims those: the
+compositor package and the satellites `ryoku-desktop-<name>` installs (the
+provider declares them in `caps`, so nothing outside the seam names one), plus
+the private dependencies that orphan with them. The switch names how many
+packages and how much space that is, from the outgoing compositor's own
+installed packages, so the choice is offered even on a checkout box where the
+meta-package was never installed. A package the incoming compositor also needs,
+or one another installed package still depends on, is kept; and the removal is
+cross-checked against pacman's own plan and refused if it would touch anything
+outside the reviewed set, so a switch can never break the machine. Either way
+the settings survive, which is what makes removal safe. Keeping is the default
+because it is the reversible choice.
 
 Every `desktop.*` setting is compositor-neutral and carries over. Only
 `wm.<name>.*` is compositor-exclusive, and it is never deleted, only left alone

@@ -113,6 +113,12 @@ type wmPreviewReport struct {
 	Provider     string         `json:"provider,omitempty"`
 	Unhonored    []wm.Unhonored `json:"unhonored"`
 	ReloadNeeded bool           `json:"reloadNeeded"`
+	// Reclaim is what leaving the active compositor for this target would remove:
+	// the packages, their count and their total size, or Removable false when
+	// nothing is installed to reclaim. It is what turns the sheet's keep-or-
+	// remove question from a guess about the meta-package into the truth about
+	// the compositor's own packages. Absent when there is no compositor to leave.
+	Reclaim *wm.ReclaimSet `json:"reclaim,omitempty"`
 }
 
 func wmPreview(name string) error {
@@ -139,6 +145,15 @@ func wmPreview(name string) error {
 		out.ReloadNeeded = rep.ReloadNeeded
 		if len(rep.Unhonored) > 0 {
 			out.Unhonored = rep.Unhonored
+		}
+	}
+	// What leaving the active compositor reclaims. Computed for the outgoing
+	// compositor, not the target, and best-effort: a box without pacman (or with
+	// no active compositor) simply carries no reclaim block and the sheet reads
+	// that as nothing to remove.
+	if out.Active != "" && out.Active != name {
+		if rs, err := wm.Reclaim(out.Active, name); err == nil {
+			out.Reclaim = &rs
 		}
 	}
 	return printJSON(out)

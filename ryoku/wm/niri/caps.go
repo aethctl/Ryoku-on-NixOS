@@ -62,6 +62,18 @@ var configFiles = []string{
 	"niri/monitors_user.kdl",
 }
 
+// The packages ryoku-desktop-niri installs for the compositor: niri, the
+// xwayland-satellite X11 bridge, and the GNOME portal backend its caps report.
+// Kept in step with that package's depends
+// (release/packages/ryoku-desktop-niri/PKGBUILD); this is the list a switch
+// away from niri reclaims, minus ryoku-desktop, which is shared with the
+// compositor that replaces it.
+var compositorPackages = []string{
+	"niri",
+	"xwayland-satellite",
+	"xdg-desktop-portal-gnome",
+}
+
 // The manifest is fixed, not probed: niri does not gain features while running,
 // and caps is read during startup.
 func runCaps() error {
@@ -79,6 +91,7 @@ func runCaps() error {
 		ConfigFiles:    configFiles,
 		GeneratedFiles: generatedFiles,
 		PortalBackend:  "gnome",
+		Packages:       compositorPackages,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")

@@ -58,6 +58,25 @@ var configFiles = []string{
 	"hypr/modules",
 }
 
+// The packages ryoku-desktop-hyprland installs for the compositor: Hyprland
+// itself, its plugins, its portal and its satellites. Kept in step with that
+// package's depends (release/packages/ryoku-desktop-hyprland/PKGBUILD); this is
+// the list a switch away from Hyprland reclaims, minus ryoku-desktop, which is
+// shared with the compositor that replaces it.
+var compositorPackages = []string{
+	"hyprland",
+	"hypr-dynamic-cursors",
+	"ryoku-hypr-plugins",
+	"hyprglass",
+	"imgborders",
+	"ryoku-keysounds",
+	"hyprpolkitagent",
+	"xdg-desktop-portal-hyprland",
+	"hyprland-preview-share-picker",
+	"hypridle",
+	"hyprpicker",
+}
+
 // The manifest is fixed, not probed: Hyprland does not gain features while
 // running, and caps is read during startup.
 func runCaps() error {
@@ -73,6 +92,7 @@ func runCaps() error {
 		ConfigFiles:    configFiles,
 		GeneratedFiles: generatedFiles,
 		PortalBackend:  "hyprland",
+		Packages:       compositorPackages,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
