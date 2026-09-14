@@ -78,8 +78,12 @@ Column {
                             font.weight: Font.Medium
                         }
                         Text {
+                            // A deployed provider is switchable, so it must not
+                            // read as missing: on a checkout neither compositor
+                            // is a package and both are ready.
                             text: row.isActive ? I18n.tr("RUNNING NOW")
-                                : (row.modelData.installed ? I18n.tr("INSTALLED") : I18n.tr("NOT INSTALLED"))
+                                : (row.modelData.installed ? I18n.tr("INSTALLED")
+                                : (row.modelData.deployed ? I18n.tr("READY") : I18n.tr("NOT INSTALLED")))
                             color: Tokens.inkMuted
                             font.family: Tokens.mono
                             font.pixelSize: Tokens.fTiny
@@ -138,7 +142,7 @@ Column {
             Text {
                 width: parent.width
                 wrapMode: Text.WordWrap
-                text: I18n.tr("Switching installs the chosen compositor and takes effect at your next login. Every setting lives in one store, so a switch never loses your preferences.")
+                text: I18n.tr("A switch takes effect at your next login, installing the chosen compositor first if it is not already on the machine. Every setting lives in one store, so a switch never loses your preferences.")
                 color: Tokens.inkFaint
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fSmall

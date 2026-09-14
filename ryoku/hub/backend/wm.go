@@ -58,12 +58,16 @@ func wmDeployed(name string) bool {
 // so the Hub can build the switch and the keep-or-remove cleanup from data,
 // never from a compositor name spelled in QML.
 type wmProvider struct {
-	Name      string   `json:"name"`
-	Package   string   `json:"package"`
-	ConfigDir string   `json:"configDir"`
-	Installed bool     `json:"installed"`
-	Active    bool     `json:"active"`
-	Caps      *wm.Caps `json:"caps,omitempty"`
+	Name      string `json:"name"`
+	Package   string `json:"package"`
+	ConfigDir string `json:"configDir"`
+	Installed bool   `json:"installed"`
+	// Deployed is true for a provider usable without its package, which is what
+	// a checkout leaves behind. A row that is deployed is switchable, so the
+	// Hub must not label it as missing.
+	Deployed bool     `json:"deployed"`
+	Active   bool     `json:"active"`
+	Caps     *wm.Caps `json:"caps,omitempty"`
 }
 
 func wmList() error {
@@ -75,6 +79,7 @@ func wmList() error {
 			Package:   wmPackage(name),
 			ConfigDir: wm.ConfigDir(name),
 			Installed: pkgInstalled(wmPackage(name)),
+			Deployed:  wmDeployed(name),
 			Active:    name == active,
 		}
 		// The manifest is present only when the provider binary is, so a box

@@ -31,6 +31,9 @@ Item {
         sh.current = currentRow;
         sh.report = null;
         sh.keep = "keep";
+        sh.switching = false;
+        sh.switched = false;
+        sh.failure = "";
         sh.loading = true;
         previewProc.command = ["ryoku-hub", "wm", "preview", targetRow.name];
         previewProc.running = false;
@@ -49,6 +52,9 @@ Item {
     readonly property bool deployed: !!sh.report && sh.report.deployed === true
     readonly property bool available: !!sh.report && (sh.report.available === true || sh.report.deployed === true)
     readonly property var unhonored: sh.report && sh.report.unhonored ? sh.report.unhonored : []
+    property bool switching: false
+    property bool switched: false
+    property string failure: ""
 
     anchors.fill: parent
     visible: sh.active
@@ -69,20 +75,45 @@ Item {
         stderr: StdioCollector { }
     }
 
+    // The deployed switch has nothing to install, so it runs here rather than
+    // in a terminal: a console window for work that needs no password and
+    // prints one line was the wrong surface for it. A package install still
+    // gets the terminal, where pacman's progress and its sudo prompt belong.
+    Process {
+        id: switchProc
+        stdout: StdioCollector { }
+        stderr: StdioCollector { }
+        onExited: (code) => {
+            sh.switching = false;
+            sh.switched = code === 0;
+            sh.failure = code === 0 ? "" : I18n.tr("The switch did not complete. Run ryoku wm use %1 to see why.").arg(sh.targetName);
+        }
+    }
+
     function shq(s) { return "'" + String(s).replace(/'/g, "'\\''") + "'"; }
     function confirm() {
-        if (!sh.available || sh.loading || !sh.target)
+        if (!sh.available || sh.loading || sh.switching || !sh.target)
             return;
-        // One switch path: the CLI owns the transaction order, so the Hub never
-        // spells a pacman command of its own. Removal drops the package only;
-        // the old compositor's config tree holds hand-written files the user
-        // owns (user.lua, monitors_user.lua), and deleting it would lose them.
+        // One switch path either way: the CLI owns the transaction order, so
+        // the Hub never spells a pacman command of its own. Removal drops the
+        // package only; the old compositor's config tree holds hand-written
+        // files the user owns, and deleting it would lose them.
+        if (sh.deployed) {
+            sh.switching = true;
+            switchProc.command = ["ryoku", "wm", "use", sh.target.name, "--keep-previous"];
+            switchProc.running = false;
+            switchProc.running = true;
+            return;
+        }
+        // A package install needs a terminal: pacman's progress and its sudo
+        // prompt have nowhere to go in a sheet.
         var line = "ryoku wm use " + sh.shq(sh.target.name)
             + (sh.keep === "remove" ? " --remove-previous" : " --keep-previous");
         line += "; echo; read -n1 -rsp " + sh.shq(I18n.tr("Done. Press any key to close.")) + "; echo";
         Spawn.run(["kitty", "--class", "ryoku-wm-switch", "-e", "sh", "-c", line]);
         sh.close();
     }
+    function logOut() { Spawn.run(["ryoku", "wm", "act", "session.exit"]); }
 
     // dim backdrop: a click outside the card cancels.
     MouseArea { anchors.fill: parent; onClicked: sh.close() }
@@ -118,7 +149,8 @@ Item {
         Text {
             id: headline
             anchors { left: eyebrow.left; top: eyebrow.bottom; topMargin: Tokens.s1; right: closeBtn.left; rightMargin: Tokens.s3 }
-            text: I18n.tr("Switch to %1").arg(sh.cap(sh.targetName))
+            text: sh.switched ? I18n.tr("%1 is ready").arg(sh.cap(sh.targetName))
+                : I18n.tr("Switch to %1").arg(sh.cap(sh.targetName))
             color: Tokens.ink
             font.family: Tokens.display
             font.pixelSize: Tokens.fHero
@@ -135,6 +167,7 @@ Item {
                 topMargin: Tokens.s4; bottomMargin: Tokens.s3
             }
             clip: true
+            visible: !sh.switched
             contentHeight: bodyCol.height
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
@@ -232,6 +265,31 @@ Item {
             }
         }
 
+        // ── done ────────────────────────────────────────────────────────────
+        // Replaces the preview once the switch has landed. A compositor change
+        // only takes effect at the next session, so the one useful next step is
+        // logging out, and that is the action offered.
+        Column {
+            visible: sh.switched
+            anchors {
+                left: parent.left; right: parent.right
+                top: headline.bottom; bottom: decision.top
+                leftMargin: Tokens.s5; rightMargin: Tokens.s5
+                topMargin: Tokens.s5
+            }
+            spacing: Tokens.s3
+            CompositorSwitchSheetHead { text: I18n.tr("WHAT HAPPENS NEXT") }
+            Body {
+                width: parent.width
+                text: I18n.tr("Log out, then pick %1 at the greeter. Your session is untouched until you do.").arg(sh.cap(sh.targetName))
+            }
+            Body {
+                width: parent.width
+                text: I18n.tr("Every desktop.* setting is already in place, and %1 stays exactly as it is, so you can come back the same way.").arg(sh.cap(sh.activeName))
+                faint: true
+            }
+        }
+
         // ── decision ────────────────────────────────────────────────────────
         // pinned above the footer so the reason a switch is blocked and the
         // keep-or-remove choice are always in view, never scrolled off with the
@@ -248,7 +306,7 @@ Item {
             Rectangle { width: parent.width; height: 1; color: Tokens.lineSoft }
 
             Rectangle {
-                visible: !!sh.report && !sh.available
+                visible: sh.failure !== "" || (!!sh.report && !sh.available)
                 width: parent.width
                 height: unavailText.height + Tokens.s3
                 radius: Tokens.radius
@@ -259,7 +317,8 @@ Item {
                     id: unavailText
                     anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: Tokens.s3; rightMargin: Tokens.s3 }
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("The %1 package is not available on this channel yet, and it is not deployed from a checkout, so this switch cannot be made from here.").arg(sh.report ? sh.report.package : "")
+                    text: sh.failure !== "" ? sh.failure
+                        : I18n.tr("The %1 package is not available on this channel yet, and it is not deployed from a checkout, so this switch cannot be made from here.").arg(sh.report ? sh.report.package : "")
                     color: Tokens.alert
                     font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall
@@ -304,15 +363,17 @@ Item {
             Rectangle { height: 1; color: Tokens.lineSoft; anchors { left: parent.left; right: parent.right; top: parent.top } }
             Btn {
                 anchors { left: parent.left; leftMargin: Tokens.s5; verticalCenter: parent.verticalCenter }
-                text: I18n.tr("CANCEL")
+                text: sh.switched ? I18n.tr("LATER") : I18n.tr("CANCEL")
                 onAct: sh.close()
             }
             Btn {
                 anchors { right: parent.right; rightMargin: Tokens.s5; verticalCenter: parent.verticalCenter }
-                text: I18n.tr("SWITCH TO %1").arg(sh.cap(sh.targetName).toUpperCase())
+                text: sh.switched ? I18n.tr("LOG OUT NOW")
+                    : (sh.switching ? I18n.tr("SWITCHING")
+                    : I18n.tr("SWITCH TO %1").arg(sh.cap(sh.targetName).toUpperCase()))
                 primary: true
-                armed: sh.available && !sh.loading
-                onAct: sh.confirm()
+                armed: sh.switched || (sh.available && !sh.loading && !sh.switching)
+                onAct: sh.switched ? sh.logOut() : sh.confirm()
             }
         }
     }

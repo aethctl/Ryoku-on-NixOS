@@ -176,19 +176,18 @@ func cmdWmUse(args []string) {
 	// not be installed yet.
 	report, applyErr := wm.OpenNamed(name).DryRun(store)
 	printWmSwitchPreview(name, active, store, report, applyErr)
-	printWmPreviousChoice(active, keepPrevious)
 
 	pkg := "ryoku-desktop-" + name
+	// A checkout box runs deployed trees, not packages, so there is nothing to
+	// install, nothing missing, and nothing to keep or remove: both compositors
+	// ride the same checkout. Mentioning packages there would describe work
+	// that is not going to happen.
+	if deployedProvider(name) {
+		fmt.Printf(i18n.T("%s is ready. Log out and pick %s at the greeter.\n"), name, name)
+		return
+	}
+	printWmPreviousChoice(active, keepPrevious)
 	if !packageAvailable(pkg) {
-		// A checkout box runs deployed trees, not packages, so there is nothing
-		// to install and nothing missing: the provider and its config are
-		// already in place and the greeter has the session. Saying "not
-		// available" there would be a dead end for the exact box that can
-		// switch most easily.
-		if deployedProvider(name) {
-			fmt.Printf(i18n.T("%s is deployed from your checkout; pick it at the greeter to switch.\n"), name)
-			return
-		}
 		die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
 	}
 	// A plain pacman transaction (no SNAP_PAC_SKIP) so snap-pac snapshots it and
