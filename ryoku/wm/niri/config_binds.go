@@ -52,7 +52,11 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + F", action: "fullscreen-window"},
 		{chord: "SUPER + SHIFT + P", reason: "niri has no pin-window action."},
 		{chord: "SUPER + A", action: "toggle-window-floating"},
-		{chord: "SUPER + R", reason: "niri has no submap, so resize mode has no equivalent."},
+		// Hyprland spends this chord on a resize submap, which niri has no
+		// equivalent for. niri's own answer to resizing is stepping the column
+		// through preset widths, so the freed chord goes to the thing that
+		// makes the preset-widths setting reachable at all.
+		{chord: "SUPER + R", action: "switch-preset-column-width"},
 		{chord: "SUPER + P", action: spawnArgs("ryoku-monitor", "toggle")},
 
 		{chord: "SUPER + Left", action: "focus-column-left"},

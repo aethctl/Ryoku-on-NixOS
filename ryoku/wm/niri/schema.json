@@ -1,10 +1,10 @@
 [
   {
     "tab": "Layout",
-    "group": "COLUMN WIDTHS",
+    "group": "WINDOW WIDTH",
     "key": "wm.niri.presetColumnWidths",
-    "label": "Widths to cycle",
-    "desc": "The widths a window steps through when you press the column-width key",
+    "label": "Widths Super+R steps through",
+    "desc": "niri resizes by stepping a window through set widths instead of dragging. Super+R moves to the next one",
     "ctl": "chips",
     "src": "desktop.json",
     "page": "windowmanager",
