@@ -136,6 +136,7 @@ func reconcilers() []reconciler {
 		{i18n.T("desktop portal session"), reconcilePortalSession},
 		{i18n.T("audio service health"), reconcileAudioService},
 		{i18n.T("audio playback routing"), reconcileAudioRouting},
+		{i18n.T("keyboard layout code"), reconcileKbLayoutCode},
 		{i18n.T("keyboard layout"), reconcileKeymap},
 		{i18n.T("keyboard layout detection"), reconcileKeyboardSeed},
 		{i18n.T("in-session lockscreen"), reconcileLockscreen},

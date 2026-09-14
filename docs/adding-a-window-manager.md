@@ -10,7 +10,7 @@ page is the human version: what to do, in what order, and what will bite you.
 
 ## What you are actually signing up for
 
-You write one program, `ryoku-wm-<name>`, that answers nine questions about your
+You write one program, `ryoku-wm-<name>`, that answers ten questions about your
 compositor. Everything else in Ryoku talks to that program and never learns
 which compositor is running. The shell, the bar, the dock, the launcher, the
 lockscreen and every settings page are already compositor-neutral. You do not
@@ -45,7 +45,7 @@ existing provider is closer to yours, and do not invent a second shape:
 `ryoku/wm/niri/` if your compositor has a socket and a declarative config,
 `ryoku/wm/hyprland/` if it has a CLI and a scripted config.
 
-The nine verbs, in plain terms:
+The ten verbs, in plain terms:
 
 |Verb|What it means|
 |---|---|
@@ -56,6 +56,7 @@ The nine verbs, in plain terms:
 |`apply <store>`|"Turn these settings into my config file."|
 |`defaults`|"Here is my baseline for those settings."|
 |`schema`|"Here are the settings only I have, so the Hub can draw them."|
+|`binds <store>`|"Here are the keybinds only I have, so the cheatsheet can list them under my name."|
 |`outputs <file>`|"Arrange the displays like this."|
 |`session`|The `wayland-session` desktop entry, so a greeter can offer you.|
 

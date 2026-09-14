@@ -28,18 +28,25 @@ const (
 	CapAnimations            Capability = "animations"
 	CapCursorSet             Capability = "cursorSet"
 	CapNativeOverview        Capability = "nativeOverview"
-	CapOutputPower           Capability = "outputPower"
-	CapKeyboardLayoutSwitch  Capability = "keyboardLayoutSwitch"
-	CapMonitorConfig         Capability = "monitorConfig"
+	// CapOverviewBackdrop is set when the compositor can lift a layer-shell
+	// surface into the backdrop it shows behind the workspaces in its overview,
+	// so the shell's blurred wallpaper fills that region instead of a flat
+	// colour. Named for what the user gets, not for a compositor: an overview
+	// that cannot place a surface in its backdrop leaves this off and the shell
+	// maps nothing there.
+	CapOverviewBackdrop     Capability = "overviewBackdrop"
+	CapOutputPower          Capability = "outputPower"
+	CapKeyboardLayoutSwitch Capability = "keyboardLayoutSwitch"
+	CapMonitorConfig        Capability = "monitorConfig"
 	// CapOutputMirror and CapOutputHdr describe per-output behaviours some
 	// compositors offer and others cannot: cloning one output onto another, and
 	// an HDR/wide-gamut colour pipeline. Named for the behaviour so the Hub gates
 	// the control on the capability, never on which compositor is running.
-	CapOutputMirror          Capability = "outputMirror"
-	CapOutputHdr             Capability = "outputHdr"
-	CapWindowFloat           Capability = "windowFloat"
-	CapTiledLayout           Capability = "tiledLayout"
-	CapSessionExit           Capability = "sessionExit"
+	CapOutputMirror Capability = "outputMirror"
+	CapOutputHdr    Capability = "outputHdr"
+	CapWindowFloat  Capability = "windowFloat"
+	CapTiledLayout  Capability = "tiledLayout"
+	CapSessionExit  Capability = "sessionExit"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -51,7 +58,8 @@ func All() []Capability {
 		CapWindowRules, CapLayerRules, CapSubmap, CapGlobalShortcuts,
 		CapFocusGrab,
 		CapScreenShader, CapPlugins, CapLiveConfigEval, CapConfigReload,
-		CapAnimations, CapCursorSet, CapNativeOverview, CapOutputPower,
+		CapAnimations, CapCursorSet, CapNativeOverview, CapOverviewBackdrop,
+		CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
 		CapTiledLayout, CapSessionExit,

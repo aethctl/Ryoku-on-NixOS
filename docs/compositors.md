@@ -15,7 +15,7 @@ signature, or an `isNiri`-style test anywhere else. Consumers ask what the
 compositor *can do*, never which one it is.
 
 A provider is one binary, `ryoku-wm-<name>`, shipped by
-`ryoku-desktop-<name>`. It implements nine verbs:
+`ryoku-desktop-<name>`. It implements ten verbs:
 
 |Verb|Answers|
 |---|---|
@@ -26,6 +26,7 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 |`apply <store>`|write the compositor's config from the neutral settings store|
 |`defaults`|the provider's baseline subtree of that store|
 |`schema`|the settings rows only this compositor has, for the Hub to render|
+|`binds <store>`|the keybinds only this compositor has, resolved against the store, for the cheatsheet's compositor section|
 |`outputs <layout>`|apply a display layout|
 |`session`|the `wayland-session` desktop entry|
 
@@ -42,7 +43,14 @@ visually and adding a third needs no Hub edit. The `ctl` field is the shared
 control vocabulary; a row whose control needs a bespoke editor names the page
 that draws it.
 
-Hyprland adds a tenth verb, `plugins`. niri has no plugin system and says so
+`binds` is `schema`'s keybind twin: the provider declares the chords only it
+offers and the Hub folds them into a cheatsheet section titled with the
+compositor's name, so a scrolling-tiler action niri has and Hyprland lacks is
+listed without the shell naming either. It resolves the store the way `apply`
+does, so a chord a user displaced is already gone from the list. A compositor
+whose binds are all shared prints an empty list and gets no section.
+
+Hyprland adds one more verb, `plugins`. niri has no plugin system and says so
 in `caps` instead of shipping a verb that would fail.
 
 ## Capabilities
@@ -147,7 +155,7 @@ This is the checklist. `docs/adding-a-window-manager.md` is the same job written
 out as a walkthrough, including the traps that cost time on the second
 compositor; read that one if you are doing this rather than reviewing it.
 
-1. `ryoku/wm/<name>/`, a `package main` implementing the nine verbs. Mirror
+1. `ryoku/wm/<name>/`, a `package main` implementing the ten verbs. Mirror
    the nearest existing provider rather than inventing a second shape. Pin the
    compositor's own dialect in a test: the argv or request a provider emits is
    its contract, and getting it wrong usually fails silently.

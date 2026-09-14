@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -197,5 +199,48 @@ func TestComboAndRebindable(t *testing.T) {
 func TestDescribeRyokuApp(t *testing.T) {
 	if got := describeExec("ryoku-app browser"); got != "browser" {
 		t.Errorf("describeExec ryoku-app = %q, want browser", got)
+	}
+}
+
+// The provider's exclusive binds become one named section, its keycaps prettified
+// and its copy capitalised like the shared legend, minus any chord the shared
+// legend already carries (which would otherwise read twice).
+func TestCompositorSection(t *testing.T) {
+	base := legend{Categories: []category{
+		{Name: "Windows", Binds: []bind{{Combo: "SUPER + Q"}, {Combo: "SUPER + F"}}},
+	}}
+	rows := []json.RawMessage{
+		json.RawMessage(`{"chord":"SUPER + D","desc":"maximise the column"}`),
+		json.RawMessage(`{"chord":"SUPER + F","desc":"already a shared chord"}`),
+		json.RawMessage(`{"chord":"SUPER + CTRL + R","desc":"reset the window height"}`),
+	}
+	cat, ok := compositorSection(rows, "Niri", base)
+	if !ok {
+		t.Fatal("expected a section")
+	}
+	if cat.Name != "Niri" {
+		t.Errorf("section name = %q, want Niri", cat.Name)
+	}
+	if len(cat.Binds) != 2 {
+		t.Fatalf("got %d binds, want 2 (the shared SUPER + F chord is dropped)", len(cat.Binds))
+	}
+	if !reflect.DeepEqual(cat.Binds[0].Keys, []string{"Super", "D"}) {
+		t.Errorf("keycaps = %v, want [Super D]", cat.Binds[0].Keys)
+	}
+	if cat.Binds[0].Desc != "Maximise the column" {
+		t.Errorf("desc = %q, want capitalised", cat.Binds[0].Desc)
+	}
+	if !cat.Binds[0].Rebindable {
+		t.Error("a single-literal chord should be rebindable")
+	}
+}
+
+// When every exclusive chord is one the shared legend already carries, the
+// section is absent, not an empty group.
+func TestCompositorSectionAbsentWhenAllShared(t *testing.T) {
+	base := legend{Categories: []category{{Name: "Windows", Binds: []bind{{Combo: "SUPER + D"}}}}}
+	rows := []json.RawMessage{json.RawMessage(`{"chord":"SUPER + D","desc":"x"}`)}
+	if _, ok := compositorSection(rows, "Niri", base); ok {
+		t.Error("section must be absent when no exclusive bind survives dedup")
 	}
 }

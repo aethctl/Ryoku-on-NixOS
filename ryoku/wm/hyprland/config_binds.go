@@ -70,3 +70,13 @@ func renderRebinds(o Overrides) []byte {
 	b.WriteString("}\n")
 	return []byte(b.String())
 }
+
+// runBinds prints Hyprland's compositor-exclusive binds, the seam's binds verb.
+// Hyprland's shipped set IS the shared Ryoku legend (binds.lua), so it adds none
+// of its own: an empty list, which the Hub reads as no compositor section. The
+// store path apply and niri take is accepted and ignored, so the seam call is
+// identical across providers.
+func runBinds(_ []string) error {
+	_, err := stdout.Write([]byte("[]\n"))
+	return err
+}

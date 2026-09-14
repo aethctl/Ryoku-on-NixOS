@@ -54,6 +54,8 @@ func main() {
 		err = runSession()
 	case "schema":
 		err = runSchema()
+	case "binds":
+		err = runBinds(os.Args[2:])
 	case "plugins":
 		// Separate from act because plugins are a subsystem with list and
 		// rebuild semantics; folding them in would make act a passthrough.
@@ -81,6 +83,7 @@ func usage() {
   state            one state snapshot (JSON)
   session          the wayland-session desktop entry
   schema           exclusive settings rows the Hub renders (JSON)
+  binds [store]    compositor-exclusive keybinds the cheatsheet lists (JSON)
   watch            stream state frames (newline-delimited JSON)
   apply <store>    write the compositor config from the neutral store
   outputs <file>   apply an output layout from the neutral display store

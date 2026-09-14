@@ -1,15 +1,21 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
-// keybind legend = whatever binds.lua actually has live
-// (ryoku/hyprland/modules/binds.lua, deployed to ~/.config/hypr). one source of
-// truth; no second hand-maintained list to drift.
+// The keybind legend: the shared binds parsed from binds.lua (the live
+// ryoku/hyprland/modules/binds.lua) followed by the active provider's own
+// compositor-exclusive binds, appended as one section under the compositor's
+// name. Each half reads its single source at request time so neither drifts: the
+// shared set from the file the desktop loads, the exclusives from the provider
+// that owns them.
 
 type bind struct {
 	Keys       []string `json:"keys"`
@@ -36,11 +42,68 @@ func bindsPath() string {
 }
 
 func keybinds() legend {
-	b, err := os.ReadFile(bindsPath())
-	if err != nil {
-		return legend{Categories: []category{}}
+	l := legend{Categories: []category{}}
+	if b, err := os.ReadFile(bindsPath()); err == nil {
+		l = parseBinds(string(b))
 	}
-	return parseBinds(string(b))
+	appendCompositorBinds(&l)
+	return l
+}
+
+// appendCompositorBinds folds the active provider's compositor-exclusive binds
+// into the legend as one section titled with the compositor's own name, read from
+// the same provider name the Hub's window-manager page titles itself from. It
+// carries only the binds the shared legend above does not already document, so a
+// chord never reads twice; the provider resolves them against the store, so a
+// bind a user displaced is already gone. The section is left off when the provider
+// adds none, so a compositor whose binds are all shared shows no empty group.
+func appendCompositorBinds(l *legend) {
+	c := wm.Open()
+	if !c.Available() {
+		return
+	}
+	rows, err := c.Binds(desktopStorePath())
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	if cat, ok := compositorSection(rows, capitalize(c.Detection().Name), *l); ok {
+		l.Categories = append(l.Categories, cat)
+	}
+}
+
+// compositorSection turns the provider's exclusive rows into one named legend
+// section, keeping only the chords the shared legend does not already carry so a
+// chord never reads twice. ok is false when nothing survives, so the caller adds
+// no empty group. Each row's chord is prettified into keycaps the same way the
+// shared binds are, so the section reads identically to the rest of the legend.
+func compositorSection(rows []json.RawMessage, name string, base legend) (category, bool) {
+	seen := map[string]bool{}
+	for _, cat := range base.Categories {
+		for _, b := range cat.Binds {
+			seen[b.Combo] = true
+		}
+	}
+	var binds []bind
+	for _, raw := range rows {
+		var e struct {
+			Chord string `json:"chord"`
+			Desc  string `json:"desc"`
+		}
+		if json.Unmarshal(raw, &e) != nil || e.Chord == "" || seen[e.Chord] {
+			continue
+		}
+		seen[e.Chord] = true
+		binds = append(binds, bind{
+			Keys:       splitCombo(e.Chord),
+			Combo:      e.Chord,
+			Desc:       capitalize(e.Desc),
+			Rebindable: rebindable(e.Chord),
+		})
+	}
+	if len(binds) == 0 {
+		return category{}, false
+	}
+	return category{Name: name, Binds: binds}, true
 }
 
 var (

@@ -235,6 +235,32 @@ func (c *Client) Schema() ([]json.RawMessage, error) {
 	return rows, nil
 }
 
+// Binds is the provider's compositor-exclusive keybinds, in the shape the
+// keybind legend consumes: each row a {chord, desc} for a behaviour that has no
+// place in the shared Ryoku bind set, so the cheatsheet can list it under the
+// compositor's own name. The store path resolves the user's rebinds and unbinds
+// the way apply does, so the list reflects the chords actually emitted, never a
+// static default a user has displaced. Empty with no error when a provider adds
+// none, so a compositor that only speaks the shared binds contributes no section.
+func (c *Client) Binds(storePath string) ([]json.RawMessage, error) {
+	if c.bin == "" {
+		return nil, ErrNoProvider
+	}
+	out, err := c.run("binds", storePath)
+	if err != nil {
+		return nil, err
+	}
+	out = bytes.TrimSpace(out)
+	if len(out) == 0 {
+		return []json.RawMessage{}, nil
+	}
+	var rows []json.RawMessage
+	if err := json.Unmarshal(out, &rows); err != nil {
+		return nil, fmt.Errorf("binds: %w", err)
+	}
+	return rows, nil
+}
+
 // Session is the wayland-session desktop-entry body for this provider, for the
 // installer and the greeter setup to write when the compositor package ships
 // none. Raw bytes: the entry is the provider's to author.
