@@ -477,3 +477,30 @@ func TestWindowManagerLeavesEmitted(t *testing.T) {
 	}
 	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
 }
+
+// The lone-window centring rule is a bare flag with no value, so the store
+// toggle maps to the presence or absence of the always-center-single-column
+// node, and both states validate. The overview-backdrop layer-rule is always
+// emitted, since the provider cannot know whether the shell will map the
+// surface, and a rule that matches nothing is inert.
+func TestOverviewBackdropAndSingleColumnCentring(t *testing.T) {
+	off := niriHome(t)
+	capApply(t, writeStore(t, `{"wm":{"niri":{"alwaysCenterSingleColumn":false}}}`))
+	dis := readGen(t, off, "settings.kdl")
+	if strings.Contains(dis, "always-center-single-column") {
+		t.Errorf("single-column centring off must omit the node\n%s", dis)
+	}
+	if !strings.Contains(dis, `match namespace="ryoku-overview-backdrop"`) ||
+		!strings.Contains(dis, "place-within-backdrop true") {
+		t.Errorf("overview-backdrop layer-rule missing\n%s", dis)
+	}
+	validateGen(t, off, "settings.kdl", "rebinds.kdl")
+
+	on := niriHome(t)
+	capApply(t, writeStore(t, `{"wm":{"niri":{"alwaysCenterSingleColumn":true}}}`))
+	en := readGen(t, on, "settings.kdl")
+	if !strings.Contains(en, "always-center-single-column") {
+		t.Errorf("single-column centring on must emit the bare flag\n%s", en)
+	}
+	validateGen(t, on, "settings.kdl", "rebinds.kdl")
+}

@@ -181,6 +181,16 @@ ShellRoot {
                 videoVolume: wallpaper.videoVolume
             }
 
+            // A blurred copy of the wallpaper for the compositor's overview
+            // backdrop, mapped below the desktop so it shows only in the
+            // overview. Gated on the capability, so nothing maps where a
+            // compositor cannot host it.
+            OverviewBackdrop {
+                screen: perScreen.modelData
+                available: Wm.caps.overviewBackdrop === true
+                wallpaperUrl: wallpaper.wallpaperUrl
+            }
+
             // Stage now renders entirely inside the desktop surface (one stack:
             // backdrop, layers, widgets), so there is no separate Background
             // surface here (docs/stage.md).

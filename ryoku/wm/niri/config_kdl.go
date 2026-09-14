@@ -183,6 +183,7 @@ type Niri struct {
 	DefaultColumnWidth float64     `json:"defaultColumnWidth"`
 	PresetColumnWidths Proportions `json:"presetColumnWidths"`
 	CenterFocused      string      `json:"centerFocusedColumn"`
+	AlwaysCenterSingle bool        `json:"alwaysCenterSingleColumn"`
 	UrgentColor        string      `json:"urgentColor"`
 	TabIndicatorWidth  int         `json:"tabIndicatorWidth"`
 	TabIndicatorHide   bool        `json:"tabIndicatorHideSingle"`
@@ -254,6 +255,7 @@ func defaultStore() niriStore {
 			DefaultColumnWidth: 0.5,
 			PresetColumnWidths: []float64{0.33333, 0.5, 0.66667},
 			CenterFocused:      "never",
+			AlwaysCenterSingle: true,
 			UrgentColor:        "#9b0000",
 			TabIndicatorWidth:  4,
 			TabIndicatorHide:   true,
@@ -422,7 +424,26 @@ func genSettings(s niriStore) []byte {
 	writeAutostart(&b, s.Autostart)
 	writeWindowRules(&b, s.Appearance, s.WindowRules, s.AppOverrides)
 	writeBlockOut(&b, s.Niri.BlockOutApps)
+	writeLayerRules(&b)
 	return []byte(b.String())
+}
+
+// overviewBackdropNamespace is the layer-shell namespace the shell maps its
+// blurred overview-wallpaper surface under. The provider and the shell agree on
+// this exact string: the shell names the surface, this rule routes it.
+const overviewBackdropNamespace = "ryoku-overview-backdrop"
+
+// writeLayerRules lifts the shell's overview-backdrop surface into niri's
+// backdrop, the region the user sees behind the workspaces in the overview, so a
+// blurred copy of the wallpaper fills what is otherwise a flat colour. The rule
+// is always emitted: it matches nothing until the shell maps that surface (only
+// when the overviewBackdrop capability is live and the user turned it on), and a
+// rule that matches nothing is inert. Ryoku keeps its wallpaper on a separate
+// opaque surface that already paints every workspace, so unlike a shell whose
+// wallpaper IS the backdrop this needs no transparent workspace background to be
+// seen.
+func writeLayerRules(b *strings.Builder) {
+	fmt.Fprintf(b, "layer-rule {\n    match namespace=%s\n    place-within-backdrop true\n}\n\n", kdlStr(overviewBackdropNamespace))
 }
 
 func writeInput(b *strings.Builder, in Input) {
@@ -521,7 +542,7 @@ func accelProfile(s string) string {
 // the focus ring off, so the frame the user sized is the one they see, and adds
 // the drop shadow when the store asks for one, spread and offset included, since
 // those are neutral appearance keys like softness and colour. The default and
-// preset widths, the centring rule, the urgent colour, the tab indicator, the
+// preset widths, the centring rules, the urgent colour, the tab indicator, the
 // insert hint and the struts are niri exclusives with no neutral key.
 func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	b.WriteString("layout {\n")
@@ -531,6 +552,9 @@ func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	}
 	if c := centerFocused(n.CenterFocused); c != "" {
 		fmt.Fprintf(b, "    center-focused-column %s\n", kdlStr(c))
+	}
+	if n.AlwaysCenterSingle {
+		b.WriteString("    always-center-single-column\n")
 	}
 	if len(n.PresetColumnWidths) > 0 {
 		b.WriteString("    preset-column-widths {\n")

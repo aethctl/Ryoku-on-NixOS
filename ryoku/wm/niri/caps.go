@@ -39,6 +39,7 @@ var capsManifest = []wm.Capability{
 	wm.CapLayerRules,
 	wm.CapAnimations,
 	wm.CapNativeOverview,
+	wm.CapOverviewBackdrop,
 	wm.CapOutputPower,
 	wm.CapKeyboardLayoutSwitch,
 	wm.CapMonitorConfig,

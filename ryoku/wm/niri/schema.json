@@ -57,6 +57,16 @@
   },
   {
     "tab": "Layout",
+    "group": "COLUMN FOCUS",
+    "key": "wm.niri.alwaysCenterSingleColumn",
+    "label": "Centre a lone window",
+    "desc": "Open a single window in the middle of the screen instead of against the left edge; it scrolls normally once another window joins the strip",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
     "group": "TABBED COLUMNS",
     "key": "wm.niri.tabIndicatorWidth",
     "label": "Tab strip thickness",

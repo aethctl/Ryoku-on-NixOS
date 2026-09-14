@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -23,6 +24,7 @@ type defBind struct {
 	chord      string
 	action     string
 	reason     string // set when action == ""
+	desc       string // set for a niri-only behaviour the shared legend omits; its cheatsheet copy
 	locked     bool   // allow-when-locked=true
 	noRepeat   bool   // repeat=false
 	cooldownMs int    // cooldown-ms=N, for wheel binds
@@ -74,6 +76,14 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + CTRL + Right", action: `set-column-width "+10%"`},
 		{chord: "SUPER + CTRL + Up", action: `set-window-height "-10%"`},
 		{chord: "SUPER + CTRL + Down", action: `set-window-height "+10%"`},
+
+		// niri's scrolling tiler sizes the focused column, a model Hyprland has
+		// no equivalent for, so these carry a desc: the Hub lists them in niri's
+		// own cheatsheet section. Their chords are free on both compositors, so a
+		// user who switches never meets a chord that means two different things.
+		{chord: "SUPER + D", action: "maximize-column", desc: "maximise the column to full width (keeps the gaps and bar)"},
+		{chord: "SUPER + C", action: "center-column", desc: "centre the focused column on screen"},
+		{chord: "SUPER + CTRL + R", action: "reset-window-height", desc: "reset the window height to automatic"},
 
 		{chord: "SUPER + Return", action: spawnArgs("ryoku-app", "terminal")},
 		{chord: "SUPER + E", action: spawnArgs("ryoku-app", "files")},
@@ -145,10 +155,24 @@ func defaultBinds() []defBind {
 	return binds
 }
 
-// genBinds renders rebinds.kdl and returns the binds it could not honour. The
-// block is always well formed, empty body included, because a missing include is
-// a hard config error that would cost the user their session.
-func genBinds(s niriStore) (string, []wm.Unhonored) {
+// outBind is one resolved bind, ready for the config writer. chord and action
+// are the niri form apply writes; dispChord is the Hub display chord it landed
+// on (a rebind moves it) and desc is set only for a compositor-exclusive bind,
+// so the binds verb can list what actually emitted, never a static default a
+// user has displaced.
+type outBind struct {
+	chord, action    string
+	dispChord, desc  string
+	locked, noRepeat bool
+	cooldownMs       int
+}
+
+// resolveBinds folds the store's custom binds, rebinds and unbinds into the
+// shipped defaults, resolving every chord to one winner: a custom bind beats a
+// rebound default beats a static default. It is the single source the config
+// writer and the binds verb both read, so the cheatsheet can never advertise a
+// chord the emitted config does not carry. report names what could not be honoured.
+func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 	unbind := map[string]bool{}
 	for _, c := range s.Unbinds {
 		if c = strings.TrimSpace(c); c != "" {
@@ -158,18 +182,16 @@ func genBinds(s niriStore) (string, []wm.Unhonored) {
 
 	var report []wm.Unhonored
 	claimed := map[string]bool{}
-	type outBind struct {
-		chord, action    string
-		locked, noRepeat bool
-		cooldownMs       int
-	}
 	var out []outBind
-	emit := func(niriChord, action string, locked, noRepeat bool, cooldownMs int) {
+	emit := func(niriChord, dispChord, action, desc string, locked, noRepeat bool, cooldownMs int) {
 		if niriChord == "" || claimed[niriChord] {
 			return
 		}
 		claimed[niriChord] = true
-		out = append(out, outBind{niriChord, action, locked, noRepeat, cooldownMs})
+		out = append(out, outBind{
+			chord: niriChord, action: action, dispChord: dispChord, desc: desc,
+			locked: locked, noRepeat: noRepeat, cooldownMs: cooldownMs,
+		})
 	}
 
 	// Priority 1: user custom binds win every chord they take.
@@ -186,7 +208,7 @@ func genBinds(s niriStore) (string, []wm.Unhonored) {
 			report = append(report, wm.Unhonored{Key: fmt.Sprintf("desktop.keybinds[%d]", i), Reason: fmt.Sprintf("niri cannot bind the chord %q.", k.Keys)})
 			continue
 		}
-		emit(niriChord, action, false, false, 0)
+		emit(niriChord, k.Keys, action, "", false, false, 0)
 	}
 
 	defs := defaultBinds()
@@ -213,11 +235,20 @@ func genBinds(s niriStore) (string, []wm.Unhonored) {
 			if !ok {
 				continue
 			}
-			emit(niriChord, d.action, d.locked, d.noRepeat, d.cooldownMs)
+			emit(niriChord, to, d.action, d.desc, d.locked, d.noRepeat, d.cooldownMs)
 		}
 	}
 	claimDefaults(true)
 	claimDefaults(false)
+
+	return out, report
+}
+
+// genBinds renders rebinds.kdl and returns the binds it could not honour. The
+// block is always well formed, empty body included, because a missing include is
+// a hard config error that would cost the user their session.
+func genBinds(s niriStore) (string, []wm.Unhonored) {
+	out, report := resolveBinds(s)
 
 	var b strings.Builder
 	b.WriteString("binds {\n")
@@ -240,6 +271,36 @@ func genBinds(s niriStore) (string, []wm.Unhonored) {
 	}
 	b.WriteString("}\n")
 	return b.String(), report
+}
+
+// runBinds prints niri's compositor-exclusive binds as JSON, the mirror of
+// schema: the provider declares what only it offers. Each row is the chord that
+// actually emitted and its cheatsheet copy, resolved through the store so a bind
+// a user displaced is absent and a rebound one shows its new chord. The Hub
+// folds these into a section titled with the compositor's name; a chord the
+// shared legend already documents is dropped there, so this need not know it.
+func runBinds(args []string) error {
+	storePath := ""
+	if len(args) > 0 {
+		storePath = args[0]
+	}
+	out, _ := resolveBinds(loadStore(storePath))
+
+	type exclusiveBind struct {
+		Chord string `json:"chord"`
+		Desc  string `json:"desc"`
+	}
+	list := []exclusiveBind{}
+	for _, o := range out {
+		if o.desc == "" {
+			continue
+		}
+		list = append(list, exclusiveBind{Chord: o.dispChord, Desc: o.desc})
+	}
+
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(list)
 }
 
 // effectiveChord resolves a default's emitted chord: the user's rebind when set,

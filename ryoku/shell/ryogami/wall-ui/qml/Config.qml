@@ -366,8 +366,6 @@ QtObject {
     readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled === true
     readonly property string overviewBackdropPath: _data.overviewBackdrop?.path ?? ""
     readonly property bool overviewBackdropFollowWallpaper: _data.overviewBackdrop?.followWallpaper === true
-    readonly property bool overviewBackdropAutoTheme: _data.overviewBackdrop?.autoTheme === true
-    readonly property string overviewBackdropTheme: _data.overviewBackdrop?.theme ?? "Catppuccin"
     readonly property int overviewBackdropDim: Math.max(0, Math.min(100, _data.overviewBackdrop?.dim ?? 0))
     readonly property int overviewBackdropBlur: Math.max(1, Math.min(200, _data.overviewBackdrop?.blur ?? 30))
     readonly property bool overviewBackdropBlurEnabled: _data.overviewBackdrop?.blurEnabled !== false

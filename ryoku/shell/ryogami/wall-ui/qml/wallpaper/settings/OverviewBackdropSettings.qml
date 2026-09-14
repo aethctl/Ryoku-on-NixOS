@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell.Io
 import "../.."
 import "../../components"
 import "../../services"
@@ -12,22 +13,29 @@ Flow {
     width: parent ? parent.width : 0
     spacing: 12
 
-    property var _backdropThemes: []
+    // Only a compositor that can lift a layer surface into its overview backdrop
+    // has anywhere to put this, so ask before offering it.
+    property bool supported: false
 
-    Component.onCompleted: {
-        DaemonClient.call("effects.list", {}, function(result, err) {
-            if (err || !result || !result.effects) return
-            for (var i = 0; i < result.effects.length; i++) {
-                var eff = result.effects[i]
-                if (eff.id !== "theme" || !eff.params) continue
-                for (var j = 0; j < eff.params.length; j++) {
-                    if (eff.params[j].id === "theme") {
-                        root._backdropThemes = eff.params[j].options || []
-                        return
+    Process {
+        running: true
+        command: ["ryoku-hub", "wm", "list"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var wms = JSON.parse(this.text) || [];
+                    for (var i = 0; i < wms.length; i++) {
+                        if (!wms[i].active)
+                            continue;
+                        var s = (wms[i].caps && wms[i].caps.supports) || [];
+                        root.supported = s.indexOf("overviewBackdrop") >= 0;
+                        return;
                     }
+                } catch (e) {
+                    root.supported = false;
                 }
             }
-        })
+        }
     }
 
     SettingsCard {
@@ -35,6 +43,7 @@ Flow {
         title: I18n.tr("Overview backdrop")
         subtitle: I18n.tr("Render the current wallpaper (optionally blurred) as the backdrop visible in the compositor's overview.")
         width: parent.width
+        visible: root.supported
 
         RowToggle {
             colors: root.colors
@@ -72,26 +81,6 @@ Flow {
             onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("overviewBackdrop.followWallpaper", v) }
         }
 
-        RowToggle {
-            colors: root.colors
-            title: I18n.tr("Auto-theme the backdrop")
-            description: I18n.tr("Recolour the backdrop with a gowall theme palette.")
-            checked: Config.overviewBackdropAutoTheme
-            enabled: Config.overviewBackdropEnabled
-            onToggle: function(v) { if (root.saveConfigKey) root.saveConfigKey("overviewBackdrop.autoTheme", v) }
-        }
-
-        RowDropdown {
-            colors: root.colors
-            title: I18n.tr("Backdrop theme")
-            description: I18n.tr("Palette used when auto-theming the backdrop.")
-            value: Config.overviewBackdropTheme
-            model: root._backdropThemes
-            enabled: Config.overviewBackdropEnabled && Config.overviewBackdropAutoTheme
-            opacity: enabled ? 1.0 : 0.5
-            onSelect: function(v) { if (root.saveConfigKey) root.saveConfigKey("overviewBackdrop.theme", v) }
-        }
-
         RowInput {
             colors: root.colors
             title: I18n.tr("Backdrop dimming")
@@ -100,30 +89,6 @@ Flow {
             min: 0; max: 100; suffix: "%"
             enabled: Config.overviewBackdropEnabled
             onCommit: function(v) { if (root.saveConfigKey) root.saveConfigKey("overviewBackdrop.dim", v) }
-        }
-
-        RowAction {
-            colors: root.colors
-            title: _refreshState._busy ? I18n.tr("Regenerating...") : I18n.tr("Regenerate backdrop now")
-            description: I18n.tr("Re-blur the current wallpaper and respawn the backdrop renderer. Use this after toggling the feature on without applying a new wallpaper.")
-            enabled: Config.overviewBackdropEnabled && !_refreshState._busy
-            opacity: enabled ? 1.0 : 0.5
-            onClicked: {
-                _refreshState._busy = true
-                DaemonClient.call("wall.refresh_overview_backdrop", {}, function(_r, _e) {
-                    _refreshResetTimer.restart()
-                })
-            }
-
-            QtObject {
-                id: _refreshState
-                property bool _busy: false
-            }
-            Timer {
-                id: _refreshResetTimer
-                interval: 3000
-                onTriggered: _refreshState._busy = false
-            }
         }
     }
 }
