@@ -326,6 +326,23 @@ Item {
                 }
             }
 
+            // A checkout has no packages to keep or remove, so the choice is
+            // absent rather than disabled. Say why: an option that silently
+            // disappears reads as a missing feature.
+            Column {
+                visible: sh.leaving && sh.deployed
+                width: parent.width
+                spacing: Tokens.s2
+                CompositorSwitchSheetHead {
+                    width: parent.width
+                    text: I18n.tr("LEAVING %1").arg(sh.cap(sh.activeName).toUpperCase())
+                }
+                Body {
+                    width: parent.width
+                    text: I18n.tr("Nothing to uninstall: %1 runs from your checkout rather than a package, so both compositors stay available and switching back costs nothing.").arg(sh.cap(sh.activeName))
+                }
+            }
+
             Column {
                 // Nothing to keep or remove without packages: on a checkout both
                 // compositors ride the deployed trees.
