@@ -609,6 +609,7 @@ EOF
           for key in \
             DISPLAY \
             HYPRLAND_INSTANCE_SIGNATURE \
+            NIRI_SOCKET \
             XDG_CURRENT_DESKTOP \
             XDG_SESSION_DESKTOP \
             XDG_SESSION_TYPE \
@@ -629,7 +630,7 @@ EOF
       done
 
       printf '%s\n' \
-        "ryoku-shell: timed out waiting for the Hyprland Wayland socket" >&2
+        "ryoku-shell: timed out waiting for the active Wayland socket" >&2
 
       exit 1
     '';
@@ -1104,7 +1105,41 @@ in
       bindsTo = [
         "graphical-session.target"
       ];
+
+      conflicts = [
+        "niri-session.target"
+      ];
     };
+
+    systemd.user.targets.niri-session = {
+      description = "Ryoku Niri session";
+
+      wants = [
+        "graphical-session-pre.target"
+        "xdg-desktop-autostart.target"
+      ];
+
+      after = [
+        "graphical-session-pre.target"
+        "niri.service"
+      ];
+
+      before = [
+        "xdg-desktop-autostart.target"
+      ];
+
+      bindsTo = [
+        "niri.service"
+      ];
+
+      conflicts = [
+        "hyprland-session.target"
+      ];
+    };
+
+    systemd.user.services.niri.wants = [
+      "niri-session.target"
+    ];
 
     # Rashin is optional at the application level: the service
     # exists on every Ryoku system, while `serve --if-enabled`
@@ -1276,6 +1311,7 @@ in
 
       wantedBy = [
         "hyprland-session.target"
+        "niri-session.target"
       ];
 
       restartTriggers = [
@@ -1384,10 +1420,12 @@ in
 
       wantedBy = [
         "hyprland-session.target"
+        "niri-session.target"
       ];
 
       partOf = [
         "hyprland-session.target"
+        "niri-session.target"
       ];
 
       requires = [
@@ -1396,6 +1434,7 @@ in
 
       after = [
         "hyprland-session.target"
+        "niri-session.target"
         "ryoku-materialize.service"
       ];
 
@@ -1443,14 +1482,17 @@ in
 
       wantedBy = [
         "hyprland-session.target"
+        "niri-session.target"
       ];
 
       partOf = [
         "hyprland-session.target"
+        "niri-session.target"
       ];
 
       after = [
         "hyprland-session.target"
+        "niri-session.target"
         "ryoku-materialize.service"
       ];
 
