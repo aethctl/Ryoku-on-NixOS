@@ -31,38 +31,41 @@ if [ -s "$cj" ] && command -v jq >/dev/null 2>&1; then
     palette=$(jq -r '[.color0,.color1,.color2,.color3,.color4,.color5,.color6,.color7,.color8,.color9,.color10,.color11,.color12,.color13,.color14,.color15]|join(",")' "$cj" 2>/dev/null)
 fi
 
+# compositor version and active-monitor count, both from neutral sources so the
+# dossier reads the same under any window manager. the seam reports the provider
+# version; the kernel's DRM state names every connector a compositor is actively
+# driving, which is set the same way no matter which one is running.
+wm_ver=$(ryoku wm status 2>/dev/null | sed -n 's/^Version: //p' | awk '{print $1; exit}')
+monitors=0
+for e in /sys/class/drm/card*-*/enabled; do
+    [ "$(cat "$e" 2>/dev/null)" = enabled ] && monitors=$((monitors + 1))
+done
+
 printf '%s\n' "$l1"
 printf '%s\n' "$temp"
 ps -e --no-headers 2>/dev/null | wc -l
 free --si | awk '/Swap:/{ if ($2 > 0) printf "%d%%\n", $3 / $2 * 100; else print "off" }'
 printf '%s\n' "$bat"
-hyprctl version 2>/dev/null | grep -oP 'Hyprland \K[0-9][0-9.]*' | head -1
-hyprctl monitors 2>/dev/null | grep -c '^Monitor'
-system_pkgs=0
-if [ -r /etc/ryoku/nix-system-package-count ]; then
-    system_pkgs=$(tr -cd '0-9' < /etc/ryoku/nix-system-package-count)
-    [ -n "$system_pkgs" ] || system_pkgs=0
+printf '%s\n' "$wm_ver"
+printf '%s\n' "$monitors"
+if [ -e /etc/NIXOS ]; then
+    system_pkgs=0
+    if [ -r /etc/ryoku/nix-system-package-count ]; then
+        system_pkgs=$(tr -cd '0-9' < /etc/ryoku/nix-system-package-count)
+        [ -n "$system_pkgs" ] || system_pkgs=0
+    fi
+
+    user_pkgs=0
+    profile_manifest="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/profile/manifest.json"
+    [ -r "$profile_manifest" ] || profile_manifest="$HOME/.nix-profile/manifest.json"
+    if [ -r "$profile_manifest" ] && command -v jq >/dev/null 2>&1; then
+        user_pkgs=$(jq -r 'if (.elements | type) == "object" then [.elements[] | select(.active != false)] | length else 0 end' "$profile_manifest" 2>/dev/null || printf '0\n')
+    fi
+    printf '%s\n' "$system_pkgs"
+    printf '%s\n' "$user_pkgs"
+else
+    pacman -Qen 2>/dev/null | wc -l
+    pacman -Qm 2>/dev/null | wc -l
 fi
-
-user_pkgs=0
-profile_manifest="${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles/profile/manifest.json"
-
-if [ ! -r "$profile_manifest" ]; then
-    profile_manifest="$HOME/.nix-profile/manifest.json"
-fi
-
-if [ -r "$profile_manifest" ] && command -v jq >/dev/null 2>&1; then
-    user_pkgs=$(
-        jq -r '
-            if (.elements | type) == "object"
-            then [.elements[] | select(.active != false)] | length
-            else 0
-            end
-        ' "$profile_manifest" 2>/dev/null || printf '0\n'
-    )
-fi
-
-printf '%s\n' "$system_pkgs"
-printf '%s\n' "$user_pkgs"
 printf '%s\n' "${XCURSOR_THEME:--}${XCURSOR_SIZE:+ · $XCURSOR_SIZE}"
 printf '%s\n' "$palette"

@@ -38,6 +38,22 @@ wifi_helper="${RYOKU_WIFI_POWERSAVE_BIN-$(command -v ryoku-wifi-powersave || tru
 tune_helper="${RYOKU_GAME_TUNE_BIN-$(command -v ryoku-game-tune || true)}"
 idle_helper="${RYOKU_IDLE_BIN-$(command -v ryoku-idle || true)}"
 
+# The window manager is reached only through the seam, asked by capability and
+# never by name. The live decoration strip below is a runtime config override; a
+# compositor that cannot evaluate its config live has no equivalent, so game mode
+# still boosts power there and leaves the desktop's look alone instead of
+# dispatching into a socket that will not answer.
+ryoku_bin="${RYOKU_BIN-$(command -v ryoku || true)}"
+stripped=0
+
+wm_can() {  # capability -> 0 when the live compositor honours it
+  [[ -n $ryoku_bin && -x $ryoku_bin ]] || return 1
+  case ",$("$ryoku_bin" wm status 2>/dev/null | sed -n 's/^Capabilities: //p' | tr -d '[:space:]')," in
+    *",$1,"*) return 0 ;;
+  esac
+  return 1
+}
+
 is_on() { [[ -f $state_file ]]; }
 
 notify() {
@@ -75,7 +91,7 @@ on_battery() {
 # only while Game Mode is on, because it is not free: the card keeps working on a
 # workspace nobody is looking at.
 hypr_fast() {
-  command -v hyprctl >/dev/null 2>&1 || return 0
+  wm_can liveConfigEval || return 0
   hyprctl eval '
 hl.config({
   general = { allow_tearing = true },
@@ -91,12 +107,12 @@ hl.config({
 })
 hl.window_rule({ name = "game-mode-immediate", match = { class = ".*" }, immediate = true })
 hl.window_rule({ name = "game-mode-render-unfocused", match = { fullscreen = true }, render_unfocused = true })
-' >/dev/null 2>&1 || true
+' >/dev/null 2>&1 && stripped=1 || true
 }
 
 # reload rereads Lua and blows away every eval override above.
 hypr_restore() {
-  command -v hyprctl >/dev/null 2>&1 || return 0
+  wm_can configReload || return 0
   hyprctl reload >/dev/null 2>&1 || true
 }
 
@@ -169,7 +185,11 @@ start() {
   tune apply
   wifi_set off
   printf 'enabled\n' >"$state_file" 2>/dev/null || true
-  notify "力 Game Mode" "On - performance profile, deep idle off, compositor stripped"
+  if (( stripped )); then
+    notify "力 Game Mode" "On - performance profile, deep idle off, compositor stripped"
+  else
+    notify "力 Game Mode" "On - performance profile, deep idle off"
+  fi
 }
 
 stop() {

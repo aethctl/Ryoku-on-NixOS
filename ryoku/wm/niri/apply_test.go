@@ -287,3 +287,106 @@ func TestDefaultsCarryNiriNamespace(t *testing.T) {
 		t.Error("wm.niri must include preferNoCsd")
 	}
 }
+
+// niri can express drop shadows and window opacity, so the Hub shadow and opacity
+// controls must reach the config; the leaves niri has no field for stay in the
+// unhonored list, each naming the field it is missing.
+func TestAppearanceShadowAndOpacityEmitted(t *testing.T) {
+	dir := niriHome(t)
+	store := writeStore(t, `{"desktop":{"appearance":{
+		"shadowEnabled":true,"shadowRange":30,"shadowColor":"#101010",
+		"shadowPower":3,"shadowSharp":true,"shadowScale":0.9,
+		"activeOpacity":0.8,"inactiveOpacity":0.6,"fullscreenOpacity":0.5
+	}}}`)
+
+	rep := capApply(t, store)
+	settings := readGen(t, dir, "settings.kdl")
+
+	for _, want := range []string{"shadow {", "softness 30", `color "#101010"`} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("shadow not emitted, missing %q\n%s", want, settings)
+		}
+	}
+	if !strings.Contains(settings, "opacity 0.8") {
+		t.Errorf("global active opacity not emitted\n%s", settings)
+	}
+	if !strings.Contains(settings, "match is-active=false") || !strings.Contains(settings, "opacity 0.6") {
+		t.Errorf("inactive opacity not emitted as an is-active=false rule\n%s", settings)
+	}
+
+	reason := map[string]string{}
+	for _, u := range rep.Unhonored {
+		reason[u.Key] = u.Reason
+	}
+	unhonored := map[string]string{
+		"desktop.appearance.shadowPower":       "shadow",
+		"desktop.appearance.shadowSharp":       "shadow",
+		"desktop.appearance.shadowScale":       "shadow",
+		"desktop.appearance.fullscreenOpacity": "fullscreen",
+	}
+	for key, term := range unhonored {
+		if !strings.Contains(reason[key], term) {
+			t.Errorf("%s reason %q must name the missing niri feature (%q)", key, reason[key], term)
+		}
+	}
+	for _, key := range []string{
+		"desktop.appearance.shadowEnabled", "desktop.appearance.shadowRange",
+		"desktop.appearance.shadowColor", "desktop.appearance.activeOpacity",
+		"desktop.appearance.inactiveOpacity",
+	} {
+		if reason[key] != "" {
+			t.Errorf("%s is emitted; it must not be reported unhonored (%q)", key, reason[key])
+		}
+	}
+	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
+}
+
+// The opacity precedence a user sees is the emission order, since niri lets the
+// last matching rule win: the global floor first, focus state over it, then a
+// specific app over both. A reorder would silently invert what the user sees.
+func TestOpacityRuleOrder(t *testing.T) {
+	dir := niriHome(t)
+	store := writeStore(t, `{"desktop":{
+		"appearance":{"activeOpacity":0.9,"inactiveOpacity":0.7},
+		"appOverrides":[{"class":"mpv","opacity":0.4,"rounding":-1,"borderSize":-1}]
+	}}`)
+
+	capApply(t, store)
+	settings := readGen(t, dir, "settings.kdl")
+
+	global := strings.Index(settings, "opacity 0.9")
+	inactive := strings.Index(settings, "match is-active=false")
+	perApp := strings.Index(settings, `app-id="mpv"`)
+	if global < 0 || inactive < 0 || perApp < 0 {
+		t.Fatalf("all three opacity tiers must be present\n%s", settings)
+	}
+	if !(global < inactive && inactive < perApp) {
+		t.Errorf("order must be global < is-active=false < per-app, got %d,%d,%d\n%s", global, inactive, perApp, settings)
+	}
+	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
+}
+
+// The pointer scroll-factor controls map onto niri's mouse and touchpad blocks,
+// so a non-default factor reaches the right block and drops off the unhonored
+// list.
+func TestScrollFactorsEmitted(t *testing.T) {
+	dir := niriHome(t)
+	store := writeStore(t, `{"desktop":{"input":{"mouseScrollFactor":1.5,"touchScrollFactor":0.8}}}`)
+
+	rep := capApply(t, store)
+	settings := readGen(t, dir, "settings.kdl")
+
+	tp := strings.Index(settings, "touchpad {")
+	ms := strings.Index(settings, "mouse {")
+	touch := strings.Index(settings, "scroll-factor 0.8")
+	mouse := strings.Index(settings, "scroll-factor 1.5")
+	if !(tp >= 0 && tp < touch && touch < ms && ms < mouse) {
+		t.Errorf("scroll-factor mapping wrong: want touchpad 0.8 then mouse 1.5\n%s", settings)
+	}
+	for _, u := range rep.Unhonored {
+		if u.Key == "desktop.input.mouseScrollFactor" || u.Key == "desktop.input.touchScrollFactor" {
+			t.Errorf("%s is emitted now; must not be reported unhonored", u.Key)
+		}
+	}
+	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
+}

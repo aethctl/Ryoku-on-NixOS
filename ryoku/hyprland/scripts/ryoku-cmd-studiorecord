@@ -19,14 +19,25 @@ raw="$(mktemp "${TMPDIR:-/tmp}/ryoku-cursor.XXXXXX")"
 sampler_pid=""
 done=0
 
-# Focused monitor geometry in logical coordinates, to normalise the global
-# cursor position to 0..1 within the recorded screen (matches how OpenScreen's
-# cursor telemetry is stored). Falls back to a common default.
-geom="$(hyprctl -j monitors 2>/dev/null \
-  | jq -r '(([.[] | select(.focused)] + .)[0]) | "\(.x) \(.y) \(.width / .scale) \(.height / .scale)"' 2>/dev/null || true)"
-read -r MX MY MW MH <<<"${geom:-0 0 1920 1080}"
-if [[ ! ${MW:-0} =~ ^[0-9.]+$ ]] || [[ $(awk -v w="${MW:-0}" 'BEGIN{print (w>0)}') != 1 ]]; then
-  MX=0; MY=0; MW=1920; MH=1080
+# Cursor-follow zoom needs a live cursor read, which is a compositor IPC query
+# with no portable equivalent: a compositor that does not answer it records fine,
+# just without the sidecar. Probe once so the sampler never busy-loops a dead
+# query and no empty track is written.
+have_cursor=0
+[[ "$(hyprctl cursorpos 2>/dev/null || true)" == *,* ]] && have_cursor=1
+
+# Focused monitor geometry in logical coordinates, to normalise the global cursor
+# position to 0..1 within the recorded screen (matches how OpenScreen's cursor
+# telemetry is stored). Only meaningful when the cursor is sampled; falls back to
+# a common default otherwise.
+MX=0; MY=0; MW=1920; MH=1080
+if (( have_cursor )); then
+  geom="$(hyprctl -j monitors 2>/dev/null \
+    | jq -r '(([.[] | select(.focused)] + .)[0]) | "\(.x) \(.y) \(.width / .scale) \(.height / .scale)"' 2>/dev/null || true)"
+  read -r MX MY MW MH <<<"${geom:-0 0 1920 1080}"
+  if [[ ! ${MW:-0} =~ ^[0-9.]+$ ]] || [[ $(awk -v w="${MW:-0}" 'BEGIN{print (w>0)}') != 1 ]]; then
+    MX=0; MY=0; MW=1920; MH=1080
+  fi
 fi
 
 # Region capture (from the shell island): --geometry WxH+X+Y crops the recording to
@@ -76,7 +87,7 @@ finish() {
   local video
   video="$(cat "$last_rec" 2>/dev/null || true)"
   if [[ -n $video && -f $video ]]; then
-    awk -v mx="$MX" -v my="$MY" -v mw="$MW" -v mh="$MH" '
+    [[ -s $raw ]] && awk -v mx="$MX" -v my="$MY" -v mw="$MW" -v mh="$MH" '
       BEGIN { printf "{\"version\":1,\"provider\":\"native\",\"assets\":[],\"samples\":["; sep="" }
       {
         cx=($2-mx)/mw; cy=($3-my)/mh;
@@ -101,13 +112,15 @@ rec_pid=$!
 
 # Align the cursor clock to when the recorder actually starts capturing, so the
 # sidecar timestamps line up with the video.
-for _ in $(seq 1 50); do
-  pgrep -f '(^|/)gpu-screen-recorder( |$)' >/dev/null 2>&1 && break
-  pgrep -f '(^|/)wf-recorder( |$)' >/dev/null 2>&1 && break
-  sleep 0.1
-done
-sample_cursor &
-sampler_pid=$!
+if (( have_cursor )); then
+  for _ in $(seq 1 50); do
+    pgrep -f '(^|/)gpu-screen-recorder( |$)' >/dev/null 2>&1 && break
+    pgrep -f '(^|/)wf-recorder( |$)' >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  sample_cursor &
+  sampler_pid=$!
+fi
 
 wait "$rec_pid" 2>/dev/null || true
 finish

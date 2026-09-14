@@ -33,6 +33,11 @@ Item {
     // rebinds when hyprDefaults lands). The provider probes leaves + curves live.
     readonly property var liveAnims: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.items : []
     readonly property var liveCurves: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.curves : []
+    // The window-animation editor is the active provider's own tree; a provider
+    // that carries no anim subtree (its defaults never mention one) has nothing
+    // for the preset picker, curve workshop or per-leaf table to write, so those
+    // stand down and only the shell's own motion and the master switch remain.
+    readonly property bool hasWindowAnims: !!(pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim)
     property string selectedCurve: ""
     // seed the selection off the first curve once the provider list arrives.
     function seedCurve() { if (pg.selectedCurve === "" && pg.liveCurves.length > 0) pg.selectedCurve = pg.liveCurves[0].name }
@@ -609,7 +614,7 @@ Item {
             SettingCard {
                 width: col.width
                 title: I18n.tr("ANIMATION PRESET")
-                visible: Settings.supports("animations")
+                visible: Settings.supports("animations") && pg.hasWindowAnims
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -662,7 +667,7 @@ Item {
                 Item {
                     width: parent.width
                     height: workshop.height + 2 * Tokens.s4
-                    visible: Settings.supports("animations")
+                    visible: Settings.supports("animations") && pg.hasWindowAnims
 
                     // hairline off the switch row above (only while it is shown)
                     Rectangle {
@@ -819,7 +824,7 @@ Item {
                 id: fsec
                 width: col.width
                 title: I18n.tr("FOCUS FLASH")
-                visible: pg.fVisible
+                visible: pg.fVisible && Settings.supports("plugins")
 
                 readonly property bool ffOn: !!pg.hv("wm.hyprland.plugins.hyprfocus.enabled")
                 readonly property string ffMode: String(pg.hv("wm.hyprland.plugins.hyprfocus.mode"))
@@ -933,7 +938,7 @@ Item {
             SettingCard {
                 width: col.width
                 title: I18n.tr("ADVANCED")
-                visible: pg.aVisible && Settings.supports("animations")
+                visible: pg.aVisible && Settings.supports("animations") && pg.hasWindowAnims
 
                 Text {
                     width: parent.width

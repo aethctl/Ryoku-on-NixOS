@@ -63,6 +63,20 @@ echo "ryoku-idle \$*" >>"$calls"
 [[ -f "$ac" ]] && exit 1
 exit 0
 EOF
+
+# a stubbed ryoku CLI: game mode asks `wm status` for the live compositor's
+# capabilities. the default reports a Hyprland-shaped set (live config eval and
+# reload present), so the compositor strip is exercised; a caps line without them
+# stands in for a compositor that cannot evaluate its config live.
+mk_ryoku() {  # path caps -> a ryoku stub whose `wm status` prints caps
+  cat >"$1" <<EOF
+#!/usr/bin/env bash
+[ "\$1 \$2" = "wm status" ] && echo "Capabilities: $2"
+exit 0
+EOF
+  chmod +x "$1"
+}
+mk_ryoku "$bin/ryoku" "animations, configReload, cursorSet, liveConfigEval, windowRules"
 chmod +x "$bin"/*
 
 # fake sysfs with one wifi device (overridable per-test).
@@ -77,6 +91,7 @@ export RYOKU_NET_SYSFS="$net"
 export RYOKU_WIFI_POWERSAVE_BIN="$bin/ryoku-wifi-powersave"
 export RYOKU_GAME_TUNE_BIN="$bin/ryoku-game-tune"
 export RYOKU_IDLE_BIN="$bin/ryoku-idle"
+export RYOKU_BIN="$bin/ryoku"
 state="$RYOKU_GAMEMODE_STATE_FILE"
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
@@ -162,5 +177,19 @@ grep -qF 'hyprctl eval' "$calls" || fail "compositor did not apply when helpers 
 grep -qF 'ryoku-wifi-powersave' "$calls" && fail "tried to call an absent WiFi helper"
 grep -qF 'ryoku-game-tune' "$calls" && fail "tried to call an absent tune helper"
 RYOKU_WIFI_POWERSAVE_BIN="$tmp/nope" RYOKU_GAME_TUNE_BIN="$tmp/nope" "$gm" stop
+
+# --- a compositor with no live config eval: power still boosts, the desktop is
+#     left untouched (no eval on start, no reload on stop) --------------------
+mk_ryoku "$tmp/ryoku-nolive" "animations, windowRules, workspaces"
+: >"$calls"
+RYOKU_BIN="$tmp/ryoku-nolive" "$gm" start
+on || fail "start did not persist where the compositor has no live config eval"
+grep -qF 'hyprctl eval' "$calls" && fail "stripped a compositor that cannot evaluate its config live"
+grep -qF 'powerprofilesctl set performance' "$calls" || fail "power did not boost without a compositor strip"
+grep -qF 'ryoku-game-tune apply' "$calls" || fail "system tune skipped without a compositor strip"
+: >"$calls"
+RYOKU_BIN="$tmp/ryoku-nolive" "$gm" stop
+grep -qF 'hyprctl reload' "$calls" && fail "reloaded a compositor that never took the eval override"
+on && fail "stop did not clear the request without a compositor strip"
 
 echo "game-mode: all checks passed"

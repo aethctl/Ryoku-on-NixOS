@@ -119,20 +119,26 @@ var desktopHandled = map[string]bool{
 var appearanceEmitted = map[string]bool{
 	"gapsIn": true, "gapsOut": true, "borderSize": true, "rounding": true,
 	"activeBorder": true, "inactiveBorder": true, "animations": true,
+	"activeOpacity": true, "inactiveOpacity": true,
+	"shadowEnabled": true, "shadowRange": true, "shadowColor": true,
 }
 
 func appearanceReason(leaf string) string {
 	switch {
 	case strings.HasPrefix(leaf, "blur"):
 		return "niri has no blur."
-	case strings.HasPrefix(leaf, "shadow"):
-		return "niri draws shadows its own way; this does not carry over."
+	case leaf == "shadowPower":
+		return "niri's shadow block has no sharpness or falloff field."
+	case leaf == "shadowSharp":
+		return "niri's shadow block has no hard-edge option; its shadow is always soft."
+	case leaf == "shadowScale":
+		return "niri's shadow block has no scale field."
 	case strings.HasPrefix(leaf, "glow"):
 		return "niri has no glow."
 	case strings.HasPrefix(leaf, "dim"):
 		return "niri has no window dimming."
-	case leaf == "activeOpacity" || leaf == "inactiveOpacity" || leaf == "fullscreenOpacity":
-		return "niri sets window opacity per rule, not globally."
+	case leaf == "fullscreenOpacity":
+		return "niri window rules have no fullscreen match."
 	case leaf == "roundingPower":
 		return "niri corner rounding has no power curve."
 	case leaf == "layout":
@@ -146,19 +152,18 @@ func appearanceReason(leaf string) string {
 var inputEmitted = map[string]bool{
 	"kbLayout": true, "kbVariant": true, "kbOptions": true, "numlockByDefault": true,
 	"followMouse": true, "sensitivity": true, "accelProfile": true, "leftHanded": true,
-	"mouseNaturalScroll": true, "naturalScroll": true, "tapToClick": true,
+	"mouseNaturalScroll": true, "mouseScrollFactor": true, "naturalScroll": true,
+	"touchScrollFactor": true, "tapToClick": true,
 	"tapAndDrag": true, "clickfinger": true, "middleEmulation": true,
 	"disableWhileTyping": true, "repeatRate": true, "repeatDelay": true,
 }
 
 func inputReason(leaf string) string {
 	switch leaf {
-	case "mouseScrollFactor", "touchScrollFactor":
-		return "niri has no scroll-factor control."
 	case "middleClickPaste":
-		return "niri has no middle-click paste toggle."
+		return "niri has no middle-click paste."
 	case "workspaceSwipe", "swipeFingers", "swipeInvert", "swipeCreateNew", "swipeDistance":
-		return "niri workspace gestures are built in and not configurable here."
+		return "niri's touchpad workspace gesture is built in and takes no finger count, distance, inversion or create-new."
 	}
 	return "niri has no matching input control."
 }

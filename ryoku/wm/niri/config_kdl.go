@@ -19,17 +19,22 @@ import (
 // settings.kdl and rebinds.kdl are the only writers of real config. A leaf left
 // out here would boot as stock niri, not Ryoku.
 
-// Appearance: the window-frame and gap leaves niri can express. The rest of the
-// neutral appearance model (blur, glow, per-window dim, opacity) has no niri
-// setting and is reported unhonored.
+// Appearance: the window-frame, gap, shadow and opacity leaves niri can express.
+// The rest of the neutral appearance model (blur, glow, per-window dim) has no
+// niri setting and is reported unhonored.
 type Appearance struct {
-	GapsIn         int    `json:"gapsIn"`
-	GapsOut        int    `json:"gapsOut"`
-	BorderSize     int    `json:"borderSize"`
-	Rounding       int    `json:"rounding"`
-	ActiveBorder   string `json:"activeBorder"`
-	InactiveBorder string `json:"inactiveBorder"`
-	Animations     bool   `json:"animations"`
+	GapsIn          int     `json:"gapsIn"`
+	GapsOut         int     `json:"gapsOut"`
+	BorderSize      int     `json:"borderSize"`
+	Rounding        int     `json:"rounding"`
+	ActiveBorder    string  `json:"activeBorder"`
+	InactiveBorder  string  `json:"inactiveBorder"`
+	Animations      bool    `json:"animations"`
+	ActiveOpacity   float64 `json:"activeOpacity"`
+	InactiveOpacity float64 `json:"inactiveOpacity"`
+	ShadowEnabled   bool    `json:"shadowEnabled"`
+	ShadowRange     int     `json:"shadowRange"`
+	ShadowColor     string  `json:"shadowColor"`
 }
 
 // Input: the keyboard, pointer and touchpad leaves niri's input block covers.
@@ -43,7 +48,9 @@ type Input struct {
 	AccelProfile       string  `json:"accelProfile"`
 	LeftHanded         bool    `json:"leftHanded"`
 	MouseNaturalScroll bool    `json:"mouseNaturalScroll"`
+	MouseScrollFactor  float64 `json:"mouseScrollFactor"`
 	NaturalScroll      bool    `json:"naturalScroll"`
+	TouchScrollFactor  float64 `json:"touchScrollFactor"`
 	TapToClick         bool    `json:"tapToClick"`
 	TapAndDrag         bool    `json:"tapAndDrag"`
 	Clickfinger        bool    `json:"clickfinger"`
@@ -155,11 +162,14 @@ func defaultStore() niriStore {
 		Appearance: Appearance{
 			GapsIn: 16, GapsOut: 16, BorderSize: 4, Rounding: 0,
 			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d", Animations: true,
+			ActiveOpacity: 1, InactiveOpacity: 1,
+			ShadowEnabled: true, ShadowRange: 45, ShadowColor: "#000000",
 		},
 		Input: Input{
 			KbLayout: "us", NumlockByDefault: false, FollowMouse: 0,
 			Sensitivity: 0, AccelProfile: "", LeftHanded: false,
-			MouseNaturalScroll: false, NaturalScroll: true,
+			MouseNaturalScroll: false, MouseScrollFactor: 1,
+			NaturalScroll: true, TouchScrollFactor: 1,
 			TapToClick: true, TapAndDrag: true, Clickfinger: false,
 			MiddleEmulation: false, DisableWhileTyping: true,
 			RepeatRate: 25, RepeatDelay: 600,
@@ -369,6 +379,9 @@ func writeInput(b *strings.Builder, in Input) {
 	if in.NaturalScroll {
 		b.WriteString("        natural-scroll\n")
 	}
+	if in.TouchScrollFactor > 0 && in.TouchScrollFactor != 1 {
+		fmt.Fprintf(b, "        scroll-factor %s\n", kdlNum(in.TouchScrollFactor))
+	}
 	if in.DisableWhileTyping {
 		b.WriteString("        dwt\n")
 	}
@@ -395,6 +408,9 @@ func writeInput(b *strings.Builder, in Input) {
 	b.WriteString("    mouse {\n")
 	if in.MouseNaturalScroll {
 		b.WriteString("        natural-scroll\n")
+	}
+	if in.MouseScrollFactor > 0 && in.MouseScrollFactor != 1 {
+		fmt.Fprintf(b, "        scroll-factor %s\n", kdlNum(in.MouseScrollFactor))
 	}
 	if in.LeftHanded {
 		b.WriteString("        left-handed\n")
@@ -426,8 +442,9 @@ func accelProfile(s string) string {
 }
 
 // writeLayout maps the neutral border onto niri's always-visible border and turns
-// the focus ring off, so the frame the user sized is the one they see. The column
-// widths and struts are niri exclusives with no neutral key.
+// the focus ring off, so the frame the user sized is the one they see, and adds
+// the drop shadow when the store asks for one. The column widths and struts are
+// niri exclusives with no neutral key.
 func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	b.WriteString("layout {\n")
 	fmt.Fprintf(b, "    gaps %d\n", a.GapsOut)
@@ -460,6 +477,17 @@ func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	}
 	b.WriteString("    }\n")
 	b.WriteString("    focus-ring {\n        off\n    }\n")
+	if a.ShadowEnabled {
+		b.WriteString("    shadow {\n")
+		b.WriteString("        on\n")
+		if a.ShadowRange > 0 {
+			fmt.Fprintf(b, "        softness %d\n", a.ShadowRange)
+		}
+		if c := kdlColor(a.ShadowColor); c != "" {
+			fmt.Fprintf(b, "        color %s\n", c)
+		}
+		b.WriteString("    }\n")
+	}
 	b.WriteString("}\n\n")
 }
 
@@ -554,9 +582,9 @@ func writeAutostart(b *strings.Builder, auto []Autostart) {
 	}
 }
 
-// writeWindowRules emits the global corner radius, then each user window rule and
-// per-app override niri can express. Rules niri cannot express are reported
-// unhonored by apply, not silently dropped here.
+// writeWindowRules emits the global corner radius and opacity, then each user
+// window rule and per-app override niri can express. Rules niri cannot express
+// are reported unhonored by apply, not silently dropped here.
 func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps []AppOverride) {
 	if a.Rounding > 0 {
 		b.WriteString("window-rule {\n")
@@ -564,6 +592,7 @@ func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps
 		b.WriteString("    clip-to-geometry true\n")
 		b.WriteString("}\n\n")
 	}
+	writeOpacityRules(b, a)
 	for _, r := range rules {
 		if props := windowRuleProps(r); len(props) > 0 {
 			writeRuleBlock(b, r.Class, r.Title, props)
@@ -573,6 +602,24 @@ func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps
 		if props := appOverrideProps(ao); len(props) > 0 {
 			writeRuleBlock(b, ao.Class, ao.Title, props)
 		}
+	}
+}
+
+// writeOpacityRules emits the global opacity as a matchless window-rule and the
+// inactive opacity as an is-active=false rule niri re-evaluates on focus change.
+// Both carry no app match, so a later per-app opacity override still wins for its
+// windows: in niri the last matching rule sets the value.
+func writeOpacityRules(b *strings.Builder, a Appearance) {
+	if a.ActiveOpacity > 0 && a.ActiveOpacity < 1 {
+		b.WriteString("window-rule {\n")
+		fmt.Fprintf(b, "    opacity %s\n", kdlNum(a.ActiveOpacity))
+		b.WriteString("}\n\n")
+	}
+	if a.InactiveOpacity > 0 && a.InactiveOpacity < 1 {
+		b.WriteString("window-rule {\n")
+		b.WriteString("    match is-active=false\n")
+		fmt.Fprintf(b, "    opacity %s\n", kdlNum(a.InactiveOpacity))
+		b.WriteString("}\n\n")
 	}
 }
 

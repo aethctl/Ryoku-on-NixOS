@@ -23,13 +23,22 @@ Singleton {
     property bool ready: false
     property int revision: 0
 
-    // Compositor capabilities and provider config files from the daemon `wm`
-    // topic on the same socket. supports() -> a gated row is hidden, not disabled.
+    // Compositor gating, carried on the `settings` frame with the values it
+    // gates. caps is behavioural (supports() -> a gated row is hidden, not
+    // disabled); deadKeys are provider store leaves the active compositor does
+    // not model, so modelsKey() drops a row nothing would write. provider and
+    // its config files still ride the `wm` topic below.
     property var caps: ({})
+    property var deadKeys: []
     property var configFiles: []
     property string provider: ""
     property var windows: []
     function supports(cap) { return !cap || root.caps[cap] !== false; }
+    // A schema row's key names a provider store leaf. When some installed
+    // provider models it but the active one does not, nothing writes it, so the
+    // row is dropped; a keyless row, or a leaf no provider models (Hub-owned),
+    // is kept.
+    function modelsKey(key) { return !key || root.deadKeys.indexOf(key) < 0; }
 
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
@@ -63,6 +72,8 @@ Singleton {
         try {
             var frame = JSON.parse(line);
             if (frame && typeof frame === "object" && !Array.isArray(frame)) {
+                root.caps = frame.caps || ({});
+                root.deadKeys = frame.deadKeys || [];
                 root.data = frame;
                 root.ready = true;
                 root.revision++;
@@ -118,7 +129,6 @@ Singleton {
         try {
             var f = JSON.parse(line);
             if (f && typeof f === "object" && !Array.isArray(f)) {
-                root.caps = f.caps || ({});
                 root.configFiles = f.configFiles || [];
                 root.provider = f.provider || "";
                 root.windows = f.windows || [];

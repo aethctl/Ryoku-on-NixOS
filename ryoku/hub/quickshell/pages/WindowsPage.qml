@@ -20,7 +20,10 @@ Item {
 
     readonly property string pTitle: I18n.tr("Windows")
     readonly property string pEyebrow: I18n.tr("DESKTOP")
-    readonly property string pBlurb: I18n.tr("How your windows look and behave: layout, shape, blur, shadows, borders, and motion.")
+    // Names the concerns, not the effects: which effects are on offer depends
+    // on what the running compositor can do, so listing blur here read as a
+    // promise the page could not keep.
+    readonly property string pBlurb: I18n.tr("How your windows look and behave: shape, transparency, borders, and motion.")
 
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }

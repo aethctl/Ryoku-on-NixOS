@@ -5,6 +5,7 @@ import QtQuick.Controls
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 
 // Input (DESIGN.md, SYSTEM). Keyboard layout and remaps, pointer and touchpad
 // behaviour, and key repeat for the Hyprland session. Rendered as rows off the
@@ -358,7 +359,10 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         divider: true
-        visible: st.gate
+        // a row nothing in the active provider would write is dropped, same rule
+        // the schema pages gate on, so a pointer/touchpad knob the compositor has
+        // no key for is absent rather than a dead switch.
+        visible: st.gate && Settings.modelsKey(st.path)
         source: "hypr"
         block: st.segBand
         controlWidth: st.ctl === "sw" ? 54

@@ -212,6 +212,7 @@ Rectangle {
                 var r = rows[ri];
                 if (!isSetting(r)) continue;
                 if (r.caps && !Settings.supports(r.caps)) continue;
+                if (!Settings.modelsKey(r.key)) continue;
                 // a setting also matches its option values (h264, dwindle, dark,
                 // fahrenheit): index the lowercase ones (skips DisplaysPage's
                 // capitalised doc placeholders) so an enum value finds its row.
