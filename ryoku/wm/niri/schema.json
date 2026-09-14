@@ -1,21 +1,32 @@
 [
   {
     "tab": "Layout",
-    "group": "COLUMNS",
+    "group": "COLUMN WIDTHS",
     "key": "wm.niri.presetColumnWidths",
-    "label": "Preset column widths",
-    "desc": "Widths the column-width switch cycles through, as screen proportions, comma separated",
-    "ctl": "text",
+    "label": "Widths to cycle",
+    "desc": "The widths a window steps through when you press the column-width key",
+    "ctl": "chips",
     "src": "desktop.json",
-    "eg": "0.33, 0.5, 0.67",
-    "page": "windowmanager"
+    "page": "windowmanager",
+    "opts": [
+      "0.5",
+      "0.33333, 0.66667",
+      "0.33333, 0.5, 0.66667",
+      "0.25, 0.5, 0.75"
+    ],
+    "optLabels": {
+      "0.5": "Half",
+      "0.33333, 0.66667": "Thirds",
+      "0.33333, 0.5, 0.66667": "Thirds and half",
+      "0.25, 0.5, 0.75": "Quarters"
+    }
   },
   {
     "tab": "Layout",
-    "group": "STRUTS",
+    "group": "SCREEN EDGE GAPS",
     "key": "wm.niri.struts.left",
-    "label": "Left strut",
-    "desc": "Empty space niri keeps clear at the left screen edge, in pixels",
+    "label": "Left edge",
+    "desc": "Space kept clear along the left edge, so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -25,10 +36,10 @@
   },
   {
     "tab": "Layout",
-    "group": "STRUTS",
+    "group": "SCREEN EDGE GAPS",
     "key": "wm.niri.struts.right",
-    "label": "Right strut",
-    "desc": "Empty space niri keeps clear at the right screen edge, in pixels",
+    "label": "Right edge",
+    "desc": "Space kept clear along the right edge, so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -38,10 +49,10 @@
   },
   {
     "tab": "Layout",
-    "group": "STRUTS",
+    "group": "SCREEN EDGE GAPS",
     "key": "wm.niri.struts.top",
-    "label": "Top strut",
-    "desc": "Empty space niri keeps clear at the top screen edge, in pixels",
+    "label": "Top edge",
+    "desc": "Space kept clear along the top edge, so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -51,10 +62,10 @@
   },
   {
     "tab": "Layout",
-    "group": "STRUTS",
+    "group": "SCREEN EDGE GAPS",
     "key": "wm.niri.struts.bottom",
-    "label": "Bottom strut",
-    "desc": "Empty space niri keeps clear at the bottom screen edge, in pixels",
+    "label": "Bottom edge",
+    "desc": "Space kept clear along the bottom edge, so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -110,11 +121,12 @@
     "tab": "Behaviour",
     "group": "SCREENSHOTS",
     "key": "wm.niri.screenshotPath",
-    "label": "Screenshot path",
-    "desc": "Where niri saves screenshots; date tokens like %Y %m %d expand to the moment it is taken",
+    "label": "Save screenshots to",
+    "desc": "Where the compositor's own screenshot lands. %Y, %m and %d become the date",
     "ctl": "text",
     "src": "desktop.json",
     "eg": "~/Pictures/Screenshots/Screenshot %Y-%m-%d.png",
-    "page": "windowmanager"
+    "page": "windowmanager",
+    "adv": true
   }
 ]

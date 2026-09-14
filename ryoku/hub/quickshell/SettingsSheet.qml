@@ -22,6 +22,11 @@ import "ReloadCoverModel.js" as ReloadCoverModel
 Item {
     id: sheet
 
+    // Page-supplied blocks that belong ABOVE the rows and must scroll WITH them.
+    // Pinning them outside the scroll area steals the viewport: a page with a
+    // tall lead block leaves the rows a thin strip to scroll in.
+    default property alias lead: leadSlot.data
+
     property var schema: []          // [{ tab, group, key, label, desc, ctl, src, caps?, opts, lo, hi, unit, pct }]
     property var draft: null         // the page's live values
     property var defaults: ({})      // factory values, for the struck default
@@ -206,6 +211,13 @@ Item {
             // cap the column so rows do not run a label metres from its control.
             width: Math.min(flick.width - 14, 1000)
             spacing: Tokens.s4
+
+            Item {
+                id: leadSlot
+                width: col.width
+                height: childrenRect.height
+                visible: children.length > 0
+            }
 
             Repeater {
                 model: sheet.groups
@@ -407,6 +419,10 @@ Item {
                                 Chips {
                                     anchors.fill: parent
                                     options: sheet.optsFor(srow.r)
+                                    // optLabels lets a row offer readable chips over
+                                    // literal stored values, so a user picks "Thirds"
+                                    // rather than typing proportions.
+                                    labels: srow.r.optLabels || ({})
                                     current: String(sheet.val(srow.r))
                                     onChose: (k) => sheet.edited(srow.r.key, k)
                                 }

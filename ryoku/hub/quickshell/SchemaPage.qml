@@ -29,7 +29,9 @@ Item {
     property string query: ""
     property alias tab: sheet.tab
     property alias advanced: sheet.advanced
-    default property alias extras: extraSlot.data
+    // extras ride inside the sheet's scroll area, not pinned above it, so a page
+    // with a tall extra block still scrolls as one surface.
+    default property alias extras: sheet.lead
     property var pendingImageRow: null
     property string externalReloadCoverError: ""
     property string importReloadCoverError: ""
@@ -143,18 +145,11 @@ Item {
         }
     }
 
-    Item {
-        id: extraSlot
-        anchors { left: parent.left; right: parent.right; top: head.bottom; topMargin: childrenRect.height > 0 ? Tokens.s4 : 0 }
-        height: childrenRect.height
-        visible: children.length > 0
-    }
-
     SettingsSheet {
         id: sheet
         anchors {
             left: parent.left; right: parent.right
-            top: extraSlot.visible ? extraSlot.bottom : head.bottom
+            top: head.bottom
             bottom: parent.bottom
             topMargin: Tokens.s5
         }
