@@ -1,0 +1,10 @@
+// Yours, and the last file niri reads, so anything here beats both the seeds
+// and the Hub's generated config. Seeded once and never touched by an update.
+//
+// Add a bind, override a setting, or drop in a window rule:
+//
+//   binds {
+//       Mod+Shift+T { spawn "kitty"; }
+//   }
+//
+// A chord already bound in rebinds.kdl is replaced by one you set here.

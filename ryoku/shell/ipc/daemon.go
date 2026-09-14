@@ -844,20 +844,31 @@ func (d *daemon) handle(conn net.Conn) {
 }
 
 var surfaceCommands = map[string]string{
-	"menu screenshot": "screenshot",
-	"menu stash":      "stash",
-	// The file-picker tools (install-app.desktop, compress-video.desktop) open the
-	// stash sidebar straight onto their picker through the shell openSurface bus.
-	"install":  "stash#install",
-	"compress": "stash#compress",
-	// launcher/overview/visualizer are in-process toggles driven by the shell's own
-	// global:ryoku:* keybinds (CustomShortcut -> ShellState), not the surface bus,
-	// so these daemon verbs stay no-ops. Do NOT invent a shell IPC function for them.
-	"menu app-launcher":  "launcher",
+	// One bare kebab verb per shell surface, spelled to match its CustomShortcut
+	// id, so a compositor keybind reaches any surface as `ryoku-shell <id>` where
+	// no global-shortcuts protocol exists (niri). Flag surfaces land on ShellState
+	// through the surface bus's style-independent consumer; frame-menu surfaces
+	// land on the per-monitor FrameMenuManager. Both are the same transition a
+	// CustomShortcut press runs in-process.
+	"bar-toggle":         "barToggle",
 	"launcher":           "launcher",
 	"overview":           "overview",
 	"visualizer":         "visualizer",
 	"visualizer-overlay": "visualizer-overlay",
+	"visualizer-place":   "visualizer-place",
+	"quicksettings":      "quick-settings",
+	"wallpaper-menu":     "wallpaper",
+	"clipboard":          "quick-settings#clipboard",
+	"stash":              "stash",
+	"screenshot":         "quick-settings#capture",
+	"compress":           "stash#compress",
+	"install":            "stash#install",
+	// Preserved aliases so nothing scripted today breaks: the menu-prefixed
+	// spellings and the file-picker desktop entries (install-app.desktop,
+	// compress-video.desktop) land on the same surfaces they always have.
+	"menu screenshot":   "screenshot",
+	"menu stash":        "stash",
+	"menu app-launcher": "launcher",
 }
 
 // route resolves an IPC-style command to the single shell's IpcHandler config,

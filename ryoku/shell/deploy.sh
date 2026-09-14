@@ -125,12 +125,18 @@ say "building ryoku-shell"
 mkdir -p "$bindir"
 install -m755 "$here/ipc/ryoku-shell" "$bindir/ryoku-shell"
 say "installed $bindir/ryoku-shell"
-# Build the Hyprland window-manager provider; deploy routes the config-swap pause
-# and reload below through it.
-say "building ryoku-wm-hyprland"
-(cd "$here/../wm/hyprland" && go build -o ryoku-wm-hyprland .)
-install -m755 "$here/../wm/hyprland/ryoku-wm-hyprland" "$bindir/ryoku-wm-hyprland"
-say "installed $bindir/ryoku-wm-hyprland"
+# Build every window-manager provider the repo carries, not just the running
+# one: a checkout must be able to deploy, then switch compositors and find the
+# other provider already on PATH. deploy routes the config-swap pause and reload
+# below through whichever one is live.
+for p in "$here/../wm"/*/; do
+  [[ -f "$p/main.go" ]] || continue
+  name=${p%/}; name=${name##*/}
+  say "building ryoku-wm-$name"
+  (cd "$p" && go build -o "ryoku-wm-$name" .)
+  install -m755 "$p/ryoku-wm-$name" "$bindir/ryoku-wm-$name"
+  say "installed $bindir/ryoku-wm-$name"
+done
 install -m755 "$here/scripts/ryoku-reload-cover" "$bindir/ryoku-reload-cover"
 install -m755 "$here/scripts/ryostage" "$bindir/ryostage"
 install -m755 "$here/scripts/ryoku-eq" "$bindir/ryoku-eq"
@@ -144,14 +150,19 @@ done
 # helpers keeps them on PATH forever otherwise (pacman drops them on packaged boxes).
 rm -f "$bindir"/ryoku-{depth,parallax-engine}
 
-# Every hyprland leaf script the config calls by bare name (ryoku-app, the
+# Every compositor leaf script a config calls by bare name (ryoku-app, the
 # ryoku-cmd-*, ...). The package ships them to /usr/bin; a checkout must put the
 # current copies on PATH too, else a new one like ryoku-app is simply missing.
-for s in "$here/../hyprland/scripts"/ryoku-*; do
-  [[ -f $s ]] || continue
-  install -m755 "$s" "$bindir/${s##*/}"
+# Per provider, because the scripts are that compositor's payload: a provider
+# with no scripts dir contributes none.
+for d in "$here/../wm"/*/; do
+  name=${d%/}; name=${name##*/}
+  for s in "$here/../$name/scripts"/ryoku-*; do
+    [[ -f $s ]] || continue
+    install -m755 "$s" "$bindir/${s##*/}"
+  done
 done
-say "installed the hyprland leaf scripts to $bindir"
+say "installed the compositor leaf scripts to $bindir"
 
 # Build ryogami-live, the software-decode video-wallpaper daemon the shell drives
 # for live wallpapers. Needs wayland-scanner + a C toolchain + ffmpeg/wayland dev
@@ -550,62 +561,83 @@ install -Dm644 "$here/../apps/nautilus/ryoku-stash-menu.py" \
   "$appshare/nautilus-python/extensions/ryoku-stash-menu.py"
 say "installed nautilus stash menu -> $appshare/nautilus-python/extensions"
 
-# Pause config auto-reload through the provider so the swap below never exposes a
-# missing config mid-rename. A successful pause also proves a live session (so the
-# swap reloads at the end); a failure means no session and the swap just stages.
+# The compositor config comes from the ACTIVE provider's payload, so a checkout
+# on niri deploys ryoku/niri exactly the way one on Hyprland deploys
+# ryoku/hyprland. `ryoku wm config` is the single source for the config dir name
+# and the seed list: a second copy of that table here would drift from
+# ryoku/wm/detect.go, which is the one place allowed to know it.
+wm_conf=$("$bindir/ryoku" wm config 2>/dev/null || true)
+wm_name=$(jq -r '.name // empty' <<<"$wm_conf" 2>/dev/null)
+wm_dir=$(jq -r '.dir // empty' <<<"$wm_conf" 2>/dev/null)
+mapfile -t seeds < <(jq -r '.seeds[]? | sub("^[^/]+/"; "")' <<<"$wm_conf" 2>/dev/null)
+wm_bin="$bindir/ryoku-wm-$wm_name"
+
+# Liveness comes from the provider, not from the pause below: a compositor that
+# watches its own config has no auto-reload to pause and would read as dead.
 wm_live=0
-if [[ -x "$bindir/ryoku-wm-hyprland" ]] && "$bindir/ryoku-wm-hyprland" act config.autoreload off >/dev/null 2>&1; then
+if [[ -n $wm_name && -x $wm_bin ]] && "$wm_bin" state >/dev/null 2>&1; then
   wm_live=1
 fi
+# Pause auto-reload where the compositor has one, so the swap below never
+# exposes a missing config mid-rename. Unsupported is fine: the swap is a
+# rename, so a config-watching compositor never sees a partial tree.
+if [[ -x $wm_bin ]]; then
+  "$wm_bin" act config.autoreload off >/dev/null 2>&1 || true
+fi
 
-# Hyprland config replaces the base, but the user's own files and the per-machine
+if [[ -z $wm_dir || ! -d "$here/../$wm_name" ]]; then
+  say "no compositor payload for ${wm_name:-none}; skipped the config swap"
+else
+# The repo tree replaces the base, but the user's own files and the per-machine
 # generated drop-ins must survive a redeploy, exactly the way a packaged
 # `ryoku materialize` preserves every unshipped file (docs/updates.md). Two
-# classes survive: (1) anything the repo tree does NOT ship (monitors_user.lua,
-# settings.lua, theme.lua, and anything else the user dropped
-# in) is user-owned and carried across untouched; (2) the seed drop-ins the repo
-# ships a default for but the machine owns after first boot (ryoku-monitor writes
-# monitors.lua, ryoku-gpu writes gpu.lua, the user owns keyboard.lua and user.lua) keep their
-# live copy over the shipped default. Shipped files (modules/*, scripts/*, ...)
-# stay Ryoku-owned: the repo copy wins, matching materialize clobbering them.
-seeds=(monitors.lua gpu.lua keyboard.lua user.lua)
+# classes survive: (1) anything the repo tree does NOT ship (the hand-edit
+# display file, the generated settings, and anything else the user dropped in)
+# is user-owned and carried across untouched; (2) the seed drop-ins the repo
+# ships a default for but the machine owns after first boot (the display and GPU
+# pins the runtime rewrites, the keyboard and user files) keep their live copy
+# over the shipped default. Shipped files stay Ryoku-owned: the repo copy wins,
+# matching materialize clobbering them.
+#
 # Build the new config in a staging dir on the same filesystem, then rename it
-# into place. A slow rm+cp of ~/.config/hypr leaves a long window where
-# hyprland.lua is missing; anything that reloads then (a manual reload or a fresh
-# login both bypass the autoreload pause) trips Hyprland into emergency mode and a
-# stale "cannot open hyprland.lua". A rename swap closes that window.
-rm -rf "$cfg"/hypr.staging.*
-staging="$cfg/hypr.staging.$$"
+# into place. A slow rm+cp of the config dir leaves a long window where the
+# entry file is missing; anything that reloads then (a manual reload or a fresh
+# login both bypass the autoreload pause) trips the compositor into its error
+# path, and on niri a missing include is fatal. A rename swap closes that window.
+rm -rf "$cfg/$wm_dir".staging.*
+staging="$cfg/$wm_dir.staging.$$"
 mkdir -p "$staging"
-cp -a "$here/../hyprland/." "$staging/"
+cp -a "$here/../$wm_name/." "$staging/"
 # Carry the user's own files and the per-machine seeds across, mirroring
 # materialize: any file the freshly-staged repo tree does not contain is
 # user-owned and kept; the seeds keep their live copy over the shipped default.
-if [[ -d $cfg/hypr ]]; then
+if [[ -d $cfg/$wm_dir ]]; then
   while IFS= read -r -d '' f; do
-    rel=${f#"$cfg/hypr/"}
+    rel=${f#"$cfg/$wm_dir/"}
     [[ -e "$staging/$rel" ]] && continue   # shipped -> Ryoku-owned, repo copy wins
     mkdir -p "$staging/$(dirname "$rel")"
     cp -a "$f" "$staging/$rel"
-    # -type l too: a user who symlinks a user-owned file (monitors_user.lua,
-    # user.lua) from a dotfiles repo owns it; -type f alone would drop the link
-    # and the redeploy would lose their file. cp -a carries the symlink itself.
-  done < <(find "$cfg/hypr" \( -type f -o -type l \) -print0)
+    # -type l too: a user who symlinks a user-owned file from a dotfiles repo
+    # owns it; -type f alone would drop the link and the redeploy would lose
+    # their file. cp -a carries the symlink itself.
+  done < <(find "$cfg/$wm_dir" \( -type f -o -type l \) -print0)
   for f in "${seeds[@]}"; do
     # -e follows the link and misses a dangling one (repo not mounted yet), so
     # test -L as well; without it a symlinked seed is replaced by the default.
-    { [[ -e "$cfg/hypr/$f" || -L "$cfg/hypr/$f" ]]; } && cp -a "$cfg/hypr/$f" "$staging/$f"
+    { [[ -e "$cfg/$wm_dir/$f" || -L "$cfg/$wm_dir/$f" ]]; } && cp -a "$cfg/$wm_dir/$f" "$staging/$f"
   done
 fi
-# cp -a carries the repo's older mtimes; bump the entry so an mtime-watching
-# autoreload still registers the swapped-in config as new.
-touch "$staging/hyprland.lua"
-if [[ -d $cfg/hypr ]]; then
-  bak="$cfg/hypr.bak-$(date +%Y%m%d%H%M%S)"
-  mv "$cfg/hypr" "$bak"
-  say "backed up existing hypr -> $bak"
+# cp -a carries the repo's older mtimes; bump the top level so an mtime-watching
+# autoreload still registers the swapped-in config as new, whichever file the
+# compositor treats as its entry.
+touch "$staging"/* 2>/dev/null || true
+if [[ -d $cfg/$wm_dir ]]; then
+  bak="$cfg/$wm_dir.bak-$(date +%Y%m%d%H%M%S)"
+  mv "$cfg/$wm_dir" "$bak"
+  say "backed up existing $wm_dir -> $bak"
 fi
-mv "$staging" "$cfg/hypr"
+mv "$staging" "$cfg/$wm_dir"
+fi
 
 wireplumber_policy="$cfg/wireplumber/wireplumber.conf.d/51-ryoku-bluetooth.conf"
 wireplumber_before=

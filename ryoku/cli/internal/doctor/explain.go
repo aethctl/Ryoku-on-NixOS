@@ -14,6 +14,7 @@ import (
 	"time"
 
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // `ryoku doctor --explain` = the reasoning layer over the deterministic
@@ -31,15 +32,22 @@ const (
 	defaultAIModel    = "llama-3.3-70b-versatile"
 )
 
-// aiSystemPrompt: compact framing so the model knows the system it's
-// diagnosing and what to produce. short on purpose -- the report is the data.
-const aiSystemPrompt = "You are the diagnostic brain for Ryoku, an Arch-based Linux distro running the " +
-	"Hyprland Wayland compositor (btrfs root with snapper; the `ryoku` CLI manages updates, snapshots, and " +
-	"config). You are given a `ryoku doctor` report: deterministic findings plus system state (btrfs, " +
-	"packages, services, journal errors, and hardware: GPU and backlight). Name the single most likely root " +
-	"cause and give the exact, safe fix, preferring precise shell commands. When the cause is hardware, " +
-	"firmware, or BIOS, say so plainly: software cannot fix it, so tell the user what to change. Never give a " +
-	"destructive command without a clear warning. Be brief: lead with the cause, then the fix."
+// aiSystemPrompt frames the system for the model, naming the compositor from the
+// detected provider so the advice fits the box actually running. short on
+// purpose -- the report is the data.
+func aiSystemPrompt() string {
+	comp := "a Wayland compositor"
+	if n := wm.Detect().Name; n != "" {
+		comp = "the " + n + " Wayland compositor"
+	}
+	return "You are the diagnostic brain for Ryoku, an Arch-based Linux distro running " + comp +
+		" (btrfs root with snapper; the `ryoku` CLI manages updates, snapshots, and " +
+		"config). You are given a `ryoku doctor` report: deterministic findings plus system state (btrfs, " +
+		"packages, services, journal errors, and hardware: GPU and backlight). Name the single most likely root " +
+		"cause and give the exact, safe fix, preferring precise shell commands. When the cause is hardware, " +
+		"firmware, or BIOS, say so plainly: software cannot fix it, so tell the user what to change. Never give a " +
+		"destructive command without a clear warning. Be brief: lead with the cause, then the fix."
+}
 
 func aiKey() string {
 	if k := strings.TrimSpace(os.Getenv("RYOKU_AI_KEY")); k != "" {
@@ -126,7 +134,7 @@ func aiDiagnose(endpoint, key, model, report string) (string, error) {
 	body, err := json.Marshal(aiRequest{
 		Model: model,
 		Messages: []aiMessage{
-			{Role: "system", Content: aiSystemPrompt},
+			{Role: "system", Content: aiSystemPrompt()},
 			{Role: "user", Content: "Diagnose this machine and tell me how to fix it:\n\n" + report},
 		},
 	})

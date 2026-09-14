@@ -1,0 +1,32 @@
+// Ryoku's niri config. niri reads exactly one file, so this is the top level
+// and everything else is included from here.
+//
+// Two niri rules shape this file:
+//
+// A missing include is a HARD config error, and a niri with an unreadable
+// config has no session. So every path below must exist on a deployed box:
+// ryoku-desktop-niri ships the seeds and ryoku-wm-niri always writes both
+// generated files, even when they would be empty. There is no optional include
+// the way hyprland.lua can pcall a drop-in.
+//
+// The LAST include wins for a value set twice, so order is the override chain:
+// machine seeds, then the desktop's generated config, then your own file.
+
+// Seeded once, then owned by this machine. keyboard.kdl is yours to edit; gpu
+// and monitors are rewritten at runtime on a GPU reset or a hotplug.
+include "keyboard.kdl"
+include "gpu.kdl"
+include "monitors.kdl"
+// Hand-written display pins, loaded after the generated monitors.kdl so a
+// forced mode or a fixed layout wins over autoscale.
+include "monitors_user.kdl"
+
+// Written by ryoku-wm-niri from the neutral settings store: settings.kdl is
+// every desktop.* and wm.niri.* value in effect, rebinds.kdl is the complete
+// keybind set. Never hand-edit these, an update overwrites them; put changes in
+// the Hub or in user.kdl.
+include "settings.kdl"
+include "rebinds.kdl"
+
+// The last word, and yours. Seeded once and never touched by an update.
+include "user.kdl"

@@ -281,67 +281,121 @@ ShellRoot {
         }
     }
 
-    // In-process global shortcuts. Each flips the focused monitor's ShellState
-    // flag that the per-screen surfaces above bind their visibility to, so a
-    // keybind is a property write, not a client spawn. Names match the
-    // compositor's global-shortcut binds where that protocol is available.
+    // The single surface-toggle mapping. Every shell surface id resolves to one
+    // transition here: a per-monitor ShellState flip, a global config toggle, or
+    // a request onto the frame menu bus. Both routes to a surface end in this one
+    // call -- a CustomShortcut press where the compositor bridges global
+    // shortcuts, and the surfaceRequested bus a `ryoku-shell <id>` spawn drives
+    // where that protocol is absent (niri) -- so a toggle is defined once.
+    function toggleSurface(id) {
+        const st = ShellState.forActive();
+        switch (id) {
+        case "barToggle":
+            if (st)
+                st.barRevealed = !st.barRevealed;
+            break;
+        case "launcher":
+            if (st)
+                st.launcherOpen = !st.launcherOpen;
+            break;
+        case "overview":
+            if (Wm.caps.nativeOverview)
+                Wm.toggleOverview();
+            else if (Wm.caps.windowGeometry && st)
+                st.overviewOpen = !st.overviewOpen;
+            break;
+        case "visualizer":
+            VizCfg.Config.setEnabled(!VizCfg.Config.enabled);
+            break;
+        case "visualizer-overlay":
+            if (st)
+                st.visualizerOverlay = !st.visualizerOverlay;
+            break;
+        case "visualizer-place":
+            if (st)
+                root.placeVisualizer(!st.visualizerPlacing);
+            break;
+        case "quicksettings":
+            ShellState.requestSurfaceActive("quick-settings", undefined);
+            break;
+        case "wallpaper-menu":
+            ShellState.requestSurfaceActive("wallpaper", undefined);
+            break;
+        case "clipboard":
+            ShellState.requestSurfaceActive("quick-settings#clipboard", undefined);
+            break;
+        case "stash":
+            ShellState.requestSurfaceActive("stash", undefined);
+            break;
+        case "screenshot":
+            ShellState.requestSurfaceActive("quick-settings#capture", undefined);
+            break;
+        case "compress":
+            ShellState.requestSurfaceActive("stash#compress", undefined);
+            break;
+        case "install":
+            ShellState.requestSurfaceActive("stash#install", undefined);
+            break;
+        }
+    }
+
+    // The style-independent half of the surface bus. With no global-shortcuts
+    // protocol a keybind reaches a surface only by spawning `ryoku-shell <id>`,
+    // which arrives here as a surfaceRequested. Frame-menu surfaces are opened by
+    // the per-monitor FrameMenuManager (Frame.qml), which maps in every bar
+    // style; the shell-wide flag surfaces have no such host, so this routes them
+    // through the same toggleSurface a shortcut press uses. Frame-menu ids never
+    // match here, so a surface still opens exactly once.
+    Connections {
+        target: ShellState
+        function onSurfaceRequested(id, mon, ctx) {
+            switch (id) {
+            case "barToggle":
+            case "launcher":
+            case "overview":
+            case "visualizer":
+            case "visualizer-overlay":
+            case "visualizer-place":
+                root.toggleSurface(id);
+                break;
+            }
+        }
+    }
+
+    // In-process global shortcuts. Each dispatches to the one toggleSurface
+    // mapping above, so the compositor's global-shortcut bind and a `ryoku-shell`
+    // spawn drive the identical transition. Names match the compositor binds.
     CustomShortcut {
         name: "barToggle"
         description: I18n.tr("Toggle the Ryoku frame bar on the active monitor")
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                st.barRevealed = !st.barRevealed;
-        }
+        onPressed: root.toggleSurface("barToggle")
     }
     CustomShortcut {
         name: "launcher"
         description: I18n.tr("Toggle the app launcher on the active monitor")
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                st.launcherOpen = !st.launcherOpen;
-        }
+        onPressed: root.toggleSurface("launcher")
     }
     CustomShortcut {
         name: "overview"
         description: I18n.tr("Toggle the workspace overview on the active monitor")
-        onPressed: {
-            if (Wm.caps.nativeOverview) {
-                Wm.toggleOverview();
-                return;
-            }
-            if (!Wm.caps.windowGeometry)
-                return;
-            const st = ShellState.forActive();
-            if (st)
-                st.overviewOpen = !st.overviewOpen;
-        }
+        onPressed: root.toggleSurface("overview")
     }
     // On/off is the persisted key, so the keybind, the Hub switch and the next
     // restart all read the same answer. Only the layer is per-monitor memory.
     CustomShortcut {
         name: "visualizer"
         description: I18n.tr("Cycle the desktop audio visualiser off and on")
-        onPressed: VizCfg.Config.setEnabled(!VizCfg.Config.enabled)
+        onPressed: root.toggleSurface("visualizer")
     }
     CustomShortcut {
         name: "visualizer-overlay"
         description: I18n.tr("Toggle the audio visualiser overlay over windows")
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                st.visualizerOverlay = !st.visualizerOverlay;
-        }
+        onPressed: root.toggleSurface("visualizer-overlay")
     }
     CustomShortcut {
         name: "visualizer-place"
         description: I18n.tr("Grab the audio visualiser's ring or orb and drag it into place")
-        onPressed: {
-            const st = ShellState.forActive();
-            if (st)
-                root.placeVisualizer(!st.visualizerPlacing);
-        }
+        onPressed: root.toggleSurface("visualizer-place")
     }
 
     // Aiming a hidden spectrum aims nothing, so placing it shows it first.
@@ -550,43 +604,43 @@ ShellRoot {
         }
         function toggle(): void { Keypresses.toggle(); }
     }
-    // Menu global shortcuts (Phase 10): open a bar menu/surface on the focused
-    // monitor via the ShellState bus, replacing the old `ryoku-shell menu <id>`
-    // spawn. binds.lua dispatches global:ryoku:<name> straight here.
+    // Menu global shortcuts: open a bar surface on the focused monitor. Each
+    // dispatches to the one toggleSurface mapping so the compositor bind and the
+    // `ryoku-shell <id>` spawn open the identical surface.
     CustomShortcut {
         name: "quicksettings"
         description: I18n.tr("Open quick settings on the active monitor")
-        onPressed: ShellState.requestSurfaceActive("quick-settings", undefined)
+        onPressed: root.toggleSurface("quicksettings")
     }
     CustomShortcut {
         name: "wallpaper-menu"
         description: I18n.tr("Open the wallpaper and theme menu on the active monitor")
-        onPressed: ShellState.requestSurfaceActive("wallpaper", undefined)
+        onPressed: root.toggleSurface("wallpaper-menu")
     }
     CustomShortcut {
         name: "clipboard"
         description: I18n.tr("Open the clipboard history on the active monitor")
-        onPressed: ShellState.requestSurfaceActive("quick-settings#clipboard", undefined)
+        onPressed: root.toggleSurface("clipboard")
     }
     CustomShortcut {
         name: "stash"
         description: I18n.tr("Open the feature sidebar on the active monitor")
-        onPressed: ShellState.requestSurfaceActive("stash", undefined)
+        onPressed: root.toggleSurface("stash")
     }
     CustomShortcut {
         name: "screenshot"
         description: I18n.tr("Open the capture tab in quick settings on the active monitor")
-        onPressed: ShellState.requestSurfaceActive("quick-settings#capture", undefined)
+        onPressed: root.toggleSurface("screenshot")
     }
     CustomShortcut {
         name: "compress"
         description: I18n.tr("Open the feature sidebar's file picker to compress media")
-        onPressed: ShellState.requestSurfaceActive("stash#compress", undefined)
+        onPressed: root.toggleSurface("compress")
     }
     CustomShortcut {
         name: "install"
         description: I18n.tr("Open the feature sidebar's file picker to install a package")
-        onPressed: ShellState.requestSurfaceActive("stash#install", undefined)
+        onPressed: root.toggleSurface("install")
     }
 
 }

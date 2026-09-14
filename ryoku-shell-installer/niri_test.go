@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -93,5 +94,47 @@ func TestReadNiriTreeIncludes(t *testing.T) {
 	outs := parseNiriOutputs(loadNiriConfig(home))
 	if len(outs) != 1 || outs[0].name != "DP-2" || outs[0].scale != "2" {
 		t.Fatalf("include glob not followed: %+v", outs)
+	}
+}
+
+// The KDL pins are what a niri install carries the user's display layout in, so
+// the emitted file has to be config niri will actually load. A wrong block is
+// not a cosmetic bug: the pins ride into monitors_user.kdl, which config.kdl
+// includes, and a parse error there costs the session.
+func TestRenderKdlPinsValidates(t *testing.T) {
+	outs := []niriOutput{
+		{name: "eDP-1", mode: "2560x1600@165.001", position: "0x0", scale: "1.6", transform: 1},
+		{name: "HDMI-A-1", off: true},
+		// highrr and auto have no niri spelling, so both are left out and niri
+		// picks: the block must still be valid with neither.
+		{name: "DP-2", mode: "highrr", position: "auto", vrr: 1},
+		{name: "Some Vendor Panel 123", mode: "1920x1080"},
+	}
+	pins, skipped := renderKdlPins(outs, false, "niri")
+	if len(skipped) != 1 || skipped[0] != "Some Vendor Panel 123" {
+		t.Fatalf("description-style name must be skipped, got %v", skipped)
+	}
+	for _, want := range []string{
+		`output "eDP-1" {`, `mode "2560x1600@165.001"`, `scale 1.6`,
+		`position x=0 y=0`, `transform "90"`, `off`, `variable-refresh-rate`,
+	} {
+		if !strings.Contains(pins, want) {
+			t.Errorf("pins missing %q\n%s", want, pins)
+		}
+	}
+	if strings.Contains(pins, "highrr") || strings.Contains(pins, `position x=auto`) {
+		t.Errorf("emitted a value niri cannot express:\n%s", pins)
+	}
+
+	if _, err := exec.LookPath("niri"); err != nil {
+		t.Skip("niri not installed; format assertions above still ran")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "monitors_user.kdl")
+	if err := os.WriteFile(path, []byte(pins), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command("niri", "validate", "-c", path).CombinedOutput(); err != nil {
+		t.Fatalf("niri rejected the emitted pins: %v\n%s\n%s", err, out, pins)
 	}
 }

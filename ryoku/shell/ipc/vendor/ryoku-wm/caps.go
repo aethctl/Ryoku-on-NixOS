@@ -80,6 +80,10 @@ type Caps struct {
 	// ~/.config, for the Hub to offer as an escape hatch. Provider-owned so the
 	// Hub never spells a compositor's file names.
 	ConfigFiles []string `json:"configFiles,omitempty"`
+	// GeneratedFiles are the config files apply authors, relative to ~/.config.
+	// They are a pure function of the store, so a caller that restores a state
+	// with no store removes them instead of emitting defaults the user never had.
+	GeneratedFiles []string `json:"generatedFiles,omitempty"`
 	// PortalBackend is the xdg-desktop-portal backend this compositor needs as
 	// the preferred default. Doctor repairs portals.conf against it, so the
 	// backend name lives with the compositor rather than in a reconciler.

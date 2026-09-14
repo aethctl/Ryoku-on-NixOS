@@ -678,11 +678,12 @@ func gpuModes() []item {
 	}
 }
 
-// compositors lists the window managers with a shipped variant package. niri is one
-// more line here once its provider ships; the step auto-skips while the list has one.
+// compositors lists the window managers with a shipped variant package, in
+// wm.Providers order. The step auto-skips while the list has one entry.
 func compositors() []item {
 	return []item{
 		{wm.ProviderHyprland, "Hyprland", i18n.T("dynamic tiling, the Ryoku default")},
+		{wm.ProviderNiri, "niri", i18n.T("scrollable tiling")},
 	}
 }
 

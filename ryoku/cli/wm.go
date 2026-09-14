@@ -16,8 +16,9 @@ import (
 )
 
 // cmdWm is the neutral front door to the window-manager provider: what is running
-// (status), dispatch an action from a script (act), print the provider's session
-// entry (session), and switch compositors as a reversible package op (use).
+// (status), where its config lives (config), dispatch an action from a script
+// (act), print the provider's session entry (session), and switch compositors as
+// a reversible package op (use).
 func cmdWm(args []string) {
 	if len(args) == 0 {
 		wmUsage()
@@ -30,6 +31,8 @@ func cmdWm(args []string) {
 		cmdWmAct(args[1:])
 	case "session":
 		cmdWmSession()
+	case "config":
+		cmdWmConfig(args[1:])
 	case "use":
 		cmdWmUse(args[1:])
 	default:
@@ -38,7 +41,7 @@ func cmdWm(args []string) {
 }
 
 func wmUsage() {
-	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
+	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
 }
 
 func cmdWmStatus() {
@@ -100,21 +103,80 @@ func cmdWmSession() {
 	os.Stdout.Write(out)
 }
 
-func cmdWmUse(args []string) {
-	if len(args) == 0 {
-		die("usage: ryoku wm use <name>")
+// cmdWmConfig prints where a provider's config lives and which files belong to
+// whom, as JSON for a script to read. The mapping already exists once in the
+// seam (ryoku/wm/detect.go); exposing it here is what keeps deploy.sh and any
+// other tool from keeping a second copy of a per-compositor file list.
+func cmdWmConfig(args []string) {
+	name := wm.Detect().Name
+	if len(args) > 0 && strings.TrimSpace(args[0]) != "" {
+		name = args[0]
 	}
-	name := args[0]
+	if name == "" {
+		die(i18n.T("no window manager detected; name one: %s"), strings.Join(wm.Providers(), ", "))
+	}
+	if !knownProvider(name) {
+		die("unknown compositor %q; known: %s", name, strings.Join(wm.Providers(), ", "))
+	}
+	// Generated files come from the provider, which is the only thing that knows
+	// what its apply authors; empty when that provider is not installed.
+	generated := []string{}
+	if caps, err := wm.OpenNamed(name).Caps(); err == nil {
+		generated = caps.GeneratedFiles
+	}
+	payload := struct {
+		Name      string   `json:"name"`
+		Dir       string   `json:"dir"`
+		Seeds     []string `json:"seeds"`
+		UserOwned []string `json:"userOwned"`
+		Generated []string `json:"generated"`
+	}{
+		Name:      name,
+		Dir:       wm.ConfigDir(name),
+		Seeds:     wm.ConfigSeeds(name),
+		UserOwned: wm.ConfigUserOwned(name),
+		Generated: generated,
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(payload); err != nil {
+		die("%v", err)
+	}
+}
+
+func cmdWmUse(args []string) {
+	keepPrevious := true
+	var rest []string
+	for _, a := range args {
+		switch a {
+		case "--remove-previous":
+			keepPrevious = false
+		case "--keep-previous":
+			keepPrevious = true
+		default:
+			rest = append(rest, a)
+		}
+	}
+	if len(rest) == 0 {
+		die("usage: ryoku wm use <name> [--keep-previous|--remove-previous]")
+	}
+	name := rest[0]
 	if !knownProvider(name) {
 		die("unknown compositor %q; known: %s", name, strings.Join(wm.Providers(), ", "))
 	}
 	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
 	active := wm.Detect().Name
+	if name == active {
+		fmt.Printf(i18n.T("%s is already the compositor.\n"), name)
+		return
+	}
 
-	// Preview: the target applying the neutral store reports what it cannot
-	// honour. Best-effort, since the provider may not be installed yet.
-	report, applyErr := wm.OpenNamed(name).Apply(store)
+	// A dry run, not an apply: asking the target what it cannot honour must not
+	// author its config as a side effect. Best-effort, since the provider may
+	// not be installed yet.
+	report, applyErr := wm.OpenNamed(name).DryRun(store)
 	printWmSwitchPreview(name, active, store, report, applyErr)
+	printWmPreviousChoice(active, keepPrevious)
 
 	pkg := "ryoku-desktop-" + name
 	if !packageAvailable(pkg) {
@@ -125,7 +187,36 @@ func cmdWmUse(args []string) {
 	if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
 		die(i18n.T("could not install %s: %v"), pkg, err)
 	}
+	// Removal is a second transaction on purpose: the switch is complete once
+	// the target is installed, so a failure to remove the old compositor leaves
+	// a working desktop rather than a half-switched one.
+	if !keepPrevious && active != "" {
+		removePreviousCompositor(active)
+	}
 	fmt.Printf(i18n.T("Installed %s; %s is the compositor at the next login.\n"), pkg, name)
+}
+
+// printWmPreviousChoice states the tradeoff in the terms that are actually
+// true, because the settings surviving either way is what makes removal safe.
+func printWmPreviousChoice(active string, keep bool) {
+	if active == "" {
+		return
+	}
+	if keep {
+		fmt.Printf(i18n.T("  Keeping %s installed: switching back needs no download, and its packages and config stay on disk.\n"), active)
+		return
+	}
+	fmt.Printf(i18n.T("  Removing %s: frees its packages and drops its session entry, and switching back later installs it again.\n"), active)
+}
+
+// removePreviousCompositor drops the old compositor package, leaving its config
+// tree and its wm.<name>.* settings alone so a switch back restores the desktop
+// rather than a default one.
+func removePreviousCompositor(active string) {
+	pkg := "ryoku-desktop-" + active
+	if err := sys.Sudo("pacman", "-Rns", "--noconfirm", pkg); err != nil {
+		fmt.Printf(i18n.T("Switched, but %s could not be removed: %v\n"), pkg, err)
+	}
 }
 
 func knownProvider(name string) bool {

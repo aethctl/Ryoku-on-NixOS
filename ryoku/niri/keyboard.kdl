@@ -1,0 +1,6 @@
+// Your keyboard. Seeded once, never repaired by an update, so an edit here
+// survives forever.
+//
+// The Hub writes the layout you pick into settings.kdl, which is included after
+// this file and therefore wins. Set a layout here only to hold one the Hub
+// cannot express, for example a per-device rule or a custom xkb file.

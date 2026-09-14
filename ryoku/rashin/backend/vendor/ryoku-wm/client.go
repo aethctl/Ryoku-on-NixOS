@@ -143,6 +143,26 @@ func (c *Client) Apply(storePath string) (ApplyReport, error) {
 	return rep, nil
 }
 
+// DryRun asks a provider what it could not honour if the store were applied to
+// it, and writes nothing. Ungated, unlike Preview: the question is answerable
+// by any provider, and it is how `ryoku wm use` and the Hub tell a user what a
+// switch would cost BEFORE the target owns the config. Calling Apply here would
+// author the target compositor's config as a side effect of asking.
+func (c *Client) DryRun(storePath string) (ApplyReport, error) {
+	var rep ApplyReport
+	if c.bin == "" {
+		return rep, ErrNoProvider
+	}
+	out, err := c.run("apply", storePath, "--preview")
+	if err != nil {
+		return rep, err
+	}
+	if err := json.Unmarshal(out, &rep); err != nil {
+		return rep, fmt.Errorf("%s dry run: %w", c.bin, err)
+	}
+	return rep, nil
+}
+
 // Preview pushes the store to the live session without writing any config, for
 // the Hub's appearance sliders. Gated on CapLiveConfigEval: a compositor whose
 // config is file-only cannot preview, and the Hub then applies on save.

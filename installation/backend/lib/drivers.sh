@@ -50,8 +50,10 @@ ryoku_drivers() {
 #   offload -> hybrid       (no pin; Hyprland's iGPU-first default, for battery)
 #   sync    -> performance  (pin the dGPU as the primary renderer)
 #   vfio    -> passthrough  (pin the iGPU alone, freeing the dGPU for a VM)
-# run `ryoku-gpu mode <mapped>` as the user against their Hyprland pin file, via
-# runuser like deploy.sh's materialize. ryoku-gpu's analyze reads /sys/class/drm,
+# run `ryoku-gpu mode <mapped>` as the user against the provider's gpu.lua render
+# pin, via runuser like deploy.sh's materialize. only a compositor whose config
+# ships that Lua pin has a writer here: niri picks its own render device and ships
+# gpu.kdl, so the step is skipped for it. ryoku-gpu's analyze reads /sys/class/drm,
 # which arch-chroot bind-mounts, so detection sees the real target GPUs; the tool
 # self-gates (a single GPU no-ops, a missing iGPU refuses passthrough), so a
 # non-hybrid box is harmless. best-effort: a failure only skips the pin.
@@ -77,6 +79,12 @@ ryoku_gpu_mode() {
 	local u=$RYOKU_USERNAME dest="/home/$RYOKU_USERNAME/.config/$RYOKU_COMPOSITOR_CONFIG_DIR/gpu.lua"
 	if [[ -n ${RYOKU_DRYRUN:-} ]]; then
 		log "DRYRUN: arch-chroot /mnt runuser -u $u -- env HOME=/home/$u ryoku-gpu mode $mapped $dest"
+		return 0
+	fi
+	# only a compositor whose config ships a gpu.lua pin has a ryoku-gpu writer;
+	# niri ships gpu.kdl (comment-only, it picks its own render device), so skip.
+	if [[ ! -f /mnt/usr/share/ryoku/config/$RYOKU_COMPOSITOR_CONFIG_DIR/gpu.lua ]]; then
+		log 'GPU mode: skipped (the %s compositor has no ryoku-gpu render pin)' "$RYOKU_COMPOSITOR"
 		return 0
 	fi
 	if [[ ! -x /mnt/usr/bin/ryoku-gpu ]]; then

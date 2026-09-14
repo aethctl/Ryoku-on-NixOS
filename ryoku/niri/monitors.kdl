@@ -1,0 +1,6 @@
+// Written at runtime by the display tooling: one output block per connected
+// screen, with the scale and layout autoscale resolved.
+//
+// Empty means niri uses each monitor's preferred mode at scale 1. Hand edits
+// are lost on the next hotplug; put yours in monitors_user.kdl, which loads
+// after this file.

@@ -5,13 +5,15 @@
 # tree, and the ryoku-wm-hyprland provider binary (ryoku/wm/hyprland). It provides
 # the ryoku-desktop-compositor virtual, so an installed ryoku-desktop pulls it on
 # the next -Syu with no user action and `ryoku rollback` stays pure metadata.
-# A sibling ryoku-desktop-niri would provide the same virtual once niri ships.
+# Its sibling ryoku-desktop-niri provides the same virtual; both also conflict
+# with it, so a box carries exactly one compositor variant and `ryoku wm use`
+# swaps them.
 #
 # built from in-repo sources, no tarball fetch. makepkg runs from a full
 # checkout, so the repo root is three levels up.
 pkgname=ryoku-desktop-hyprland
 pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=1
+pkgrel=2
 pkgdesc="Ryoku desktop: the Hyprland compositor, plugins, portal, and the ryoku-wm-hyprland provider"
 # package() builds the Go provider, so the payload is arch-specific.
 arch=('x86_64')
@@ -39,6 +41,10 @@ depends=(
   'hyprpicker'
 )
 provides=('ryoku-desktop-compositor')
+# one compositor variant at a time: this and ryoku-desktop-niri both provide AND
+# conflict with the virtual, so installing one removes the other and `ryoku
+# rollback` can put it back.
+conflicts=('ryoku-desktop-compositor')
 source=()
 
 _repo="$startdir/../../.."

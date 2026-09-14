@@ -1,0 +1,12 @@
+// Your display pins, loaded after the generated monitors.kdl so what you set
+// here wins. Never shipped over, never rewritten by the display tooling.
+//
+// One block per output, keyed by the name `niri msg outputs` prints:
+//
+//   output "eDP-1" {
+//       mode "2560x1600@165.001"
+//       scale 1.6
+//       position x=0 y=0
+//   }
+//
+// A panel that lies about its EDID usually needs the mode spelled out here.

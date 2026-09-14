@@ -54,7 +54,11 @@ func ConfigDir(name string) string { return configDirs[name] }
 // the compositor's own, not a shared shape.
 var configSeeds = map[string][]string{
 	ProviderHyprland: {"monitors.lua", "gpu.lua", "keyboard.lua", "user.lua"},
-	ProviderNiri:     {"monitors.kdl", "gpu.kdl", "keyboard.kdl", "user.kdl"},
+	// niri seeds its hand-edit file too, unlike Hyprland: config.kdl includes
+	// monitors_user.kdl by name and a missing include is a hard config error,
+	// so the file has to exist from first boot. Being a seed is also what stops
+	// an update re-laying it over a user's edits.
+	ProviderNiri: {"monitors.kdl", "gpu.kdl", "keyboard.kdl", "user.kdl", "monitors_user.kdl"},
 }
 
 // ConfigSeeds returns the seeded, machine-owned files for a provider, as paths
@@ -80,11 +84,10 @@ func ConfigUserOwned(name string) []string {
 	if dir == "" {
 		return nil
 	}
-	switch name {
-	case ProviderHyprland:
+	// Hyprland's monitors_user.lua is optional, so it is hand-created rather
+	// than seeded; niri's equivalent is already in its seed list above.
+	if name == ProviderHyprland {
 		return append(seeds, dir+"/monitors_user.lua")
-	case ProviderNiri:
-		return append(seeds, dir+"/monitors_user.kdl")
 	}
 	return seeds
 }

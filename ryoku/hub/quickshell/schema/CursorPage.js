@@ -12,7 +12,6 @@ var rows = [{
         "desc": "From installed icon sets, applies now and to newly opened apps",
         "ctl": "seg",
         "src": "desktop.json",
-        "caps": "cursorSet",
         "opts": [
             "DYNAMIC"
         ]
@@ -23,8 +22,7 @@ var rows = [{
         "label": "Material Bibata",
         "desc": "Swap the pointer for the Bibata cursor recolored in the Ryoku vermillion accent",
         "ctl": "sw",
-        "src": "desktop.json",
-        "caps": "cursorSet"
+        "src": "desktop.json"
     },{
         "tab": "Pointer",
         "group": "CURSOR",

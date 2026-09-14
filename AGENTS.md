@@ -9,6 +9,8 @@ New here? Read these in order, then keep them open while you work:
 
 - `docs/ryoku.md` what Ryoku is, who it is for, and how the parts fit.
 - `docs/structure.md` the repo map: where everything lives and the one job it has.
+- `docs/compositors.md` the window-manager seam: the provider contract, what
+  each compositor can do, and how to add another.
 - `docs/conventions.md` how code and configuration are written here.
 - `docs/ui-ux.md` the desktop's look and motion, and how to build or replicate it.
 - `docs/development.md` the workflow: deploy, test, the commit gates, and research.
@@ -22,11 +24,14 @@ These are not negotiable. Most are enforced by the git hooks in `.githooks/`.
    purpose. Before adding anything, search the repo first; if it already exists,
    reuse it. Never keep two copies of the same thing. See `docs/structure.md`.
 
-2. **The Hyprland config is Lua.** It is authored as Lua modules under
-   `ryoku/hyprland/`, one concern per file. Never hand-write a raw
-   `hyprland.conf`. A standalone daemon or app that cannot read Lua keeps its own
-   native config under its own directory (for example `hypridle.conf`,
-   `matugen/config.toml`, `kitty.conf`); that is the only reason a non-Lua config exists.
+2. **A compositor's config is authored in that compositor's own language.**
+   Hyprland is Lua modules under `ryoku/hyprland/`; niri is KDL under
+   `ryoku/niri/`. One concern per file, and never a hand-written
+   `hyprland.conf`. A standalone daemon or app that cannot read either keeps its
+   own native config under its own directory (for example `hypridle.conf`,
+   `matugen/config.toml`, `kitty.conf`); that is the only reason another config
+   format exists. Nothing outside `ryoku/wm/` may name a compositor at all:
+   ask capabilities, see `docs/compositors.md`.
 
 3. **One concern per file.** A Lua module does one thing. A QML component is one
    component in one file. Split things out; do not pile unrelated logic together.
@@ -67,7 +72,7 @@ These are not negotiable. Most are enforced by the git hooks in `.githooks/`.
 
 | Path | Purpose |
 |---|---|
-| `ryoku/` | The desktop: app configs, the Hyprland (Lua) config, the shell UI, the lockscreen, brand assets. |
+| `ryoku/` | The desktop: app configs, the window-manager seam and its per-compositor configs (Hyprland in Lua, niri in KDL), the shell UI, the lockscreen, brand assets. |
 | `system/` | The machine definition: boot chain, hardware policy, package sets. |
 | `installation/` | How a machine is built: the TUI, the backend installer, the ISO profile. |
 | `release/` | Packaging: the desktop PKGBUILDs, the `[ryoku]` repo, the signing keyring. |

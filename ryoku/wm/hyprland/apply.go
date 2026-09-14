@@ -36,9 +36,17 @@ func runApply(args []string) error {
 	}
 	o := loadStore(storePath)
 
+	// --preview writes no config. It pushes what it can live, and it still
+	// reports what it cannot honour: DryRun asks a provider that question
+	// before a switch hands it the config, so an empty list here would tell a
+	// user moving to Hyprland that nothing would be lost.
 	if preview {
 		pushEval(liveLua(o))
-		rep := wm.ApplyReport{Provider: wm.ProviderHyprland, ReloadNeeded: false}
+		rep := wm.ApplyReport{
+			Provider:     wm.ProviderHyprland,
+			Unhonored:    unhonored(storePath),
+			ReloadNeeded: false,
+		}
 		enc := json.NewEncoder(stdout)
 		enc.SetIndent("", "  ")
 		return enc.Encode(rep)

@@ -254,3 +254,100 @@ func renderPins(outs []niriOutput, allowDesc bool, source string) (pins string, 
 		"-- delete lines to hand control back. see monitors_user.lua.example.\n"
 	return hdr + b.String(), skipped
 }
+
+// renderKdlPins is the same salvage in niri's KDL. It is a separate emitter
+// rather than a translation of the Lua one because the dialects disagree on
+// more than syntax: niri has no "highrr" or "auto" placeholder, so a salvaged
+// value it cannot express is left out and niri decides, which is better than
+// pinning a mode the panel may not have.
+func renderKdlPins(outs []niriOutput, allowDesc bool, source string) (pins string, skipped []string) {
+	var b strings.Builder
+	wrote := false
+	for _, o := range outs {
+		if strings.ContainsAny(o.name, "\"\\") || (!allowDesc && strings.Contains(o.name, " ")) {
+			skipped = append(skipped, o.name)
+			continue
+		}
+		b.WriteString("output \"" + o.name + "\" {\n")
+		if o.off {
+			b.WriteString("    off\n}\n")
+			wrote = true
+			continue
+		}
+		if mode := kdlMode(o.mode); mode != "" {
+			b.WriteString("    mode \"" + mode + "\"\n")
+		}
+		if o.scale != "" {
+			b.WriteString("    scale " + o.scale + "\n")
+		}
+		if x, y, ok := kdlPosition(o.position); ok {
+			b.WriteString("    position x=" + x + " y=" + y + "\n")
+		}
+		if t := kdlTransform(o.transform); t != "" {
+			b.WriteString("    transform \"" + t + "\"\n")
+		}
+		if o.vrr > 0 {
+			b.WriteString("    variable-refresh-rate\n")
+		}
+		b.WriteString("}\n")
+		wrote = true
+	}
+	if !wrote {
+		return "", skipped
+	}
+	hdr := "// migrated from your " + source + " output settings by ryoku-shell-install.\n" +
+		"// the display tooling leaves the outputs named here alone; edit or delete\n" +
+		"// a block to hand control back.\n"
+	return hdr + b.String(), skipped
+}
+
+// kdlMode keeps only a real WIDTHxHEIGHT[@RATE] mode. Hyprland's "highrr" and
+// "preferred" have no niri spelling, and niri already picks the preferred mode.
+func kdlMode(mode string) string {
+	w, rest, ok := strings.Cut(mode, "x")
+	if !ok || !allDigits(w) {
+		return ""
+	}
+	h, rate, hasRate := strings.Cut(rest, "@")
+	if !allDigits(h) {
+		return ""
+	}
+	if hasRate && strings.TrimSpace(rate) == "" {
+		return w + "x" + h
+	}
+	return mode
+}
+
+// kdlPosition accepts the "XxY" the salvage carries; "auto" and anything else
+// mean niri places the output itself.
+func kdlPosition(pos string) (string, string, bool) {
+	x, y, ok := strings.Cut(pos, "x")
+	if !ok || !allDigits(x) || !allDigits(y) {
+		return "", "", false
+	}
+	return x, y, true
+}
+
+func kdlTransform(t int) string {
+	switch t {
+	case 1:
+		return "90"
+	case 2:
+		return "180"
+	case 3:
+		return "270"
+	}
+	return ""
+}
+
+func allDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}

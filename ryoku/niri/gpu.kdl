@@ -1,0 +1,5 @@
+// Written at runtime by the GPU tooling, which pins the render device when a
+// machine has more than one and niri's own pick is wrong.
+//
+// Empty means niri chooses, which is right on a single-GPU box. Hand edits are
+// lost on the next GPU reset; put yours in user.kdl.

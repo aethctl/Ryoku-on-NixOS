@@ -20,6 +20,13 @@ func TestRoute(t *testing.T) {
 		{"menu stash", "shell", "shell", "openSurface"},
 		{"install", "shell", "shell", "openSurface"},
 		{"compress", "shell", "shell", "openSurface"},
+		{"bar-toggle", "shell", "shell", "openSurface"},
+		{"visualizer-place", "shell", "shell", "openSurface"},
+		{"quicksettings", "shell", "shell", "openSurface"},
+		{"wallpaper-menu", "shell", "shell", "openSurface"},
+		{"clipboard", "shell", "shell", "openSurface"},
+		{"stash", "shell", "shell", "openSurface"},
+		{"screenshot", "shell", "shell", "openSurface"},
 	}
 	for _, c := range cases {
 		config, target, fn, ok := route(c.cmd)
@@ -31,7 +38,7 @@ func TestRoute(t *testing.T) {
 		}
 	}
 	for _, cmd := range []string{
-		"clipboard", "link", "inbox", "mixer", "calendar", "battery",
+		"link", "inbox", "mixer", "calendar", "battery",
 		"toolkit", "utilities", "system", "workspaces", "sysinfo", "peek", "hide",
 		"voice", "lock", "wallpaper", "wallpaper-switcher", "reload", "status",
 		"ping", "quit", "bogus", "", "power", "menu system", "menu recording",
@@ -159,6 +166,39 @@ func TestDispatchFilePickerTools(t *testing.T) {
 		}
 		if got := <-calls; got != want {
 			t.Fatalf("%s shell IPC = %q, want %q", verb, got, want)
+		}
+	}
+}
+
+// Every one of the 13 shell surfaces is reachable as a bare kebab verb equal to
+// its CustomShortcut id, each emitting the exact openSurface id the shell routes
+// to that surface. A niri keybind spawns `ryoku-shell <verb>` for all of these,
+// so a missing or misspelled verb here is a dead keybind on niri.
+func TestDispatchSurfaceVerbs(t *testing.T) {
+	want := map[string]string{
+		"bar-toggle":         "openSurface DP-1 barToggle",
+		"launcher":           "openSurface DP-1 launcher",
+		"overview":           "openSurface DP-1 overview",
+		"visualizer":         "openSurface DP-1 visualizer",
+		"visualizer-overlay": "openSurface DP-1 visualizer-overlay",
+		"visualizer-place":   "openSurface DP-1 visualizer-place",
+		"quicksettings":      "openSurface DP-1 quick-settings",
+		"wallpaper-menu":     "openSurface DP-1 wallpaper",
+		"clipboard":          "openSurface DP-1 quick-settings#clipboard",
+		"stash":              "openSurface DP-1 stash",
+		"screenshot":         "openSurface DP-1 quick-settings#capture",
+		"compress":           "openSurface DP-1 stash#compress",
+		"install":            "openSurface DP-1 stash#install",
+	}
+	calls := make(chan string, 1)
+	stubShellIpc(t, calls)
+	d := &daemon{sup: map[string]bool{"shell": true}, activeMon: "DP-1"}
+	for verb, expect := range want {
+		if got := d.dispatch(verb); got != "ok" {
+			t.Fatalf("dispatch(%q) = %q, want ok", verb, got)
+		}
+		if got := <-calls; got != expect {
+			t.Fatalf("dispatch(%q) shell IPC = %q, want %q", verb, got, expect)
 		}
 	}
 }
