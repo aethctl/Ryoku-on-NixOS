@@ -15,6 +15,7 @@ const (
 
 type compositorBackend interface {
 	Name() string
+	Identity() string
 	Prepare()
 	Start(*daemon)
 }
@@ -23,6 +24,14 @@ type hyprlandCompositor struct{}
 
 func (hyprlandCompositor) Name() string {
 	return compositorHyprland
+}
+
+func (hyprlandCompositor) Identity() string {
+	sig := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if sig == "" {
+		return ""
+	}
+	return compositorHyprland + ":" + sig
 }
 
 func (hyprlandCompositor) Prepare() {
@@ -38,7 +47,7 @@ func currentCompositorBackend() (compositorBackend, error) {
 	case compositorHyprland:
 		return hyprlandCompositor{}, nil
 	case compositorNiri:
-		return nil, fmt.Errorf("niri compositor detected, but the Ryoku Niri backend is not implemented yet")
+		return niriCompositor{socket: os.Getenv("NIRI_SOCKET")}, nil
 	default:
 		return nil, fmt.Errorf("no supported compositor IPC socket found")
 	}
