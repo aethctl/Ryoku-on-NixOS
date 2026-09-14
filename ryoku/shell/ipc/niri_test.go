@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"net"
 	"path/filepath"
 	"strings"
@@ -156,5 +157,60 @@ func TestConsumeNiriState(t *testing.T) {
 	snapshot = d.compState.snapshot()
 	if snapshot.FocusedWorkspaceID != "4" || snapshot.FocusedWindowID != "4" {
 		t.Fatalf("incremental state = workspace %q window %q", snapshot.FocusedWorkspaceID, snapshot.FocusedWindowID)
+	}
+}
+
+func TestNiriWorkspaceActions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "niri-actions.sock")
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	requests := make(chan string, 2)
+	go func() {
+		for i := 0; i < 2; i++ {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			reader := bufio.NewReader(conn)
+			line, _ := reader.ReadString('\n')
+			requests <- strings.TrimSpace(line)
+			_, _ = conn.Write([]byte("{\"Ok\":\"Handled\"}\n"))
+			conn.Close()
+		}
+	}()
+
+	n := niriCompositor{socket: path}
+	if err := n.FocusWorkspace(3); err != nil {
+		t.Fatal(err)
+	}
+	if err := n.FocusWorkspaceRelative(-1); err != nil {
+		t.Fatal(err)
+	}
+
+	focus := <-requests
+	relative := <-requests
+
+	var focusJSON map[string]any
+	if err := json.Unmarshal([]byte(focus), &focusJSON); err != nil {
+		t.Fatal(err)
+	}
+	action := focusJSON["Action"].(map[string]any)
+	focusWorkspace := action["FocusWorkspace"].(map[string]any)
+	reference := focusWorkspace["reference"].(map[string]any)
+	if reference["Index"] != float64(3) {
+		t.Fatalf("workspace index = %#v, want 3", reference["Index"])
+	}
+
+	var relativeJSON map[string]any
+	if err := json.Unmarshal([]byte(relative), &relativeJSON); err != nil {
+		t.Fatal(err)
+	}
+	relativeAction := relativeJSON["Action"].(map[string]any)
+	if _, ok := relativeAction["FocusWorkspaceUp"]; !ok {
+		t.Fatalf("relative action = %#v, want FocusWorkspaceUp", relativeAction)
 	}
 }

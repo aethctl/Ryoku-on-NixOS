@@ -28,6 +28,36 @@ func (n niriCompositor) FocusedOutput() string {
 	return queryNiriFocusedOutput(n.socket)
 }
 
+func (n niriCompositor) FocusWorkspace(index int) error {
+	if index < 1 || index > 255 {
+		return fmt.Errorf("invalid workspace index %d", index)
+	}
+	return sendNiriRequest(n.socket, map[string]any{
+		"Action": map[string]any{
+			"FocusWorkspace": map[string]any{
+				"reference": map[string]any{"Index": index},
+			},
+		},
+	})
+}
+
+func (n niriCompositor) FocusWorkspaceRelative(delta int) error {
+	action := ""
+	switch {
+	case delta < 0:
+		action = "FocusWorkspaceUp"
+	case delta > 0:
+		action = "FocusWorkspaceDown"
+	default:
+		return nil
+	}
+	return sendNiriRequest(n.socket, map[string]any{
+		"Action": map[string]any{
+			action: map[string]any{},
+		},
+	})
+}
+
 func (n niriCompositor) Prepare() {}
 
 func (n niriCompositor) Start(d *daemon) {
@@ -145,6 +175,41 @@ func openNiriEventStream(path string) (net.Conn, *bufio.Reader, error) {
 
 	_ = conn.SetDeadline(time.Time{})
 	return conn, reader, nil
+}
+
+func sendNiriRequest(path string, request any) error {
+	conn, err := net.DialTimeout("unix", path, 500*time.Millisecond)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+	if err := json.NewEncoder(conn).Encode(request); err != nil {
+		return err
+	}
+
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadBytes('\n')
+	if err != nil {
+		return err
+	}
+
+	var reply map[string]json.RawMessage
+	if err := json.Unmarshal(line, &reply); err != nil {
+		return err
+	}
+	if raw, ok := reply["Err"]; ok {
+		var message string
+		if json.Unmarshal(raw, &message) == nil && message != "" {
+			return fmt.Errorf("niri request failed: %s", message)
+		}
+		return fmt.Errorf("niri request failed")
+	}
+	if _, ok := reply["Ok"]; !ok {
+		return fmt.Errorf("invalid niri reply")
+	}
+	return nil
 }
 
 func queryNiriFocusedOutput(path string) string {

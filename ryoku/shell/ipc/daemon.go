@@ -335,6 +335,7 @@ func setupQmlImportPath() {
 // wallpaper surface and the first wallpaper, then the persistent Quickshell
 // components.
 func (d *daemon) bootstrap() {
+	d.startCompositorCalls()
 	d.startSettings()
 	d.startKeypress()
 	d.startClipboard()

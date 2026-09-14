@@ -12,6 +12,7 @@ Singleton {
     property string focusedWindowId: ""
     property var workspaces: []
     property var windows: []
+    property int nextCallId: 1
 
     readonly property bool isHyprland: name === "hyprland"
     readonly property bool isNiri: name === "niri"
@@ -53,6 +54,25 @@ Singleton {
             root.windows = Array.isArray(frame.windows) ? frame.windows : []
         } catch (e) {
         }
+    }
+
+    function call(method, args) {
+        const id = root.nextCallId++
+        const payload = Object.assign({}, args, { id: id })
+        ctl.queued += "call " + method + " " + JSON.stringify(payload) + "\n"
+        if (ctl.connected)
+            ctl.flushQueued()
+        else
+            ctl.connected = true
+        return id
+    }
+
+    function focusWorkspace(index) {
+        return root.call("compositor.focusWorkspace", { index: Number(index) })
+    }
+
+    function focusRelative(delta) {
+        return root.call("compositor.focusRelative", { delta: Number(delta) })
     }
 
     function workspaceByIndex(index, output) {
@@ -99,5 +119,22 @@ Singleton {
         id: retry
         interval: 2000
         onTriggered: if (!sub.connected) sub.connected = true
+    }
+
+    Socket {
+        id: ctl
+        path: root.sockPath
+        property string queued: ""
+        parser: SplitParser { onRead: line => {} }
+
+        function flushQueued() {
+            if (queued.length === 0)
+                return
+            write(queued)
+            flush()
+            queued = ""
+        }
+
+        onConnectionStateChanged: if (connected) flushQueued()
     }
 }

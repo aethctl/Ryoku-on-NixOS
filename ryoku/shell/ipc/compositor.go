@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 )
@@ -17,6 +18,8 @@ type compositorBackend interface {
 	Name() string
 	Identity() string
 	FocusedOutput() string
+	FocusWorkspace(int) error
+	FocusWorkspaceRelative(int) error
 	Prepare()
 	Start(*daemon)
 }
@@ -37,6 +40,36 @@ func (hyprlandCompositor) Identity() string {
 
 func (hyprlandCompositor) FocusedOutput() string {
 	return queryActiveMonitor()
+}
+
+func (hyprlandCompositor) FocusWorkspace(index int) error {
+	if index < 1 {
+		return fmt.Errorf("invalid workspace index %d", index)
+	}
+	return runHyprWorkspaceFocus(fmt.Sprintf("%d", index))
+}
+
+func (hyprlandCompositor) FocusWorkspaceRelative(delta int) error {
+	switch {
+	case delta < 0:
+		return runHyprWorkspaceFocus("r-1")
+	case delta > 0:
+		return runHyprWorkspaceFocus("r+1")
+	default:
+		return nil
+	}
+}
+
+func runHyprWorkspaceFocus(workspace string) error {
+	out, err := exec.Command(
+		"hyprctl",
+		"dispatch",
+		fmt.Sprintf(`hl.dsp.focus({ workspace = "%s" })`, workspace),
+	).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("hyprland workspace focus: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func (hyprlandCompositor) Prepare() {

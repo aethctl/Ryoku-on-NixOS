@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 )
 
@@ -232,5 +233,39 @@ func (s *compositorState) setWindowUrgent(id string, urgent bool) {
 				return
 			}
 		}
+	})
+}
+
+func (d *daemon) startCompositorCalls() {
+	d.registerCall("compositor.focusWorkspace", func(raw json.RawMessage) (any, error) {
+		var request struct {
+			Index int `json:"index"`
+		}
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		if d.compositor == nil {
+			return nil, fmt.Errorf("no compositor backend")
+		}
+		if err := d.compositor.FocusWorkspace(request.Index); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	})
+
+	d.registerCall("compositor.focusRelative", func(raw json.RawMessage) (any, error) {
+		var request struct {
+			Delta int `json:"delta"`
+		}
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		if d.compositor == nil {
+			return nil, fmt.Errorf("no compositor backend")
+		}
+		if err := d.compositor.FocusWorkspaceRelative(request.Delta); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
 	})
 }
