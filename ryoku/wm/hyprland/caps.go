@@ -42,22 +42,6 @@ var capsManifest = []wm.Capability{
 	wm.CapSessionExit,
 }
 
-// What apply authors: the generated Lua plus its user_edits overlay copies, so
-// materialize re-lays them after an update.
-var generatedFiles = []string{
-	"hypr/settings.lua",
-	"hypr/rebinds.lua",
-	"ryoku/user_edits/hypr/settings.lua",
-	"ryoku/user_edits/hypr/rebinds.lua",
-}
-
-// The hand-edit escape hatches hyprland.lua sources; ordered most useful first.
-var configFiles = []string{
-	"hypr/user.lua",
-	"hypr/monitors_user.lua",
-	"hypr/modules",
-}
-
 // The packages ryoku-desktop-hyprland installs for the compositor: Hyprland
 // itself, its plugins, its portal and its satellites. Kept in step with that
 // package's depends (release/packages/ryoku-desktop-hyprland/PKGBUILD); this is
@@ -89,8 +73,8 @@ func runCaps() error {
 		// wm.hyprland.* keys stay in the store untouched while another
 		// compositor is active, so they are still there on the way back.
 		SettingDomains: []string{"desktop", "wm." + wm.ProviderHyprland},
-		ConfigFiles:    configFiles,
-		GeneratedFiles: generatedFiles,
+		ConfigFiles:    wm.ConfigFiles(wm.ProviderHyprland),
+		GeneratedFiles: wm.GeneratedConfig(wm.ProviderHyprland),
 		PortalBackend:  "hyprland",
 		Packages:       compositorPackages,
 	}

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"ryoku-cli/internal/sys"
+	"strings"
 	"testing"
 )
 
@@ -112,5 +113,38 @@ func TestReconcileUserEditsRetiresStaleOverlayCopy(t *testing.T) {
 
 	if r := reconcileUserEdits(false); r.status != recOK {
 		t.Fatalf("idempotent: status=%s, want ok", r.status.label())
+	}
+}
+
+// The overlay guide names the active provider's own files, and doctor refreshes
+// it when it drifts (a stale wording, or another compositor's paths after a
+// switch), so a niri box never reads a guide that points at Hyprland's config.
+func TestReconcileUserEditsGuideNamesActiveProvider(t *testing.T) {
+	ueSetup(t)
+	t.Setenv("RYOKU_WM", "niri")
+	guide := filepath.Join(sys.UserEditsDir(), "README.md")
+
+	// a guide describing another compositor is stale: doctor flags then rewrites.
+	ueWrite(t, guide, "# old guide naming hypr/user.lua and hypr/settings.lua\n")
+	if r := reconcileUserEdits(true); r.status != recWouldFix {
+		t.Fatalf("stale-guide check: status=%s, want todo", r.status.label())
+	}
+	if r := reconcileUserEdits(false); r.status != recFixed {
+		t.Fatalf("refresh: status=%s, want fixed", r.status.label())
+	}
+
+	body, err := os.ReadFile(guide)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+	if !strings.Contains(got, "niri/user.kdl") || !strings.Contains(got, "niri/settings.kdl") {
+		t.Fatalf("guide must name the active provider's files, got:\n%s", got)
+	}
+	if strings.Contains(got, "hypr/") {
+		t.Fatalf("a niri box's guide must not name hypr paths, got:\n%s", got)
+	}
+	if r := reconcileUserEdits(false); r.status != recOK {
+		t.Fatalf("idempotent after refresh: status=%s, want ok", r.status.label())
 	}
 }

@@ -33,6 +33,8 @@ func cmdWm(args []string) {
 		cmdWmSession()
 	case "config":
 		cmdWmConfig(args[1:])
+	case "reset-paths":
+		cmdWmResetPaths()
 	case "use":
 		cmdWmUse(args[1:])
 	default:
@@ -41,7 +43,7 @@ func cmdWm(args []string) {
 }
 
 func wmUsage() {
-	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
+	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
 }
 
 func cmdWmStatus() {
@@ -141,6 +143,31 @@ func cmdWmConfig(args []string) {
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(payload); err != nil {
 		die("%v", err)
+	}
+}
+
+// cmdWmResetPaths prints, one path per line relative to ~/.config, the config
+// files a factory reset clears for every provider the tree carries: each one's
+// generated config and hand-edit files, never the per-machine seeds a reset
+// keeps. Recovery reads this instead of hardcoding a compositor's file names, so
+// the list stays in the seam. Pure Go on purpose: it answers with no compositor
+// running and no provider binary built, which is what lets the rescue clear a
+// box whose desktop is down.
+func cmdWmResetPaths() {
+	seen := map[string]bool{}
+	var paths []string
+	for _, name := range wm.Providers() {
+		for _, rel := range wm.ResetPaths(name) {
+			if rel == "" || seen[rel] {
+				continue
+			}
+			seen[rel] = true
+			paths = append(paths, rel)
+		}
+	}
+	sort.Strings(paths)
+	for _, rel := range paths {
+		fmt.Println(rel)
 	}
 }
 

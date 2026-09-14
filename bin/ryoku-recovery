@@ -137,17 +137,43 @@ if [[ $DO_PACKAGES == 1 ]]; then
   fi
 fi
 
-# Factory reset: drop the user overlay, the fork ledger, the generated Hyprland
-# overlays, and the Hub's stored settings, so the redeploy below lays pure Ryoku
-# defaults with nothing layered back on (deploy.sh re-applies user_edits and
-# preserves unshipped live files otherwise). This is the point of recovery, and
-# why it is the last resort: your customizations go. Saved looks under rices/ and
-# the per-machine display/GPU seeds are left alone.
+# Factory reset: drop the user overlay, the compositor config each provider
+# authors and its hand-edit files, and the Hub's stored settings, so the redeploy
+# below lays pure Ryoku defaults with nothing layered back on (deploy.sh re-lays
+# user_edits, re-seeds each compositor's default config, and preserves unshipped
+# live files otherwise). This is the point of recovery, and why it is the last
+# resort: your customizations go. Saved looks under rices/ and the per-machine
+# display, GPU and keyboard seeds are left alone; the seam's reset list never
+# names them.
 say "clearing user overrides and Hub settings (recovery restores pure defaults)"
 RCFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 rm -rf "$RCFG/ryoku/user_edits"
-rm -f "$RCFG/hypr/settings.lua" "$RCFG/hypr/rebinds.lua" "$RCFG/hypr/user.lua" "$RCFG/hypr/monitors_user.lua"
-for _s in shell theme launcher widgets visualizer decor brand hypr plugins; do
+
+# The compositor files to clear come from the window-manager seam, the one place
+# that knows each provider's config layout, so this clears whichever compositor a
+# box runs from the same code with no compositor name here, and clears both when
+# both are installed (recovery restores pure defaults and a user may switch next).
+# Ask the freshly-fetched checkout first (go run, which needs no compositor
+# running and no provider binary, so a broken installed build cannot misdirect the
+# rescue), then the installed CLI; if neither answers, clear only what has a
+# compositor-free name and let the redeploy re-lay each compositor's defaults.
+reset_paths=""
+if ! reset_paths="$(cd "$RECOVERY_DIR/ryoku/cli" 2>/dev/null && go run . wm reset-paths 2>/dev/null)" || [[ -z $reset_paths ]]; then
+  reset_paths="$(ryoku wm reset-paths 2>/dev/null || true)"
+fi
+if [[ -n $reset_paths ]]; then
+  while IFS= read -r rel; do
+    [[ -n $rel && $rel == */* ]] || continue # seam paths are <dir>/<file>; never act on a bare or empty entry
+    rm -rf "${RCFG:?}/$rel"
+  done <<<"$reset_paths"
+else
+  warn "could not ask the window-manager seam for the reset list; clearing only the overlay and Hub settings, and letting the redeploy re-lay compositor defaults"
+fi
+
+# The Hub's stored settings under ~/.config/ryoku. desktop.json holds every
+# compositor's settings now (both live in the one neutral store), so clearing it
+# resets them for whichever compositor a user switches to next.
+for _s in shell theme launcher widgets visualizer decor brand desktop plugins; do
   rm -f "$RCFG/ryoku/$_s.json"
 done
 

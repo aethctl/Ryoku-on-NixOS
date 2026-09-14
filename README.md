@@ -9,7 +9,7 @@
 ### 力と美のために
 **For the sake of power and beauty.**
 
-Ryoku is a hand built Hyprland desktop built for Power, Beauty and Declarative setups.
+Ryoku is a hand-built Hyprland and Niri desktop built for power, beauty and declarative setups.
 This repository is an official port of [**RyokuArch**](https://github.com/Ryoku-dev/ryoku-arch) that brings that same desktop to NixOS with a native declarative system layer.
 
 <br />

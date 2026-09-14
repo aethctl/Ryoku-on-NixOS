@@ -22,10 +22,11 @@ page exists to prevent.
 
 ## `ryoku update`
 
-Snapper pre-snapshot, then the channel (git fast-forward, or `pacman -Syu` from
-`[ryoku]`), then stage2 through the just-installed binary: quiesce the shell,
-`ryoku materialize`, reload Hyprland, restart the shell, `ryoku doctor`, snapper
-post-snapshot. Each stage publishes to `$XDG_RUNTIME_DIR/ryoku-update.json` (the
+Snapper pre-snapshot, then the channel (git fast-forward, or the `[ryoku]`
+package set), then stage2 through the just-installed binary: quiesce the shell,
+`ryoku materialize`, reload the compositor, restart the shell, `ryoku doctor`,
+snapper post-snapshot. Each stage publishes to
+`$XDG_RUNTIME_DIR/ryoku-update.json` (the
 ordered steps, the current label, a live log tail, and, on failure, the error
 and the pre-update snapshot), so the update island and the Hub's Updates page
 render a determinate run and a one-click rollback.
@@ -38,10 +39,13 @@ mirrored by `ryoku/shell/deploy.sh` on a dev box) into `~/.config`:
 - Every shipped file is copied over on every update (the previous Ryoku copy is
   clobbered) and files dropped from a release are pruned; `~/.config/quickshell`
   is converged wholesale.
-- A short **seed list** (`generatedSeed` in `ryoku/cli/materialize.go`:
-  `hypr/monitors.lua`, `hypr/gpu.lua`, `hypr/keyboard.lua`,
-  `fastfetch/config.jsonc`, `kitty/current-theme.conf`) is copied only when
-  absent, never clobbered: per-machine or user-owned state an update must keep.
+- A short **seed list** (`generatedSeed` in
+  `ryoku/cli/internal/updater/materialize.go`: `fastfetch/config.jsonc`,
+  `kitty/current-theme.conf`, the ghostty and nvim starting points, plus every
+  provider's per-machine files from `wm.ConfigSeeds`, e.g. `hypr/monitors.lua`
+  and `niri/monitors_user.kdl`) is copied only when absent, never clobbered:
+  per-machine or user-owned state an update must keep, for every installed
+  compositor, not just the active one.
 - The user overlay (`~/.config/ryoku/user_edits`, mirroring `~/.config`) is laid
   on top last, so a file there wins at its mirrored path; see below. Anything the
   package never ships (`hypr/user.lua`, `kitty/user.conf`, a forked module) is
@@ -116,13 +120,51 @@ the module the loader blamed, moves a user override that breaks the desktop asid
 as `.broken`, puts back every shipped file the live tree no longer matches, and
 restarts the shell. When the shipped file is itself at fault it says so and names
 `ryoku update` and `ryoku rollback`, the two things that help.
-`reconcileHyprPlugins` keeps the enabled Hyprland compositor plugins loading
-across a Hyprland bump: a plugin is ABI-locked to the exact compositor build
-and every copy Ryoku builds carries an `.abi` receipt, so after an update it
-rebuilds each enabled plugin whose receipts no longer match the installed
-headers (`ryoku-hub desktop plugins rebuild --stale`, the Plugins page's builder)
-before the next login, and names the toolchain to install when a box has none.
-See `docs/hyprland-plugins.md`.
+`reconcileWmPlugins` keeps a compositor's enabled plugins loading across a
+compositor bump: a plugin is ABI-locked to the exact build and every copy Ryoku
+builds carries an ABI receipt, so after an update it rebuilds each enabled
+plugin whose receipts no longer match the installed headers through the provider
+(`ryoku-hub desktop plugins rebuild --stale`, the Plugins page's builder) before
+the next login, and names the toolchain to install when a box has none. Gated on
+`CapPlugins`, so a compositor with no plugin system (niri) is a no-op. See
+`docs/hyprland-plugins.md`.
+
+## Two compositors
+
+A box can have both compositors installed and switch between them. Update, doctor
+and recovery reach the compositor only through the seam (`ryoku/wm/`), so none of
+them names one. Update and doctor keep the inactive compositor's config
+untouched; recovery deliberately resets both when both are installed.
+
+- **`ryoku update`** re-lays the base config, then reloads the active compositor
+  through `wm.Open()` (`update.go` `pauseConfigAutoreload`/`reloadConfig` call
+  `Act(ActionConfigReload)`; a compositor that watches its own file no-ops the
+  reload). The seed list folds in every provider's per-machine files from
+  `wm.ConfigSeeds` (`ryoku/cli/internal/updater/materialize.go`), so an update
+  while niri is active never clobbers or prunes `hypr/*` seeds, and the reverse.
+- **`ryoku doctor`** repairs compositor state through the seam and only for the
+  running provider: it points xdg-desktop-portal at that provider's
+  `Caps.PortalBackend` (`reconcilePortalRouting`), rebuilds stale window manager
+  plugins only when the provider declares `CapPlugins` (`reconcileWmPlugins`; a
+  compositor with no plugin system reports no plugin support), and writes the
+  overlay how-to guide against the active provider's own config files
+  (`reconcileUserEdits`, so it names `niri/user.kdl` on niri and `hypr/` paths on
+  Hyprland). It does not touch the inactive compositor.
+- **`ryoku recovery`** clears the `user_edits` overlay and the neutral Hub
+  stores, then removes every path that `ryoku wm reset-paths` prints: each
+  provider's generated config plus its hand-edit files (`wm.ResetPaths` over
+  `wm.Providers`), for both compositors when both are installed. It runs that
+  command from the freshly fetched checkout first (`go run . wm reset-paths`), so
+  a broken installed build cannot skew the list, then redeploys the shipped
+  defaults. The per-machine seeds (monitors, gpu, keyboard) and saved rices are
+  not in that set and survive. `--no-packages` skips pacman; it refuses on a
+  machine that is not Ryoku.
+- **Switching** (`ryoku wm use <name> [--keep-previous|--remove-previous]`)
+  installs the target's package; removing the old compositor reclaims its
+  packages. `wm.Reclaim` computes the free set from the outgoing provider's
+  `Caps.Packages`, and the package and byte counts shown come from pacman's own
+  removal plan, re-checked immediately before the transaction. Full switch
+  contract in `docs/compositors.md`.
 
 ## Publishing: how a commit becomes a user update
 

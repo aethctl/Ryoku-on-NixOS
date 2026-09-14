@@ -22,8 +22,10 @@ Read these first, then keep them open while you work:
 - **Organization is the point.** Every file and folder has one purpose and
   appears once. Search before adding; if a thing exists, reference it rather than
   copying it.
-- **The Hyprland config is Lua.** Author it as Lua modules under
-  `ryoku/hyprland/`, one concern per file. Never hand-write a raw `hyprland.conf`.
+- **A compositor's config is in its own language.** Hyprland is Lua modules
+  under `ryoku/hyprland/`, niri is KDL under `ryoku/niri/`, one concern per file
+  and never a hand-written `hyprland.conf`. Nothing outside `ryoku/wm/` may name
+  a compositor: ask capabilities.
 - **One concern per file.** A Lua module does one thing; a QML component is one
   component in one file.
 - **The repository is the source of truth.** Deployment is one way, from the
@@ -35,8 +37,8 @@ Read these first, then keep them open while you work:
 
 ## Set up the dev loop
 
-Ryoku is developed on a running Ryoku (or Arch + Hyprland) machine. Edit the
-repository, deploy, and test live:
+Ryoku is developed on a running Ryoku machine, or Arch running Hyprland or niri.
+Edit the repository, deploy, and test live:
 
 ```bash
 ryoku/shell/dev-run.sh       # build ryoku-shell and run it from the checkout (hot reload)
@@ -53,14 +55,36 @@ full set, or let the installer's deploy step do it on a fresh machine.
 - A **package**: the right set in `system/packages/` (`base` for everyone, `dev`
   for toolchains, `hardware` per profile, `aur` for the AUR). Prefer the official
   repositories over the AUR when both have it.
-- A **keybind**: `ryoku/hyprland/modules/binds.lua`.
-- A **Hyprland concern**: a new module under `ryoku/hyprland/modules/` plus one
-  `require` in `hyprland.lua`. Do not grow an unrelated module.
+- A **keybind or compositor concern**: a module in the active compositor's
+  config (`ryoku/hyprland/modules/` in Lua, `ryoku/niri/` in KDL), one concern
+  per file. A capability the desktop must learn is a new field on the provider's
+  `caps`, never a name test outside `ryoku/wm/`.
 - A **shell surface**: a new component under `ryoku/shell/quickshell/`, with any
   state wired through `ryoku-shell` (`ryoku/shell/ipc/`).
 - A **system helper**: a `ryoku-<thing>` script under `system/hardware/.../`,
   installed via `install_bin` in `installation/backend/lib/deploy.sh`, and invoked
   by name from Lua autostart or a keybind.
+
+## Working on a compositor
+
+The desktop reaches a compositor only through the seam at `ryoku/wm/`, and that
+is the only place a compositor name may appear. The shell, Hub, CLI and
+lockscreen ask what a compositor *can do*, never which one is running.
+
+| Compositor | Provider | Config payload |
+|---|---|---|
+| niri | `ryoku/wm/niri/` | `ryoku/niri/` (KDL) |
+| Hyprland | `ryoku/wm/hyprland/` | `ryoku/hyprland/` (Lua) |
+
+A provider declares its own settings rows (`schema`), keybinds (`binds`) and
+package list (`caps`). The Hub renders the rows through the shared renderer, so
+a setting is shown only where a provider will write it. Teaching the desktop
+something new about a compositor is a new capability on `caps`, never a branch
+outside the seam.
+
+Adding a third is one directory and one package: the walkthrough is
+[`docs/adding-a-window-manager.md`](docs/adding-a-window-manager.md), and the
+contract it implements is [`docs/compositors.md`](docs/compositors.md).
 
 ## Verify before you commit
 
@@ -72,6 +96,18 @@ Test behavior on the running system, not only that a file parses:
 - QML: `qmllint <file>` when available.
 - Installer: run the backend with `RYOKU_DRYRUN=1` and the required `RYOKU_*`
   variables to print every action without touching a disk.
+
+Then run the gates that match what you touched. They are not optional; the hooks
+run them too:
+
+- `bin/ryoku-dev-verify-wm-isolation` no compositor name leaks outside
+  `ryoku/wm/`.
+- `bin/ryoku-dev-verify-delivery` every shipped config reaches users.
+- `bin/ryoku-dev-lint-qml <config-root>` the QML you changed still loads (on a
+  dev box after `ryoku deploy`, where the Qt modules resolve).
+- `go build ./... && go vet ./... && go test ./...` in each Go module you
+  touched (`ryoku/wm`, `ryoku/cli`, `ryoku/shell/ipc`, `ryoku/hub/backend`,
+  ...).
 
 Go programs (the TUI, `ryoku-shell`, `ryoku-hub`) and the `Ryoku.Blobs` QML plugin
 ship prebuilt in the ISO. The target has no build toolchain, so never assume `go`,

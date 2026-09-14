@@ -47,21 +47,6 @@ var capsManifest = []wm.Capability{
 	wm.CapSessionExit,
 }
 
-// What apply authors: the generated KDL plus its user_edits overlay copies, so
-// materialize re-lays them after an update.
-var generatedFiles = []string{
-	"niri/settings.kdl",
-	"niri/rebinds.kdl",
-	"ryoku/user_edits/niri/settings.kdl",
-	"ryoku/user_edits/niri/rebinds.kdl",
-}
-
-// The hand-edit escape hatches config.kdl includes; ordered most useful first.
-var configFiles = []string{
-	"niri/user.kdl",
-	"niri/monitors_user.kdl",
-}
-
 // The packages ryoku-desktop-niri installs for the compositor: niri, the
 // xwayland-satellite X11 bridge, and the GNOME portal backend its caps report.
 // Kept in step with that package's depends
@@ -88,8 +73,8 @@ func runCaps() error {
 		// wm.niri.* keys stay in the store untouched while another compositor
 		// is active, so they are still there on the way back.
 		SettingDomains: []string{"desktop", "wm." + wm.ProviderNiri},
-		ConfigFiles:    configFiles,
-		GeneratedFiles: generatedFiles,
+		ConfigFiles:    wm.ConfigFiles(wm.ProviderNiri),
+		GeneratedFiles: wm.GeneratedConfig(wm.ProviderNiri),
 		PortalBackend:  "gnome",
 		Packages:       compositorPackages,
 	}

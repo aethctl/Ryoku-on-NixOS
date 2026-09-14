@@ -129,6 +129,47 @@ func ConfigUserOwned(name string) []string {
 	return seeds
 }
 
+// configFiles are the hand-edit escape hatches a user owns under a provider's
+// config dir, as paths relative to ~/.config, most useful first. The Hub offers
+// these to open, and a factory reset clears them, because they are the user's
+// own config rather than the machine state the seeds hold. The raw-config
+// include is first, so a caller that wants one file wants this one.
+var configFiles = map[string][]string{
+	ProviderHyprland: {"hypr/user.lua", "hypr/monitors_user.lua", "hypr/modules"},
+	ProviderNiri:     {"niri/user.kdl", "niri/monitors_user.kdl"},
+}
+
+// generatedConfig are the files a provider's apply authors from the store, as
+// paths relative to ~/.config: the generated config and the user_edits overlay
+// copy the updater re-lays. A pure function of the store, so clearing the store
+// clears these, and a reset that restores pure defaults removes them.
+var generatedConfig = map[string][]string{
+	ProviderHyprland: {"hypr/settings.lua", "hypr/rebinds.lua", "ryoku/user_edits/hypr/settings.lua", "ryoku/user_edits/hypr/rebinds.lua"},
+	ProviderNiri:     {"niri/settings.kdl", "niri/rebinds.kdl", "ryoku/user_edits/niri/settings.kdl", "ryoku/user_edits/niri/rebinds.kdl"},
+}
+
+// ConfigFiles are a provider's user-editable config paths (the hand-edit escape
+// hatches the Hub offers), relative to ~/.config. Empty for an unknown provider.
+func ConfigFiles(name string) []string {
+	return append([]string(nil), configFiles[name]...)
+}
+
+// GeneratedConfig are the config files a provider's apply authors, relative to
+// ~/.config. Empty for an unknown provider.
+func GeneratedConfig(name string) []string {
+	return append([]string(nil), generatedConfig[name]...)
+}
+
+// ResetPaths are the config files a factory reset removes for a provider, as
+// paths relative to ~/.config: its generated config and its hand-edit files. It
+// never names the per-machine seeds (the display, GPU and keyboard pins), which
+// a reset keeps, since those are not among these. Pure Go, so recovery can ask
+// for the set with no compositor running and no provider binary built, which is
+// what lets the rescue clear a box whose desktop is down.
+func ResetPaths(name string) []string {
+	return append(GeneratedConfig(name), ConfigFiles(name)...)
+}
+
 // Providers is stable order, so generated config and installer prompts do not
 // reshuffle between runs.
 func Providers() []string { return []string{ProviderHyprland, ProviderNiri} }
