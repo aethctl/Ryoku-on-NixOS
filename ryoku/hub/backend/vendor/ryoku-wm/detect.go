@@ -1,9 +1,11 @@
 package wm
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // The only place allowed to care which compositor is running. It resolves an
@@ -29,12 +31,47 @@ type Detection struct {
 
 // Presence of an instance handle beats XDG_CURRENT_DESKTOP, which a user or a
 // greeter can set to anything.
+//
+// The handle must still ANSWER, not merely be set. A terminal, a tmux server or
+// a service started under one compositor keeps that compositor's handle in its
+// environment for as long as it lives, so after a switch a stale handle would
+// name the compositor that is gone: every later action would be dispatched at a
+// dead socket and silently fail. socket resolves the handle to the socket that
+// proves the session is alive.
 var envProviders = []struct {
-	env  string
-	name string
+	env    string
+	name   string
+	socket func(handle string) []string
 }{
-	{"HYPRLAND_INSTANCE_SIGNATURE", ProviderHyprland},
-	{"NIRI_SOCKET", ProviderNiri},
+	{"HYPRLAND_INSTANCE_SIGNATURE", ProviderHyprland, hyprlandSockets},
+	// niri exports the socket path itself.
+	{"NIRI_SOCKET", ProviderNiri, func(h string) []string { return []string{h} }},
+}
+
+// Hyprland's socket dir survives the instance that made it, so the path
+// existing is not proof; only a dial is.
+func hyprlandSockets(sig string) []string {
+	var out []string
+	if rt := os.Getenv("XDG_RUNTIME_DIR"); rt != "" {
+		out = append(out, filepath.Join(rt, "hypr", sig, ".socket.sock"))
+	}
+	return append(out, filepath.Join("/tmp", "hypr", sig, ".socket.sock"))
+}
+
+// handleAlive dials the handle's socket. A refused or missing socket means the
+// session it names has exited.
+func handleAlive(sockets []string) bool {
+	for _, p := range sockets {
+		if p == "" {
+			continue
+		}
+		c, err := net.DialTimeout("unix", p, 200*time.Millisecond)
+		if err == nil {
+			_ = c.Close()
+			return true
+		}
+	}
+	return false
 }
 
 // Every compositor-scoped delivery allowlist derives from this, so the mapping
@@ -104,7 +141,7 @@ func Detect() Detection {
 		return Detection{Name: forced, Live: liveFor(forced), Source: "RYOKU_WM"}
 	}
 	for _, p := range envProviders {
-		if os.Getenv(p.env) != "" {
+		if h := os.Getenv(p.env); h != "" && handleAlive(p.socket(h)) {
 			return Detection{Name: p.name, Live: true, Source: p.env}
 		}
 	}
@@ -136,7 +173,10 @@ func Detect() Detection {
 // liveFor stops a forced provider claiming liveness it cannot back.
 func liveFor(name string) bool {
 	for _, p := range envProviders {
-		if p.name == name && os.Getenv(p.env) != "" {
+		if p.name != name {
+			continue
+		}
+		if h := os.Getenv(p.env); h != "" && handleAlive(p.socket(h)) {
 			return true
 		}
 	}
