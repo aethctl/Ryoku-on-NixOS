@@ -3,6 +3,14 @@
 ## Unreleased
 
 ### Changed
+- **`ryoku doctor` keeps your login shell honest.** Changing your shell in the
+  Hub writes it in two places: your account shell, and a session override the
+  compositor exports so everything it launches agrees. Nothing noticed when the
+  two drifted, so a box could run fish while `$SHELL` said zsh, and fastfetch,
+  terminals and scripts all believed the wrong one. Doctor now names both values
+  and points the override back at your real account shell, refreshing the
+  running session so it takes effect without a logout
+  (`internal/doctor/reconcile_login_shell.go`).
 - **The Rashin AI assistant is on by default now.** The needle (Super+S) and its
   dashboard used to sit dormant until you found the switch in the Hub; a fresh
   box now brings the daemon up at boot. `ryoku-rashin disable` turns it off for

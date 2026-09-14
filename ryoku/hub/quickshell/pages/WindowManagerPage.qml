@@ -96,6 +96,9 @@ Item {
         return out;
     }
 
+    // the rowless tab that carries the compositor itself
+    readonly property string switchTab: I18n.tr("Compositor")
+
     function focusKey(k) { sp.focusKey(k) }
     SchemaPage {
         id: sp
@@ -110,12 +113,16 @@ Item {
         query: pg.hub ? pg.hub.query : ""
         onEdited: (k, v) => { if (pg.hub) pg.hub.hyprEdit(k, v); }
         onPickRequested: (r) => { if (pg.hub) pg.hub.openPick(r); }
+        // Which compositor is running, how to change it, and what it cannot do
+        // are about the compositor rather than about any group of settings, so
+        // they get a tab of their own instead of repeating above every tab.
+        tailTabs: [pg.switchTab]
 
-        // extras sit full width above the settings sheet: the switch to another
-        // compositor, and the honest cannot-do list.
         Column {
             width: parent.width
             spacing: Tokens.s5
+            visible: sp.tab === pg.switchTab
+            height: visible ? implicitHeight : 0
 
             CompositorControl {
                 id: wmPicker

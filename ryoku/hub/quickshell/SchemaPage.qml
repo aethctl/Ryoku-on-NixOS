@@ -63,12 +63,19 @@ Item {
         return Settings.modelsKey(r.key);
     })
 
+    // A page may add a tab that holds no settings rows, for content that belongs
+    // to the page rather than to a group of controls. It goes last so the page
+    // still opens on its first real tab.
+    property var tailTabs: []
+
     readonly property var tabs: {
         var t = [];
         for (var i = 0; i < capsSchema.length; i++) {
             var x = capsSchema[i].tab;
             if (x && t.indexOf(x) < 0) t.push(x);
         }
+        for (var j = 0; j < page.tailTabs.length; j++)
+            if (t.indexOf(page.tailTabs[j]) < 0) t.push(page.tailTabs[j]);
         return t;
     }
 

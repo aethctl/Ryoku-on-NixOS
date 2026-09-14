@@ -215,8 +215,11 @@ Item {
             Item {
                 id: leadSlot
                 width: col.width
+                // childrenRect counts a block the page hides on this tab, so the
+                // slot is judged by height too: an empty one must not spend a
+                // spacing gap above the first card.
                 height: childrenRect.height
-                visible: children.length > 0
+                visible: children.length > 0 && height > 0
             }
 
             Repeater {

@@ -144,6 +144,7 @@ func reconcilers() []reconciler {
 		{i18n.T("Material Symbols icon font"), reconcileIconFont},
 		{i18n.T("frame bar style name"), reconcileFrameBarsStyle},
 		{i18n.T("shell config schema"), reconcileShellConfig},
+		{i18n.T("login shell source"), reconcileLoginShell},
 		{i18n.T("shell style knobs"), reconcileLegacyStyleKnobs},
 		{i18n.T("sumi bar simplification"), reconcileSumiBar},
 		{i18n.T("dock config store"), reconcileDockStore},
