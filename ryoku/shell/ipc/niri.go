@@ -41,6 +41,20 @@ func (n niriCompositor) FocusWorkspace(index int) error {
 	})
 }
 
+func (n niriCompositor) FocusWorkspaceID(id string) error {
+	workspaceID, err := strconv.ParseUint(id, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid workspace id %q", id)
+	}
+	return sendNiriRequest(n.socket, map[string]any{
+		"Action": map[string]any{
+			"FocusWorkspace": map[string]any{
+				"reference": map[string]any{"Id": workspaceID},
+			},
+		},
+	})
+}
+
 func (n niriCompositor) FocusWorkspaceRelative(delta int) error {
 	action := ""
 	switch {

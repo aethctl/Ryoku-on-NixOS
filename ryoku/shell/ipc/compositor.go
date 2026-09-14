@@ -19,6 +19,7 @@ type compositorBackend interface {
 	Identity() string
 	FocusedOutput() string
 	FocusWorkspace(int) error
+	FocusWorkspaceID(string) error
 	FocusWorkspaceRelative(int) error
 	Prepare()
 	Start(*daemon)
@@ -47,6 +48,13 @@ func (hyprlandCompositor) FocusWorkspace(index int) error {
 		return fmt.Errorf("invalid workspace index %d", index)
 	}
 	return runHyprWorkspaceFocus(fmt.Sprintf("%d", index))
+}
+
+func (hyprlandCompositor) FocusWorkspaceID(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("invalid workspace id")
+	}
+	return runHyprWorkspaceFocus(id)
 }
 
 func (hyprlandCompositor) FocusWorkspaceRelative(delta int) error {

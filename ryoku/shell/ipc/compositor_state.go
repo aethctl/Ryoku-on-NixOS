@@ -253,6 +253,22 @@ func (d *daemon) startCompositorCalls() {
 		return map[string]any{"ok": true}, nil
 	})
 
+	d.registerCall("compositor.focusWorkspaceId", func(raw json.RawMessage) (any, error) {
+		var request struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(raw, &request); err != nil {
+			return nil, err
+		}
+		if d.compositor == nil {
+			return nil, fmt.Errorf("no compositor backend")
+		}
+		if err := d.compositor.FocusWorkspaceID(request.ID); err != nil {
+			return nil, err
+		}
+		return map[string]any{"ok": true}, nil
+	})
+
 	d.registerCall("compositor.focusRelative", func(raw json.RawMessage) (any, error) {
 		var request struct {
 			Delta int `json:"delta"`

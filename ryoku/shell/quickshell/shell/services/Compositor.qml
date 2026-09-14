@@ -71,6 +71,10 @@ Singleton {
         return root.call("compositor.focusWorkspace", { index: Number(index) })
     }
 
+    function focusWorkspaceId(id) {
+        return root.call("compositor.focusWorkspaceId", { id: String(id) })
+    }
+
     function focusRelative(delta) {
         return root.call("compositor.focusRelative", { delta: Number(delta) })
     }

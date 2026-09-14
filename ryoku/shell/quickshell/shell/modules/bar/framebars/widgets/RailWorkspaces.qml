@@ -30,8 +30,30 @@ Item {
     // Non-special workspaces sorted by (monitor name, id). Fork-safe fallback
     // identical to the original RailWorkspaces.
     readonly property var entries: {
-        const list = Hyprland.workspaces ? Hyprland.workspaces.values : [];
         const out = [];
+        if (Compositor.isNiri) {
+            const list = Compositor.workspaces || [];
+            for (let i = 0; i < list.length; ++i) {
+                const workspace = list[i];
+                if (!workspace)
+                    continue;
+                const id = String(workspace.id || "");
+                const index = Number(workspace.index);
+                if (id === "" || index <= 0)
+                    continue;
+                out.push({
+                    id: id,
+                    index: index,
+                    monName: workspace.output || "",
+                    monId: 0
+                });
+            }
+            out.sort((a, b) => a.monName < b.monName ? -1 :
+                (a.monName > b.monName ? 1 : a.index - b.index));
+            return out;
+        }
+
+        const list = Hyprland.workspaces ? Hyprland.workspaces.values : [];
         const seen = {};
         for (let i = 0; i < list.length; ++i) {
             const w = list[i];
@@ -65,6 +87,16 @@ Item {
     // Active set is per-monitor (multiple active at once), fork-safe.
     readonly property var activeIds: {
         const s = {};
+        if (Compositor.isNiri) {
+            const list = Compositor.workspaces || [];
+            for (let i = 0; i < list.length; ++i) {
+                const workspace = list[i];
+                if (workspace && workspace.active)
+                    s[String(workspace.id)] = true;
+            }
+            return s;
+        }
+
         const mons = Hyprland.monitors ? Hyprland.monitors.values : [];
         for (let i = 0; i < mons.length; ++i) {
             const m = mons[i];
@@ -94,7 +126,10 @@ Item {
     }
 
     function focusWorkspace(id) {
-        Hyprland.dispatch('hl.dsp.focus({ workspace = "' + id + '" })');
+        if (Compositor.isNiri)
+            Compositor.focusWorkspaceId(id);
+        else
+            Hyprland.dispatch('hl.dsp.focus({ workspace = "' + id + '" })');
     }
 
     implicitWidth: horizontal ? strip.implicitWidth : Math.max(cross, strip.implicitWidth)
@@ -136,16 +171,34 @@ Item {
 
             required property var modelData
 
-            readonly property int wsId: modelData.id
+            readonly property var wsId: modelData.id
             readonly property bool isActive: root.activeIds[wsId] === true
 
             // Re-evaluates when Hyprland.toplevels changes -- exactly on
             // open/close/move events, never per-frame. Up to maxIcons unique
             // class names ordered by pid.
             readonly property var classes: {
-                const tls = Hyprland.toplevels ? Hyprland.toplevels.values : [];
                 const out = [];
                 const seen = {};
+
+                if (Compositor.isNiri) {
+                    const windows = Compositor.windows || [];
+                    for (let i = 0; i < windows.length; ++i) {
+                        if (out.length >= root.maxIcons)
+                            break;
+                        const window = windows[i];
+                        if (!window || String(window.workspaceId || "") !== String(pill.wsId))
+                            continue;
+                        const cls = window.appId || "";
+                        if (!cls || seen[cls])
+                            continue;
+                        seen[cls] = true;
+                        out.push(cls);
+                    }
+                    return out;
+                }
+
+                const tls = Hyprland.toplevels ? Hyprland.toplevels.values : [];
                 for (let i = 0; i < tls.length; ++i) {
                     if (out.length >= root.maxIcons)
                         break;
@@ -353,6 +406,11 @@ Item {
 
     // Hover-gated vertical wheel: up -> r-1, down -> r+1.
     WheelHandler {
-        onWheel: event => root.focusWorkspace(event.angleDelta.y > 0 ? "r-1" : "r+1")
+        onWheel: event => {
+            if (Compositor.isNiri)
+                Compositor.focusRelative(event.angleDelta.y > 0 ? -1 : 1)
+            else
+                root.focusWorkspace(event.angleDelta.y > 0 ? "r-1" : "r+1")
+        }
     }
 }

@@ -168,9 +168,9 @@ func TestNiriWorkspaceActions(t *testing.T) {
 	}
 	defer ln.Close()
 
-	requests := make(chan string, 2)
+	requests := make(chan string, 3)
 	go func() {
-		for i := 0; i < 2; i++ {
+		for i := 0; i < 3; i++ {
 			conn, err := ln.Accept()
 			if err != nil {
 				return
@@ -187,11 +187,15 @@ func TestNiriWorkspaceActions(t *testing.T) {
 	if err := n.FocusWorkspace(3); err != nil {
 		t.Fatal(err)
 	}
+	if err := n.FocusWorkspaceID("42"); err != nil {
+		t.Fatal(err)
+	}
 	if err := n.FocusWorkspaceRelative(-1); err != nil {
 		t.Fatal(err)
 	}
 
 	focus := <-requests
+	focusID := <-requests
 	relative := <-requests
 
 	var focusJSON map[string]any
@@ -203,6 +207,17 @@ func TestNiriWorkspaceActions(t *testing.T) {
 	reference := focusWorkspace["reference"].(map[string]any)
 	if reference["Index"] != float64(3) {
 		t.Fatalf("workspace index = %#v, want 3", reference["Index"])
+	}
+
+	var focusIDJSON map[string]any
+	if err := json.Unmarshal([]byte(focusID), &focusIDJSON); err != nil {
+		t.Fatal(err)
+	}
+	idAction := focusIDJSON["Action"].(map[string]any)
+	idFocusWorkspace := idAction["FocusWorkspace"].(map[string]any)
+	idReference := idFocusWorkspace["reference"].(map[string]any)
+	if idReference["Id"] != float64(42) {
+		t.Fatalf("workspace id = %#v, want 42", idReference["Id"])
 	}
 
 	var relativeJSON map[string]any
