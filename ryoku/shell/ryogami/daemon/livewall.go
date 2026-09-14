@@ -11,7 +11,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,13 +28,11 @@ const liveDaemon = "ryogami-live"
 const liveEncRev = "4"
 
 // liveCapWidth caps the player's decode/render width at the widest monitor's
-// PHYSICAL pixel width, so a video wallpaper renders 1:1 with the panel. The
-// compositor upscales the buffer to physical pixels, so encoding at the
-// logical width (physical / fractional scale, an earlier bug) came out soft on
-// any scaled monitor: 1920 @ 1.25 cached at 1536 and stretched back up. The
-// ceiling bounds software decode and the player's RSS by resource tier; a
-// wider panel plays at the ceiling rather than blow the budget. 1920 when
-// hyprctl is absent.
+// PHYSICAL pixel width, so a video wallpaper renders 1:1 with the panel.
+// Encoding at the logical width (physical / fractional scale) comes out soft on
+// a scaled monitor: 1920 @ 1.25 cached at 1536 and stretched back up. The
+// ceiling bounds decode and the player's RSS by resource tier. 1920 when no
+// compositor answers.
 func liveCapWidth(tier string) int {
 	floor, ceil := 1280, 2560
 	switch tier {
@@ -45,21 +42,14 @@ func liveCapWidth(tier string) int {
 		ceil = 3840
 	}
 	best := 1920
-	if out, err := exec.Command("hyprctl", "monitors", "-j").Output(); err == nil {
-		var mons []struct {
-			Width int `json:"width"`
+	w := 0
+	for _, o := range outputs.list() {
+		if o.Width > w {
+			w = o.Width
 		}
-		if json.Unmarshal(out, &mons) == nil {
-			w := 0
-			for _, m := range mons {
-				if m.Width > w {
-					w = m.Width
-				}
-			}
-			if w > 0 {
-				best = w
-			}
-		}
+	}
+	if w > 0 {
+		best = w
 	}
 	if best < floor {
 		best = floor

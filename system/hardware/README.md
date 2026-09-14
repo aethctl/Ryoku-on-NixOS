@@ -29,11 +29,9 @@ in the machine, and do not waste power doing it.
     `lib32-mesa` + `lib32-vulkan-icd-loader` baseline.
   - `90-ryoku-gpu.rules` A udev rule that gives every GPU a stable, predictable
     name under `/dev/dri` so the pin keeps working across reboots.
-- `display/`
-  - `ryoku-monitor` Sets each monitor's scale from its real pixel density, so a
-    dense laptop panel is zoomed and a normal external screen is left alone.
-    `autoscale` applies it live and saves it; `persist` just saves the current
-    layout.
+- `display/` Backlight and output policy. The scaling tool itself moved to the
+  compositor payload (`ryoku/hyprland/scripts/ryoku-monitor`): it speaks the
+  compositor's output config, so each window manager ships its own.
 - `power/`
   - `ryoku-hw-laptop` Classifies the host as laptop or desktop from DMI chassis
     type, battery presence, and lid switches. It is shared by GPU and idle policy.
@@ -65,13 +63,14 @@ in the machine, and do not waste power doing it.
     ASPM policy and governor from the kernel's own lists, `maxFreqPct` 20-100 --
     so the passwordless grant stays safe. The rule pins `/usr/bin/ryoku-power`
     on purpose: granting it to a user-writable path would be a privilege hole.
-  - `ryoku-clamshell` macOS-style clamshell for laptops: a daemon that holds a
-    systemd `handle-lid-switch` inhibitor while on AC power with an external
-    display, so closing the lid keeps the session on the external instead of
-    suspending (and suspends when either is lost with the lid already shut), plus
-    a `lid` subcommand the Hyprland lid-switch bind calls to blank the internal
-    panel on close and restore it on open. Autostarted like `ryoku-idle`; a
-    desktop start exits at once.
+  - `ryoku-clamshell` (now `ryoku/hyprland/scripts/ryoku-clamshell`, since it
+    disables outputs through the compositor) macOS-style clamshell for laptops: a
+    daemon that holds a systemd `handle-lid-switch` inhibitor while on AC power
+    with an external display, so closing the lid keeps the session on the
+    external instead of suspending (and suspends when either is lost with the lid
+    already shut), plus a `lid` subcommand the lid-switch bind calls to blank the
+    internal panel on close and restore it on open. Autostarted like `ryoku-idle`;
+    a desktop start exits at once.
   - `logind-ryoku-lid.conf` The logind drop-in (installed to
     `/etc/systemd/logind.conf.d/10-ryoku-lid.conf`). It makes logind suspend on
     lid close in every case, so `ryoku-clamshell` is the only thing that keeps a

@@ -5,7 +5,7 @@
 # Core system
 base
 base-devel
-# rust: the shell's wallpaper daemon (awww) and other AUR dependencies are Rust
+# rust: the depth cutout worker and several AUR dependencies are Rust
 # programs, so the toolchain is part of the base set (not the optional dev
 # toolchains in dev.packages), and every Ryoku machine can always build them.
 rust
@@ -87,14 +87,16 @@ rtkit
 mesa
 vulkan-icd-loader
 
-# Desktop: plain Hyprland, Xwayland, portals, polkit agent, Qt/GTK runtime
-hyprland
+# Desktop runtime: Xwayland, the GTK portal, and the Qt/GTK stack. The
+# compositor, its portal backend, and its polkit agent are compositor-specific
+# and ship with the compositor meta-package.
+# SDDM may still be built with Qt5; the greeter's native Wayland QPA plugin is
+# version-specific, so qt6-wayland alone cannot start it.
 xorg-xwayland
-hyprpolkitagent
-xdg-desktop-portal-hyprland
 xdg-desktop-portal-gtk
 xdg-user-dirs
 qt6-wayland
+qt5-wayland
 qt6ct
 adwaita-icon-theme
 # gnome-themes-extra ships the standalone Adwaita-dark GTK theme the Hyprland
@@ -165,29 +167,6 @@ mpv-mpris
 nautilus
 # nautilus-python: runs the Ryoku stash actions in the file-manager right-click menu
 nautilus-python
-# spotify-launcher: Spotify from the official repo, installed per-user into
-# ~/.local (never root-owned /opt), so the desktop music widget's Spotify Canvas
-# backdrop works out of the box: `ryoku doctor` spicetifies the per-user client
-# with no root chmod. The client itself downloads on first launch.
-spotify-launcher
-# spicetify-cli: the other half of that pair, shipped from [ryoku] (see
-# release/packages/spicetify-cli) rather than the AUR so it is a plain pacman
-# target. It patches the client so the bundled Ryoku Canvas extension
-# (ryoku/apps/spicetify/ryoku-canvas.js) can relay the playing track's Canvas to
-# the music widget. It used to sit in aur.packages, which the ISO does bake, but
-# `ryoku update` is pacman and pacman never touches the AUR: an existing box that
-# missed the one-shot AUR build had no way to get it. Spotify and spicetify are
-# listed together here because neither is useful for this feature without the
-# other. Inert for anyone who does not use Spotify.
-spicetify-cli
-# spicetify-marketplace: the store custom app -- the Marketplace icon in
-# Spotify's sidebar that installs themes and extensions. Shipped from [ryoku]
-# (release/packages/spicetify-marketplace) for the same reason as spicetify-cli:
-# a plain pacman target that lands on install, on `ryoku update`, and in the
-# offline closure. `ryoku doctor` (reconcileSpicetifyMarketplace) drops it into
-# the per-user spicetify CustomApps, enables it and applies it, so the store is
-# there out of the box instead of the fiddly manual install. Inert without Spotify.
-spicetify-marketplace
 
 # Virtual machines (Ryoku Settings > GPU > Machine): a windowed VM runs in QEMU
 # on the host GPU. edk2-ovmf is the UEFI firmware and virglrenderer the host-GL

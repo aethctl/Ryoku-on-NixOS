@@ -131,6 +131,11 @@ Item {
     property var sessionModel: ListModel {
         id: internalSessionModel
         property int lastIndex: 0
+        // Running compositor's session id from the environment; the theme
+        // prefers the installed session that matches this, by data not by name.
+        property string desktopName: (Quickshell.env("XDG_SESSION_DESKTOP")
+            || Quickshell.env("DESKTOP_SESSION")
+            || Quickshell.env("XDG_CURRENT_DESKTOP") || "").split(":")[0].toLowerCase()
         function rowCount() { return count; }
         function index(row, col) { return row; }
         function data(row, role) {

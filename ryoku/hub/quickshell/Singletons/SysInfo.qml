@@ -12,8 +12,8 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property string helper: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-sysinfo"
-    readonly property string helperExtra: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-profile-stats"
+    readonly property string helper: "ryoku-sysinfo"
+    readonly property string helperExtra: "ryoku-profile-stats"
 
     property string sysUser: "user"
     property string sysHost: "host"

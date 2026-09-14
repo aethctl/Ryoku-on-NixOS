@@ -2,7 +2,6 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import Quickshell
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 import "lib/screens.js" as Screens
 
@@ -32,11 +31,10 @@ Singleton {
         return Screens.sliceForScreen(states.instances, screen);
     }
 
-    // State for the monitor Hyprland currently focuses; falls back to the first
-    // screen so a caller before focus is known still gets a live target.
+    // State for the focused output; falls back to the first screen so a caller
+    // before focus is known still gets a live target.
     function forActive() {
-        const mon = Hyprland.focusedMonitor;
-        const slice = Screens.sliceForName(states.instances, mon && mon.name ? mon.name : "");
+        const slice = Screens.sliceForName(states.instances, Wm.focusedOutput);
         if (slice)
             return slice;
         const list = states.instances;
@@ -84,8 +82,7 @@ Singleton {
     // call this so a keybind lands on the active screen, matching the old
     // `ryoku-shell menu <id>` which routed to the daemon's activeMonitor.
     function requestSurfaceActive(id, context) {
-        const m = Hyprland.focusedMonitor;
-        root.surfaceRequested(id, m && m.name ? m.name : "", context);
+        root.surfaceRequested(id, Wm.focusedOutput, context);
     }
 
     // Keyboard-return bounce bridge. A dismissed keyboard surface (the per-monitor

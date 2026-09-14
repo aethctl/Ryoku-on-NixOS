@@ -6,7 +6,6 @@ singleton Scheme Scheme.qml
 singleton Config Config.qml
 singleton Motion Motion.qml
 singleton Perf Perf.qml
-singleton Workspaces Workspaces.qml
 singleton Media Media.qml
 singleton Music Music.qml
 singleton AudioBars AudioBars.qml
@@ -21,7 +20,6 @@ singleton Dock Dock.qml
 singleton DockPreview DockPreview.qml
 singleton MusicPreview MusicPreview.qml
 singleton BarProducts BarProducts.qml
-singleton Fullscreen Fullscreen.qml
 singleton Devices Devices.qml
 singleton Weather Weather.qml
 singleton Updates Updates.qml

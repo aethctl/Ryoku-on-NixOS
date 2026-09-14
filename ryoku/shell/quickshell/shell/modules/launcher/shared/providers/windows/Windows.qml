@@ -1,35 +1,24 @@
 import QtQuick
-import QtQml.Models
 import Quickshell
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 import "../../Singletons"
 import "../../lib/fuzzy.js" as Fuzzy
 import ".."
 import shell.services as Svc
 
-// Open-window switcher: lists Hyprland toplevels, fuzzy-matched by title and
-// class, and focuses the picked one. Default-ranked just below apps so "fire"
-// surfaces a running Firefox window under the app entry.
+// Open-window switcher: lists open windows, fuzzy-matched by title and class,
+// and focuses the picked one. Default-ranked just below apps so "fire" surfaces
+// a running Firefox window under the app entry.
 Provider {
     id: windows
 
     providerId: "windows"
 
-    // Hyprland events keep the model live after one initial snapshot. Refreshing
-    // from every query creates a revision loop: query -> refresh -> valuesChanged
-    // -> dispatcher revision -> query. That loop makes the whole launcher redraw
-    // while the user types.
-    property bool initialSnapshotRequested: false
+    // The window list is eager, so a query never refreshes it. The signature
+    // check below suppresses redundant notifications so the launcher does not
+    // redraw while the user types.
     property bool notifyQueued: false
     property string publishedSignature: ""
-
-    function requestInitialSnapshot() {
-        if (initialSnapshotRequested)
-            return;
-        initialSnapshotRequested = true;
-        Hyprland.refreshToplevels();
-    }
 
     function queueLiveUpdate() {
         if (notifyQueued)
@@ -46,24 +35,13 @@ Provider {
     }
 
     Connections {
-        target: Hyprland.toplevels
-        function onValuesChanged() { windows.queueLiveUpdate(); }
-    }
-
-    Instantiator {
-        model: Hyprland.toplevels
-        delegate: Connections {
-            required property var modelData
-            target: modelData
-            function onLastIpcObjectChanged() { windows.queueLiveUpdate(); }
-            function onTitleChanged() { windows.queueLiveUpdate(); }
-            function onWorkspaceChanged() { windows.queueLiveUpdate(); }
-        }
+        target: Wm
+        function onWindowsChanged() { windows.queueLiveUpdate(); }
     }
 
     // Focusing must wait until the palette's close morph unmaps its exclusive-
-    // focus layer: focusing earlier gets overridden when the unmap hands focus
-    // to the window under the cursor (input:mouse_refocus).
+    // focus layer: focusing earlier gets overridden when the unmap hands focus to
+    // the window under the cursor on mouse refocus.
     property var pendingFocus: null
     Timer {
         id: focusDelay
@@ -74,7 +52,7 @@ Provider {
             windows.pendingFocus = null;
             if (!e)
                 return;
-            var w = e.toplevel ? e.toplevel.wayland : null;
+            var w = e.toplevel;
             if (w)
                 w.activate();
             else
@@ -82,34 +60,27 @@ Provider {
         }
     }
 
-    function normAddr(addr) {
-        var a = String(addr || "");
-        return a.indexOf("0x") === 0 ? a : "0x" + a;
-    }
-
     function focusWindow(addr) {
-        Hyprland.dispatch('hl.dsp.focus({ window = "address:' + normAddr(addr) + '" })');
+        Wm.focusWindow(addr);
     }
 
     function entries() {
         var out = [];
-        var tl = Hyprland.toplevels.values;
-        for (var i = 0; i < tl.length; i++) {
-            var t = tl[i];
-            var o = t && t.lastIpcObject;
-            if (!o || !o.address)
+        var wins = Wm.windows;
+        for (var i = 0; i < wins.length; i++) {
+            var w = wins[i];
+            if (!w || !w.id)
                 continue;
-            if (o.workspace && String(o.workspace.name).indexOf("special:") === 0)
+            var ws = Wm.workspaceByName(w.workspace);
+            if (ws && ws.special)
                 continue;
-            var workspace = o.workspace && o.workspace.name
-                ? String(o.workspace.name) : "";
             out.push({
-                address: o.address,
-                toplevel: t,
-                title: o.title || o.class || I18n.tr("Window"),
-                cls: o.class || "",
-                workspace: workspace,
-                keywords: [o.class || ""]
+                address: w.id,
+                toplevel: w.toplevel,
+                title: w.title || w.appId || I18n.tr("Window"),
+                cls: w.appId || "",
+                workspace: w.workspace || "",
+                keywords: [w.appId || ""]
             });
         }
         return out;
@@ -150,7 +121,6 @@ Provider {
     }
 
     function query(text) {
-        windows.requestInitialSnapshot();
         var list = windows.entries();
         var q = (text || "").trim().toLowerCase();
         var rows = [];
@@ -162,7 +132,6 @@ Provider {
 
     Component.onCompleted: {
         windows.publishedSignature = windows.windowSignature();
-        windows.requestInitialSnapshot();
         Dispatcher.register(windows);
     }
 }

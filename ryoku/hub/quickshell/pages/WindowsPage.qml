@@ -31,24 +31,24 @@ Item {
     // when they lived on the Appearance page.
     function gateOk(key, d) {
         switch (key) {
-        case "dwindle.preserveSplit": case "dwindle.smartSplit": case "dwindle.smartResizing":
-        case "dwindle.defaultSplitRatio": case "dwindle.forceSplit": case "dwindle.useActiveForSplits":
-            return d["appearance.layout"] === "dwindle";
-        case "master.mfact": case "master.newStatus": case "master.newOnTop":
-        case "master.orientation": case "master.smartResizing":
-            return d["appearance.layout"] === "master";
-        case "plugins.hyprscrolling.columnWidth": case "plugins.hyprscrolling.followFocus":
-            return d["appearance.layout"] === "scrolling";
-        case "appearance.dimStrength": return d["appearance.dimInactive"] === true;
-        case "appearance.wobblyWindows": case "appearance.windowStyle": return d["appearance.animations"] === true;
-        case "appearance.glowRange": case "appearance.glowColor": return d["appearance.glowEnabled"] === true;
-        case "appearance.borderAngleSpeed": return d["appearance.animatedBorder"] === true;
-        case "appearance.blurContrast": case "appearance.blurBrightness": case "appearance.blurSpecial":
-        case "appearance.blurPopups": case "appearance.blurIgnoreOpacity": case "appearance.blurNewOptimizations":
-        case "appearance.blurVibrancyDarkness":
-            return d["appearance.blurEnabled"] === true;
-        case "appearance.shadowSharp": case "appearance.shadowScale": case "appearance.shadowColor":
-            return d["appearance.shadowEnabled"] === true;
+        case "wm.hyprland.dwindle.preserveSplit": case "wm.hyprland.dwindle.smartSplit": case "wm.hyprland.dwindle.smartResizing":
+        case "wm.hyprland.dwindle.defaultSplitRatio": case "wm.hyprland.dwindle.forceSplit": case "wm.hyprland.dwindle.useActiveForSplits":
+            return d["desktop.appearance.layout"] === "dwindle";
+        case "wm.hyprland.master.mfact": case "wm.hyprland.master.newStatus": case "wm.hyprland.master.newOnTop":
+        case "wm.hyprland.master.orientation": case "wm.hyprland.master.smartResizing":
+            return d["desktop.appearance.layout"] === "master";
+        case "wm.hyprland.plugins.hyprscrolling.columnWidth": case "wm.hyprland.plugins.hyprscrolling.followFocus":
+            return d["desktop.appearance.layout"] === "scrolling";
+        case "desktop.appearance.dimStrength": return d["desktop.appearance.dimInactive"] === true;
+        case "desktop.appearance.wobblyWindows": case "desktop.appearance.windowStyle": return d["desktop.appearance.animations"] === true;
+        case "desktop.appearance.glowRange": case "desktop.appearance.glowColor": return d["desktop.appearance.glowEnabled"] === true;
+        case "desktop.appearance.borderAngleSpeed": return d["desktop.appearance.animatedBorder"] === true;
+        case "desktop.appearance.blurContrast": case "desktop.appearance.blurBrightness": case "desktop.appearance.blurSpecial":
+        case "desktop.appearance.blurPopups": case "desktop.appearance.blurIgnoreOpacity": case "desktop.appearance.blurNewOptimizations":
+        case "desktop.appearance.blurVibrancyDarkness":
+            return d["desktop.appearance.blurEnabled"] === true;
+        case "desktop.appearance.shadowSharp": case "desktop.appearance.shadowScale": case "desktop.appearance.shadowColor":
+            return d["desktop.appearance.shadowEnabled"] === true;
         }
         return true;
     }

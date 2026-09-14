@@ -11,7 +11,7 @@ import "lib/arrange.js" as Arrange
 // Displays (SYSTEM). Detect every connected monitor, arrange them to scale on a
 // drag canvas (no coordinate math), and tune resolution, scale, rotation, colour
 // (HDR) and mirror per monitor. Apply writes the layout to the live session via
-// ryoku-monitor (over hyprctl) and persists it, so it returns at next login; a
+// ryoku-monitor and persists it, so it returns at next login; a
 // named profile is hardware-keyed so it returns when the same displays are
 // plugged in. Edits stage in a draft and only touch real screens on Apply, so
 // fiddling never nukes a display. Full-bleed: this page owns the whole content

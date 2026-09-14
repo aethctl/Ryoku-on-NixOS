@@ -10,6 +10,7 @@ import (
 	"ryoku-cli/internal/sys"
 
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // ---- diagnostic report -------------------------------------------------------
@@ -122,9 +123,11 @@ func gatherReport(findings []finding) string {
 	section("desktop")
 	cmd("ryoku-shell", "status")
 	cmd("pgrep", "-af", "quickshell")
-	for _, v := range []string{"WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "HYPRLAND_INSTANCE_SIGNATURE"} {
+	for _, v := range []string{"WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE"} {
 		line("%s=%s", v, os.Getenv(v))
 	}
+	d := wm.Detect()
+	line("window manager: name=%s live=%t source=%s", d.Name, d.Live, d.Source)
 
 	section("hardware")
 	bl := backlightDevices()

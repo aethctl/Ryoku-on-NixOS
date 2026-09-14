@@ -221,7 +221,7 @@ QtObject {
     // (~/.config/ryoku/matugen.json), which ryoku-shell watches and retints on
     // change. The ryogami daemon does not run matugen, so the old wall.retheme
     // RPC was a no-op and light/dark never left the picker. Hand the knobs to
-    // the one writer the Hub also uses ("ryoku-hub hypr matugen set", a merge),
+    // the one writer the Hub also uses ("ryoku-hub desktop matugen set", a merge),
     // so mode/scheme/index retint the whole desktop.
     property var _rethemeProc: Process {}
     function retheme(scheme, mode, colorIndex, callback) {

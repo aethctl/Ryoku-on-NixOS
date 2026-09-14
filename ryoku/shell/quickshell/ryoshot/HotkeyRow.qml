@@ -1,14 +1,19 @@
 import QtQuick
 import QtQuick.Layouts
+import Quickshell
 import Quickshell.Io
 import "lib/keymap.js" as Keymap
 import "Singletons"
 import Ryoku.Ui.Singletons
 
+// The launch-key rebind. ryoku-hub owns desktop.json, so the chosen chord is
+// written there as a keybind rebind and the provider emits it; this row only
+// reads the store to show the current chord.
 Item {
     id: hk
 
-    property string luaPath: ""
+    // The shipped chord desktop.keybindRebinds is keyed by.
+    property string defaultChord: ""
     property string hotkey: "-"
     property bool listening: false
 
@@ -18,29 +23,37 @@ Item {
     implicitWidth: row.implicitWidth
     implicitHeight: row.implicitHeight
 
-    FileView {
-        id: reader
-        path: hk.luaPath
-        onLoaded: { var b = Keymap.parseBind(text()); if (b) hk.hotkey = b; }
-    }
+    readonly property string desktopPath: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/ryoku/desktop.json"
 
     FileView {
-        id: writer
-        path: hk.luaPath
-        atomicWrites: true
-        onSaved: { reloadProc.running = true; hk.rebound(); }
-        onSaveFailed: (err) => console.log("ryoshot: ryoshot.lua write failed: " + err)
+        id: store
+        path: hk.desktopPath
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: hk.refresh()
+        onLoadFailed: hk.hotkey = hk.defaultChord
     }
 
-    Process {
-        id: reloadProc
-        command: ["setsid", "-f", "sh", "-c", "sleep 0.5; hyprctl reload"]
+    function refresh() {
+        var chosen = "";
+        try {
+            var o = JSON.parse(store.text() || "{}");
+            var r = o && o.desktop && o.desktop.keybindRebinds;
+            if (r && typeof r[hk.defaultChord] === "string")
+                chosen = r[hk.defaultChord];
+        } catch (e) {}
+        hk.hotkey = chosen !== "" ? chosen : hk.defaultChord;
     }
+    onDefaultChordChanged: hk.refresh()
+    Component.onCompleted: hk.refresh()
 
     function applyBind(bind) {
         hk.hotkey = bind;
         hk.listening = false;
-        writer.setText(Keymap.luaFile(bind));
+        Quickshell.execDetached(["ryoku-hub", "desktop", "set-rebind", hk.defaultChord, bind]);
+        hk.rebound();
     }
 
     RowLayout {

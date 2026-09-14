@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { keyName, bindString, luaFile, parseBind } = require("./keymap.js");
+const { keyName, bindString } = require("./keymap.js");
 
 const K = {
     Print: 0x01000009, Escape: 0x01000000, Tab: 0x01000001, Return: 0x01000004,
@@ -49,13 +49,6 @@ eq(bindString(K.Shift, M.SHIFT, ""), null, "modifier-only chord -> null");
 
 eq(bindString(K.P, M.CTRL | M.SHIFT, "p").toUpperCase(), "CTRL + SHIFT + P",
     "Ctrl+Shift+P structural form (upper) == 'CTRL + SHIFT + P'");
-
-const file = luaFile("CTRL + SHIFT + P");
-if (file.includes('hl.bind("CTRL + SHIFT + P", hl.dsp.exec_cmd("flock -n /tmp/ryoshot.lock qs -c ryoshot"))'))
-    console.log("PASS luaFile contains correct bind line");
-else { failed++; console.log("FAIL luaFile bind line\n  got:\n" + file); }
-eq(parseBind(file), "CTRL + SHIFT + P", "parseBind round-trips the written bind");
-eq(parseBind('hl.bind("Print", hl.dsp.exec_cmd("qs -c ryoshot"))'), "Print", "parseBind reads default Print");
 
 if (failed > 0) { console.log("\n" + failed + " test(s) FAILED"); process.exit(1); }
 console.log("\nAll tests PASSED");

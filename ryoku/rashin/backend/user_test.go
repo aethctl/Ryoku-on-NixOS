@@ -21,6 +21,7 @@ func seedTree(t *testing.T, root string, files map[string]string) {
 }
 
 func TestDiffUserConfig(t *testing.T) {
+	t.Setenv("RYOKU_WM", "hyprland")
 	base, cfg := t.TempDir(), t.TempDir()
 	seedTree(t, base, map[string]string{
 		"hypr/hyprland.lua": "shipped",
@@ -91,6 +92,7 @@ func TestUserDocBodyDevBaseline(t *testing.T) {
 	t.Setenv("RYOKU_RASHIN_REPO", "")
 	t.Setenv("XDG_STATE_HOME", state)
 	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("RYOKU_WM", "hyprland")
 	body := userDocBody()
 	if !strings.Contains(body, "dev checkout") {
 		t.Fatalf("expected dev-baseline note, got:\n%s", body)

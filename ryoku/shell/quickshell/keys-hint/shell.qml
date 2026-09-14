@@ -2,10 +2,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 
-// First-boot hint -- a one-shot `qs -c keys-hint` toast the Hyprland autostart
+// First-boot hint -- a one-shot `qs -c keys-hint` toast the session autostart
 // launches exactly once, ever (a state marker gates it), to point a new user at
 // the keyboard cheatsheet. A quiet top-centre card in the reference vocabulary:
 // ink kanji seal, hairline mono caps, no accent. It never steals keyboard focus
@@ -83,8 +82,8 @@ ShellRoot {
 
             // Show only on the monitor the user is on when Ryoku first comes up.
             readonly property bool onFocused: {
-                var fm = Hyprland.focusedMonitor;
-                return fm && fm.name ? (modelData ? fm.name === modelData.name : false) : true;
+                var fo = Wm.focusedOutput;
+                return fo ? (modelData ? fo === modelData.name : false) : true;
             }
             visible: win.onFocused
 

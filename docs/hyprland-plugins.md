@@ -54,7 +54,7 @@ explicitly as well.
 ## The Plugins page
 
 Settings > Plugins, one tab per plugin. Above the settings sits the status
-card from `ryoku-hub hypr plugins list`: source and version (package, built
+card from `ryoku-hub desktop plugins list`: source and version (package, built
 here with commit and date, hyprpm), whether it is running, and the verdict:
 
 - **Running**: loaded in the compositor.
@@ -136,7 +136,7 @@ Ryoku extension: the builder lays that directory beside the `.so`
 
 - `ryoku doctor` (which `ryoku update` runs) has a `Hyprland plugin builds`
   reconciler: every enabled plugin whose receipts no longer match the installed
-  headers is rebuilt through `ryoku-hub hypr plugins rebuild --stale`, so a
+  headers is rebuilt through `ryoku-hub desktop plugins rebuild --stale`, so a
   Hyprland bump taken with `ryoku update` is converged before the next login. A
   disabled stale plugin costs nothing and is left to the page. Without a
   toolchain it warns and names the packages to install.
@@ -151,10 +151,10 @@ Ryoku extension: the builder lays that directory beside the `.so`
 ## The backend
 
 ```
-ryoku-hub hypr plugins list                                   the roster, JSON
-ryoku-hub hypr plugins rebuild [--all|--stale] [--checkout <dir>] [<id>...]
-ryoku-hub hypr plugins add [--inspect] <git-url> [<plugin>...]
-ryoku-hub hypr plugins remove <id>
+ryoku-hub desktop plugins list                                   the roster, JSON
+ryoku-hub desktop plugins rebuild [--all|--stale] [--checkout <dir>] [<id>...]
+ryoku-hub desktop plugins add [--inspect] <git-url> [<plugin>...]
+ryoku-hub desktop plugins remove <id>
 ```
 
 `rebuild` and `add` log to stderr and print a JSON summary

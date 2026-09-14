@@ -29,13 +29,11 @@ Singleton {
     property real pulse: 1
     readonly property string elapsedText: fmt(elapsedSec)
 
-    // full path: ~/.config/hypr/scripts isn't on the shell's PATH, a bare name
-    // wouldn't resolve and recording would silently never start.
-    readonly property string script: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-screenrecord"
+    readonly property string script: "ryoku-cmd-screenrecord"
 
     // studio uses gpu-screen-recorder + a cursor track (this wrapper), then opens
-    // the clip in the ryomotion editor; a bare name wouldn't resolve on PATH.
-    readonly property string studioScript: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-studiorecord"
+    // the clip in the ryomotion editor.
+    readonly property string studioScript: "ryoku-cmd-studiorecord"
 
     // region capture: the box the user drew as gsr's "WxH+X+Y" (logical coords),
     // "" = full monitor. slurp must launch detached (a managed Process gets its
@@ -108,7 +106,7 @@ Singleton {
     // (native resolution and audio kept) so it drops straight into a chat.
     // Studio never compresses. pendingDiscord latches the toggle at start, so a
     // mid-capture change can't retarget the clip; discordMode persists.
-    readonly property string discordScript: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-discord-compress"
+    readonly property string discordScript: "ryoku-cmd-discord-compress"
     property bool discordMode: false
     property bool pendingDiscord: false
     readonly property string discordFile: (Quickshell.env("RYOKU_STATE_PATH") || (Quickshell.env("HOME") + "/.local/state/ryoku")) + "/discord-record"
@@ -186,7 +184,7 @@ Singleton {
 
     // edit-after: when a Quick recording ends, hand the clip to ryomotion. Latched
     // at start so a mid-capture toggle can't retarget it; Studio never uses it.
-    readonly property string editScript: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-edit-recording"
+    readonly property string editScript: "ryoku-cmd-edit-recording"
     property bool pendingEdit: false
 
     // pre-record countdown: the capture card can arm a delay (Capture.delay,

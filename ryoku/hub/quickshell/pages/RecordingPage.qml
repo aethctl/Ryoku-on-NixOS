@@ -374,7 +374,7 @@ Item {
     property string infoEncoder: ""
     Process {
         id: info
-        command: [(Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-screenrecord", "--info"]
+        command: ["ryoku-cmd-screenrecord", "--info"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {

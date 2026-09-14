@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -151,23 +150,6 @@ func pillIpc(fn string, args ...string) string {
 // Quickshell.
 var shellIpc = func(fn string, args ...string) string {
 	return ipcCallN("shell", "shell", fn, args...)
-}
-
-// queryActiveMonitor reads the focused monitor fresh from hyprctl. The daemon's
-// cached d.activeMonitor() is the keybind hot path; this is the cold fallback
-// and the one-shot seed the event watcher uses on connect.
-func queryActiveMonitor() string {
-	out, err := exec.Command("hyprctl", "activeworkspace", "-j").Output()
-	if err != nil {
-		return ""
-	}
-	var w struct {
-		Monitor string `json:"monitor"`
-	}
-	if json.Unmarshal(out, &w) != nil {
-		return ""
-	}
-	return w.Monitor
 }
 
 // lockMarker is the file qylock's lock_shell.qml touches once the compositor

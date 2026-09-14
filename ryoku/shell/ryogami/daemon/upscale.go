@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -228,7 +227,7 @@ func (u *Upscaler) enhanceVideo(ctx context.Context, f string, scale int) map[st
 
 	u.setPhase("probe")
 	w := u.videoWidth(ctx, f)
-	capW := u.screenCap(ctx)
+	capW := u.screenCap()
 	if w >= capW {
 		u.setPhase("sharp")
 		return upscaleVerdict("sharp", upscaleKindVideo, w, capW, "", "")
@@ -496,27 +495,20 @@ func (u *Upscaler) videoFrameEstimate(ctx context.Context, f, fps string) int {
 }
 
 // screenCap is ryowalls' screen_cap: the widest monitor's logical width (physical
-// / fractional scale), clamped to 1280..2560, defaulting to 1920 when hyprctl is
-// absent. A source already this wide gains nothing on screen, so it is skipped.
-func (u *Upscaler) screenCap(ctx context.Context) int {
-	out, err := u.runOut(ctx, upscaleProbeTimeout, "hyprctl", "monitors", "-j")
-	if err != nil {
-		return 1920
-	}
-	var mons []struct {
-		Width float64 `json:"width"`
-		Scale float64 `json:"scale"`
-	}
-	if err := json.Unmarshal(out, &mons); err != nil || len(mons) == 0 {
+// / fractional scale), clamped to 1280..2560, 1920 when no compositor answers. A
+// source already this wide gains nothing on screen, so it is skipped.
+func (u *Upscaler) screenCap() int {
+	outs := outputs.list()
+	if len(outs) == 0 {
 		return 1920
 	}
 	best := 0.0
-	for _, m := range mons {
-		s := m.Scale
+	for _, o := range outs {
+		s := o.Scale
 		if s <= 0 {
 			s = 1
 		}
-		if v := m.Width / s; v > best {
+		if v := float64(o.Width) / s; v > best {
 			best = v
 		}
 	}

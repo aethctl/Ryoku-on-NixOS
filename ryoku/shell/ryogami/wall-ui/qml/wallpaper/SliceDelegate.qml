@@ -635,8 +635,8 @@ Item {
 
                 Item {
                     width: parent.width; height: 28
-                    visible: Config.isNiri && Config.niriOverviewBackdrop && delegateItem.model.type === "static"
-                    property bool _isBackdrop: Config.niriBackdrop === delegateItem.model.path
+                    visible: Config.canOverviewBackdrop && Config.overviewBackdropEnabled && delegateItem.model.type === "static"
+                    property bool _isBackdrop: Config.overviewBackdropPath === delegateItem.model.path
 
                     Text {
                         anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter

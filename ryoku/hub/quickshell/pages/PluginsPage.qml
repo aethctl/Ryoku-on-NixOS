@@ -10,7 +10,7 @@ import "../schema/PluginsPage.js" as Schema
 
 // Plugins: every Hyprland compositor plugin on this machine in one place. One
 // tab per plugin; above its settings sits a status card from
-// `ryoku-hub hypr plugins list`: where the copy came from, its version, whether
+// `ryoku-hub desktop plugins list`: where the copy came from, its version, whether
 // it matches the running Hyprland (a plugin is ABI-locked to the exact
 // compositor build, so an Arch bump can leave a copy that no longer loads), and
 // the actions that fix it: Rebuild here from upstream, Docs, Remove. "Add from
@@ -77,16 +77,16 @@ Item {
     readonly property var extraRows: {
         var out = [];
         for (var i = 0; i < pg.extras.length; i++) {
-            var p = pg.extras[i], base = "plugins.extra." + p.id;
+            var p = pg.extras[i], base = "wm.hyprland.plugins.extra." + p.id;
             out.push({ tab: p.name, group: I18n.tr("PLUGIN"), key: base + ".enabled", label: I18n.tr("Enabled"),
-                       desc: I18n.tr("Loads %1 into the compositor, applies on Save").arg(p.name), ctl: "sw", src: "hypr.json" });
+                       desc: I18n.tr("Loads %1 into the compositor, applies on Save").arg(p.name), ctl: "sw", src: "desktop.json" });
             var ss = p.settings || [];
             for (var j = 0; j < ss.length; j++) {
                 var s = ss[j], parts = s.key.split(":");
                 var row = { tab: p.name, key: base + ".config." + s.key, label: pg.humanize(parts[parts.length - 1]),
                             group: parts.length > 2 ? parts.slice(1, -1).join(" \u00b7 ").toUpperCase() : I18n.tr("SETTINGS"),
                             desc: "plugin:" + s.key + (s.type ? ", " + s.type : "") + (s.default !== undefined && s.default !== null ? ", default " + s.default : ""),
-                            src: "hypr.json", when: {} };
+                            src: "desktop.json", when: {} };
                 row.when[base + ".enabled"] = [true];
                 var d = Number(s.default);
                 switch (s.type) {
@@ -110,7 +110,7 @@ Item {
         for (var i = 0; i < pg.extras.length; i++) {
             var p = pg.extras[i], ss = p.settings || [];
             for (var j = 0; j < ss.length; j++)
-                if (ss[j].default !== undefined && ss[j].default !== null) m["plugins.extra." + p.id + ".config." + ss[j].key] = ss[j].default;
+                if (ss[j].default !== undefined && ss[j].default !== null) m["wm.hyprland.plugins.extra." + p.id + ".config." + ss[j].key] = ss[j].default;
         }
         return m;
     }
@@ -148,8 +148,8 @@ Item {
         pg.log = [];
         pg.notice = "";
         actProc.command = id === "all"
-            ? ["ryoku-hub", "hypr", "plugins", "rebuild", "--stale"]
-            : ["ryoku-hub", "hypr", "plugins", "rebuild", id];
+            ? ["ryoku-hub", "desktop", "plugins", "rebuild", "--stale"]
+            : ["ryoku-hub", "desktop", "plugins", "rebuild", id];
         actProc.running = true;
     }
     function inspect() {
@@ -160,7 +160,7 @@ Item {
         pg.notice = "";
         pg.inspected = null;
         pg.picked = ({});
-        actProc.command = ["ryoku-hub", "hypr", "plugins", "add", "--inspect", url];
+        actProc.command = ["ryoku-hub", "desktop", "plugins", "add", "--inspect", url];
         actProc.running = true;
     }
     function addPicked() {
@@ -170,7 +170,7 @@ Item {
         pg.busy = "add";
         pg.log = [];
         pg.notice = "";
-        actProc.command = ["ryoku-hub", "hypr", "plugins", "add", pg.inspected.repo].concat(ids);
+        actProc.command = ["ryoku-hub", "desktop", "plugins", "add", pg.inspected.repo].concat(ids);
         actProc.running = true;
     }
     function remove(id) {
@@ -178,7 +178,7 @@ Item {
         pg.busy = "remove:" + id;
         pg.log = [];
         pg.notice = "";
-        actProc.command = ["ryoku-hub", "hypr", "plugins", "remove", id];
+        actProc.command = ["ryoku-hub", "desktop", "plugins", "remove", id];
         actProc.running = true;
     }
     function openDocs(url) { if (url) Spawn.run(["xdg-open", url]); }
@@ -205,7 +205,7 @@ Item {
             return;
         }
         if (kind.indexOf("remove:") === 0) {
-            if (pg.hub) pg.hub.hyprDrop("plugins.extra." + r.removed);
+            if (pg.hub) pg.hub.hyprDrop("wm.hyprland.plugins.extra." + r.removed);
             pg.notice = I18n.tr("Removed %1").arg(r.removed);
             pg.refresh();
             return;
@@ -220,7 +220,7 @@ Item {
         if (kind === "add" && pg.hub) {
             // a plugin just added is one the user wants running: enable it in the
             // draft, and Save loads it (the roster then types its settings)
-            for (var b = 0; b < built.length; b++) pg.hub.hyprEdit("plugins.extra." + built[b] + ".enabled", true);
+            for (var b = 0; b < built.length; b++) pg.hub.hyprEdit("wm.hyprland.plugins.extra." + built[b] + ".enabled", true);
             if (built.length) { pg.addOpen = false; pg.inspected = null; pg.addUrl = ""; pg.pendingTab = built[0]; }
         }
         pg.refresh();
@@ -228,7 +228,7 @@ Item {
 
     Process {
         id: listProc
-        command: ["ryoku-hub", "hypr", "plugins", "list"]
+        command: ["ryoku-hub", "desktop", "plugins", "list"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {

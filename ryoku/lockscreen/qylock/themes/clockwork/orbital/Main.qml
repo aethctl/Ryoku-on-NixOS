@@ -488,8 +488,8 @@ Rectangle {
         revealOut.restart()
     }
 
-    // Default the picker to the plain "Hyprland" session, not the package's
-    // "Hyprland (uwsm-managed)", which Ryoku's logout path does not drive.
+    // Prefer the session matching the running compositor, resolved from the
+    // environment by the shim (sessionModel.desktopName), never a name literal.
     Item {
         visible: false
         Repeater {
@@ -501,16 +501,19 @@ Rectangle {
     function preferredSessionIndex() {
         if (typeof sessionModel === "undefined")
             return 0
+        var want = (typeof sessionModel.desktopName === "string") ? sessionModel.desktopName : ""
         var exact = -1, loose = -1
         for (var i = 0; i < sessionScan.count; i++) {
             var it = sessionScan.itemAt(i)
             if (!it)
                 continue
-            var nm = it.sName || ""
-            var low = nm.toLowerCase()
-            if (nm === "Hyprland")
+            var low = (it.sName || "").toLowerCase()
+            // uwsm-managed is a duplicate entry Ryoku's logout path does not drive.
+            if (low.indexOf("uwsm") >= 0)
+                continue
+            if (want !== "" && low === want)
                 exact = i
-            else if (low.indexOf("hyprland") >= 0 && low.indexOf("uwsm") < 0 && loose < 0)
+            else if (want !== "" && low.indexOf(want) >= 0 && loose < 0)
                 loose = i
         }
         if (exact >= 0)

@@ -8,20 +8,20 @@ var rows = [
     {
         "tab": "custom",
         "group": "OTHER",
-        "key": "keybinds",
+        "key": "desktop.keybinds",
         "label": "Shortcut entry",
         "desc": "Hyprland-style combo plus an action; the command field is for Run command",
         "ctl": "list",
-        "src": "settings.lua on Save via genKeybind() hypr.go:1160"
+        "src": "desktop.json"
     },
     {
         "tab": "custom",
         "group": "OTHER",
-        "key": "keybinds",
+        "key": "desktop.keybinds",
         "label": "Shortcut entry",
         "desc": "Hyprland-style combo plus an action; the command field is for Run command",
         "ctl": "multi",
-        "src": "shell",
+        "src": "desktop.json",
         "opts": [
             "(no visible label - key combo field; placeholder \"SUPER + J\")",
             "exec",

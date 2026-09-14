@@ -1,4 +1,4 @@
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import QtQuick
 import QtQuick.Shapes
 import shell.services
@@ -16,30 +16,38 @@ Item {
     implicitHeight: 28
     readonly property color contentColor: root.widgetContentColor("G2", root.seal)
 
-    // The focused workspace's id ONLY when it's a real (positive) workspace beyond
-    // the persist range - else 0. An int signals on value change only, so switching
-    // between in-range workspaces does NOT renotify → workspaceList stays identical
-    // → the Repeater model is stable → the per-delegate width/colour Behaviors keep
-    // animating instead of the whole model rebuilding (B2). `id > n` (n≥5) also
-    // excludes negative special/scratchpad ids (B3).
-    readonly property int extraWs: {
-        if (root.workspaceMode === "active") return 0
+    // The focused workspace name only when it is a real workspace beyond the
+    // persist range, else "". Renotifies on value change only, so switching
+    // between in-range workspaces keeps the model stable and the delegate
+    // Behaviors animating.
+    readonly property bool dynamicModel: Wm.workspaceModel === "dynamic"
+    readonly property string extraWs: {
+        if (root.workspaceMode === "active" || wsWidget.dynamicModel) return ""
         var n = root.workspaceMode === "5" ? 5 : 10
-        var f = Hyprland.focusedWorkspace
-        return (f && f.id > n) ? f.id : 0
+        var f = Wm.focusedWorkspace
+        var num = f ? Number(f.name) : 0
+        return (num > n) ? f.name : ""
     }
 
+    // A dynamic model follows the live workspace list with no invented slots; a
+    // fixed model shows a stable numbered row plus the focused-beyond-range one.
     readonly property var workspaceList: {
+        if (wsWidget.dynamicModel) {
+            var live = []
+            var lw = Wm.workspaces
+            for (var k = 0; k < lw.length; k++) if (!lw[k].special) live.push(lw[k].name)
+            return live
+        }
         if (root.workspaceMode === "active") {
             var ids = {}
-            var ws = Hyprland.workspaces.values
-            for (var i = 0; i < ws.length; i++) if (ws[i].id > 0) ids[ws[i].id] = true   // F13: skip special (negative-id) workspaces
-            if (Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id > 0) ids[Hyprland.focusedWorkspace.id] = true
-            return Object.keys(ids).map(Number).sort(function(a, b) { return a - b })
+            var ws = Wm.workspaces
+            for (var i = 0; i < ws.length; i++) if (!ws[i].special) ids[ws[i].name] = true
+            if (Wm.focusedWorkspace && !Wm.focusedWorkspace.special) ids[Wm.focusedWorkspace.name] = true
+            return Object.keys(ids).sort(function(a, b) { return Number(a) - Number(b) })
         }
         var n = root.workspaceMode === "5" ? 5 : 10
-        var list = []; for (var j = 1; j <= n; j++) list.push(j)
-        if (extraWs > 0) list.push(extraWs)   // focused-beyond-range, stable per id
+        var list = []; for (var j = 1; j <= n; j++) list.push(String(j))
+        if (extraWs !== "") list.push(extraWs)
         return list
     }
 
@@ -47,11 +55,11 @@ Item {
     //    mark occupied cells, dimmed dots the empty ones. On a focus change a
     //    runner pacman travels from the old cell to the new one, chomping as it
     //    goes; the destination pellet is eaten (fades/shrinks) as it arrives. ──
-    readonly property int focusedWorkspaceId: Hyprland.focusedWorkspace
-        && Hyprland.focusedWorkspace.id > 0 ? Hyprland.focusedWorkspace.id : -1
+    readonly property string focusedWorkspaceKey: Wm.focusedWorkspace
+        && !Wm.focusedWorkspace.special ? Wm.focusedWorkspace.name : ""
 
-    property int pacmanLastFocusedWorkspaceId: -1
-    property int pacmanTargetWorkspaceId: -1
+    property string pacmanLastFocusedWorkspaceKey: ""
+    property string pacmanTargetWorkspaceKey: ""
     property bool pacmanTraveling: false
     property real pacmanMouthClosure: 0
     property int pacmanTravelDirection: 1
@@ -68,54 +76,51 @@ Item {
     readonly property int pacmanEatDuration: 240
     readonly property int pacmanEatLeadIn: Math.max(0, pacmanTravelDuration - pacmanEatDuration)
 
-    function pacmanCell(id) {
+    function pacmanCell(key) {
         for (var i = 0; i < wsRepeater.count; i++) {
             var it = wsRepeater.itemAt(i)
-            if (it && it.wsId === id) return it
+            if (it && it.wsKey === key) return it
         }
         return null
     }
-    function pacmanCellIndex(id) {
+    function pacmanCellIndex(key) {
         for (var i = 0; i < wsRepeater.count; i++) {
             var it = wsRepeater.itemAt(i)
-            if (it && it.wsId === id) return i
+            if (it && it.wsKey === key) return i
         }
         return -1
     }
-    function pacmanCenterX(id) {
-        var it = pacmanCell(id)
+    function pacmanCenterX(key) {
+        var it = pacmanCell(key)
         return it ? wsRow.x + it.x + it.width / 2 : -1
     }
     function finishPacmanTravel() {
         pacmanTraveling = false
         pacmanMouthClosure = 0
         pacmanEatProgress = 0
-        pacmanTargetWorkspaceId = -1
+        pacmanTargetWorkspaceKey = ""
     }
     function resetPacmanTravel() {
         pacmanTravel.stop()
         finishPacmanTravel()
-        pacmanLastFocusedWorkspaceId = focusedWorkspaceId
+        pacmanLastFocusedWorkspaceKey = focusedWorkspaceKey
     }
-    function beginPacmanTravel(sourceId, targetId) {
-        if (root.workspaceStyle !== "pacman" || focusedWorkspaceId !== targetId) {
+    function beginPacmanTravel(sourceKey, targetKey) {
+        if (root.workspaceStyle !== "pacman" || focusedWorkspaceKey !== targetKey) {
             resetPacmanTravel()
             return
         }
-        // Power Saver / reduce-motion: snap to the focused cell like the rest of
-        // the shell (Motion collapses every animation to a cut). Running the travel
-        // state machine while the compositor is throttled stranded the runner and
-        // its eat state, an artifact that only cleared on an unrelated relayout.
+        // Reduce-motion snaps to the focused cell; running the travel state
+        // machine while throttled stranded the runner.
         if (Motion.reduce) {
             resetPacmanTravel()
             return
         }
-        // Freshly rebound Row delegates can sit at x=0 until the next polish
-        // pass; resolve the positioner before measuring so a real focus change
-        // is not mistaken for a zero-distance transition.
+        // Resolve the positioner before measuring so freshly rebound delegates at
+        // x=0 are not mistaken for a zero-distance transition.
         if (typeof wsRow.forceLayout === "function") wsRow.forceLayout()
-        var sourceX = pacmanTraveling ? pacmanTravelX : pacmanCenterX(sourceId)
-        var targetX = pacmanCenterX(targetId)
+        var sourceX = pacmanTraveling ? pacmanTravelX : pacmanCenterX(sourceKey)
+        var targetX = pacmanCenterX(targetKey)
         if (sourceX < 0 || targetX < 0 || sourceX === targetX) {
             finishPacmanTravel()
             return
@@ -125,32 +130,32 @@ Item {
         pacmanTravelTargetX = targetX
         pacmanTravelX = sourceX
         pacmanTravelDirection = targetX >= sourceX ? 1 : -1
-        var sourceIndex = pacmanCellIndex(sourceId)
-        var targetIndex = pacmanCellIndex(targetId)
+        var sourceIndex = pacmanCellIndex(sourceKey)
+        var targetIndex = pacmanCellIndex(targetKey)
         pacmanTravelSteps = sourceIndex >= 0 && targetIndex >= 0
             ? Math.max(1, Math.abs(targetIndex - sourceIndex)) : 1
-        pacmanTargetWorkspaceId = targetId
+        pacmanTargetWorkspaceKey = targetKey
         pacmanEatProgress = 0
         pacmanMouthClosure = 0
         pacmanTraveling = true
         pacmanTravel.restart()
     }
     function observePacmanFocus() {
-        var targetId = focusedWorkspaceId
-        if (targetId < 1) return
-        if (root.workspaceStyle !== "pacman" || pacmanLastFocusedWorkspaceId < 1) {
+        var targetKey = focusedWorkspaceKey
+        if (targetKey === "") return
+        if (root.workspaceStyle !== "pacman" || pacmanLastFocusedWorkspaceKey === "") {
             resetPacmanTravel()
-            pacmanLastFocusedWorkspaceId = targetId
+            pacmanLastFocusedWorkspaceKey = targetKey
             return
         }
-        if (targetId === pacmanLastFocusedWorkspaceId) return
-        var sourceId = pacmanLastFocusedWorkspaceId
-        pacmanLastFocusedWorkspaceId = targetId
-        Qt.callLater(function() { wsWidget.beginPacmanTravel(sourceId, targetId) })
+        if (targetKey === pacmanLastFocusedWorkspaceKey) return
+        var sourceKey = pacmanLastFocusedWorkspaceKey
+        pacmanLastFocusedWorkspaceKey = targetKey
+        Qt.callLater(function() { wsWidget.beginPacmanTravel(sourceKey, targetKey) })
     }
 
-    onFocusedWorkspaceIdChanged: observePacmanFocus()
-    Component.onCompleted: pacmanLastFocusedWorkspaceId = focusedWorkspaceId
+    onFocusedWorkspaceKeyChanged: observePacmanFocus()
+    Component.onCompleted: pacmanLastFocusedWorkspaceKey = focusedWorkspaceKey
 
     Connections {
         target: root
@@ -187,21 +192,19 @@ Item {
 
             delegate: Item {
                 id: wsCell
-                required property int modelData
-                readonly property int wsId: modelData
+                required property var modelData
+                readonly property string wsKey: String(modelData)
 
                 // hover feedback works in every style (the old code scaled the
                 // default-only `dot`, invisible in numbers/magic)
                 Behavior on scale { NumberAnimation { duration: 120 } }
 
-                readonly property bool isFocused: Hyprland.focusedWorkspace !== null
-                                               && Hyprland.focusedWorkspace.id === wsId
+                readonly property bool isFocused: Wm.focusedWorkspace !== null
+                                               && Wm.focusedWorkspace.name === wsKey
 
                 readonly property bool isOccupied: {
-                    var ws = Hyprland.workspaces.values
-                    for (var i = 0; i < ws.length; i++)
-                        if (ws[i].id === wsId) return !isFocused
-                    return false
+                    var w = Wm.workspaceByName(wsKey)
+                    return !!w && w.occupied && !isFocused
                 }
 
                 readonly property bool isEmpty: !isFocused && !isOccupied
@@ -268,7 +271,7 @@ Item {
                     Behavior on color { ColorAnimation { duration: 200 } }
                     Text {
                         anchors.centerIn: parent
-                        text: wsId
+                        text: wsKey
                         // focused = the only BRIGHT digit (lightened seal + bold + bigger);
                         // others dimmed so the active workspace is unmistakable
                         color: isFocused  ? wsWidget.contentColor
@@ -305,9 +308,9 @@ Item {
                 Text {
                     visible: root.workspaceStyle === "kanji"
                     anchors.centerIn: parent
-                    text: wsId >= 1 && wsId <= 10
-                        ? ["一","二","三","四","五","六","七","八","九","十"][wsId - 1]
-                        : String(wsId)
+                    text: (Number(wsKey) >= 1 && Number(wsKey) <= 10)
+                        ? ["一","二","三","四","五","六","七","八","九","十"][Number(wsKey) - 1]
+                        : wsKey
                     color: isFocused  ? wsWidget.contentColor
                          : isOccupied ? Qt.rgba(wsWidget.contentColor.r, wsWidget.contentColor.g, wsWidget.contentColor.b, 0.7)
                                       : Qt.rgba(wsWidget.contentColor.r, wsWidget.contentColor.g, wsWidget.contentColor.b, 0.3)
@@ -325,7 +328,7 @@ Item {
                     id: frameLabel
                     visible: root.workspaceStyle === "rings"
                     anchors.centerIn: parent
-                    text: String(wsId)
+                    text: wsKey
                     color: wsWidget.contentColor
                     opacity: wsMa.containsMouse ? 1.0
                         : isFocused ? 1.0
@@ -389,11 +392,11 @@ Item {
                     visible: root.workspaceStyle === "pacman"
                     anchors.centerIn: parent
                     focused: wsCell.isFocused && !(wsWidget.pacmanTraveling
-                        && wsCell.wsId === wsWidget.pacmanTargetWorkspaceId)
+                        && wsCell.wsKey === wsWidget.pacmanTargetWorkspaceKey)
                     occupied: wsCell.isOccupied
                     hovered: wsMa.containsMouse
                     eatProgress: wsWidget.pacmanTraveling
-                        && wsCell.wsId === wsWidget.pacmanTargetWorkspaceId
+                        && wsCell.wsKey === wsWidget.pacmanTargetWorkspaceKey
                         ? wsWidget.pacmanEatProgress : 0
                     eatDirection: wsWidget.pacmanTravelDirection
                     activeColor: wsWidget.contentColor
@@ -407,7 +410,7 @@ Item {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
                     hoverEnabled: true
-                    onClicked: root.gotoWorkspace(wsId)
+                    onClicked: root.gotoWorkspace(wsKey)
                     onEntered: wsCell.scale = root.workspaceStyle === "rings" ? 1.0
                         : root.workspaceStyle === "pacman" ? 1.0
                         : root.workspaceStyle === "aurora" ? 1.04 : 1.15
@@ -427,9 +430,9 @@ Item {
         visible: root.workspaceStyle === "rings" && targetIndex >= 0
 
         readonly property int targetIndex: {
-            var focused = Hyprland.focusedWorkspace
-            if (!focused || focused.id <= 0) return -1
-            return wsWidget.workspaceList.indexOf(focused.id)
+            var focused = Wm.focusedWorkspace
+            if (!focused || focused.special) return -1
+            return wsWidget.workspaceList.indexOf(focused.name)
         }
         readonly property real targetLeft: targetIndex >= 0
             ? wsRow.x + targetIndex * (20 + wsRow.spacing) + 1 : 0

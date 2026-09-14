@@ -8,20 +8,22 @@ var rows = [
     {
         "tab": "",
         "group": "OTHER",
-        "key": "windowRules",
+        "key": "desktop.windowRules",
         "label": "Rule editor",
         "desc": "Match by class and/or title; changing the action resets its value",
         "ctl": "list",
-        "src": "settings.lua as hl.window_rule({ name = \"ryoku-user-<i+1>\", match = {...}, <prop> })"
+        "src": "desktop.json",
+        "caps": "windowRules"
     },
     {
         "tab": "",
         "group": "OTHER",
-        "key": "windowRules",
+        "key": "desktop.windowRules",
         "label": "Rule editor",
         "desc": "Match by class and/or title; changing the action resets its value",
         "ctl": "multi",
-        "src": "shell",
+        "src": "desktop.json",
+        "caps": "windowRules",
         "opts": [
             "Match class (placeholder text; no visible field label)",
             "Match title (placeholder text; no visible field label)",

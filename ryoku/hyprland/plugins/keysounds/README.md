@@ -81,7 +81,7 @@ decoded or scheduled on Hyprland's thread.
 lays the profiles into `sounds/`: it clones Mechvibes at the pinned commit (or
 uses `MECHVIBES=<checkout>`) and runs `ryoku-keysounds-import` on each line of
 `profiles.txt` (`IMPORTER=` overrides which copy). `hyprpm.toml` names the same
-step, which is what `ryoku-hub hypr plugins rebuild keysounds` runs (from a
+step, which is what `ryoku-hub desktop plugins rebuild keysounds` runs (from a
 checkout, or from the copy `ryoku-keysounds` lays under
 `/usr/share/ryoku/hypr-plugins`). Depends on `hyprland` (headers),
 `libcanberra`, and `git` + `ffmpeg` to cut the profiles.

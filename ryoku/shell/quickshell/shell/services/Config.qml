@@ -3,6 +3,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Ryoku.FrameBars
+import Ryoku.Ui.Singletons
 
 // live shell appearance config. one source of truth for the look knobs Ryoku
 // Settings' Shell section edits, plus the shipped defaults the shell falls back
@@ -81,10 +82,8 @@ Singleton {
     // Region control; a plain passthrough key in shell.json.
     property alias formatLocale: adapter.formatLocale
 
-    // screenShader: the compositor's print filter, by shader name. Persisted for
-    // the reload path (decoration.lua reads the key) and applied live here. The
-    // live call is `hyprctl eval` with Lua, not `keyword`, which this Hyprland
-    // fork rejects outright.
+    // screenShader: the compositor's print filter, by shader name. Persisted, and
+    // applied live through the provider, which resolves the name to its shader.
     property alias screenShader: adapter.screenShader
     readonly property var screenShaders: ["", "halftone", "bone", "onebit", "vignette", "grain"]
     function setScreenShader(name) {
@@ -96,11 +95,7 @@ Singleton {
             shaderCtl.flushQueued();
         else
             shaderCtl.connected = true;
-        const path = pick === ""
-            ? ""
-            : (Quickshell.env("HOME") || "") + "/.config/hypr/shaders/" + pick + ".glsl";
-        Quickshell.execDetached(["hyprctl", "eval",
-            'hl.config({ decoration = { screen_shader = "' + path + '" } })']);
+        Wm.setScreenShader(pick);
     }
 
     // Which surface the bar's brand logo opens: "studio" (QS Bar Settings) or

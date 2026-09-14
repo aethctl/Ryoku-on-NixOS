@@ -1,0 +1,3 @@
+module Ryoku.Wm.Hyprland
+GlobalShortcutBridge GlobalShortcutBridge.qml
+FocusGrabBridge FocusGrabBridge.qml

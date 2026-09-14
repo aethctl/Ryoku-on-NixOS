@@ -82,8 +82,8 @@ Run the shell straight from this checkout on a running Hyprland session, no
 install required:
 
     ryoku/shell/dev-run.sh       # build ryoku-shell, then run it with RYOKU_SHELL_DIR set
-    ryoku/shell/dev-binds.sh on  # optional: bind the shell keys for this session
-    ryoku/shell/dev-stop.sh      # stop it (restore your keys with: hyprctl reload)
+    ryoku/hyprland/dev-binds.sh on  # optional: bind the shell keys for this session
+    ryoku/shell/dev-stop.sh      # stop it (restore your keys with: ryoku wm act config.reload)
     ryoku deploy                # build + materialize this checkout into ~/.config, then reload
 
 The daemon launches each component with `qs -p`, so your own `~/.config` is never

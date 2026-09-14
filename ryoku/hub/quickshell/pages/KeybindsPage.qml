@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell.Io
 import Quickshell
-import Quickshell.Hyprland
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "../Combos.js" as Combos
@@ -28,10 +27,17 @@ Item {
     // exposing hyprVal/hyprEdit; a bare probe object exposes neither.
     readonly property bool hubReady: pg.hub && typeof pg.hub.hyprVal === "function"
     // the live custom-bind array from the draft: a list of { keys, action, value }.
-    readonly property var customRows: pg.hubReady ? (pg.hub.hyprVal("keybinds") || []) : []
+    readonly property var customRows: pg.hubReady ? (pg.hub.hyprVal("desktop.keybinds") || []) : []
     // gated so the editor empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hubReady ? pg.hub.hyprLoaded === true : false
     readonly property int dirtyCount: pg.hubReady ? (pg.hub.dirty || 0) : 0
+
+    // the compositor's own hand-edit config path from the provider; empty with
+    // no provider so the copy drops the path rather than printing a bare prefix.
+    readonly property string wmCfgPath: {
+        var cf = (pg.hub && pg.hub.wmConfigFiles) ? pg.hub.wmConfigFiles : [];
+        return cf.length ? "~/.config/" + cf[0] : "";
+    }
 
     // "apps" = app-role launchers, "system" = the shipped legend, "custom" = the
     // editor. Transient, not persisted.
@@ -117,7 +123,7 @@ Item {
         shellSet.running = true;
     }
     // role -> chosen command (draft); empty/absent uses the shipped fallback.
-    readonly property var chosen: pg.hubReady ? (pg.hub.hyprVal("apps") || ({})) : ({})
+    readonly property var chosen: pg.hubReady ? (pg.hub.hyprVal("desktop.apps") || ({})) : ({})
     function effOf(role, fallback) {
         var v = pg.chosen[role];
         return (v && ("" + v).length) ? ("" + v) : fallback;
@@ -125,7 +131,7 @@ Item {
     function setApp(role, cmd) {
         if (!pg.hubReady)
             return;
-        var cur = pg.hub.hyprVal("apps") || {};
+        var cur = pg.hub.hyprVal("desktop.apps") || {};
         var m = {};
         for (var k in cur)
             m[k] = cur[k];
@@ -134,9 +140,9 @@ Item {
             delete m[role];
         else
             m[role] = cmd;
-        pg.hub.hyprEdit("apps", m);
+        pg.hub.hyprEdit("desktop.apps", m);
     }
-    function clearApps() { if (pg.hubReady) pg.hub.hyprEdit("apps", ({})); }
+    function clearApps() { if (pg.hubReady) pg.hub.hyprEdit("desktop.apps", ({})); }
     function hasApps() { return Object.keys(pg.chosen).length > 0; }
 
     // shipped combos that launch an app role, so the System tab drops them
@@ -270,39 +276,39 @@ Item {
     function patch(i, key, val) {
         if (!pg.hubReady)
             return;
-        var a = (pg.hub.hyprVal("keybinds") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.keybinds") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
-        pg.hub.hyprEdit("keybinds", a);
+        pg.hub.hyprEdit("desktop.keybinds", a);
     }
     // switching action clears the value: only "exec" carries a command.
     function setAction(i, key) {
         if (!pg.hubReady)
             return;
-        var a = (pg.hub.hyprVal("keybinds") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.keybinds") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i].action = key;
         if (key !== "exec")
             a[i].value = "";
-        pg.hub.hyprEdit("keybinds", a);
+        pg.hub.hyprEdit("desktop.keybinds", a);
     }
     function addRow() {
         if (!pg.hubReady)
             return;
-        var a = (pg.hub.hyprVal("keybinds") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.keybinds") || []).slice();
         a.push({ "keys": "", "action": "exec", "value": "", "release": false });
-        pg.hub.hyprEdit("keybinds", a);
+        pg.hub.hyprEdit("desktop.keybinds", a);
     }
     function removeRow(i) {
         if (!pg.hubReady)
             return;
-        var a = (pg.hub.hyprVal("keybinds") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.keybinds") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("keybinds", a);
+        pg.hub.hyprEdit("desktop.keybinds", a);
     }
     function clearAll() {
         if (pg.hubReady)
-            pg.hub.hyprEdit("keybinds", []);
+            pg.hub.hyprEdit("desktop.keybinds", []);
     }
     function saveAll() {
         if (pg.hubReady)
@@ -326,8 +332,8 @@ Item {
     property string recordCombo: ""
     readonly property bool recording: pg.recordRow >= 0 || pg.recordCombo.length > 0
 
-    function enterRecordSubmap() { Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.submap(\"record\")"]); }
-    function exitRecordSubmap() { Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.submap(\"reset\")"]); }
+    function enterRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.enter", ["record"]); }
+    function exitRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.reset"); }
 
     function startRecord(i) {
         if (!pg.hubReady || i < 0)
@@ -400,7 +406,7 @@ Item {
     // A rebind remaps a shipped chord to a user-chosen one, held as
     // { "SUPER + Q": "SUPER + X" } in the draft and rendered to rebinds.lua, which
     // binds.lua's K() consults. The shipped default combo is the stable id.
-    readonly property var rebinds: pg.hubReady ? (pg.hub.hyprVal("keybindRebinds") || ({})) : ({})
+    readonly property var rebinds: pg.hubReady ? (pg.hub.hyprVal("desktop.keybindRebinds") || ({})) : ({})
     function effectiveCombo(defCombo) {
         var r = pg.rebinds[defCombo];
         return (r && r.length) ? r : defCombo;
@@ -418,7 +424,7 @@ Item {
     function setRebind(defCombo, chord) {
         if (!pg.hubReady)
             return;
-        var cur = pg.hub.hyprVal("keybindRebinds") || {};
+        var cur = pg.hub.hyprVal("desktop.keybindRebinds") || {};
         var m = {};
         for (var k in cur)
             m[k] = cur[k];
@@ -426,12 +432,12 @@ Item {
             delete m[defCombo];
         else
             m[defCombo] = chord;
-        pg.hub.hyprEdit("keybindRebinds", m);
+        pg.hub.hyprEdit("desktop.keybindRebinds", m);
     }
     function clearRebind(defCombo) { pg.setRebind(defCombo, ""); }
     function clearRebinds() {
         if (pg.hubReady)
-            pg.hub.hyprEdit("keybindRebinds", ({}));
+            pg.hub.hyprEdit("desktop.keybindRebinds", ({}));
     }
 
     // norm -> how many shipped (effective) + custom binds hold it; >1 is a clash.
@@ -1062,7 +1068,9 @@ Item {
                 Text {
                     width: col.width
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in ~/.config/hypr/user.lua do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.")
+                    text: pg.wmCfgPath
+                        ? I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in %1 do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.").arg(pg.wmCfgPath)
+                        : I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in the compositor's own config do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.")
                     color: Tokens.inkFaint; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; lineHeight: 1.3
                 }
@@ -1086,7 +1094,9 @@ Item {
                 id: intro
                 anchors { left: parent.left; right: parent.right; top: parent.top }
                 wrapMode: Text.WordWrap
-                text: I18n.tr("Custom shortcuts layered over the ones Ryoku ships and kept in the Hub, so they show in the Shortcuts legend and get conflict-checked. Click record and press the combo -- even SUPER + Q is captured safely -- or type it the way Hyprland writes it, e.g. SUPER + J. Binds hand-written in ~/.config/hypr/user.lua never appear here and are not conflict-checked.")
+                text: pg.wmCfgPath
+                    ? I18n.tr("Custom shortcuts layered over the ones Ryoku ships and kept in the Hub, so they show in the Shortcuts legend and get conflict-checked. Click record and press the combo -- even SUPER + Q is captured safely -- or type it, e.g. SUPER + J. Binds hand-written in %1 never appear here and are not conflict-checked.").arg(pg.wmCfgPath)
+                    : I18n.tr("Custom shortcuts layered over the ones Ryoku ships and kept in the Hub, so they show in the Shortcuts legend and get conflict-checked. Click record and press the combo -- even SUPER + Q is captured safely -- or type it, e.g. SUPER + J. Binds hand-written in the compositor's own config never appear here and are not conflict-checked.")
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                 lineHeight: 1.3
             }
@@ -1250,7 +1260,7 @@ Item {
                                 // record: capture the combo by pressing it. Safe
                                 // because startRecord enters the record submap
                                 // first, so the live chord reaches the field, not
-                                // Hyprland.
+                                // the compositor.
                                 IconBtn {
                                     id: recBtn
                                     anchors.left: keysF.right

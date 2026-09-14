@@ -1,7 +1,6 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
 import Quickshell.Services.UPower
 import shell.services
 import Ryoku.Ui.Singletons
@@ -621,8 +620,7 @@ Item {
     }
 
     function activateFocusedPopupScreen() {
-        var monitor = Hyprland.focusedMonitor
-        var targetName = monitor ? monitor.name : ""
+        var targetName = Wm.focusedOutput
 
         for (var i = 0; i < Quickshell.screens.length; i++) {
             var candidate = Quickshell.screens[i]
@@ -666,13 +664,12 @@ Item {
     }
 
     Connections {
-        target: Hyprland
+        target: Wm
 
-        function onFocusedMonitorChanged() {
+        function onFocusedOutputChanged() {
             if (!theme.keyboardPopupVisible || theme.activePopupScreenName === "") return
 
-            var monitor = Hyprland.focusedMonitor
-            var focusedName = monitor ? monitor.name : ""
+            var focusedName = Wm.focusedOutput
             if (focusedName !== "" && focusedName !== theme.activePopupScreenName) {
                 theme.closePopups()
             }
@@ -2633,6 +2630,8 @@ Item {
     property string launcherLogoMode: "text"     // "text" or "icon"
     property string launcherLogoText: "ryoku"    // "ryoku", "omarchy", "hyprland", "arch", or "omacom"
     property string launcherLogoIcon: "ryoku"    // see launcherLogoIconGlyph()
+    // Legacy launcher-logo text values migrated to the current text mode.
+    readonly property var legacyLogoTextValues: ["omarchy", "hyprland"]
     property bool   weatherImperial: false   // false = °C / km·h, true = °F / mph
     property bool   clock12h:        false   // false = 24h, true = 12h (AM/PM)
 
@@ -3150,7 +3149,7 @@ Item {
                                 theme.launcherLogoText = parts[wsField + 19]
                             if (parts.length > wsField + 20 && theme.launcherLogoIconValid(parts[wsField + 20]))
                                 theme.launcherLogoIcon = parts[wsField + 20]
-                        } else if (lm === "omarchy" || lm === "hyprland") {
+                        } else if (theme.legacyLogoTextValues.indexOf(lm) >= 0) {
                             // Legacy cache field from the first text-logo picker.
                             theme.launcherLogoMode = "text"
                             theme.launcherLogoText = lm
@@ -3434,33 +3433,7 @@ Item {
         }
     }
 
-    // ── Hyprland workspace dispatch (config-mode-aware) ──
-    // Hyprland 0.55 added Lua configs but still supports classic hyprlang, and
-    // BOTH ship the same version number - so the dispatch form depends on which
-    // config is ACTIVE, not the version: classic wants "workspace N", Lua wants
-    // hl.dsp.focus({ workspace = N }). Probe with the Lua form itself, focusing
-    // the workspace already focused ("e+0", so nothing moves): Lua answers "ok",
-    // classic does not know the dispatcher and says so.
-    // Never probe with a deliberately malformed token. Hyprland files a Lua
-    // dispatch error in the very buffer `hyprctl configerrors` reports, so the
-    // earlier "hl.dsp" probe left every session looking like it was rejecting
-    // its config until the next reload, and `ryoku doctor` warned about it.
-    property bool hyprUsesLua: false
-    Process {
-        id: hyprDispatchProbe
-        command: ["bash", "-c",
-            "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+0\" })' 2>&1 | grep -qix ok && echo lua || echo classic"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: { theme.hyprUsesLua = (this.text.trim() === "lua") }
-        }
-    }
-    function gotoWorkspace(id) {
-        if (hyprUsesLua)
-            Hyprland.dispatch("hl.dsp.focus({ workspace = " + id + " })")
-        else
-            Hyprland.dispatch("workspace " + id)
-    }
+    function gotoWorkspace(id) { Wm.focusWorkspace(id) }
 
     // Bumped by the ryoku.system-update IPC after `ryoku update` finishes so the
     // clock's UpdateWidget re-polls its status instead of waiting for its cycle.

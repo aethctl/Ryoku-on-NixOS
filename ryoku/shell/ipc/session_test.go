@@ -5,13 +5,10 @@ import (
 	"testing"
 )
 
-// The three power actions must map to their documented commands (logout exits
-// the compositor; reboot and shutdown go through systemctl), and there must be
-// no suspend action anywhere: the reference tree has none, so inventing one is a
-// parity failure.
+// Reboot and shutdown map to their systemctl commands; logout is no longer an
+// argv action (it exits through the wm seam), and suspend/hibernate never exist.
 func TestSessionActionArgv(t *testing.T) {
 	want := map[string][]string{
-		"logout":   {"hyprctl", "dispatch", "exit"},
 		"reboot":   {"systemctl", "reboot"},
 		"shutdown": {"systemctl", "poweroff"},
 	}
@@ -24,9 +21,9 @@ func TestSessionActionArgv(t *testing.T) {
 			t.Errorf("sessionActionArgv(%q) = %v, want %v", action, got, argv)
 		}
 	}
-	for _, absent := range []string{"suspend", "hibernate", "", "poweroff"} {
+	for _, absent := range []string{"logout", "suspend", "hibernate", "", "poweroff"} {
 		if _, ok := sessionActionArgv(absent); ok {
-			t.Errorf("sessionActionArgv(%q) exists; only logout/reboot/shutdown are actions", absent)
+			t.Errorf("sessionActionArgv(%q) exists; only reboot/shutdown are argv actions", absent)
 		}
 	}
 }

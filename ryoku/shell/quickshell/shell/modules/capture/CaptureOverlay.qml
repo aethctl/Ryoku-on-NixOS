@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import shell.services
 import Ryoku.Ui.Singletons
 
@@ -37,22 +36,15 @@ PanelWindow {
 
     readonly property string sel: Capture.selecting
 
-    // This output's Hyprland monitor gives the logical layout origin (the space
-    // grim -g and Recorder expect) and, as a fallback before the surface maps,
-    // the logical size. Never gate `visible` on width/height: they are 0 until
-    // the surface maps, which would deadlock (never sized -> never visible).
-    readonly property var mon: {
-        var mons = Hyprland.monitors.values;
-        for (var i = 0; i < mons.length; i++)
-            if (mons[i].name === (win.modelData ? win.modelData.name : ""))
-                return mons[i];
-        return null;
-    }
-    readonly property real monX: win.mon ? win.mon.x : 0
-    readonly property real monY: win.mon ? win.mon.y : 0
-    readonly property real monScale: win.mon && win.mon.scale > 0 ? win.mon.scale : 1
-    readonly property real scrW: win.width > 0 ? win.width : (win.mon ? win.mon.width / win.monScale : 0)
-    readonly property real scrH: win.height > 0 ? win.height : (win.mon ? win.mon.height / win.monScale : 0)
+    // This surface's screen: layout position and logical size in the same
+    // space the capture pipeline and Recorder expect, and a fallback for the
+    // logical size before the surface maps. Never gate `visible` on
+    // width/height: they are 0 until the surface maps, which would deadlock
+    // (never sized -> never visible).
+    readonly property real monX: modelData ? modelData.x : 0
+    readonly property real monY: modelData ? modelData.y : 0
+    readonly property real scrW: win.width > 0 ? win.width : (modelData ? modelData.width : 0)
+    readonly property real scrH: win.height > 0 ? win.height : (modelData ? modelData.height : 0)
 
     screen: modelData
     visible: win.sel !== ""
@@ -87,27 +79,28 @@ PanelWindow {
         win.hoverWin = -1;
     }
 
-    // --- window selector: this output's toplevels, snapshotted while open -----
-    // Global logical rects from Hyprland, filtered to mapped, unhidden, sized
-    // windows that intersect this output, converted to output-local for drawing
-    // and hit-testing. Snapshotted reactively; overlays are transient so the
-    // next invocation re-queries (hotplug mid-selection is out of scope).
+    // --- window selector: this output's windows, snapshotted while open ------
+    // Global logical rects, only when the compositor reports window geometry,
+    // filtered to windows on this output's active workspace that intersect it
+    // and converted to output-local for drawing and hit-testing. Snapshotted
+    // reactively; overlays are transient so the next invocation re-queries
+    // (hotplug mid-selection is out of scope).
     readonly property var wins: {
-        if (win.sel !== "window")
+        if (win.sel !== "window" || !Wm.caps.windowGeometry)
             return [];
         var out = [];
-        var tl = Hyprland.toplevels.values;
-        for (var i = 0; i < tl.length; i++) {
-            var o = tl[i] && tl[i].lastIpcObject;
-            if (!o || o.mapped === false || o.hidden === true)
+        var output = Wm.outputByName(win.modelData ? win.modelData.name : "");
+        var activeWs = output ? output.activeWorkspace : "";
+        var all = Wm.windows;
+        for (var i = 0; i < all.length; i++) {
+            var w = all[i];
+            if (!w || w.workspace !== activeWs || w.width <= 0 || w.height <= 0)
                 continue;
-            if (!o.at || !o.size || o.size[0] <= 0 || o.size[1] <= 0)
+            var lx = w.x - win.monX;
+            var ly = w.y - win.monY;
+            if (lx + w.width <= 0 || ly + w.height <= 0 || lx >= win.scrW || ly >= win.scrH)
                 continue;
-            var lx = o.at[0] - win.monX;
-            var ly = o.at[1] - win.monY;
-            if (lx + o.size[0] <= 0 || ly + o.size[1] <= 0 || lx >= win.scrW || ly >= win.scrH)
-                continue;
-            out.push({ x: lx, y: ly, w: o.size[0], h: o.size[1] });
+            out.push({ x: lx, y: ly, w: w.width, h: w.height });
         }
         return out;
     }

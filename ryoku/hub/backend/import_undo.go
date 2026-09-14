@@ -2,8 +2,8 @@ package main
 
 // Undo a config import: restore every file the import touched from its backup,
 // or remove it when the backup is empty (the import created it). The manifest is
-// the pure restore truth, so this reverts the marked blocks, the ingested hub
-// Overrides, and the generated settings.lua in one pass.
+// the pure restore truth, so this reverts the marked blocks and the ingested
+// desktop.json entries, then re-authors the compositor config from it.
 
 import (
 	"encoding/json"
@@ -46,6 +46,14 @@ func undoImport(ts string) (undoResult, error) {
 			return undoResult{}, fmt.Errorf("remove %s: %w", f.Path, err)
 		}
 		restored = append(restored, f.Path)
+	}
+	// The emitted config is a pure function of the store, so match it: re-author
+	// when the restore left a store, and clear what apply authored when it did
+	// not, rather than emitting defaults the user never had.
+	if _, err := os.Stat(desktopStorePath()); err == nil {
+		_ = applyDesktop()
+	} else {
+		clearGeneratedConfig()
 	}
 	return undoResult{Ts: man.Ts, Restored: relPaths(restored)}, nil
 }

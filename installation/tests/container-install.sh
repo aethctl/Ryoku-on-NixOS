@@ -74,6 +74,11 @@ log "installing ryoku-desktop from [ryoku-local]"
 pacman -S --noconfirm ryoku-desktop
 
 [[ -d /usr/share/ryoku/config ]] || die "ryoku-desktop did not lay /usr/share/ryoku/config"
+# the compositor split: the base pulls its sole variant through the
+# ryoku-desktop-compositor virtual, which ships the hypr tree and the provider.
+pacman -Qq ryoku-desktop-hyprland >/dev/null 2>&1 \
+  || die "ryoku-desktop did not pull ryoku-desktop-hyprland (compositor-split auto-pull broken)"
+[[ -x /usr/bin/ryoku-wm-hyprland ]] || die "ryoku-desktop-hyprland did not ship the ryoku-wm-hyprland provider"
 [[ -x /usr/bin/ryoku ]] || die "the ryoku CLI was not installed"
 
 # 4. materialize as a throwaway user, forcing HOME/USER like deploy.sh's

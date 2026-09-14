@@ -30,6 +30,8 @@ content they would produce. Preflight reports its checks and returns rather than
 probing real hardware, so the full flow can be exercised on any machine without a
 target disk. Secrets (the LUKS passphrase, the password hash) are never printed,
 even in dry-run.
+An `alongside` dry run must set `RYOKU_ESP_MODE=shared` or `dedicated`, because
+preflight intentionally does not mount the real ESP to resolve `auto`.
 
 ```
 RYOKU_DRYRUN=1 RYOKU_DISK=/dev/vda RYOKU_DISK_STRATEGY=whole RYOKU_HOSTNAME=ryoku RYOKU_USERNAME=ryo \
@@ -45,7 +47,9 @@ Required:
 |-----------------------|------------------------------------------------------------|
 | `RYOKU_DISK`          | Target block device, e.g. `/dev/nvme0n1` or `/dev/sda`.    |
 | `RYOKU_PASSWORD_HASH` | `openssl passwd -6` hash of the user password (no plaintext). |
-| `RYOKU_DISK_STRATEGY` | `whole` (wipe the disk) or `alongside` (dual-boot; shares Windows' ESP, kernels on an XBOOTLDR `/boot`). No default: an empty value aborts rather than risk a silent wipe. |
+| `RYOKU_DISK_STRATEGY` | `whole` (wipe the disk) or `alongside` (dual-boot; keeps existing partitions and chooses shared or dedicated ESP boot automatically). No default: an empty value aborts rather than risk a silent wipe. |
+| `RYOKU_COMPOSITOR`        | Window manager to install, e.g. `hyprland`. Selects the `ryoku-desktop-<name>` variant package. |
+| `RYOKU_COMPOSITOR_CONFIG_DIR` | The `~/.config` subdir that compositor owns (the TUI derives it from `wm.ConfigDir`, e.g. `hypr`); seeds the keymap and GPU pin. Empty means an unknown compositor and the install aborts. |
 
 With defaults:
 
@@ -58,6 +62,7 @@ With defaults:
 | `RYOKU_TIMEZONE`          | `UTC`              | `Region/City`, or `auto` (ipinfo.io).    |
 | `RYOKU_PROFILE`           | `vm`               | `amd-nvidia` \| `amd` \| `intel` \| `vm`. |
 | `RYOKU_ESP_GIB`           | `1`                | Whole-disk ESP size in GiB (alongside boot is a fixed 2 GiB). |
+| `RYOKU_ESP_MODE`          | `auto`              | Alongside boot target: `auto`, `shared`, or `dedicated`. Auto uses dedicated when the existing ESP has less than 8 MiB free. |
 | `RYOKU_SWAP_GIB`          | `0`                | Swapfile size in GiB (0 disables it).    |
 | `RYOKU_SUBVOL_SNAPSHOTS`  | `1`                | Create `@snapshots` -> `/.snapshots`.    |
 | `RYOKU_SUBVOL_HOME`       | `1`                | Create `@home` -> `/home`.               |
@@ -93,26 +98,20 @@ Other (all optional, env-only):
   (FAT32, label `BOOT`) plus a Btrfs root taking the rest. A disk that already
   holds partitions needs `RYOKU_WIPE_CONFIRMED=1` (the TUI sets it after the
   typed `ERASE` ack); a blank disk installs without it.
-- `alongside` keeps every existing partition and shares the existing OS's single
-  ESP -- it never creates a second one. It works beside Windows, an old whole-disk
-  Ryoku, or any Linux; the probe reports `esp_kind windows|ryoku|linux` plus the
-  existing system's boot binary to chainload (`existing_boot <path>|none`). In the
-  chosen contiguous free region it creates a 2 GiB XBOOTLDR boot partition (FAT32,
-  GPT type `ea00`, partlabel `ryokuboot`, label `BOOT`, mounted at `/boot` with the
-  kernels) followed by the Btrfs root (partlabel `ryoku`), at the explicit sectors
-  the TUI's probe reported (`RYOKU_REGION_START`/`RYOKU_REGION_END`, re-validated
-  against a live `sfdisk` read before any write). The bootloader tars the shared
-  ESP to `/var/backups/ryoku/` (`windows-esp-<date>.tar` for a Windows ESP, else
-  `esp-<kind>-<date>.tar`), then writes ONLY `/EFI/ryoku/BOOTX64.EFI` with
-  `limine.conf` beside it (kernels addressed by the boot partition's FAT label
-  `fslabel(RYOKUBOOT)` -- Limine reads FAT only and does not resolve `guid()` to a
-  FAT volume in 12.4.0) and adds a same-volume `boot():` chainload entry for the
-  existing system (Windows' `/Windows` entry, or a `<OS> (existing)` entry pointing
-  at `existing_boot`; when none is found the existing system stays bootable via the
-  firmware boot menu only). No other vendor's directory (e.g. `/EFI/Microsoft`) is
-  ever touched, and exactly one ESP stays on the disk. Partitions labeled exactly
-  `ryoku`/`ryokuboot` that are VERIFIED failed-run debris (no filesystem, or an
-  empty/kernel-less boot vfat / an `@`-less btrfs) abort the install unless
+- `alongside` keeps every existing partition. It creates one 2 GiB FAT32 boot
+  partition plus the Btrfs root in the chosen free region. With at least 8 MiB
+  free on the existing ESP, the boot partition is an XBOOTLDR and a static
+  Limine hop is backed up and added under `/EFI/ryoku` on the shared ESP. When
+  the existing ESP is too full, the same 2 GiB partition becomes a dedicated
+  Ryoku ESP: loader, kernels and menu stay there and the existing ESP is never
+  mounted read-write or modified. Windows or another OS is chainloaded by its
+  ESP PARTUUID, and its original firmware entry remains unchanged. A recorded
+  non-Windows entry is restored by the packaged post-update hook after Limine
+  regenerates the menu. `RYOKU_ESP_MODE` may force either path; the TUI uses
+  `auto`.
+  Partitions labeled exactly `ryoku`/`ryokuboot` that are verified failed-run
+  debris (no filesystem, an empty/kernel-less boot FAT, or an `@`-less Btrfs)
+  abort the install unless
   `RYOKU_RECLAIM_LEFTOVERS=1` (the TUI's typed `ERASE` ack) is set, which deletes
   the *unmounted* ones so re-runs never stack partitions; a mounted one, a living
   install (even carrying our label), or a partition it cannot inspect is always
@@ -169,10 +168,9 @@ stage runs two: the chroot config (`chroot.sh`) then the desktop install
 (`deploy.sh`: add the `[ryoku]` repo, `pacman -S` the Ryoku packages, then
 `ryoku materialize`), both under the one `configure` sentinel. After the
 bootloader and AUR steps, `ryoku_bootloader_finalize` promotes the Limine menu
-to the tool-managed UKI tree (when `limine-mkinitcpio-hook` landed; wipe mode
-only -- alongside hand-writes its `limine.conf` on the shared ESP), then
-`snapshots.sh` wires up Btrfs snapshots (snapper `root`, snap-pac,
-`limine-snapper-sync`).
+to the tool-managed UKI tree when its hook is installed. Shared-ESP alongside
+mode maintains its two-stage menu; whole-disk and dedicated-ESP mode use the
+normal ESP-root menu. `snapshots.sh` then wires Btrfs snapshots.
 
 ## What it consumes from the repo
 

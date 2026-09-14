@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import Quickshell.Widgets
 import "Singletons"
@@ -70,16 +69,15 @@ Item {
         var vx0 = ov.monX, vy0 = ov.monY, vx1 = ov.monX + ov.monLW, vy1 = ov.monY + ov.monLH;
         var cx0 = vx0, cy0 = vy0, cx1 = vx1, cy1 = vy1;   // content bounds seeded with the viewport
         var raw = [];
-        var tl = Hyprland.toplevels.values;
-        for (var i = 0; i < tl.length; i++) {
-            var t = tl[i];
-            var o = t && t.lastIpcObject;
-            if (!t || !t.workspace || t.workspace.id !== cell.wsId)
+        var wins = Wm.windows;
+        for (var i = 0; i < wins.length; i++) {
+            var w = wins[i];
+            if (!w || w.workspace !== String(cell.wsId))
                 continue;
-            if (!o || !o.at || !o.size || o.mapped === false)
+            if (w.width <= 0 || w.height <= 0)
                 continue;
-            var ax = o.at[0], ay = o.at[1], aw = o.size[0], ah = o.size[1];
-            raw.push({ addr: o.address, tl: t, cls: (o.class || "").toLowerCase(), ax: ax, ay: ay, aw: aw, ah: ah });
+            var ax = w.x, ay = w.y, aw = w.width, ah = w.height;
+            raw.push({ addr: w.id, tl: w.toplevel, cls: (w.appId || "").toLowerCase(), ax: ax, ay: ay, aw: aw, ah: ah });
             cx0 = Math.min(cx0, ax); cy0 = Math.min(cy0, ay);
             cx1 = Math.max(cx1, ax + aw); cy1 = Math.max(cy1, ay + ah);
         }
@@ -355,9 +353,9 @@ Item {
                 // picker, so per-frame window capture is what dropped it to 30fps.
                 ScreencopyView {
                     anchors.fill: parent
-                    captureSource: (!!cell.ov && cell.ov.active && tile.modelData.tl) ? tile.modelData.tl.wayland : null
+                    captureSource: (!!cell.ov && cell.ov.active && tile.modelData.tl) ? tile.modelData.tl : null
                     live: false
-                    visible: (tile.modelData.tl && tile.modelData.tl.wayland) !== null
+                    visible: tile.modelData.tl !== null
                 }
 
                 MouseArea {
@@ -388,7 +386,7 @@ Item {
                             cell.ov.dragging = true;
                             cell.ov.dragAddr = tile.addr;
                             cell.ov.dragSrcWs = cell.wsId;
-                            cell.ov.dragTl = tile.modelData.tl ? tile.modelData.tl.wayland : null;
+                            cell.ov.dragTl = tile.modelData.tl;
                         }
                         var rp = tileMa.mapToItem(cell.ov, m.x, m.y);
                         cell.ov.updateDrag(rp.x, rp.y);
@@ -400,7 +398,7 @@ Item {
                         } else if (tileMa.btn === Qt.RightButton && cell.ov) {
                             cell.ov.switchWs(cell.wsId);
                         } else if (tileMa.armed && cell.ov) {
-                            cell.ov.focusWindow(tile.modelData.tl, tile.addr);
+                            cell.ov.focusWindow(tile.addr);
                         }
                         tileMa.armed = false;
                     }
@@ -433,7 +431,7 @@ Item {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: if (cell.ov) cell.ov.closeWindow(tile.modelData.tl, tile.addr)
+                        onClicked: if (cell.ov) cell.ov.closeWindow(tile.addr)
                     }
                 }
             }

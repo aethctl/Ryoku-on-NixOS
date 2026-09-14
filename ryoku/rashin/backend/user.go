@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // user.go builds user.md: the user-owned changes layer. It diffs the shipped
@@ -25,15 +27,20 @@ func baseConfigDir() string {
 	return "/usr/share/ryoku/config"
 }
 
-// userOverrideFiles are the documented always-user files: present means the
-// user customized; they are never shipped.
-var userOverrideFiles = []string{
-	"hypr/user.lua",
-	"hypr/monitors_user.lua",
-	"kitty/user.conf",
-	"fish/user.fish",
-	"bash/user.bash",
-	"zsh/user.zsh",
+// userOverrideFiles are the always-user files: present means the user
+// customized, and they are never shipped. The compositor's live under its own
+// config dir, resolved through the seam.
+func userOverrideFiles() []string {
+	files := []string{
+		"kitty/user.conf",
+		"fish/user.fish",
+		"bash/user.bash",
+		"zsh/user.zsh",
+	}
+	if dir := compositorConfigDir(); dir != "" {
+		files = append([]string{dir + "/user.lua", dir + "/monitors_user.lua"}, files...)
+	}
+	return files
 }
 
 type userDiff struct {
@@ -44,8 +51,8 @@ type userDiff struct {
 
 // diffUserConfig walks the base tree and compares each file against the live
 // config by content hash. relPrefix maps the base onto its subdir under cfg:
-// "" for the packaged config tree (which already mirrors ~/.config), "hypr" for
-// a dev checkout's hyprland tree.
+// "" for the packaged config tree (which already mirrors ~/.config), the
+// compositor's config dir for a dev checkout.
 func diffUserConfig(base, cfg, relPrefix string) (userDiff, error) {
 	var d userDiff
 	err := filepath.WalkDir(base, func(p string, e os.DirEntry, err error) error {
@@ -74,7 +81,7 @@ func diffUserConfig(base, cfg, relPrefix string) (userDiff, error) {
 	if err != nil {
 		return d, err
 	}
-	for _, rel := range userOverrideFiles {
+	for _, rel := range userOverrideFiles() {
 		if _, err := os.Stat(filepath.Join(cfg, rel)); err == nil {
 			d.Overrides = append(d.Overrides, rel)
 		}
@@ -106,17 +113,20 @@ func fileHash(p string) (string, error) {
 // resolveUserBase finds the baseline to diff the live config against. The
 // packaged base (/usr/share/ryoku/config, or RYOKU_CONFIG_BASE) mirrors the
 // whole ~/.config, so its prefix is "". On a dev checkout that base is absent,
-// so fall back to the checkout ryoku deploy recorded and diff its hyprland tree
-// (prefix "hypr"), the surface where Ryoku-vs-user ownership actually lives.
+// so fall back to the checkout ryoku deploy recorded and diff the active
+// compositor's source tree onto its config dir, the surface where
+// Ryoku-vs-user ownership actually lives.
 func resolveUserBase() (base, prefix string, ok bool) {
 	pkg := baseConfigDir()
 	if fi, err := os.Stat(pkg); err == nil && fi.IsDir() {
 		return pkg, "", true
 	}
 	if repo := recordedCheckout(); repo != "" {
-		hypr := filepath.Join(repo, "ryoku", "hyprland")
-		if fi, err := os.Stat(hypr); err == nil && fi.IsDir() {
-			return hypr, "hypr", true
+		if name := wm.Detect().Name; name != "" {
+			src := filepath.Join(repo, "ryoku", name)
+			if fi, err := os.Stat(src); err == nil && fi.IsDir() {
+				return src, wm.ConfigDir(name), true
+			}
 		}
 	}
 	return "", "", false
@@ -145,7 +155,7 @@ func recordedCheckout() string {
 // which are user-owned regardless of any baseline.
 func noBaselineBody(cfg string) string {
 	var present []string
-	for _, rel := range userOverrideFiles {
+	for _, rel := range userOverrideFiles() {
 		if _, err := os.Stat(filepath.Join(cfg, rel)); err == nil {
 			present = append(present, rel)
 		}
@@ -178,10 +188,10 @@ func userDocBody() string {
 
 	var b strings.Builder
 	if prefix != "" {
-		b.WriteString("Baseline: this machine has no packaged `/usr/share/ryoku/config`, so the\n" +
-			"comparison uses the hyprland tree of the dev checkout `ryoku deploy` recorded.\n" +
-			"It covers `~/.config/hypr` (where Ryoku-vs-user ownership lives); other config\n" +
-			"trees are not diffed here.\n\n")
+		fmt.Fprintf(&b, "Baseline: this machine has no packaged `/usr/share/ryoku/config`, so the\n"+
+			"comparison uses the window-manager tree of the dev checkout `ryoku deploy`\n"+
+			"recorded. It covers `~/.config/%s` (where Ryoku-vs-user ownership lives);\n"+
+			"other config trees are not diffed here.\n\n", prefix)
 	}
 	if len(d.Modified) == 0 && len(d.Missing) == 0 && len(d.Overrides) == 0 {
 		b.WriteString("The live config matches the shipped Ryoku baseline exactly; no user\nedits detected.\n")
@@ -235,7 +245,11 @@ func writeUserVaultDoc() error {
 func userConfigFingerprint() string {
 	cfg := configHomeDir()
 	h := sha256.New()
-	for _, dir := range []string{"hypr", "quickshell", "ryoku", "kitty", "fish"} {
+	dirs := []string{"quickshell", "ryoku", "kitty", "fish"}
+	if wmDir := compositorConfigDir(); wmDir != "" {
+		dirs = append([]string{wmDir}, dirs...)
+	}
+	for _, dir := range dirs {
 		root := filepath.Join(cfg, dir)
 		_ = filepath.WalkDir(root, func(p string, e os.DirEntry, err error) error {
 			if err != nil {

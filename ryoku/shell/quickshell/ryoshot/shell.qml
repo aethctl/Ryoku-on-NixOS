@@ -44,7 +44,22 @@ ShellRoot {
     property var moveStart: null
     property var resizing: null
     property var hoverWindow: null
-    property var windowRects: []
+    // Visible windows for the window-pick target, on the outputs' active workspaces.
+    readonly property var windowRects: {
+        var active = ({});
+        var outs = Wm.outputs;
+        for (var i = 0; i < outs.length; i++)
+            if (outs[i].activeWorkspace) active[outs[i].activeWorkspace] = true;
+        var rects = [];
+        var wins = Wm.windows;
+        for (var j = 0; j < wins.length; j++) {
+            var c = wins[j];
+            if (!c.workspace || !active[c.workspace]) continue;
+            if (c.width <= 0 || c.height <= 0) continue;
+            rects.push({ x: c.x, y: c.y, w: c.width, h: c.height, z: c.focusOrder });
+        }
+        return rects;
+    }
     property bool dialogMode: false
     // Manual toolbar offset. The bar parks itself under the region and flips
     // above when there is no room; dragging it covers the case where it still
@@ -75,7 +90,6 @@ ShellRoot {
     property bool fromFile: false
     readonly property string homeDir: Quickshell.env("HOME")
     readonly property string shotsDir: (Quickshell.env("XDG_PICTURES_DIR") || (homeDir + "/Pictures")) + "/Screenshots"
-    readonly property string ryoshotLuaPath: homeDir + "/.config/hypr/modules/ryoshot.lua"
     readonly property string pinDir: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku/pins"
 
     /**
@@ -440,29 +454,6 @@ ShellRoot {
     function pointerHover(gx, gy) {
         if (phase !== "selecting") { if (hoverWindow !== null) hoverWindow = null; return; }
         hoverWindow = target === "monitor" ? monitorAt(gx, gy) : windowAt(gx, gy);
-    }
-    function parseWindows(activeWs, json) {
-        var rects = [];
-        try {
-            var arr = JSON.parse(json);
-            for (var i = 0; i < arr.length; i++) {
-                var c = arr[i];
-                if (!c.mapped || c.hidden) continue;
-                if (!c.workspace || activeWs.indexOf(c.workspace.id) === -1) continue;
-                if (!c.size || c.size[0] <= 0 || c.size[1] <= 0) continue;
-                rects.push({ x: c.at[0], y: c.at[1], w: c.size[0], h: c.size[1], z: c.focusHistoryID });
-            }
-        } catch (e) { console.log("ryoshot: parseWindows failed: " + e); }
-        windowRects = rects;
-    }
-    function parseActiveWs(json) {
-        var ids = [];
-        try {
-            var arr = JSON.parse(json);
-            for (var i = 0; i < arr.length; i++)
-                if (arr[i].activeWorkspace) ids.push(arr[i].activeWorkspace.id);
-        } catch (e) { console.log("ryoshot: parseActiveWs failed: " + e); }
-        return ids;
     }
     function pointerPressed(gx, gy, mods) {
         root.openPopover = "";
@@ -865,22 +856,6 @@ ShellRoot {
     }
 
     Process {
-        id: monitorsProc
-        running: true
-        command: ["hyprctl", "monitors", "-j"]
-        stdout: StdioCollector { id: monitorsOut }
-        onExited: { clientsProc.activeWs = root.parseActiveWs(monitorsOut.text); clientsProc.running = true; }
-    }
-
-    Process {
-        id: clientsProc
-        property var activeWs: []
-        command: ["hyprctl", "clients", "-j"]
-        stdout: StdioCollector { id: clientsOut }
-        onExited: root.parseWindows(activeWs, clientsOut.text)
-    }
-
-    Process {
         id: stitchProc
         property var cb: null
         function runWith(args, after) { cb = after; command = args; running = true; }
@@ -1110,7 +1085,7 @@ ShellRoot {
                 SettingsPanel {
                     id: hotkeyPopover
                     visible: toolbar.visible && root.settingsOpen
-                    luaPath: root.ryoshotLuaPath
+                    defaultChord: "Print"
                     x: Math.max(8, Math.min(toolbar.x + toolbar.gearCenterX - width / 2,
                                             win.width - width - 8))
                     y: Math.max(8, toolbar.y - height - 6)

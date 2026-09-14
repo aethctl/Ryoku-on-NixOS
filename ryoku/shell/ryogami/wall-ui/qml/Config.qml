@@ -30,8 +30,36 @@ QtObject {
     function _reparse() {
         var raw = _configFile.text() || ""
         if (!raw) { config._data = {}; config.configLoaded = false; return }
-        try { config._data = JSON.parse(raw); config.configLoaded = true }
-        catch (e) { config._data = {}; config.configLoaded = false }
+        var parsed
+        try { parsed = JSON.parse(raw) }
+        catch (e) { config._data = {}; config.configLoaded = false; return }
+        config._data = config._migrateBackdropKeys(parsed)
+        config.configLoaded = true
+    }
+
+    // _migrateBackdropKeys renames the pre-seam niri.* overview-backdrop keys to
+    // overviewBackdrop.* once, then writes the file so the rename sticks.
+    function _migrateBackdropKeys(data) {
+        if (!data || typeof data.niri !== "object" || data.niri === null) return data
+        var map = {
+            "overviewBackdrop": "enabled",
+            "overviewBackdropBlur": "blur",
+            "overviewBackdropBlurEnabled": "blurEnabled",
+            "backdrop": "path",
+            "backdropFollowWallpaper": "followWallpaper",
+            "backdropAutoTheme": "autoTheme",
+            "backdropTheme": "theme",
+            "backdropDim": "dim"
+        }
+        var ob = (data.overviewBackdrop && typeof data.overviewBackdrop === "object") ? data.overviewBackdrop : {}
+        for (var oldKey in map) {
+            if (data.niri[oldKey] !== undefined && ob[map[oldKey]] === undefined)
+                ob[map[oldKey]] = data.niri[oldKey]
+        }
+        data.overviewBackdrop = ob
+        delete data.niri
+        _configWriter.setText(JSON.stringify(data, null, 2) + "\n")
+        return data
     }
 
     function saveKey(path, value) {
@@ -235,7 +263,7 @@ QtObject {
         console.log("Config: generated matugen config with", ints.length, "integrations")
     }
 
-    Component.onCompleted: console.log("Configuration Loaded")
+    Component.onCompleted: { console.log("Configuration Loaded"); config._loadCaps() }
 
     property var _components: _data.components ?? {}
     property var _wallpaperSelector: (typeof _components.wallpaperSelector === "object" && _components.wallpaperSelector !== null) ? _components.wallpaperSelector : {}
@@ -317,19 +345,32 @@ QtObject {
         return desktop.indexOf("kde") >= 0 || desktop.indexOf("plasma") >= 0
     }
 
-    readonly property bool isNiri: {
-        var desktop = (Quickshell.env("XDG_CURRENT_DESKTOP") || "").toLowerCase()
-        return desktop.indexOf("niri") >= 0
+    // Compositor capabilities from the ryogami daemon (which holds the wm seam
+    // client), so the picker gates features on what the compositor can do, never
+    // on its name.
+    property var _caps: ({})
+    readonly property bool canOverviewBackdrop: {
+        var s = _caps.supports
+        return Array.isArray(s) && s.indexOf("nativeOverview") >= 0
+    }
+    function _loadCaps() {
+        DaemonClient.call("wm.caps", {}, function(result, err) {
+            if (!err && result) config._caps = result
+        })
+    }
+    property var _capsConn: Connections {
+        target: DaemonClient
+        function onReadyChanged() { if (DaemonClient.ready) config._loadCaps() }
     }
 
-    readonly property bool niriOverviewBackdrop: _data.niri?.overviewBackdrop === true
-    readonly property string niriBackdrop: _data.niri?.backdrop ?? ""
-    readonly property bool niriBackdropFollowWallpaper: _data.niri?.backdropFollowWallpaper === true
-    readonly property bool niriBackdropAutoTheme: _data.niri?.backdropAutoTheme === true
-    readonly property string niriBackdropTheme: _data.niri?.backdropTheme ?? "Catppuccin"
-    readonly property int niriBackdropDim: Math.max(0, Math.min(100, _data.niri?.backdropDim ?? 0))
-    readonly property int niriOverviewBackdropBlur: Math.max(1, Math.min(200, _data.niri?.overviewBackdropBlur ?? 30))
-    readonly property bool niriOverviewBackdropBlurEnabled: _data.niri?.overviewBackdropBlurEnabled !== false
+    readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled === true
+    readonly property string overviewBackdropPath: _data.overviewBackdrop?.path ?? ""
+    readonly property bool overviewBackdropFollowWallpaper: _data.overviewBackdrop?.followWallpaper === true
+    readonly property bool overviewBackdropAutoTheme: _data.overviewBackdrop?.autoTheme === true
+    readonly property string overviewBackdropTheme: _data.overviewBackdrop?.theme ?? "Catppuccin"
+    readonly property int overviewBackdropDim: Math.max(0, Math.min(100, _data.overviewBackdrop?.dim ?? 0))
+    readonly property int overviewBackdropBlur: Math.max(1, Math.min(200, _data.overviewBackdrop?.blur ?? 30))
+    readonly property bool overviewBackdropBlurEnabled: _data.overviewBackdrop?.blurEnabled !== false
 
     readonly property string kdeVideoPlugin: "luisbocanegra.smart.video.wallpaper.reborn"
 }

@@ -13,8 +13,6 @@ import Quickshell.Bluetooth
 Singleton {
     id: root
 
-    readonly property string scripts: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/"
-
     // refcount bumped by every on-screen toggle (a BarToggle, or the open deck),
     // so the pollers sleep when nothing shows a toggle.
     property int watchers: 0
@@ -56,7 +54,7 @@ Singleton {
         stdout: StdioCollector { onStreamFinished: root.nightOn = this.text.trim() === "on" }
     }
     function toggleNight() {
-        Quickshell.execDetached([root.scripts + "ryoku-cmd-nightlight"]);
+        Quickshell.execDetached(["ryoku-cmd-nightlight"]);
         root.nightOn = !root.nightOn;
         nightPoll.restart();
     }

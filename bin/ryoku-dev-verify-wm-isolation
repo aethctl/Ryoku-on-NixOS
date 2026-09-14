@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# Fail when compositor specifics leak outside the window-manager seam. The desktop
+# reaches a compositor only through ryoku/wm; code elsewhere that speaks a socket,
+# imports the compositor's QML, branches on which compositor is running, or bakes a
+# compositor name into a capability has found a missing capability instead. Every
+# offending path:line is printed so the remaining leaks read as a work list.
+#
+#   ryoku-dev-verify-wm-isolation           run every check (exit 1 on a leak)
+#   ryoku-dev-verify-wm-isolation --quiet   same, only print violations
+set -euo pipefail
+
+quiet=0
+[[ ${1:-} == --quiet ]] && quiet=1
+say() { (( quiet )) || printf '%s\n' "$*"; }
+
+repo="$(git rev-parse --show-toplevel)"
+cd "$repo"
+
+# excluded from every scan: this gate holds the patterns, docs must name what they
+# ban, CHANGELOGs and the generated translation catalog only mirror source that is
+# scanned at its real home, .prowl is a generated cache, and a Go vendor/ tree
+# carries a legitimate copy of the wm module.
+ex=(
+	':(exclude)bin/ryoku-dev-verify-wm-isolation'
+	':(exclude)*.md'
+	':(exclude)*CHANGELOG*'
+	':(exclude).prowl/'
+	':(exclude)*/vendor/*'
+	':(exclude)ryoku/i18n/catalog/'
+)
+
+fail=0
+# report <what> <regex> [extra pathspecs]: list every surviving match as
+# path:line:text on stderr and record a failure.
+report() {
+	local what=$1 pat=$2
+	shift 2
+	local hits
+	hits="$(git grep -nIE "$pat" -- "${ex[@]}" "$@" 2>/dev/null || true)"
+	[[ -n $hits ]] || return 0
+	printf 'wm-isolation: %s\n' "$what" >&2
+	printf '%s\n' "$hits" | sed 's/^/  /' >&2
+	fail=1
+}
+
+# 1. compositor sockets and handles: only the seam, its payload, and the test
+#    harnesses that exercise that payload speak them. ryoku/wm is the seam
+#    (detect.go resolves an instance handle into a provider name, the provider
+#    itself runs hyprctl); ryoku/hyprland is the Hyprland payload (Lua modules,
+#    leaf scripts, hypridle.conf) delivered by ryoku-desktop-hyprland; tests/ and
+#    the launcher's qa/ harness stub or drive a live compositor to exercise it,
+#    the way a human tester would. A niri package ships its own scripts under the
+#    same names.
+report 'hyprctl / HYPRLAND_INSTANCE_SIGNATURE / .socket2.sock (route through wm.Client)' \
+	'hyprctl|HYPRLAND_INSTANCE_SIGNATURE|\.socket2\.sock' \
+	':(exclude)ryoku/wm/*' ':(exclude)ryoku/hyprland/*' \
+	':(exclude)tests/*' ':(exclude)*/qa/*'
+
+# 2. the compositor's own QML: the Ryoku.Wm.<name> facade replaces it everywhere
+#    but the provider's bridges. The import is required to touch the Hyprland
+#    singleton, so keying on it also covers every Hyprland.<member> call.
+report 'import Quickshell.Hyprland (import Ryoku.Wm.Hyprland instead)' \
+	'import[[:space:]]+Quickshell\.Hyprland' \
+	'*.qml' ':(exclude)ryoku/wm/hyprland/qml/*'
+
+# 3. compositor identity in a conditional: gate on a capability, not on which
+#    compositor it is. A name in a string or a path (a migrator naming what it
+#    retires, or the shell installer picking a foreign config format to parse) is
+#    allowed; only the bare name as the whole branched value is a leak. ryoku/hyprland
+#    is the Hyprland payload; ryoku-shell-installer reads foreign configs by name.
+report 'isHyprland / isNiri or a compositor name compared or switched on' \
+	'\b[iI]s(Hyprland|Niri)\b|[=!]=+[[:space:]]*"(hyprland|niri)"|"(hyprland|niri)"[[:space:]]*[=!]=+|[=!]=+[[:space:]]*(hyprland|niri)([[:space:]);]|$)|^[[:space:]]*"?(hyprland|niri)"?\)|\bcase[[:space:]]+"?(hyprland|niri)"?[[:space:]:)]' \
+	':(exclude)ryoku/hyprland/*' ':(exclude)ryoku-shell-installer/*'
+
+# 4. a capability named after a compositor (the niriBackdropSupported mistake):
+#    capabilities describe behaviour, never a compositor. Allowed nowhere.
+report 'capability identifier baked with a compositor name (name it for behaviour)' \
+	'Cap[A-Za-z0-9]*(Hyprland|Niri)[A-Za-z0-9]*|(hyprland|niri)[A-Za-z0-9]*(Support|Supported|Capable|Capabilit|Enabled)'
+
+(( fail )) || say 'wm-isolation: no compositor specifics leak outside ryoku/wm'
+exit "$fail"

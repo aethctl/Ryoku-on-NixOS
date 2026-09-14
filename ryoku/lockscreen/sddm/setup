@@ -13,7 +13,7 @@
 #      password at sign-in, so the desktop stops prompting), or never-ask under
 #      autologin (strip the lines; there is no login password for PAM to reuse,
 #      and the keyring seeds a blank default on first use via the Hub/CLI).
-#   4. make sure a hyprland.desktop wayland session exists so SDDM can launch it
+#   4. make sure the configured compositor's wayland session exists so SDDM can launch it
 #
 # the greeter THEME itself is installed by install-qylock. this script only
 # does the SDDM service/session wiring; keep the two separate so a cosmetic
@@ -70,7 +70,6 @@ write_root() {
 
 PAM_FILE="/etc/pam.d/sddm"
 SESSION_DIR="/usr/share/wayland-sessions"
-HYPRLAND_SESSION="$SESSION_DIR/hyprland.desktop"
 
 # --- 1. enable the service ---------------------------------------------------
 echo "  enabling sddm.service"
@@ -128,40 +127,39 @@ else
   echo "  note: $PAM_FILE not present yet; nothing to wire"
 fi
 
-# --- 4. make sure a Hyprland wayland session exists --------------------------
-session_found=false
-for session in hyprland.desktop Hyprland.desktop hyprland-uwsm.desktop; do
-  if [[ -f $SESSION_DIR/$session ]]; then
+# --- 4. make sure the configured compositor's wayland session exists ---------
+# The compositor package normally ships its own entry; write a fallback only
+# when it did not. The provider emits its own [Desktop Entry], so there is no
+# compositor literal here; the file is named after that entry's Name.
+body="$(ryoku wm session 2>/dev/null || true)"
+id="$(printf '%s\n' "$body" | sed -n 's/^Name=//p' | head -n1 | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9-')"
+if [[ -z $id ]]; then
+  echo "  no compositor session provided; skipping session fallback"
+else
+  session_found=false
+  shopt -s nullglob nocaseglob
+  for f in "$SESSION_DIR/$id"*.desktop; do
     session_found=true
-    echo "  hyprland session present: $session"
+    echo "  $id session present: ${f##*/}"
     break
-  fi
-done
+  done
+  shopt -u nullglob nocaseglob
 
-if [[ $session_found == false ]]; then
-  echo "  writing fallback session -> $HYPRLAND_SESSION"
-  priv mkdir -p "$SESSION_DIR"
-  if [[ $RYOKU_DRYRUN == 1 ]]; then
-    printf 'DRYRUN: write (root) %s:\n%s\n' "$HYPRLAND_SESSION" \
-      "[Desktop Entry]
-Name=Hyprland
-Comment=An intelligent dynamic tiling Wayland compositor
-Exec=Hyprland
-Type=Application"
-  else
-    "${PRIV[@]}" tee "$HYPRLAND_SESSION" >/dev/null <<'EOF'
-[Desktop Entry]
-Name=Hyprland
-Comment=An intelligent dynamic tiling Wayland compositor
-Exec=Hyprland
-Type=Application
-EOF
+  if [[ $session_found == false ]]; then
+    fallback="$SESSION_DIR/$id.desktop"
+    echo "  writing fallback session -> $fallback"
+    priv mkdir -p "$SESSION_DIR"
+    if [[ $RYOKU_DRYRUN == 1 ]]; then
+      printf 'DRYRUN: write (root) %s:\n%s\n' "$fallback" "$body"
+    else
+      printf '%s\n' "$body" | "${PRIV[@]}" tee "$fallback" >/dev/null
+    fi
   fi
 fi
 
 # --- 5. run the greeter on Wayland, not X11 ----------------------------------
-# SDDM's default X11 greeter is orphaned when a Wayland session (Hyprland)
-# starts: sddm-helper dies mid-teardown without reaping sddm-greeter-qt6, which
+# SDDM's default X11 greeter is orphaned when a Wayland session starts:
+# sddm-helper dies mid-teardown without reaping sddm-greeter-qt6, which
 # lingers on a leftover Xorg and keeps drawing power (a video skin decodes a
 # 1440p60 clip forever). Running the greeter on Wayland like the session lets
 # SDDM own the VT and tear it down cleanly at login. weston --shell=kiosk is

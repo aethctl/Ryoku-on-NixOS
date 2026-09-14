@@ -161,7 +161,8 @@ var rows = [
         "label": "Save (profile)",
         "desc": "",
         "ctl": "action",
-        "src": "monitors.lua"
+        "src": "desktop.json",
+        "caps": "monitorConfig"
     },
     {
         "tab": "",
@@ -170,7 +171,8 @@ var rows = [
         "label": "Mirror (quick action)",
         "desc": "",
         "ctl": "action",
-        "src": "monitors.lua (via cmd_mirror \u2192 cmd_persist)"
+        "src": "desktop.json",
+        "caps": "monitorConfig"
     },
     {
         "tab": "",

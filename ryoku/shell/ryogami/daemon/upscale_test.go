@@ -223,8 +223,9 @@ func TestEnhanceVideoBranches(t *testing.T) {
 		t.Fatalf("unsupported: %v", v)
 	}
 
-	// both present, source already at/over the screen cap -> sharp. hyprctl fails,
+	// both present, source already at/over the screen cap -> sharp. No compositor,
 	// so the cap falls back to 1920; a 3000px-wide clip clears it.
+	seedOutputs(t, nil)
 	u = mockUpscaler(t, map[string]bool{"ffmpeg": true, "waifu2x-ncnn-vulkan": true}, func(name string, args ...string) (string, error) {
 		switch name {
 		case "ffprobe":
@@ -232,8 +233,6 @@ func TestEnhanceVideoBranches(t *testing.T) {
 				return "3000", nil
 			}
 			return "", nil
-		case "hyprctl":
-			return "", fmt.Errorf("no hyprctl")
 		}
 		return "", fmt.Errorf("unexpected %s", name)
 	})

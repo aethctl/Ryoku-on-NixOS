@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // control.go adds the reference control surface to the CLI over the existing
@@ -154,11 +156,11 @@ func hubAlive() bool {
 	return exec.Command("qs", argv...).Run() == nil
 }
 
-// hubRaise brings the Hub window to the focused workspace. The Hub is the
-// only floating org.quickshell client the shell spawns, so class targeting
-// is unambiguous here.
-func hubRaise() {
-	_ = exec.Command("hyprctl", "dispatch", "focuswindow", "class:org.quickshell").Run()
+// hubRaise brings the Hub window to the focused workspace. The Hub is the only
+// floating org.quickshell client the shell spawns, so app-id targeting is
+// unambiguous.
+func (d *daemon) hubRaise() {
+	_ = d.wmc.Act(wm.ActionAppFocus, "org.quickshell")
 }
 
 func (d *daemon) hub(sub, section string) string {
@@ -169,7 +171,7 @@ func (d *daemon) hub(sub, section string) string {
 				if section != "" {
 					hubNav(section)
 				}
-				hubRaise()
+				d.hubRaise()
 				return
 			}
 			// -o, or the Hub's own children inherit the locked descriptor:

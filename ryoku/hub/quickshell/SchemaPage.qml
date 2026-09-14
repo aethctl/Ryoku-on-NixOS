@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "Singletons"
 import "ReloadCoverModel.js" as ReloadCoverModel
 
 // Every settings page, once. A page supplies its schema, its draft and its
@@ -48,10 +49,14 @@ Item {
     // a search jump forwards here; the sheet switches tab, scrolls, and flashes.
     function focusKey(k) { sheet.focusKey(k) }
 
+    // Rows gated on a capability the active provider lacks are dropped, so an
+    // unsupported control is absent, not shown dead.
+    readonly property var capsSchema: (schema || []).filter(function (r) { return Settings.supports(r.caps); })
+
     readonly property var tabs: {
         var t = [];
-        for (var i = 0; i < schema.length; i++) {
-            var x = schema[i].tab;
+        for (var i = 0; i < capsSchema.length; i++) {
+            var x = capsSchema[i].tab;
             if (x && t.indexOf(x) < 0) t.push(x);
         }
         return t;
@@ -145,7 +150,7 @@ Item {
             bottom: parent.bottom
             topMargin: Tokens.s5
         }
-        schema: page.schema
+        schema: page.capsSchema
         draft: page.draft
         defaults: page.defaults
         query: page.query

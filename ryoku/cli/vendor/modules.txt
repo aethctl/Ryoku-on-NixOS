@@ -7,4 +7,8 @@ golang.org/x/sys/unix
 # ryoku-i18n v0.0.0 => ../i18n
 ## explicit; go 1.23
 ryoku-i18n
+# ryoku-wm v0.0.0 => ../wm
+## explicit; go 1.22
+ryoku-wm
 # ryoku-i18n => ../i18n
+# ryoku-wm => ../wm

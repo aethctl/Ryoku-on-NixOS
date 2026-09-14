@@ -31,7 +31,7 @@ import Ryoku.Ui.Singletons
 //
 // Blur, shadows and low-power are the only keys the compositor reads
 // (decoration.lua parses performance.json at Hyprland parse time), so a Save
-// that changes one of those three -- and only those -- fires `hyprctl reload`,
+// that changes one of those three -- and only those -- reloads the compositor
 // once the write has landed, to re-read it live. Shell singletons watch the file
 // themselves and need no reload.
 Item {
@@ -185,7 +185,7 @@ Item {
             if (!pg.reloadPending)
                 return;
             pg.reloadPending = false;
-            Quickshell.execDetached(["hyprctl", "reload"]);
+            if (pg.hub) pg.hub.wmAct("config.reload");
         }
 
         JsonAdapter {

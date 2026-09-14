@@ -164,20 +164,23 @@ Rectangle {
     // The rail search matches page titles AND every option (label, hint, key)
     // inside every schema page, so "noise" finds the Blur noise control from
     // anywhere. Ranking is fuzzy: exact word > substring > subsequence.
+    // section -> its schema rows, the one source for both global search and the
+    // compositor-driving classification, so the two cannot drift apart.
+    readonly property var sectionRows: ({
+        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windows": WindowsSchema.rows, "plugins": PluginsSchema.rows,
+        "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
+        "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
+        "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
+        "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
+        "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
+        "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
+        "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
+        "layerrules": LayerRulesSchema.rows, "autostart": AutostartSchema.rows,
+        "environment": EnvironmentSchema.rows, "performance": PerformanceSchema.rows,
+        "updates": UpdatesSchema.rows
+    })
     readonly property var searchIndex: {
-        var srcs = {
-            "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windows": WindowsSchema.rows, "plugins": PluginsSchema.rows,
-            "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
-            "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
-            "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
-            "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
-            "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
-            "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
-            "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
-            "layerrules": LayerRulesSchema.rows, "autostart": AutostartSchema.rows,
-            "environment": EnvironmentSchema.rows, "performance": PerformanceSchema.rows,
-            "updates": UpdatesSchema.rows
-        };
+        var srcs = hub.sectionRows;
         // a real, navigable setting vs a doc-only "surface" row (an action button
         // or a dynamic-title note) whose engineering copy must never surface.
         var isSetting = function (r) {
@@ -208,6 +211,7 @@ Rectangle {
             for (var ri = 0; ri < rows.length; ri++) {
                 var r = rows[ri];
                 if (!isSetting(r)) continue;
+                if (r.caps && !Settings.supports(r.caps)) continue;
                 // a setting also matches its option values (h264, dwindle, dark,
                 // fahrenheit): index the lowercase ones (skips DisplaysPage's
                 // capitalised doc placeholders) so an enum value finds its row.
@@ -361,17 +365,20 @@ Rectangle {
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "autostart": true, "environment": true
     })
-    // Which rail sections drive the Hyprland compositor (they write settings.lua:
-    // input, window/layer rules, keybinds, animations, autostart, env, plus the
-    // display and cursor hardware). Everything else configures the Ryoku shell.
-    readonly property var hyprlandSet: ({
-        "displays": true, "input": true, "cursor": true, "windows": true, "plugins": true,
-        "animations": true, "keybinds": true, "windowrules": true,
-        "appoverrides": true, "layerrules": true, "autostart": true, "environment": true
-    })
-    // A shell (non-Hyprland) section gets the red rail marker, so the settings that
-    // drive the desktop shell read apart from the compositor ones at a glance.
-    function isShellSection(key) { return !hub.hyprlandSet[key]; }
+    // A section drives the compositor when any of its rows targets the neutral
+    // window-manager store (src desktop.json), derived from the schema so it
+    // tracks the rows instead of a hand-kept list. A shell section gets the red
+    // rail marker, reading apart from the compositor ones at a glance.
+    readonly property var compositorSections: {
+        var m = {};
+        for (var k in hub.sectionRows) {
+            var rows = hub.sectionRows[k] || [];
+            for (var i = 0; i < rows.length; i++)
+                if (rows[i].src === "desktop.json") { m[k] = true; break; }
+        }
+        return m;
+    }
+    function isShellSection(key) { return !hub.compositorSections[key]; }
 
     readonly property var pageMeta: ({})
     function metaFor(s) {
@@ -403,6 +410,12 @@ Rectangle {
     }
     function openPick(r) { picker.openFor(r); }
 
+    // Compositor actions and the live window list for the pages, over the daemon
+    // wm seam so no page forks a compositor CLI.
+    readonly property var wmWindows: Settings.windows
+    readonly property var wmConfigFiles: Settings.configFiles
+    function wmAct(action, args) { Settings.send("wm.act", { action: action, args: args || [] }); }
+
     // ── the store ─────────────────────────────────────────────────────────
     // draft is the live full map; committed mirrors disk; defs are factory.
     property var draft: ({})
@@ -416,6 +429,9 @@ Rectangle {
         "surfaceColor": "#0f1115", "osdRadius": 28, "osdOpacity": 1,
         "fontFamily": "Space Grotesk", "fontSize": 11, "fontScale": 1.3,
         "frameBars": FrameBars.defaultConfig(),
+        "frameBars.menus.quick-settings.anchor": "left",
+        "frameBars.menus.quick-settings.expansion": "always",
+        "frameBars.menus.quick-settings.minWidth": 410,
         "weatherLocation": "", "weatherUnit": "auto", "formatLocale": "",
         "enabled": true, "bars": 64, "thickness": 0.58, "bloom": 0.6,
         "reflection": 0.1, "idleWave": true, "style": "bars", "shape": "rounded",
@@ -452,14 +468,13 @@ Rectangle {
         var ce = hub.cfgDir;
         var home = Quickshell.env("HOME") || "";
         var out = [];
-        if (hub.hyprlandSet[s]) {
-            out.push({ role: "yours", label: "Your config", path: ce + "/hypr.json",
-                note: "Every Hyprland setting the pages control, with your values, in one full file you edit in place. The GUI writes this same file and reads your hand-edits back on open." });
-            out.push({ role: "advanced", label: "Raw overrides", path: home + "/.config/hypr/user.lua",
-                seed: "-- Your Hyprland overrides. Loaded last, so this wins over the\\n-- hub-generated files and the shipped base. Updates never touch it.\\n",
-                note: "Hand-written Hyprland for anything the GUI does not expose. Loaded last, so it wins over your config and the shipped base; updates never touch it. Import config lands the raw settings you bring here." });
-            out.push({ role: "base", label: "Shipped base", path: home + "/.config/hypr/modules",
-                note: "Ryoku's defaults (Lua logic), refreshed every update; your config above wins. The compositor loads a generated copy of your settings, which you never edit." });
+        if (hub.compositorSections[s]) {
+            out.push({ role: "yours", label: "Your config", path: ce + "/desktop.json",
+                note: "Every window-manager setting the pages control, with your values, in one full file you edit in place. The GUI writes this same file and reads your hand-edits back on open." });
+            var cf = Settings.configFiles || [];
+            for (var ci = 0; ci < cf.length; ci++)
+                out.push({ role: "advanced", label: cf[ci].split("/").pop(), path: home + "/.config/" + cf[ci],
+                    note: "Config the compositor loads for anything the GUI does not expose. Provider-owned, and updates never touch it." });
         } else {
             out.push({ role: "yours", label: "Your shell config", path: ce + "/shell.json",
                 note: "Every shell setting, with your values, in one full file you edit in place. The GUI writes it and the shell retunes live when you save a hand-edit." });
@@ -610,7 +625,7 @@ Rectangle {
         // retranslates. Set it here too so this window switches deterministically.
         if (files.shell) I18n.configLang = hub.committed.language || "Auto";
         if (hub.hyprChanges().length) {
-            hyprSave.command = ["ryoku-hub", "hypr", "save", JSON.stringify(hub.hyprDraft)];
+            hyprSave.command = ["ryoku-hub", "desktop", "save", JSON.stringify(hub.hyprDraft)];
             hyprSave.running = true;
             hub.hyprCommitted = JSON.parse(JSON.stringify(hub.hyprDraft));
         }
@@ -622,7 +637,7 @@ Rectangle {
         hub.draft = JSON.parse(JSON.stringify(hub.committed));
         hub.restoreLiveUnsaved();
         hub.hyprDraft = JSON.parse(JSON.stringify(hub.hyprCommitted));
-        if (hub.hyprLoaded) { hyprRestore.command = ["ryoku-hub", "hypr", "restore"]; hyprRestore.running = true; }
+        if (hub.hyprLoaded) { hyprRestore.command = ["ryoku-hub", "desktop", "restore"]; hyprRestore.running = true; }
         hub.revertPage();
         hub.requestReloadCoverPrune(hub.committed.reloadCover);
     }
@@ -803,7 +818,7 @@ Rectangle {
 
     Process {
         id: hyprGet
-        command: ["ryoku-hub", "hypr", "get"]
+        command: ["ryoku-hub", "desktop", "get"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
@@ -818,7 +833,7 @@ Rectangle {
     }
     Process {
         id: hyprDefaultsGet
-        command: ["ryoku-hub", "hypr", "defaults"]
+        command: ["ryoku-hub", "desktop", "defaults"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: { try { hub.hyprDefaults = JSON.parse(this.text); } catch (e) {} }
@@ -835,7 +850,7 @@ Rectangle {
         id: hyprPreviewThrottle
         interval: 140
         onTriggered: {
-            hyprPreview.command = ["ryoku-hub", "hypr", "preview", JSON.stringify(hub.hyprDraft)];
+            hyprPreview.command = ["ryoku-hub", "desktop", "preview", JSON.stringify(hub.hyprDraft)];
             hyprPreview.running = true;
         }
     }
@@ -856,7 +871,7 @@ Rectangle {
         var restored = hub.restoreLiveUnsaved();
         if (hub.hyprLoaded && hub.hyprChanges().length) {
             hub.quitting = true;
-            hyprRestore.command = ["ryoku-hub", "hypr", "restore"];
+            hyprRestore.command = ["ryoku-hub", "desktop", "restore"];
             hyprRestore.running = true;
         } else if (restored) {
             // hold the door one beat so the control socket flushes the patches

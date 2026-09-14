@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import shell.services
 
 // Persistent region-capture boundary. While a region recording runs (Quick or
@@ -17,23 +16,14 @@ PanelWindow {
 
     required property var modelData
 
-    // this screen's Hyprland monitor: layout position is in logical coordinates,
-    // the same space slurp reports the box in, so we can map global -> screen-local.
-    readonly property var mon: {
-        var mons = Hyprland.monitors.values;
-        for (var i = 0; i < mons.length; i++)
-            if (mons[i].name === (modelData ? modelData.name : ""))
-                return mons[i];
-        return null;
-    }
-    readonly property real monX: mon ? mon.x : 0
-    readonly property real monY: mon ? mon.y : 0
-    // logical screen size (Hyprland reports physical width/height + scale). The
-    // window's own width/height are 0 until it maps, so gating `visible` on them
-    // deadlocks (never sized -> never visible -> never sized); use these instead.
-    readonly property real monScale: mon && mon.scale > 0 ? mon.scale : 1
-    readonly property real screenW: mon ? mon.width / win.monScale : (modelData ? modelData.width : 0)
-    readonly property real screenH: mon ? mon.height / win.monScale : (modelData ? modelData.height : 0)
+    // This surface's screen: layout position and logical size in the same space
+    // slurp reports the box in, so we can map global -> screen-local. The window's
+    // own width/height are 0 until it maps, so gating `visible` on them deadlocks
+    // (never sized -> never visible -> never sized); read the screen instead.
+    readonly property real monX: modelData ? modelData.x : 0
+    readonly property real monY: modelData ? modelData.y : 0
+    readonly property real screenW: modelData ? modelData.width : 0
+    readonly property real screenH: modelData ? modelData.height : 0
 
     // Recorder.regionGeom is "WxH+X+Y" (global logical); parse to this screen's coords.
     readonly property var box: {

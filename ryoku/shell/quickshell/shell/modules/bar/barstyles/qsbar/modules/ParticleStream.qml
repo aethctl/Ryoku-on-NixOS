@@ -1,7 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import Quickshell.Services.UPower
 import Quickshell.Services.Mpris
 import shell.services
@@ -31,8 +31,9 @@ Item {
     // Timer's interval). The cost that made this worth gating was never the motion
     // itself: it was ambient motion running at fullMotionTick forever, because a
     // passive sine always counts as "moving" so the existing throttle never
-    // engaged. Measured at 16% for the shell and 7% for Hyprland, idle, silent --
-    // worst on a high-refresh panel, where dragging a window is what visibly loses.
+    // engaged. Measured at 16% for the shell and 7% for the compositor, idle,
+    // silent -- worst on a high-refresh panel, where dragging a window is what
+    // visibly loses.
     readonly property bool streamLive: active && !Perf.reduceMotion
         && (root.audioLive || Perf.ambientMotion)
     onStreamLiveChanged: {
@@ -106,14 +107,19 @@ Item {
     property bool animating7: false
     property bool animating8: false
     property int lastWsId: -1
-    property int pendingWsId: -1
-    property int pendingWsDir: 1
-    property int pendingWsSeq7: 0
-    property int activeWsSeq7: 0
     property int queuedWsId7: -1
     property int queuedWsDir7: 1
-    property int queuedWsSeq7: 0
     property int queuedWsAttempts7: 0
+    // previous window id set, diffed against Wm.windows for open/close pulses
+    property var prevWinIds7: ({})
+    property bool winBaselined7: false
+    // workspace names currently urgent, diffed to detect urgent transitions
+    property var urgentWs7: ({})
+    property string urgentWsName7: ""
+    property bool urgentBaselined7: false
+    // focused-workspace fullscreen state, tracked so text fires only on a toggle
+    property string lastFsWs7: ""
+    property bool lastFsOn7: false
     property string activeAddr7: ""
     property string pendingUrgentAddr7: ""
     property string pendingUrgentCls7: ""
@@ -152,12 +158,14 @@ Item {
             urgentNags = 0
             recentOpen7 = ({})
             urgentProbe7.stop()
+            urgentWsName7 = ""
         } else {
             pulses = []
             animating7 = ambientField7
             armedIntroShown7 = false
-            var ws7 = Hyprland.focusedWorkspace
-            lastWsId = ws7 && ws7.id > 0 ? ws7.id : -1
+            var ws7 = Wm.focusedWorkspace
+            var wsn7 = ws7 ? Number(ws7.name) : -1
+            lastWsId = isFinite(wsn7) && wsn7 > 0 ? wsn7 : -1
             root.setReactorFastTick7()
             Qt.callLater(function() { root.announceReactorArmed7() })
         }
@@ -191,6 +199,7 @@ Item {
             urgentNags = 0
             recentOpen7 = ({})
             urgentProbe7.stop()
+            urgentWsName7 = ""
             warnQueue7 = []
             warnQueueTimer.stop()
             canvas.quoteAmbientFade = 0
@@ -326,17 +335,10 @@ Item {
         return n === 0 ? "EMPTY" : (n === 1 ? "1 APP" : n + " APPS")
     }
 
-    function workspaceIdFromV2Event7(data) {
-        var s = String(data || "").trim()
-        if (s === "") return -1
-        var first = s.split(",")[0]
-        var id = parseInt(first)
-        return isFinite(id) && id > 0 ? id : -1
-    }
-
-    function handleWorkspaceV2Event7(data) {
-        var id = workspaceIdFromV2Event7(data)
-        if (id <= 0) return
+    function handleWorkspaceChange7() {
+        var ws = Wm.focusedWorkspace
+        var id = ws ? Number(ws.name) : -1
+        if (!isFinite(id) || id <= 0) return
         var prev = lastWsId
         lastWsId = id
         if (!active || !reactorMode7) return
@@ -346,68 +348,35 @@ Item {
 
     function requestWorkspaceText(id, dir) {
         if (!active || !reactorMode7 || id <= 0) return
-        pendingWsSeq7++
         queuedWsId7 = id
         queuedWsDir7 = dir
-        queuedWsSeq7 = pendingWsSeq7
         queuedWsAttempts7 = 0
         flushWorkspaceText7()
     }
 
+    // Count is synchronous now: read it off the workspace and push in one text.
     function flushWorkspaceText7() {
         if (!active || !reactorMode7 || queuedWsId7 <= 0) return
-        var ok = pushText("WS " + queuedWsId7, "", queuedWsDir7, "short", true, { wsSeq: queuedWsSeq7 })
+        var ws = Wm.workspaceByName(String(queuedWsId7))
+        var n = ws ? Number(ws.windows) : -1
+        var label = isFinite(n) && n >= 0 ? root.workspaceLabel(n) : ""
+        var ok = pushText("WS " + queuedWsId7, label, queuedWsDir7, "short", true)
         if (ok) {
-            activeWsSeq7 = queuedWsSeq7
-            pendingWsId = queuedWsId7
-            pendingWsDir = queuedWsDir7
             wsRetryTimer.stop()
-            wsCountProc.seq = activeWsSeq7
             queuedWsId7 = -1
             queuedWsAttempts7 = 0
-            wsCountProc.running = false
-            wsCountProc.running = true
             return
         }
         queuedWsAttempts7++
         if (queuedWsAttempts7 <= 12) wsRetryTimer.restart()
     }
 
-    function updateWorkspaceText7(seq, label) {
-        if (seq !== activeWsSeq7 || label === "") return
-        var now = Date.now()
-        var ps = pulses.slice(0)
-        for (var i = ps.length - 1; i >= 0; i--) {
-            var p = ps[i]
-            if (p && p.k === "text" && p.wsSeq === seq && now - p.t < pulseLife7(p)) {
-                p.r = label
-                p.grid = null
-                ps[i] = p
-                pulses = ps
-                root.requestFrame()
-                return
-            }
-        }
-    }
-
-    function eventAddr7(data) {
-        var s = String(data || "").trim()
-        if (s === "") return ""
-        var comma = s.indexOf(",")
-        if (comma >= 0) s = s.substring(0, comma)
-        return s.replace(/^0x/, "").toLowerCase()
-    }
-
+    // Resolve a window id to its app class through the Wm window list.
     function classForAddr7(addr) {
         if (addr === "") return ""
-        try {
-            var tls = Hyprland.toplevels.values
-            for (var i = 0; i < tls.length; i++) {
-                var o = tls[i].lastIpcObject
-                if (o && String(o.address || "").replace(/^0x/, "").toLowerCase() === addr)
-                    return o.class || o.initialClass || ""
-            }
-        } catch (e) {}
+        var wins = Wm.windows
+        for (var i = 0; i < wins.length; i++)
+            if (String(wins[i].id) === String(addr)) return wins[i].appId || ""
         return ""
     }
 
@@ -454,63 +423,128 @@ Item {
         onTriggered: root.commitUrgent7()
     }
 
-    Connections {
-        target: Hyprland
-        function onFocusedMonitorChanged() {
-            var m = Hyprland.focusedMonitor
-            if (m && root.monitor !== "" && m.name === root.monitor)
-                root.pushPulse("monsweep", 1)
+    // Window open/close: diff the Wm window-id set. Newly present ids pulse like
+    // the old open, vanished ids pulse like the old close and clear their urgent
+    // state. First run only baselines, so the initial set is not a burst.
+    function diffWindows7() {
+        var cur = Wm.windows
+        var curIds = ({})
+        var i
+        for (i = 0; i < cur.length; i++) curIds[String(cur[i].id)] = true
+        if (!winBaselined7) {
+            winBaselined7 = true
+            prevWinIds7 = curIds
+            return
         }
-        function onRawEvent(event) {
-            if (event.name === "openwindow") {
-                var openAddr = root.eventAddr7(event.data)
-                root.rememberOpen7(openAddr)
+        var prev = prevWinIds7
+        for (var id in curIds) {
+            if (!prev[id]) {
+                root.rememberOpen7(id)
                 root.pushPulse("win", 1)
             }
-            else if (event.name === "closewindow") {
+        }
+        for (var cid in prev) {
+            if (!curIds[cid]) {
                 root.pushPulse("win", -1)
-                var ac = root.eventAddr7(event.data)
                 var ro = root.recentOpen7
-                if (ac !== "" && ro[ac] !== undefined) {
-                    delete ro[ac]
-                    root.recentOpen7 = ro
-                }
-                if (root.urgentAddr !== "" && ac === root.urgentAddr) root.clearUrgent7()
-                if (root.pendingUrgentAddr7 !== "" && ac === root.pendingUrgentAddr7) {
+                if (ro[cid] !== undefined) { delete ro[cid]; root.recentOpen7 = ro }
+                if (root.urgentAddr !== "" && cid === root.urgentAddr) root.clearUrgent7()
+                if (root.pendingUrgentAddr7 !== "" && cid === root.pendingUrgentAddr7) {
                     root.pendingUrgentAddr7 = ""
                     root.pendingUrgentCls7 = ""
                     urgentProbe7.stop()
                 }
-            }
-            else if (event.name === "fullscreen") {
-                var fsOn7 = String(event.data).trim() === "1"
-                root.pushText("FULLSCREEN", fsOn7 ? "ON" : "OFF", 1, "short")
-            }
-            else if (event.name === "urgent") {
-                // Some apps briefly raise urgent while they are still opening.
-                // Delay the warning and drop it if the window is already focused.
-                var adr = root.eventAddr7(event.data)
-                if (adr !== "") {
-                    root.pendingUrgentAddr7 = adr
-                    root.pendingUrgentCls7 = root.classForAddr7(adr)
-                    urgentProbe7.restart()
-                }
-            }
-            else if (event.name === "activewindowv2") {
-                // focusing the urgent window resolves the warning
-                var a2 = root.eventAddr7(event.data)
-                root.activeAddr7 = a2
-                if (root.urgentAddr !== "" && a2 === root.urgentAddr) root.clearUrgent7()
-                if (root.pendingUrgentAddr7 !== "" && a2 === root.pendingUrgentAddr7) {
-                    root.pendingUrgentAddr7 = ""
-                    root.pendingUrgentCls7 = ""
-                    urgentProbe7.stop()
-                }
-            }
-            else if (event.name === "workspacev2") {
-                root.handleWorkspaceV2Event7(event.data)
             }
         }
+        prevWinIds7 = curIds
+    }
+
+    // Active window: focusing the urgent window resolves the warning.
+    function handleActiveWindow7() {
+        var fw = Wm.focusedWindow
+        var a2 = fw ? String(fw.id) : ""
+        root.activeAddr7 = a2
+        if (root.urgentAddr !== "" && a2 === root.urgentAddr) root.clearUrgent7()
+        if (root.pendingUrgentAddr7 !== "" && a2 === root.pendingUrgentAddr7) {
+            root.pendingUrgentAddr7 = ""
+            root.pendingUrgentCls7 = ""
+            urgentProbe7.stop()
+        }
+    }
+
+    // Fullscreen text fires only when the focused workspace toggles fullscreen;
+    // arriving on a workspace with a different state rebaselines instead.
+    function handleFullscreen7() {
+        var ws = Wm.focusedWorkspace
+        var name = ws ? String(ws.name) : ""
+        var on = ws ? ws.fullscreen === true : false
+        if (name !== lastFsWs7) {
+            lastFsWs7 = name
+            lastFsOn7 = on
+            return
+        }
+        if (on === lastFsOn7) return
+        lastFsOn7 = on
+        if (active && reactorMode7)
+            root.pushText("FULLSCREEN", on ? "ON" : "OFF", 1, "short")
+    }
+
+    // No per-window urgent flag exists, so drive the warning from workspace-level
+    // urgent: a workspace turning urgent raises it, named best-effort after a
+    // window on that workspace; the same workspace clearing resolves it.
+    function pickUrgentWin7(wsName) {
+        var wins = []
+        try { wins = Wm.windowsOnWorkspace(wsName) } catch (e) {}
+        var fw = Wm.focusedWindow
+        var fid = fw ? String(fw.id) : ""
+        for (var i = 0; i < wins.length; i++)
+            if (String(wins[i].id) !== fid) return wins[i]
+        return wins.length > 0 ? wins[0] : null
+    }
+
+    function diffUrgentWorkspaces7() {
+        var list = Wm.workspaces
+        var cur = ({})
+        var i
+        for (i = 0; i < list.length; i++)
+            if (list[i].urgent === true) cur[String(list[i].name)] = true
+        if (!urgentBaselined7) {
+            urgentBaselined7 = true
+            urgentWs7 = cur
+            return
+        }
+        var prev = urgentWs7
+        for (var name in cur) {
+            if (!prev[name]) {
+                var win = root.pickUrgentWin7(name)
+                root.pendingUrgentAddr7 = win ? String(win.id) : ("ws:" + name)
+                root.pendingUrgentCls7 = win ? String(win.appId || "") : ""
+                root.urgentWsName7 = name
+                urgentProbe7.restart()
+            }
+        }
+        for (var pname in prev) {
+            if (!cur[pname] && root.urgentWsName7 === pname) {
+                root.clearUrgent7()
+                root.urgentWsName7 = ""
+            }
+        }
+        urgentWs7 = cur
+    }
+
+    Connections {
+        target: Wm
+        function onWindowsChanged() { root.diffWindows7() }
+        function onFocusedWindowChanged() { root.handleActiveWindow7() }
+        function onFocusedOutputChanged() {
+            if (Wm.focusedOutput !== "" && root.monitor !== "" && Wm.focusedOutput === root.monitor)
+                root.pushPulse("monsweep", 1)
+        }
+        function onFocusedWorkspaceChanged() {
+            root.handleWorkspaceChange7()
+            root.handleFullscreen7()
+        }
+        function onWorkspacesChanged() { root.diffUrgentWorkspaces7() }
     }
 
     Timer {
@@ -519,32 +553,6 @@ Item {
         repeat: false
         running: false
         onTriggered: root.flushWorkspaceText7()
-    }
-
-    Process {
-        id: wsCountProc
-        property int seq: 0
-        command: ["hyprctl", "workspaces", "-j"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var seq = wsCountProc.seq
-                if (seq !== root.activeWsSeq7) return
-                var id = root.pendingWsId
-                if (id <= 0) return
-                var n = -1
-                try {
-                    var arr = JSON.parse(this.text)
-                    for (var i = 0; i < arr.length; i++) {
-                        if (arr[i].id === id) {
-                            if (arr[i].windows !== undefined) n = Number(arr[i].windows)
-                            break
-                        }
-                    }
-                } catch (e) {}
-                if (n >= 0) root.updateWorkspaceText7(seq, root.workspaceLabel(n))
-            }
-        }
     }
 
     property string pendingThemeName7: ""

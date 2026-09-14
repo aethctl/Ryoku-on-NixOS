@@ -18,6 +18,24 @@ func (d *daemon) dispatchRequest(req *request) response {
 			"current_wallpaper": nullable(d.currentName()),
 		})
 
+	// wm.caps lets the wall-ui gate compositor affordances on capability rather
+	// than a compositor name.
+	case "wm.caps":
+		caps, _ := wmClient.Caps()
+		return ok(req.ID, caps)
+
+	// wm.focusedOutput: the picker opens on the display in use, which no Wayland
+	// protocol reports to a client.
+	case "wm.focusedOutput":
+		name := ""
+		for _, o := range outputs.list() {
+			if o.Focused {
+				name = o.Name
+				break
+			}
+		}
+		return ok(req.ID, map[string]interface{}{"name": name})
+
 	case "state.get":
 		if v, okKey := d.store.stateGet(strParam(p, "key", "")); okKey {
 			return ok(req.ID, map[string]interface{}{"value": v})

@@ -2,10 +2,11 @@ package main
 
 // Apply a config import: re-scan the source, resolve every keybind conflict per
 // the decisions, back up every file to be touched (plus a best-effort snapper
-// snapshot), then write. Ingestable Hyprland binds and window rules land in the
-// hub Overrides model (settings.lua); a "mine" shadow also records an unbind so
-// the imported bind wins over the shipped one. Everything else layers into each
-// app's user-include inside a marked, idempotent, undoable block. Writes are
+// snapshot), then write. Ingestable Hyprland binds and window rules land in
+// desktop.json (the provider regenerates the compositor config from it); a "mine"
+// shadow also records an unbind so the imported bind wins over the shipped one.
+// Everything else layers into each app's user-include inside a marked,
+// idempotent, undoable block. Writes are
 // validated (Lua parse) before committing and rolled back from the backup on any
 // error.
 
@@ -50,11 +51,13 @@ func applyImport(dec decisions) (applyResult, error) {
 	}
 
 	var writes []pendingWrite
-	o := loadOverrides()
+	var ingBinds []Keybind
+	var ingRules []WindowRule
+	var ingUnbinds []string
 	binds, rules, unbinds := 0, 0, 0
 	var unresolved []string
 
-	// --- Hyprland: deep ingest into the Overrides model + user.lua raw block ---
+	// --- Hyprland: ingest into desktop.json + a user.lua raw block ------------
 	if included(dec, "hyprland") {
 		if hpath, ok := findConfig(dec.Source, "hypr", "hyprland.conf"); ok {
 			b, _ := os.ReadFile(hpath)
@@ -64,7 +67,7 @@ func applyImport(dec decisions) (applyResult, error) {
 			var userLua []string
 			for _, kb := range plan.keep {
 				if kb.Ingestable {
-					o.Keybinds = append(o.Keybinds, Keybind{Keys: kb.Combo, Action: kb.Action, Value: kb.Value})
+				ingBinds = append(ingBinds, Keybind{Keys: kb.Combo, Action: kb.Action, Value: kb.Value})
 					binds++
 					continue
 				}
@@ -75,11 +78,11 @@ func applyImport(dec decisions) (applyResult, error) {
 					unresolved = append(unresolved, kb.Raw)
 				}
 			}
-			o.Unbinds = append(o.Unbinds, plan.unbinds...)
+			ingUnbinds = append(ingUnbinds, plan.unbinds...)
 			unbinds += len(plan.unbinds)
 
 			for _, r := range hs.Rules {
-				o.WindowRules = append(o.WindowRules, r.Rule)
+				ingRules = append(ingRules, r.Rule)
 				rules++
 			}
 			for _, rl := range hs.Raws {
@@ -131,18 +134,18 @@ func applyImport(dec decisions) (applyResult, error) {
 		writes = append(writes, layerWrite(ga.ID, "user.conf", "#", ts, body))
 	}
 
-	// --- render the Overrides model when Hyprland ingest changed it -----------
-	if binds > 0 || rules > 0 || unbinds > 0 {
-		jb, err := json.MarshalIndent(o, "", "  ")
-		if err != nil {
-			return res, err
-		}
-		lua := []byte(genLua(o, paletteDriven()))
-		writes = append(writes,
-			pendingWrite{path: hyprStorePath(), content: jb},
-			pendingWrite{path: filepath.Join(userEditsHyprDir(), "settings.lua"), content: lua, luaCheck: true},
-			pendingWrite{path: filepath.Join(hyprConfigDir(), "settings.lua"), content: lua, luaCheck: true},
-		)
+	// --- persist the ingested binds/rules into desktop.json -------------------
+	ingested := binds > 0 || rules > 0 || unbinds > 0
+	if ingested {
+		ns := readJSONMap(desktopStorePath())
+		appendDesktopSection(ns, "keybinds", ingBinds)
+		appendDesktopSection(ns, "windowRules", ingRules)
+		appendDesktopSection(ns, "unbinds", ingUnbinds)
+		writes = append(writes, pendingWrite{path: desktopStorePath(), content: mustJSON(ns)})
+		// The provider re-authors these from the store below. Back them up like
+		// any other file so an undo restores the exact pre-import config instead
+		// of leaving a freshly generated one behind.
+		writes = append(writes, generatedConfigWrites()...)
 	}
 
 	man, err := backup(res.BackupDir, ts, writes)
@@ -160,11 +163,33 @@ func applyImport(dec decisions) (applyResult, error) {
 			return res, fmt.Errorf("write %s: %w (rolled back)", w.path, err)
 		}
 	}
+	if ingested {
+		// the provider re-authors settings.lua from the store and reloads.
+		_ = applyDesktop()
+	}
 
 	res.FilesWritten = relPaths(writePaths(writes))
 	res.BindsIngested, res.RulesIngested, res.Unbinds = binds, rules, unbinds
 	res.Unresolved = unresolved
 	return res, nil
+}
+
+// appendDesktopSection appends a typed slice to desktop.<key> in ns, creating the
+// array when absent. An empty slice is a no-op.
+func appendDesktopSection(ns map[string]any, key string, items any) {
+	ib, _ := json.Marshal(items)
+	var add []json.RawMessage
+	_ = json.Unmarshal(ib, &add)
+	if len(add) == 0 {
+		return
+	}
+	d := childMap(ns, "desktop")
+	var cur []json.RawMessage
+	if raw, ok := d[key]; ok {
+		b, _ := json.Marshal(raw)
+		_ = json.Unmarshal(b, &cur)
+	}
+	d[key] = append(cur, add...)
 }
 
 // bindPlan is the resolved set of imported binds to apply (remaps already

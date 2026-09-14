@@ -3,12 +3,12 @@ package doctor
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"ryoku-cli/internal/sys"
 	"strings"
 
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // ---- reconciler: stale window-border pin ------------------------------------
@@ -22,16 +22,15 @@ import (
 // setting: the palette keeps rendering fresh colours nobody applies and every
 // window wears the stale pin ("the border colour is stuck on red").
 //
-// The Hub owns the file, so the repair asks it to re-emit from today's state
-// (`ryoku-hub hypr get` re-renders settings.lua as a side effect) and then
-// reloads Hyprland config-only. Silent when colours are user-fixed: a pinned
-// border is exactly what fixed mode means.
+// The provider re-emits settings.lua from the neutral store, dropping the stale
+// pin when the palette drives borders, then reloads config-only. Silent when
+// colours are user-fixed: a pinned border is exactly what fixed mode means.
 
 // borderPinState is what the verdict needs, lifted so planBorderPin is pure.
 type borderPinState struct {
 	paletteDriven bool
 	settingsLua   string // "" when the generated file is absent
-	hubPresent    bool
+	providerReady bool
 }
 
 var gatherBorderPin = func() borderPinState {
@@ -41,8 +40,7 @@ var gatherBorderPin = func() borderPinState {
 	if err == nil {
 		s.settingsLua = string(b)
 	}
-	_, lookErr := exec.LookPath("ryoku-hub")
-	s.hubPresent = lookErr == nil
+	s.providerReady = wm.Open().Available()
 	return s
 }
 
@@ -80,11 +78,12 @@ func themeFollowsPalette() bool {
 }
 
 var repairBorderPin = func() error {
-	if err := exec.Command("ryoku-hub", "hypr", "get").Run(); err != nil {
+	c := wm.Open()
+	if _, err := c.Apply(filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")); err != nil {
 		return err
 	}
-	// Config keywords re-read; best-effort, a headless run has no compositor.
-	_ = exec.Command("hyprctl", "reload", "config-only").Run()
+	// best-effort; a headless run has no compositor to reload.
+	_ = c.Act(wm.ActionConfigReload, "config-only")
 	return nil
 }
 
@@ -96,19 +95,19 @@ func planBorderPin(s borderPinState, checkOnly bool, repair func() error) recRes
 	if !strings.Contains(s.settingsLua, "col.active_border") {
 		return okRes(i18n.T("no stale border pin; the palette drives the window border"))
 	}
-	if !s.hubPresent {
-		return warnRes(i18n.T("hypr/settings.lua pins col.active_border while colours follow the palette, and ryoku-hub is not installed to regenerate it; the border is stuck on a stale colour")).
+	if !s.providerReady {
+		return warnRes(i18n.T("settings.lua pins col.active_border while colours follow the palette, and no window manager provider is installed to regenerate it; the border is stuck on a stale colour")).
 			withFix("ryoku update")
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("hypr/settings.lua pins col.active_border while colours follow the palette, so the window border is stuck on a stale colour")).
-			withFix(i18n.T("ryoku doctor regenerates it via ryoku-hub"))
+		return wouldRes(i18n.T("settings.lua pins col.active_border while colours follow the palette, so the window border is stuck on a stale colour")).
+			withFix(i18n.T("ryoku doctor regenerates it via the provider"))
 	}
 	if err := repair(); err != nil {
-		return failRes(i18n.T("could not regenerate hypr/settings.lua: %v"), err).
-			withFix(i18n.T("run `ryoku-hub hypr get` by hand, then `hyprctl reload config-only`"))
+		return failRes(i18n.T("could not regenerate settings.lua: %v"), err).
+			withFix("ryoku doctor")
 	}
-	return fixedRes(i18n.T("regenerated hypr/settings.lua; the window border follows the palette again"))
+	return fixedRes(i18n.T("regenerated settings.lua; the window border follows the palette again"))
 }
 
 func reconcileBorderPin(checkOnly bool) recResult {

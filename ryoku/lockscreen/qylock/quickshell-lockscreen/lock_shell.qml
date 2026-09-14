@@ -55,11 +55,6 @@ ShellRoot {
         function onLoginSucceeded() {
             shellRoot.authenticated = true
 
-            // Hyprland session lock fix: allow the compositor to restore
-            // the previous layout after the lock surface is destroyed.
-            if (Quickshell.env("XDG_CURRENT_DESKTOP") === "Hyprland" || Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== "") {
-                Quickshell.execDetached(["hyprctl", "keyword", "misc:allow_session_lock_restore", "1"]);
-            }
             Quickshell.execDetached(["loginctl", "unlock-session"]);
 
             // Dynamic exit delay: clockwork themes with windup animation

@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import Quickshell
-import Quickshell.Hyprland
+import "../../../../components"
 import Quickshell.Wayland
 import Quickshell.Widgets
 import Ryoku.Ui
@@ -566,7 +566,7 @@ PanelWindow {
         }
     }
 
-    HyprlandFocusGrab {
+    FocusGrab {
         id: focusGrab
         property int generation: -1
         active: win.invocationSurface
@@ -582,8 +582,28 @@ PanelWindow {
             if (!win.invocationSurface
                     || win.lifecycleState.phase === Lifecycle.PHASES.CLOSING)
                 return;
-            win.requestClose(
-                generation, win.surfaceMonitor);
+            win.requestClose(generation, win.surfaceMonitor);
+        }
+    }
+
+    // Where the compositor has no focus-grab protocol, a full-screen scrim below
+    // the launcher closes it on an outside press.
+    PanelWindow {
+        id: dismissScrim
+        visible: !focusGrab.available && focusGrab.active
+        screen: win.screen
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "launcher-dismiss"
+        WlrLayershell.layer: WlrLayer.Top
+        anchors { top: true; bottom: true; left: true; right: true }
+        MouseArea {
+            anchors.fill: parent
+            onPressed: {
+                if (win.invocationSurface
+                        && win.lifecycleState.phase !== Lifecycle.PHASES.CLOSING)
+                    win.requestClose(focusGrab.generation, win.surfaceMonitor);
+            }
         }
     }
 

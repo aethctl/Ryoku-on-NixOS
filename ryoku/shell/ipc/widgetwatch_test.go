@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"testing"
+
+	wm "ryoku-wm"
+)
 
 func TestParsePerfFlag(t *testing.T) {
 	cases := []struct {
@@ -25,74 +29,46 @@ func TestParsePerfFlag(t *testing.T) {
 	}
 }
 
-func TestParseDesktopVisible(t *testing.T) {
+// An output whose active workspace holds no windows means the desktop is
+// showing there; only when every output is covered are the widgets parked. A
+// cold or unknown reading stays visible so a bare desktop is never left.
+func TestDesktopVisibleFrom(t *testing.T) {
 	cases := []struct {
-		name string
-		mons string
-		wss  string
-		want bool
+		name       string
+		outputs    []wm.Output
+		workspaces []wm.Workspace
+		want       bool
 	}{
 		{
 			"single empty workspace is visible",
-			`[{"name":"eDP-1","activeWorkspace":{"id":1,"name":"1"}}]`,
-			`[{"id":1,"name":"1","windows":0}]`,
+			[]wm.Output{{Name: "eDP-1", ActiveWorkspace: "1"}},
+			[]wm.Workspace{{ID: "1", Windows: 0}},
 			true,
 		},
 		{
 			"single covered workspace is hidden",
-			`[{"name":"eDP-1","activeWorkspace":{"id":1,"name":"1"}}]`,
-			`[{"id":1,"name":"1","windows":2}]`,
+			[]wm.Output{{Name: "eDP-1", ActiveWorkspace: "1"}},
+			[]wm.Workspace{{ID: "1", Windows: 2}},
 			false,
 		},
 		{
-			"one of two monitors empty is visible",
-			`[{"activeWorkspace":{"id":1}},{"activeWorkspace":{"id":2}}]`,
-			`[{"id":1,"windows":3},{"id":2,"windows":0}]`,
+			"one of two outputs empty is visible",
+			[]wm.Output{{ActiveWorkspace: "1"}, {ActiveWorkspace: "2"}},
+			[]wm.Workspace{{ID: "1", Windows: 3}, {ID: "2", Windows: 0}},
 			true,
 		},
 		{
-			"all monitors covered is hidden",
-			`[{"activeWorkspace":{"id":1}},{"activeWorkspace":{"id":2}}]`,
-			`[{"id":1,"windows":3},{"id":2,"windows":1}]`,
+			"all outputs covered is hidden",
+			[]wm.Output{{ActiveWorkspace: "1"}, {ActiveWorkspace: "2"}},
+			[]wm.Workspace{{ID: "1", Windows: 3}, {ID: "2", Windows: 1}},
 			false,
 		},
-		{"malformed monitors stays visible", `nope`, `[{"id":1,"windows":2}]`, true},
-		{"malformed workspaces stays visible", `[{"activeWorkspace":{"id":1}}]`, `nope`, true},
-		{"no monitors stays visible", `[]`, `[{"id":1,"windows":2}]`, true},
-		{"unknown active workspace stays visible", `[{"activeWorkspace":{"id":9}}]`, `[{"id":1,"windows":2}]`, true},
+		{"no outputs stays visible", nil, []wm.Workspace{{ID: "1", Windows: 2}}, true},
+		{"unknown active workspace stays visible", []wm.Output{{ActiveWorkspace: "9"}}, []wm.Workspace{{ID: "1", Windows: 2}}, true},
 	}
 	for _, c := range cases {
-		if got := parseDesktopVisible([]byte(c.mons), []byte(c.wss)); got != c.want {
-			t.Errorf("%s: parseDesktopVisible = %v, want %v", c.name, got, c.want)
-		}
-	}
-}
-
-func TestAffectsCoverage(t *testing.T) {
-	relevant := []string{
-		"openwindow>>0x1,1,kitty,kitty",
-		"closewindow>>0x1",
-		"movewindowv2>>0x1,2,2",
-		"workspacev2>>2,2",
-		"workspace>>2",
-		"focusedmonv2>>eDP-1,2",
-		"monitoradded>>HDMI-A-1",
-		"monitorremoved>>HDMI-A-1",
-	}
-	irrelevant := []string{
-		"activewindow>>kitty,kitty",
-		"activelayout>>keyboard,layout",
-		"submap>>resize",
-		"",
-	}
-	for _, l := range relevant {
-		if !affectsCoverage(l) {
-			t.Errorf("affectsCoverage(%q) = false, want true", l)
-		}
-	}
-	for _, l := range irrelevant {
-		if affectsCoverage(l) {
-			t.Errorf("affectsCoverage(%q) = true, want false", l)
+		if got := desktopVisibleFrom(c.outputs, c.workspaces); got != c.want {
+			t.Errorf("%s: desktopVisibleFrom = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

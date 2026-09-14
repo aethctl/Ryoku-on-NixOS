@@ -8,6 +8,19 @@ import (
 	"testing"
 )
 
+// writeDesktopStore lays flat hypr sections into the namespaced desktop.json the
+// store now uses, so a test can keep writing the sections it cares about.
+func writeDesktopStore(t *testing.T, flat string) {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal([]byte(flat), &m); err != nil {
+		t.Fatal(err)
+	}
+	if err := setHyprSections(m); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A snapshot captures shell.json whole and applies it whole: omit drops only
 // the denylisted personal / regional keys (so a new look key travels
 // automatically), and a nil-allowlist overlay sets every captured key while
@@ -99,7 +112,7 @@ func TestRiceCapture(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(hyprStorePath(), `{"appearance":{"rounding":10},"cursor":{"theme":"Bibata-Modern-Ice","size":24},"input":{"sensitivity":0.2}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":10},"cursor":{"theme":"Bibata-Modern-Ice","size":24},"input":{"sensitivity":0.2}}`)
 	write(shellStorePath(), `{"frameBars":{"style":"ryoku-frame"},"weatherLocation":"Oslo","sidebarWidth":360}`)
 	write(launcherStorePath(), `{"heroStrength":0.5,"showWeather":true}`)
 	write(themeStatePath(), `{"followWallpaper":true}`)
@@ -169,7 +182,7 @@ func TestRiceApplyMergesAndRestoreReverts(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	w(hyprStorePath(), `{"appearance":{"rounding":2},"cursor":{"theme":"Bibata-Modern-Ice","size":24}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":2},"cursor":{"theme":"Bibata-Modern-Ice","size":24}}`)
 	w(shellStorePath(), `{"frameBars":{"style":"slate-frame","rails":{"top":{"size":44}}},"weatherLocation":"Oslo","sidebarWidth":360}`)
 	w(launcherStorePath(), `{"heroStrength":0.6}`)
 	w(themeStatePath(), `{"followWallpaper":true}`)
@@ -190,7 +203,7 @@ func TestRiceApplyMergesAndRestoreReverts(t *testing.T) {
 	if shell["sidebarWidth"] != float64(360) {
 		t.Fatal("apply clobbered a personal sidebar value")
 	}
-	ap := readJSONMap(hyprStorePath())["appearance"].(map[string]any)
+	ap := readHyprSections()["appearance"].(map[string]any)
 	if ap["rounding"].(float64) != 18 {
 		t.Fatalf("apply rounding = %v, want 18", ap["rounding"])
 	}
@@ -250,7 +263,7 @@ func TestThemeAppsRoundTrip(t *testing.T) {
 	}
 
 	// capture with the toggle off records the choice on the rice.
-	w(hyprStorePath(), `{"appearance":{"rounding":2}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":2}}`)
 	w(shellStorePath(), `{"frameBars":{"style":"slate-frame"}}`)
 	w(launcherStorePath(), `{}`)
 	w(themeStatePath(), `{"followWallpaper":true,"themeApps":false}`)
@@ -356,9 +369,7 @@ func TestCaptureAllLayersAndTouches(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "ryoku"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(hyprStorePath(), []byte(`{"appearance":{"rounding":0},"keybinds":[{"keys":"SUPER + T","action":"exec","value":"kitty"}],"windowRules":[{"class":"Spotify","action":"float"}],"input":[]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeDesktopStore(t, `{"appearance":{"rounding":0},"keybinds":[{"keys":"SUPER + T","action":"exec","value":"kitty"}],"windowRules":[{"class":"Spotify","action":"float"}],"input":[]}`)
 	if err := os.WriteFile(themeStatePath(), []byte(`{"followWallpaper":true}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -410,7 +421,7 @@ func TestSquareShellAndKeybindRoundTrip(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	w(hyprStorePath(), `{"appearance":{"rounding":12},"keybinds":[]}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":12},"keybinds":[]}`)
 	w(shellStorePath(), `{"frameBars":{"style":"slate-frame"},"frameRadius":9,"roundness":10,"osdRadius":12}`)
 	w(launcherStorePath(), `{}`)
 	w(themeStatePath(), `{"followWallpaper":true}`)
@@ -429,12 +440,12 @@ func TestSquareShellAndKeybindRoundTrip(t *testing.T) {
 			t.Fatalf("square rice did not set shell %s to 0: %v", k, shell[k])
 		}
 	}
-	ap := readJSONMap(hyprStorePath())["appearance"].(map[string]any)
+	ap := readHyprSections()["appearance"].(map[string]any)
 	if ap["rounding"].(float64) != 0 {
 		t.Fatalf("square rice did not set window rounding to 0: %v", ap["rounding"])
 	}
-	if kb, _ := readJSONMap(hyprStorePath())["keybinds"].([]any); len(kb) != 1 {
-		t.Fatalf("keybinds layer not installed: %v", readJSONMap(hyprStorePath())["keybinds"])
+	if kb, _ := readHyprSections()["keybinds"].([]any); len(kb) != 1 {
+		t.Fatalf("keybinds layer not installed: %v", readHyprSections()["keybinds"])
 	}
 
 	if err := restoreRice(".baseline"); err != nil {
@@ -444,8 +455,8 @@ func TestSquareShellAndKeybindRoundTrip(t *testing.T) {
 	if shell2["frameRadius"].(float64) != 9 {
 		t.Fatalf("restore did not revert the frame shape: %v", shell2)
 	}
-	if kb2, _ := readJSONMap(hyprStorePath())["keybinds"].([]any); len(kb2) != 0 {
-		t.Fatalf("restore did not remove the installed keybind: %v", readJSONMap(hyprStorePath())["keybinds"])
+	if kb2, _ := readHyprSections()["keybinds"].([]any); len(kb2) != 0 {
+		t.Fatalf("restore did not remove the installed keybind: %v", readHyprSections()["keybinds"])
 	}
 }
 
@@ -474,7 +485,7 @@ func TestCaptureNewStoresDecorsAndLiveWall(t *testing.T) {
 	w(decorPic, "PNG")
 	w(mark, "PNG")
 	w(clip, "MP4")
-	w(hyprStorePath(), `{"appearance":{"rounding":8}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":8}}`)
 	w(shellStorePath(), `{"frameBars":{"style":"ryoku-frame"}}`)
 	w(launcherStorePath(), `{"bgBlur":0.4,"radius":22}`)
 	w(themeStatePath(), `{"followWallpaper":true}`)
@@ -560,7 +571,7 @@ func TestApplyNewStoresBrandAndVideoWall(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	w(hyprStorePath(), `{"appearance":{"rounding":2}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":2}}`)
 	w(shellStorePath(), `{"frameBars":{"style":"slate-frame"}}`)
 	w(launcherStorePath(), `{}`)
 	w(themeStatePath(), `{"followWallpaper":true}`)
@@ -740,7 +751,7 @@ func TestCaptureAppliesThemeFastfetchAndLock(t *testing.T) {
 	w(filepath.Join(qylockThemesDir(), slug, "Main.qml"), "import QtQuick")
 	w(qylockThemePref(), slug+"\n")
 
-	w(hyprStorePath(), `{"appearance":{"rounding":6},"dwindle":{"mfact":0.6}}`)
+	writeDesktopStore(t, `{"appearance":{"rounding":6},"dwindle":{"mfact":0.6}}`)
 	w(shellStorePath(), `{"barStyle":"qsbar"}`)
 	w(launcherStorePath(), `{}`)
 	w(themeStatePath(), `{"followWallpaper":false,"scheme":"mono","gtkTheme":"adwaita","themeApps":true}`)

@@ -54,7 +54,7 @@ var blockingRules = map[string]bool{
 // plugin runs must be in its own bin/ or in dependencies.commands.
 var commandAllowlist = map[string]bool{
 	"ryoku": true, "ryoku-shell": true, "ryoku-plugins-place": true,
-	"ryostore": true, "hyprctl": true, "notify-send": true, "xdg-open": true,
+	"ryostore": true, "notify-send": true, "xdg-open": true,
 	"wl-copy": true, "wl-paste": true, "sh": true, "bash": true, "jq": true,
 	"cat": true, "grep": true, "sed": true, "awk": true, "head": true,
 	"tail": true, "sleep": true, "date": true, "nmcli": true, "pactl": true,
@@ -487,6 +487,10 @@ func unquote(s string) (string, bool) {
 
 func commandAllowed(name string, deps []string) bool {
 	if commandAllowlist[name] {
+		return true
+	}
+	// ryoku-wm-<name> is the provider binary a plugin reaches the compositor through.
+	if strings.HasPrefix(name, "ryoku-wm-") {
 		return true
 	}
 	for _, d := range deps {

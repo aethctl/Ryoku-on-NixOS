@@ -1,16 +1,16 @@
 # Maintainer: Ryoku <releases@ryoku.dev>
 #
-# Ryoku desktop umbrella. pulls the Ryoku components + the user-facing runtime,
-# lays the base config under /usr/share/ryoku/config (mirrors the ~/.config tree
-# that `ryoku materialize` copies into a user's home), and drops the helper
-# scripts + the GPU udev rule.
+# Ryoku desktop base: the compositor-neutral components + user-facing runtime.
+# The compositor and its config ship from a sibling ryoku-desktop-<wm> variant
+# this base pulls via the ryoku-desktop-compositor virtual. Lays the base config
+# under /usr/share/ryoku/config, the helper scripts, and the GPU udev rule.
 #
 # built from in-repo sources, no tarball fetch. publish CI runs makepkg inside
 # this dir from a full checkout, so the repo root is three levels up.
 pkgname=ryoku-desktop
 pkgver=${RYOKU_PKGVER:-0.1.0}
-pkgrel=2
-pkgdesc="Ryoku desktop: Hyprland + Quickshell configuration, helpers, and runtime"
+pkgrel=3
+pkgdesc="Ryoku desktop: Quickshell configuration, helpers, and runtime (compositor-neutral base)"
 # package() compiles Go helpers (ryovm-fetch), so the payload is arch-specific.
 arch=('x86_64')
 url="https://ryoku.dev"
@@ -31,18 +31,14 @@ depends=(
   "ryoku-oh-my-zsh=$pkgver"
   # the RyokuArch package manager (GlazePKG)
   'gpk'
-  # compositor + Wayland session
-  'hyprland'
-  # Hyprland compositor plugins the Hub can toggle (Appearance / Animations).
-  # pinned to this build's version like the other monorepo packages, so a plugin
-  # .so never runs against a different release's headers. Off by default; the
-  # generated settings.lua only loads one once the user enables it.
-  "hypr-dynamic-cursors=$pkgver"
-  "ryoku-hypr-plugins=$pkgver"
-  "hyprglass=$pkgver"
-  "imgborders=$pkgver"
+  # a compositor variant provides this virtual; an installed base pulls the sole
+  # provider (ryoku-desktop-hyprland) on the next -Syu with no user action.
+  'ryoku-desktop-compositor'
   'xorg-xwayland'
+  # CachyOS's SDDM greeter is still Qt5; QPA plugins are ABI-specific, so the
+  # Qt6 plugin cannot provide the native Wayland platform to that greeter.
   'qt6-wayland'
+  'qt5-wayland'
   'qt6-5compat'
   'qt6-svg'
   # WebP/AVIF/etc image decoders (libqwebp.so and friends). qt6-base ships only
@@ -58,12 +54,6 @@ depends=(
   # on the ISO and reaches existing boxes on `ryoku update` -- a Wayland greeter
   # config without weston cannot start.
   'weston'
-  'hyprpolkitagent'
-  'xdg-desktop-portal-hyprland'
-  # XDPH invokes /usr/bin/hyprland-preview-share-picker by name for the
-  # screen-share source chooser, so a hard depend (not an optdepend) guarantees
-  # the picker installs and updates atomically with the portal that names it.
-  'hyprland-preview-share-picker'
   'xdg-desktop-portal-gtk'
   # adw-gtk3 / adw-gtk3-dark, the GTK3 theme the Hyprland autostart selects
   # (gsettings gtk-theme). Unlike stock Adwaita it derives its 156 widget rules
@@ -85,7 +75,7 @@ depends=(
   # cursor picker defaults to it). ships from [ryoku], not the AUR, so a fresh
   # install and `ryoku update` always carry it: the old AUR theme was skipped
   # offline and never revisited by `ryoku update`, leaving the pointer on a lone
-  # fallback bitmap. fixed upstream version, so unpinned like awww; see
+  # fallback bitmap. fixed upstream version, not the monorepo RYOKU_PKGVER; see
   # release/packages/ryoku-cursors/PKGBUILD.
   'ryoku-cursors'
   # the optional "Material Bibata" pointer in the Ryoku accent, offered as a
@@ -93,30 +83,21 @@ depends=(
   # installed theme, offline and after `ryoku update`, like ryoku-cursors above.
   # see release/packages/ryoku-cursor-material/PKGBUILD.
   'ryoku-cursor-material'
-  # shell + apps configured here
+  # shell + the runtime the QML itself imports
   'quickshell'
   # KSyntaxHighlighting (org.kde.syntaxhighlighting QML module) colours code
   # blocks in the Super+S chat; the import is load-bearing, so it ships here.
   'syntax-highlighting'
-  'kitty'
-  'fish'
-  'blesh'
-  'starship'
+  # The user-facing applications are deliberately NOT depends (see optdepends):
+  # pacman re-satisfies a dependency list on every upgrade, so a hard depend
+  # reinstalled apps people deleted. The ISO pacstraps them from
+  # system/packages/base.packages and `ryoku doctor` delivers them once
+  # (reconcile_shipped_apps.go). Tools the shell calls by name stay below.
   'zsh'
   'zsh-autosuggestions'
   'zsh-history-substring-search'
   'zsh-syntax-highlighting'
-  'fastfetch'
-  'yazi'
-  'neovim'
-  # file manager + its stash right-click integration. nautilus-python loads
-  # ryoku-stash-menu.py (Install/Compress/Send with Ryoku); a hard depend, not
-  # optional, so `ryoku update` pulls it onto existing boxes that predate it (an
-  # optdepend never installs on -Syu) and the right-click menu actually shows up.
-  'nautilus'
-  'nautilus-python'
   # tools the shipped autostart, pill, ryoshot, and helper scripts call by name
-  'hypridle'
   'brightnessctl'
   'playerctl'
   # the launcher's "@" live radio: mpv plays the stream, mpv-mpris puts it on
@@ -126,7 +107,6 @@ depends=(
   'yt-dlp'
   'wl-clipboard'
   'cliphist'
-  'hyprpicker'
   'grim'
   'slurp'
   'cava'
@@ -141,29 +121,25 @@ depends=(
   # the daemon runs it on every wallpaper change to derive colors.json and
   # retint kitty / Hyprland / the shell (the "match wallpaper" colors).
   'matugen'
-  # animated wallpaper daemon the shell drives (`awww img` / `awww-daemon`).
-  # ships from [ryoku], not the AUR, so a fresh install and `ryoku update` always
-  # carry it: an AUR-only optdepend left boxes with no wallpaper daemon out of the
-  # box (no image at all, and ryowalls could list images but set none). See
-  # release/packages/awww/PKGBUILD.
-  'awww'
+  # ryogami: the wallpaper daemon the shell drives (`ryogami wallpaper ...`) over
+  # ryogami.sock -- catalog, thumbnails, applies, transitions, live video and the
+  # depth surface. Ships from [ryoku], so a fresh install and `ryoku update` always
+  # carry it; it supersedes awww (the retired swww fork the shell no longer drives).
+  # ryoku doctor enables its user unit and retires any old awww-daemon. See
+  # release/packages/ryogami/PKGBUILD.
+  'ryogami'
   # live (video) wallpapers: the daemon grabs one frame with ffmpeg to derive the
   # wallpaper palette. official repo, so a hard depend reaches existing boxes.
   'ffmpeg'
-  # qt6-multimedia + qt6-declarative back the QML video surfaces: ryowalls' live
-  # previews, the shell's video-wallpaper preview, and the qylock lockscreen.
+  # ryogami's wall-ui source browser fetches remote wallpapers (Wallhaven,
+  # MoeWalls, MotionBGs, GitHub, Steam) with curl; a hard depend so the browser
+  # works out of the box on the ISO and on existing boxes after `ryoku update`.
+  'curl'
+  # qt6-multimedia + qt6-declarative back the QML video surfaces: the wallpaper
+  # picker's live previews, the shell's video-wallpaper preview, and qylock.
   # official repo, hard depends so they reach existing boxes on `ryoku update`.
   'qt6-multimedia'
   'qt6-declarative'
-  # Ryoku Motion: the screen-demo recorder and editor (OpenScreen fork, built for
-  # the [ryoku] repo). The shell's record island opens it for a studio capture or
-  # to import a clip; ships in the ISO and reaches boxes on `ryoku update`.
-  'ryomotion'
-  # ryoshot Beautify's HD export and ryowalls Enhance AI-upscale on the GPU with
-  # this. official repo (extra), so a hard depend ships it in the ISO install and
-  # reaches existing boxes on `ryoku update` -- an optdepend never installs on -Syu,
-  # and the HD toggle / Enhance are meant to work for every user out of the box.
-  'waifu2x-ncnn-vulkan'
   # Hub's ISO picker (GPU passthrough VM) shells out to a file chooser
   'zenity'
   # Game Mode wifi power-save toggle (ryoku-wifi-powersave runs iw)
@@ -207,9 +183,7 @@ depends=(
   'wf-recorder'          # multi-GPU capture fallback (pill Super+U)
   'hyprsunset'           # night-light colour temperature (pill Super+U)
   'wtype'                # voice-dictation typing on Wayland (Voxtype)
-  'openrgb'              # keyboard and mouse lighting (Settings > Appearance > Lighting)
   'libqalculate'         # calculator backend (launcher Super+Space)
-  'songrec'              # Recognize Music (launcher)
   'upower'               # battery + power status (pill/bar battery indicator)
   'power-profiles-daemon'
   # external-monitor brightness over DDC/CI: the pill DISPLAY faders and the
@@ -217,11 +191,6 @@ depends=(
   # was base.packages-only, so it never reached update/shell boxes (the pill
   # faders were silently dead there); a hard depend fixes every path.
   'ddcutil'
-  # GUI audio mixer the bar's "Open audio" button launches for advanced routing
-  # (card profiles, per-app device moves) beyond the bar's own native PipeWire
-  # mixer. A hard depend so the button works on every install path; it launched a
-  # missing binary before. Official extra repo.
-  'pavucontrol'
   # Game controllers: xpadneo-dkms (Xbox One/Series Bluetooth pads, from the AUR
   # step) is a DKMS module, so it needs the kernel headers and the DKMS build
   # system to compile its module; without them the build silently fails and the
@@ -231,19 +200,32 @@ depends=(
   # onto an existing box rebuilds an already-installed pad driver.
   'linux-headers'
   'dkms'
-  # Gaming stack (Bazzite-style): gamescope runs a game in a nested micro-
-  # compositor isolated from the desktop, sidestepping the XWayland compositing
-  # that is the real source of in-game and Steam-overlay lag on Wayland
-  # (`gamescope -- %command%`); gamemode is the perf governor Steam invokes via
-  # `gamemoderun %command%`; mangohud is the FPS/frametime overlay. Official extra
-  # repo, so a hard depend ships them in the ISO and reaches existing boxes on
-  # `ryoku update`.
-  'gamescope'
-  'gamemode'
-  'mangohud'
 )
 optdepends=(
+  # The applications Ryoku ships. Optional here on purpose: the ISO pacstraps
+  # them and `ryoku doctor` delivers them once to an existing box, so pacman
+  # never has a missing dependency to "repair" and a deleted app stays deleted.
+  'kitty: the default terminal'
+  'fish: optional interactive shell'
+  'blesh: Bash line editor'
+  'starship: shell prompt'
+  'fastfetch: system summary (launcher, RyoStore covers)'
+  'yazi: terminal file manager'
+  'neovim: the shipped editor'
+  'nautilus: graphical file manager'
+  'nautilus-python: Ryoku stash actions in the Nautilus right-click menu'
+  'ryotunes: the Ryoku music app the now-playing widget follows'
+  'ryomotion: screen-demo recorder and editor'
+  'waifu2x-ncnn-vulkan: AI upscale for ryoshot Beautify HD and ryowalls Enhance'
+  'pavucontrol: GUI mixer behind the bar Open audio button'
+  'songrec: Recognize Music in the launcher'
+  'openrgb: keyboard and mouse lighting (Settings > Appearance > Lighting)'
+  'gamescope: nested gaming micro-compositor'
+  'gamemode: gaming performance governor Steam invokes'
+  'mangohud: in-game FPS and frametime overlay'
   'chromium: web browser'
+  'kdialog: folder picker fallback for rice export/import when zenity is absent'
+  'plasma-integration: full KDE platform theme for KDE apps (Dolphin, Kate); set QT_QPA_PLATFORMTHEME=kde'
   'qemu-desktop: GPU-passthrough VM (Ryoku Settings > GPU)'
   'libvirt: VM management for the passthrough VM'
   'edk2-ovmf: UEFI and Secure Boot firmware for the VM'
@@ -263,14 +245,22 @@ _repo="$startdir/../../.."
 package() {
   local cfg="$pkgdir/usr/share/ryoku/config"
 
+  # /etc/ryoku-release: the named state this build is. build-repo.sh exports
+  # RYOKU_RELEASE (a release tag on stable, the dev version on testing, a
+  # local-* marker for a hand build) and RYOKU_CHANNEL; `ryoku version`,
+  # `ryoku status`, the update island and the doctor read this file, and it is
+  # pacman-owned so it always names the release actually installed.
+  install -Dm644 /dev/stdin "$pkgdir/etc/ryoku-release" <<EOF
+RELEASE=${RYOKU_RELEASE:-local-$pkgver}
+NAME=$(tr -d '[:space:]' < "$_repo/CODENAME")
+CHANNEL=${RYOKU_CHANNEL:-local}
+VERSION=$pkgver
+COMMIT=$(git -C "$_repo" rev-parse HEAD 2>/dev/null || echo unknown)
+DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+EOF
+
   # --- base configs under /usr/share/ryoku/config, mirroring ~/.config -------
   # `ryoku materialize` copies this tree verbatim into the user's ~/.config.
-
-  # Hyprland: whole tree. includes scripts/ (shell calls
-  # ~/.config/hypr/scripts/* by absolute path) and the hardware-managed
-  # gpu/keyboard/monitors drop-ins.
-  install -d "$cfg/hypr"
-  cp -a "$_repo/ryoku/hyprland/." "$cfg/hypr/"
 
   # Quickshell desktop components, Hub's config nested under hub/.
   install -d "$cfg/quickshell"
@@ -278,11 +268,7 @@ package() {
   install -d "$cfg/quickshell/hub"
   cp -a "$_repo/ryoku/hub/quickshell/." "$cfg/quickshell/hub/"
 
-  # xdg-desktop-portal: route ScreenCast/Screenshot to hyprland (screen sharing).
-  install -Dm644 "$_repo/ryoku/shell/portals/hyprland-portals.conf" \
-    "$cfg/xdg-desktop-portal/hyprland-portals.conf"
-
-  # First-party GUI apps: a Quickshell app (ryowalls, ryovm, ryostore) ships its
+  # First-party GUI apps: a Quickshell app (ryovm, ryostore) ships its
   # quickshell/ tree as qs -c <name>; a compiled app has a CMakeLists.txt and
   # builds to a /usr/bin/<name> binary (supported, none ship today). Either way
   # its bin/ helpers, .desktop and icon are installed. Dropping in an app dir
@@ -338,10 +324,10 @@ package() {
   # way a surface was launched.
   install -d "$pkgdir/usr/lib/qt6/qml/Ryoku/Ui"
   cp -a "$_repo/ryoku/ui/." "$pkgdir/usr/lib/qt6/qml/Ryoku/Ui/"
-  # install.sh and the i18n sync/wrap tools are authoring-time helpers; the
-  # runtime reads only I18n.qml + translations/, so the tools stay out of the
-  # Qt import path (as does any stray python bytecode cache).
-  rm -f "$pkgdir/usr/lib/qt6/qml/Ryoku/Ui/install.sh" "$pkgdir"/usr/lib/qt6/qml/Ryoku/Ui/i18n-*.py
+  # install.sh is an authoring-time helper, not runtime QML, so it stays off
+  # the Qt import path. The catalog it used to carry now lives once at
+  # /usr/share/ryoku/i18n, which every runtime reads.
+  rm -f "$pkgdir/usr/lib/qt6/qml/Ryoku/Ui/install.sh"
   rm -rf "$pkgdir/usr/lib/qt6/qml/Ryoku/Ui/__pycache__"
   chmod -R u=rwX,go=rX "$pkgdir/usr/lib/qt6/qml/Ryoku/PluginKit"
 
@@ -402,6 +388,10 @@ package() {
   install -Dm644 "$_repo/ryoku/apps/yazi/yazi.toml"         "$cfg/yazi/yazi.toml"
   install -d "$cfg/kitty"
   cp -a "$_repo/ryoku/apps/kitty/." "$cfg/kitty/"
+  # ghostty: config is the user's (materialize seeds it once, never clobbers);
+  # matugen owns ryoku-colors, which the config includes for the palette.
+  install -d "$cfg/ghostty"
+  cp -a "$_repo/ryoku/apps/ghostty/." "$cfg/ghostty/"
 
   # neovim (LazyVim seed): the config only, not the repo docs.
   install -Dm644 "$_repo/ryoku/apps/nvim/init.lua"       "$cfg/nvim/init.lua"
@@ -426,21 +416,6 @@ package() {
     "$pkgdir/usr/share/applications/ryoku-hub.desktop"
   install -Dm644 "$_repo/ryoku/assets/brand/logo.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/ryoku-hub.svg"
-  # ryotunes: YouTube Music as a Chromium app-window wired to the desktop
-  # now-playing widget over MPRIS. Not a quickshell app, so it ships explicitly:
-  # the wrapper on PATH, its .desktop, and its icon. chromium comes from
-  # base.packages, so the wrap always has an engine.
-  install -Dm755 "$_repo/ryoku/apps/ryotunes/bin/ryotunes" "$pkgdir/usr/bin/ryotunes"
-  install -Dm644 "$_repo/ryoku/apps/ryotunes/ryotunes.desktop" \
-    "$pkgdir/usr/share/applications/ryotunes.desktop"
-  install -Dm644 "$_repo/ryoku/apps/ryotunes/ryotunes.svg" \
-    "$pkgdir/usr/share/icons/hicolor/scalable/apps/ryotunes.svg"
-  # ryoku-canvas spicetify extension (apps/spicetify): the source asset for the
-  # music widget's Spotify Canvas backdrop. `ryoku doctor` (reconcileSpicetifyCanvas)
-  # drops it into a Spotify user's spicetify Extensions and applies it, and stays
-  # inert for anyone without Spotify, so it ships as an asset here, not active config.
-  install -Dm644 "$_repo/ryoku/apps/spicetify/ryoku-canvas.js" \
-    "$pkgdir/usr/share/ryoku/spicetify/ryoku-canvas.js"
   # Default apps: the vendor layer, NOT ~/.config/mimeapps.list. That file is
   # where "Set as default" (GNOME, Firefox, xdg-mime) writes, and materializing
   # over it threw a user's choices away on every update. /usr/share/applications
@@ -448,13 +423,12 @@ package() {
   # the user picks something else, and then their pick wins for good.
   install -Dm644 "$_repo/ryoku/apps/mimeapps.list" \
     "$pkgdir/usr/share/applications/mimeapps.list"
-  # chromium reads ~/.config/chromium-flags.conf; pin its password store to GNOME
-  # Secret Service so it shares the keyring the desktop unlocks (screen share).
+  # chromium reads ~/.config/chromium-flags.conf and Google Chrome reads
+  # ~/.config/chrome-flags.conf; lay the one source to both so each pins the GNOME
+  # keyring password store and native Wayland (screen share works, and Chrome does
+  # not sit on Xwayland where it renders pages blank on NVIDIA).
   install -Dm644 "$_repo/ryoku/apps/chromium-flags.conf" "$cfg/chromium-flags.conf"
-  # the screen-share source chooser xdph launches (hypr/xdph.conf names the
-  # binary); its stylesheet is the matugen template rendered on palette change.
-  install -Dm644 "$_repo/ryoku/apps/hyprland-preview-share-picker/config.yaml" \
-    "$cfg/hyprland-preview-share-picker/config.yaml"
+  install -Dm644 "$_repo/ryoku/apps/chromium-flags.conf" "$cfg/chrome-flags.conf"
 
   # the qylock lockscreen bundle + its installer, so doctor can install or
   # repair the in-session lock on a box the ISO step missed (or that predates
@@ -507,18 +481,8 @@ package() {
   chmod -R u=rwX,go=rX "$pkgdir/usr/share/ryoku"
 
   # --- helper scripts on PATH (/usr/bin) ------------------------------------
-  # the pill, Hub, and shell also call the hypr/scripts copies above by absolute
-  # path; these are for CLI use + the hardware helpers Hyprland autostart calls
-  # by bare name.
+  # the hardware + container helpers the shell and autostart call by bare name.
   local s
-  for s in "$_repo"/ryoku/hyprland/scripts/ryoku-cmd-*; do
-    install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
-  done
-  # the app-role resolver the keybinds launch by bare name (SUPER+B -> browser, ...)
-  install -Dm755 "$_repo/ryoku/hyprland/scripts/ryoku-app" "$pkgdir/usr/bin/ryoku-app"
-  # the desktop music widget's corner button: launch / minimise / restore.
-  install -Dm755 "$_repo/ryoku/hyprland/scripts/ryoku-music-toggle" \
-    "$pkgdir/usr/bin/ryoku-music-toggle"
   for s in "$_repo"/system/hardware/*/ryoku-*; do
     [[ -f $s && -x $s ]] || continue
     install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
@@ -542,11 +506,20 @@ package() {
   install -Dm755 "$_repo/ryoku/shell/quickshell/plugins/ryoku-plugins-place" \
     "$pkgdir/usr/bin/ryoku-plugins-place"
 
-  # AI UI translation (Ryoku Settings > Shell > Language > Generate with AI):
+  # The translation catalog, at the one path every runtime reads: the QML
+  # singleton (ryoku/ui/Singletons/I18n.qml), the Go runtime the ryoku CLI and
+  # the installers link (ryoku/i18n/i18n.go) and the installer's shell
+  # (installation/backend/lib/i18n.sh). langs.json rides along because it is
+  # the list the Hub's language picker draws from.
+  install -d "$pkgdir/usr/share/ryoku/i18n"
+  install -m0644 "$_repo"/ryoku/i18n/catalog/*.json "$pkgdir/usr/share/ryoku/i18n/"
+  install -m0644 "$_repo/ryoku/i18n/langs.json" "$pkgdir/usr/share/ryoku/i18n/langs.json"
+
+  # AI UI translation (Ryoku Settings > Global > Language > Generate with AI):
   # the Hub button runs `ryoku-i18n llm <lang>` and Hyprland autostart runs
   # `ryoku-i18n ensure`, which seeds ~/.config/ryoku/i18n-llm.json for the
   # user's API key and machine-translates the UI to their language.
-  install -Dm755 "$_repo/ryoku/ui/i18n-sync.py" "$pkgdir/usr/bin/ryoku-i18n"
+  install -Dm755 "$_repo/ryoku/i18n/tools/sync.py" "$pkgdir/usr/bin/ryoku-i18n"
 
   # Nautilus stash actions: a nautilus-python extension that adds the deck's
   # install/compress/LocalSend actions to the file-manager right-click menu.
@@ -708,6 +681,13 @@ package() {
     "$pkgdir/usr/bin/ryoku-windows-entry"
   install -Dm755 "$_repo/system/boot/limine/45-ryoku-windows" \
     "$pkgdir/etc/boot/hooks/post.d/45-ryoku-windows"
+
+  # The initramfs GPU trim: a mkinitcpio install hook named by the HOOKS
+  # drop-in, so it has to exist for any image to build. Keeps the denylisted
+  # nouveau and its GSP firmware out, which is ~100 MiB per kernel image on a
+  # 2 GiB boot partition (issue #140's stale image).
+  install -Dm644 "$_repo/system/boot/mkinitcpio/install/ryoku-gpu-trim" \
+    "$pkgdir/usr/lib/initcpio/install/ryoku-gpu-trim"
 
   # The boot look, shipped so `ryoku update` refreshes it on every box, not just
   # fresh installs; the ryoku-desktop scriptlet then runs ryoku-boot-apply.

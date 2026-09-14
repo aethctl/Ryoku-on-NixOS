@@ -22,7 +22,7 @@ Item {
     property var hub
 
     // the live rules array from the draft: { namespace, action, value } entries.
-    readonly property var rules: pg.hub ? (pg.hub.hyprVal("layerRules") || []) : []
+    readonly property var rules: pg.hub ? (pg.hub.hyprVal("wm.hyprland.layerRules") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
 
@@ -61,39 +61,39 @@ Item {
     function patch(i, key, val) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("layerRules") || []).slice();
+        var a = (pg.hub.hyprVal("wm.hyprland.layerRules") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
-        pg.hub.hyprEdit("layerRules", a);
+        pg.hub.hyprEdit("wm.hyprland.layerRules", a);
     }
     // switching action seeds ignorealpha's default and clears the value for
     // every valueless action so nothing stale lingers in the draft.
     function setAction(i, key) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("layerRules") || []).slice();
+        var a = (pg.hub.hyprVal("wm.hyprland.layerRules") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i].action = key;
         a[i].value = key === "ignorealpha" ? "0.5" : "";
-        pg.hub.hyprEdit("layerRules", a);
+        pg.hub.hyprEdit("wm.hyprland.layerRules", a);
     }
     function addRule() {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("layerRules") || []).slice();
+        var a = (pg.hub.hyprVal("wm.hyprland.layerRules") || []).slice();
         a.push({ "namespace": "", "action": "blur", "value": "" });
-        pg.hub.hyprEdit("layerRules", a);
+        pg.hub.hyprEdit("wm.hyprland.layerRules", a);
     }
     function removeRule(i) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("layerRules") || []).slice();
+        var a = (pg.hub.hyprVal("wm.hyprland.layerRules") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("layerRules", a);
+        pg.hub.hyprEdit("wm.hyprland.layerRules", a);
     }
     function clearAll() {
         if (pg.hub)
-            pg.hub.hyprEdit("layerRules", []);
+            pg.hub.hyprEdit("wm.hyprland.layerRules", []);
     }
 
     // head: eyebrow, Fraunces title, blurb (matches every settings page). The

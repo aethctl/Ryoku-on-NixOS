@@ -3,15 +3,14 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 import "Singletons"
 
 /**
  * Ryoku workspace overview: a full-screen expo, migrated to a per-monitor module
  * entry the single resident shell instantiates once per screen. The compositor
- * blurs the desktop behind the "overview" layer (the layer rule in
- * hyprland/modules/decoration.lua), so only the workspace cells and their live
+ * blurs the desktop behind the "overview" layer (a compositor rule keyed on the
+ * layer namespace), so only the workspace cells and their live
  * window previews read on top. This screen shows its own workspaces as scaled
  * mini-desktops; only the focused monitor grabs the keyboard. Click a cell to
  * switch, click a window to focus, drag a window onto another cell to move it,
@@ -35,35 +34,21 @@ Scope {
     // and leave the overview permanently unable to reopen.
     signal requestClose()
 
-    // Refresh Hyprland's monitor/workspace/toplevel models once when the expo
-    // opens so a just-mapped window lands; the resident models are already warm,
-    // so nothing polls. Phase 10: the daemon idle-park report that also lived on
-    // this handler (execDetached ryoku-shell state overview) is dropped now that
-    // ShellState.overviewOpen owns open/close.
-    onActiveChanged: if (root.active) {
-        Hyprland.refreshMonitors();
-        Hyprland.refreshWorkspaces();
-        Hyprland.refreshToplevels();
-    }
-
-    function focusedMonitor() {
-        var m = Hyprland.focusedMonitor;
-        return m && m.name ? m.name : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
-    }
     function hide() {
         root.requestClose();
     }
 
-    readonly property string focusedMon: {
-        var m = Hyprland.focusedMonitor;
-        return m && m.name ? m.name : "";
-    }
+    // The shell draws its own overview only where the compositor lacks a native
+    // one and exposes window geometry to place the previews.
+    readonly property bool available: !Wm.caps.nativeOverview && Wm.caps.windowGeometry
+
+    readonly property string focusedMon: Wm.focusedOutput
 
     PanelWindow {
         id: win
         readonly property real s: Math.min(1.25, (root.screen ? root.screen.height / 1080 : 1)) * Math.max(0.8, Math.min(1.4, Config.fontScale)) * Tokens.uiScaleFor(root.screen ? root.screen.name : "")
         readonly property bool isFocused: !root.focusedMon || root.focusedMon === (root.screen ? root.screen.name : "")
-        readonly property bool shown: root.active
+        readonly property bool shown: root.active && root.available
 
         screen: root.screen
         visible: shown || closing.running

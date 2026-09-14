@@ -1336,15 +1336,10 @@ func writeSolidColourPNG(t *testing.T, path string, r, g, b uint8) {
 	}
 }
 
-// applyHyprBorder is the only runtime path that lands the wallpaper border on
-// the live compositor: a hyprctl reload re-runs decoration.lua, which reverts
-// col.active_border to the value it parses at config time (the shipped red
-// fallback when hypr-colors.lua is stale), so the paint worker must eval the
-// palette border after every reload. The eval reads color4 (active) and
-// background (inactive) from the colors.json just written. A regression that
-// drops the call -- as the wallpaper-backend move to the daemon once did --
-// strands the window border on red.
-func TestApplyHyprBorderEvalsPaletteBorder(t *testing.T) {
+// paletteBorderColors maps the palette roles the shell owns onto the border:
+// color4 is the active border, background the inactive. The provider owns the
+// colour literal format, so only that role mapping is asserted here.
+func TestPaletteBorderColors(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, ".cache"))
@@ -1353,31 +1348,14 @@ func TestApplyHyprBorderEvalsPaletteBorder(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(colorsPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if _, _, ok := paletteBorderColors(); ok {
+		t.Fatal("paletteBorderColors ok with no colors.json, want not ok")
+	}
 	if err := os.WriteFile(colorsPath, []byte(`{"color4":"#12ab34","background":"#010203"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	var got [][]string
-	orig := runCommand
-	t.Cleanup(func() { runCommand = orig })
-	runCommand = func(name string, args ...string) error {
-		got = append(got, append([]string{name}, args...))
-		return nil
-	}
-
-	applyHyprBorder()
-
-	if len(got) != 1 {
-		t.Fatalf("want exactly one hyprctl eval, got %v", got)
-	}
-	if got[0][0] != "hyprctl" || got[0][1] != "eval" {
-		t.Fatalf("not a hyprctl eval: %v", got[0])
-	}
-	line := strings.Join(got[0], " ")
-	if !strings.Contains(line, `["col.active_border"]="rgb(12ab34)"`) {
-		t.Fatalf("active border not evalled from color4: %q", line)
-	}
-	if !strings.Contains(line, `["col.inactive_border"]="rgb(010203)"`) {
-		t.Fatalf("inactive border not evalled from background: %q", line)
+	active, inactive, ok := paletteBorderColors()
+	if !ok || active != "#12ab34" || inactive != "#010203" {
+		t.Fatalf("paletteBorderColors() = (%q,%q,%v), want (#12ab34,#010203,true)", active, inactive, ok)
 	}
 }

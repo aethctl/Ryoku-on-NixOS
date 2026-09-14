@@ -1,7 +1,6 @@
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import QtQuick
 import QtQuick.Shapes
 import QtQuick.Effects
@@ -30,11 +29,18 @@ Scope {
   // time, not bound, so the panel does not hop mid-session when focus moves.
   property string mainMonitor: Config.mainMonitor
   property string openMonitor: ""
-  function focusedMonitorName() {
-      const m = Hyprland.focusedMonitor;
-      if (m && m.name)
-          return String(m.name);
+  function firstScreenName() {
       return Quickshell.screens.length > 0 ? String(Quickshell.screens[0].name) : "";
+  }
+  // The focused output comes from the daemon: no Wayland protocol reports it to
+  // a client. Answers after the first paint, so the first screen is latched
+  // first and corrected when the reply lands.
+  function latchFocusedMonitor() {
+      openMonitor = firstScreenName()
+      DaemonClient.call("wm.focusedOutput", {}, function(result, err) {
+          if (!err && result && result.name)
+              openMonitor = String(result.name)
+      })
   }
   property string _activeThemeName: ""
   property var _stageWalls: ({})
@@ -317,7 +323,7 @@ Scope {
     if (showing) {
       // latch the monitor before anything paints: the surface must land where
       // the user is looking, and must not then chase focus while open.
-      openMonitor = wallpaperSelector.focusedMonitorName()
+      wallpaperSelector.latchFocusedMonitor()
       _filterBarManuallyShown = Config.filterBarAlwaysVisible
       _restorePending = true
       _bindActiveViewModel()
@@ -2200,8 +2206,8 @@ Scope {
 
               Item {
                 width: parent.width; height: 26
-                visible: Config.isNiri && Config.niriOverviewBackdrop && gridBackOverlay.overlayData && gridBackOverlay.overlayData.type === "static"
-                property bool _isBackdrop: !!(gridBackOverlay.overlayData && Config.niriBackdrop === gridBackOverlay.overlayData.path)
+                visible: Config.canOverviewBackdrop && Config.overviewBackdropEnabled && gridBackOverlay.overlayData && gridBackOverlay.overlayData.type === "static"
+                property bool _isBackdrop: !!(gridBackOverlay.overlayData && Config.overviewBackdropPath === gridBackOverlay.overlayData.path)
                 Text {
                   anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                   text: I18n.tr("OVERVIEW BACKDROP")
@@ -2629,8 +2635,8 @@ Scope {
 
               Item {
                 width: parent.width; height: 26
-                visible: Config.isNiri && Config.niriOverviewBackdrop && hexBackOverlay.overlayData && hexBackOverlay.overlayData.type === "static"
-                property bool _isBackdrop: !!(hexBackOverlay.overlayData && Config.niriBackdrop === hexBackOverlay.overlayData.path)
+                visible: Config.canOverviewBackdrop && Config.overviewBackdropEnabled && hexBackOverlay.overlayData && hexBackOverlay.overlayData.type === "static"
+                property bool _isBackdrop: !!(hexBackOverlay.overlayData && Config.overviewBackdropPath === hexBackOverlay.overlayData.path)
                 Text {
                   anchors.left: parent.left; anchors.verticalCenter: parent.verticalCenter
                   text: I18n.tr("OVERVIEW BACKDROP")

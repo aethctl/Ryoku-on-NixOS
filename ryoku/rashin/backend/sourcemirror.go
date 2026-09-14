@@ -23,8 +23,8 @@ const sourceMirrorMaxFileSize = 2 << 20 // 2 MiB
 
 const sourceMirrorReadme = "# Rashin config mirror\n" +
 	"\n" +
-	"This is a READ-ONLY copy of the live desktop config (`~/.config/quickshell`,\n" +
-	"`~/.config/hypr`, and `~/.config/ryoku/*.json`), kept only so `prowl-agent`\n" +
+	"This is a READ-ONLY copy of the live desktop config (`~/.config/quickshell`, the\n" +
+	"active window manager's config, and `~/.config/ryoku/*.json`), kept only so `prowl-agent`\n" +
 	"can index the config on a box with no source checkout. It is rebuilt on every\n" +
 	"Rashin reindex; edits here are overwritten and never reach the desktop. Edit\n" +
 	"the real files (see `desktop.md`), never this mirror.\n"
@@ -45,11 +45,14 @@ type mirrorInput struct {
 
 func sourceMirrorInputs() []mirrorInput {
 	cfg := configHome()
-	return []mirrorInput{
+	inputs := []mirrorInput{
 		{src: filepath.Join(cfg, "quickshell"), dst: "quickshell"},
-		{src: filepath.Join(cfg, "hypr"), dst: "hypr"},
-		{src: filepath.Join(cfg, "ryoku"), dst: "ryoku", glob: "*.json"},
 	}
+	if dir := compositorConfigDir(); dir != "" {
+		inputs = append(inputs, mirrorInput{src: filepath.Join(cfg, dir), dst: dir})
+	}
+	inputs = append(inputs, mirrorInput{src: filepath.Join(cfg, "ryoku"), dst: "ryoku", glob: "*.json"})
+	return inputs
 }
 
 // RefreshSourceMirror rebuilds the config mirror and refreshes its prowl index.

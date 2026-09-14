@@ -37,7 +37,7 @@ Item {
     property var cursorThemes: []
     Process {
         id: cursorsProc
-        command: ["ryoku-hub", "hypr", "cursors"]
+        command: ["ryoku-hub", "desktop", "cursors"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: { try { pg.cursorThemes = JSON.parse(this.text); } catch (e) {} }
@@ -50,7 +50,7 @@ Item {
         var d = {};
         if (pg.hub) {
             for (var i = 0; i < Schema.rows.length; i++) { var k = Schema.rows[i].key; if (k) d[k] = pg.hv(k); }
-            d["cursor.material"] = (String(pg.hv("cursor.theme")) === pg.matVariant);
+            d["desktop.cursor.material"] = (String(pg.hv("desktop.cursor.theme")) === pg.matVariant);
         }
         return d;
     }
@@ -58,7 +58,7 @@ Item {
         var d = {};
         if (pg.hub) {
             for (var i = 0; i < Schema.rows.length; i++) { var k = Schema.rows[i].key; if (k) d[k] = pg.cv(k); }
-            d["cursor.material"] = (String(pg.cv("cursor.theme")) === pg.matVariant);
+            d["desktop.cursor.material"] = (String(pg.cv("desktop.cursor.theme")) === pg.matVariant);
         }
         return d;
     }
@@ -66,9 +66,9 @@ Item {
         var out = [];
         for (var i = 0; i < Schema.rows.length; i++) {
             var r = Schema.rows[i];
-            if (r.key === "cursor.theme")
+            if (r.key === "desktop.cursor.theme")
                 out.push({ tab: r.tab, group: r.group, key: r.key, label: r.label,
-                           desc: r.desc, ctl: "pick", src: "hypr", opts: pg.cursorThemes });
+                           desc: r.desc, ctl: "pick", src: "desktop.json", opts: pg.cursorThemes });
             else
                 out.push(r);
         }
@@ -89,25 +89,25 @@ Item {
         query: pg.hub ? pg.hub.query : ""
         onEdited: (k, v) => {
             if (!pg.hub) return;
-            if (k === "cursor.material") {
+            if (k === "desktop.cursor.material") {
                 if (v) {
-                    var cur = String(pg.hv("cursor.theme"));
+                    var cur = String(pg.hv("desktop.cursor.theme"));
                     if (cur !== pg.matVariant) pg.prevTheme = cur;
-                    pg.hub.hyprEdit("cursor.theme", pg.matVariant);
+                    pg.hub.hyprEdit("desktop.cursor.theme", pg.matVariant);
                     // recolour to the live wallpaper accent right away, so the
                     // pointer follows matugen from the moment it is turned on
                     // rather than showing the packaged fallback until Save.
                     Quickshell.execDetached(["sh", "-c", "command -v ryoku-cursor-material-recolor >/dev/null && ryoku-cursor-material-recolor --force --full"]);
                 } else {
                     var back = (pg.prevTheme && pg.prevTheme !== pg.matVariant) ? pg.prevTheme : pg.matFallback;
-                    pg.hub.hyprEdit("cursor.theme", back);
+                    pg.hub.hyprEdit("desktop.cursor.theme", back);
                 }
                 return;
             }
             pg.hub.hyprEdit(k, v);
         }
         onPickRequested: (r) => {
-            if (r.key === "cursor.theme") cursorPick.show();
+            if (r.key === "desktop.cursor.theme") cursorPick.show();
             else if (pg.hub) pg.hub.openPick(r);
         }
     }
@@ -125,8 +125,8 @@ Item {
             anchors.centerIn: parent
             title: I18n.tr("CURSOR THEME")
             options: pg.cursorThemes
-            current: pg.hub ? String(pg.hub.hyprVal("cursor.theme")) : ""
-            onChose: (k) => { pg.setKey("cursor.theme", k); cursorPick.visible = false; }
+            current: pg.hub ? String(pg.hub.hyprVal("desktop.cursor.theme")) : ""
+            onChose: (k) => { pg.setKey("desktop.cursor.theme", k); cursorPick.visible = false; }
             onDismissed: cursorPick.visible = false
         }
     }

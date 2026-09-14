@@ -31,6 +31,6 @@ export RYOKU_SHELL_DIR="$here"
 echo "ryoku-shell dev  (RYOKU_SHELL_DIR=$here)"
 echo "  edit anything under $here/quickshell and it reloads live"
 echo "  test actions:  $bin <launcher|lock|wallpaper|status>"
-echo "  add keybinds:  $here/dev-binds.sh on    (restore yours with: hyprctl reload)"
+echo "  add keybinds:  $here/../hyprland/dev-binds.sh on    (restore yours with: ryoku wm act config.reload)"
 echo "  stop:          $here/dev-stop.sh"
 exec "$bin" daemon

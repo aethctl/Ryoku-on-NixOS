@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -43,19 +42,13 @@ func newVideoPlayer() *videoPlayer { return &videoPlayer{} }
 // output by name, or the NULL slot ("", the compositor's primary) when the
 // list can't be read.
 func liveSlots() []string {
-	out, err := exec.Command("hyprctl", "monitors", "-j").Output()
-	if err != nil {
+	outs := outputs.list()
+	if len(outs) == 0 {
 		return []string{""}
 	}
-	var mons []struct {
-		Name string `json:"name"`
-	}
-	if json.Unmarshal(out, &mons) != nil || len(mons) == 0 {
-		return []string{""}
-	}
-	slots := make([]string, 0, len(mons))
-	for _, m := range mons {
-		slots = append(slots, m.Name)
+	slots := make([]string, 0, len(outs))
+	for _, o := range outs {
+		slots = append(slots, o.Name)
 	}
 	return slots
 }

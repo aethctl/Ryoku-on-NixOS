@@ -7,7 +7,7 @@ import Ryoku.Ui.Singletons
 Item {
     id: panel
 
-    property alias luaPath: hotkeyRow.luaPath
+    property alias defaultChord: hotkeyRow.defaultChord
     property alias hotkey: hotkeyRow.hotkey
 
     signal closeRequested()

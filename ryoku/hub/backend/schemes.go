@@ -126,9 +126,8 @@ func applyScheme(mode string) error {
 		st.FollowWallpaper = true
 		saveThemeState(st)
 		// borders read the master: regen so they follow the wallpaper again.
-		if err := writeGeneratedLua(loadOverrides()); err != nil {
-			return err
-		}
+		// Best-effort: a box with no provider still persists the choice above.
+		_, _ = desktopClient().Apply(desktopStorePath())
 		// the daemon derives (honouring the per-image tune); no re-animation.
 		// Explicit, not left to the theme patch: when theme.theme already read
 		// Wallpaper the patch is a no-op and nothing else would repaint.
@@ -147,11 +146,8 @@ func applyScheme(mode string) error {
 		st.Scheme = mode
 		st.FollowWallpaper = false
 		saveThemeState(st)
-		// borders read the master: regen so the fixed border colours pin now,
-		// not only on the next appearance save.
-		if err := writeGeneratedLua(loadOverrides()); err != nil {
-			return err
-		}
+		// borders read the master: regen so the fixed border colours pin now.
+		_, _ = desktopClient().Apply(desktopStorePath())
 		writePalette(pal)
 		// The desktop's GTK settings (colour-scheme preference, the theme name
 		// for this mode, the accent) are the daemon's to write: it owns the
@@ -166,7 +162,7 @@ func applyScheme(mode string) error {
 	default:
 		return fmt.Errorf("unknown scheme %q (want follow|light|dark)", mode)
 	}
-	hyprReload()
+	reloadDesktop()
 	_ = exec.Command("pkill", "-USR1", "-x", "kitty").Run()
 	return nil
 }
@@ -330,10 +326,12 @@ func applyRyokuTheme() error {
 		"osdRadius":   0,
 		"fontFamily":  "Space Grotesk",
 	})
-	// square window corners: pin the appearance override the daemon reads.
-	o := loadOverrides()
-	o.Appearance.Rounding = 0
-	_ = saveOverrides(o)
+	// square window corners: pin the appearance override the provider reads.
+	_ = withDesktopLock(func() error {
+		ns := readJSONMap(desktopStorePath())
+		childMap(childMap(ns, "desktop"), "appearance")["rounding"] = 0
+		return atomicWrite(desktopStorePath(), mustJSON(ns), 0o644)
+	})
 	// GTK type now; the Hyprland autostart pins it on the next login.
 	_ = exec.Command("gsettings", "set", "org.gnome.desktop.interface", "font-name", "Space Grotesk 11").Run()
 	// clear any active-rice marker: the signature is a fresh look, not a rice,

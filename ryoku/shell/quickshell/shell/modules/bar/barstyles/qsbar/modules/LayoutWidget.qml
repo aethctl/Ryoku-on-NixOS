@@ -8,6 +8,7 @@ Item {
     required property var root
 
     readonly property bool iconOnly: root.iconOnly("G19")
+    readonly property bool shown: root.modLayout && Wm.caps.keyboardLayoutSwitch
 
     property string layout: {
         var value = KeyboardLayout.variant || ""
@@ -23,10 +24,10 @@ Item {
 
     readonly property string tooltipText: I18n.tr("Keyboard layout · %1").arg(rootMod.layout)
 
-    visible: root.modLayout && implicitWidth > 0.5
-    implicitWidth: root.modLayout ? row.implicitWidth + 18 : 0
+    visible: rootMod.shown && implicitWidth > 0.5
+    implicitWidth: rootMod.shown ? row.implicitWidth + 18 : 0
     implicitHeight: 28
-    opacity: root.modLayout ? 1 : 0
+    opacity: rootMod.shown ? 1 : 0
 
     Behavior on opacity {
         NumberAnimation {
@@ -95,11 +96,11 @@ Item {
         onExited: tip.hide()
 
         // Left click opens the keyboard settings page; right click cycles to the
-        // next configured xkb layout, which fires activelayout so the pill updates.
+        // next configured layout.
         onClicked: function (mouse) {
             tip.hide()
             if (mouse.button === Qt.RightButton)
-                Quickshell.execDetached(["hyprctl", "switchxkblayout", "all", "next"])
+                Wm.cycleKeyboardLayout()
             else
                 Quickshell.execDetached(["ryoku-shell", "hub", "open", "input"])
         }

@@ -3,8 +3,8 @@
 # wallpaper topic the shell subscribes to, so it is supervised beside the shell
 # daemon on the same session target.
 Description=Ryogami wallpaper daemon
-PartOf=hyprland-session.target
-After=hyprland-session.target
+PartOf=ryoku-session.target
+After=ryoku-session.target
 ConditionEnvironment=WAYLAND_DISPLAY
 # a config that cannot load would otherwise restart forever; stop and let
 # doctor report it instead (start-rate keys belong in [Unit]).
@@ -21,4 +21,4 @@ KillMode=process
 Slice=session.slice
 
 [Install]
-WantedBy=hyprland-session.target
+WantedBy=ryoku-session.target

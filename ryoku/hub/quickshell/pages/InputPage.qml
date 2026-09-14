@@ -49,10 +49,10 @@ Item {
     // because xkb aligns variants to layouts by position. `committed` reads disk
     // for the struck default.
     function kbLayoutStr(committed) {
-        return String((committed ? pg.cv("input.kbLayout") : pg.hv("input.kbLayout")) || "");
+        return String((committed ? pg.cv("desktop.input.kbLayout") : pg.hv("desktop.input.kbLayout")) || "");
     }
     function kbVariantStr(committed) {
-        return String((committed ? pg.cv("input.kbVariant") : pg.hv("input.kbVariant")) || "");
+        return String((committed ? pg.cv("desktop.input.kbVariant") : pg.hv("desktop.input.kbVariant")) || "");
     }
     function primaryLayout(committed) { return pg.kbLayoutStr(committed).split(",")[0]; }
     function secondaryLayout(committed) {
@@ -62,12 +62,12 @@ Item {
     function primaryVariant(committed) { return pg.kbVariantStr(committed).split(",")[0]; }
 
     function setLayouts(primary, secondary) {
-        pg.he("input.kbLayout", secondary ? primary + "," + secondary : primary);
+        pg.he("desktop.input.kbLayout", secondary ? primary + "," + secondary : primary);
         var v = pg.primaryVariant(false);
-        pg.he("input.kbVariant", secondary && v ? v + "," : v);
+        pg.he("desktop.input.kbVariant", secondary && v ? v + "," : v);
     }
     function setVariant(v) {
-        pg.he("input.kbVariant", pg.secondaryLayout(false) && v ? v + "," : v);
+        pg.he("desktop.input.kbVariant", pg.secondaryLayout(false) && v ? v + "," : v);
     }
 
     // ── curated remaps over kb_options ──────────────────────────────────────
@@ -82,7 +82,7 @@ Item {
     readonly property string swapId: "altwin:swap_alt_win"
 
     function kbOptionsStr(committed) {
-        return String((committed ? pg.cv("input.kbOptions") : pg.hv("input.kbOptions")) || "");
+        return String((committed ? pg.cv("desktop.input.kbOptions") : pg.hv("desktop.input.kbOptions")) || "");
     }
     function optTokens(committed) {
         var raw = pg.kbOptionsStr(committed).split(",");
@@ -123,7 +123,7 @@ Item {
                 out.push(toks[j]);
         if (value.length)
             out.push(value);
-        pg.he("input.kbOptions", out.join(","));
+        pg.he("desktop.input.kbOptions", out.join(","));
     }
     function setExtra(text) {
         var known = pg.knownIds();
@@ -138,7 +138,7 @@ Item {
             if (t.length)
                 keep.push(t);
         }
-        pg.he("input.kbOptions", keep.join(","));
+        pg.he("desktop.input.kbOptions", keep.join(","));
     }
 
     // family key <-> visible label, offered choices per family.
@@ -184,7 +184,7 @@ Item {
 
     Process {
         id: layoutsProc
-        command: ["ryoku-hub", "hypr", "layouts"]
+        command: ["ryoku-hub", "desktop", "layouts"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {
@@ -205,7 +205,7 @@ Item {
     Process {
         id: variantsProc
         property string forLayout: ""
-        command: ["ryoku-hub", "hypr", "variants", forLayout]
+        command: ["ryoku-hub", "desktop", "variants", forLayout]
         stdout: StdioCollector {
             onStreamFinished: {
                 var out = [{ "code": "", "name": I18n.tr("Default") }];
@@ -243,9 +243,9 @@ Item {
     // Out of band: this writes to /etc and rebuilds the boot image, not the
     // draft, and escalates through polkit.
     property string sysApplyState: ""
-    function applyLayoutArg() { return String(pg.hv("input.kbLayout") || "us"); }
-    function applyVariantArg() { return String(pg.hv("input.kbVariant") || ""); }
-    function applyOptionsArg() { return String(pg.hv("input.kbOptions") || ""); }
+    function applyLayoutArg() { return String(pg.hv("desktop.input.kbLayout") || "us"); }
+    function applyVariantArg() { return String(pg.hv("desktop.input.kbVariant") || ""); }
+    function applyOptionsArg() { return String(pg.hv("desktop.input.kbOptions") || ""); }
     // `ryoku keyboard apply` owns all four layers: it sets the greeter and the
     // console through localectl AND rebuilds the boot image, which localectl
     // alone cannot do. mkinitcpio bakes a copy of /etc/vconsole.conf into the
@@ -268,12 +268,12 @@ Item {
     readonly property bool kbClean: {
         if (!pg.hub)
             return false;
-        return JSON.stringify(pg.hv("input.kbLayout")) === JSON.stringify(pg.cv("input.kbLayout"))
-            && JSON.stringify(pg.hv("input.kbVariant")) === JSON.stringify(pg.cv("input.kbVariant"))
-            && JSON.stringify(pg.hv("input.kbOptions")) === JSON.stringify(pg.cv("input.kbOptions"));
+        return JSON.stringify(pg.hv("desktop.input.kbLayout")) === JSON.stringify(pg.cv("desktop.input.kbLayout"))
+            && JSON.stringify(pg.hv("desktop.input.kbVariant")) === JSON.stringify(pg.cv("desktop.input.kbVariant"))
+            && JSON.stringify(pg.hv("desktop.input.kbOptions")) === JSON.stringify(pg.cv("desktop.input.kbOptions"));
     }
 
-    readonly property bool swipeOn: pg.hv("input.workspaceSwipe") === true
+    readonly property bool swipeOn: pg.hv("desktop.input.workspaceSwipe") === true
 
     // ── the catalogue overlay (filtered pick over the runtime xkb lists) ─────
     property var catList: null            // [{ code, name }] while open, else null
@@ -614,7 +614,7 @@ Item {
                 swapAltSuper: pg.pickFrom([pg.swapId], false) === pg.swapId
                 composeKey: pg.pickFrom(pg.composeIds, false)
                 switchChord: pg.pickFrom(pg.grpIds, false)
-                numlock: pg.hv("input.numlockByDefault") === true
+                numlock: pg.hv("desktop.input.numlockByDefault") === true
             }
             Decor {
                 width: kbmSect.span(Spans.cols) - pinnedMap.width - Tokens.s4
@@ -687,7 +687,7 @@ Item {
                     kind: "seg"
                 }
                 Setting {
-                    path: "input.numlockByDefault"
+                    path: "desktop.input.numlockByDefault"
                     ctl: "sw"
                     label: I18n.tr("Numlock on at login")
                     desc: I18n.tr("Start each session with the keypad typing digits.")
@@ -795,45 +795,45 @@ Item {
 
                 Setting {
                     divider: false
-                    path: "input.sensitivity"
+                    path: "desktop.input.sensitivity"
                     ctl: "slid"; lo: -1; hi: 1; sc: 100; dec: 2
                     label: I18n.tr("Sensitivity")
                     desc: I18n.tr("Pointer speed offset; 0 is the device default.")
                 }
                 Setting {
-                    path: "input.mouseScrollFactor"
+                    path: "desktop.input.mouseScrollFactor"
                     ctl: "slid"; lo: 0.2; hi: 3; sc: 10; dec: 1; unit: "×"
                     label: I18n.tr("Scroll speed")
                     desc: I18n.tr("Multiplier on each wheel notch.")
                 }
                 Setting {
-                    path: "input.followMouse"
+                    path: "desktop.input.followMouse"
                     ctl: "seg"; asInt: true
                     opts: [{ "key": 0, "label": I18n.tr("Ignore pointer movement") }, { "key": 1, "label": I18n.tr("Focus under pointer") }, { "key": 2, "label": I18n.tr("Click to focus") }]
                     label: I18n.tr("Focus behavior")
                     desc: I18n.tr("Click to focus keeps newly launched and dock-selected apps in front.")
                 }
                 Setting {
-                    path: "input.leftHanded"
+                    path: "desktop.input.leftHanded"
                     ctl: "sw"
                     label: I18n.tr("Left-handed buttons")
                     desc: I18n.tr("Swap the left and right mouse buttons.")
                 }
                 Setting {
-                    path: "input.accelProfile"
+                    path: "desktop.input.accelProfile"
                     ctl: "seg"
                     opts: [{ "key": "", "label": I18n.tr("Default") }, { "key": "flat", "label": I18n.tr("Flat") }, { "key": "adaptive", "label": I18n.tr("Adaptive") }]
                     label: I18n.tr("Acceleration")
                     desc: I18n.tr("Flat ties travel to the hand; Adaptive speeds quick moves.")
                 }
                 Setting {
-                    path: "input.mouseNaturalScroll"
+                    path: "desktop.input.mouseNaturalScroll"
                     ctl: "sw"
                     label: I18n.tr("Natural scroll")
                     desc: I18n.tr("Roll the wheel up and the page moves up.")
                 }
                 Setting {
-                    path: "input.middleClickPaste"
+                    path: "desktop.input.middleClickPaste"
                     ctl: "sw"
                     label: I18n.tr("Middle-click pastes")
                     desc: I18n.tr("Press the wheel to insert the last highlighted text.")
@@ -846,74 +846,74 @@ Item {
 
                 Setting {
                     divider: false
-                    path: "input.naturalScroll"
+                    path: "desktop.input.naturalScroll"
                     ctl: "sw"
                     label: I18n.tr("Natural scroll")
                     desc: I18n.tr("Two fingers drag the content like a touchscreen.")
                 }
                 Setting {
-                    path: "input.tapToClick"
+                    path: "desktop.input.tapToClick"
                     ctl: "sw"
                     label: I18n.tr("Tap to click")
                     desc: I18n.tr("A tap counts as a click; two fingers right, three middle.")
                 }
                 Setting {
-                    path: "input.tapAndDrag"
+                    path: "desktop.input.tapAndDrag"
                     ctl: "sw"
                     label: I18n.tr("Tap and drag")
                     desc: I18n.tr("Tap, then hold the finger down to drag what you tapped.")
                 }
                 Setting {
-                    path: "input.disableWhileTyping"
+                    path: "desktop.input.disableWhileTyping"
                     ctl: "sw"
                     label: I18n.tr("Disable while typing")
                     desc: I18n.tr("Ignore the touchpad while you type so a palm cannot nudge it.")
                 }
                 Setting {
-                    path: "input.clickfinger"
+                    path: "desktop.input.clickfinger"
                     ctl: "sw"
                     label: I18n.tr("Click by finger count")
                     desc: I18n.tr("One finger clicks left, two right, three middle.")
                 }
                 Setting {
-                    path: "input.middleEmulation"
+                    path: "desktop.input.middleEmulation"
                     ctl: "sw"
                     label: I18n.tr("Emulate middle click")
                     desc: I18n.tr("Press left and right together for a middle click.")
                 }
                 Setting {
-                    path: "input.touchScrollFactor"
+                    path: "desktop.input.touchScrollFactor"
                     ctl: "slid"; lo: 0.2; hi: 3; sc: 10; dec: 1; unit: "×"
                     label: I18n.tr("Scroll speed")
                     desc: I18n.tr("Multiplier on two-finger scroll distance.")
                 }
                 Setting {
-                    path: "input.workspaceSwipe"
+                    path: "desktop.input.workspaceSwipe"
                     ctl: "sw"
                     label: I18n.tr("Swipe between workspaces")
                     desc: I18n.tr("A horizontal swipe slides to the next workspace.")
                 }
                 Setting {
-                    path: "input.swipeFingers"
+                    path: "desktop.input.swipeFingers"
                     ctl: "seg"; asInt: true; gate: pg.swipeOn
                     opts: [{ "key": 3, "label": "3" }, { "key": 4, "label": "4" }]
                     label: I18n.tr("Swipe fingers")
                     desc: I18n.tr("How many fingers count as a workspace swipe.")
                 }
                 Setting {
-                    path: "input.swipeInvert"
+                    path: "desktop.input.swipeInvert"
                     ctl: "sw"; gate: pg.swipeOn
                     label: I18n.tr("Natural swipe direction")
                     desc: I18n.tr("The workspace row follows your fingers.")
                 }
                 Setting {
-                    path: "input.swipeCreateNew"
+                    path: "desktop.input.swipeCreateNew"
                     ctl: "sw"; gate: pg.swipeOn
                     label: I18n.tr("Swipe past the last workspace")
                     desc: I18n.tr("Swiping past the end opens a fresh workspace instead of stopping.")
                 }
                 Setting {
-                    path: "input.swipeDistance"
+                    path: "desktop.input.swipeDistance"
                     ctl: "slid"; lo: 100; hi: 600; sc: 1; dec: 0; unit: "px"; gate: pg.swipeOn
                     label: I18n.tr("Swipe distance")
                     desc: I18n.tr("Finger travel for a full switch; lower flips sooner.")
@@ -926,13 +926,13 @@ Item {
 
                 Setting {
                     divider: false
-                    path: "input.repeatRate"
+                    path: "desktop.input.repeatRate"
                     ctl: "step"; lo: 1; hi: 100; stepBy: 1; unit: "/s"
                     label: I18n.tr("Repeat rate")
                     desc: I18n.tr("Characters per second while a key is held.")
                 }
                 Setting {
-                    path: "input.repeatDelay"
+                    path: "desktop.input.repeatDelay"
                     ctl: "step"; lo: 100; hi: 2000; stepBy: 50; unit: "ms"
                     label: I18n.tr("Repeat delay")
                     desc: I18n.tr("Pause before a held key starts repeating.")

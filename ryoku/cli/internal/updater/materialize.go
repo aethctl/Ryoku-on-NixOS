@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 	"sort"
 	"strings"
 )
@@ -35,15 +36,24 @@ var ryokuDropIn = regexp.MustCompile(`^[0-9]+-ryoku-[^/]*\.conf$`)
 // sys.LiveOwnedConfig so the overlay never re-lays a frozen copy over a file
 // edited in place; ghostty/config is the exception -- it is a seed the user may
 // instead fork through the overlay, so it stays overlay-able (not live-owned).
-var generatedSeed = map[string]bool{
-	"hypr/monitors.lua":        true,
-	"hypr/gpu.lua":             true,
-	"hypr/keyboard.lua":        true,
-	"hypr/user.lua":            true,
-	"fastfetch/config.jsonc":   true,
-	"kitty/current-theme.conf": true,
-	"ghostty/config":           true,
-	"ghostty/ryoku-colors":     true,
+var generatedSeed = generatedSeedSet()
+
+func generatedSeedSet() map[string]bool {
+	seed := map[string]bool{
+		"fastfetch/config.jsonc":   true,
+		"kitty/current-theme.conf": true,
+		"ghostty/config":           true,
+		"ghostty/ryoku-colors":     true,
+	}
+	// Every provider's per-machine files are seeded and kept regardless of which
+	// compositor is running, so an update under one never prunes another's. The
+	// names come from the provider because they are its own config format.
+	for _, name := range wm.Providers() {
+		for _, rel := range wm.ConfigSeeds(name) {
+			seed[rel] = true
+		}
+	}
+	return seed
 }
 
 // nvim is seeded like ghostty: Ryoku lays its LazyVim starting point once, then

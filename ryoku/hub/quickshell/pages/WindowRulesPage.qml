@@ -20,7 +20,7 @@ Item {
     property var hub
 
     // the live rule array from the draft: a list of { class, title, action, value }.
-    readonly property var ruleRows: pg.hub ? (pg.hub.hyprVal("windowRules") || []) : []
+    readonly property var ruleRows: pg.hub ? (pg.hub.hyprVal("desktop.windowRules") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
 
@@ -99,39 +99,39 @@ Item {
     function patch(i, key, val) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("windowRules") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.windowRules") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
-        pg.hub.hyprEdit("windowRules", a);
+        pg.hub.hyprEdit("desktop.windowRules", a);
     }
     // switching action resets the value to that action's default: the two
     // enumerated actions seed their first choice, everything else clears it.
     function setAction(i, key) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("windowRules") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.windowRules") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i].action = key;
         a[i].value = pg.actionValueDefault(key);
-        pg.hub.hyprEdit("windowRules", a);
+        pg.hub.hyprEdit("desktop.windowRules", a);
     }
     function addRule() {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("windowRules") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.windowRules") || []).slice();
         a.push({ "class": "", "title": "", "action": "float", "value": "" });
-        pg.hub.hyprEdit("windowRules", a);
+        pg.hub.hyprEdit("desktop.windowRules", a);
     }
     function removeRule(i) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("windowRules") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.windowRules") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("windowRules", a);
+        pg.hub.hyprEdit("desktop.windowRules", a);
     }
     function clearAll() {
         if (pg.hub)
-            pg.hub.hyprEdit("windowRules", []);
+            pg.hub.hyprEdit("desktop.windowRules", []);
     }
 
     // which row's action Picker is open; -1 = closed.

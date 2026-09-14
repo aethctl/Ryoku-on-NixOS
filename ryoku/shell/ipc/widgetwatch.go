@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // widgetwatch frees the desktop-widget layer's memory when windows cover the
@@ -83,62 +83,34 @@ func perfFlagDefault(key string, def bool) bool {
 // screen is covered is invisible and reclaims their scene-graph + GL memory.
 func unloadWidgetsWhenCovered() bool { return perfFlagDefault("unloadWidgetsWhenCovered", true) }
 
-// parseDesktopVisible reports whether any monitor's active workspace is empty,
-// i.e. the wallpaper (and the widgets on it) is showing somewhere. It is given
-// the JSON of `hyprctl monitors` and `hyprctl workspaces`. Unparseable or empty
-// input returns true, so the widgets are only ever parked on a confident,
-// fully-covered reading.
-func parseDesktopVisible(monitorsJSON, workspacesJSON []byte) bool {
-	var mons []struct {
-		ActiveWorkspace struct {
-			ID int `json:"id"`
-		} `json:"activeWorkspace"`
-	}
-	var wss []struct {
-		ID      int `json:"id"`
-		Windows int `json:"windows"`
-	}
-	if json.Unmarshal(monitorsJSON, &mons) != nil || json.Unmarshal(workspacesJSON, &wss) != nil {
+// desktopVisibleFrom reports whether any output's active workspace holds no
+// windows, i.e. the wallpaper (and the widgets on it) is showing. An empty
+// output list, or an output on an unknown workspace, reads as visible, so the
+// widgets are only parked on a confident, fully-covered reading.
+func desktopVisibleFrom(outputs []wm.Output, workspaces []wm.Workspace) bool {
+	if len(outputs) == 0 {
 		return true
 	}
-	if len(mons) == 0 {
-		return true
-	}
-	windows := make(map[int]int, len(wss))
-	for _, w := range wss {
+	windows := make(map[string]int, len(workspaces))
+	for _, w := range workspaces {
 		windows[w.ID] = w.Windows
 	}
-	for _, m := range mons {
-		if windows[m.ActiveWorkspace.ID] == 0 {
+	for _, o := range outputs {
+		if windows[o.ActiveWorkspace] == 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// desktopVisible queries Hyprland for the per-monitor active workspaces and
-// their window counts. A failed probe returns true (keep the widgets up).
-func desktopVisible() bool {
-	mon, err := exec.Command("hyprctl", "monitors", "-j").Output()
-	if err != nil {
-		return true
-	}
-	ws, err := exec.Command("hyprctl", "workspaces", "-j").Output()
-	if err != nil {
-		return true
-	}
-	return parseDesktopVisible(mon, ws)
-}
-
-// affectsCoverage reports whether a Hyprland event line could change which
-// workspace is visible or how many windows it holds.
-func affectsCoverage(line string) bool {
-	for _, p := range []string{"openwindow", "closewindow", "movewindow", "workspace", "focusedmon", "monitoradded", "monitorremoved"} {
-		if strings.HasPrefix(line, p) {
-			return true
-		}
-	}
-	return false
+// desktopVisible reads coverage from the watcher cache. A cold cache reads as
+// visible, keeping the widgets up.
+func (d *daemon) desktopVisible() bool {
+	d.wmMu.Lock()
+	outputs := d.wmOutputs
+	workspaces := d.wmWorkspaces
+	d.wmMu.Unlock()
+	return desktopVisibleFrom(outputs, workspaces)
 }
 
 // widgetGateWorker parks the widget layer after a grace period of being fully
@@ -151,7 +123,7 @@ func (d *daemon) widgetGateWorker() {
 	var coveredSince time.Time
 	reeval := func() {
 		// Power Saver forces the unload too (like the QML freezes), reclaiming RAM.
-		if (!unloadWidgetsWhenCovered() && !d.saverActive()) || desktopVisible() {
+		if (!unloadWidgetsWhenCovered() && !d.saverActive()) || d.desktopVisible() {
 			coveredSince = time.Time{}
 			d.setGate("widgets", true)
 			return

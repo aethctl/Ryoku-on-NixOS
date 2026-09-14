@@ -23,7 +23,7 @@ Item {
 
     // the live records from the draft: an unbounded list of app-override
     // objects, each carrying the 10-field schema seeded by addApp().
-    readonly property var overrides: pg.hub ? (pg.hub.hyprVal("appOverrides") || []) : []
+    readonly property var overrides: pg.hub ? (pg.hub.hyprVal("desktop.appOverrides") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
 
@@ -35,10 +35,10 @@ Item {
     function patch(i, key, val) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("appOverrides") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.appOverrides") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
-        pg.hub.hyprEdit("appOverrides", a);
+        pg.hub.hyprEdit("desktop.appOverrides", a);
     }
     // the literal seed IS the per-record default contract: -1 sentinels for the
     // three numeric fields (0 is a legal custom value, distinct from -1), and
@@ -46,51 +46,39 @@ Item {
     function addApp(cls) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("appOverrides") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.appOverrides") || []).slice();
         a.push({
             "class": cls || "", "title": "",
             "opacity": -1, "rounding": -1, "borderSize": -1,
             "blur": "inherit", "shadow": "inherit", "dim": "inherit",
             "anim": "inherit", "opaque": "inherit"
         });
-        pg.hub.hyprEdit("appOverrides", a);
+        pg.hub.hyprEdit("desktop.appOverrides", a);
     }
     function removeApp(i) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("appOverrides") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.appOverrides") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("appOverrides", a);
+        pg.hub.hyprEdit("desktop.appOverrides", a);
     }
     function clearAll() {
         if (pg.hub)
-            pg.hub.hyprEdit("appOverrides", []);
+            pg.hub.hyprEdit("desktop.appOverrides", []);
     }
 
-    // open windows, for the class picker: hyprctl lists every client and we keep
-    // the unique classes, so you can pick an app straight from the list instead
-    // of hunting for its class name in a terminal. Fetched once, failure-silent;
-    // the picker just stays hidden when the list is empty.
-    property var openClasses: []
-    function refreshOpenClasses() { clientsProc.running = false; clientsProc.running = true; }
-    Process {
-        id: clientsProc
-        command: ["hyprctl", "clients", "-j"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    var arr = JSON.parse(this.text), seen = {}, out = [];
-                    for (var i = 0; i < arr.length; i++) {
-                        var c = arr[i]["class"] || "";
-                        if (c.length && !seen[c]) { seen[c] = true; out.push(c); }
-                    }
-                    out.sort();
-                    pg.openClasses = out;
-                } catch (e) {}
-            }
+    // open windows, for the class picker: the app ids the compositor reports,
+    // deduped, so you can pick an app instead of typing its class.
+    readonly property var openClasses: {
+        var ws = (pg.hub ? pg.hub.wmWindows : []) || [];
+        var seen = {}, out = [];
+        for (var i = 0; i < ws.length; i++) {
+            var c = ws[i].appId || "";
+            if (c.length && !seen[c]) { seen[c] = true; out.push(c); }
         }
+        out.sort();
+        return out;
     }
-    Component.onCompleted: pg.refreshOpenClasses()
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {

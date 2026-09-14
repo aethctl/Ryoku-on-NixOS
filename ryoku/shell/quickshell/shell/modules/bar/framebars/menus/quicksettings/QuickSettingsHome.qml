@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import "../../.." as Pill
 import shell.services
 import "../../../../../components"
@@ -84,7 +83,7 @@ Item {
                         icon: "logout"
                         tip: I18n.tr("Log out")
                         tipBelow: true
-                        onClicked: Hyprland.dispatch("hl.dsp.exit()")
+                        onClicked: SessionActions.run("logout")
                     }
                     Menus.QsIconButton {
                         icon: "lock"

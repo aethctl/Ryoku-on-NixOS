@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Ryoku.FrameBars
 import "framebars/widgets"
 import shell.services

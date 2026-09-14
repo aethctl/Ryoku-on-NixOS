@@ -2,7 +2,6 @@ import QtQuick
 import "../modules"
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 
 PanelWindow {
@@ -37,9 +36,9 @@ PanelWindow {
         property int navIndex: -1
         readonly property var wsIds: {
             var a = []
-            var vs = Hyprland.workspaces.values
-            for (var i = 0; i < vs.length; i++) if (vs[i].id > 0) a.push(vs[i].id)
-            a.sort(function(x, y) { return x - y })
+            var vs = Wm.workspaces
+            for (var i = 0; i < vs.length; i++) if (!vs[i].special) a.push(vs[i].name)
+            a.sort(function(x, y) { return Number(x) - Number(y) })
             return a
         }
         width: 240
@@ -103,13 +102,13 @@ PanelWindow {
                 width: parent.width
                 spacing: 4
                 Repeater {
-                    model: Hyprland.workspaces
+                    model: Wm.workspaces
 
                     delegate: Rectangle {
                         required property var modelData
-                        visible: modelData.id > 0   // F13: hide special (negative-id) workspaces from the normal list
-                        readonly property bool isActive: Hyprland.focusedWorkspace && Hyprland.focusedWorkspace.id === modelData.id
-                        readonly property bool navOn: card.navIndex >= 0 && card.navIndex < card.wsIds.length && card.wsIds[card.navIndex] === modelData.id
+                        visible: !modelData.special
+                        readonly property bool isActive: Wm.focusedWorkspace && Wm.focusedWorkspace.name === modelData.name
+                        readonly property bool navOn: card.navIndex >= 0 && card.navIndex < card.wsIds.length && card.wsIds[card.navIndex] === modelData.name
                         width: col.width
                         height: 30; radius: root.panelButtonRadius
                         color: isActive ? root.fillActive
@@ -121,7 +120,7 @@ PanelWindow {
                         UiText {
                             anchors.left: parent.left; anchors.leftMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            text: I18n.tr("Workspace %1").arg(modelData.id)
+                            text: I18n.tr("Workspace %1").arg(modelData.name)
                             color: (ma.containsMouse || isActive) ? root.seal : root.ink
                             font.family: root.mono; font.pixelSize: 12
                             font.weight: isActive ? Font.Medium : Font.Normal
@@ -129,7 +128,7 @@ PanelWindow {
                         UiText {
                             anchors.right: parent.right; anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.toplevels && modelData.toplevels.values ? modelData.toplevels.values.length : ""
+                            text: modelData.windows
                             color: root.sumiHi; font.family: root.mono; font.pixelSize: 10
                         }
 
@@ -139,7 +138,7 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.gotoWorkspace(modelData.id)
+                                root.gotoWorkspace(modelData.name)
                                 root.workspaceVisible = false
                             }
                         }

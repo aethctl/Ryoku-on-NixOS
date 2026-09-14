@@ -6,7 +6,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-mon="$here/../system/hardware/display/ryoku-monitor"
+mon="$here/../ryoku/hyprland/scripts/ryoku-monitor"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

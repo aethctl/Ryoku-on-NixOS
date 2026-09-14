@@ -2,7 +2,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 
 // owns screen vibrance (nvibrant) + external monitor brightness (ddcutil) for
 // the mixer. persisted vibrance % = source of truth: loaded and pushed once at
@@ -188,16 +188,10 @@ Singleton {
     }
 
     // Hotplug: a display plugged in after login gets its fader without a restart.
-    readonly property var monitorEvents: ({
-        monitoradded: true, monitoraddedv2: true,
-        monitorremoved: true, monitorremovedv2: true
-    })
-
     Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            if (root.monitorEvents[event.name])
-                Qt.callLater(root.invalidateDisplays);
+        target: Wm
+        function onOutputsChanged() {
+            Qt.callLater(root.invalidateDisplays);
         }
     }
 

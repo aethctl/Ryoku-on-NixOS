@@ -120,7 +120,7 @@ restarts the shell. When the shipped file is itself at fault it says so and name
 across a Hyprland bump: a plugin is ABI-locked to the exact compositor build
 and every copy Ryoku builds carries an `.abi` receipt, so after an update it
 rebuilds each enabled plugin whose receipts no longer match the installed
-headers (`ryoku-hub hypr plugins rebuild --stale`, the Plugins page's builder)
+headers (`ryoku-hub desktop plugins rebuild --stale`, the Plugins page's builder)
 before the next login, and names the toolchain to install when a box has none.
 See `docs/hyprland-plugins.md`.
 

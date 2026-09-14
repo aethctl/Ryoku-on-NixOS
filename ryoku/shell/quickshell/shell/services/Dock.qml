@@ -2,7 +2,6 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Io
 import Ryoku.Ui.Singletons
 import shell.services
@@ -16,16 +15,6 @@ import "lib/dock.js" as DockList
 Singleton {
     id: root
 
-    // Live-update: Hyprland events keep the toplevel LIST live, but a newly opened
-    // window's lastIpcObject (its class/title) is not populated until a
-    // refreshToplevels() runs -- so without a refresh the dock only picks up new
-    // apps on a shell reload. Refresh whenever the window COUNT changes (open or
-    // close), which is idempotent: the refresh fires valuesChanged again but the
-    // count is unchanged, so it never loops. Bump _rev on every list/toplevel/
-    // active change so clients/activeClass re-read (a plain .values read in a
-    // binding does not track Quickshell's model).
-    property int _rev: 0
-    property int _primeTries: 0
     // Icon resolution is not reactive on its own: iconFor() reads the desktop DB and
     // the icon theme through plain function calls, so a binding that resolves before
     // the desktop DB is scanned or the icon-theme cache is warm -- a fresh boot, or
@@ -35,64 +24,6 @@ Singleton {
     // re-resolve: on a desktop-DB change and via a bounded warm-up poll after load.
     property int iconRev: 0
     property int _iconTries: 0
-    // True while some toplevel is in the list without its class yet (a freshly
-    // opened window, before its ipc object is populated).
-    function _needsPrime() {
-        const tls = Hyprland.toplevels ? Hyprland.toplevels.values : [];
-        for (let i = 0; i < tls.length; ++i) {
-            const o = tls[i] && tls[i].lastIpcObject;
-            if (!o || !(o.class || o.initialClass))
-                return true;
-        }
-        return false;
-    }
-    // A new window enters the list before a refreshToplevels() fills in its class,
-    // and a single refresh can lose the race (rapid opens). Poll-refresh until
-    // every toplevel has a class, then stop -- bounded so a genuinely class-less
-    // surface cannot spin forever.
-    Timer {
-        id: primePoll
-        interval: 120
-        repeat: true
-        onTriggered: {
-            if (root._primeTries++ > 25 || !root._needsPrime()) {
-                primePoll.stop();
-                return;
-            }
-            Hyprland.refreshToplevels();
-        }
-    }
-    Component.onCompleted: Hyprland.refreshToplevels()
-    Connections {
-        target: Hyprland.toplevels
-        function onValuesChanged() {
-            root._rev++;
-            root._primeTries = 0;
-            if (root._needsPrime())
-                primePoll.restart();
-        }
-    }
-    Connections {
-        target: Hyprland
-        function onActiveToplevelChanged() { root._rev++; }
-        // Hyprland.activeToplevel never populates on this fork's ipc (the same
-        // request-socket parse gap Fullscreen.qml documents), so focus is read out
-        // of the toplevel list instead -- hyprctl marks the focused window
-        // focusHistoryID 0. That field only moves when the list is re-read, so a
-        // focus event has to force the refresh.
-        function onRawEvent(event) {
-            if (event.name === "activewindow" || event.name === "activewindowv2")
-                Qt.callLater(Hyprland.refreshToplevels);
-        }
-    }
-    Instantiator {
-        model: Hyprland.toplevels
-        delegate: Connections {
-            required property var modelData
-            target: modelData
-            function onLastIpcObjectChanged() { root._rev++; }
-        }
-    }
 
     // A desktop-DB change -- an app installed, updated, or removed -- can add or fix
     // the icon a pin resolves to; re-resolve every dock icon when it fires so a pin
@@ -130,43 +61,29 @@ Singleton {
     // that tells them apart, so it maps to the desktop entry id the dock
     // groups, launches and draws them by; anything else keeps its class.
     readonly property var quickshellApps: ({ "Ryoku Settings": "ryoku-hub", "Ryostore": "ryostore", "ryovm": "ryovm" })
-    function classOf(data) {
-        if (!data) return "";
-        const cls = data.class || data.initialClass;
-        if (cls === "org.quickshell" && root.quickshellApps[data.title || data.initialTitle])
-            return root.quickshellApps[data.title || data.initialTitle];
+    function classOf(w) {
+        if (!w) return "";
+        const cls = w.appId;
+        if (cls === "org.quickshell" && root.quickshellApps[w.title])
+            return root.quickshellApps[w.title];
         return cls;
     }
 
-    // Toplevels as { className, address, pid }, pid-sorted for a stable order.
+    // Running windows as { className, address }, id-sorted for a stable order.
     readonly property var clients: {
-        void root._rev;
         const result = [];
-        const toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : [];
-        for (let i = 0; i < toplevels.length; ++i) {
-            const data = toplevels[i] && toplevels[i].lastIpcObject;
-            const className = root.classOf(data);
+        const wins = Wm.windows;
+        for (let i = 0; i < wins.length; ++i) {
+            const className = root.classOf(wins[i]);
             if (typeof className === "string" && className)
-                result.push({ className: className, address: data.address || "", pid: (typeof data.pid === "number" ? data.pid : 0) });
+                result.push({ className: className, address: wins[i].id });
         }
-        result.sort((a, b) => a.pid - b.pid);
+        result.sort((a, b) => a.address < b.address ? -1 : (a.address > b.address ? 1 : 0));
         return result;
     }
 
-    // The focused window's ipc object, or null when nothing holds focus:
-    // focusHistoryID 0 is hyprctl's focused marker, with quickshell's own
-    // activeToplevel as the fallback for an ipc shape that omits the field.
-    readonly property var focusedClient: {
-        void root._rev;
-        const toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : [];
-        for (let i = 0; i < toplevels.length; ++i) {
-            const data = toplevels[i] && toplevels[i].lastIpcObject;
-            if (data && data.focusHistoryID === 0)
-                return data;
-        }
-        const active = Hyprland.activeToplevel && Hyprland.activeToplevel.lastIpcObject;
-        return active || null;
-    }
+    // The focused window, or null on a bare desktop.
+    readonly property var focusedClient: Wm.focusedWindow
 
     // True while some window holds focus; a bare desktop reads false, which the
     // dock surface uses to show itself when there is nothing to get out of.
@@ -174,7 +91,7 @@ Singleton {
 
     readonly property string activeClass: root.classOf(root.focusedClient)
 
-    // Pinned first, then running-unpinned in pid order. Omit clients for live.
+    // Pinned first, then running-unpinned in id order. Omit clients for live.
     function resolve(pinned, activeClients) {
         const p = (pinned === undefined || pinned === null) ? [] : Array.from(pinned);
         return DockList.resolve(p, activeClients === undefined ? root.clients : activeClients);
@@ -270,40 +187,37 @@ Singleton {
     // No clients -> launch; focused already -> cycle by address; else focus,
     // preferring a client on the active workspace.
     function activate(className) {
-        const toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : [];
+        const wins = Wm.windows;
         const matches = [];
-        for (let i = 0; i < toplevels.length; ++i) {
-            const d = toplevels[i] && toplevels[i].lastIpcObject;
-            if (d && root.classOf(d) === className && d.address)
-                matches.push(d);
-        }
+        for (let i = 0; i < wins.length; ++i)
+            if (root.classOf(wins[i]) === className)
+                matches.push(wins[i]);
         if (matches.length === 0) {
             const entry = DesktopEntries.heuristicLookup(className);
             if (entry)
                 AppLaunch.run(entry, null);
             return;
         }
-        matches.sort((a, b) => a.address < b.address ? -1 : (a.address > b.address ? 1 : 0));
-        const active = Hyprland.activeToplevel && Hyprland.activeToplevel.lastIpcObject ? Hyprland.activeToplevel.lastIpcObject.address : "";
-        const idx = matches.findIndex(m => m.address === active);
+        matches.sort((a, b) => a.id < b.id ? -1 : (a.id > b.id ? 1 : 0));
+        const focused = Wm.focusedWindow;
+        const active = focused ? focused.id : "";
+        const idx = matches.findIndex(m => m.id === active);
         let target;
         if (idx >= 0)
             target = matches[(idx + 1) % matches.length];
         else {
-            const ws = Hyprland.focusedWorkspace ? Hyprland.focusedWorkspace.id : -1;
-            target = matches.find(m => m.workspace && m.workspace.id === ws) || matches[0];
+            const wsName = Wm.focusedWorkspace ? Wm.focusedWorkspace.name : "";
+            target = matches.find(m => m.workspace === wsName) || matches[0];
         }
-        Hyprland.dispatch('hl.dsp.focus({ window = "address:' + target.address + '" })');
+        Wm.focusWindow(target.id);
     }
 
     // Close every window of a class (dock menu Close).
     function closeAll(className) {
-        const toplevels = Hyprland.toplevels ? Hyprland.toplevels.values : [];
-        for (let i = 0; i < toplevels.length; ++i) {
-            const d = toplevels[i] && toplevels[i].lastIpcObject;
-            if (d && root.classOf(d) === className && d.address)
-                Hyprland.dispatch('closewindow address:' + d.address);
-        }
+        const wins = Wm.windows;
+        for (let i = 0; i < wins.length; ++i)
+            if (root.classOf(wins[i]) === className)
+                Wm.closeWindow(wins[i].id);
     }
 
     // ── right-click context menu ───────────────────────────────────────────────

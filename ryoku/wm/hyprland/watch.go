@@ -1,0 +1,422 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"net"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+
+	wm "ryoku-wm"
+)
+
+// Two properties must survive any rewrite here:
+//
+// A focus change emits straight from the event line with no compositor query,
+// because the shell daemon resolves a surface target on every keypress from it.
+//
+// Everything else is debounced into one resync, so a burst during a workspace
+// switch costs one query pass instead of a storm.
+
+// Half a 60 Hz frame: folds a burst, never a visible stale beat.
+const resyncDebounce = 8 * time.Millisecond
+
+const reconnectBackoff = 500 * time.Millisecond
+
+// Event prefixes that can change what a consumer sees. Anything else costs
+// nothing.
+var coverageEvents = []string{
+	"openwindow", "closewindow", "movewindow", "windowtitle", "activewindow",
+	"workspace", "createworkspace", "destroyworkspace", "moveworkspace",
+	"fullscreen", "changefloatingmode",
+	"monitoradded", "monitorremoved", "focusedmon",
+}
+
+// runWatch streams every frame kind, or only the ones named in args. A narrowed
+// watch skips the reads it does not need, which keeps a burst cheap for a
+// consumer that only wants one kind.
+func runWatch(args []string) error {
+	want := map[wm.FrameKind]bool{}
+	for _, a := range args {
+		want[wm.FrameKind(a)] = true
+	}
+	wants := func(k wm.FrameKind) bool { return len(want) == 0 || want[k] }
+	return streamWatch(wants)
+}
+
+func streamWatch(wants func(wm.FrameKind) bool) error {
+	enc := json.NewEncoder(stdout)
+	emit := func(f wm.Frame) {
+		// Flush per frame: the consumer is a live shell, and an unflushed focus
+		// frame is a bar that never updates.
+		if enc.Encode(f) != nil || stdout.Flush() != nil {
+			os.Exit(0)
+		}
+	}
+
+	for {
+		ensureLiveSignature()
+		path := eventSocketPath()
+		if path == "" {
+			time.Sleep(reconnectBackoff)
+			continue
+		}
+		conn, err := net.Dial("unix", path)
+		if err != nil {
+			time.Sleep(reconnectBackoff)
+			continue
+		}
+		// focusedmon only fires on change, so a single-monitor session would
+		// never populate the cache from events alone.
+		resync(emit, wants)
+		emit(wm.Frame{Kind: wm.FrameReady})
+		consume(conn, emit, wants)
+		_ = conn.Close()
+		time.Sleep(reconnectBackoff)
+	}
+}
+
+func consume(conn net.Conn, emit func(wm.Frame), wants func(wm.FrameKind) bool) {
+	pending := time.NewTimer(time.Hour)
+	if !pending.Stop() {
+		<-pending.C
+	}
+	defer pending.Stop()
+
+	lines := make(chan string, 256)
+	go func() {
+		defer close(lines)
+		scan := bufio.NewScanner(conn)
+		for scan.Scan() {
+			lines <- scan.Text()
+		}
+	}()
+
+	armed := false
+	for {
+		select {
+		case line, ok := <-lines:
+			if !ok {
+				return
+			}
+			if mon, isFocus := parseFocusedMon(line); isFocus && wants(wm.FrameFocus) {
+				emit(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: mon})
+			}
+			if name, removed := parseMonitorRemoved(line); removed && wants(wm.FrameFocus) {
+				// A removed output must not linger until the debounce: the next
+				// keybind would target a dead monitor.
+				emit(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: focusedFallback(name)})
+			}
+			if !affectsCoverage(line) {
+				continue
+			}
+			if !armed {
+				armed = true
+				pending.Reset(resyncDebounce)
+			}
+		case <-pending.C:
+			armed = false
+			resync(emit, wants)
+		}
+	}
+}
+
+// Outputs first, so a consumer rebuilding all three sees them before anything
+// that references them.
+func resync(emit func(wm.Frame), wants func(wm.FrameKind) bool) {
+	mons, err := readMonitors()
+	if err != nil {
+		return
+	}
+	if wants(wm.FrameOutputs) {
+		emit(wm.Frame{Kind: wm.FrameOutputs, Outputs: monitorOutputs(mons)})
+	}
+	if wants(wm.FrameFocus) {
+		if focused := focusedName(mons); focused != "" {
+			emit(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: focused})
+		}
+	}
+	if wants(wm.FrameWorkspaces) {
+		if ws := readWorkspaces(mons); ws != nil {
+			emit(wm.Frame{Kind: wm.FrameWorkspaces, Workspaces: ws})
+		}
+	}
+	if wants(wm.FrameWindows) {
+		if wins := readWindows(mons); wins != nil {
+			emit(wm.Frame{Kind: wm.FrameWindows, Windows: wins})
+		}
+	}
+	if wants(wm.FrameKeyboard) {
+		if active, all := readKeyboard(); active != "" {
+			emit(wm.Frame{Kind: wm.FrameKeyboard, KeyboardLayout: active, KeyboardLayouts: all})
+		}
+	}
+}
+
+type hyprMonitor struct {
+	ID              int     `json:"id"`
+	Name            string  `json:"name"`
+	Width           int     `json:"width"`
+	Height          int     `json:"height"`
+	Scale           float64 `json:"scale"`
+	Focused         bool    `json:"focused"`
+	Make            string  `json:"make"`
+	Model           string  `json:"model"`
+	PhysicalWidth   int     `json:"physicalWidth"`
+	Disabled        bool    `json:"disabled"`
+	ActiveWorkspace struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	} `json:"activeWorkspace"`
+}
+
+// Read once per resync and threaded through, so workspaces and windows do not
+// each re-query the monitor list to resolve a name.
+func readMonitors() ([]hyprMonitor, error) {
+	out, err := ctl("monitors", "all", "-j")
+	if err != nil {
+		return nil, err
+	}
+	var mons []hyprMonitor
+	if err := json.Unmarshal(out, &mons); err != nil {
+		return nil, err
+	}
+	return mons, nil
+}
+
+func monitorOutputs(mons []hyprMonitor) []wm.Output {
+	outputs := make([]wm.Output, 0, len(mons))
+	for _, m := range mons {
+		outputs = append(outputs, wm.Output{
+			Name:            m.Name,
+			Width:           m.Width,
+			Height:          m.Height,
+			Scale:           m.Scale,
+			Focused:         m.Focused,
+			ActiveWorkspace: workspaceKey(m.ActiveWorkspace.ID, m.ActiveWorkspace.Name),
+			Make:            m.Make,
+			Model:           m.Model,
+			PhysicalWidth:   m.PhysicalWidth,
+			Disabled:        m.Disabled,
+		})
+	}
+	return outputs
+}
+
+func focusedName(mons []hyprMonitor) string {
+	for _, m := range mons {
+		if m.Focused {
+			return m.Name
+		}
+	}
+	return ""
+}
+
+func readWorkspaces(mons []hyprMonitor) []wm.Workspace {
+	out, err := ctl("workspaces", "-j")
+	if err != nil {
+		return nil
+	}
+	var raw []struct {
+		ID            int    `json:"id"`
+		Name          string `json:"name"`
+		Monitor       string `json:"monitor"`
+		Windows       int    `json:"windows"`
+		HasFullscreen bool   `json:"hasfullscreen"`
+		TiledLayout   string `json:"tiledLayout"`
+	}
+	if json.Unmarshal(out, &raw) != nil {
+		return nil
+	}
+	// Active is per output, not per session, so it comes from the monitor list.
+	active := make(map[string]bool, len(mons))
+	for _, m := range mons {
+		if k := workspaceKey(m.ActiveWorkspace.ID, m.ActiveWorkspace.Name); k != "" {
+			active[k] = true
+		}
+	}
+	list := make([]wm.Workspace, 0, len(raw))
+	for _, w := range raw {
+		key := workspaceKey(w.ID, w.Name)
+		list = append(list, wm.Workspace{
+			ID:     key,
+			Name:   w.Name,
+			Output: w.Monitor,
+			Active: active[key],
+			// A negative id is how Hyprland marks a scratchpad workspace.
+			Special:    w.ID < 0 || strings.HasPrefix(w.Name, "special:"),
+			Windows:    w.Windows,
+			Fullscreen: w.HasFullscreen,
+			Layout:     w.TiledLayout,
+		})
+	}
+	return list
+}
+
+func readWindows(mons []hyprMonitor) []wm.Window {
+	out, err := ctl("clients", "-j")
+	if err != nil {
+		return nil
+	}
+	var raw []struct {
+		Address   string `json:"address"`
+		Class     string `json:"class"`
+		Title     string `json:"title"`
+		Monitor   int    `json:"monitor"`
+		Floating  bool   `json:"floating"`
+		At        []int  `json:"at"`
+		Size      []int  `json:"size"`
+		Workspace struct {
+			ID   int    `json:"id"`
+			Name string `json:"name"`
+		} `json:"workspace"`
+		FocusHistoryID int `json:"focusHistoryID"`
+	}
+	if json.Unmarshal(out, &raw) != nil {
+		return nil
+	}
+	// The client list reports a monitor index while everything else uses names.
+	names := make(map[int]string, len(mons))
+	for _, m := range mons {
+		names[m.ID] = m.Name
+	}
+	list := make([]wm.Window, 0, len(raw))
+	for _, c := range raw {
+		w := wm.Window{
+			ID:         c.Address,
+			AppID:      c.Class,
+			Title:      c.Title,
+			Workspace:  workspaceKey(c.Workspace.ID, c.Workspace.Name),
+			Output:     names[c.Monitor],
+			FocusOrder: c.FocusHistoryID,
+			Floating:   c.Floating,
+		}
+		if len(c.At) == 2 {
+			w.X, w.Y = c.At[0], c.At[1]
+		}
+		if len(c.Size) == 2 {
+			w.Width, w.Height = c.Size[0], c.Size[1]
+		}
+		list = append(list, w)
+	}
+	return list
+}
+
+// readKeyboard returns the active layout and the loaded set. The main keyboard
+// is the first with a layout list; per-device layouts are not surfaced because
+// the bar shows one indicator.
+func readKeyboard() (string, []string) {
+	out, err := ctl("devices", "-j")
+	if err != nil {
+		return "", nil
+	}
+	var devs struct {
+		Keyboards []struct {
+			ActiveKeymap string `json:"active_keymap"`
+			Layout       string `json:"layout"`
+			Main         bool   `json:"main"`
+		} `json:"keyboards"`
+	}
+	if json.Unmarshal(out, &devs) != nil {
+		return "", nil
+	}
+	for _, k := range devs.Keyboards {
+		if !k.Main || k.ActiveKeymap == "" {
+			continue
+		}
+		var all []string
+		for _, l := range strings.Split(k.Layout, ",") {
+			if l = strings.TrimSpace(l); l != "" {
+				all = append(all, l)
+			}
+		}
+		return k.ActiveKeymap, all
+	}
+	return "", nil
+}
+
+// runState is one snapshot for callers that ask once and exit.
+func runState() error {
+	if !live() {
+		return fmt.Errorf("state: no live Hyprland session")
+	}
+	mons, err := readMonitors()
+	if err != nil {
+		return err
+	}
+	active, all := readKeyboard()
+	snap := wm.Snapshot{
+		FocusedOutput:   focusedName(mons),
+		Outputs:         monitorOutputs(mons),
+		Workspaces:      readWorkspaces(mons),
+		Windows:         readWindows(mons),
+		KeyboardLayout:  active,
+		KeyboardLayouts: all,
+	}
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(snap)
+}
+
+// The name is what a dispatcher accepts and what a user recognises; the id is
+// the fallback for an unnamed workspace.
+func workspaceKey(id int, name string) string {
+	if name != "" {
+		return name
+	}
+	if id == 0 {
+		return ""
+	}
+	return strconv.Itoa(id)
+}
+
+// Queried, not guessed: Hyprland refocuses a survivor on unplug, and naming the
+// wrong one would send the next surface to a monitor that is gone.
+func focusedFallback(gone string) string {
+	mons, err := readMonitors()
+	if err != nil {
+		return ""
+	}
+	if focused := focusedName(mons); focused != gone {
+		return focused
+	}
+	return ""
+}
+
+// focusedmonv2 is rejected on purpose: matching v1 exactly means a future
+// Hyprland that drops it fails in the tests instead of going silently stale.
+func parseFocusedMon(line string) (string, bool) {
+	ev, data, ok := strings.Cut(line, ">>")
+	if !ok || ev != "focusedmon" {
+		return "", false
+	}
+	mon, _, _ := strings.Cut(data, ",")
+	if mon == "" {
+		return "", false
+	}
+	return mon, true
+}
+
+func parseMonitorRemoved(line string) (string, bool) {
+	ev, data, ok := strings.Cut(line, ">>")
+	if !ok || ev != "monitorremoved" {
+		return "", false
+	}
+	name := strings.TrimSpace(data)
+	if name == "" {
+		return "", false
+	}
+	return name, true
+}
+
+func affectsCoverage(line string) bool {
+	for _, p := range coverageEvents {
+		if strings.HasPrefix(line, p) {
+			return true
+		}
+	}
+	return false
+}

@@ -6,8 +6,8 @@ import Ryoku.Ui.Singletons
 import shell.services
 
 /**
- * Local screen-time tracking. Every few seconds it asks Hyprland for the
- * focused window's app class and banks the elapsed time against today's bucket
+ * Local screen-time tracking. Every few seconds it reads the focused window's
+ * app class and banks the elapsed time against today's bucket
  * (per app, per hour, and a running total). "Active" means a real app is
  * focused; nothing syncs and nothing leaves the box. History persists to
  * ~/.local/state/ryoku/screentime.json (last 30 days) so a shell restart
@@ -154,29 +154,13 @@ Singleton {
         interval: root.sampleSec * 1000
         running: true
         repeat: true
-        onTriggered: probe.running = true
+        onTriggered: root.accrue(Wm.focusedWindow ? Wm.focusedWindow.appId : "")
     }
     Timer {
         interval: 30000
         running: true
         repeat: true
         onTriggered: if (root.dirty) root.persist()
-    }
-
-    // Direct query beats Quickshell's event-driven activeToplevel, which stays
-    // empty here until a focus change and is not bound by every bar style.
-    Process {
-        id: probe
-        command: ["hyprctl", "activewindow", "-j"]
-        stdout: StdioCollector { id: probeOut }
-        onExited: {
-            var c = "";
-            try {
-                var o = JSON.parse(probeOut.text || "{}");
-                c = (o && (o.class || o.initialClass)) || "";
-            } catch (e) {}
-            root.accrue(c);
-        }
     }
 
     Process {

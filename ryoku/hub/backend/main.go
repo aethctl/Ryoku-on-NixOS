@@ -45,8 +45,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
 			os.Exit(1)
 		}
-	case "hypr":
-		if err := runHypr(args[1:]); err != nil {
+	case "desktop":
+		if err := runDesktop(args[1:]); err != nil {
 			fmt.Fprintln(os.Stderr, "ryoku-hub:", err)
 			os.Exit(1)
 		}
@@ -142,14 +142,15 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  ryoku-hub config get <key>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub config set <key> <value>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub shell get|set <fish|bash|zsh>")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr get|defaults|cursors|layouts")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr variants <layout>")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr save|preview <json>")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr restore")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr plugins list")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr plugins rebuild [--all|--stale] [--checkout <dir>] [<id>...]")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr plugins add [--inspect] <git-url> [<plugin>...]")
-	fmt.Fprintln(os.Stderr, "  ryoku-hub hypr plugins remove <id>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop get|defaults|cursors|layouts")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop variants <layout>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop save|preview <json>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop restore")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop set-rebind <default> <chosen>")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop plugins list")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop plugins rebuild [--all|--stale] [--checkout <dir>] [<id>...]")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop plugins add [--inspect] <git-url> [<plugin>...]")
+	fmt.Fprintln(os.Stderr, "  ryoku-hub desktop plugins remove <id>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub lock list")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub lock set <slug>")
 	fmt.Fprintln(os.Stderr, "  ryoku-hub gpu caps|mode")

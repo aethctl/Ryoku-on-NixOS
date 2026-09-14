@@ -8,20 +8,20 @@ var rows = [
     {
         "tab": "",
         "group": "OTHER",
-        "key": "env",
+        "key": "desktop.env",
         "label": "Variable name and value",
         "desc": "Name and value for one variable, e.g. MOZ_ENABLE_WAYLAND = 1",
         "ctl": "list",
-        "src": "settings.lua as one `hl.env(\"NAME\", \"value\")` line per entry"
+        "src": "desktop.json"
     },
     {
         "tab": "",
         "group": "OTHER",
-        "key": "env",
+        "key": "desktop.env",
         "label": "Variable name and value",
         "desc": "Name and value for one variable, e.g. MOZ_ENABLE_WAYLAND = 1",
         "ctl": "multi",
-        "src": "shell",
+        "src": "desktop.json",
         "opts": [
             "NAME (per-row variable name)",
             "value (per-row variable value)"

@@ -3,7 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import Ryoku.Ui
 
 // Session-only activation and daemon-backed key events for the recording
@@ -80,22 +80,15 @@ Singleton {
 
 
     function monitorAvailable(name) {
-        const monitors = Hyprland.monitors.values;
-        for (var i = 0; i < monitors.length; i++) {
-            if (monitors[i].name === name)
-                return true;
-        }
-        return false;
+        return Wm.outputByName(name) !== null;
     }
 
     function chooseMonitor() {
         if (root.monitor !== "" && root.monitorAvailable(root.monitor))
             return root.monitor;
-        const focused = Hyprland.focusedMonitor;
-        if (focused && focused.name)
-            return focused.name;
-        const monitors = Hyprland.monitors.values;
-        return monitors.length > 0 ? monitors[0].name : "";
+        if (Wm.focusedOutput)
+            return Wm.focusedOutput;
+        return Wm.outputs.length > 0 ? Wm.outputs[0].name : "";
     }
     function sendConfigure() {
         root.send("keypress.configure", { enabled: root.active, mode: root.mode });

@@ -21,7 +21,7 @@ Item {
     property var hub
 
     // the live autostart array from the draft: a list of { command } entries.
-    readonly property var cmdRows: pg.hub ? (pg.hub.hyprVal("autostart") || []) : []
+    readonly property var cmdRows: pg.hub ? (pg.hub.hyprVal("desktop.autostart") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
 
@@ -32,28 +32,28 @@ Item {
     function patch(i, val) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("autostart") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i].command = val;
-        pg.hub.hyprEdit("autostart", a);
+        pg.hub.hyprEdit("desktop.autostart", a);
     }
     function removeRow(i) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("autostart") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("autostart", a);
+        pg.hub.hyprEdit("desktop.autostart", a);
     }
     function addRow() {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("autostart") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
         a.push({ "command": "" });
-        pg.hub.hyprEdit("autostart", a);
+        pg.hub.hyprEdit("desktop.autostart", a);
     }
     function clearAll() {
         if (pg.hub)
-            pg.hub.hyprEdit("autostart", []);
+            pg.hub.hyprEdit("desktop.autostart", []);
     }
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──

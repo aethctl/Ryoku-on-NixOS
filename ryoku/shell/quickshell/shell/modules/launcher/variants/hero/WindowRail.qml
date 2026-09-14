@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Widgets
 import "../../shared/Singletons"
 import Ryoku.Ui.Singletons
@@ -23,7 +22,7 @@ Item {
     signal focusRequested(string address)
 
     readonly property var windows: {
-        void Hyprland.toplevels.values;
+        void Wm.windows;
         var result = root.entry;
         if (!result || !root.open || String(result.type || "") !== "App")
             return [];
@@ -34,17 +33,16 @@ Item {
         var wantedTitle = String(result.title || "").toLowerCase();
         var wantedTokens = wantedTitle.split(/[^a-z0-9]+/).filter(
             token => token.length > 2);
-        var values = Hyprland.toplevels.values || [];
+        var values = Wm.windows || [];
         var out = [];
         for (var index = 0; index < values.length; index++) {
-            var tl = values[index];
-            var ipc = tl && tl.lastIpcObject;
-            if (!tl || !ipc || ipc.mapped === false || !ipc.address)
+            var w = values[index];
+            if (!w || !w.id)
                 continue;
-            var address = String(ipc.address);
-            var cls = String(ipc.class || tl.wayland && tl.wayland.appId || "");
+            var address = String(w.id);
+            var cls = String(w.appId || "");
             var lowerClass = cls.toLowerCase();
-            var lowerTitle = String(ipc.title || "").toLowerCase();
+            var lowerTitle = String(w.title || "").toLowerCase();
             var exactWindow = wantedAddress.length > 0
                 && address === wantedAddress;
             var exactId = wantedId.length > 0
@@ -55,10 +53,9 @@ Item {
             if (exactWindow || exactId || titleMatch) {
                 out.push({
                     address: address,
-                    title: String(ipc.title || cls || I18n.tr("OPEN WINDOW")),
+                    title: String(w.title || cls || I18n.tr("OPEN WINDOW")),
                     cls: cls,
-                    workspace: String(ipc.workspace && ipc.workspace.name
-                        || ipc.workspace && ipc.workspace.id || I18n.tr("CURRENT"))
+                    workspace: String(w.workspace || I18n.tr("CURRENT"))
                 });
             }
         }

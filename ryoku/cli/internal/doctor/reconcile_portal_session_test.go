@@ -19,7 +19,7 @@ func statLine(comm string, start uint64) string {
 }
 
 func TestParseStartTicksReadsFieldTwentyTwo(t *testing.T) {
-	got, ok := parseStartTicks(statLine("Hyprland", 60273731))
+	got, ok := parseStartTicks(statLine("systemd", 60273731))
 	if !ok || got != 60273731 {
 		t.Fatalf("plain comm: got (%d, %v), want (60273731, true)", got, ok)
 	}
@@ -37,10 +37,10 @@ func TestParseStartTicksSurvivesCommWithSpacesAndParens(t *testing.T) {
 
 func TestParseStartTicksRejectsUnusableLines(t *testing.T) {
 	for name, stat := range map[string]string{
-		"no comm parens": "4242 Hyprland S 0 0\n",
-		"truncated":      "4242 (Hyprland) S 0 0 0\n",
+		"no comm parens": "4242 systemd S 0 0\n",
+		"truncated":      "4242 (systemd) S 0 0 0\n",
 		"empty":          "",
-		"unparsable":     statLine("Hyprland", 0)[:strings.LastIndex(statLine("Hyprland", 0), " 0 trailing")] + " notanumber trailing fields\n",
+		"unparsable":     statLine("systemd", 0)[:strings.LastIndex(statLine("systemd", 0), " 0 trailing")] + " notanumber trailing fields\n",
 	} {
 		if _, ok := parseStartTicks(stat); ok {
 			t.Errorf("%s: parsed as usable, want rejected", name)

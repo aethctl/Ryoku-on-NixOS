@@ -19,7 +19,7 @@ Item {
     property var hub
 
     // the live env array from the draft: a list of { key, value } entries.
-    readonly property var envRows: pg.hub ? (pg.hub.hyprVal("env") || []) : []
+    readonly property var envRows: pg.hub ? (pg.hub.hyprVal("desktop.env") || []) : []
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.hyprLoaded === true : false
 
@@ -30,28 +30,28 @@ Item {
     function patch(i, key, val) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("env") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.env") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
-        pg.hub.hyprEdit("env", a);
+        pg.hub.hyprEdit("desktop.env", a);
     }
     function removeRow(i) {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("env") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.env") || []).slice();
         a.splice(i, 1);
-        pg.hub.hyprEdit("env", a);
+        pg.hub.hyprEdit("desktop.env", a);
     }
     function addRow() {
         if (!pg.hub)
             return;
-        var a = (pg.hub.hyprVal("env") || []).slice();
+        var a = (pg.hub.hyprVal("desktop.env") || []).slice();
         a.push({ "key": "", "value": "" });
-        pg.hub.hyprEdit("env", a);
+        pg.hub.hyprEdit("desktop.env", a);
     }
     function clearAll() {
         if (pg.hub)
-            pg.hub.hyprEdit("env", []);
+            pg.hub.hyprEdit("desktop.env", []);
     }
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──

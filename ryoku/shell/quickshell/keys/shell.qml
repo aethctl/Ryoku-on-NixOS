@@ -3,7 +3,6 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 
 // Ryoku keybind cheatsheet -- a one-shot `qs -c keys` app bound to Super+K. It
@@ -64,8 +63,8 @@ ShellRoot {
             // root.screen is briefly null while an output tears down; guard the
             // read so keyboard focus never latches on a stale value.
             readonly property bool onFocused: {
-                var fm = Hyprland.focusedMonitor;
-                return fm && fm.name ? (modelData ? fm.name === modelData.name : false) : true;
+                var fo = Wm.focusedOutput;
+                return fo ? (modelData ? fo === modelData.name : false) : true;
             }
             WlrLayershell.keyboardFocus: (win.onFocused && !app.closing)
                 ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None

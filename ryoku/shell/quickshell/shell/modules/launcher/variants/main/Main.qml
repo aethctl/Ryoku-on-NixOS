@@ -2,10 +2,10 @@
 //@ pragma DefaultEnv QSG_RENDER_LOOP = basic
 
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Ui.Singletons
 import "../../shared/Singletons"
 import "../../shared/providers" as SharedProviders
@@ -25,74 +25,6 @@ Scope {
     readonly property bool shown: open
         || (activeSurface !== null && activeSurface.visible)
 
-    onShownChanged: {
-        // Phase 10: the launcher-open daemon report (execDetached ryoku-shell state
-        // launcher) is dropped; ShellState.launcherOpen owns open state now.
-        if (shown)
-            root.applyBackdropBlur();
-        else
-            root.restoreBackdropBlur();
-    }
-
-    // --- backdrop blur -----------------------------------------------------
-    // Frost the desktop behind the palette while it is open, by how much the App
-    // Launcher page's slider says (LauncherConfig.bgBlur, px; 0 = off). Hyprland
-    // blur size and enable are global (no per-layer size), so this reads the live
-    // blur on open, drives it to the chosen strength, and puts it back on hide,
-    // turning blur on even when the user keeps it off globally. The low-power
-    // blur switch (weak GPUs) suppresses it. Hyprland's Lua parser takes runtime
-    // config through `hyprctl eval`, not `keyword`.
-    property bool blurForced: false
-    property bool savedBlurEnabled: false
-    property int  savedBlurSize: 5
-
-    function evalBlur(enabled, size) {
-        Quickshell.execDetached(["hyprctl", "eval",
-            "hl.config({ decoration = { blur = { enabled = " + (enabled ? "true" : "false")
-                + ", size = " + Math.max(1, size) + " } } })"]);
-    }
-    function applyBackdropBlur() {
-        if (Performance.blurDisabled)
-            return;
-        blurProbe.running = true;
-    }
-    function restoreBackdropBlur() {
-        if (!root.blurForced)
-            return;
-        root.blurForced = false;
-        root.evalBlur(root.savedBlurEnabled, root.savedBlurSize);
-    }
-
-    // Read the live compositor blur once per open (the real baseline to put
-    // back), then push the launcher's strength. Ignored if the palette closed
-    // before the read returned.
-    Process {
-        id: blurProbe
-        command: ["sh", "-c", "hyprctl getoption -j decoration:blur:enabled; hyprctl getoption -j decoration:blur:size"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (!root.open)
-                    return;
-                var en, sz;
-                try {
-                    var lines = this.text.trim().split("\n");
-                    en = JSON.parse(lines[0]);
-                    sz = JSON.parse(lines[1]);
-                } catch (e) {
-                    return;
-                }
-                if (!root.blurForced) {
-                    root.savedBlurEnabled = en.bool === true;
-                    root.savedBlurSize = sz.int > 0 ? sz.int : 5;
-                }
-                root.blurForced = true;
-                var want = LauncherConfig.bgBlur | 0;
-                root.evalBlur(want > 0, want);
-            }
-        }
-    }
-
-
     // launcher weather units from the config: "auto" follows the locale.
     Binding {
         target: Weather
@@ -101,8 +33,8 @@ Scope {
     }
 
     function focusedMonitor() {
-        var m = Hyprland.focusedMonitor;
-        return m && m.name ? m.name : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
+        var name = Wm.focusedOutput;
+        return name ? name : (Quickshell.screens.length > 0 ? Quickshell.screens[0].name : "");
     }
 
     function show(mon) {
@@ -171,6 +103,49 @@ Scope {
             onVisibleChanged: {
                 if (!visible && root.activeSurface === win)
                     root.activeSurface = null;
+            }
+
+            // blurred backdrop: a still snapshot of the desktop presented through
+            // a Qt blur so the palette floats over frost without driving the
+            // compositor. captured once per open (live: false) so the full-screen
+            // window never samples itself. skipped on weak GPUs and at zero blur.
+            Item {
+                id: frost
+                anchors.fill: parent
+                readonly property int radius: LauncherConfig.bgBlur | 0
+                readonly property bool wanted: !Performance.blurDisabled && radius > 0
+                visible: opacity > 0.001 && frostCapture.hasContent
+                opacity: win.shown ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: Motion.open; easing.type: Easing.OutCubic } }
+
+                ScreencopyView {
+                    id: frostCapture
+                    anchors.fill: parent
+                    visible: false
+                    live: false
+                    paintCursor: false
+                    captureSource: (frost.wanted && win.visible) ? win.modelData : null
+                }
+
+                ShaderEffectSource {
+                    id: frostSource
+                    anchors.fill: parent
+                    sourceItem: frostCapture
+                    live: frost.visible
+                    hideSource: false
+                    recursive: false
+                    smooth: true
+                    visible: false
+                }
+
+                MultiEffect {
+                    anchors.fill: parent
+                    source: frostSource
+                    autoPaddingEnabled: false
+                    blurEnabled: true
+                    blur: 1
+                    blurMax: Math.max(1, Math.min(64, frost.radius))
+                }
             }
 
             // dim + click-out scrim.

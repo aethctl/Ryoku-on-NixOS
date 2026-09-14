@@ -23,6 +23,14 @@ Singleton {
     property bool ready: false
     property int revision: 0
 
+    // Compositor capabilities and provider config files from the daemon `wm`
+    // topic on the same socket. supports() -> a gated row is hidden, not disabled.
+    property var caps: ({})
+    property var configFiles: []
+    property string provider: ""
+    property var windows: []
+    function supports(cap) { return !cap || root.caps[cap] !== false; }
+
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
     // Nested read by dotted path; undefined for any missing segment.
@@ -104,5 +112,38 @@ Singleton {
         }
 
         onConnectionStateChanged: if (connected) flushQueued()
+    }
+
+    function applyWm(line) {
+        try {
+            var f = JSON.parse(line);
+            if (f && typeof f === "object" && !Array.isArray(f)) {
+                root.caps = f.caps || ({});
+                root.configFiles = f.configFiles || [];
+                root.provider = f.provider || "";
+                root.windows = f.windows || [];
+            }
+        } catch (e) {
+        }
+    }
+
+    Socket {
+        id: wmSub
+        path: root.sockPath
+        parser: SplitParser { onRead: line => root.applyWm(line) }
+        Component.onCompleted: connected = true
+        onConnectionStateChanged: {
+            if (connected) {
+                write("subscribe wm\n");
+                flush();
+            } else {
+                wmRetry.restart();
+            }
+        }
+    }
+    Timer {
+        id: wmRetry
+        interval: 2000
+        onTriggered: if (!wmSub.connected) wmSub.connected = true
     }
 }

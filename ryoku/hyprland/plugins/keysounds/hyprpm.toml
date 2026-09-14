@@ -1,4 +1,4 @@
-# The build recipe: what `ryoku-hub hypr plugins rebuild` runs on a checkout or
+# The build recipe: what `ryoku-hub desktop plugins rebuild` runs on a checkout or
 # a packaged box, in the format hyprpm reads. The plugin lives in the Ryoku
 # monorepo, so it tracks the Hyprland the repo ships and carries no commit pins.
 # `assets` is a Ryoku extension: a directory the build fills that the builder

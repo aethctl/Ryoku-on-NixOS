@@ -1,0 +1,4 @@
+# ryoku-wm v0.0.0 => ../../../wm
+## explicit; go 1.22
+ryoku-wm
+# ryoku-wm => ../../../wm

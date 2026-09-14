@@ -80,6 +80,7 @@ func TestZshPromptDefaultsAndPersists(t *testing.T) {
 }
 
 func TestSyncSessionShellUpdatesLaunchEnvironments(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	old := runSessionCommand
 	defer func() { runSessionCommand = old }()
 	var calls []string
@@ -92,11 +93,22 @@ func TestSyncSessionShellUpdatesLaunchEnvironments(t *testing.T) {
 	for _, want := range []string{
 		"systemctl --user set-environment SHELL=/usr/bin/zsh",
 		"dbus-update-activation-environment --systemd SHELL=/usr/bin/zsh",
-		"hyprctl eval hl.env(\"SHELL\", \"/usr/bin/zsh\")",
 		"ryoku reload",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("session calls missing %q:\n%s", want, joined)
 		}
+	}
+	// SHELL is persisted into desktop.env for the provider to emit into env config.
+	d, _ := readJSONMap(desktopStorePath())["desktop"].(map[string]any)
+	env, _ := d["env"].([]any)
+	found := false
+	for _, e := range env {
+		if m, ok := e.(map[string]any); ok && m["key"] == "SHELL" && m["value"] == "/usr/bin/zsh" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("SHELL not persisted into desktop.env: %v", d["env"])
 	}
 }

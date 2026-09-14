@@ -125,9 +125,9 @@ When a request would change the system, in order:
    `ryoku plugin add <url> --bar`, or from Ryostore; see `plugins.md`. Never
    run a plugin's code to install it. A Hyprland compositor plugin (title
    bars, cursor motion, key sounds, a `.so` the compositor loads) is managed
-   by `ryoku-hub hypr plugins list|rebuild|add|remove` and Settings >
+   by `ryoku-hub desktop plugins list|rebuild|add|remove` and Settings >
    Plugins; a "version mismatch" after an update means
-   `ryoku-hub hypr plugins rebuild --stale`.
+   `ryoku-hub desktop plugins rebuild --stale`.
 3. **Is it a config edit with no command?** Edit the override, never the shipped
    file: the tool's own `user.*` file, or a fork at the mirrored path under
    `~/.config/ryoku/user_edits/`. Then reload (`ryoku reload`, or `hyprctl

@@ -269,6 +269,34 @@ func syncSessionShell(path string) {
 	_ = os.Setenv("SHELL", path)
 	_ = runSessionCommand("systemctl", "--user", "set-environment", "SHELL="+path)
 	_ = runSessionCommand("dbus-update-activation-environment", "--systemd", "SHELL="+path)
-	_ = runSessionCommand("hyprctl", "eval", fmt.Sprintf("hl.env(%q, %q)", "SHELL", path))
+	// SHELL is a persisted setting: the provider emits it into the compositor's
+	// env config and a reload makes newly spawned processes read it.
+	persistShellEnv(path)
+	_ = applyDesktop()
 	_ = runSessionCommand("ryoku", "reload")
+}
+
+// persistShellEnv upserts SHELL into desktop.env under the store lock.
+func persistShellEnv(path string) {
+	_ = withDesktopLock(func() error {
+		ns := readJSONMap(desktopStorePath())
+		d := childMap(ns, "desktop")
+		var env []map[string]any
+		if raw, ok := d["env"]; ok {
+			b, _ := json.Marshal(raw)
+			_ = json.Unmarshal(b, &env)
+		}
+		found := false
+		for _, e := range env {
+			if e["key"] == "SHELL" {
+				e["value"] = path
+				found = true
+			}
+		}
+		if !found {
+			env = append(env, map[string]any{"key": "SHELL", "value": path})
+		}
+		d["env"] = env
+		return atomicWrite(desktopStorePath(), mustJSON(ns), 0o644)
+	})
 }

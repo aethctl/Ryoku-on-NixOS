@@ -67,20 +67,6 @@ function bindString(key, modifiers, text) {
     return parts.join(" + ");
 }
 
-function luaLine(bind) {
-    return 'hl.bind("' + bind + '", hl.dsp.exec_cmd("flock -n /tmp/ryoshot.lock qs -c ryoshot"))';
-}
-
-function luaFile(bind) {
-    return luaLine(bind) + "\n";
-}
-
-function parseBind(luaText) {
-    var m = /hl\.bind\(\s*"([^"]*)"/.exec(luaText);
-    return m ? m[1] : null;
-}
-
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { keyName: keyName, modNames: modNames, bindString: bindString,
-        luaLine: luaLine, luaFile: luaFile, parseBind: parseBind };
+    module.exports = { keyName: keyName, modNames: modNames, bindString: bindString };
 }

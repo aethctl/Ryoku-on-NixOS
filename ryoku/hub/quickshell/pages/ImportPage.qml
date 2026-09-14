@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Io
-import Quickshell.Hyprland
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "../Combos.js" as Combos
@@ -264,7 +263,7 @@ Item {
         undoProc.command = ["ryoku-hub", "import", "undo"];
         undoProc.running = true;
     }
-    function reloadDesktop() { Quickshell.execDetached(["hyprctl", "reload"]); }
+    function reloadDesktop() { if (pg.hub) pg.hub.wmAct("config.reload"); }
     function restart() {
         pg.scan = null;
         pg.applyResult = null;
@@ -1270,8 +1269,8 @@ Item {
     property string remapNorm: ""
     readonly property bool recording: pg.remapNorm.length > 0
 
-    function enterRecordSubmap() { Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.submap(\"record\")"]); }
-    function exitRecordSubmap() { Quickshell.execDetached(["hyprctl", "dispatch", "hl.dsp.submap(\"reset\")"]); }
+    function enterRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.enter", ["record"]); }
+    function exitRecordSubmap() { if (pg.hub) pg.hub.wmAct("submap.reset"); }
     function startRemap(norm) {
         if (!norm)
             return;

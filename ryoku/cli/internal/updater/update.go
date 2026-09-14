@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -551,9 +552,9 @@ func updateStage2(pre string, withSystem bool) error {
 	// the old process still has mapped. pause Hyprland's Lua auto-reload for
 	// the same reason (= emergency overlay popping up with no keybinds).
 	stopShell()
-	hyprPauseAutoreload()
+	pauseConfigAutoreload()
 	if err := Materialize(); err != nil {
-		hyprReload()
+		reloadConfig()
 		startShell()
 		restartWallpaper()
 		progress.fail(err)
@@ -564,7 +565,7 @@ func updateStage2(pre string, withSystem bool) error {
 	progress.logf(i18n.T("Reloading the desktop"))
 	// one clean reload picks up the new config and restores auto-reload, then
 	// start the shell daemon so the new binary + QML both take effect.
-	hyprReload()
+	reloadConfig()
 	startShell()
 	restartWallpaper()
 	rashinReindex()
@@ -1387,19 +1388,21 @@ func snapperPost(pre, desc string) {
 	_ = sys.Sudo("snapper", "-c", snapperConfig, "cleanup", "number")
 }
 
-// hyprPauseAutoreload stops Hyprland reloading the Lua config mid-swap, so a
-// half-written file is never observed (would trip the emergency overlay).
-func hyprPauseAutoreload() {
-	if sys.HyprLive() {
-		_ = exec.Command("hyprctl", "keyword", "misc:disable_autoreload", "true").Run()
+// pauseConfigAutoreload stops the compositor reloading its config mid-swap, so a
+// half-written tree is never observed.
+func pauseConfigAutoreload() {
+	c := wm.Open()
+	if c.Detection().Live {
+		_ = c.Act(wm.ActionConfigAutoreload, "off")
 	}
 }
 
-// hyprReload applies the materialized config in one clean pass. the reload
-// also restores auto-reload, since keywords reset from the config.
-func hyprReload() {
-	if sys.HyprLive() {
-		_ = exec.Command("hyprctl", "reload").Run()
+// reloadConfig applies the materialized config in one clean pass; the reload
+// also restores auto-reload.
+func reloadConfig() {
+	c := wm.Open()
+	if c.Detection().Live {
+		_ = c.Act(wm.ActionConfigReload)
 	}
 }
 

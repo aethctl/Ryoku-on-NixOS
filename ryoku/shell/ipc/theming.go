@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // theming.go is what ryoku-shell keeps of the old wallpaper file after Ryogami
@@ -167,10 +169,6 @@ func (d *daemon) scheduleTheme() {
 // trigger. Runs for the life of the daemon.
 func (d *daemon) paintWorker() {
 	for range d.paintSig {
-		// Self-heal a stale signature before any hyprctl fork: if Hyprland
-		// restarted under this persisted daemon, re-bind so the border reload
-		// and the cursor recolour reach the live compositor (see hyprsig.go).
-		ensureLiveHyprSignature()
 		// The surfaces floating on the picture need its luminance map either
 		// way, named theme or not.
 		writeWallpaperTone(d.currentWall())
@@ -182,11 +180,11 @@ func (d *daemon) paintWorker() {
 					fmt.Fprintf(os.Stderr, "paintWorker matugen static: %v\n", err)
 					continue
 				}
-				_ = exec.Command("hyprctl", "reload", "config-only").Run()
-				// A hyprctl reload re-runs decoration.lua, which reverts
-				// col.active_border to the value it parses at config time; the
-				// eval is the only path that lands the live palette border.
-				applyHyprBorder()
+				if d.wmc.Can(wm.CapConfigReload) {
+					_ = d.wmc.Act(wm.ActionConfigReload, "config-only")
+				}
+				// A config reload drops the live border to its config value.
+				d.applyBorderColors()
 				select {
 				case d.ledsSig <- struct{}{}:
 				default:
@@ -211,12 +209,11 @@ func (d *daemon) paintWorker() {
 			// decoration.lua's red fallback.
 			continue
 		}
-		_ = exec.Command("hyprctl", "reload", "config-only").Run()
-		// The reload reverts the window border to decoration.lua's parsed
-		// fallback (#e0563b when hypr-colors.lua is stale); eval lands the live
-		// wallpaper border over it. Lost when the wallpaper backend moved to the
-		// daemon, which is why the border kept snapping back to red.
-		applyHyprBorder()
+		if d.wmc.Can(wm.CapConfigReload) {
+			_ = d.wmc.Act(wm.ActionConfigReload, "config-only")
+		}
+		// A config reload drops the live border to its config value.
+		d.applyBorderColors()
 		select {
 		case d.ledsSig <- struct{}{}:
 		default:

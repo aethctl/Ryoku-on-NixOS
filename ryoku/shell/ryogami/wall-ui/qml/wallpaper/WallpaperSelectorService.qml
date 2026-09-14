@@ -467,7 +467,7 @@ QtObject {
 
   function applyBackdrop(path) {
     var p = path || ""
-    Config.saveKey("niri.backdrop", p)
+    Config.saveKey("overviewBackdrop.path", p)
     DaemonClient.call("wall.backdrop", { "path": p }, function() {})
   }
 

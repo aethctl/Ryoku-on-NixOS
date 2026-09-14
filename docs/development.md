@@ -12,7 +12,7 @@ The loop, the gates, and how to add things without breaking the rules.
 Edit the repo, deploy, test on the running system.
 
 - **Shell (QML + daemon):** `ryoku/shell/dev-run.sh` builds `ryoku-shell` and
-  runs it from the checkout (`qs -p`, hot-reload). `dev-binds.sh on` binds the
+  runs it from the checkout (`qs -p`, hot-reload). `ryoku/hyprland/dev-binds.sh on` binds the
   shell keys for the session; `dev-stop.sh` stops it. Your own `~/.config` is not
   touched.
 - **Configs:** `ryoku deploy` builds the binaries and lays the repo into

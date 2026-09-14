@@ -120,7 +120,7 @@ ryoku_repo_keyring() {
 # fatal: no desktop without it and no ryoku CLI left to recover, so we stop
 # loudly instead of booting a half-configured box.
 ryoku_deploy_packages() {
-  local -a pkgs=(ryoku-keyring ryoku-desktop)
+  local -a pkgs=(ryoku-keyring ryoku-desktop "ryoku-desktop-$RYOKU_COMPOSITOR")
   local aura="$RYOKU_REPO/system/hardware/input/ryoku-hw-asus-aura"
   if [[ -x $aura ]] && "$aura"; then
     if [[ -z ${RYOKU_DRYRUN:-} ]] && arch-chroot /mnt pacman -Qq tlp >/dev/null 2>&1; then
@@ -241,7 +241,7 @@ ryoku_deploy_materialize() {
 # one edit sticks across updates; without it a non-us user gets a us Hyprland
 # session and a password typed there mismatches the install-time one.
 ryoku_seed_hypr_keymap() {
-  local kb=/mnt/usr/share/ryoku/config/hypr/keyboard.lua
+  local kb=/mnt/usr/share/ryoku/config/$RYOKU_COMPOSITOR_CONFIG_DIR/keyboard.lua
   local xkbl=${RYOKU_XKB_LAYOUT:-} xkbv=${RYOKU_XKB_VARIANT:-}
   [[ -n $xkbl ]] || xkbl=$RYOKU_KEYMAP
   [[ $xkbl == us && -z $xkbv ]] && return 0   # shipped default is already us

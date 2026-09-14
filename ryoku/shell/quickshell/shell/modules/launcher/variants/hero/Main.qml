@@ -2,7 +2,7 @@
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import Quickshell.Io
 import "../../shared/Singletons"
 import "../../shared/providers" as SharedProviders
@@ -23,9 +23,8 @@ Scope {
     property int railRevision: 0
     property string recoveryTarget: ""
     property bool pointerFocusForced: false
-    property bool pointerFocusKnown: false
-    property int savedFollowMouse: 2
-    property string pointerFocusPending: ""
+    property string savedFollowMouse: ""
+    property bool restorePending: false
     property var lifetime: ({ alive: true })
 
     readonly property bool open: openRequested
@@ -51,9 +50,8 @@ Scope {
     }
 
     function focusedMonitor() {
-        var monitor = Hyprland.focusedMonitor;
-        if (monitor && monitor.name)
-            return monitor.name;
+        if (Wm.focusedOutput !== "")
+            return Wm.focusedOutput;
         return Quickshell.screens.length > 0
             ? Quickshell.screens[0].name : "";
     }
@@ -292,70 +290,36 @@ Scope {
         return railSurfaces[String(monitor || "")] || null;
     }
 
-    // The launcher has exclusive keyboard focus. Temporarily disabling
-    // pointer-driven refocus prevents a cursor outside its small surface from
-    // handing typed keys back to the window underneath. The user's exact
-    // follow_mouse setting is probed once and restored after the close morph.
-    Process {
-        id: pointerFocusWriter
-        onRunningChanged: {
-            if (running || root.pointerFocusPending === "")
-                return;
-            var next = root.pointerFocusPending;
-            root.pointerFocusPending = "";
-            command = ["hyprctl", "eval", next];
-            running = true;
-        }
-    }
-
-    function evalFollowMouse(value) {
-        var next = Math.max(0, Math.min(3, Number(value) | 0));
-        var command = "hl.config({ input = { follow_mouse = " + next + " } })";
-        if (pointerFocusWriter.running) {
-            pointerFocusPending = command;
-            return;
-        }
-        pointerFocusWriter.command = ["hyprctl", "eval", command];
-        pointerFocusWriter.running = true;
-    }
-
-    Process {
-        id: pointerFocusProbe
-        command: ["hyprctl", "getoption", "-j", "input:follow_mouse"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (!root.open)
-                    return;
-                var option;
-                try {
-                    option = JSON.parse(this.text);
-                } catch (error) {
-                    return;
-                }
-                if (typeof option.int !== "number")
-                    return;
-                root.savedFollowMouse = option.int;
-                root.pointerFocusKnown = true;
-                root.pointerFocusForced = true;
-                root.evalFollowMouse(0);
-            }
-        }
-    }
-
+    // The launcher holds exclusive keyboard focus; suppress pointer-driven
+    // refocus while open so a cursor outside its small surface does not hand keys
+    // back, then restore the user's setting on close.
     function freezePointerFocus() {
-        if (pointerFocusForced) {
-            evalFollowMouse(0);
+        if (pointerFocusForced || !Wm.caps.liveConfigEval)
             return;
-        }
-        if (!pointerFocusProbe.running)
-            pointerFocusProbe.running = true;
+        pointerFocusForced = true;
+        root.restorePending = false;
+        root.savedFollowMouse = "";
+        Wm.setFocusFollowsMouse("0", function (prev) {
+            root.savedFollowMouse = prev || "";
+            if (root.restorePending)
+                root._restoreFollowMouse();
+        });
     }
 
     function restorePointerFocus() {
-        if (!pointerFocusForced || !pointerFocusKnown)
+        if (!pointerFocusForced)
             return;
-        evalFollowMouse(savedFollowMouse);
         pointerFocusForced = false;
+        if (root.savedFollowMouse !== "")
+            root._restoreFollowMouse();
+        else
+            root.restorePending = true;
+    }
+
+    function _restoreFollowMouse() {
+        root.restorePending = false;
+        if (root.savedFollowMouse !== "")
+            Wm.setFocusFollowsMouse(root.savedFollowMouse);
     }
 
     function stateDump() {

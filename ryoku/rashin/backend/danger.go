@@ -3,6 +3,8 @@ package main
 import (
 	"path/filepath"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // danger.go classifies a proposed shell command into a tier the terminal lane
@@ -73,10 +75,17 @@ var readSubs = map[string]map[string]bool{
 	"ryoku-rashin": {"status": true},
 	"rashin":       {"status": true},
 	"snapper":      {"list": true, "status": true},
-	"hyprctl": {"monitors": true, "clients": true, "activewindow": true, "workspaces": true,
-		"devices": true, "binds": true, "version": true, "getoption": true, "systeminfo": true},
 	"loginctl": {"list-sessions": true, "session-status": true, "show-session": true,
 		"show-user": true, "user-status": true},
+}
+
+// The resident agent may probe the compositor read-only through the provider
+// binaries, never a compositor-specific tool: only caps, which reports what the
+// compositor can do and touches nothing.
+func init() {
+	for _, p := range wm.Providers() {
+		readSubs["ryoku-wm-"+p] = map[string]bool{"caps": true}
+	}
 }
 
 // sudoLike run their argument as another user; the wrapped command is what

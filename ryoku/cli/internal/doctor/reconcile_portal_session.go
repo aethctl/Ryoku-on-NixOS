@@ -15,9 +15,9 @@ import (
 // xdg-desktop-portal is only PartOf=graphical-session.target and nothing ever
 // stops that target, so logging out and back in leaves the old session's
 // frontend running. A ScreenCast request then times out inside it instead of
-// reaching the hyprland backend: no source picker, and the app is handed
-// nothing with no error anywhere the user looks. A frontend older than the
-// Hyprland it serves cannot belong to this session, and restarting it is
+// reaching the compositor's portal backend: no source picker, and the app is
+// handed nothing with no error anywhere the user looks. A frontend older than
+// the session it serves cannot belong to this session, and restarting it is
 // enough; the backend re-registers on demand.
 
 // parseStartTicks reads field 22 of /proc/<pid>/stat, in clock ticks since boot.
@@ -49,31 +49,23 @@ func procStartTicks(pid int) (uint64, bool) {
 	return parseStartTicks(string(b))
 }
 
-// compositorStartTicks is the start time of the session's Hyprland, walked out
-// of /proc rather than asked of hyprctl: the point is to compare against the
-// LIVE compositor even when the caller's HYPRLAND_INSTANCE_SIGNATURE names a
-// dead one. Oldest match wins, so a nested Hyprland cannot make a healthy
-// frontend look stale and get it restarted out from under a live share.
-func compositorStartTicks() (uint64, bool) {
-	ents, err := os.ReadDir("/proc")
+// sessionStartTicks is when this login session began, read from its leader
+// process so the check stays compositor-neutral: a portal frontend left from a
+// previous login predates this leader whatever window manager runs.
+func sessionStartTicks() (uint64, bool) {
+	sid := strings.TrimSpace(os.Getenv("XDG_SESSION_ID"))
+	if sid == "" {
+		return 0, false
+	}
+	out, err := exec.Command("loginctl", "show-session", sid, "-p", "Leader", "--value").Output()
 	if err != nil {
 		return 0, false
 	}
-	oldest, found := uint64(0), false
-	for _, e := range ents {
-		pid, err := strconv.Atoi(e.Name())
-		if err != nil {
-			continue
-		}
-		comm, err := os.ReadFile(filepath.Join("/proc", e.Name(), "comm"))
-		if err != nil || strings.TrimSpace(string(comm)) != "Hyprland" {
-			continue
-		}
-		if ticks, ok := procStartTicks(pid); ok && (!found || ticks < oldest) {
-			oldest, found = ticks, true
-		}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || pid <= 0 {
+		return 0, false
 	}
-	return oldest, found
+	return procStartTicks(pid)
 }
 
 // userUnitMainPID is the MainPID of a --user unit, or 0 when it is not running.
@@ -90,9 +82,9 @@ func userUnitMainPID(unit string) int {
 }
 
 func reconcilePortalSession(checkOnly bool) recResult {
-	hyprStart, ok := compositorStartTicks()
+	sessionStart, ok := sessionStartTicks()
 	if !ok {
-		return okRes(i18n.T("no running compositor to compare against"))
+		return okRes(i18n.T("no running session to compare against"))
 	}
 	fePID := userUnitMainPID("xdg-desktop-portal.service")
 	if fePID == 0 {
@@ -102,11 +94,11 @@ func reconcilePortalSession(checkOnly bool) recResult {
 	if !ok {
 		return okRes(i18n.T("could not read the portal frontend's start time"))
 	}
-	if feStart >= hyprStart {
+	if feStart >= sessionStart {
 		return okRes(i18n.T("portal frontend belongs to this session"))
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("the portal frontend predates this Hyprland session; screen share opens no source picker and silently shares nothing")).
+		return wouldRes(i18n.T("the portal frontend predates this login session; screen share opens no source picker and silently shares nothing")).
 			withFix(i18n.T("ryoku doctor restarts xdg-desktop-portal"))
 	}
 	if err := exec.Command("systemctl", "--user", "restart", "xdg-desktop-portal.service").Run(); err != nil {

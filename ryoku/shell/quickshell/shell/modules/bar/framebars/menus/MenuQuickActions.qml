@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import "../.." as Pill
 import shell.services
 import "../../../../components"
@@ -64,7 +63,7 @@ Item {
         case "color": Quickshell.execDetached(["ryoku-cmd-color-picker"]); root.requestClose(); return;
         case "settings": Quickshell.execDetached(["ryoku-shell", "hub", "open"]); root.requestClose(); return;
         case "lock": Quickshell.execDetached(["ryoku-shell", "lock"]); root.requestClose(); return;
-        case "logout": Hyprland.dispatch("exit"); return;
+        case "logout": SessionActions.run("logout"); return;
         case "reboot": Quickshell.execDetached(["systemctl", "reboot"]); return;
         case "shutdown": Quickshell.execDetached(["systemctl", "poweroff"]); return;
         }

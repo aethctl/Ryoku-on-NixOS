@@ -1,32 +1,21 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import Quickshell
-import Quickshell.Io
-import Quickshell.Hyprland
-import shell.services
+import Ryoku.Ui.Singletons
 import "../lib/providers.js" as Providers
 
-// Resolves the active workspace's tiled layout and applies a chosen layout to it.
-// Event driven: the layout is re-read only on the Hyprland events that can change
-// it (mirroring the reference re-subscribe on WorkspaceChanged), never on a
-// timer. `processCommand`, `stopped()` and `stop()` are part of the API the menu
-// and its integration harness rely on.
+// Reads the active workspace's tiled layout and applies a chosen one to it.
+// Gated on caps.tiledLayout so a compositor without a tiled-layout concept shows
+// no control. `active` mirrors the owning menu's open state; `stopped()` fires
+// when it closes.
 Item {
     id: root
 
     property bool active: false
     readonly property var layouts: Providers.layouts
     property string current: ""
-    property var processCommand: ["sh", "-c", "hyprctl -j activeworkspace 2>/dev/null | jq -r '.tiledLayout // .layout // empty'"]
+    readonly property bool available: Wm.caps.tiledLayout
     signal stopped()
-
-    // The Hyprland events that can change the active workspace's layout.
-    readonly property var watched: ({
-        workspace: true, workspacev2: true,
-        focusedmon: true, focusedmonv2: true,
-        activelayout: true
-    })
 
     onActiveChanged: {
         if (active)
@@ -37,42 +26,26 @@ Item {
     Component.onCompleted: refresh()
     Component.onDestruction: stop()
 
-    function refresh() {
-        if (active)
-            layoutProc.running = true;
+    Connections {
+        target: Wm
+        function onFocusedWorkspaceChanged() { if (root.active) root.refresh(); }
     }
 
-    // SetLayout: apply a per-workspace layout rule to this workspace, then
-    // optimistically set current (tiled_layout does not update on an empty
-    // workspace). Contract 03 sec 4.5.
+    function refresh() {
+        if (active)
+            root.current = Wm.focusedWorkspace ? (Wm.focusedWorkspace.layout || "") : "";
+    }
+
+    // tiled_layout does not update on an empty workspace, so set current
+    // optimistically as well as through the live frame.
     function choose(layout) {
-        if (!active || !layouts.includes(layout))
+        if (!active || !available || !layouts.includes(layout))
             return;
-        Quickshell.execDetached(["hyprctl", "eval",
-            'hl.workspace_rule({ workspace = "' + Workspaces.activeId + '", layout = "' + layout + '" })']);
-        current = layout;
+        Wm.setWorkspaceLayout(Wm.focusedWorkspace ? Wm.focusedWorkspace.name : "", layout);
+        root.current = layout;
     }
 
     function stop() {
-        if (layoutProc.running) {
-            layoutProc.running = false;
-            stopped();
-        }
-    }
-
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            if (root.active && root.watched[event.name])
-                Qt.callLater(root.refresh);
-        }
-    }
-
-    Process {
-        id: layoutProc
-        command: root.processCommand
-        stdout: StdioCollector {
-            onStreamFinished: root.current = Providers.parseLayouts(this.text)[0] || ""
-        }
+        stopped();
     }
 }

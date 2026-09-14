@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import shell.services
 import Ryoku.Ui
@@ -20,19 +19,10 @@ PanelWindow {
     // and drag chrome without touching the fullscreen bounds. 1.0 is a no-op.
     readonly property real us: Tokens.uiScaleFor(modelData ? modelData.name : "")
 
-    readonly property var mon: {
-        const monitors = Hyprland.monitors.values;
-        for (var i = 0; i < monitors.length; i++) {
-            if (monitors[i].name === (modelData ? modelData.name : ""))
-                return monitors[i];
-        }
-        return null;
-    }
-    readonly property real monX: mon ? mon.x : 0
-    readonly property real monY: mon ? mon.y : 0
-    readonly property real monScale: mon && mon.scale > 0 ? mon.scale : 1
-    readonly property real screenW: mon ? mon.width / monScale : (modelData ? modelData.width : 0)
-    readonly property real screenH: mon ? mon.height / monScale : (modelData ? modelData.height : 0)
+    readonly property real monX: modelData ? modelData.x : 0
+    readonly property real monY: modelData ? modelData.y : 0
+    readonly property real screenW: modelData ? modelData.width : 0
+    readonly property real screenH: modelData ? modelData.height : 0
     readonly property string targetMonitor: Keypresses.sessionMonitor !== ""
         ? Keypresses.sessionMonitor
         : (ShellState.screens.length > 0 ? ShellState.screens[0].name : "")

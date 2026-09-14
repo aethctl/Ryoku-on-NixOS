@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // UserEditFiles lists the layable files in the overlay: regular files under
@@ -40,29 +42,29 @@ func UserEditFiles() ([]string, error) {
 	return rels, err
 }
 
-// LiveOwnedConfig are the files edited at their normal ~/.config path and
-// loaded there directly. Two kinds qualify: the tool's own user-include files
-// (hyprland.lua's optional("user") and optional("monitors_user"); kitty.conf
-// includes user.conf), and the update seeds the runtime or the Hub edits in
-// place (materialize's generatedSeed set: the Hub's Fastfetch editor and the
-// store's readout styles rewrite fastfetch/config.jsonc, ryoku-gpu owns
-// gpu.lua, the display flow owns monitors.lua and keyboard.lua, matugen owns
-// kitty/current-theme.conf and ghostty/ryoku-colors). They must NEVER live in the overlay:
-// overlayUserEdits would re-lay a frozen copy over the live file on every
-// update and silently wipe edits made afterward. The user.lua report was the
-// first sighting; "updates keep resetting my fastfetch" was the same bug
-// through the seed set. The overlay is for forking a whole Ryoku file, not
-// these.
-var LiveOwnedConfig = []string{
-	"hypr/user.lua",
-	"hypr/monitors_user.lua",
-	"kitty/user.conf",
-	"fastfetch/config.jsonc",
-	"hypr/monitors.lua",
-	"hypr/gpu.lua",
-	"hypr/keyboard.lua",
-	"kitty/current-theme.conf",
-	"ghostty/ryoku-colors",
+// LiveOwnedConfig are the files edited at their normal ~/.config path and loaded
+// there directly: the tool's own user-include files and the seeds the runtime
+// or the Hub edit in place (fastfetch/config.jsonc, matugen's kitty and ghostty
+// colours, and each compositor's display, GPU and keyboard state). They must
+// NEVER live in the overlay: overlayUserEdits would re-lay a frozen copy over
+// the live file on every update and silently wipe edits made afterward.
+var LiveOwnedConfig = liveOwnedConfig()
+
+// compositorLiveOwned are the live-owned files under a provider's config dir.
+func liveOwnedConfig() []string {
+	files := []string{
+		"kitty/user.conf",
+		"fastfetch/config.jsonc",
+		"kitty/current-theme.conf",
+		"ghostty/ryoku-colors",
+	}
+	// Every provider's files are kept regardless of which one is running, so an
+	// update under Hyprland never prunes a niri box's seeds and vice versa. The
+	// names come from the provider because they are its own config format.
+	for _, name := range wm.Providers() {
+		files = append(files, wm.ConfigUserOwned(name)...)
+	}
+	return files
 }
 
 // IsLiveOwnedConfig reports whether rel (a slash path relative to ~/.config) is

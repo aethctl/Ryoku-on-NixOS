@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 func TestQsEnvAddsMallocConf(t *testing.T) {
@@ -110,16 +112,11 @@ func TestShouldTakeOver(t *testing.T) {
 	}
 }
 
-// the signature command lets one daemon identify another's Hyprland instance; it
-// must echo the launch-time HYPRLAND_INSTANCE_SIGNATURE verbatim, empty included.
-func TestSignatureCommand(t *testing.T) {
-	d := &daemon{}
-	t.Setenv("HYPRLAND_INSTANCE_SIGNATURE", "sig-abc")
-	if got := d.dispatch("signature"); got != "sig-abc" {
-		t.Fatalf("dispatch(signature) = %q, want %q", got, "sig-abc")
-	}
-	t.Setenv("HYPRLAND_INSTANCE_SIGNATURE", "")
+// The signature verb reports the provider's opaque instance handle. With no
+// provider resolvable it is empty, which reads as no session to be stale against.
+func TestSignatureCommandNoProvider(t *testing.T) {
+	d := &daemon{wmc: wm.OpenNamed("does-not-exist")}
 	if got := d.dispatch("signature"); got != "" {
-		t.Fatalf("dispatch(signature) with no session = %q, want empty", got)
+		t.Fatalf("dispatch(signature) with no provider = %q, want empty", got)
 	}
 }

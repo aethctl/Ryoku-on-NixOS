@@ -3,7 +3,7 @@
 # is the source, the shell configs replace the matching ones under ~/.config,
 # including the Hyprland config. Builds ryoku-shell and puts it on PATH.
 #
-#   deploy.sh              build + install, then apply live (hyprctl reload).
+#   deploy.sh              build + install, then apply live (provider config.reload).
 #   deploy.sh --no-reload  build + install + stage the files, but DO NOT touch
 #                          the running session. The new config takes effect on
 #                          the next login. Useful so a live swap can't disrupt
@@ -108,24 +108,6 @@ restart_shell() {
   fi
 }
 
-hypr_live=0
-if command -v hyprctl >/dev/null 2>&1; then
-  # When deploy runs outside the Hyprland session (ssh, an agent, the curl
-  # recovery), HYPRLAND_INSTANCE_SIGNATURE is unset and hyprctl cannot find the
-  # compositor, so the autoreload pause below would be skipped and the rm+cp
-  # config swap could trip the live session into emergency mode. Recover the
-  # signature from the runtime dir so the pause still happens when a session is up.
-  if [ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
-    for _inst in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
-      [ -d "$_inst" ] || continue
-      _sig="$(basename "$_inst")"
-      export HYPRLAND_INSTANCE_SIGNATURE="$_sig"
-      break
-    done
-  fi
-  if hyprctl version >/dev/null 2>&1; then hypr_live=1; fi
-fi
-
 # Building the desktop from a checkout needs the Go toolchain (cmake/ninja and
 # makepkg below self-gate; go is the one hard requirement). A packaged box that
 # was switched to a checkout channel without it would otherwise die here with a
@@ -143,9 +125,21 @@ say "building ryoku-shell"
 mkdir -p "$bindir"
 install -m755 "$here/ipc/ryoku-shell" "$bindir/ryoku-shell"
 say "installed $bindir/ryoku-shell"
+# Build the Hyprland window-manager provider; deploy routes the config-swap pause
+# and reload below through it.
+say "building ryoku-wm-hyprland"
+(cd "$here/../wm/hyprland" && go build -o ryoku-wm-hyprland .)
+install -m755 "$here/../wm/hyprland/ryoku-wm-hyprland" "$bindir/ryoku-wm-hyprland"
+say "installed $bindir/ryoku-wm-hyprland"
 install -m755 "$here/scripts/ryoku-reload-cover" "$bindir/ryoku-reload-cover"
 install -m755 "$here/scripts/ryostage" "$bindir/ryostage"
 install -m755 "$here/scripts/ryoku-eq" "$bindir/ryoku-eq"
+# The Stash sidebar's helpers. Shell scripts, not compositor config, so they ride
+# the shell to PATH and work with no compositor config tree.
+for s in "$here/scripts"/stash-*.sh; do
+  [[ -f $s ]] || continue
+  install -m755 "$s" "$bindir/${s##*/}"
+done
 # Depth and Parallax merged into ryostage; a checkout box that installed the old
 # helpers keeps them on PATH forever otherwise (pacman drops them on packaged boxes).
 rm -f "$bindir"/ryoku-{depth,parallax-engine}
@@ -338,8 +332,8 @@ fi
 
 # Build the optional Hyprland compositor plugins (dynamic-cursors, hyprbars,
 # hyprfocus, hyprglass, imgborders, and this repo's keysounds) through the one
-# builder the Hub's Plugins page and the doctor use, `ryoku-hub hypr plugins
-# rebuild` (built above): it clones each upstream into
+# builder the Hub's Plugins page and the doctor use, `ryoku-hub desktop plugins
+# rebuild` (built above, which forwards to the provider): it clones each upstream into
 # ~/.cache/ryoku/hypr-plugins-src, checks out the commit its hyprpm.toml pins
 # for the installed Hyprland, runs the manifest's build steps against the
 # installed headers, and lays the .so with its .abi receipt under the user
@@ -355,7 +349,7 @@ rm -f "$HOME/.local/lib/hyprland/plugins/.hyprland-version"   # the pre-receipt 
 if pkg-config --exists hyprland 2>/dev/null; then
   mkdir -p "$HOME/.cache/ryoku"
   say "building Hyprland compositor plugins that are missing or stale"
-  if _out="$("$bindir/ryoku-hub" hypr plugins rebuild --stale --checkout "$here/../.." 2>"$HOME/.cache/ryoku/hypr-plugins-build.log")"; then
+  if _out="$("$bindir/ryoku-hub" desktop plugins rebuild --stale --checkout "$here/../.." 2>"$HOME/.cache/ryoku/hypr-plugins-build.log")"; then
     say "  $(jq -r '"built: " + (.built|join(", ")|if .=="" then "none" else . end) + "  skipped: " + (.skipped|length|tostring) + "  failed: " + ((.failed|keys)|join(", ")|if .=="" then "none" else . end)' <<<"$_out")"
     say "  log: ~/.cache/ryoku/hypr-plugins-build.log"
   else
@@ -406,6 +400,14 @@ say "installing Ryoku.FrameBars module"
 "$here/framebars/install.sh" "$qmldir"
 say "installed Ryoku.FrameBars -> $qmldir/Ryoku/FrameBars"
 
+# Install the Ryoku.Wm.Hyprland QML module (the provider's global-shortcut and
+# focus-grab bridges the shell imports instead of Quickshell.Hyprland). Pure QML.
+say "installing Ryoku.Wm.Hyprland module"
+rm -rf "$qmldir/Ryoku/Wm/Hyprland"
+mkdir -p "$qmldir/Ryoku/Wm/Hyprland"
+cp -a "$here/../wm/hyprland/qml/." "$qmldir/Ryoku/Wm/Hyprland/"
+say "installed Ryoku.Wm.Hyprland -> $qmldir/Ryoku/Wm/Hyprland"
+
 # Quickshell components: a deployed daemon runs `qs -c <name>`, reading
 # ~/.config/quickshell/<name>.
 say "installing quickshell components -> $cfg/quickshell"
@@ -414,7 +416,7 @@ mkdir -p "$cfg/quickshell"
 cp -a "$here/quickshell/." "$cfg/quickshell/"
 
 # xdg-desktop-portal: route ScreenCast/Screenshot to hyprland so screen sharing works.
-install -Dm644 "$here/portals/hyprland-portals.conf" "$cfg/xdg-desktop-portal/hyprland-portals.conf"
+install -Dm644 "$here/../hyprland/hyprland-portals.conf" "$cfg/xdg-desktop-portal/hyprland-portals.conf"
 # The single-instance shell ships as ryoku/shell/quickshell/shell and lands at
 # $cfg/quickshell/shell via the copy above; the ryoku-shell daemon launches it as
 # `qs -c shell`, the live desktop.
@@ -548,10 +550,12 @@ install -Dm644 "$here/../apps/nautilus/ryoku-stash-menu.py" \
   "$appshare/nautilus-python/extensions/ryoku-stash-menu.py"
 say "installed nautilus stash menu -> $appshare/nautilus-python/extensions"
 
-# Pause Hyprland's config auto-reload so the hypr swap below never exposes a
-# missing hyprland.lua (which would trip emergency mode).
-if (( hypr_live )); then
-  hyprctl keyword misc:disable_autoreload true >/dev/null 2>&1 || true
+# Pause config auto-reload through the provider so the swap below never exposes a
+# missing config mid-rename. A successful pause also proves a live session (so the
+# swap reloads at the end); a failure means no session and the swap just stages.
+wm_live=0
+if [[ -x "$bindir/ryoku-wm-hyprland" ]] && "$bindir/ryoku-wm-hyprland" act config.autoreload off >/dev/null 2>&1; then
+  wm_live=1
 fi
 
 # Hyprland config replaces the base, but the user's own files and the per-machine
@@ -701,7 +705,7 @@ command -v systemctl >/dev/null 2>&1 && systemctl --user daemon-reload 2>/dev/nu
 # box on `ryoku update` with no manual Hub save. Derived from hypr.json (the
 # editable truth), so idempotent; guarded, since a box may have no overrides yet.
 # Runs before overlay_user_edits so a user_edits/hypr/settings.lua still wins.
-"$bindir/ryoku-hub" hypr get >/dev/null 2>&1 || true
+"$bindir/ryoku-hub" desktop get >/dev/null 2>&1 || true
 
 # User overrides win over the base just laid, for hypr and every other surface.
 overlay_user_edits
@@ -714,12 +718,12 @@ if (( reload )) && [[ $wireplumber_before != "$wireplumber_after" ]]; then
 fi
 
 
-if (( hypr_live && reload )); then
-  # Apply now in one clean reload (this also restores auto-reload), then restart
-  # the shell daemon so a changed binary and changed QML both take effect.
-  hyprctl reload >/dev/null 2>&1 || true
+if (( wm_live && reload )); then
+  # One clean reload (which also restores auto-reload), then restart the shell
+  # daemon so a changed binary and changed QML both take effect.
+  "$bindir/ryoku-wm-hyprland" act config.reload >/dev/null 2>&1 || true
   restart_shell
-  say "deployed and reloaded Hyprland."
+  say "deployed and reloaded the compositor."
 else
   # Staged: leave auto-reload paused so the running session keeps its current
   # config until the next login, which loads the new one and fires the autostart.

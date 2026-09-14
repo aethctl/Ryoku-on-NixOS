@@ -57,4 +57,8 @@ bin/ryoku-dev-scan-slop --staged >/dev/null \
 bin/ryoku-dev-verify-delivery --quiet \
 	|| fail "a config in ryoku/apps reaches no user (see above); ship it from a PKGBUILD or a deploy path. See docs/updates.md."
 
+# 5. wm-isolation: compositor specifics stay inside the ryoku/wm seam.
+bin/ryoku-dev-verify-wm-isolation --quiet \
+	|| fail "compositor specifics leak outside ryoku/wm (see above); gate on a capability or route through wm.Client."
+
 exit 0

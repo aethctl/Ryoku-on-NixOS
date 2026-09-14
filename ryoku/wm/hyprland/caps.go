@@ -1,0 +1,105 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"strings"
+
+	wm "ryoku-wm"
+)
+
+// Every entry here must actually be honoured in act, apply or plugins. Claiming
+// one this provider cannot perform is worse than omitting it: the desktop would
+// offer a control that does nothing.
+//
+// CapNativeOverview is absent because Hyprland ships no overview, so the shell
+// draws its own.
+var capsManifest = []wm.Capability{
+	wm.CapWorkspaces,
+	wm.CapSpecialWorkspace,
+	wm.CapWorkspaceMoveToOutput,
+	wm.CapWindowWorkspaceMap,
+	wm.CapWindowGeometry,
+	wm.CapFocusHistory,
+	wm.CapWindowRules,
+	wm.CapLayerRules,
+	wm.CapSubmap,
+	wm.CapGlobalShortcuts,
+	wm.CapFocusGrab,
+	wm.CapScreenShader,
+	wm.CapPlugins,
+	wm.CapLiveConfigEval,
+	wm.CapConfigReload,
+	wm.CapAnimations,
+	wm.CapCursorSet,
+	wm.CapOutputPower,
+	wm.CapKeyboardLayoutSwitch,
+	wm.CapMonitorConfig,
+	wm.CapWindowFloat,
+	wm.CapTiledLayout,
+	wm.CapSessionExit,
+}
+
+// What apply authors: the generated Lua plus its user_edits overlay copies, so
+// materialize re-lays them after an update.
+var generatedFiles = []string{
+	"hypr/settings.lua",
+	"hypr/rebinds.lua",
+	"ryoku/user_edits/hypr/settings.lua",
+	"ryoku/user_edits/hypr/rebinds.lua",
+}
+
+// The hand-edit escape hatches hyprland.lua sources; ordered most useful first.
+var configFiles = []string{
+	"hypr/user.lua",
+	"hypr/monitors_user.lua",
+	"hypr/modules",
+}
+
+// The manifest is fixed, not probed: Hyprland does not gain features while
+// running, and caps is read during startup.
+func runCaps() error {
+	caps := wm.Caps{
+		Name:           wm.ProviderHyprland,
+		Version:        probeVersion(),
+		Instance:       instanceHandle(),
+		Supports:       capsManifest,
+		WorkspaceModel: wm.WorkspaceModelFixed,
+		// wm.hyprland.* keys stay in the store untouched while another
+		// compositor is active, so they are still there on the way back.
+		SettingDomains: []string{"desktop", "wm." + wm.ProviderHyprland},
+		ConfigFiles:    configFiles,
+		GeneratedFiles: generatedFiles,
+		PortalBackend:  "hyprland",
+	}
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	return enc.Encode(caps)
+}
+
+// instanceHandle is opaque to consumers, which only string-compare it.
+func instanceHandle() string {
+	if !live() {
+		return ""
+	}
+	return os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
+}
+
+// Probed best-effort: the installer and doctor need a manifest before any
+// compositor is running.
+func probeVersion() string {
+	if !live() {
+		return ""
+	}
+	out, err := ctl("version", "-j")
+	if err != nil {
+		return ""
+	}
+	var v struct {
+		Tag string `json:"tag"`
+	}
+	if json.Unmarshal(out, &v) != nil {
+		return ""
+	}
+	return strings.TrimSpace(v.Tag)
+}

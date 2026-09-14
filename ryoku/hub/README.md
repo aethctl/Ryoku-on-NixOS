@@ -22,7 +22,7 @@ changing a page's look.
   out to it the same way the rest of the desktop talks to `ryoku-shell`:
   - `ryoku-hub keybinds` parses the live Hyprland binds
     (`~/.config/hypr/modules/binds.lua`) into categorised, display-ready JSON.
-  - `ryoku-hub hypr get|defaults|save|preview|restore` reads and writes the
+  - `ryoku-hub desktop get|defaults|save|preview|restore` reads and writes the
     system-settings override document and generates the Lua the live config loads
     (see "The override model" below). `cursors` and `layouts` enumerate installed
     cursor themes and X11 keyboard layouts for the pickers.

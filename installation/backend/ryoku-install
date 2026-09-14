@@ -108,6 +108,8 @@ export RYOKU_VARIANT
 : "${RYOKU_ENCRYPT:=}"
 : "${RYOKU_LUKS_PASSPHRASE:=}"
 : "${RYOKU_GPU_MODE:=}"
+: "${RYOKU_COMPOSITOR:=}"
+: "${RYOKU_COMPOSITOR_CONFIG_DIR:=}"
 : "${RYOKU_REBOOT:=}"
 : "${RYOKU_DRYRUN:=}"
 # carve (in-place resize) contract: shrink RYOKU_RESIZE_PART to free
@@ -118,6 +120,8 @@ export RYOKU_VARIANT
 # required answers.
 [[ -n $RYOKU_DISK ]] || die "RYOKU_DISK is required"
 [[ -n $RYOKU_PASSWORD_HASH ]] || die "RYOKU_PASSWORD_HASH is required"
+[[ -n $RYOKU_COMPOSITOR ]] || die "RYOKU_COMPOSITOR is required (which window manager to install)"
+[[ -n $RYOKU_COMPOSITOR_CONFIG_DIR ]] || die "RYOKU_COMPOSITOR_CONFIG_DIR is required: the TUI derives it from wm.ConfigDir, so an empty value means '$RYOKU_COMPOSITOR' is not a known compositor. Refusing rather than seeding an unseeded desktop."
 case $RYOKU_DISK_STRATEGY in
   whole|alongside) ;;
   '') die "RYOKU_DISK_STRATEGY is required (use 'whole' or 'alongside'); refusing to wipe disk on empty strategy." ;;

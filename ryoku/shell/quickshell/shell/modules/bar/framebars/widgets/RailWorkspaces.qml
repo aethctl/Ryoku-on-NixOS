@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import "../../../../components"
 import shell.services
 
@@ -27,60 +27,39 @@ Item {
     readonly property real iconPx: 10 * scale
     readonly property int maxIcons: 3
 
-    // Non-special workspaces sorted by (monitor name, id). Fork-safe fallback
-    // identical to the original RailWorkspaces.
+    // Non-special workspaces sorted by (output, workspace number).
     readonly property var entries: {
-        const list = Hyprland.workspaces ? Hyprland.workspaces.values : [];
+        const list = Wm.workspaces;
         const out = [];
         const seen = {};
         for (let i = 0; i < list.length; ++i) {
             const w = list[i];
-            if (!w)
+            if (!w || w.special)
                 continue;
-            const o = w.lastIpcObject || ({});
-            const id = (typeof w.id === "number" && w.id !== 0) ? w.id
-                : (typeof o.id === "number" ? o.id : 0);
-            if (id <= 0)
+            const name = w.name || "";
+            if (name === "" || seen[name])
                 continue;
-            const name = (typeof w.name === "string" && w.name.length) ? w.name
-                : (o.name || "");
-            if (name.indexOf("special") === 0)
-                continue;
-            if (seen[id])
-                continue;
-            seen[id] = true;
-            const mon = w.monitor;
-            const monName = (mon && mon.name) ? mon.name : (o.monitor || "");
-            const monId = (mon && typeof mon.id === "number") ? mon.id
-                : (typeof o.monitorID === "number" ? o.monitorID : 0);
-            out.push({ id: id, monName: monName, monId: monId });
+            seen[name] = true;
+            out.push({ name: name, output: w.output || "" });
         }
-        if (out.length === 0 && Workspaces.activeId > 0)
-            out.push({ id: Workspaces.activeId, monName: "", monId: 0 });
-        out.sort((a, b) => a.monName < b.monName ? -1 :
-            (a.monName > b.monName ? 1 : a.id - b.id));
+        if (out.length === 0 && Wm.focusedWorkspace)
+            out.push({ name: Wm.focusedWorkspace.name, output: Wm.focusedWorkspace.output || "" });
+        out.sort((a, b) => a.output < b.output ? -1 :
+            (a.output > b.output ? 1 : Number(a.name) - Number(b.name)));
         return out;
     }
 
-    // Active set is per-monitor (multiple active at once), fork-safe.
+    // Active set is per-output (the active workspace shown on each output).
     readonly property var activeIds: {
         const s = {};
-        const mons = Hyprland.monitors ? Hyprland.monitors.values : [];
-        for (let i = 0; i < mons.length; ++i) {
-            const m = mons[i];
-            if (!m)
-                continue;
-            const aw = m.activeWorkspace;
-            if (aw && typeof aw.id === "number") {
-                s[aw.id] = true;
-            } else {
-                const mo = m.lastIpcObject;
-                if (mo && mo.activeWorkspace && typeof mo.activeWorkspace.id === "number")
-                    s[mo.activeWorkspace.id] = true;
-            }
+        const outs = Wm.outputs;
+        for (let i = 0; i < outs.length; ++i) {
+            const o = outs[i];
+            if (o && o.activeWorkspace)
+                s[o.activeWorkspace] = true;
         }
-        if (Workspaces.activeId > 0)
-            s[Workspaces.activeId] = true;
+        if (Wm.focusedWorkspace)
+            s[Wm.focusedWorkspace.name] = true;
         return s;
     }
 
@@ -93,8 +72,8 @@ Item {
             Icons.path(className.toLowerCase(), true);
     }
 
-    function focusWorkspace(id) {
-        Hyprland.dispatch('hl.dsp.focus({ workspace = "' + id + '" })');
+    function focusWorkspace(name) {
+        Wm.focusWorkspace(name);
     }
 
     implicitWidth: horizontal ? strip.implicitWidth : Math.max(cross, strip.implicitWidth)
@@ -136,28 +115,21 @@ Item {
 
             required property var modelData
 
-            readonly property int wsId: modelData.id
-            readonly property bool isActive: root.activeIds[wsId] === true
+            readonly property string wsName: modelData.name
+            readonly property bool isActive: root.activeIds[wsName] === true
 
-            // Re-evaluates when Hyprland.toplevels changes -- exactly on
-            // open/close/move events, never per-frame. Up to maxIcons unique
-            // class names ordered by pid.
+            // Up to maxIcons unique app ids for windows on this workspace.
             readonly property var classes: {
-                const tls = Hyprland.toplevels ? Hyprland.toplevels.values : [];
+                const wins = Wm.windows;
                 const out = [];
                 const seen = {};
-                for (let i = 0; i < tls.length; ++i) {
+                for (let i = 0; i < wins.length; ++i) {
                     if (out.length >= root.maxIcons)
                         break;
-                    const t = tls[i];
-                    if (!t)
+                    const t = wins[i];
+                    if (!t || t.workspace !== pill.wsName)
                         continue;
-                    const o = t.lastIpcObject || {};
-                    const wsIdT = (o.workspace && typeof o.workspace.id === "number")
-                        ? o.workspace.id : -1;
-                    if (wsIdT !== pill.wsId)
-                        continue;
-                    const cls = o.class || o.initialClass || "";
+                    const cls = t.appId || "";
                     if (!cls || seen[cls])
                         continue;
                     seen[cls] = true;
@@ -346,13 +318,13 @@ Item {
                 anchors.fill: parent
                 acceptedButtons: Qt.LeftButton
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.focusWorkspace(pill.wsId)
+                onClicked: root.focusWorkspace(pill.wsName)
             }
         }
     }
 
-    // Hover-gated vertical wheel: up -> r-1, down -> r+1.
+    // Vertical wheel: up -> previous workspace, down -> next.
     WheelHandler {
-        onWheel: event => root.focusWorkspace(event.angleDelta.y > 0 ? "r-1" : "r+1")
+        onWheel: event => Wm.cycleWorkspace(event.angleDelta.y > 0 ? -1 : 1)
     }
 }

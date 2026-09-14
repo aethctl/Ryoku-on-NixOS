@@ -726,6 +726,7 @@ def ryoku_install(work, iso, overlay, user="ryoku", carve_take_mib=None, ev=None
                f"RYOKU_PROFILE=vm RYOKU_HOSTNAME=ryoku-dual RYOKU_USERNAME={user} "
                f"RYOKU_SKIP_AUR=1 RYOKU_REPO=/usr/share/ryoku "
                f"RYOKU_KEYMAP=us RYOKU_XKB_LAYOUT=us "
+               f"RYOKU_COMPOSITOR=hyprland RYOKU_COMPOSITOR_CONFIG_DIR=hypr "
                f"RYOKU_PASSWORD_HASH='{pwhash}'")
         if carve_take_mib:
             # the disk is FULL, so there is no pre-made gap to take. Probe first and

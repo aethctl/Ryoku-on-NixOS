@@ -3,7 +3,6 @@ package sys
 import (
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 )
 
@@ -57,9 +56,4 @@ func CopyFile(src, dst string) error {
 		return err
 	}
 	return os.Rename(tmp, dst)
-}
-
-// HyprLive reports whether a Hyprland session is reachable for hyprctl.
-func HyprLive() bool {
-	return Has("hyprctl") && exec.Command("hyprctl", "version").Run() == nil
 }

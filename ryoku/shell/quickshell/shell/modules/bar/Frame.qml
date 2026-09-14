@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import Ryoku.Blobs
 import Ryoku.Ui.Singletons
 import shell.services
@@ -37,7 +36,7 @@ Scope {
     // This monitor's per-monitor UI scale (shell.json displays.ui_scale, default
     // 1.0). The bar content (railScale) and the reserved band (edgeReserve) both
     // multiply by this one factor, so a scaled bar stays matched to its reserve
-    // without touching the Hyprland compositor scale apps depend on.
+    // without touching the compositor scale apps depend on.
     readonly property real uiScale: Tokens.uiScaleFor(root.modelData ? root.modelData.name : "")
 
     // The built-in Sumi frame scene draws only while the active bar style is the
@@ -152,15 +151,7 @@ Scope {
 
         // True when this monitor's active workspace holds a fullscreen window;
         // the frame then unmaps its input and hides so the window is unobstructed.
-        readonly property bool monFullscreen: {
-            if (!root.modelData)
-                return false;
-            const mons = Hyprland.monitors.values;
-            for (let i = 0; i < mons.length; i++)
-                if (mons[i].name === root.modelData.name)
-                    return mons[i].activeWorkspace ? (Fullscreen.byWs[mons[i].activeWorkspace.id] === true) : false;
-            return false;
-        }
+        readonly property bool monFullscreen: Wm.outputHasFullscreen(root.modelData ? root.modelData.name : "")
 
         onMonFullscreenChanged: if (monFullscreen) frameMenus.closeAll()
 
@@ -404,12 +395,12 @@ Scope {
                 }
             }
 
-            // No HyprlandFocusGrab here. A modal surface already takes the layer's
-            // exclusive keyboard focus, and Hyprland clears a grab the moment that
-            // focus moves to the grabbing layer: the two together closed every
-            // surface a few milliseconds after it opened. The mask plus the
-            // backdrop press above dismisses a click outside, and Escape closes
-            // through the FocusScope.
+            // No compositor focus grab here. A modal surface already takes the
+            // layer's exclusive keyboard focus, and the compositor clears a grab
+            // the moment that focus moves to the grabbing layer: the two together
+            // closed every surface a few milliseconds after it opened. The mask
+            // plus the backdrop press above dismisses a click outside, and Escape
+            // closes through the FocusScope.
 
             RecordHud {
                 id: recHud

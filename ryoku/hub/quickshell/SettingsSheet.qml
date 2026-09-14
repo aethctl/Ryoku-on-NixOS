@@ -22,7 +22,7 @@ import "ReloadCoverModel.js" as ReloadCoverModel
 Item {
     id: sheet
 
-    property var schema: []          // [{ tab, group, key, label, desc, ctl, src, opts, lo, hi, unit, pct }]
+    property var schema: []          // [{ tab, group, key, label, desc, ctl, src, caps?, opts, lo, hi, unit, pct }]
     property var draft: null         // the page's live values
     property var defaults: ({})      // factory values, for the struck default
     property string tab: ""
@@ -236,7 +236,7 @@ Item {
                             unit: sheet.rowUnit(r)
                             def: sheet.shownDef(r)
                             changed: sheet.isChanged(r)
-                            source: r.src ? r.src + ".json" : ""
+                            source: r.src ? (r.src.slice(-5) === ".json" ? r.src : r.src + ".json") : ""
                             block: sheet.ctlBlock(r)
                             footH: sheet.ctlBlock(r) ? 0 : sheet.ctlFoot(r)
                             controlWidth: sheet.ctlWidth(r, card.width)

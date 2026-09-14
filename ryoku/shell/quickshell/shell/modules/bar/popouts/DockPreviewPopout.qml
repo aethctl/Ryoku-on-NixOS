@@ -2,7 +2,6 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import Quickshell.Wayland
 import ".."
 import shell.services
@@ -38,23 +37,10 @@ Popout {
     readonly property string cls: DockPreview.hoveredClass
     property string shownClass: ""
     onClsChanged: if (root.cls !== "") root.shownClass = root.cls;
-    // Every open window of the hovered class, across all workspaces. We do NOT
-    // filter on the surface `mapped` flag: a window on a hidden workspace reports
-    // unmapped (no live capture) yet is a real window you want to reach -- it just
-    // falls back to the app icon tile and a focus-by-address click.
-    readonly property var windows: {
-        if (root.shownClass === "")
-            return [];
-        const out = [];
-        const tls = Hyprland.toplevels ? Hyprland.toplevels.values : [];
-        for (let i = 0; i < tls.length; ++i) {
-            const o = tls[i] && tls[i].lastIpcObject;
-            const c = o && (o.class || o.initialClass);
-            if (c === root.shownClass)
-                out.push(tls[i]);
-        }
-        return out;
-    }
+    // Every open window of the hovered class, across all workspaces. A window on
+    // a hidden workspace reports no live capture yet is real and reachable: it
+    // falls back to the app icon tile and a focus click.
+    readonly property var windows: root.shownClass === "" ? [] : Wm.windows.filter(w => w.appId === root.shownClass)
     readonly property int n: root.windows.length
 
     // desktop-entry app label + icon for the header / capture fallback.
@@ -128,8 +114,7 @@ Popout {
                 delegate: Item {
                     id: tile
                     required property var modelData
-                    readonly property var tl: tile.modelData
-                    readonly property bool hasCapture: !!(tile.tl && tile.tl.wayland)
+                    readonly property bool hasCapture: !!(tile.modelData && tile.modelData.toplevel)
                     width: root.tileW
                     height: root.tileH
 
@@ -146,7 +131,7 @@ Popout {
                         ScreencopyView {
                             anchors.fill: parent
                             anchors.margins: Theme.borderWidth
-                            captureSource: tile.hasCapture ? tile.tl.wayland : null // qmllint disable unresolved-type
+                            captureSource: tile.hasCapture ? tile.modelData.toplevel : null // qmllint disable unresolved-type
                             live: root.prog > 0.004
                             visible: tile.hasCapture
                         }
@@ -166,17 +151,10 @@ Popout {
                         MouseArea {
                             anchors.fill: parent
                             acceptedButtons: Qt.LeftButton
-                            // Focus the specific window by address so a tile for a
-                            // window on another workspace switches to it; a live
-                            // capture can also self-activate, but address focus is
-                            // the reliable path for an unmapped (hidden) window.
-                            onClicked: {
-                                const o = tile.tl ? tile.tl.lastIpcObject : null;
-                                if (o && o.address)
-                                    Hyprland.dispatch('hl.dsp.focus({ window = "address:' + o.address + '" })');
-                                else if (tile.hasCapture)
-                                    tile.tl.wayland.activate();
-                            }
+                            // Focus the specific window so a tile for a window on
+                            // another workspace switches to it; the provider handles
+                            // the unmapped (hidden) case.
+                            onClicked: Wm.focusWindow(tile.modelData.id)
                         }
 
                         // close (X), revealed on hover of the tile
@@ -198,19 +176,8 @@ Popout {
                             HoverHandler { id: closeHov; cursorShape: Qt.PointingHandCursor }
                             MouseArea {
                                 anchors.fill: parent
-                                // Terminate the process, not a polite request.
-                                // wayland.close() only ASKS, so an Electron app
-                                // declines it and the X looked dead; it was also
-                                // gated on a thumbnail existing, so a tile with
-                                // no capture did nothing at all.
-                                onClicked: {
-                                    const o = tile.tl ? tile.tl.lastIpcObject : null;
-                                    const pid = o && o.pid ? Number(o.pid) : 0;
-                                    if (pid > 0)
-                                        Quickshell.execDetached(["kill", "-9", String(pid)]);
-                                    else if (tile.hasCapture)
-                                        tile.tl.wayland.close();
-                                }
+                                // The X closes the window.
+                                onClicked: Wm.closeWindow(tile.modelData.id)
                             }
                         }
                     }
@@ -218,10 +185,7 @@ Popout {
                     Text {
                         anchors { top: frame.bottom; topMargin: 4 * root.s; horizontalCenter: frame.horizontalCenter }
                         width: root.tileW
-                        text: {
-                            const o = tile.tl && tile.tl.lastIpcObject;
-                            return (o && o.title) ? o.title : root.appLabel;
-                        }
+                        text: tile.modelData.title || root.appLabel
                         color: Theme.onSurfaceVariant
                         font.family: Theme.fontPrimary
                         font.pixelSize: 10 * root.s

@@ -35,7 +35,7 @@ import Ryoku.Ui.Singletons
  *
  * One ShellRoot for the whole desktop. It brings the shared service singletons
  * online, holds the per-monitor ShellState every surface binds its visibility
- * to, and registers the shell's in-QML Hyprland global shortcuts. Each monitor
+ * to, and registers the shell's in-QML global shortcuts. Each monitor
  * gets one Scope carrying that screen's ShellState slice (st); every migrated
  * surface is instantiated once inside it and binds its screen and its visibility
  * to the slice, so a keybind that flips a flag on the active monitor reveals or
@@ -43,8 +43,8 @@ import Ryoku.Ui.Singletons
  * ryoku-shell client per press across separate surface processes.
  *
  * The ryoku-shell daemon launches this instance as `qs -c shell`, the live
- * desktop, and the compositor binds dispatch global:ryoku:<name> straight to the
- * shortcuts registered here.
+ * desktop. Where the compositor offers a global-shortcuts protocol its binds
+ * dispatch straight to the shortcuts registered here.
  *
  * UseQApplication is declared once for the whole shell (the tray needs Qt
  * Widgets), replacing the six per-surface copies the old multi-process shell paid.
@@ -122,15 +122,15 @@ ShellRoot {
     // Power Saver strips compositor blur and shadow too (the heaviest present-time
     // GPU cost), reusing the decoration.lua path lowPowerMode already takes. Perf
     // folds the active power profile into its switches; mirror the profile-driven
-    // "saver" flag to a cache decoration.lua reads, and reload Hyprland when it
-    // flips so the compositor re-reads it live. Seeded once at load with no reload
+    // "saver" flag to a cache the compositor reads, and reload it when it flips
+    // so it re-reads the value live. Seeded once at load with no reload
     // (login already parsed the right value); only a later profile change reloads.
     FileView {
         id: hyprPerf
         path: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/ryoku/hypr-perf.json"
         printErrors: false
         property bool armed: false
-        onSaved: if (hyprPerf.armed) Quickshell.execDetached(["hyprctl", "reload"])
+        onSaved: if (hyprPerf.armed) Wm.reloadConfig("")
         JsonAdapter { id: hyprPerfA; property bool saver: false }
         Component.onCompleted: {
             hyprPerfA.saver = Perf.saver;
@@ -283,10 +283,8 @@ ShellRoot {
 
     // In-process global shortcuts. Each flips the focused monitor's ShellState
     // flag that the per-screen surfaces above bind their visibility to, so a
-    // keybind is a property write, not the old ryoku-shell client spawn. Names
-    // match the compositor binds (rewired to global:ryoku:<name> in Phase 10) so
-    // `hyprctl dispatch "hl.dsp.global('ryoku:<name>')"` lands here (the Lua
-    // dispatch form this Hyprland takes; the old `dispatch global ryoku:x` errors).
+    // keybind is a property write, not a client spawn. Names match the
+    // compositor's global-shortcut binds where that protocol is available.
     CustomShortcut {
         name: "barToggle"
         description: I18n.tr("Toggle the Ryoku frame bar on the active monitor")
@@ -309,6 +307,12 @@ ShellRoot {
         name: "overview"
         description: I18n.tr("Toggle the workspace overview on the active monitor")
         onPressed: {
+            if (Wm.caps.nativeOverview) {
+                Wm.toggleOverview();
+                return;
+            }
+            if (!Wm.caps.windowGeometry)
+                return;
             const st = ShellState.forActive();
             if (st)
                 st.overviewOpen = !st.overviewOpen;
@@ -368,9 +372,8 @@ ShellRoot {
     // reload/restart: ryoku-cmd-caffeine runs systemd-inhibit independent of our
     // lifetime, while the Wayland IdleInhibitor below only gives compositor-level
     // effect. Every surface toggle just flips Flags.keepAwake. (pill 246-257)
-    readonly property string caffeineScript: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-caffeine"
     function syncCaffeine(action) {
-        Quickshell.execDetached([root.caffeineScript, action]);
+        Quickshell.execDetached(["ryoku-cmd-caffeine", action]);
     }
     Connections {
         target: Flags
@@ -379,13 +382,11 @@ ShellRoot {
         }
     }
 
-    // Game mode's compositor + WiFi tuning lives outside the shell, same shape as
-    // Keep-Awake: ryoku-cmd-game-mode drives hyprctl and NetworkManager so the
-    // tuning survives a reload. The deck toggle just flips Flags.gameMode.
-    // (pill 264-275)
-    readonly property string gameModeScript: (Quickshell.env("HOME") || "") + "/.config/hypr/scripts/ryoku-cmd-game-mode"
+    // Game mode's compositor and WiFi tuning lives outside the shell, same shape
+    // as Keep-Awake: ryoku-cmd-game-mode (on PATH) drives it so the tuning
+    // survives a reload. The deck toggle just flips Flags.gameMode.
     function syncGameMode(action) {
-        Quickshell.execDetached([root.gameModeScript, action]);
+        Quickshell.execDetached(["ryoku-cmd-game-mode", action]);
     }
     Connections {
         target: Flags
@@ -488,7 +489,14 @@ ShellRoot {
     // runtime socket and produces zero live side effects alongside the daemon.
     IpcHandler {
         target: "shell"
-        function openSurface(mon: string, id: string): void { ShellState.requestSurface(id, mon, undefined); }
+        // An empty monitor means "wherever focus is": the daemon sends "" when
+        // its focused-output cache is cold.
+        function openSurface(mon: string, id: string): void {
+            if (mon && mon.length > 0)
+                ShellState.requestSurface(id, mon, undefined);
+            else
+                ShellState.requestSurfaceActive(id, undefined);
+        }
         function closeSurface(mon: string, id: string): void { ShellState.closeSurface(id, mon); }
         function keyringPrompt(payload: string): void {
             Keyring.apply(payload);
@@ -581,17 +589,4 @@ ShellRoot {
         onPressed: ShellState.requestSurfaceActive("stash#install", undefined)
     }
 
-    // External surface opener: the ryoku-shell daemon calls
-    // `qs ipc call shell openSurface <monitor> <id>` for its `menu`/tool verbs
-    // (install-app and compress-video launch through here). It routes the id onto
-    // the same surfaceRequested bus the global-shortcut keybinds use.
-    IpcHandler {
-        target: "shell"
-        function openSurface(monitor: string, id: string): void {
-            if (monitor && monitor.length > 0)
-                ShellState.requestSurface(id, monitor, "");
-            else
-                ShellState.requestSurfaceActive(id, undefined);
-        }
-    }
 }

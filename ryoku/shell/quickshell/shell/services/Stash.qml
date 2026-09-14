@@ -16,9 +16,10 @@ Singleton {
 
     readonly property string home: Quickshell.env("HOME") || ""
     readonly property string dir: home + "/Downloads/Stash"
-    readonly property string scriptDir: home + "/.config/hypr/scripts"
-    readonly property string cobaltScript: scriptDir + "/stash-cobalt.sh"
-    readonly property string serverScript: scriptDir + "/stash-cobalt-server.sh"
+    // On PATH, installed with the shell: these are shell helpers, not compositor
+    // config, so they must resolve without a compositor config tree.
+    readonly property string cobaltScript: "stash-cobalt.sh"
+    readonly property string serverScript: "stash-cobalt-server.sh"
 
     readonly property alias files: files
     readonly property int count: files.count
@@ -173,11 +174,11 @@ Singleton {
     // (PanelPicker); the launcher entries deep-link to the same picker.
     function compress(paths) {
         if (!paths || paths.length === 0) return;
-        Quickshell.execDetached(["bash", root.scriptDir + "/stash-compress.sh"].concat(paths));
+        Quickshell.execDetached(["stash-compress.sh"].concat(paths));
     }
     function install(paths) {
         if (!paths || paths.length === 0) return;
-        Quickshell.execDetached(["bash", root.scriptDir + "/stash-install.sh"].concat(paths));
+        Quickshell.execDetached(["stash-install.sh"].concat(paths));
     }
 
     // ── Cobalt download + remux ─────────────────────────────────────────

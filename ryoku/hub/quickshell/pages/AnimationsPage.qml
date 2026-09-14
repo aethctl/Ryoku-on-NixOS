@@ -7,9 +7,10 @@ import Ryoku.Ui.Singletons
 import "../Singletons"
 
 // Animations, ported to the monochrome instrument. The Hyprland animation tree
-// (read once via `hyprctl animations -j`) plus a bezier curve editor; per-leaf
-// overrides and user curves persist through the shell's hypr store, which
-// previews them live on the desktop and restores on revert.
+// (its inventory comes from the provider defaults, `ryoku-hub desktop defaults`)
+// plus a bezier curve editor; per-leaf overrides and user curves persist through
+// the shell's hypr store, which previews them live on the desktop and restores
+// on revert.
 //
 // The shell owns the rail, side panel (preview/state/diff), the action bar
 // (Save/Revert/Reset read the same hub.dirty/diff this page feeds) and the
@@ -28,10 +29,15 @@ Item {
     function chg(path) { return JSON.stringify(pg.hv(path)) !== JSON.stringify(pg.cv(path)) }
     function cap(s) { s = String(s); return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s }
 
-    // ── the live animation tree, read once at construction ──────────────────
-    property var liveAnims: []
-    property var liveCurves: []
+    // the animatable inventory, from the provider defaults (async: guarded, so it
+    // rebinds when hyprDefaults lands). The provider probes leaves + curves live.
+    readonly property var liveAnims: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.items : []
+    readonly property var liveCurves: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.curves : []
     property string selectedCurve: ""
+    // seed the selection off the first curve once the provider list arrives.
+    function seedCurve() { if (pg.selectedCurve === "" && pg.liveCurves.length > 0) pg.selectedCurve = pg.liveCurves[0].name }
+    onLiveCurvesChanged: pg.seedCurve()
+    Component.onCompleted: pg.seedCurve()
 
     // theme.motion in shell.json, written instantly through the settings seam
     // (not the staged hypr draft); the shell's ui tokens read the same keys.
@@ -39,25 +45,6 @@ Item {
     readonly property bool reduceMotion: { Settings.revision; return Settings.get("theme.motion.reduce") === true; }
     readonly property string motionScaleLabel: Math.round(pg.motionScale * 100) + "%"
     function setMotion(key, v) { Settings.patch("theme.motion." + key, v); }
-
-    Process {
-        id: animProc
-        command: ["hyprctl", "animations", "-j"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    var d = JSON.parse(this.text);
-                    pg.liveAnims = (d[0] || []).filter(function (a) { return a.overridden && a.name.indexOf("__") !== 0; });
-                    pg.liveCurves = d[1] || [];
-                    if (pg.selectedCurve === "" && pg.liveCurves.length > 0)
-                        pg.selectedCurve = pg.liveCurves[0].name;
-                } catch (e) {
-                    console.log("hub: animations parse failed: " + e);
-                }
-            }
-        }
-    }
 
     // Hyprland animation personality: the preset the loader picks. Read from the
     // backend at load; setAnimPreset writes ~/.config/ryoku/anim-preset + reloads.
@@ -80,19 +67,19 @@ Item {
     readonly property var animPresetLabels: pg.animPresets.map(p => p.label)
     function animPresetLabel(id) { for (var i = 0; i < pg.animPresets.length; i++) if (pg.animPresets[i].id === id) return pg.animPresets[i].label; return "Ryoku"; }
     function animPresetId(label) { for (var i = 0; i < pg.animPresets.length; i++) if (pg.animPresets[i].label === label) return pg.animPresets[i].id; return "ryoku"; }
-    function setAnimPreset(id) { pg.animPreset = id; animPresetSet.command = ["ryoku-hub", "hypr", "anim-preset", id]; animPresetSet.running = true; }
+    function setAnimPreset(id) { pg.animPreset = id; animPresetSet.command = ["ryoku-hub", "desktop", "anim-preset", id]; animPresetSet.running = true; }
 
     Process {
         id: animPresetGet
-        command: ["ryoku-hub", "hypr", "anim-preset"]
+        command: ["ryoku-hub", "desktop", "anim-preset"]
         running: true
         stdout: StdioCollector { onStreamFinished: { try { var d = JSON.parse(this.text); if (d && d.preset) pg.animPreset = d.preset; } catch (e) {} } }
     }
     Process { id: animPresetSet }
 
     // ── curves model ────────────────────────────────────────────────────────
-    function curvesArr() { var a = pg.hv("anim.curves"); return Array.isArray(a) ? a : []; }
-    function itemsArr() { var a = pg.hv("anim.items"); return Array.isArray(a) ? a : []; }
+    function curvesArr() { var a = pg.hv("wm.hyprland.anim.curves"); return Array.isArray(a) ? a : []; }
+    function itemsArr() { var a = pg.hv("wm.hyprland.anim.items"); return Array.isArray(a) ? a : []; }
 
     function curveNames() {
         var seen = ({}), out = [];
@@ -112,10 +99,10 @@ Item {
         for (var i = 0; i < cs.length; i++)
             if (cs[i].name === name)
                 return cs[i];
-        // live curves report capital X0/Y0/X1/Y1; overrides store lowercase.
+        // provider curves already use lowercase x0/y0/x1/y1, the store shape.
         for (var j = 0; j < pg.liveCurves.length; j++)
             if (pg.liveCurves[j].name === name)
-                return { "name": name, "x0": pg.liveCurves[j].X0, "y0": pg.liveCurves[j].Y0, "x1": pg.liveCurves[j].X1, "y1": pg.liveCurves[j].Y1 };
+                return { "name": name, "x0": pg.liveCurves[j].x0, "y0": pg.liveCurves[j].y0, "x1": pg.liveCurves[j].x1, "y1": pg.liveCurves[j].y1 };
         return { "name": name, "x0": 0.25, "y0": 0.1, "x1": 0.25, "y1": 1 };
     }
     readonly property bool selectedIsCustom: {
@@ -143,14 +130,14 @@ Item {
             }
         if (!found)
             arr.push({ "name": name, "x0": x0, "y0": y0, "x1": x1, "y1": y1 });
-        pg.he("anim.curves", arr);
+        pg.he("wm.hyprland.anim.curves", arr);
     }
     function resetCurve(name) {
         var arr = [], cs = pg.curvesArr();
         for (var i = 0; i < cs.length; i++)
             if (cs[i].name !== name)
                 arr.push(cs[i]);
-        pg.he("anim.curves", arr);
+        pg.he("wm.hyprland.anim.curves", arr);
         if (pg.selectedIsCustom && pg.liveCurves.length > 0)
             pg.selectedCurve = pg.liveCurves[0].name;
     }
@@ -182,7 +169,7 @@ Item {
             if (items[i].leaf === leaf)
                 return items[i];
         for (var j = 0; j < pg.liveAnims.length; j++)
-            if (pg.liveAnims[j].name === leaf)
+            if (pg.liveAnims[j].leaf === leaf)
                 return { "leaf": leaf, "enabled": pg.liveAnims[j].enabled, "speed": pg.liveAnims[j].speed, "bezier": pg.liveAnims[j].bezier, "style": pg.liveAnims[j].style };
         return { "leaf": leaf, "enabled": true, "speed": 1, "bezier": "", "style": "" };
     }
@@ -195,7 +182,7 @@ Item {
             if (arr[i].leaf === leaf) { arr[i] = next; found = true; break; }
         if (!found)
             arr.push(next);
-        pg.he("anim.items", arr);
+        pg.he("wm.hyprland.anim.items", arr);
     }
     // Hyprland style options are grouped by leaf family; keys are the config
     // literals, labels are the human reading.
@@ -219,7 +206,7 @@ Item {
         if (pg.query === "") return true;
         if (pg.hit("animations")) return true;
         for (var i = 0; i < pg.liveAnims.length; i++)
-            if (String(pg.liveAnims[i].name).toLowerCase().indexOf(pg.query.toLowerCase()) >= 0)
+            if (String(pg.liveAnims[i].leaf).toLowerCase().indexOf(pg.query.toLowerCase()) >= 0)
                 return true;
         return false;
     }
@@ -622,6 +609,7 @@ Item {
             SettingCard {
                 width: col.width
                 title: I18n.tr("ANIMATION PRESET")
+                visible: Settings.supports("animations")
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -657,14 +645,14 @@ Item {
                     visible: pg.hit("animations master switch desktop motion")
                     label: I18n.tr("Animations")
                     desc: I18n.tr("Master switch for desktop motion; off, everything snaps into place")
-                    def: pg.cv("appearance.animations") ? I18n.tr("ON") : I18n.tr("OFF")
-                    changed: pg.chg("appearance.animations")
-                    source: "settings.lua"
+                    def: pg.cv("desktop.appearance.animations") ? I18n.tr("ON") : I18n.tr("OFF")
+                    changed: pg.chg("desktop.appearance.animations")
+                    source: "desktop.json"
                     controlWidth: 54
                     Sw {
                         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                        on: !!pg.hv("appearance.animations")
-                        onToggled: (v) => pg.he("appearance.animations", v)
+                        on: !!pg.hv("desktop.appearance.animations")
+                        onToggled: (v) => pg.he("desktop.appearance.animations", v)
                     }
                 }
 
@@ -674,6 +662,7 @@ Item {
                 Item {
                     width: parent.width
                     height: workshop.height + 2 * Tokens.s4
+                    visible: Settings.supports("animations")
 
                     // hairline off the switch row above (only while it is shown)
                     Rectangle {
@@ -832,8 +821,8 @@ Item {
                 title: I18n.tr("FOCUS FLASH")
                 visible: pg.fVisible
 
-                readonly property bool ffOn: !!pg.hv("plugins.hyprfocus.enabled")
-                readonly property string ffMode: String(pg.hv("plugins.hyprfocus.mode"))
+                readonly property bool ffOn: !!pg.hv("wm.hyprland.plugins.hyprfocus.enabled")
+                readonly property string ffMode: String(pg.hv("wm.hyprland.plugins.hyprfocus.mode"))
 
                 // group note, shown once the effect is on (was the trailing blurb)
                 Text {
@@ -851,14 +840,14 @@ Item {
                     visible: pg.hit("animate the focused window enabled")
                     label: I18n.tr("Animate the focused window")
                     desc: I18n.tr("Short effect on the window that takes focus; applies on Save only")
-                    def: pg.cv("plugins.hyprfocus.enabled") ? I18n.tr("ON") : I18n.tr("OFF")
-                    changed: pg.chg("plugins.hyprfocus.enabled")
-                    source: "settings.lua"
+                    def: pg.cv("wm.hyprland.plugins.hyprfocus.enabled") ? I18n.tr("ON") : I18n.tr("OFF")
+                    changed: pg.chg("wm.hyprland.plugins.hyprfocus.enabled")
+                    source: "desktop.json"
                     controlWidth: 54
                     Sw {
                         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                         on: fsec.ffOn
-                        onToggled: (v) => pg.he("plugins.hyprfocus.enabled", v)
+                        onToggled: (v) => pg.he("wm.hyprland.plugins.hyprfocus.enabled", v)
                     }
                 }
                 SettingRow {
@@ -868,15 +857,15 @@ Item {
                     visible: fsec.ffOn && pg.hit("style flash bounce slide")
                     label: I18n.tr("Style")
                     desc: I18n.tr("Flash dips opacity, Bounce shrinks and springs, Slide nudges it")
-                    def: pg.cap(String(pg.cv("plugins.hyprfocus.mode")))
-                    changed: pg.chg("plugins.hyprfocus.mode")
-                    source: "settings.lua"
+                    def: pg.cap(String(pg.cv("wm.hyprland.plugins.hyprfocus.mode")))
+                    changed: pg.chg("wm.hyprland.plugins.hyprfocus.mode")
+                    source: "desktop.json"
                     Seg {
                         anchors.left: parent.left; anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         options: ["flash", "bounce", "slide"]
                         current: fsec.ffMode
-                        onChose: (k) => pg.he("plugins.hyprfocus.mode", k)
+                        onChose: (k) => pg.he("wm.hyprland.plugins.hyprfocus.mode", k)
                     }
                 }
                 // opacity/bounce are fractional (0..1); the module Slid is integer,
@@ -888,16 +877,16 @@ Item {
                     label: I18n.tr("Flash opacity")
                     desc: I18n.tr("Opacity the flash dips to, lower is deeper; Flash style only")
                     unit: "%"
-                    value: String(Math.round((Number(pg.hv("plugins.hyprfocus.opacity")) || 0) * 100))
-                    def: String(Math.round((Number(pg.cv("plugins.hyprfocus.opacity")) || 0) * 100))
-                    changed: pg.chg("plugins.hyprfocus.opacity")
-                    source: "settings.lua"
+                    value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
+                    def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
+                    changed: pg.chg("wm.hyprland.plugins.hyprfocus.opacity")
+                    source: "desktop.json"
                     controlWidth: Math.min(240, Math.max(160, Math.round(fsec.width * 0.34)))
                     Slid {
                         anchors.fill: parent
                         from: 0; to: 100
-                        value: Math.round((Number(pg.hv("plugins.hyprfocus.opacity")) || 0) * 100)
-                        onModified: (v) => pg.he("plugins.hyprfocus.opacity", v / 100)
+                        value: Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100)
+                        onModified: (v) => pg.he("wm.hyprland.plugins.hyprfocus.opacity", v / 100)
                     }
                 }
                 SettingRow {
@@ -907,16 +896,16 @@ Item {
                     label: I18n.tr("Bounce strength")
                     desc: I18n.tr("Scale the window shrinks to, lower bounces harder; Bounce style only")
                     unit: "%"
-                    value: String(Math.round((Number(pg.hv("plugins.hyprfocus.bounce")) || 0) * 100))
-                    def: String(Math.round((Number(pg.cv("plugins.hyprfocus.bounce")) || 0) * 100))
-                    changed: pg.chg("plugins.hyprfocus.bounce")
-                    source: "settings.lua"
+                    value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
+                    def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
+                    changed: pg.chg("wm.hyprland.plugins.hyprfocus.bounce")
+                    source: "desktop.json"
                     controlWidth: Math.min(240, Math.max(160, Math.round(fsec.width * 0.34)))
                     Slid {
                         anchors.fill: parent
                         from: 50; to: 100
-                        value: Math.round((Number(pg.hv("plugins.hyprfocus.bounce")) || 0) * 100)
-                        onModified: (v) => pg.he("plugins.hyprfocus.bounce", v / 100)
+                        value: Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100)
+                        onModified: (v) => pg.he("wm.hyprland.plugins.hyprfocus.bounce", v / 100)
                     }
                 }
                 SettingRow {
@@ -926,16 +915,16 @@ Item {
                     label: I18n.tr("Slide height")
                     desc: I18n.tr("How far the window hops, in pixels; Slide style only")
                     unit: "px"
-                    value: String(Math.round(Number(pg.hv("plugins.hyprfocus.slide")) || 0))
-                    def: String(Math.round(Number(pg.cv("plugins.hyprfocus.slide")) || 0))
-                    changed: pg.chg("plugins.hyprfocus.slide")
-                    source: "settings.lua"
+                    value: String(Math.round(Number(pg.hv("wm.hyprland.plugins.hyprfocus.slide")) || 0))
+                    def: String(Math.round(Number(pg.cv("wm.hyprland.plugins.hyprfocus.slide")) || 0))
+                    changed: pg.chg("wm.hyprland.plugins.hyprfocus.slide")
+                    source: "desktop.json"
                     controlWidth: 58
                     Step {
                         anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
                         from: 0; to: 150
-                        value: Math.round(Number(pg.hv("plugins.hyprfocus.slide")) || 0)
-                        onModified: (v) => pg.he("plugins.hyprfocus.slide", v)
+                        value: Math.round(Number(pg.hv("wm.hyprland.plugins.hyprfocus.slide")) || 0)
+                        onModified: (v) => pg.he("wm.hyprland.plugins.hyprfocus.slide", v)
                     }
                 }
             }
@@ -944,7 +933,7 @@ Item {
             SettingCard {
                 width: col.width
                 title: I18n.tr("ADVANCED")
-                visible: pg.aVisible
+                visible: pg.aVisible && Settings.supports("animations")
 
                 Text {
                     width: parent.width
@@ -970,7 +959,7 @@ Item {
                     delegate: Item {
                         id: ar
                         required property var modelData
-                        readonly property string leaf: modelData.name
+                        readonly property string leaf: modelData.leaf
                         readonly property var it: pg.itemOf(ar.leaf)
                         readonly property var styleOpts: pg.styleOptionsFor(ar.leaf)
                         readonly property bool on: !!ar.it.enabled

@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // matugen.go is the dynamic colour pipeline and the sole renderer of the
@@ -1280,46 +1282,38 @@ func nudgePalette() {
 	go ipcCall("shell", "theme", "reload", "")
 }
 
-// applyHyprBorder pushes the window-border colours to the live compositor via
-// `hyprctl eval`. Under Hyprland's Lua config provider a `hyprctl reload` re-runs
-// decoration.lua but reverts col.active_border to the value parsed at login (the
-// fallback), so the border never followed the wallpaper; eval is the only path
-// that lands a runtime change. Reads the same roles the hypr-colors template uses
-// (color4 active, background inactive) from the palette just written to
-// colors.json, so it must run AFTER the caller's config reload, whose revert it undoes.
-func applyHyprBorder() {
+// applyBorderColors lands the palette's border colours on the live compositor
+// when the provider can push config at runtime. It reads the roles the caller
+// just wrote to colors.json; the provider owns the colour literal format.
+func (d *daemon) applyBorderColors() {
+	if !d.wmc.Can(wm.CapLiveConfigEval) {
+		return
+	}
+	active, inactive, ok := paletteBorderColors()
+	if !ok {
+		return
+	}
+	_ = d.wmc.Act(wm.ActionBorderColors, active, inactive)
+}
+
+// paletteBorderColors reads the active (color4) and inactive (background) border
+// roles from the palette written to colors.json.
+func paletteBorderColors() (active, inactive string, ok bool) {
 	b, err := os.ReadFile(matugenColorsPath())
 	if err != nil {
-		return
+		return "", "", false
 	}
 	var c struct {
 		Color4     string `json:"color4"`
 		Background string `json:"background"`
 	}
 	if json.Unmarshal(b, &c) != nil {
-		return
+		return "", "", false
 	}
-	var parts []string
-	if rgb := hyprRGB(c.Color4); rgb != "" {
-		parts = append(parts, `["col.active_border"]=`+strconv.Quote(rgb))
+	if c.Color4 == "" && c.Background == "" {
+		return "", "", false
 	}
-	if rgb := hyprRGB(c.Background); rgb != "" {
-		parts = append(parts, `["col.inactive_border"]=`+strconv.Quote(rgb))
-	}
-	if len(parts) == 0 {
-		return
-	}
-	_ = runCommand("hyprctl", "eval", "hl.config({general={"+strings.Join(parts, ",")+"}})")
-}
-
-// hyprRGB turns a #rrggbb palette colour into Hyprland's rgb(rrggbb) literal, or
-// "" for a non-hex value so a missing role is skipped rather than mis-set.
-func hyprRGB(hex string) string {
-	h := strings.TrimPrefix(hex, "#")
-	if len(h) != 6 {
-		return ""
-	}
-	return "rgb(" + h + ")"
+	return c.Color4, c.Background, true
 }
 
 // matugenNudgeGtk lands gtk-theme on `want`, flipping through a placeholder first

@@ -3,7 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
+import Ryoku.Ui.Singletons
 import shell.services
 
 // The Ryoku dock: a first-class shell surface (namespace ryoku-dock), one per
@@ -72,13 +72,7 @@ PanelWindow {
     implicitWidth: dock.horizontal ? 0 : (dock.depth + dock.edgeGap + dock.headroom)
 
     // ── reveal state machine ──────────────────────────────────────────────────
-    readonly property bool monFullscreen: {
-        const mons = Hyprland.monitors.values;
-        for (let i = 0; i < mons.length; ++i)
-            if (mons[i].name === (dock.screen ? dock.screen.name : ""))
-                return mons[i].activeWorkspace ? (Fullscreen.byWs[mons[i].activeWorkspace.id] === true) : false;
-        return false;
-    }
+    readonly property bool monFullscreen: Wm.outputHasFullscreen(dock.screen ? dock.screen.name : "")
     readonly property bool pointerInside: band.hovered || peekHover.hovered
     readonly property string screenName: dock.screen ? dock.screen.name : ""
     readonly property bool menuHere: Dock.menuOpen && Dock.menuScreen === dock.screenName

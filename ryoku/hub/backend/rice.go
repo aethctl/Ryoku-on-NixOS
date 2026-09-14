@@ -434,7 +434,7 @@ func captureRice(name string, layers []string) (Rice, error) {
 	if slug == "" {
 		return Rice{}, fmt.Errorf("a rice needs a name")
 	}
-	hy := readJSONMap(hyprStorePath())
+	hy := readHyprSections()
 	r := Rice{
 		Schema:      riceSchema,
 		Slug:        slug,
@@ -589,7 +589,7 @@ func isEmptyLayer(v any) bool {
 // riceRun / riceReload wrap the external effects (wallpaper daemon, cursor,
 // compositor reload) so tests can observe an apply without a live session.
 var riceRun = func(name string, args ...string) error { return exec.Command(name, args...).Run() }
-var riceReload = func() { hyprReload() }
+var riceReload = func() { reloadDesktop() }
 
 func wallpaperDir() string { return filepath.Join(os.Getenv("HOME"), "Pictures", "Wallpapers") }
 
@@ -615,7 +615,7 @@ func readPalette(path string) map[string]string {
 // a byte-for-byte revert (not an allowlisted merge). that is what makes
 // "restore my original setup" trustworthy.
 var backupStores = []string{
-	"hypr.json", "shell.json", "launcher.json", "theme.json", "ryogami.json",
+	"desktop.json", "shell.json", "launcher.json", "theme.json", "ryogami.json",
 	"widgets.json", "visualizer.json", "decor.json", "brand.json", "profile.json",
 }
 
@@ -647,7 +647,7 @@ func snapshotStores(slot string) error {
 // ensureBaseline snapshots the pristine pre-rice setup exactly once; it is never
 // overwritten, so the user can always return to how the machine shipped/was.
 func ensureBaseline() {
-	if !isFile(filepath.Join(ricesDir(), ".baseline", "hypr.json")) {
+	if !isFile(filepath.Join(ricesDir(), ".baseline", "desktop.json")) {
 		_ = snapshotStores(".baseline")
 	}
 }
@@ -684,7 +684,7 @@ func restoreRice(slot string) error {
 			_ = setLockSkinIn(qylockThemesDir(), qylockThemePref(), slug)
 		}
 	}
-	_ = writeGeneratedLua(loadOverrides())
+	_, _ = desktopClient().Apply(desktopStorePath())
 	riceReload()
 	return nil
 }
@@ -702,7 +702,7 @@ func applyRice(slug string, layers []string) error {
 	// a store write failing (disk full, bad perms) must surface: silently
 	// applying half a rice reports success over mixed state. .previous (above)
 	// is the one-click way back either way.
-	if err := overlayStore(hyprStorePath(), r.Look["hypr"], riceHyprLook); err != nil {
+	if err := overlayHyprSections(r.Look["hypr"], riceHyprLook); err != nil {
 		return fmt.Errorf("apply hypr look: %w", err)
 	}
 	// "all" restores every captured layer, so applying a snapshot brings back the
@@ -714,8 +714,7 @@ func applyRice(slug string, layers []string) error {
 		}
 	}
 	if len(layers) > 0 && r.Layers != nil {
-		hy := readJSONMap(hyprStorePath())
-		changed := false
+		sections := map[string]any{}
 		for _, l := range layers {
 			raw, ok := r.Layers[l]
 			if !ok {
@@ -734,12 +733,11 @@ func applyRice(slug string, layers []string) error {
 			}
 			var v any
 			if json.Unmarshal(raw, &v) == nil {
-				hy[l] = v
-				changed = true
+				sections[l] = v
 			}
 		}
-		if changed {
-			_ = atomicWrite(hyprStorePath(), mustJSON(hy), 0o644)
+		if len(sections) > 0 {
+			_ = setHyprSections(sections)
 		}
 	}
 	if err := overlayStore(shellStorePath(), r.Look["shell"], nil); err != nil {
@@ -844,10 +842,11 @@ func applyRice(slug string, layers []string) error {
 		}
 	}
 	if r.Assets.Cursor != "" {
-		o := loadOverrides()
-		o.Cursor.Theme = r.Assets.Cursor
-		_ = saveOverrides(o)
-		_ = riceRun("hyprctl", "setcursor", o.Cursor.Theme, fmt.Sprintf("%d", o.Cursor.Size))
+		ns := readJSONMap(desktopStorePath())
+		childMap(childMap(ns, "desktop"), "cursor")["theme"] = r.Assets.Cursor
+		_ = atomicWrite(desktopStorePath(), mustJSON(ns), 0o644)
+		theme, size := effectiveCursor()
+		setLiveCursor(theme, size)
 	}
 	// fastfetch: lay the whole readout config first, then repoint the emblem at
 	// the rice's bundled logo (an apply that carries only a style leaves the
@@ -884,7 +883,7 @@ func applyRice(slug string, layers []string) error {
 		}
 	}
 
-	_ = writeGeneratedLua(loadOverrides())
+	_, _ = desktopClient().Apply(desktopStorePath())
 	riceReload()
 	return nil
 }
@@ -1276,7 +1275,7 @@ func forkRice(slug string) (Rice, error) {
 // decor count, the non-empty behavior layers, colour mode. the user sees the
 // coverage before naming the rice, instead of after.
 func preflightData() map[string]any {
-	hy := readJSONMap(hyprStorePath())
+	hy := readHyprSections()
 	layers := []string{}
 	for _, l := range riceHyprLayers {
 		if v, ok := hy[l]; ok && !isEmptyLayer(v) {

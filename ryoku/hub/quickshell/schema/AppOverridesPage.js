@@ -8,11 +8,12 @@ var rows = [
     {
         "tab": "",
         "group": "Match row (card header, above the LOOK divider - no SettingSection)",
-        "key": "appOverrides",
+        "key": "desktop.appOverrides",
         "label": "App overrides",
         "desc": "Per-app look on top of the global Appearance, applied as a rule on Save",
         "ctl": "multi",
-        "src": "shell",
+        "src": "desktop.json",
+        "caps": "windowRules",
         "opts": [
             "Match class",
             "Match title (optional)",

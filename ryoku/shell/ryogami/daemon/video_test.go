@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 func TestLiveFps(t *testing.T) {
@@ -72,9 +74,9 @@ func TestLiveFit(t *testing.T) {
 	}
 }
 
-// fakeLiveTools installs stub ryogami-live / ffprobe / hyprctl binaries on
-// PATH. The player records its argv to marker; ffprobe reports a small direct-
-// playable h264 clip so Play never transcodes; hyprctl reports two monitors.
+// fakeLiveTools installs stub ryogami-live / ffprobe binaries on PATH and seeds
+// the output cache with two monitors. The player records its argv to marker;
+// ffprobe reports a small direct-playable h264 clip so Play never transcodes.
 func fakeLiveTools(t *testing.T, marker string, exitFast bool) {
 	t.Helper()
 	dir := t.TempDir()
@@ -91,11 +93,28 @@ func fakeLiveTools(t *testing.T, marker string, exitFast bool) {
 	}
 	write("ryogami-live", player)
 	write("ffprobe", "#!/bin/sh\nprintf 'codec_name=h264\\npix_fmt=yuv420p\\nwidth=1280\\nr_frame_rate=30/1\\n'\n")
-	write("hyprctl", `#!/bin/sh
-printf '[{"name":"DP-1","width":2560,"scale":1.25},{"name":"DP-2","width":1920,"scale":1.0}]\n'
-`)
 	t.Setenv("PATH", dir+":"+os.Getenv("PATH"))
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	seedOutputs(t, []wm.Output{
+		{Name: "DP-1", Width: 2560, Scale: 1.25},
+		{Name: "DP-2", Width: 1920, Scale: 1.0},
+	})
+}
+
+// seedOutputs pins the output cache so liveSlots/liveCapWidth read a known
+// monitor set instead of probing a compositor the test has none of.
+func seedOutputs(t *testing.T, outs []wm.Output) {
+	t.Helper()
+	outputs.mu.Lock()
+	outputs.outs = outs
+	outputs.probed = true
+	outputs.mu.Unlock()
+	t.Cleanup(func() {
+		outputs.mu.Lock()
+		outputs.outs = nil
+		outputs.probed = false
+		outputs.mu.Unlock()
+	})
 }
 
 func readMarker(t *testing.T, marker string) []string {

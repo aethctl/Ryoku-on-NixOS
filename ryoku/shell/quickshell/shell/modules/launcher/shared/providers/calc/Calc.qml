@@ -140,7 +140,7 @@ Provider {
         property bool inFlight: false
         property bool didStart: false
         property string out: ""
-        command: [Config.scriptsDir + "ryoku-cmd-calc", expr]
+        command: ["ryoku-cmd-calc", expr]
         stdout: SplitParser {
             onRead: data => proc.out += data + "\n"
         }

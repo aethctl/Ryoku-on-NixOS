@@ -20,6 +20,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // run executes a command and returns its trimmed stdout, plus whether it worked.
@@ -66,8 +69,8 @@ func sysKeymaps() []item {
 		return nil
 	}
 	labels := map[string]string{
-		"us": "US (QWERTY)", "uk": "United Kingdom", "gb": "United Kingdom",
-		"de": "German", "fr": "French (AZERTY)", "es": "Spanish", "it": "Italian",
+		"us": i18n.T("US (QWERTY)"), "uk": i18n.T("United Kingdom"), "gb": i18n.T("United Kingdom"),
+		"de": i18n.T("German"), "fr": i18n.T("French (AZERTY)"), "es": i18n.T("Spanish"), "it": i18n.T("Italian"),
 		"dvorak": "Dvorak", "colemak": "Colemak",
 	}
 	var items []item
@@ -116,13 +119,43 @@ func sysLocales() []item {
 	return promote(items, []string{"en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8", "es_ES.UTF-8"})
 }
 
+func localeTerritory(locale string) string {
+	v := locale
+	if i := strings.IndexAny(v, ".@"); i >= 0 {
+		v = v[:i]
+	}
+	parts := strings.SplitN(v, "_", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	return strings.ToUpper(parts[1])
+}
+
+// promoteKbLocales floats the keyboard's own country to the top: "be" is the
+// Belgian layout and the Belarusian language, and be_BY sorted ahead of
+// fr_BE, which handed Belgians a Cyrillic locale.
+func promoteKbLocales(items []item, keymap string) []item {
+	lay, _ := xkbFromKeymap(keymap)
+	terr := strings.ToUpper(lay)
+	if terr == "" || terr == "US" {
+		return items // us is already the promoted default; nothing to disambiguate
+	}
+	var prefer []string
+	for _, it := range items {
+		if localeTerritory(it.key) == terr {
+			prefer = append(prefer, it.key)
+		}
+	}
+	return promote(items, prefer)
+}
+
 // sysTimezones lists time zones, with the auto-detect entry first.
 func sysTimezones() []item {
 	out, ok := run("timedatectl", "list-timezones")
 	if !ok {
 		return nil
 	}
-	items := []item{{"auto", "Detect automatically", "via IP, also sets the clock"}}
+	items := []item{{"auto", i18n.T("Detect automatically"), i18n.T("via IP, also sets the clock")}}
 	for _, l := range strings.Split(out, "\n") {
 		c := strings.TrimSpace(l)
 		if c != "" {
@@ -312,9 +345,9 @@ func sysDisks() []item {
 // module, so the fix is a firmware setting; anything else gets a generic hint.
 func diskHint() string {
 	if hasVMD() {
-		return "No disks found. This machine has Intel VMD (RST) enabled -- enable AHCI / disable VMD (Intel RST) in BIOS setup, then reboot the installer. dual-boot note: Windows installed under RST will not boot after switching; see docs/installation-hardware.md."
+		return i18n.T("No disks found. This machine has Intel VMD (RST) enabled -- enable AHCI / disable VMD (Intel RST) in BIOS setup, then reboot the installer. dual-boot note: Windows installed under RST will not boot after switching; see docs/installation-hardware.md.")
 	}
-	return "No disks found. Check that a drive is connected and detected in firmware, then reboot the installer."
+	return i18n.T("No disks found. Check that a drive is connected and detected in firmware, then reboot the installer.")
 }
 
 // hasVMD reports whether an Intel Volume Management Device controller is present
@@ -370,6 +403,7 @@ type diskLayout struct {
 	existingBoot string // the existing OS's chainloadable EFI binary, or "none" ("" when absent)
 	leftovers    []part // verified failed-install debris the backend reclaims (freed space)
 	espCount     int    // EF00 ESPs on the disk (>1 surfaces a multi-ESP review note)
+	espFreeKiB   int64  // free KiB on the existing ESP; below 8192 selects a dedicated Ryoku ESP
 }
 
 // sysDiskLayout reads the existing partitions and largest free region of a disk.
@@ -378,47 +412,55 @@ func sysDiskLayout(disk string) diskLayout {
 	if pt, ok := run("blkid", "-o", "value", "-s", "PTTYPE", disk); ok {
 		dl.gpt = strings.TrimSpace(pt) == "gpt"
 	}
-	out, ok := run("lsblk", "-pnbo", "NAME,TYPE,SIZE,FSTYPE,PARTTYPE,PARTLABEL", "-P", disk)
-	if ok {
-		for _, line := range strings.Split(out, "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			r := map[string]string{}
-			for _, tok := range splitPairs(line) {
-				if eq := strings.IndexByte(tok, '='); eq >= 0 {
-					r[tok[:eq]] = unescapeLsblk(strings.Trim(tok[eq+1:], "\""))
-				}
-			}
-			if r["TYPE"] != "part" {
-				continue
-			}
-			sizeB, _ := strconv.ParseInt(r["SIZE"], 10, 64)
-			gib := int((sizeB + (1 << 29)) / (1 << 30)) // round to nearest GiB
-			fs := strings.ToLower(r["FSTYPE"])
-			if fs == "bitlocker" {
-				dl.bitlocker = true // locked NTFS: booting Windows via Ryoku will demand the recovery key
-			}
-			p := part{size: gib, fs: fs, mount: "-", flags: "-", status: "keep"}
-			switch {
-			case strings.EqualFold(r["PARTTYPE"], espTypeGUID):
-				p.dev, p.fs, p.mount, p.flags = "EFI System", "fat32", "-", "esp"
-			case fs == "ntfs":
-				p.dev, p.mount = winLabel(r["PARTLABEL"]), "Windows"
-				dl.windows = true
-			default:
-				p.dev = partLabel(r["PARTLABEL"], fs)
-			}
-			dl.parts = append(dl.parts, p)
-		}
+	if out, ok := run("lsblk", "-pnbo", "NAME,TYPE,SIZE,FSTYPE,PARTTYPE,PARTLABEL", "-P", disk); ok {
+		dl.parts, dl.windows, dl.bitlocker = parseDiskParts(out)
 	}
 	pr := probeAlongside(disk)
 	dl.freeG, dl.regionStart, dl.regionEnd = pr.freeG, pr.regionStart, pr.regionEnd
 	dl.probeVerdict, dl.probeMessage = pr.verdict, pr.message
 	dl.espKind, dl.existingBoot, dl.leftovers = pr.espKind, pr.existingBoot, pr.leftovers
-	dl.espCount = pr.espCount
+	dl.espCount, dl.espFreeKiB = pr.espCount, pr.espFreeKiB
 	return dl
+}
+
+// parseDiskParts parses `lsblk -pnbo NAME,TYPE,SIZE,FSTYPE,PARTTYPE,PARTLABEL -P`
+// into a disk's partition list. Every `part` row is listed regardless of table
+// type or filesystem, so an MBR disk or an unformatted partition never reads as
+// blank. windows/bitlocker report a present NTFS / locked-NTFS volume.
+func parseDiskParts(out string) (parts []part, windows, bitlocker bool) {
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		r := map[string]string{}
+		for _, tok := range splitPairs(line) {
+			if eq := strings.IndexByte(tok, '='); eq >= 0 {
+				r[tok[:eq]] = unescapeLsblk(strings.Trim(tok[eq+1:], "\""))
+			}
+		}
+		if r["TYPE"] != "part" {
+			continue
+		}
+		sizeB, _ := strconv.ParseInt(r["SIZE"], 10, 64)
+		gib := int((sizeB + (1 << 29)) / (1 << 30)) // round to nearest GiB
+		fs := strings.ToLower(r["FSTYPE"])
+		if fs == "bitlocker" {
+			bitlocker = true // locked NTFS: booting Windows via Ryoku will demand the recovery key
+		}
+		p := part{size: gib, fs: fs, mount: "-", flags: "-", status: "keep"}
+		switch {
+		case strings.EqualFold(r["PARTTYPE"], espTypeGUID):
+			p.dev, p.fs, p.mount, p.flags = "EFI System", "fat32", "-", "esp"
+		case fs == "ntfs":
+			p.dev, p.mount = winLabel(r["PARTLABEL"]), "Windows"
+			windows = true
+		default:
+			p.dev = partLabel(r["PARTLABEL"], fs)
+		}
+		parts = append(parts, p)
+	}
+	return parts, windows, bitlocker
 }
 
 func winLabel(lbl string) string {
@@ -435,7 +477,7 @@ func partLabel(lbl, fs string) string {
 	if fs != "" {
 		return strings.ToUpper(fs)
 	}
-	return "partition"
+	return i18n.T("partition")
 }
 
 // probeResult is the backend alongside probe's report: the largest usable free
@@ -450,6 +492,7 @@ type probeResult struct {
 	espKind                string // esp_kind: windows|ryoku|linux ("" when no ESP or older backend)
 	existingBoot           string // existing_boot: the existing OS's EFI binary, or "none" ("" when absent)
 	espCount               int    // esp_count: number of EF00 ESPs on the disk (0 when older backend)
+	espFreeKiB             int64  // esp_free_kib: free space on the existing ESP
 	leftovers              []part // one per verified failed-install partition to reclaim (freed)
 }
 
@@ -460,9 +503,9 @@ func probeAlongside(disk string) probeResult {
 	}
 	out, ok := run(bin, "probe", "alongside", disk)
 	if !ok {
-		return probeResult{verdict: "error", message: "could not run the disk probe (ryoku-install probe alongside)."}
+		return probeResult{verdict: "error", message: i18n.T("could not run the disk probe (ryoku-install probe alongside)."), espFreeKiB: -1}
 	}
-	var r probeResult
+	r := probeResult{espFreeKiB: -1}
 	var bestMiB int64
 	for _, line := range strings.Split(out, "\n") {
 		line = strings.TrimSpace(line)
@@ -481,10 +524,12 @@ func probeAlongside(disk string) probeResult {
 			r.existingBoot = f[1]
 		case len(f) >= 2 && f[0] == "esp_count":
 			r.espCount = int(parseI64(f[1]))
+		case len(f) >= 2 && f[0] == "esp_free_kib":
+			r.espFreeKiB = parseI64(f[1])
 		case len(f) == 4 && f[0] == "leftover":
 			// leftover <dev> <partlabel> <sizeMiB>: verified debris the backend frees.
 			r.leftovers = append(r.leftovers, part{
-				dev: "previous Ryoku", fs: f[2], size: gibRound(parseI64(f[3])),
+				dev: i18n.T("previous Ryoku"), fs: f[2], size: gibRound(parseI64(f[3])),
 				reclaim: true, status: "reclaim",
 			})
 		case len(f) >= 2 && f[0] == "verdict":
@@ -528,7 +573,7 @@ func (p resizePart) name() string {
 	case "ntfs":
 		return "Windows"
 	case "":
-		return "partition"
+		return i18n.T("partition")
 	default:
 		return strings.ToUpper(p.fs)
 	}
@@ -590,15 +635,15 @@ func probeResize(disk string) []resizePart {
 // without opening it. e.g. "Windows + 3 more · 190 GiB free", "ryoku · full".
 func diskSummary(dl diskLayout) string {
 	if len(dl.parts) == 0 {
-		return "empty"
+		return i18n.T("empty")
 	}
 	head := diskPrimary(dl)
 	if more := len(dl.parts) - 1; more > 0 {
-		head += fmt.Sprintf(" + %d more", more)
+		head += i18n.Tf(" + %d more", more)
 	}
-	free := "full"
+	free := i18n.T("full")
 	if dl.freeG > 0 {
-		free = fmt.Sprintf("%d GiB free", dl.freeG)
+		free = i18n.Tf("%d GiB free", dl.freeG)
 	}
 	return head + " · " + free
 }
@@ -750,9 +795,9 @@ func detectHardware() hwInfo {
 		h.fw, h.bios = "BIOS", true // backend is UEFI-only; the TUI hard-blocks BIOS boot
 	}
 	if isVM {
-		h.fw += " · virtual machine"
+		h.fw += i18n.T(" · virtual machine")
 	} else {
-		h.fw += " · bare metal"
+		h.fw += i18n.T(" · bare metal")
 	}
 	h.secureBoot = secureBootEnabled() // Limine is unsigned; blocks Review when on
 
@@ -829,7 +874,7 @@ func summarizeGPU(lines []string) string {
 		}
 	}
 	if len(names) == 0 {
-		return "unclassified"
+		return i18n.T("unclassified")
 	}
 	return strings.Join(names, " + ")
 }
@@ -1028,10 +1073,14 @@ func (m model) installEnv() []string {
 		"RYOKU_XKB_LAYOUT=" + xkbLay,
 		"RYOKU_XKB_VARIANT=" + xkbVar,
 		"RYOKU_LOCALE=" + def(m.picks["locale"], "en_US.UTF-8"),
+		// The backend's shell reads RYOKU_LANG (lib/i18n.sh) so its progress log
+		// speaks the language the user picked in the TUI.
+		"RYOKU_LANG=" + i18n.Lang(),
 		"RYOKU_TIMEZONE=" + def(m.picks["timezone"], "UTC"),
 		"RYOKU_PROFILE=" + def(m.picks["profile"], "vm"),
 		"RYOKU_ESP_GIB=" + strconv.Itoa(m.espG),
 		"RYOKU_SWAP_GIB=" + strconv.Itoa(m.swapG),
+		"RYOKU_ESP_MODE=" + m.espMode(),
 		"RYOKU_SUBVOL_SNAPSHOTS=" + b(m.snapshots),
 		"RYOKU_SUBVOL_HOME=" + b(m.sepHome),
 		"RYOKU_SUBVOL_BACKUPS=" + b(m.backups),
@@ -1045,6 +1094,10 @@ func (m model) installEnv() []string {
 	} else {
 		env = append(env, "RYOKU_ONLINE=1")
 	}
+	// backend picks the ryoku-desktop-<name> variant and seeds ConfigDir(name);
+	// an unknown name yields an empty dir the backend refuses on.
+	comp := m.picks["compositor"]
+	env = append(env, "RYOKU_COMPOSITOR="+comp, "RYOKU_COMPOSITOR_CONFIG_DIR="+wm.ConfigDir(comp))
 	if m.picks["gpu"] != "" {
 		env = append(env, "RYOKU_GPU_MODE="+m.picks["gpu"])
 	}
@@ -1281,5 +1334,5 @@ func netInterface() string {
 	if out, ok := run("sh", "-c", "ip -4 route show default | awk '{print $5; exit}'"); ok && out != "" {
 		return out
 	}
-	return "online"
+	return i18n.T("online")
 }

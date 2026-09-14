@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
-import Quickshell.Hyprland
+import Quickshell
 import Quickshell.Wayland
 import "Singletons"
 import Ryoku.Ui.Singletons
@@ -19,8 +19,8 @@ import Ryoku.Ui.Singletons
  *   │          visible + reachable without eating a full cell).   │
  *   └──────────────────────────────────────────────────────────┘
  *
- * Hyprland has no native "desktop" and only creates a workspace when it is first
- * visited, so gaps (e.g. ws3 when you hold 1,2,4) do not exist in the model. The
+ * The window manager has no native "desktop" and may create a workspace only on
+ * first visit, so gaps (e.g. ws3 when you hold 1,2,4) can be absent. The
  * filmstrip renders every SLOT 1..N in order regardless: a slot with windows is a
  * full live-preview cell, an empty slot is a thin number slat (click/drop creates
  * and enters it). A desktop is a block of workspace ids (desktop d owns ids
@@ -41,29 +41,28 @@ Item {
     property bool focusHere: false
     signal requestClose()
 
-    // ---- monitor geometry (logical, matching hyprctl client coords) ----------
-    readonly property var mon: {
-        var ms = Hyprland.monitors.values;
-        for (var i = 0; i < ms.length; i++)
-            if (ms[i] && ms[i].name === root.screenName)
-                return ms[i];
-        return null;
-    }
-    readonly property var monObj: root.mon ? root.mon.lastIpcObject : null
+    // ---- monitor geometry (logical layout coordinates) ------------------------
+    readonly property var mon: Wm.outputByName(root.screenName)
+    readonly property var monObj: root.mon
     readonly property real monScale: (root.monObj && root.monObj.scale > 0) ? root.monObj.scale : 1
     readonly property real monLW: (root.monObj && root.monObj.width  > 0) ? root.monObj.width  / root.monScale : 2560
     readonly property real monLH: (root.monObj && root.monObj.height > 0) ? root.monObj.height / root.monScale : 1600
-    readonly property real monX: (root.monObj && typeof root.monObj.x === "number") ? root.monObj.x : 0
-    readonly property real monY: (root.monObj && typeof root.monObj.y === "number") ? root.monObj.y : 0
+    // Window geometry is global layout coordinates, so the mini-map origin is the
+    // output's own top-left, taken from its screen.
+    readonly property var screen: {
+        var list = Quickshell.screens;
+        for (var i = 0; i < list.length; i++)
+            if (list[i] && list[i].name === root.screenName)
+                return list[i];
+        return null;
+    }
+    readonly property real monX: root.screen ? root.screen.x : 0
+    readonly property real monY: root.screen ? root.screen.y : 0
     readonly property real aspect: root.monLW > 0 ? root.monLH / root.monLW : 0.625
-    // Active workspace from the monitor's IPC object (activeWorkspace.id in the
-    // hyprctl JSON), reliable in a fresh instance unlike the live cross-ref.
+    // Active workspace shown on this output; the fixed model keys it numerically.
     readonly property int activeWsId: {
-        if (root.monObj && root.monObj.activeWorkspace && typeof root.monObj.activeWorkspace.id === "number")
-            return root.monObj.activeWorkspace.id;
-        if (root.mon && root.mon.activeWorkspace)
-            return root.mon.activeWorkspace.id;
-        return -1;
+        var n = (root.mon && root.mon.activeWorkspace) ? Number(root.mon.activeWorkspace) : NaN;
+        return isNaN(n) ? -1 : n;
     }
 
     // ---- desktops = blocks of workspace ids -----------------------------------
@@ -73,22 +72,28 @@ Item {
 
     readonly property var allWsIds: {
         var out = [];
-        var all = Hyprland.workspaces.values;
+        var all = Wm.workspaces;
         for (var i = 0; i < all.length; i++) {
             var w = all[i];
-            if (w && w.id > 0 && w.monitor && w.monitor.name === root.screenName)
-                out.push(w.id);
+            if (!w || w.special || w.output !== root.screenName)
+                continue;
+            var id = Number(w.name);
+            if (id > 0)
+                out.push(id);
         }
         out.sort(function (a, b) { return a - b; });
         return out;
     }
     readonly property var globalWsIds: {
         var out = [];
-        var all = Hyprland.workspaces.values;
+        var all = Wm.workspaces;
         for (var i = 0; i < all.length; i++) {
             var w = all[i];
-            if (w && w.id > 0)
-                out.push(w.id);
+            if (!w || w.special)
+                continue;
+            var id = Number(w.name);
+            if (id > 0)
+                out.push(id);
         }
         out.sort(function (a, b) { return a - b; });
         return out;
@@ -122,13 +127,8 @@ Item {
     }
     property int viewedDesktop: 0
     function wsHasWindows(id) {
-        var tl = Hyprland.toplevels.values;
-        for (var i = 0; i < tl.length; i++) {
-            var o = tl[i] && tl[i].lastIpcObject;
-            if (o && tl[i].workspace && tl[i].workspace.id === id && o.mapped !== false)
-                return true;
-        }
-        return false;
+        var ws = Wm.workspaceByName(String(id));
+        return !!ws && ws.occupied;
     }
     function deskDots(d) {
         var out = [];
@@ -150,7 +150,7 @@ Item {
 
     // ---- the viewed desktop's block + its occupancy ---------------------------
     readonly property int blockBase: root.viewedDesktop * root.perDesktop
-    // ids of THIS desktop that exist in Hyprland.
+    // ids of THIS desktop present in the workspace model.
     readonly property var wsList: {
         var out = [];
         for (var i = 0; i < root.allWsIds.length; i++)
@@ -307,14 +307,12 @@ Item {
             root.switchWs(slot.wsId);
     }
 
-    // ---- actions (lua-config hyprland: dispatch via the hl.dsp API) -----------
-    function normAddr(a) { return (a && a.indexOf("0x") === 0) ? a : "0x" + a; }
-    // Compositor actions that dismiss the overview are DEFERRED until after it
-    // closes. The overlay holds an exclusive keyboard grab; releasing it on
-    // close makes Hyprland refocus the previously active window, which would
-    // undo a workspace/window switch dispatched while the overlay was still up
-    // (you would land back on the workspace you started from). So: close first,
-    // then run the switch once the grab has been released.
+    // ---- actions --------------------------------------------------------------
+    // Actions that dismiss the overview are DEFERRED until after it closes. The
+    // overlay holds an exclusive keyboard grab; releasing it on close refocuses
+    // the previously active window, which would undo a workspace/window switch
+    // issued while the overlay was still up (you would land back where you
+    // started). So: close first, then run the switch once the grab is released.
     property var pendingCommit: null
     Timer {
         id: commitTimer
@@ -334,44 +332,28 @@ Item {
     }
     function switchWs(id) {
         root.commitOnClose(function () {
-            Hyprland.dispatch('hl.dsp.focus({ workspace = ' + id + ' })');
+            Wm.focusWorkspace(String(id));
         });
     }
     function createAndEnterWs(id) {
-        var mon = root.screenName;
+        // No neutral focus-output action, so entering the workspace also moves
+        // the shown output to the one that owns it.
         root.commitOnClose(function () {
-            if (mon)
-                Hyprland.dispatch('hl.dsp.focus({ monitor = "' + mon + '" })');
-            Hyprland.dispatch('hl.dsp.focus({ workspace = ' + id + ' })');
+            Wm.focusWorkspace(String(id));
         });
     }
-    function focusWindow(tl, addr) {
+    function focusWindow(id) {
         root.commitOnClose(function () {
-            if (tl && tl.wayland)
-                tl.wayland.activate();
-            else if (addr)
-                Hyprland.dispatch('hl.dsp.focus({ window = "address:' + root.normAddr(addr) + '" })');
+            Wm.focusWindow(id);
         });
     }
-    function moveWindow(addr, wsId) {
-        if (!addr) return;
-        var used = false;
-        for (var i = 0; i < root.globalWsIds.length; i++)
-            if (root.globalWsIds[i] === wsId)
-                used = true;
-        Hyprland.dispatch('hl.dsp.window.move({ workspace = ' + wsId + ', window = "address:' + root.normAddr(addr) + '" })');
-        if (!used && root.screenName)
-            Hyprland.dispatch('hl.dsp.workspace.move({ workspace = ' + wsId + ', monitor = "' + root.screenName + '" })');
-        Hyprland.refreshToplevels();
-        Hyprland.refreshWorkspaces();
+    function moveWindow(id, wsId) {
+        if (!id) return;
+        Wm.moveWindowToWorkspace(id, String(wsId));
     }
-    function closeWindow(tl, addr) {
-        if (tl && tl.wayland)
-            tl.wayland.close();
-        else if (addr)
-            Hyprland.dispatch('hl.dsp.window.close({ window = "address:' + root.normAddr(addr) + '" })');
-        Hyprland.refreshToplevels();
-        Hyprland.refreshWorkspaces();
+    function closeWindow(id) {
+        if (id)
+            Wm.closeWindow(id);
     }
     function landingWsForDesk(d) {
         var lo = -1;

@@ -8,29 +8,32 @@ var rows = [
     {
         "tab": "",
         "group": "OTHER",
-        "key": "layerRules",
+        "key": "wm.hyprland.layerRules",
         "label": "Custom layer rules",
         "desc": "Blur, dim, or restyle shell surfaces per namespace; applied only on Save",
         "ctl": "list",
-        "src": "settings.lua"
+        "src": "desktop.json",
+        "caps": "layerRules"
     },
     {
         "tab": "",
         "group": "OTHER",
-        "key": "layerRules[i].namespace",
+        "key": "wm.hyprland.layerRules[i].namespace",
         "label": "Namespace",
         "desc": "Layer-shell name to match, e.g. launcher; no match means no effect",
         "ctl": "text",
-        "src": "settings.lua"
+        "src": "desktop.json",
+        "caps": "layerRules"
     },
     {
         "tab": "",
         "group": "OTHER",
-        "key": "layerRules[i].action",
+        "key": "wm.hyprland.layerRules[i].action",
         "label": "Action",
         "desc": "What the rule does to matched surfaces; changing it resets the value",
         "ctl": "chips",
-        "src": "settings.lua",
+        "src": "desktop.json",
+        "caps": "layerRules",
         "opts": [
             "blur",
             "blurpopups",
@@ -44,11 +47,12 @@ var rows = [
     {
         "tab": "",
         "group": "OTHER",
-        "key": "layerRules[i].value",
+        "key": "wm.hyprland.layerRules[i].value",
         "label": "Value",
         "desc": "Only Ignore alpha takes a value: alpha cutoff 0.0 to 1.0, seeded to 0.5",
         "ctl": "text",
-        "src": "settings.lua",
+        "src": "desktop.json",
+        "caps": "layerRules",
         "unit": "alpha"
     }
 ];

@@ -142,7 +142,7 @@ def build_x11(body, primary, watch):
 
 
 def apply_live():
-    subprocess.run(["hyprctl", "setcursor", THEME, str(cursor_size())],
+    subprocess.run(["ryoku", "wm", "act", "cursor.set", THEME, str(cursor_size())],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 

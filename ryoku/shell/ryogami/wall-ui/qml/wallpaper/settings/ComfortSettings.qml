@@ -17,7 +17,7 @@ Column {
     property int _brightness: 100
     property bool _warm: false
     property int _temp: 4000
-    readonly property string _nlScript: Quickshell.env("HOME") + "/.config/hypr/scripts/ryoku-cmd-nightlight"
+    readonly property string _nlScript: "ryoku-cmd-nightlight"
 
     Component.onCompleted: { brProc.running = true; nlProc.running = true }
 

@@ -16,6 +16,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // component is a Quickshell config the daemon keeps alive. Persistent components
@@ -119,9 +121,14 @@ type daemon struct {
 	voiceMu     sync.Mutex               // serializes voice (Super+`) toggles
 	voiceOn     bool                     // dictation active; guarded by voiceMu
 	prompter    *prompter                // GNOME keyring system prompter (nil when unavailable)
-	monMu       sync.Mutex               // guards activeMon
-	activeMon   string                   // focused monitor, kept warm by watchHyprland
-	monFallback func() string            // monitor source when the cache is cold; tests swap it
+	wmc          *wm.Client // sole path to the compositor
+	wmMu         sync.Mutex // guards the compositor state the wm watcher keeps warm
+	activeMon    string     // focused output, kept warm by watchWindowManager
+	wmOutputs    []wm.Output
+	wmWorkspaces []wm.Workspace
+	wmWindows    []wm.Window
+	wmReady      bool
+	wmTopic      *stateTopic
 	gateMu      sync.Mutex               // guards gateWant / gateWake
 	gateWant    map[string]bool          // component -> may run now (absent = yes)
 	gateWake    map[string]chan struct{} // wakes a parked supervisor when its gate opens
@@ -142,25 +149,19 @@ type daemon struct {
 }
 
 func runDaemon() error {
-	// Bind hyprctl and the event watcher to the running compositor before
-	// anything forks or the take-over check reads the signature: a systemd
-	// Restart= can launch us under a stale one (see hyprsig.go).
-	ensureLiveHyprSignature()
+	// The provider (not this daemon) binds to the live compositor. Its opaque
+	// per-session instance handle is the only thing the take-over needs.
+	wmc := wm.Open()
 	path := sockPath()
 	if c, err := net.DialTimeout("unix", path, 300*time.Millisecond); err == nil {
 		c.Close()
-		// A daemon is already listening. Take over only a stale one: an
-		// incumbent left from a previous Hyprland instance, whose
-		// HYPRLAND_INSTANCE_SIGNATURE differs from this session's. A stale
-		// daemon supervises its quickshell children against the dead compositor
-		// socket, so workspaces freeze and monitor-aware commands fail; the fresh
-		// login-time daemon must displace it and rebind to the live session.
-		// A same-session incumbent, an older one that cannot report its
-		// signature, or our own missing signature are left alone, so a genuine
-		// double-start still refuses.
-		mySig := os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
-		incSig, ok := daemonSignature(path)
-		if !shouldTakeOver(mySig, incSig, ok) {
+		// Take over only a provably stale incumbent: one bound to a different
+		// compositor instance than ours (a previous session's). A same-session
+		// incumbent, an unidentified one (older binary, ok=false), or our own
+		// missing instance are left alone, so a genuine double-start refuses.
+		caps, _ := wmc.Caps()
+		incInstance, ok := daemonSignature(path)
+		if !shouldTakeOver(caps.Instance, incInstance, ok) {
 			return fmt.Errorf("a daemon is already running at %s", path)
 		}
 		quitStaleDaemon(path)
@@ -199,6 +200,7 @@ func runDaemon() error {
 		gateWake:    map[string]chan struct{}{},
 		hiddenSince: map[string]time.Time{},
 		lastFail:    map[string]string{},
+		wmc:         wmc,
 	}
 	d.ln = ln
 	d.lock = lock // held for the process lifetime: closing it would free the guard
@@ -232,21 +234,20 @@ func runDaemon() error {
 }
 
 // shouldTakeOver reports whether a daemon starting now should displace the
-// incumbent already listening on the control socket. It takes over only a
-// provably stale incumbent: one that reported a Hyprland instance signature
-// (ok) different from this session's (mySig). A same-session incumbent, an
-// unidentified one (an older binary that cannot answer, ok=false), or our own
-// missing signature (mySig=="") all leave the incumbent in place, so a genuine
-// double-start still refuses to run.
+// incumbent on the control socket. It takes over only a provably stale
+// incumbent: one whose compositor instance handle (ok) differs from ours
+// (mySig). A same-session incumbent, an unidentified one (older binary,
+// ok=false), or our own missing handle (mySig=="") leave it in place, so a
+// genuine double-start still refuses.
 func shouldTakeOver(mySig, incSig string, ok bool) bool {
 	return ok && mySig != "" && incSig != mySig
 }
 
-// daemonSignature asks the daemon at path for the Hyprland instance signature it
-// was launched under. ok is false when the query fails or the reply is an error
-// (an older daemon that predates the signature command), so the caller treats
-// the incumbent as unidentified and does not displace it. An empty signature
-// from a current daemon is a valid answer (ok=true, sig="").
+// daemonSignature asks the daemon at path for its compositor instance handle. ok
+// is false when the query fails or the reply is an error (an older daemon that
+// predates the verb), so the caller treats the incumbent as unidentified and
+// does not displace it. An empty handle from a current daemon is a valid answer
+// (ok=true, sig="").
 func daemonSignature(path string) (sig string, ok bool) {
 	conn, err := net.DialTimeout("unix", path, 300*time.Millisecond)
 	if err != nil {
@@ -337,6 +338,9 @@ func (d *daemon) bootstrap() {
 	d.startNetwork()
 	d.startOsd()
 	d.prompter = startKeyringPrompter()
+	if d.prompter != nil {
+		d.prompter.mon = d.activeMonitor
+	}
 	d.startSession()
 	d.startPolkit()
 	d.startUpdates()
@@ -345,7 +349,7 @@ func (d *daemon) bootstrap() {
 	go d.watchRyogami()
 	go d.watchMatugenKnobs()
 	go d.ledsWorker()
-	go d.watchHyprland()
+	d.startWM()
 	go d.watchAudio()
 	go d.watchPowerSounds()
 	go d.watchAutoPowerSaver()
@@ -1122,10 +1126,11 @@ func (d *daemon) dispatch(line string) string {
 	case "ping":
 		return "ok"
 	case "signature":
-		// The Hyprland instance this daemon was launched under. A newly starting
-		// daemon reads it to tell a stale incumbent (a previous session's) from
-		// a same-session double-start before it takes over the control socket.
-		return os.Getenv("HYPRLAND_INSTANCE_SIGNATURE")
+		// Opaque per-session instance handle from the provider, string-compared
+		// to tell a stale incumbent from a same-session double-start. Empty means
+		// no live session.
+		caps, _ := d.wmc.Caps()
+		return caps.Instance
 	case "quit":
 		d.signalQuit()
 		return "ok"

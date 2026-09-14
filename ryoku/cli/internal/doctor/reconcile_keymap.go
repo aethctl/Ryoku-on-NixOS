@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"ryoku-cli/internal/keyboard"
 	"ryoku-cli/internal/sys"
 
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // ---- reconcilers: the keyboard layout, on every screen that asks for one ------
@@ -20,25 +20,20 @@ import (
 // the layout the installer was told about into a desktop still on the shipped
 // default, and reporting when the layers have drifted apart afterwards.
 
-var keymapLayoutRe = regexp.MustCompile(`kb_layout\s*=\s*"([^"]*)"`)
-
-// hyprLayout reads the session's primary layout from the generated settings.lua.
-// The value can carry a second layout ("fr,us"); the first is the one a login
-// screen and a boot prompt need, since neither can switch.
-func hyprLayout() string {
-	b, err := os.ReadFile(filepath.Join(configHome(), "hypr", "settings.lua"))
-	if err != nil {
+// configuredKbLayout is the primary layout from the neutral store: the first of a
+// possibly comma-separated desktop.input.kbLayout ("fr,us" -> "fr"), the one a
+// login screen and a boot prompt need since neither can switch.
+func configuredKbLayout() string {
+	raw := readFileSafe(filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json"))
+	layout, ok := hyprGetKbLayout(raw)
+	if !ok {
 		return ""
 	}
-	m := keymapLayoutRe.FindSubmatch(b)
-	if m == nil {
-		return ""
-	}
-	return strings.TrimSpace(strings.SplitN(string(m[1]), ",", 2)[0])
+	return strings.TrimSpace(strings.SplitN(layout, ",", 2)[0])
 }
 
 func reconcileKeymap(checkOnly bool) recResult {
-	layout := hyprLayout()
+	layout := configuredKbLayout()
 	if layout == "" {
 		return okRes(i18n.T("no session keyboard layout recorded yet"))
 	}
@@ -69,11 +64,9 @@ func reconcileKeymap(checkOnly bool) recResult {
 
 	// Apply mode: make the layout global. Push the desktop's layout onto the
 	// console and greeter, then rebuild the boot image so the disk passphrase
-	// prompt follows too. Reconcile used to fix the console but only warn about
-	// the prompt, so AZERTY (and any non-QWERTY layout) silently reverted to
-	// QWERTY at the LUKS unlock and never went fully global. ApplySystem rewrites
-	// vconsole.conf, so a rebuild is needed whenever we touched it or the image
-	// was already stale; one unconditional rebuild covers both.
+	// prompt follows too. ApplySystem rewrites vconsole.conf, so a rebuild is
+	// needed whenever we touched it or the image was already stale; one
+	// unconditional rebuild covers both.
 	if consoleDrifted {
 		if err := keyboard.ApplySystem(keyboard.Layout{Layout: layout}); err != nil {
 			return warnRes(i18n.T("console keymap is %q but the session uses %q"), km, layout).
@@ -95,29 +88,36 @@ func keyboardSeedMarker() string {
 	return filepath.Join(sys.Xdg("XDG_STATE_HOME", ".local/state"), "ryoku", "migrations", "keyboard-layout-seed")
 }
 
-// hyprGetKbLayout pulls input.kbLayout out of a saved hypr.json.
+// hyprGetKbLayout pulls desktop.input.kbLayout out of the neutral store.
 func hyprGetKbLayout(raw string) (string, bool) {
 	var o struct {
-		Input struct {
-			KbLayout *string `json:"kbLayout"`
-		} `json:"input"`
+		Desktop struct {
+			Input struct {
+				KbLayout *string `json:"kbLayout"`
+			} `json:"input"`
+		} `json:"desktop"`
 	}
-	if json.Unmarshal([]byte(raw), &o) != nil || o.Input.KbLayout == nil {
+	if json.Unmarshal([]byte(raw), &o) != nil || o.Desktop.Input.KbLayout == nil {
 		return "", false
 	}
-	return *o.Input.KbLayout, true
+	return *o.Desktop.Input.KbLayout, true
 }
 
-// hyprSetKbLayout rewrites input.kbLayout, leaving every other key untouched.
+// hyprSetKbLayout rewrites desktop.input.kbLayout, leaving every other key intact.
 func hyprSetKbLayout(raw, layout string) (string, error) {
 	var doc map[string]any
 	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
 		return "", err
 	}
-	input, _ := doc["input"].(map[string]any)
+	desktop, _ := doc["desktop"].(map[string]any)
+	if desktop == nil {
+		desktop = map[string]any{}
+		doc["desktop"] = desktop
+	}
+	input, _ := desktop["input"].(map[string]any)
 	if input == nil {
 		input = map[string]any{}
-		doc["input"] = input
+		desktop["input"] = input
 	}
 	input["kbLayout"] = layout
 	out, err := json.MarshalIndent(doc, "", "  ")
@@ -143,12 +143,13 @@ func reconcileKeyboardSeed(checkOnly bool) recResult {
 		_ = os.MkdirAll(filepath.Dir(marker), 0o755)
 		_ = os.WriteFile(marker, []byte("done\n"), 0o644)
 	}
-	hyprJSON := filepath.Join(sys.ConfigHome(), "ryoku", "hypr.json")
-	if !sys.Has("ryoku-hub") || !sys.Exists(hyprJSON) {
+	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
+	if !sys.Exists(store) {
 		mark()
-		return okRes(i18n.T("no saved hypr input to seed a layout into"))
+		return okRes(i18n.T("no saved desktop input to seed a layout into"))
 	}
-	cur, ok := hyprGetKbLayout(readFileSafe(hyprJSON))
+	raw := readFileSafe(store)
+	cur, ok := hyprGetKbLayout(raw)
 	// Only the untouched shipped default is adopted over. Anything else is a
 	// choice, including a deliberate "us".
 	if !ok || cur != "us" {
@@ -164,17 +165,14 @@ func reconcileKeyboardSeed(checkOnly bool) recResult {
 		return wouldRes(i18n.T("%s says this is a %q keyboard but the desktop is still on us"), got.Source, got.Layout).
 			withFix("ryoku doctor")
 	}
-	raw, err := sys.RunOut("ryoku-hub", "hypr", "get")
-	if err != nil {
-		return warnRes(i18n.T("could not read hypr settings to adopt the layout: %v"), err)
-	}
 	fixed, err := hyprSetKbLayout(raw, got.Layout)
 	if err != nil {
-		return failRes(i18n.T("could not update hypr settings: %v"), err)
+		return failRes(i18n.T("could not update desktop settings: %v"), err)
 	}
-	if err := sys.Run("ryoku-hub", "hypr", "save", fixed); err != nil {
+	if err := writeStore(store, []byte(fixed)); err != nil {
 		return failRes(i18n.T("could not save the detected layout: %v"), err).withFix("ryoku doctor")
 	}
+	_, _ = wm.Open().Apply(store)
 	mark()
 	return fixedRes(i18n.T("adopted the %q keyboard layout from %s; run `ryoku keyboard apply` to put it on the login screen and boot prompt too"), got.Layout, got.Source)
 }

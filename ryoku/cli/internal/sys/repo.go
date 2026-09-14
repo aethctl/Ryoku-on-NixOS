@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // repoPathFile records where the live-mirror checkout sits. The deployed
@@ -83,7 +85,7 @@ func SourceTracked() bool {
 
 // RetireSourceTracking stops a box taking its updates from a source checkout:
 // it drops the recorded repo pointer and the RYOKU_CHANNEL line from both
-// environment.d and hypr/user.lua. The ~/ryoku-arch clone is left on disk (the
+// environment.d and the compositor's user config. The ~/ryoku-arch clone is left on disk (the
 // user's data); ResolveRepo's fallback is gated on the tracked channel this
 // clears, so the clone is not re-adopted. Clearing the running session env is
 // the caller's job: it needs a live user manager this package must not assume.
@@ -94,7 +96,11 @@ func RetireSourceTracking() error {
 	if err := dropEnvChannel(filepath.Join(ConfigHome(), "environment.d", "ryoku.conf")); err != nil {
 		return err
 	}
-	return dropLuaChannel(filepath.Join(ConfigHome(), "hypr", "user.lua"))
+	dir := wm.ConfigDir(wm.Detect().Name)
+	if dir == "" {
+		return nil
+	}
+	return dropLuaChannel(filepath.Join(ConfigHome(), dir, "user.lua"))
 }
 
 // dropEnvChannel removes the RYOKU_CHANNEL= line from an environment.d file,
@@ -122,7 +128,7 @@ func dropEnvChannel(path string) error {
 }
 
 // dropLuaChannel removes the hl.env("RYOKU_CHANNEL", ...) line bin/ryoku-track
-// appends to hypr/user.lua, leaving the rest of the user's file intact.
+// appends to the compositor's user config, leaving the rest of the user's file intact.
 func dropLuaChannel(path string) error {
 	b, err := os.ReadFile(path)
 	if err != nil {

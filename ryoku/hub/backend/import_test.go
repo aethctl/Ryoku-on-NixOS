@@ -248,34 +248,26 @@ func TestApplyIngestsAndUnbinds(t *testing.T) {
 		t.Errorf("unbinds = %d, want 1", res.Unbinds)
 	}
 
-	// settings.lua carries the ingested binds, rules, and the unbind of the
-	// shadowed chord, in the right order (unbind before the winning bind).
-	lua, err := os.ReadFile(filepath.Join(hyprConfigDir(), "settings.lua"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s := string(lua)
+	// the store carries the ingested binds, rules and the unbind of the shadowed
+	// chord; the provider renders settings.lua from it.
+	m := readJSONMap(desktopStorePath())
+	d, _ := m["desktop"].(map[string]any)
+	blob, _ := json.Marshal(d)
+	s := string(blob)
 	for _, want := range []string{
-		`hl.unbind("SUPER + Q")`,
-		`hl.bind("SUPER + Q", hl.dsp.exec_cmd("foot"))`,
-		`hl.bind("SUPER + SHIFT + E", hl.dsp.exec_cmd("thunar"))`,
-		`hl.dsp.window.float({ action = "toggle" })`,
-		`hl.bind("SUPER + G", hl.dsp.exec_cmd("gimp"))`,
+		`"keys":"SUPER + Q"`, `"value":"foot"`,
+		`"keys":"SUPER + SHIFT + E"`, `"value":"thunar"`,
+		`"action":"togglefloating"`,
+		`"keys":"SUPER + G"`, `"value":"gimp"`,
+		`"SUPER + Q"`,
+		`pavucontrol`, `"action":"opacity"`,
 	} {
 		if !strings.Contains(s, want) {
-			t.Errorf("settings.lua missing %q:\n%s", want, s)
+			t.Errorf("store missing %q:\n%s", want, s)
 		}
 	}
 	if strings.Contains(s, "inkscape") {
-		t.Error("dropped duplicate (inkscape) leaked into settings.lua")
-	}
-	if ui, bi := strings.Index(s, `hl.unbind("SUPER + Q")`), strings.Index(s, `hl.bind("SUPER + Q"`); ui < 0 || bi < 0 || ui > bi {
-		t.Errorf("unbind must precede the winning bind (unbind@%d bind@%d)", ui, bi)
-	}
-
-	// the imported window rules render.
-	if !strings.Contains(s, `class = "^(pavucontrol)$"`) || !strings.Contains(s, "opacity = 0.9") {
-		t.Errorf("window rules missing from settings.lua:\n%s", s)
+		t.Error("dropped duplicate (inkscape) leaked into the store")
 	}
 
 	// the non-ingestable bind + raw settings layered into user.lua, still valid Lua.
@@ -421,8 +413,9 @@ func TestApplyDefaultKeepsRyoku(t *testing.T) {
 	if res.Unbinds != 0 {
 		t.Errorf("unbinds = %d, want 0 (default keeps Ryoku)", res.Unbinds)
 	}
-	lua, _ := os.ReadFile(filepath.Join(hyprConfigDir(), "settings.lua"))
-	if strings.Contains(string(lua), `exec_cmd("foot")`) {
+	d, _ := readJSONMap(desktopStorePath())["desktop"].(map[string]any)
+	blob, _ := json.Marshal(d)
+	if strings.Contains(string(blob), `"value":"foot"`) {
 		t.Error("the shadowing foot bind was ingested despite defaulting to ryoku")
 	}
 }
@@ -498,9 +491,9 @@ func TestApplyMineUnknownDispatcherNoUnbind(t *testing.T) {
 	if len(res.Unresolved) != 1 {
 		t.Errorf("unresolved = %v, want the somethingweird bind", res.Unresolved)
 	}
-	// no hypr overrides changed, so no settings.lua and no unbind anywhere.
-	if b, err := os.ReadFile(filepath.Join(hyprConfigDir(), "settings.lua")); err == nil && strings.Contains(string(b), "hl.unbind") {
-		t.Errorf("settings.lua emitted an unbind for a dead key:\n%s", b)
+	// no hypr overrides changed, so the store records no unbind.
+	if store, err := os.ReadFile(desktopStorePath()); err == nil && strings.Contains(string(store), "unbinds") {
+		t.Errorf("store recorded an unbind for a dead key:\n%s", store)
 	}
 	u, _ := os.ReadFile(filepath.Join(hyprConfigDir(), "user.lua"))
 	if !strings.Contains(string(u), "port by hand: somethingweird") {

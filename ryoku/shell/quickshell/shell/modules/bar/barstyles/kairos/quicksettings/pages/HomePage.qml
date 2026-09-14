@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Bluetooth
-import Quickshell.Hyprland
 import shell.services
 import shell.barkit as Pill
 import Ryoku.Ui.Singletons
@@ -39,7 +38,7 @@ Column {
         return I18n.tr("Not connected");
     }
 
-    readonly property string focusedName: Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
+    readonly property string focusedName: Wm.focusedOutput
     readonly property string ddcBus: {
         var mons = Devices.ddcMonitors || [];
         for (var i = 0; i < mons.length; i++)

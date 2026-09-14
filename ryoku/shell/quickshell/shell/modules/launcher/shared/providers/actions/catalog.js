@@ -1,5 +1,5 @@
 // The system-action catalog: each entry is a command the launcher can fire,
-// wired to a real Ryoku helper (ryoku-shell, ryoku-cmd-*) or hyprctl. Data only,
+// wired to a real Ryoku helper (ryoku-shell, ryoku-cmd-*). Data only,
 // so the set is validated in a node test and the provider stays a thin mapper.
 // `exec` is an argv array run with execDetached. Categories group the action-mode
 // tabs (System / Appearance / Tools / Media / Settings).

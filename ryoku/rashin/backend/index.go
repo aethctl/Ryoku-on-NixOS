@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	wm "ryoku-wm"
 )
 
 // Reindex regenerates the machine-owned vault docs. Every probe is best
@@ -144,7 +146,6 @@ type desktopMapRow struct {
 // verified against the repo. The shell exposes no per-component restart verb, so
 // shell surfaces reload via `ryoku reload`.
 var desktopMap = []desktopMapRow{
-	{"Hyprland (window manager)", "~/.config/hypr/", "Hyprland (Lua config)", "hyprctl reload"},
 	{"Shell surfaces (pill, sidebar, ryoshot, widgets, launcher, hub)", "~/.config/quickshell/", "ryoku-shell daemon", "ryoku reload"},
 	{"Terminal", "~/.config/kitty/", "kitty", "relaunch kitty"},
 	{"Shell + prompt", "~/.config/{fish,bash,zsh}/, ~/.config/starship.toml", "fish, bash, or zsh; starship", "open a new shell"},
@@ -167,7 +168,7 @@ func actingBody() string {
 	var b strings.Builder
 	b.WriteString("## Acting on this desktop\n\n")
 	b.WriteString("Change the desktop through commands (`ryoku`, `ryoku-shell`, `ryoku-hub`,\n")
-	b.WriteString("`ryogami`, `hyprctl`), never by editing shipped files. The `ryoku` skill is\n")
+	b.WriteString("`ryogami`, `ryoku wm act`), never by editing shipped files. The `ryoku` skill is\n")
 	b.WriteString("the contract for that: `SKILL.md` (rules and the command catalogue), `bar.md`\n")
 	b.WriteString("(the QS Bar model), `plugins.md` (how a new widget is written and installed).\n")
 	if d := skillSourceDir(); d != "" {
@@ -187,6 +188,15 @@ func desktopBody() string {
 	b.WriteString(actingBody())
 	b.WriteString("## Subsystem map\n\n")
 	b.WriteString("| Subsystem | Config path | Owner | Reload |\n|---|---|---|---|\n")
+	if d := wm.Detect(); d.Name != "" {
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n",
+			d.Name+" (window manager)",
+			mdCell("~/.config/"+wm.ConfigDir(d.Name)+"/"),
+			d.Name+" config",
+			mdCell("ryoku wm act config.reload"))
+	} else {
+		b.WriteString("| Window manager | (no provider installed) | - | - |\n")
+	}
 	for _, r := range desktopMap {
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", r.subsystem, mdCell(r.path), r.owner, mdCell(r.reload))
 	}
@@ -417,31 +427,14 @@ func gpuDescribe() []string {
 	return gpus
 }
 
-type hyprMonitor struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Width       int     `json:"width"`
-	Height      int     `json:"height"`
-	RefreshRate float64 `json:"refreshRate"`
-	Scale       float64 `json:"scale"`
-}
-
 func monitorRows() []string {
-	out, ok := probe(5, "hyprctl", "monitors", "-j")
-	if !ok {
-		return nil
-	}
-	var ms []hyprMonitor
-	if json.Unmarshal([]byte(out), &ms) != nil {
+	outs := monitorOutputs()
+	if len(outs) == 0 {
 		return nil
 	}
 	var rows []string
-	for _, m := range ms {
-		row := fmt.Sprintf("%s: %dx%d@%.0fHz, scale %g", m.Name, m.Width, m.Height, m.RefreshRate, m.Scale)
-		if m.Description != "" {
-			row += " (" + m.Description + ")"
-		}
-		rows = append(rows, row)
+	for _, o := range outs {
+		rows = append(rows, fmt.Sprintf("%s: %dx%d, scale %g", o.Name, o.Width, o.Height, o.Scale))
 	}
 	return rows
 }

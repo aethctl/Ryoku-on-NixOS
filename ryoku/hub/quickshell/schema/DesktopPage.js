@@ -346,5 +346,34 @@ var rows = [{
         "desc": "Keep a slow wave moving when nothing is playing",
         "ctl": "sw",
         "src": "viz"
+    },{
+        "tab": "General",
+        "group": "QUICK SETTINGS",
+        "key": "frameBars.menus.quick-settings.anchor",
+        "label": "Sidebar edge",
+        "desc": "Which screen edge the Super+Esc quick settings sidebar opens from",
+        "ctl": "seg",
+        "src": "shell",
+        "opts": ["left","right","top","bottom"]
+    },{
+        "tab": "General",
+        "group": "QUICK SETTINGS",
+        "key": "frameBars.menus.quick-settings.expansion",
+        "label": "Fill the edge",
+        "desc": "Stretch the sidebar to its whole edge, or size it to its content",
+        "ctl": "seg",
+        "src": "shell",
+        "opts": ["always","never"]
+    },{
+        "tab": "General",
+        "group": "QUICK SETTINGS",
+        "key": "frameBars.menus.quick-settings.minWidth",
+        "label": "Minimum width",
+        "desc": "How wide the sidebar is at its narrowest",
+        "ctl": "step",
+        "src": "shell",
+        "lo": 200,
+        "hi": 1200,
+        "unit": "px"
     }
 ];

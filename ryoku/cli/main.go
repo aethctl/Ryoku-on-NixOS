@@ -71,6 +71,8 @@ func main() {
 		err = updater.Version(os.Args[2:])
 	case "reload":
 		err = sys.Run("ryoku-shell", "reload")
+	case "wm":
+		cmdWm(os.Args[2:])
 	case "deploy":
 		err = updater.Deploy(os.Args[2:])
 	case "recovery":
@@ -110,7 +112,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Print(i18n.T("Usage: ryoku <command>\n\n  update         apply the configured Ryoku update backend and reload\n  track <chan>   switch the configured Ryoku update channel (Arch/source installs)\n  rollback       list available releases and snapshots; NixOS uses generation rollback\n  rollback [id]  guide restoring snapshot <id> from the boot menu\n  snapshots      list snapper snapshots\n  status         version, update source, pending changes, snapshot count\n  version        print the running version (--branch = channel · sha)\n  materialize    lay the base configs into ~/.config (keeps your overrides)\n  reset [path]   drop a user_edits override (no path: all, -y skips confirm)\n  reload         restart the shell and reload Hyprland\n  deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)\n  recovery       last resort recovery for mutable/source installs\n  doctor         run convergent reconcilers (idempotent stateful fixes)\n  debug          print a shareable diagnostic bundle for bug reports\n  keyring        show or set how the GNOME keyring unlocks at sign-in\n  security-key   enroll and wire a FIDO2/U2F security key for PAM\n  import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)\n  plugin <cmd>   install/remove/list/validate a shell plugin from git\n"))
+	fmt.Print(i18n.T("Usage: ryoku <command>\n\n  update         apply the configured Ryoku update backend and reload\n  track <chan>   switch the configured Ryoku update channel (Arch/source installs)\n  rollback       list available releases and snapshots; NixOS uses generation rollback\n  rollback [id]  guide restoring snapshot <id> from the boot menu\n  snapshots      list snapper snapshots\n  status         version, update source, pending changes, snapshot count\n  version        print the running version (--branch = channel · sha)\n  materialize    lay the base configs into ~/.config (keeps your overrides)\n  reset [path]   drop a user_edits override (no path: all, -y skips confirm)\n  reload         restart the shell and reload the active compositor\n  wm <cmd>       compositor: status, use <name>, act <id>, session\n  deploy         DEV ONLY: deploy from a repo checkout (RYOKU_REPO)\n  recovery       last resort recovery for mutable/source installs\n  doctor         run convergent reconcilers (idempotent stateful fixes)\n  debug          print a shareable diagnostic bundle for bug reports\n  keyring        show or set how the GNOME keyring unlocks at sign-in\n  security-key   enroll and wire a FIDO2/U2F security key for PAM\n  import <path>  bring an existing config in: scan, resolve clashes, apply (--undo)\n  plugin <cmd>   install/remove/list/validate a shell plugin from git\n"))
 }
 
 func die(format string, a ...any) {
