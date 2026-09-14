@@ -374,6 +374,39 @@ var rows = [{
     },{
         "tab": "Look",
         "group": "SHADOWS",
+        "key": "desktop.appearance.shadowSpread",
+        "label": "Spread",
+        "desc": "Grows the shadow outward before its soft edge begins",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": 0.0,
+        "hi": 64.0,
+        "unit": "px"
+    },{
+        "tab": "Look",
+        "group": "SHADOWS",
+        "key": "desktop.appearance.shadowOffsetX",
+        "label": "Horizontal offset",
+        "desc": "Shifts the shadow sideways, as if the light came from one side",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": -64.0,
+        "hi": 64.0,
+        "unit": "px"
+    },{
+        "tab": "Look",
+        "group": "SHADOWS",
+        "key": "desktop.appearance.shadowOffsetY",
+        "label": "Vertical offset",
+        "desc": "Shifts the shadow up or down, positive drops it below the window",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": -64.0,
+        "hi": 64.0,
+        "unit": "px"
+    },{
+        "tab": "Look",
+        "group": "SHADOWS",
         "key": "desktop.appearance.shadowPower",
         "label": "Shadow sharpness",
         "desc": "Higher pulls the shadow in tight, lower leaves a wide haze",

@@ -2,6 +2,20 @@
   {
     "tab": "Layout",
     "group": "WINDOW WIDTH",
+    "key": "wm.niri.defaultColumnWidth",
+    "label": "New window width",
+    "desc": "How much of the screen a freshly opened window fills before you resize it",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "lo": 0.25,
+    "hi": 1,
+    "unit": "%",
+    "pct": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "WINDOW WIDTH",
     "key": "wm.niri.presetColumnWidths",
     "label": "Widths Super+R steps through",
     "desc": "niri resizes by stepping a window through set widths instead of dragging. Super+R moves to the next one",
@@ -23,10 +37,73 @@
   },
   {
     "tab": "Layout",
-    "group": "SCREEN EDGE GAPS",
+    "group": "COLUMN FOCUS",
+    "key": "wm.niri.centerFocusedColumn",
+    "label": "Keep the focused window centred",
+    "desc": "Whether niri slides the window you focus into the middle of the screen",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "never",
+      "always",
+      "on-overflow"
+    ],
+    "optLabels": {
+      "never": "Never",
+      "always": "Always",
+      "on-overflow": "When it won't fit"
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "TABBED COLUMNS",
+    "key": "wm.niri.tabIndicatorWidth",
+    "label": "Tab strip thickness",
+    "desc": "Width of the strip that lists tabs when you stack a column into tabs with Super+T",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 16,
+    "unit": "px",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "TABBED COLUMNS",
+    "key": "wm.niri.tabIndicatorHideSingle",
+    "label": "Hide the tab strip for a lone window",
+    "desc": "Only show the tab strip once a stacked column holds more than one window",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "DRAG AND DROP",
+    "key": "wm.niri.insertHint",
+    "label": "Show where a dragged window will land",
+    "desc": "Highlights the slot a window drops into while you drag it through the tiling",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "URGENT WINDOWS",
+    "key": "wm.niri.urgentColor",
+    "label": "Urgent window colour",
+    "desc": "The colour niri outlines a background window in when it wants your attention, like a finished download or a call",
+    "ctl": "color",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "ROOM FOR BARS AND DOCKS",
     "key": "wm.niri.struts.left",
     "label": "Left edge",
-    "desc": "Space kept clear along the left edge, so a bar or dock there is never covered by a window",
+    "desc": "Room reserved along the left so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -36,10 +113,10 @@
   },
   {
     "tab": "Layout",
-    "group": "SCREEN EDGE GAPS",
+    "group": "ROOM FOR BARS AND DOCKS",
     "key": "wm.niri.struts.right",
     "label": "Right edge",
-    "desc": "Space kept clear along the right edge, so a bar or dock there is never covered by a window",
+    "desc": "Room reserved along the right so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -49,10 +126,10 @@
   },
   {
     "tab": "Layout",
-    "group": "SCREEN EDGE GAPS",
+    "group": "ROOM FOR BARS AND DOCKS",
     "key": "wm.niri.struts.top",
     "label": "Top edge",
-    "desc": "Space kept clear along the top edge, so a bar or dock there is never covered by a window",
+    "desc": "Room reserved along the top so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -62,10 +139,10 @@
   },
   {
     "tab": "Layout",
-    "group": "SCREEN EDGE GAPS",
+    "group": "ROOM FOR BARS AND DOCKS",
     "key": "wm.niri.struts.bottom",
     "label": "Bottom edge",
-    "desc": "Space kept clear along the bottom edge, so a bar or dock there is never covered by a window",
+    "desc": "Room reserved along the bottom so a bar or dock there is never covered by a window",
     "ctl": "step",
     "src": "desktop.json",
     "lo": 0,
@@ -109,6 +186,20 @@
   },
   {
     "tab": "Behaviour",
+    "group": "MOTION",
+    "key": "wm.niri.animationSlowdown",
+    "label": "Animation slowdown",
+    "desc": "Stretches how long every animation takes. Above 1 is slower and calmer, below 1 is snappier",
+    "ctl": "slid",
+    "src": "desktop.json",
+    "lo": 0.25,
+    "hi": 3,
+    "unit": "\u00d7",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
     "group": "STARTUP",
     "key": "wm.niri.hotkeyOverlaySkip",
     "label": "Skip hotkey overlay",
@@ -128,5 +219,16 @@
     "eg": "~/Pictures/Screenshots/Screenshot %Y-%m-%d.png",
     "page": "windowmanager",
     "adv": true
+  },
+  {
+    "tab": "Behaviour",
+    "group": "PRIVACY",
+    "key": "wm.niri.blockOutApps",
+    "label": "Hide apps from screen sharing",
+    "desc": "App IDs, comma separated, that niri blanks out of screen recordings and shares. Leave empty to hide nothing",
+    "ctl": "text",
+    "src": "desktop.json",
+    "eg": "org.keepassxc.KeePassXC, org.gnome.World.Secrets",
+    "page": "windowmanager"
   }
 ]

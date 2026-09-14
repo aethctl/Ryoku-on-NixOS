@@ -121,6 +121,7 @@ var appearanceEmitted = map[string]bool{
 	"activeBorder": true, "inactiveBorder": true, "animations": true,
 	"activeOpacity": true, "inactiveOpacity": true,
 	"shadowEnabled": true, "shadowRange": true, "shadowColor": true,
+	"shadowSpread": true, "shadowOffsetX": true, "shadowOffsetY": true,
 }
 
 func appearanceReason(leaf string) string {
@@ -153,15 +154,13 @@ var inputEmitted = map[string]bool{
 	"kbLayout": true, "kbVariant": true, "kbOptions": true, "numlockByDefault": true,
 	"followMouse": true, "sensitivity": true, "accelProfile": true, "leftHanded": true,
 	"mouseNaturalScroll": true, "mouseScrollFactor": true, "naturalScroll": true,
-	"touchScrollFactor": true, "tapToClick": true,
+	"touchScrollFactor": true, "tapToClick": true, "middleClickPaste": true,
 	"tapAndDrag": true, "clickfinger": true, "middleEmulation": true,
 	"disableWhileTyping": true, "repeatRate": true, "repeatDelay": true,
 }
 
 func inputReason(leaf string) string {
 	switch leaf {
-	case "middleClickPaste":
-		return "niri has no middle-click paste."
 	case "workspaceSwipe", "swipeFingers", "swipeInvert", "swipeCreateNew", "swipeDistance":
 		return "niri's touchpad workspace gesture is built in and takes no finger count, distance, inversion or create-new."
 	}

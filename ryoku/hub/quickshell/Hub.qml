@@ -8,7 +8,7 @@ import Ryoku.Ui.Singletons
 import "Singletons"
 import "schema/DesktopPage.js" as DesktopSchema
 import "schema/BarStudioPage.js" as BarStudioSchema
-import "schema/WindowsPage.js" as WindowsSchema
+import "schema/WindowSettings.js" as WindowSettingsSchema
 import "schema/PluginsPage.js" as PluginsSchema
 import "schema/InputPage.js" as InputSchema
 import "schema/CursorPage.js" as CursorSchema
@@ -52,16 +52,21 @@ Rectangle {
     focus: true
 
     // ── which page ───────────────────────────────────────────────────────
-    property string section: "windows"
+    property string section: "windowmanager"
     // remember the last section so a reopen lands where you left, not the default.
     // Read once at startup by `sectionGet` below; written here on every change.
     onSectionChanged: Quickshell.execDetached(["ryoku-hub", "config", "set", "section", hub.section])
+    // A Hub that remembered the retired `windows` section, or a deep link that
+    // still names it, lands on the compositor page that now holds those rows
+    // rather than a blank pane.
+    function canonicalSection(s) { return s === "windows" ? "windowmanager" : s; }
     // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
     // win over the remembered section. `sectionGet` is a Process, so on a cold
     // start its stdout lands AFTER the IPC has already set the page and the
     // restore silently drags the user back to wherever they were last -- the
     // handoff looked like it did nothing. Deep links come through here and latch.
     function navigate(target) {
+        target = hub.canonicalSection(target);
         if (!target || hub.pageFile(target) === "" || !hub.sectionAvailable(target))
             return;
         hub.navigated = true;
@@ -102,7 +107,7 @@ Rectangle {
             { key: "windowmanager", name: "Window Manager", needs: { provider: true } }, { key: "plugins", name: "Plugins", needs: { cap: "plugins" } },
             { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
-            { key: "windows", name: "Windows" }, { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
+            { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
             { key: "widgets", name: "Widgets" }, { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
@@ -125,7 +130,7 @@ Rectangle {
     readonly property var jpName: ({
         "profile": "横顔", "displays": "画面", "input": "入力", "cursor": "矢印", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
-        "windows": "窓", "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
+        "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
@@ -147,8 +152,7 @@ Rectangle {
         "gpu": "graphics nvidia amd vram passthrough vfio rendering hybrid performance cpu governor epp frequency thermal battery charge ceiling aspm profile",
         "recording": "screen record capture video screencast screenshot fps codec framerate",
         "dictation": "voice typing speech transcribe whisper microphone stt",
-        "windows": "window windows rounding corners softness gaps border borders thickness colour tiling dwindle master scrolling layout opacity transparency transparent dim blur shadow glow glass wobble wobbly title bar titlebar float snap resize animation",
-        "windowmanager": "compositor window manager wm wayland switch change swap tiling scrolling layout gaps session provider hyprland niri",
+        "windowmanager": "compositor window manager wm wayland switch change swap session provider hyprland niri window windows rounding corners softness gaps border borders thickness colour tiling dwindle master scrolling layout opacity transparency transparent dim blur shadow glow glass wobble wobbly title bar titlebar float snap resize animation spread offset",
         "plugins": "plugin plugins hyprland compositor hyprpm title bar titlebar hyprbars glass hyprglass image border imgborders cursor motion dynamic cursors focus flash hyprfocus key sound sounds keyboard keysounds typing click clicky thock creamy cherry mx topre mechvibes switch version abi mismatch rebuild build update add git repository install",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
         "desktop": "desktop visualizer visualiser spectrum brand logo mark name widget board wallpaper",
@@ -178,7 +182,7 @@ Rectangle {
     // section -> its schema rows, the one source for both global search and the
     // compositor-driving classification, so the two cannot drift apart.
     readonly property var sectionRows: ({
-        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windows": WindowsSchema.rows, "plugins": PluginsSchema.rows,
+        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
         "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
@@ -393,7 +397,7 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "windows": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true, "windowmanager": true,
+        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "autostart": true, "environment": true
     })
@@ -480,7 +484,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "windows": "WindowsPage", "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -789,7 +793,7 @@ Rectangle {
             onStreamFinished: {
                 if (hub.navigated)
                     return;
-                var s = this.text.trim();
+                var s = hub.canonicalSection(this.text.trim());
                 if (s && hub.pageFile(s) !== "" && hub.sectionAvailable(s)) hub.section = s;
             }
         }

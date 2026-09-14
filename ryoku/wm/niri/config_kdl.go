@@ -37,6 +37,9 @@ type Appearance struct {
 	ShadowEnabled   bool    `json:"shadowEnabled"`
 	ShadowRange     int     `json:"shadowRange"`
 	ShadowColor     string  `json:"shadowColor"`
+	ShadowSpread    int     `json:"shadowSpread"`
+	ShadowOffsetX   int     `json:"shadowOffsetX"`
+	ShadowOffsetY   int     `json:"shadowOffsetY"`
 }
 
 // Input: the keyboard, pointer and touchpad leaves niri's input block covers.
@@ -51,6 +54,7 @@ type Input struct {
 	LeftHanded         bool    `json:"leftHanded"`
 	MouseNaturalScroll bool    `json:"mouseNaturalScroll"`
 	MouseScrollFactor  float64 `json:"mouseScrollFactor"`
+	MiddleClickPaste   bool    `json:"middleClickPaste"`
 	NaturalScroll      bool    `json:"naturalScroll"`
 	TouchScrollFactor  float64 `json:"touchScrollFactor"`
 	TapToClick         bool    `json:"tapToClick"`
@@ -176,7 +180,15 @@ type Niri struct {
 	PreferNoCSD        bool        `json:"preferNoCsd"`
 	HotkeyOverlaySkip  bool        `json:"hotkeyOverlaySkip"`
 	ScreenshotPath     string      `json:"screenshotPath"`
+	DefaultColumnWidth float64     `json:"defaultColumnWidth"`
 	PresetColumnWidths Proportions `json:"presetColumnWidths"`
+	CenterFocused      string      `json:"centerFocusedColumn"`
+	UrgentColor        string      `json:"urgentColor"`
+	TabIndicatorWidth  int         `json:"tabIndicatorWidth"`
+	TabIndicatorHide   bool        `json:"tabIndicatorHideSingle"`
+	InsertHint         bool        `json:"insertHint"`
+	AnimationSlowdown  float64     `json:"animationSlowdown"`
+	BlockOutApps       string      `json:"blockOutApps"`
 	Struts             Struts      `json:"struts"`
 	HotCorners         bool        `json:"hotCorners"`
 	OverviewZoom       float64     `json:"overviewZoom"`
@@ -218,11 +230,12 @@ func defaultStore() niriStore {
 			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d", Animations: true,
 			ActiveOpacity: 1, InactiveOpacity: 1,
 			ShadowEnabled: true, ShadowRange: 45, ShadowColor: "#000000",
+			ShadowSpread: 0, ShadowOffsetX: 0, ShadowOffsetY: 5,
 		},
 		Input: Input{
 			KbLayout: "us", NumlockByDefault: false, FollowMouse: 0,
 			Sensitivity: 0, AccelProfile: "", LeftHanded: false,
-			MouseNaturalScroll: false, MouseScrollFactor: 1,
+			MouseNaturalScroll: false, MouseScrollFactor: 1, MiddleClickPaste: true,
 			NaturalScroll: true, TouchScrollFactor: 1,
 			TapToClick: true, TapAndDrag: true, Clickfinger: false,
 			MiddleEmulation: false, DisableWhileTyping: true,
@@ -238,7 +251,14 @@ func defaultStore() niriStore {
 			PreferNoCSD:        true,
 			HotkeyOverlaySkip:  true,
 			ScreenshotPath:     "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png",
+			DefaultColumnWidth: 0.5,
 			PresetColumnWidths: []float64{0.33333, 0.5, 0.66667},
+			CenterFocused:      "never",
+			UrgentColor:        "#9b0000",
+			TabIndicatorWidth:  4,
+			TabIndicatorHide:   true,
+			InsertHint:         true,
+			AnimationSlowdown:  1,
 			Struts:             Struts{},
 			HotCorners:         false,
 			OverviewZoom:       0.5,
@@ -393,13 +413,15 @@ func genSettings(s niriStore) []byte {
 	var b strings.Builder
 	b.WriteString(kdlHeader)
 	writeInput(&b, s.Input)
+	writeClipboard(&b, s.Input)
 	writeLayout(&b, s.Appearance, s.Niri)
-	writeAnimations(&b, s.Appearance)
+	writeAnimations(&b, s.Appearance, s.Niri)
 	writeCursor(&b, s.Cursor)
 	writeMisc(&b, s.Niri)
 	writeEnvironment(&b, s.Env, s.Apps)
 	writeAutostart(&b, s.Autostart)
 	writeWindowRules(&b, s.Appearance, s.WindowRules, s.AppOverrides)
+	writeBlockOut(&b, s.Niri.BlockOutApps)
 	return []byte(b.String())
 }
 
@@ -497,11 +519,19 @@ func accelProfile(s string) string {
 
 // writeLayout maps the neutral border onto niri's always-visible border and turns
 // the focus ring off, so the frame the user sized is the one they see, and adds
-// the drop shadow when the store asks for one. The column widths and struts are
-// niri exclusives with no neutral key.
+// the drop shadow when the store asks for one, spread and offset included, since
+// those are neutral appearance keys like softness and colour. The default and
+// preset widths, the centring rule, the urgent colour, the tab indicator, the
+// insert hint and the struts are niri exclusives with no neutral key.
 func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	b.WriteString("layout {\n")
 	fmt.Fprintf(b, "    gaps %d\n", a.GapsOut)
+	if n.DefaultColumnWidth > 0 {
+		fmt.Fprintf(b, "    default-column-width { proportion %s; }\n", kdlNum(n.DefaultColumnWidth))
+	}
+	if c := centerFocused(n.CenterFocused); c != "" {
+		fmt.Fprintf(b, "    center-focused-column %s\n", kdlStr(c))
+	}
 	if len(n.PresetColumnWidths) > 0 {
 		b.WriteString("    preset-column-widths {\n")
 		for _, w := range n.PresetColumnWidths {
@@ -529,6 +559,9 @@ func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	if c := kdlColor(a.InactiveBorder); c != "" {
 		fmt.Fprintf(b, "        inactive-color %s\n", c)
 	}
+	if c := kdlColor(n.UrgentColor); c != "" {
+		fmt.Fprintf(b, "        urgent-color %s\n", c)
+	}
 	b.WriteString("    }\n")
 	b.WriteString("    focus-ring {\n        off\n    }\n")
 	if a.ShadowEnabled {
@@ -537,21 +570,61 @@ func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 		if a.ShadowRange > 0 {
 			fmt.Fprintf(b, "        softness %d\n", a.ShadowRange)
 		}
+		fmt.Fprintf(b, "        spread %d\n", a.ShadowSpread)
+		fmt.Fprintf(b, "        offset x=%d y=%d\n", a.ShadowOffsetX, a.ShadowOffsetY)
 		if c := kdlColor(a.ShadowColor); c != "" {
 			fmt.Fprintf(b, "        color %s\n", c)
 		}
 		b.WriteString("    }\n")
 	}
+	if n.TabIndicatorWidth > 0 || n.TabIndicatorHide {
+		b.WriteString("    tab-indicator {\n")
+		if n.TabIndicatorWidth > 0 {
+			fmt.Fprintf(b, "        width %d\n", n.TabIndicatorWidth)
+		}
+		if n.TabIndicatorHide {
+			b.WriteString("        hide-when-single-tab\n")
+		}
+		b.WriteString("    }\n")
+	}
+	if !n.InsertHint {
+		b.WriteString("    insert-hint {\n        off\n    }\n")
+	}
 	b.WriteString("}\n\n")
 }
 
-// writeAnimations only speaks up to turn animations off; niri runs them by
-// default.
-func writeAnimations(b *strings.Builder, a Appearance) {
-	if a.Animations {
+// writeAnimations turns animations off, or stretches them by the slowdown factor
+// when the user has moved it off 1; niri runs them at full speed by default, so a
+// factor of 1 stays silent.
+func writeAnimations(b *strings.Builder, a Appearance, n Niri) {
+	if !a.Animations {
+		b.WriteString("animations {\n    off\n}\n\n")
 		return
 	}
-	b.WriteString("animations {\n    off\n}\n\n")
+	if n.AnimationSlowdown > 0 && n.AnimationSlowdown != 1 {
+		fmt.Fprintf(b, "animations {\n    slowdown %s\n}\n\n", kdlNum(n.AnimationSlowdown))
+	}
+}
+
+// writeClipboard turns off niri's primary-selection buffer when the user has
+// disabled middle-click paste, the neutral input toggle both providers share.
+// niri keeps primary selection unless told otherwise, so the block only appears
+// to switch it off.
+func writeClipboard(b *strings.Builder, in Input) {
+	if in.MiddleClickPaste {
+		return
+	}
+	b.WriteString("clipboard {\n    disable-primary\n}\n\n")
+}
+
+// centerFocused guards the stored value against niri's three accepted words; an
+// unknown value omits the line so niri keeps its own default.
+func centerFocused(s string) string {
+	switch v := strings.ToLower(strings.TrimSpace(s)); v {
+	case "never", "always", "on-overflow":
+		return v
+	}
+	return ""
 }
 
 func writeCursor(b *strings.Builder, c Cursor) {
@@ -741,4 +814,28 @@ func parseFloat(s string, fallback float64) float64 {
 		return fallback
 	}
 	return f
+}
+
+// writeBlockOut hides each named app from screencasts with its own window-rule.
+// "screencast" keeps the app out of screen shares and recordings while leaving
+// the user's own screenshots working. The list is empty by default, so this is
+// never a blanket switch: only the app-ids the user names are ever blanked.
+func writeBlockOut(b *strings.Builder, list string) {
+	for _, id := range splitList(list) {
+		b.WriteString("window-rule {\n")
+		fmt.Fprintf(b, "    match app-id=%s\n", kdlStr(id))
+		b.WriteString("    block-out-from \"screencast\"\n")
+		b.WriteString("}\n\n")
+	}
+}
+
+// splitList splits a comma-separated field into trimmed, non-empty tokens.
+func splitList(s string) []string {
+	var out []string
+	for _, tok := range strings.Split(s, ",") {
+		if t := strings.TrimSpace(tok); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
 }

@@ -417,3 +417,63 @@ func TestPresetColumnWidthsStringAndArray(t *testing.T) {
 		})
 	}
 }
+
+// The niri surface the Window Manager page controls must reach the config: every
+// new leaf emits its line, the neutral shadow spread/offset and middle-click
+// toggle are honoured rather than reported lost, the tabbed toggle is bound so
+// the tab-indicator is reachable, and the whole tree still validates.
+func TestWindowManagerLeavesEmitted(t *testing.T) {
+	dir := niriHome(t)
+	store := writeStore(t, `{"desktop":{
+		"appearance":{"shadowEnabled":true,"shadowSpread":4,"shadowOffsetX":2,"shadowOffsetY":8},
+		"input":{"middleClickPaste":false}
+	},"wm":{"niri":{
+		"defaultColumnWidth":0.65,
+		"centerFocusedColumn":"on-overflow",
+		"urgentColor":"#ff0000",
+		"tabIndicatorWidth":6,
+		"tabIndicatorHideSingle":true,
+		"insertHint":false,
+		"animationSlowdown":1.5,
+		"blockOutApps":"org.keepassxc.KeePassXC, dev.secret.App"
+	}}}`)
+
+	rep := capApply(t, store)
+	settings := readGen(t, dir, "settings.kdl")
+	rebinds := readGen(t, dir, "rebinds.kdl")
+
+	for _, want := range []string{
+		"default-column-width { proportion 0.65; }",
+		`center-focused-column "on-overflow"`,
+		`urgent-color "#ff0000"`,
+		"spread 4",
+		"offset x=2 y=8",
+		"tab-indicator {",
+		"width 6",
+		"hide-when-single-tab",
+		"insert-hint {",
+		"slowdown 1.5",
+		"disable-primary",
+		`block-out-from "screencast"`,
+		`app-id="org.keepassxc.KeePassXC"`,
+		`app-id="dev.secret.App"`,
+	} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("settings.kdl missing %q\n%s", want, settings)
+		}
+	}
+	if !strings.Contains(rebinds, "Super+T { toggle-column-tabbed-display; }") {
+		t.Errorf("tabbed-column toggle must be bound so the tab indicator is reachable\n%s", rebinds)
+	}
+
+	// The neutral shadow shape and the middle-click toggle are now expressible,
+	// so they must drop off the switch-cost list rather than read as losses.
+	for _, u := range rep.Unhonored {
+		switch u.Key {
+		case "desktop.appearance.shadowSpread", "desktop.appearance.shadowOffsetX",
+			"desktop.appearance.shadowOffsetY", "desktop.input.middleClickPaste":
+			t.Errorf("%s is emitted now; must not be reported unhonored (%q)", u.Key, u.Reason)
+		}
+	}
+	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
+}

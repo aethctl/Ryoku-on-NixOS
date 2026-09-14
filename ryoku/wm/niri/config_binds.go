@@ -57,6 +57,9 @@ func defaultBinds() []defBind {
 		// through preset widths, so the freed chord goes to the thing that
 		// makes the preset-widths setting reachable at all.
 		{chord: "SUPER + R", action: "switch-preset-column-width"},
+		// Without a bind, tabbed columns cannot be entered, and the tab-indicator
+		// settings would size a strip a user can never see. T for tabs.
+		{chord: "SUPER + T", action: "toggle-column-tabbed-display"},
 		{chord: "SUPER + P", action: spawnArgs("ryoku-monitor", "toggle")},
 
 		{chord: "SUPER + Left", action: "focus-column-left"},
