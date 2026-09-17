@@ -13,20 +13,42 @@
   which `SettingsSheet` clamps into the row's own range and stores in the kind the
   row speaks.
 
+### Added
+- **A folded card says what it hides.** `SettingCard.summary` puts a count
+  ("4 SWITCHES") in the header of a collapsed group, because a folded card with no
+  trace of its contents reads as an empty one.
+- **A page with room spreads it into its rows.** `SettingRow.roomPad` adds
+  measured vertical air (a timer, never a binding: a row's height depends on it),
+  and `CardColumns.contentHeight` is what a page measures its spare room against.
+  A block that reaches 45% of the body is centred in it; a genuinely thin page
+  stays at the top, because a small block floated into a void reads as lost.
+
 ### Changed
+- **Every description fits its row.** A settings description is one line and 60
+  characters at a three-column card, a page blurb 70. Measured on the live Hub:
+  no description elides any more (was 8), and the two-line rows fell from 52 to 7,
+  all of them rows whose own control is wide.
+- **Autostart and Environment are one Session page.** Two thin pages became one
+  with two named clusters (what runs at login, the variables the session exports);
+  an old deep link or the remembered section still lands on it.
 - **`Sw` shows its state twice.** The track tints and the knob fills as the switch
   goes on, because an off switch drawn as an empty outline reads as an unchecked
   box at a glance.
 
 ### Added
-- **Two measures a page reads on.** `Tokens.pageMax` caps a framed page's content
-  column, and `Tokens.contentMax` caps a stack of settings rows, so a wider window
-  buys calmer margins instead of a label at one edge and its control at the other.
+- **The Hub fills the window it opens in.** A framed page takes the width beside
+  the rail instead of a centred `Tokens.pageMax` column, its head sits on the body's
+  grid, and the card grid runs as many columns as the measure holds (three on a
+  page-wide window). A page with few groups gets fewer, wider columns rather than
+  a lone card beside a window-wide gap. `Tokens.contentMax` still caps a stack of
+  prose, and a page that reads better short caps itself.
 - **The picker's option count is gone from the row.** `PickBar` showed how many
   options the catalogue held beside its chevron; that number means nothing to a
   reader, so the chevron alone is the affordance now.
 
 ### Removed
+- **The Hub's orphaned rices schema.** `schema/RicesPage.js` was a generated
+  inventory with no consumer left after the rices moved to ryogami.
 - **The decor level and its rich tier.** `Tokens.decor` and the flags derived
   from it (`decorRich`, `decorMinimal`, `showPosters`, `showGrid`, `showGrain`,
   `showSeals`, `monoHeads`) are gone, along with the `hubDecor` shell.json key

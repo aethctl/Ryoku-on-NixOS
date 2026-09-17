@@ -57,7 +57,7 @@ Item {
     // hyprEdit swaps the whole array, so the Repeater rebinds and rebuilds the
     // card owning a focused field. cards therefore commit on editing-finished
     // only, and every helper hands hyprEdit a fresh slice rather than mutating
-    // the live list. (Same discipline as EnvironmentPage.)
+    // the live list. (Same discipline as SessionPage.)
     function patch(i, key, val) {
         if (!pg.hub)
             return;
@@ -102,10 +102,9 @@ Item {
     // nothing is a no-op.
     Column {
         id: head
-        anchors.top: parent.top
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in a page-wide window
+        anchors { top: parent.top; left: parent.left; right: parent.right }
         spacing: Tokens.s2
 
         Row {
@@ -213,6 +212,7 @@ Item {
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s2
+            fillTo: flick.height
 
             Repeater {
                 model: pg.rules

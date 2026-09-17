@@ -12,15 +12,16 @@ const rows = context.rows;
 test("reload cover is a brand-backed General setting after Brand", () => {
     const index = rows.findIndex(row => row.key === "reloadCover");
     assert.ok(index >= 0);
-    assert.deepEqual(JSON.parse(JSON.stringify(rows[index])), {
-        tab: "General",
-        group: "SHELL RELOAD",
-        key: "reloadCover",
-        label: "Reload cover",
-        desc: "Shown while the desktop shell restarts; media is fitted without cropping and video is always muted",
-        ctl: "reload-cover",
-        src: "brand"
-    });
+    const row = rows[index];
+    // what the Hub acts on: the row is a brand-backed reload-cover control on
+    // General, worded for a user and short enough to read as one line
+    assert.equal(row.tab, "General");
+    assert.equal(row.group, "SHELL RELOAD");
+    assert.equal(row.ctl, "reload-cover");
+    assert.equal(row.src, "brand");
+    assert.ok(row.label.length > 0);
+    assert.ok(row.desc.length > 0 && row.desc.length <= 60, `desc is ${row.desc.length} chars`);
+    // and where it sits: the account for marking, and the end of the tab
     assert.equal(rows[index - 1].key, "markTint");
     assert.equal(rows[index + 1].tab, "Visualizer");
 });

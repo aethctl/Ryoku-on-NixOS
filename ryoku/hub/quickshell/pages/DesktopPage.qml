@@ -65,8 +65,10 @@ Item {
         // gap on Visualizer, the way the visualiser preview folds off General.
         SettingCard {
             id: pickersCard
+            // one card on the page's own measure: a lone control stretched across
+            // the window leaves its right half empty
             anchors.left: parent.left
-            anchors.right: parent.right
+            width: sp.cardWidth
             title: I18n.tr("PICKERS")
             kana: "選"
             visible: sp.tab === "General"

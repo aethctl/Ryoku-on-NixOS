@@ -44,6 +44,46 @@ Item {
 
     signal edited(string key, var value)
 
+    // A short page fills its window by giving the rows more air, rather than
+    // ending two thirds up and leaving a field of paper. Measured once the cards
+    // have settled, never bound (a row's height depends on this, so a binding
+    // would chase its own tail), and capped so a sparse page reads calm, not
+    // inflated.
+    property int roomPad: 0
+    function tuneRoom() {
+        if (!flick || flick.height <= 0 || col.height <= 0)
+            return;
+        var n = Math.max(1, sheet.rows.length);
+        var slack = flick.height - col.height;
+        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
+        var next = Math.max(0, Math.min(Tokens.s6, want));
+        if (next !== sheet.roomPad)
+            sheet.roomPad = next;
+    }
+    Timer {
+        id: roomTimer
+        interval: 200; running: false; repeat: true
+        property int tries: 0
+        property real lastH: -1
+        property bool settled: false
+        onTriggered: {
+            tries++;
+            var h = col.height;
+            settled = (h > 0 && Math.abs(h - lastH) < 1);
+            lastH = h;
+            // measure only once the cards hold still: a half-measured column
+            // reads as a short page and would inflate the rows of a long one
+            if (settled)
+                sheet.tuneRoom();
+            if (settled || tries >= 14)
+                running = false;
+        }
+    }
+    function remeasure() { roomTimer.tries = 0; roomTimer.lastH = -1; roomTimer.running = true }
+    onTabChanged: sheet.remeasure()
+    onRowsChanged: sheet.remeasure()
+    Component.onCompleted: sheet.remeasure()
+
     // key -> the live SettingRow, so a search jump can find and scroll to it.
     property var rowItems: ({})
 
@@ -89,9 +129,18 @@ Item {
     // Derived from the PAGE width, never the flick's: the flick is sized from
     // these, and reading them back would be a binding loop that silently pins the
     // sheet to one column.
+    // The Hub fills the screen, so the grid uses it: three columns of cards once
+    // the page can hold them, which is what keeps a page-wide window from being
+    // a narrow ribbon of cards floating in a field of paper.
     readonly property int cardMax: 520
-    readonly property int columns: (width - 28) >= (2 * cardMax + Tokens.s5 * 2) ? 2 : 1
-    readonly property int cardW: Math.min(cardMax, Math.max(360, Math.floor((width - 28 - (columns - 1) * Tokens.s5) / columns)))
+    function fitsColumns(n) { return (width - 28) >= (n * cardMax + (n - 1) * Tokens.s5) }
+    readonly property int capacity: fitsColumns(3) ? 3 : (fitsColumns(2) ? 2 : 1)
+    // a page with two groups does not get three columns: the grid narrows to what
+    // it has and the cards take the space, filling the window instead of hugging
+    // its left edge with a lone card
+    readonly property int columns: Math.max(1, Math.min(capacity, groups.length))
+    readonly property int cardW: Math.min(Tokens.cardWide,
+        Math.max(360, Math.floor((width - 28 - (columns - 1) * Tokens.s5) / columns)))
     // The column's own geometry, so a page's head can sit on the same grid.
     readonly property real sheetWidth: col.width
     readonly property real sheetX: flick.x + col.x
@@ -274,7 +323,7 @@ Item {
         property int columnSpan: sheet.columns
         anchors.top: parent.top
         anchors.bottom: parent.bottom
-        contentHeight: col.height + Tokens.s5
+        contentHeight: Math.max(col.height + Tokens.s5, height)
         clip: true
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
@@ -288,6 +337,11 @@ Item {
             id: col
             width: flick.width - 14
             spacing: Tokens.s5
+            // A page whose cards nearly fill the body is centred in it; a thin
+            // page stays at the top, because a small block floated into the
+            // middle of a void reads as lost rather than composed.
+            y: (flick.height > col.height && col.height >= flick.height * 0.45)
+                ? Math.round((flick.height - col.height) / 2) : 0
 
             // A Column, not an Item measured by childrenRect: it sizes itself
             // from its visible children, so a page that hides its block on a
@@ -321,6 +375,7 @@ Item {
                                         required property string modelData
                                         width: cardColumn.width
                                         title: I18n.tr(modelData === "" ? "OTHER" : modelData)
+                                        summary: card.groupRows.length + " " + I18n.tr("SETTINGS")
 
                             readonly property var groupRows: sheet.rows.filter(function (r) { return r.group === card.modelData })
 
@@ -336,6 +391,7 @@ Item {
                                     anchors.right: parent.right
                                     divider: index > 0
 
+                                    roomPad: sheet.roomPad
                                     label: I18n.tr(r.label)
                                     desc: I18n.tr(r.desc || "")
                                     eg: I18n.tr(r.eg || "")

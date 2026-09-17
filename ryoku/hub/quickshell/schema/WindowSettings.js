@@ -9,7 +9,7 @@ var rows = [{
         "group": "TILING",
         "key": "desktop.appearance.layout",
         "label": "Tiling layout",
-        "desc": "How tiles arrange: binary splits, master and stack, or a strip",
+        "desc": "Binary splits, master and stack, or a scrolling strip",
         "ctl": "seg",
         "src": "desktop.json",
         "caps": "tiledLayout",
@@ -60,10 +60,10 @@ var rows = [{
         "unit": "px"
     },{
         "tab": "Layout",
-        "group": "OPENING WINDOWS",
+        "group": "BEHAVIOUR",
         "key": "desktop.windows.tameMaximizeOnOpen",
         "label": "Tame apps that open maximised",
-        "desc": "Open maximised apps as a windowed tile inside your gaps.",
+        "desc": "Open maximised apps as a windowed tile inside your gaps",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -79,7 +79,7 @@ var rows = [{
         "group": "BEHAVIOUR",
         "key": "desktop.appearance.snapEnabled",
         "label": "Snap floating windows",
-        "desc": "Dragged floating windows stick to screen edges and other windows",
+        "desc": "Floating windows stick to edges and other windows",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -106,7 +106,7 @@ var rows = [{
         "group": "BEHAVIOUR",
         "key": "desktop.appearance.noFocusFallback",
         "label": "No focus fallback",
-        "desc": "When a window closes, do not fall focus back to the last window under the cursor",
+        "desc": "On close, don't refocus the window under the cursor",
         "ctl": "sw",
         "src": "desktop.json",
         "adv": true
@@ -115,7 +115,7 @@ var rows = [{
         "group": "BEHAVIOUR",
         "key": "desktop.appearance.resizeCorner",
         "label": "Resize corner",
-        "desc": "Force resizing from one corner, 0 is off, 1 to 4 pick a corner",
+        "desc": "Lock resizing to one corner; 0 off, 1-4 pick it",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 0.0,
@@ -137,7 +137,7 @@ var rows = [{
         "group": "SHAPE",
         "key": "desktop.appearance.roundingPower",
         "label": "Corner softness",
-        "desc": "Corner curve shape: 2 is a circle, higher flattens toward square",
+        "desc": "2 is a circle; higher flattens toward square",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 2.0,
@@ -147,7 +147,7 @@ var rows = [{
         "group": "OPACITY",
         "key": "desktop.appearance.activeOpacity",
         "label": "Active",
-        "desc": "How solid the focused window is drawn, below 100% shows through",
+        "desc": "Solidity of the focused window; under 100% shows through",
         "ctl": "slid",
         "src": "desktop.json",
         "lo": 0.4,
@@ -204,7 +204,7 @@ var rows = [{
         "group": "OPACITY",
         "key": "desktop.appearance.dimSpecial",
         "label": "Dim special workspaces",
-        "desc": "How much the special (scratchpad) workspace dims the desktop behind it",
+        "desc": "How much the scratchpad workspace dims the desktop",
         "ctl": "slid",
         "src": "desktop.json",
         "lo": 0.0,
@@ -217,7 +217,7 @@ var rows = [{
         "group": "OPACITY",
         "key": "desktop.appearance.dimAround",
         "label": "Dim around floating",
-        "desc": "How far a floating window with the dim-around rule darkens the rest",
+        "desc": "How strongly a dim-around window darkens the rest",
         "ctl": "slid",
         "src": "desktop.json",
         "lo": 0.0,
@@ -247,7 +247,7 @@ var rows = [{
         "group": "BLUR",
         "key": "desktop.appearance.blurSize",
         "label": "Size",
-        "desc": "How far each pass spreads, pair with passes for overall strength",
+        "desc": "How far each pass spreads; pair with passes",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 0.0,
@@ -345,7 +345,7 @@ var rows = [{
         "group": "BLUR",
         "key": "desktop.appearance.blurNewOptimizations",
         "label": "Blur optimizations",
-        "desc": "Cache blur for a large speedup, leave on unless you see artifacts",
+        "desc": "Cache blur for speed; off only if you see artifacts",
         "ctl": "sw",
         "src": "desktop.json",
         "adv": true
@@ -395,7 +395,7 @@ var rows = [{
         "group": "SHADOWS",
         "key": "desktop.appearance.shadowOffsetX",
         "label": "Horizontal offset",
-        "desc": "Shifts the shadow sideways, as if the light came from one side",
+        "desc": "Shifts the shadow sideways, as if lit from one side",
         "ctl": "step",
         "src": "desktop.json",
         "lo": -64.0,
@@ -406,7 +406,7 @@ var rows = [{
         "group": "SHADOWS",
         "key": "desktop.appearance.shadowOffsetY",
         "label": "Vertical offset",
-        "desc": "Shifts the shadow up or down, positive drops it below the window",
+        "desc": "Shifts the shadow up or down; positive is below",
         "ctl": "step",
         "src": "desktop.json",
         "lo": -64.0,
@@ -448,7 +448,7 @@ var rows = [{
         "group": "SHADOWS",
         "key": "desktop.appearance.shadowColor",
         "label": "Shadow color",
-        "desc": "Color of the drop shadow",
+        "desc": "",
         "ctl": "color",
         "src": "desktop.json"
     },{
@@ -494,7 +494,7 @@ var rows = [{
         "group": "THICKNESS",
         "key": "desktop.appearance.borderPartOfWindow",
         "label": "Border inside window",
-        "desc": "Count the border as part of the window size instead of drawn outside it",
+        "desc": "Count the border as part of the window size",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -502,7 +502,7 @@ var rows = [{
         "group": "ANIMATED",
         "key": "desktop.appearance.animatedBorder",
         "label": "Rotating gradient border",
-        "desc": "Sweeps your accent colours around the frame, needs thickness above 0",
+        "desc": "Sweeps accent colours around the frame; needs a border",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -520,7 +520,7 @@ var rows = [{
         "group": "MOTION",
         "key": "desktop.appearance.animations",
         "label": "Animations",
-        "desc": "Motion for opening, closing, moving, workspaces; off snaps instantly",
+        "desc": "Motion for open, close, move, workspaces; off snaps",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -528,7 +528,7 @@ var rows = [{
         "group": "MOTION",
         "key": "desktop.appearance.wobblyWindows",
         "label": "Wobbly windows",
-        "desc": "Dragged windows overshoot and spring back, needs animations on",
+        "desc": "Dragged windows overshoot and spring back",
         "ctl": "sw",
         "src": "desktop.json"
     },{
@@ -536,7 +536,7 @@ var rows = [{
         "group": "MOTION",
         "key": "desktop.appearance.windowStyle",
         "label": "Open / close",
-        "desc": "Entrance and exit motion: scale from centre, slide, or GNOME style",
+        "desc": "Open and close motion: pop, slide, or GNOME",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [

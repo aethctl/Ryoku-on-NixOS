@@ -10,7 +10,7 @@ var rows = [
         "group": "EMBLEM",
         "key": "logo.type",
         "label": "Emblem kind",
-        "desc": "Art beside the readout: an image, ASCII art, the distro logo, or none",
+        "desc": "Art beside the readout: image, ASCII, logo or none",
         "ctl": "seg",
         "src": "config.jsonc), written by `ryoku-hub fastfetch save <json>`",
         "opts": [
@@ -25,7 +25,7 @@ var rows = [
         "group": "EMBLEM",
         "key": "logo.source",
         "label": "Emblem file",
-        "desc": "Image or ASCII art file to draw; an SVG is rasterized to PNG on import",
+        "desc": "Image or ASCII file to draw; SVG is converted",
         "ctl": "text",
         "src": "config.jsonc"
     },
@@ -34,7 +34,7 @@ var rows = [
         "group": "EMBLEM",
         "key": "logo.width",
         "label": "Width",
-        "desc": "How many character columns the art spans in the terminal readout",
+        "desc": "Character columns the art spans",
         "ctl": "step",
         "src": "config.jsonc",
         "lo": 0.0,
@@ -46,7 +46,7 @@ var rows = [
         "group": "EMBLEM",
         "key": "logo.height",
         "label": "Height",
-        "desc": "Lines of text the art covers; the col unit here means character cells",
+        "desc": "Lines of text the art covers",
         "ctl": "step",
         "src": "config.jsonc",
         "lo": 0.0,
@@ -70,7 +70,7 @@ var rows = [
         "group": "EMBLEM",
         "key": "logo.dither",
         "label": "Dither",
-        "desc": "Render the emblem 1-bit: bone stipple on transparent, ordered Bayer 4x4",
+        "desc": "Draws the emblem as 1-bit stipple",
         "ctl": "sw",
         "src": "config.jsonc"
     },
@@ -79,7 +79,7 @@ var rows = [
         "group": "ACCENT",
         "key": "display.color.keys",
         "label": "Readout accent",
-        "desc": "Tints the label column of each info line; stored as an r;g;b triple",
+        "desc": "Tints the label column of every info line",
         "ctl": "color",
         "src": "config.jsonc"
     },
@@ -88,7 +88,7 @@ var rows = [
         "group": "INFO",
         "key": "modules",
         "label": "Info rows",
-        "desc": "The lines of the readout: reorder, rename, disable, or remove each one",
+        "desc": "The readout's lines: reorder, rename, remove",
         "ctl": "multi",
         "src": "shell",
         "opts": [
@@ -104,7 +104,7 @@ var rows = [
         "group": "INFO",
         "key": "(none - derived, not persisted)",
         "label": "Row name",
-        "desc": "Name shown for the row in this list; display only, nothing is stored",
+        "desc": "Name shown in this list; nothing is stored",
         "ctl": "readout",
         "src": "shell"
     }

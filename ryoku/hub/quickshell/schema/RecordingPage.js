@@ -23,7 +23,7 @@ var rows = [
         "group": "KEY PRESSES",
         "key": "keypressMode",
         "label": "Visible keys",
-        "desc": "Show all keys or hide ordinary typing and keep shortcuts only",
+        "desc": "Show every key, or hide ordinary typing and keep shortcuts.",
         "ctl": "seg",
         "src": "keypresses.json",
         "opts": [
@@ -36,7 +36,7 @@ var rows = [
         "group": "QUALITY",
         "key": "fps",
         "label": "Framerate",
-        "desc": "Frames captured per second, higher is smoother but files are larger",
+        "desc": "Frames per second; higher is smoother but larger.",
         "ctl": "step",
         "src": "recording.json",
         "unit": "fps"
@@ -46,7 +46,7 @@ var rows = [
         "group": "QUALITY",
         "key": "framerateMode",
         "label": "Framerate mode",
-        "desc": "Constant plays everywhere, variable is smaller but may import as 30fps",
+        "desc": "Constant plays everywhere; variable is smaller but choppier.",
         "ctl": "seg",
         "src": "recording.json",
         "opts": [
@@ -74,7 +74,7 @@ var rows = [
         "group": "QUALITY",
         "key": "codec",
         "label": "Codec",
-        "desc": "H.264 plays anywhere, HEVC and AV1 are crisper, AV1 needs a newer GPU",
+        "desc": "H.264 plays anywhere; AV1 is crisper but needs a newer GPU.",
         "ctl": "seg",
         "src": "recording.json",
         "opts": [
@@ -88,7 +88,7 @@ var rows = [
         "group": "ENCODER",
         "key": "encoder",
         "label": "Encoder",
-        "desc": "GPU encoding barely loads the CPU, pick CPU if the GPU encoder fails",
+        "desc": "GPU barely loads the CPU; pick CPU if GPU encoding fails.",
         "ctl": "seg",
         "src": "recording.json",
         "opts": [
@@ -101,7 +101,7 @@ var rows = [
         "group": "ENCODER",
         "key": "cursor",
         "label": "Show the cursor in recordings",
-        "desc": "The mouse pointer is drawn into the video when on, hidden when off",
+        "desc": "Draws the mouse pointer into the video.",
         "ctl": "sw",
         "src": "recording.json"
     }

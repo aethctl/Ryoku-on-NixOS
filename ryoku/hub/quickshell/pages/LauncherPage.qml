@@ -142,6 +142,22 @@ Item {
     function horizonModeLabel(k) { return k === "fixed" ? "Fixed" : k === "off" ? "Off" : "Palette"; }
     function horizonModeKey(l) { return l === "Fixed" ? "fixed" : l === "Off" ? "off" : "auto"; }
 
+    // a short page fills its window: measure the slack once the cards settle and
+    // spread half of it as row padding, so a sparse launcher reads composed at
+    // 99% width. Set by a timer, never bound -- a row's height depends on it.
+    property int roomPad: 0
+    function tuneRoom() {
+        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
+            return;
+        var n = Math.max(1, pg.keys.length);
+        var slack = flick.height - col.contentHeight;
+        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
+        var next = Math.max(0, Math.min(Tokens.s6, want));
+        if (next !== pg.roomPad)
+            pg.roomPad = next;
+    }
+    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
+    Component.onCompleted: roomTimer.restart()
 
     FileView {
         id: catalogFile
@@ -185,9 +201,9 @@ Item {
         id: head
         anchors.top: parent.top
         anchors.topMargin: Tokens.s6
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid, so the title starts over the first card
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
         spacing: Tokens.s2
 
         Row {
@@ -211,8 +227,8 @@ Item {
             font.family: Tokens.display; font.pixelSize: Tokens.fTitle
         }
         Text {
-            width: Math.min(parent.width, 760)
-            text: I18n.tr("Tune the command palette you open with Super+Space: its corners, local frost, and the hero's greeting, weather and image. Nothing is written until you save.")
+            width: Math.min(parent.width, 720)
+            text: I18n.tr("The command palette on Super+Space; nothing saves until you do.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -289,13 +305,17 @@ Item {
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("LAUNCHER")
+                onExpandedChanged: roomTimer.restart()
+                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Style")
                     desc: String(pg.variantEntry(pg.draft.variant).description || "")
@@ -316,12 +336,15 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("PALETTE")
                 visible: pg.supports("shape") || pg.supports("background")
+                onExpandedChanged: roomTimer.restart()
+                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     visible: pg.supports("shape")
                     label: I18n.tr("Corner radius")
-                    desc: I18n.tr("Rounds the palette window corners; inner cards follow 4 px tighter.")
+                    desc: I18n.tr("Rounds the palette corners; inner cards 4 px tighter.")
                     unit: "px"
                     value: String(pg.draft.radius)
                     def: String(pg.committed.radius)
@@ -338,10 +361,11 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     visible: pg.supports("background")
                     divider: pg.supports("shape")
                     label: I18n.tr("Backdrop frost")
-                    desc: I18n.tr("Blurs the frozen desktop visible through the result drawer. 0 keeps the drawer solid.")
+                    desc: I18n.tr("Frosts the frozen desktop behind the result drawer.")
                     unit: "px"
                     value: String(pg.draft.bgBlur)
                     def: String(pg.committed.bgBlur)
@@ -362,11 +386,14 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("RESULT MOTION")
                 visible: pg.supports("results")
+                onExpandedChanged: roomTimer.restart()
+                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     label: I18n.tr("Type settle")
-                    desc: I18n.tr("Waits for a pause before the finished result deck fades in. Higher values feel calmer; lower values respond sooner.")
+                    desc: I18n.tr("Pause before the results fade in.")
                     unit: "ms"
                     value: String(pg.draft.resultSettleMs)
                     def: String(pg.committed.resultSettleMs)
@@ -387,9 +414,12 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("HERO")
                 visible: pg.supports("hero")
+                onExpandedChanged: roomTimer.restart()
+                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     label: I18n.tr("Show greeting")
                     desc: I18n.tr("Time-of-day greeting above the hero clock.")
                     def: pg.committed.showGreeting ? I18n.tr("ON") : I18n.tr("OFF")
@@ -405,9 +435,10 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Show weather")
-                    desc: I18n.tr("Current conditions and temperature on the hero; off shows the date.")
+                    desc: I18n.tr("Weather and temperature on the hero; off shows the date.")
                     def: pg.committed.showWeather ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: !pg.same(pg.draft.showWeather, pg.committed.showWeather)
                     source: "launcher.json"
@@ -421,6 +452,7 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Weather units")
@@ -438,10 +470,11 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Solar line")
-                    desc: I18n.tr("The warm line under the clock. Palette follows the wallpaper, Fixed uses a colour you pick, Off hides it.")
+                    desc: I18n.tr("Warm line under the clock: Palette, Fixed or Off.")
                     def: I18n.tr(pg.horizonModeLabel(pg.committed.horizonMode))
                     changed: !pg.same(pg.draft.horizonMode, pg.committed.horizonMode)
                     source: "launcher.json"
@@ -455,11 +488,12 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     visible: pg.draft.horizonMode === "fixed"
                     divider: true
                     block: true
                     label: I18n.tr("Line colour")
-                    desc: I18n.tr("Colour of the solar line and its marker when Solar line is set to Fixed.")
+                    desc: I18n.tr("Colour of the solar line when it is set to Fixed.")
                     def: String(pg.committed.horizonColor)
                     changed: !pg.same(pg.draft.horizonColor, pg.committed.horizonColor)
                     source: "launcher.json"
@@ -478,12 +512,15 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("HERO IMAGE")
                 visible: pg.supports("hero")
+                onExpandedChanged: roomTimer.restart()
+                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     footH: 32
                     label: I18n.tr("Image")
-                    desc: I18n.tr("A landscape PNG or JPG, ideally 1600 px wide or more. It is cropped to a wide banner and dimmed; drag the preview to pick the part that shows.")
+                    desc: I18n.tr("Wide banner behind the palette; drag to reframe it.")
                     changed: !pg.same(pg.draft.heroImage, pg.committed.heroImage)
                     source: "launcher.json"
                     Item {
@@ -520,9 +557,10 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Strength")
-                    desc: I18n.tr("How visible the hero image is; 0 hides it completely.")
+                    desc: I18n.tr("How visible the hero image is.")
                     unit: "%"
                     value: String(Math.round((Number(pg.draft.heroStrength) || 0) * 100))
                     def: String(Math.round((Number(pg.committed.heroStrength) || 0) * 100))

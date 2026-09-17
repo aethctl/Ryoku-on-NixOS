@@ -10,7 +10,7 @@ var rows = [
         "group": "OTHER",
         "key": "",
         "label": "Lock skin",
-        "desc": "Reskins the lock and sign-in screens, asks for your password to apply",
+        "desc": "Reskins the lock and sign-in screens",
         "ctl": "chips",
         "src": "99-ryoku.conf (contents `[Theme]\\nCurrent=ryoku\\n`). Paths overridable by env: RYOKU_SDDM_THEMES_DIR, RYOKU_SDDM_CONF, RYOKU_QYLOCK_THEMES.",
         "opts": [
@@ -29,7 +29,7 @@ var rows = [
         "group": "OTHER",
         "key": "",
         "label": "At sign-in (keyring)",
-        "desc": "How the GNOME keyring unlocks your saved passwords at sign-in.",
+        "desc": "How the keyring unlocks your saved passwords",
         "ctl": "chips",
         "src": "~/.config/ryoku/keyring.json (mode) and /etc/pam.d/sddm (pam_gnome_keyring). Managed by `ryoku keyring set`; $RYOKU_PAM_FILE overrides the PAM path for tests.",
         "opts": [
@@ -43,7 +43,7 @@ var rows = [
         "group": "OTHER",
         "key": "",
         "label": "Browse RyoStore",
-        "desc": "Opens the RyoStore lockscreen catalogue for discovery and installation",
+        "desc": "Opens the RyoStore lockscreen catalogue",
         "ctl": "action",
         "src": "ryostore open lockscreens"
     }

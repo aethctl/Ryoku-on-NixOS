@@ -140,10 +140,10 @@ Singleton {
     // The widest a stack of settings rows reads at before a label and its control
     // stop being one thing. A page may cap its own column here and centre it.
     readonly property int contentMax: px(1000)
-    // The widest a framed page's content column grows. A settings page reads as a
-    // printed column: past this, a wider window buys calmer margins instead of a
-    // label at one edge and its control at the other.
-    readonly property int pageMax: px(1200)
+    // The widest a card grows when a page has few of them: the grid narrows its
+    // column count and lets the cards take the space, rather than leaving a
+    // window-wide gap beside a lone card.
+    readonly property int cardWide: px(760)
     readonly property int ctlH: px(26)
 
     // ── motion ───────────────────────────────────────────────────────────

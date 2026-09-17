@@ -7,25 +7,13 @@
 var rows = [
     {
         "tab": "custom",
-        "group": "OTHER",
+        "group": "SHORTCUTS",
         "key": "desktop.keybinds",
         "label": "Shortcut entry",
-        "desc": "Hyprland-style combo plus an action; the command field is for Run command",
+        "desc": "A key combo plus an action; command runs a command",
         "ctl": "list",
-        "src": "desktop.json"
-    },
-    {
-        "tab": "custom",
-        "group": "OTHER",
-        "key": "desktop.keybinds",
-        "label": "Shortcut entry",
-        "desc": "Hyprland-style combo plus an action; the command field is for Run command",
-        "ctl": "multi",
         "src": "desktop.json",
-        "opts": [
-            "(no visible label - key combo field; placeholder \"SUPER + J\")",
-            "exec",
-            "(no visible label - command field; placeholder \"command to run\")"
-        ]
+        "opts": ["key combo", "exec", "command", "run"]
     }
 ];
+

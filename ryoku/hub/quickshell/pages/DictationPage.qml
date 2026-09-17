@@ -291,15 +291,16 @@ Item {
             visible: !pg.loaded || pg.installed
             anchors.fill: parent
             contentWidth: width
-            contentHeight: content.height + Tokens.s5
+            contentHeight: Math.max(content.height, height)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-            Column {
+            CardColumns {
                 id: content
-                width: Math.min(flick.width - Tokens.s3, 720)   // reserve a scroll lane
+                width: flick.width - Tokens.s3
                 spacing: Tokens.s5
+                fillTo: flick.height
 
                 // a one-shot info note (tap to dismiss), e.g. after a download.
                 Rectangle {
@@ -326,7 +327,7 @@ Item {
 
                 // ── DICTATION: the voice-typing switch and its guidance ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("DICTATION")
 
                     Text {
@@ -363,7 +364,7 @@ Item {
 
                 // ── ENGINE & MODEL: the click-to-select card list ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("ENGINE & MODEL")
 
                     Item {
@@ -556,7 +557,7 @@ Item {
 
                 // ── API KEY: only for a cloud engine that needs one ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     visible: pg.needsKey
                     title: I18n.tr("API KEY")
 
@@ -647,8 +648,10 @@ Item {
 
                 // ── PACKAGE: uninstall handoff ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("PACKAGE")
+                    expanded: false
+                    summary: I18n.tr("VOXTYPE-BIN")
 
                     Text {
                         width: parent.width

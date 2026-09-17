@@ -13,7 +13,7 @@ var rows = [
         "group": "LANGUAGE & REGION",
         "key": "language",
         "label": "Language",
-        "desc": "Interface language; Auto follows your system locale. Every surface retranslates live, no relogin.",
+        "desc": "Interface language; Auto follows your system locale.",
         "ctl": "pick",
         "src": "shell",
         // the list is not written here: `set` points the picker at the one
@@ -25,7 +25,7 @@ var rows = [
         "group": "LANGUAGE & REGION",
         "key": "formatLocale",
         "label": "Regional formats",
-        "desc": "Dates, numbers and month names use this region while the language above stays as-is. None = follow the system.",
+        "desc": "Dates, numbers and month names use this region.",
         "ctl": "pick",
         "src": "shell",
         "set": "locales"
@@ -34,7 +34,7 @@ var rows = [
         "group": "LOCATION",
         "key": "weatherLocation",
         "label": "Location",
-        "desc": "Search a city; empty reads it from your IP. Used for weather and the clock.",
+        "desc": "Search a city; empty reads it from your IP.",
         "ctl": "location",
         "src": "shell"
     }, {
@@ -42,7 +42,7 @@ var rows = [
         "group": "LOCATION",
         "key": "timezone",
         "label": "Time zone",
-        "desc": "The system clock's time zone. Pick it on the world map; applied live with timedatectl.",
+        "desc": "The system clock's time zone; applied live.",
         "ctl": "timezone"
     }, {
         "tab": "",
@@ -58,7 +58,7 @@ var rows = [
         "group": "FONT",
         "key": "fontFamily",
         "label": "System font",
-        "desc": "One font for the shell, apps and terminal, applied live. Pick a monospace like Maple Mono NF for a clean terminal.",
+        "desc": "One font for the shell, apps and terminal.",
         "ctl": "pick",
         "src": "shell",
         "opts": []

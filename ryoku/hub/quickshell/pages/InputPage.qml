@@ -570,9 +570,10 @@ Item {
     Column {
         id: head
         anchors.top: parent.top
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid: the left inset and width of the
+        // cards below, so the title lands over the first column, not centred.
+        width: parent.width - Tokens.s3
+        x: 0
         spacing: Tokens.s2
 
         Row {
@@ -621,9 +622,10 @@ Item {
     Section {
         id: kbmSect
         anchors { top: head.bottom; topMargin: Tokens.s5 }
-        // the showcase sits on the same centred measure as the rows below it
-        width: Math.min(parent.width, Tokens.contentMax + Tokens.s3)
-        x: Math.round((parent.width - width) / 2)
+        // the showcase spans the body: its rule runs the width of the cards
+        // below and the diagram sits over the first column.
+        width: parent.width - Tokens.s3
+        x: 0
         title: I18n.tr("KEYBOARD MAP")
         titleColor: Tokens.sunDeep
 
@@ -633,7 +635,7 @@ Item {
                 id: pinnedMap
                 compact: true
                 keyMax: 40
-                width: Math.round(kbmSect.span(Spans.cols) * 0.46)
+                width: Math.min(500, Math.round(kbmSect.span(Spans.cols) * 0.46))
                 height: implicitHeight
                 layoutCode: pg.primaryLayout(false)
                 layoutName: pg.nameIn(pg.layoutOptions, pg.primaryLayout(false))
@@ -666,6 +668,9 @@ Item {
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            // short once the rarely-touched drawers fold: centre the cards in
+            // the body instead of hanging them off the top of a wide window.
+            fillTo: flick.height
 
             SettingCard {
                 width: body.colWidth
@@ -674,7 +679,7 @@ Item {
                 PickCell {
                     divider: false
                     cellLabel: I18n.tr("Layout")
-                    cellDesc: I18n.tr("The main keyboard layout.")
+                    cellDesc: I18n.tr("What your keys type: QWERTY, AZERTY, Dvorak.")
                     pickTitle: I18n.tr("KEYBOARD LAYOUT")
                     list: pg.layoutOptions
                     currentCode: pg.primaryLayout(false)
@@ -683,7 +688,7 @@ Item {
                 }
                 PickCell {
                     cellLabel: I18n.tr("Style")
-                    cellDesc: I18n.tr("A variant of the main layout, like Dvorak or intl.")
+                    cellDesc: I18n.tr("A tweak on the layout, like intl or Colemak.")
                     pickTitle: I18n.tr("LAYOUT STYLE")
                     list: pg.variantOptions
                     currentCode: pg.primaryVariant(false)
@@ -692,7 +697,7 @@ Item {
                 }
                 PickCell {
                     cellLabel: I18n.tr("Second layout")
-                    cellDesc: I18n.tr("A spare layout kept loaded; the chord below switches to it.")
+                    cellDesc: I18n.tr("A spare layout kept loaded; a chord switches to it.")
                     pickTitle: I18n.tr("SECOND LAYOUT")
                     list: [{ "code": "", "name": I18n.tr("None") }].concat(pg.layoutOptions)
                     currentCode: pg.secondaryLayout(false)
@@ -702,7 +707,7 @@ Item {
                 OptCell {
                     gate: pg.secondaryLayout(false).length > 0
                     cellLabel: I18n.tr("Switch layouts")
-                    cellDesc: I18n.tr("The chord that toggles between the two loaded layouts.")
+                    cellDesc: I18n.tr("The chord that flips between your two layouts.")
                     ids: pg.grpIds
                     map: pg.grpMap
                     kind: "seg"
@@ -717,101 +722,6 @@ Item {
 
             SettingCard {
                 width: body.colWidth
-                title: I18n.tr("KEY REMAPS")
-
-                OptCell {
-                    divider: false
-                    cellLabel: I18n.tr("Caps Lock")
-                    cellDesc: I18n.tr("Turn the Caps Lock key into something more useful.")
-                    ids: pg.capsIds
-                    map: pg.capsMap
-                    kind: "chips"
-                }
-                OptCell {
-                    cellLabel: I18n.tr("Swap Alt and Super")
-                    cellDesc: I18n.tr("Exchange the Alt and Super modifier keys.")
-                    ids: [pg.swapId]
-                    map: []
-                    kind: "sw"
-                    onKey: pg.swapId
-                }
-                OptCell {
-                    cellLabel: I18n.tr("Compose key")
-                    cellDesc: I18n.tr("A key that begins a compose sequence for accents and symbols.")
-                    ids: pg.composeIds
-                    map: pg.composeMap
-                    kind: "seg"
-                }
-
-                // Extra options: the free-text escape hatch. Everything the family
-                // pickers do not recognise round-trips here. Commit on
-                // editing-finished (not per keystroke, which would fight the
-                // tokeniser mid-word) and re-bind to the draft on focus loss so
-                // Reset/Revert refresh the shown text after a manual edit.
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    footH: 32
-                    source: "hypr"
-                    label: I18n.tr("Extra options")
-                    desc: I18n.tr("Raw xkb options, comma separated. The pickers above manage their own.")
-                    changed: pg.extraOptions(false) !== pg.extraOptions(true)
-
-                    Field {
-                        id: extraField
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        tabular: true
-                        placeholder: I18n.tr("raw xkb options, comma separated")
-                        text: pg.extraOptions(false)
-                        onCommitted: (v) => pg.setExtra(v)
-                        onFocusedChanged: if (!extraField.focused)
-                            extraField.text = Qt.binding(function () { return pg.extraOptions(false); })
-                    }
-                }
-
-                // Apply system-wide: privileged localectl write to /etc, gated on
-                // the keyboard keys already being saved so the console matches
-                // what the compositor shows.
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    controlWidth: 84
-                    source: "vconsole"
-                    label: I18n.tr("Apply system-wide")
-                    desc: I18n.tr("Also set the login screen, the TTYs, and the disk passphrase prompt.")
-                    changed: false
-
-                    Btn {
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: I18n.tr("APPLY")
-                        armed: pg.kbClean && !sysApplyProc.running
-                        onAct: sysApplyProc.running = true
-                    }
-                }
-                // paired readout: the last apply result, self-clearing after 6s.
-                // No colour; the word carries the state (DESIGN.md section 1).
-                SettingRow {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    divider: true
-                    source: "vconsole"
-                    label: I18n.tr("Login screen, TTY, and boot")
-                    value: pg.sysApplyState === "ok" ? I18n.tr("APPLIED")
-                        : pg.sysApplyState === "err" ? I18n.tr("FAILED") : I18n.tr("READY")
-                    desc: pg.sysApplyState === "ok" ? I18n.tr("Applied to the login screen, console, and boot prompt.")
-                        : pg.sysApplyState === "err" ? I18n.tr("Not applied. Cancelled or failed.")
-                        : I18n.tr("They keep their own keymap until you apply.")
-                    changed: false
-                }
-            }
-
-            SettingCard {
-                width: body.colWidth
                 title: I18n.tr("POINTER")
 
                 Setting {
@@ -819,7 +729,7 @@ Item {
                     path: "desktop.input.sensitivity"
                     ctl: "slid"; lo: -1; hi: 1; sc: 100; dec: 2
                     label: I18n.tr("Sensitivity")
-                    desc: I18n.tr("Pointer speed offset; 0 is the device default.")
+                    desc: I18n.tr("Pointer speed offset; 0 is the default.")
                 }
                 Setting {
                     path: "desktop.input.mouseScrollFactor"
@@ -832,7 +742,7 @@ Item {
                     ctl: "seg"; asInt: true
                     opts: [{ "key": 0, "label": I18n.tr("Ignore pointer movement") }, { "key": 1, "label": I18n.tr("Focus under pointer") }, { "key": 2, "label": I18n.tr("Click to focus") }]
                     label: I18n.tr("Focus behavior")
-                    desc: I18n.tr("Click to focus keeps newly launched and dock-selected apps in front.")
+                    desc: I18n.tr("How windows take focus as the pointer moves.")
                 }
                 Setting {
                     path: "desktop.input.leftHanded"
@@ -906,7 +816,127 @@ Item {
 
             SettingCard {
                 width: body.colWidth
+                title: I18n.tr("KEY REPEAT")
+
+                Setting {
+                    divider: false
+                    path: "desktop.input.repeatRate"
+                    ctl: "step"; lo: 1; hi: 100; stepBy: 1; unit: "/s"
+                    label: I18n.tr("Repeat rate")
+                    desc: I18n.tr("Characters per second while a key is held.")
+                }
+                Setting {
+                    path: "desktop.input.repeatDelay"
+                    ctl: "step"; lo: 100; hi: 2000; stepBy: 50; unit: "ms"
+                    label: I18n.tr("Repeat delay")
+                    desc: I18n.tr("Pause before a held key starts repeating.")
+                }
+            }
+
+            // rarely touched once set: folded by default so the page leads with
+            // layout, pointer and cursor. The summary says what the drawer holds.
+            SettingCard {
+                width: body.colWidth
+                title: I18n.tr("KEY REMAPS")
+                expanded: false
+                summary: I18n.tr("CAPS, COMPOSE, XKB")
+
+                OptCell {
+                    divider: false
+                    cellLabel: I18n.tr("Caps Lock")
+                    cellDesc: I18n.tr("Remap it to Escape, Ctrl, or switch it off.")
+                    ids: pg.capsIds
+                    map: pg.capsMap
+                    kind: "chips"
+                }
+                OptCell {
+                    cellLabel: I18n.tr("Swap Alt and Super")
+                    cellDesc: I18n.tr("Trade the two keys for macOS-style shortcuts.")
+                    ids: [pg.swapId]
+                    map: []
+                    kind: "sw"
+                    onKey: pg.swapId
+                }
+                OptCell {
+                    cellLabel: I18n.tr("Compose key")
+                    cellDesc: I18n.tr("Starts a sequence for accents like é and ñ.")
+                    ids: pg.composeIds
+                    map: pg.composeMap
+                    kind: "seg"
+                }
+
+                // Extra options: the free-text escape hatch. Everything the family
+                // pickers do not recognise round-trips here. Commit on
+                // editing-finished (not per keystroke, which would fight the
+                // tokeniser mid-word) and re-bind to the draft on focus loss so
+                // Reset/Revert refresh the shown text after a manual edit.
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: true
+                    footH: 32
+                    source: "hypr"
+                    label: I18n.tr("Extra options")
+                    desc: I18n.tr("Raw xkb options, comma separated, for power users.")
+                    changed: pg.extraOptions(false) !== pg.extraOptions(true)
+
+                    Field {
+                        id: extraField
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        tabular: true
+                        placeholder: I18n.tr("raw xkb options, comma separated")
+                        text: pg.extraOptions(false)
+                        onCommitted: (v) => pg.setExtra(v)
+                        onFocusedChanged: if (!extraField.focused)
+                            extraField.text = Qt.binding(function () { return pg.extraOptions(false); })
+                    }
+                }
+
+                // Apply system-wide: privileged localectl write to /etc, gated on
+                // the keyboard keys already being saved so the console matches
+                // what the compositor shows.
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: true
+                    controlWidth: 84
+                    source: "vconsole"
+                    label: I18n.tr("Apply system-wide")
+                    desc: I18n.tr("Match the login screen, TTYs, and boot prompt too.")
+                    changed: false
+
+                    Btn {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.tr("APPLY")
+                        armed: pg.kbClean && !sysApplyProc.running
+                        onAct: sysApplyProc.running = true
+                    }
+                }
+                // paired readout: the last apply result, self-clearing after 6s.
+                // No colour; the word carries the state (DESIGN.md section 1).
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: true
+                    source: "vconsole"
+                    label: I18n.tr("Login screen, TTY, and boot")
+                    value: pg.sysApplyState === "ok" ? I18n.tr("APPLIED")
+                        : pg.sysApplyState === "err" ? I18n.tr("FAILED") : I18n.tr("READY")
+                    desc: pg.sysApplyState === "ok" ? I18n.tr("Applied to the login screen, console, and boot prompt.")
+                        : pg.sysApplyState === "err" ? I18n.tr("Not applied. Cancelled or failed.")
+                        : I18n.tr("They keep their own keymap until you apply.")
+                    changed: false
+                }
+            }
+
+            SettingCard {
+                width: body.colWidth
                 title: I18n.tr("TOUCHPAD")
+                expanded: false
+                summary: I18n.tr("TAP, SCROLL, SWIPE")
 
                 Setting {
                     divider: false
@@ -931,7 +961,7 @@ Item {
                     path: "desktop.input.disableWhileTyping"
                     ctl: "sw"
                     label: I18n.tr("Disable while typing")
-                    desc: I18n.tr("Ignore the touchpad while you type so a palm cannot nudge it.")
+                    desc: I18n.tr("Ignore the pad while typing so a palm can't nudge it.")
                 }
                 Setting {
                     path: "desktop.input.clickfinger"
@@ -949,7 +979,7 @@ Item {
                     path: "desktop.input.touchScrollFactor"
                     ctl: "slid"; lo: 0.2; hi: 3; sc: 10; dec: 1; unit: "×"
                     label: I18n.tr("Scroll speed")
-                    desc: I18n.tr("Multiplier on two-finger scroll distance.")
+                    desc: I18n.tr("Multiplier on two-finger scroll.")
                 }
                 Setting {
                     path: "desktop.input.workspaceSwipe"
@@ -974,32 +1004,13 @@ Item {
                     path: "desktop.input.swipeCreateNew"
                     ctl: "sw"; gate: pg.swipeOn
                     label: I18n.tr("Swipe past the last workspace")
-                    desc: I18n.tr("Swiping past the end opens a fresh workspace instead of stopping.")
+                    desc: I18n.tr("Swiping past the end opens a fresh workspace.")
                 }
                 Setting {
                     path: "desktop.input.swipeDistance"
                     ctl: "slid"; lo: 100; hi: 600; sc: 1; dec: 0; unit: "px"; gate: pg.swipeOn
                     label: I18n.tr("Swipe distance")
-                    desc: I18n.tr("Finger travel for a full switch; lower flips sooner.")
-                }
-            }
-
-            SettingCard {
-                width: body.colWidth
-                title: I18n.tr("KEY REPEAT")
-
-                Setting {
-                    divider: false
-                    path: "desktop.input.repeatRate"
-                    ctl: "step"; lo: 1; hi: 100; stepBy: 1; unit: "/s"
-                    label: I18n.tr("Repeat rate")
-                    desc: I18n.tr("Characters per second while a key is held.")
-                }
-                Setting {
-                    path: "desktop.input.repeatDelay"
-                    ctl: "step"; lo: 100; hi: 2000; stepBy: 50; unit: "ms"
-                    label: I18n.tr("Repeat delay")
-                    desc: I18n.tr("Pause before a held key starts repeating.")
+                    desc: I18n.tr("Finger travel for a full switch.")
                 }
             }
         }

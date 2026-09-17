@@ -207,10 +207,29 @@ Item {
         }
     }
 
+    // A page with slack under its cards spreads it into the rows instead of
+    // ending two thirds up the window: measured once by a timer, never bound to
+    // a height, since a row's own height depends on it.
+    property int roomPad: 0
+    function tuneRoom() {
+        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
+            return;
+        var n = 10;                       // the setting rows the pad spreads across
+        // spare room is measured against what the cards need, not the fillTo-padded
+        // body height, or a padded page reads zero slack and never breathes.
+        var slack = flick.height - col.contentHeight;
+        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
+        var next = Math.max(0, Math.min(Tokens.s6, want));
+        if (next !== pg.roomPad)
+            pg.roomPad = next;
+    }
+    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
+
     Component.onCompleted: {
         pg.adopt();
         if (pg.keyCommitted === null)
             pg.adoptKey("");
+        roomTimer.restart();
     }
 
     // recording.json, this page's only writer. blockLoading makes the first read
@@ -386,11 +405,12 @@ Item {
     // ── head: eyebrow, Fraunces title, intro blurb (matches every settings page) ──
     Column {
         id: head
-                anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.leftMargin: Tokens.s6
+        anchors.top: parent.top
         anchors.topMargin: Tokens.s6
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head starts at the body's left inset and spans its width
+        width: parent.width - Tokens.s6 * 2
         spacing: Tokens.s2
 
         Row {
@@ -431,28 +451,30 @@ Item {
             topMargin: Tokens.s5; bottomMargin: Tokens.s4
         }
         contentWidth: width
-        contentHeight: col.height + Tokens.s5
+        contentHeight: Math.max(col.height, height)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        onHeightChanged: roomTimer.restart()
 
         CardColumns {
-
-        id: col
+            id: col
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("KEY PRESSES")
                 kana: "鍵"
+                onExpandedChanged: roomTimer.restart()
 
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s2
-                    text: I18n.tr("Show polished keycaps in tutorials and recordings. Turn the desktop preview on, drag it where viewers can read it, then record when you are ready. Enabling this never starts a recording.")
+                    text: I18n.tr("Polished keycaps for tutorials and demos; turning this on never records.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
@@ -493,8 +515,9 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Keycap style")
-                    desc: I18n.tr("Dark is black with white type; Light is white with black type.")
+                    desc: I18n.tr("Dark keycaps, or light.")
                     source: "keypresses.json"
                     def: pg.keyCommitted ? pg.keyCommitted.theme : ""
                     changed: pg.keyDraft && pg.keyCommitted ? pg.keyDraft.theme !== pg.keyCommitted.theme : false
@@ -510,8 +533,9 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Visible keys")
-                    desc: I18n.tr("All keys is most expressive; Shortcuts only hides ordinary typing.")
+                    desc: I18n.tr("Every key, or only shortcuts.")
                     source: "keypresses.json"
                     def: pg.keyCommitted ? pg.keyCommitted.mode : ""
                     changed: pg.keyDraft && pg.keyCommitted ? pg.keyDraft.mode !== pg.keyCommitted.mode : false
@@ -527,10 +551,11 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Desktop placement")
                     desc: pg.keySettingsError !== "" ? pg.keySettingsError
                         : (pg.keyBackendStatus === "error" ? pg.keyBackendError
-                        : I18n.tr("Show the animated sample, then drag the keycaps anywhere on the chosen monitor."))
+                        : I18n.tr("Show the sample, drag the keycaps"))
                     controlWidth: 282
                     Row {
                         anchors.right: parent.right
@@ -556,19 +581,21 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("QUALITY")
+                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s1
-                    text: I18n.tr("Higher framerate is smoother (120 gets closer to a high-refresh panel); higher quality and HEVC/AV1 are crisper but larger. Constant framerate plays and edits correctly everywhere; variable is smaller but can look choppy or import as 30fps.")
+                    text: I18n.tr("Higher framerate and quality look better but make larger files.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Framerate")
-                    desc: I18n.tr("Frames captured per second; higher is smoother but files are larger.")
+                    desc: I18n.tr("Frames per second; higher is smoother but larger.")
                     unit: "fps"
                     source: "recording.json"
                     value: pg.draft ? String(pg.draft.fps) : ""
@@ -585,8 +612,9 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Framerate mode")
-                    desc: I18n.tr("Constant plays everywhere; variable is smaller but may import as 30fps.")
+                    desc: I18n.tr("Constant plays anywhere; variable is smaller.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.framerateMode) : ""
                     changed: pg.draft && pg.committed ? pg.draft.framerateMode !== pg.committed.framerateMode : false
@@ -601,6 +629,7 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Quality")
                     desc: I18n.tr("Higher settings look crisper but make larger files.")
@@ -618,9 +647,10 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Codec")
-                    desc: I18n.tr("H.264 plays anywhere; HEVC and AV1 are crisper, AV1 needs a newer GPU.")
+                    desc: I18n.tr("H.264 plays anywhere; AV1 is crisper but needs a newer GPU.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.codec) : ""
                     changed: pg.draft && pg.committed ? pg.draft.codec !== pg.committed.codec : false
@@ -637,19 +667,21 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("ENCODER")
+                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s1
-                    text: I18n.tr("GPU encoding is fast and barely touches your CPU. CPU is a fallback if the GPU encoder misbehaves.")
+                    text: I18n.tr("GPU encoding is fast; CPU is the fallback if it misbehaves.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Encoder")
-                    desc: I18n.tr("GPU encoding barely loads the CPU; pick CPU if the GPU encoder fails.")
+                    desc: I18n.tr("GPU offloads the CPU; CPU if GPU fails.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.encoder) : ""
                     changed: pg.draft && pg.committed ? pg.draft.encoder !== pg.committed.encoder : false
@@ -664,8 +696,9 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     label: I18n.tr("Show the cursor")
-                    desc: I18n.tr("The mouse pointer is drawn into the video when on, hidden when off.")
+                    desc: I18n.tr("Draws the mouse pointer into the video.")
                     source: "recording.json"
                     changed: pg.draft && pg.committed ? pg.draft.cursor !== pg.committed.cursor : false
                     controlWidth: 54
@@ -678,9 +711,10 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
+                    roomPad: pg.roomPad
                     footH: 32
                     label: I18n.tr("Save recordings to")
-                    desc: I18n.tr("Every recording lands here, the editor included. Leave it empty to follow your Videos folder.")
+                    desc: I18n.tr("Leave empty to follow your Videos folder.")
                     source: "recording.json"
                     changed: pg.draft && pg.committed ? pg.draft.directory !== pg.committed.directory : false
                     Field {
@@ -697,6 +731,9 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("UNDER THE HOOD")
+                expanded: false
+                summary: I18n.tr("AUTO-DETECTED")
+                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4

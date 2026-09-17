@@ -10,7 +10,7 @@ var rows = [
         "group": "RYOKU RENDERS ON",
         "key": "AQ_DRM_DEVICES",
         "label": "Graphics mode",
-        "desc": "Which GPU the desktop renders on, takes effect at your next login",
+        "desc": "Which GPU renders the desktop; next login",
         "ctl": "seg",
         "src": "gpu.lua (override path via $RYOKU_GPU_CONF; base honours $XDG_CONFIG_HOME)",
         "opts": [
@@ -24,7 +24,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Editing profile",
-        "desc": "Which power profile you are editing (power-saver, balanced, performance); edits the definition, not the live profile",
+        "desc": "Which profile you're editing, not the live one.",
         "ctl": "seg",
         "src": "ryoku-hub cpu active (ryoku-power)",
         "opts": [
@@ -38,7 +38,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Governor",
-        "desc": "CPU scaling governor for the edited profile; ryoku-power re-applies it after the profile switches",
+        "desc": "CPU scaling governor for the edited profile.",
         "ctl": "seg",
         "src": "ryoku-power profiles (scaling_governor, power.json)",
         "opts": [
@@ -51,7 +51,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Energy preference",
-        "desc": "amd-pstate EPP hint for the edited profile, from power-saving to performance; re-applied on profile switch",
+        "desc": "Energy or performance hint",
         "ctl": "seg",
         "src": "ryoku-power profiles (energy_performance_preference, power.json)",
         "opts": [
@@ -67,7 +67,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Max frequency",
-        "desc": "Ceiling on CPU clock as a percent of the hardware maximum for the edited profile",
+        "desc": "Ceiling for the CPU clock, in percent",
         "ctl": "slid",
         "src": "ryoku-power profiles (scaling_max_freq, power.json)"
     },
@@ -76,7 +76,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Thermal profile",
-        "desc": "ACPI platform profile for the edited profile's fan and power envelope.",
+        "desc": "Fan and power envelope for the edited profile.",
         "ctl": "seg",
         "src": "ryoku-power profiles (platform_profile, power.json)",
         "opts": [
@@ -90,7 +90,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "CPU boost and PPT/TDP limits",
-        "desc": "Not exposed: firmware governs boost and PPT on this hardware.",
+        "desc": "Not exposed: firmware governs boost and PPT here.",
         "ctl": "readout",
         "src": "static copy"
     },
@@ -99,7 +99,7 @@ var rows = [
         "group": "TUNING \u00b7 THIS SESSION",
         "key": "",
         "label": "Power limit / TDP",
-        "desc": "GPU power budget in watts, applied live for this session (NVIDIA nvidia-smi, AMD sysfs cap)",
+        "desc": "GPU power budget in watts, live for this session.",
         "ctl": "slid",
         "src": "ryoku-hub gpu tune (runtime, resets on reboot)"
     },
@@ -108,7 +108,7 @@ var rows = [
         "group": "TUNING \u00b7 THIS SESSION",
         "key": "",
         "label": "Performance level",
-        "desc": "AMD power_dpm_force_performance_level: auto, low, or high",
+        "desc": "AMD performance level: auto, low, or high.",
         "ctl": "seg",
         "src": "ryoku-hub gpu tune (runtime, resets on reboot)"
     },
@@ -117,7 +117,7 @@ var rows = [
         "group": "TUNING \u00b7 THIS SESSION",
         "key": "",
         "label": "Persistence mode",
-        "desc": "Keep the NVIDIA driver initialised so the GPU stays responsive",
+        "desc": "Keeps the NVIDIA driver loaded",
         "ctl": "sw",
         "src": "ryoku-hub gpu tune (runtime, resets on reboot)"
     },
@@ -125,8 +125,8 @@ var rows = [
         "tab": "",
         "group": "TUNING \u00b7 THIS SESSION",
         "key": "",
-        "label": "Overclock / undervolt / clock lock / fan (Advanced)",
-        "desc": "GPU clock and fan control, gated behind a per-session warning; can misbehave, resets on reboot",
+        "label": "Overclock, undervolt and fan control",
+        "desc": "GPU clock and fan control; resets on reboot",
         "ctl": "slid",
         "src": "ryoku-hub gpu tune (runtime, resets on reboot)"
     },
@@ -134,8 +134,8 @@ var rows = [
         "tab": "",
         "group": "TUNING \u00b7 THIS SESSION",
         "key": "",
-        "label": "Presets (Quiet / Balanced / Performance / custom)",
-        "desc": "Save and apply named tuning bundles; built-ins adapt to whatever knobs your hardware exposes",
+        "label": "Tuning presets",
+        "desc": "Save and apply named tuning bundles.",
         "ctl": "action",
         "src": "~/.config/ryoku/gpu-presets.json"
     },
@@ -144,7 +144,7 @@ var rows = [
         "group": "BATTERY",
         "key": "",
         "label": "Charge limit",
-        "desc": "Stop charging at this percent to preserve battery health (50-100)",
+        "desc": "Stop charging here to preserve battery health.",
         "ctl": "slid",
         "src": "ryoku-power charge-limit (charge_control_end_threshold, power.json)"
     },
@@ -153,7 +153,7 @@ var rows = [
         "group": "BATTERY",
         "key": "",
         "label": "PCIe ASPM",
-        "desc": "PCIe Active State Power Management policy: trade idle power for latency",
+        "desc": "PCIe power policy: trade idle power for latency.",
         "ctl": "seg",
         "src": "ryoku-power aspm (pcie_aspm/parameters/policy, power.json)",
         "opts": [
@@ -167,7 +167,7 @@ var rows = [
         "tab": "",
         "group": "GPU PASSTHROUGH \u00b7 ADVANCED",
         "key": "",
-        "label": "Readiness checks / Hide readiness checks (disclosure)",
+        "label": "Readiness checks",
         "desc": "",
         "ctl": "sw",
         "src": "none (transient page state: page.showChecks)"
@@ -230,7 +230,7 @@ var rows = [
         "tab": "",
         "group": "GPU PASSTHROUGH \u00b7 ADVANCED",
         "key": "",
-        "label": "Passthrough status line (verdict readout)",
+        "label": "Passthrough status",
         "desc": "",
         "ctl": "readout",
         "src": "`ryoku-hub gpu caps` -> caps.verdict"
@@ -239,7 +239,7 @@ var rows = [
         "tab": "",
         "group": "GPU PASSTHROUGH \u00b7 ADVANCED",
         "key": "",
-        "label": "Readiness checks dossier rows (Repeater over caps.checks)",
+        "label": "Readiness check details",
         "desc": "",
         "ctl": "readout",
         "src": "hwcaps.go buildChecks)"
@@ -248,7 +248,7 @@ var rows = [
         "tab": "",
         "group": "RYOKU RENDERS ON",
         "key": "",
-        "label": "Graphics mode explainer (per-mode helper text)",
+        "label": "Graphics mode explainer",
         "desc": "",
         "ctl": "readout",
         "src": "derived from page.mode + page.dgpuName"

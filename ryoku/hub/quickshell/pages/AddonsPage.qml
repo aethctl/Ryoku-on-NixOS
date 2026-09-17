@@ -204,9 +204,10 @@ Item {
         id: head
         anchors.top: parent.top
         anchors.topMargin: Tokens.s6
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid: left-inset and body-wide, so the
+        // title starts over the first card column instead of floating centred
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
         spacing: Tokens.s2
 
         Row {
@@ -245,7 +246,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Installed shell plugins and bundles. RyoStore browses and installs them.")
+            text: I18n.tr("Installed plugins and bundles. RyoStore installs new ones.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

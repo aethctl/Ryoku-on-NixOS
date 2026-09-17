@@ -278,7 +278,7 @@ Item {
             divider: true
             block: true
             label: I18n.tr("This device's effects")
-            desc: I18n.tr("Run by the device itself, so they keep going with Ryoku closed. A device does not always implement every effect it lists; if one does nothing, that is its firmware, and a Ryoku effect above will work instead.")
+            desc: I18n.tr("Run by the device itself, so they keep going with Ryoku closed. An effect that does nothing is its firmware; a Ryoku effect above will work instead.")
             Flow {
                 anchors.left: parent.left; anchors.right: parent.right
                 spacing: Tokens.s2

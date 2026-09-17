@@ -1,36 +1,26 @@
 .pragma library
 
-// WindowRulesPage as data. Generated from the page it replaces.
-// Descriptions are written by hand; the inventory carries engineering
-// notes, which are not user copy.
+// WindowRulesPage as data, for search only: the page itself is a bespoke list
+// editor, so this one row is what lets a query reach it. The action keys are the
+// values the rule's action field accepts, indexed so a search for an action
+// (float, fullscreen, opacity) lands on the page.
 
 var rows = [
     {
         "tab": "",
-        "group": "OTHER",
+        "group": "RULES",
         "key": "desktop.windowRules",
         "label": "Rule editor",
-        "desc": "Match by class and/or title; changing the action resets its value",
+        "desc": "Match a window by class or title, then apply one action",
         "ctl": "list",
-        "src": "desktop.json",
-        "caps": "windowRules"
-    },
-    {
-        "tab": "",
-        "group": "OTHER",
-        "key": "desktop.windowRules",
-        "label": "Rule editor",
-        "desc": "Match by class and/or title; changing the action resets its value",
-        "ctl": "multi",
         "src": "desktop.json",
         "caps": "windowRules",
         "opts": [
-            "Match class (placeholder text; no visible field label)",
-            "Match title (placeholder text; no visible field label)",
-            "float",
-            "Value - free-form text (no visible label; placeholder is an action-dependent hint)",
-            "always",
-            "maximize"
+            "float", "tile", "pin", "fullscreen", "maximize", "center",
+            "size", "move", "workspace", "opacity", "noblur", "noborder",
+            "noshadow", "norounding", "nodim", "noanim", "opaque", "xray",
+            "nofocus", "stayfocused", "keepaspectratio", "pseudo",
+            "immediate", "idleinhibit", "suppressevent"
         ]
     }
 ];

@@ -28,6 +28,9 @@ Item {
     property string blurb: ""
     property string query: ""
     property alias tab: sheet.tab
+    // The card measure the grid below uses, so a page's own block can sit on the
+    // same grid instead of spanning the window with an empty half.
+    readonly property alias cardWidth: sheet.cardW
     property alias advanced: sheet.advanced
     // extras ride inside the sheet's scroll area, not pinned above it, so a page
     // with a tall extra block still scrolls as one surface.

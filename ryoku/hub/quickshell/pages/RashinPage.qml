@@ -647,7 +647,7 @@ Item {
 
                     FnCard {
                         width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: I18n.tr("VAULT"); accent: hx.teal
-                        desc: I18n.tr("The living map your agents read - every config beside the binary that owns it.")
+                        desc: I18n.tr("The living map your agents read, beside each binary.")
                         stat: pg.vaultExists ? I18n.tr("%1 files").arg(pg.vaultFiles) : ""
                     }
                     FnCard {
@@ -656,7 +656,7 @@ Item {
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: I18n.tr("SKILLS"); accent: hx.slate
-                        desc: I18n.tr("Toolsets Hermes wields on demand - search, files, the web, more.")
+                        desc: I18n.tr("Toolsets Hermes wields: search, files, the web.")
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: I18n.tr("AGENTS"); accent: hx.tan
@@ -665,11 +665,11 @@ Item {
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: I18n.tr("CHAT"); accent: hx.red
-                        desc: I18n.tr("Talk to Hermes - in the dashboard, or run it in any terminal.")
+                        desc: I18n.tr("Talk to Hermes in the dashboard or a terminal.")
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: I18n.tr("CODE"); accent: hx.teal
-                        desc: I18n.tr("prowl-agent code intelligence - cited answers over your repos.")
+                        desc: I18n.tr("Code intelligence: cited answers over your repos.")
                     }
                 }
             }

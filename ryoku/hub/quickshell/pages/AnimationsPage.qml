@@ -42,7 +42,7 @@ Item {
     // seed the selection off the first curve once the provider list arrives.
     function seedCurve() { if (pg.selectedCurve === "" && pg.liveCurves.length > 0) pg.selectedCurve = pg.liveCurves[0].name }
     onLiveCurvesChanged: pg.seedCurve()
-    Component.onCompleted: pg.seedCurve()
+    Component.onCompleted: { pg.seedCurve(); roomTimer.restart(); }
 
     // theme.motion in shell.json, written instantly through the settings seam
     // (not the staged hypr draft); the shell's ui tokens read the same keys.
@@ -50,6 +50,23 @@ Item {
     readonly property bool reduceMotion: { Settings.revision; return Settings.get("theme.motion.reduce") === true; }
     readonly property string motionScaleLabel: Math.round(pg.motionScale * 100) + "%"
     function setMotion(key, v) { Settings.patch("theme.motion." + key, v); }
+
+    // a short page fills its window: on a compositor with no window-animation
+    // tree the page is just the shell-motion and master rows, so measure the
+    // spare room once and spread half of it as row padding. Timer-only, never
+    // bound (a row's height depends on it); contentHeight is the pre-padding size.
+    property int roomPad: 0
+    function tuneRoom() {
+        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
+            return;
+        var n = Math.max(1, 4 + (pg.liveAnims ? pg.liveAnims.length : 0));
+        var slack = flick.height - col.contentHeight;
+        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
+        var next = Math.max(0, Math.min(Tokens.s6, want));
+        if (next !== pg.roomPad)
+            pg.roomPad = next;
+    }
+    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
 
     // Hyprland animation personality: the preset the loader picks. Read from the
     // backend at load; setAnimPreset writes ~/.config/ryoku/anim-preset + reloads.
@@ -537,9 +554,9 @@ Item {
     Column {
         id: head
         anchors.top: parent.top
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // framed page: the pageArea already insets it, so the head starts at the
+        // body's own left edge, over the first card column
+        width: Math.max(320, pg.width - Tokens.s4)
         spacing: Tokens.s2
 
         Row {
@@ -577,6 +594,7 @@ Item {
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s4
             spacing: Tokens.s5
+            fillTo: flick.height
             // The shell's own motion (distinct from the Hyprland window editor below).
             SettingCard {
                 width: col.colWidth
@@ -591,6 +609,7 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Speed")
                     value: pg.motionScaleLabel
@@ -604,6 +623,7 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Reduce motion")
                     desc: I18n.tr("Snap animations to their end instead of playing them.")
@@ -630,6 +650,7 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Preset")
@@ -652,9 +673,10 @@ Item {
                 // the one genuine setting: the master switch for desktop motion
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     visible: pg.hit("animations master switch desktop motion")
                     label: I18n.tr("Animations")
-                    desc: I18n.tr("Master switch for desktop motion; off, everything snaps into place")
+                    desc: I18n.tr("Master switch for desktop motion")
                     def: pg.cv("desktop.appearance.animations") ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: pg.chg("desktop.appearance.animations")
                     source: "desktop.json"
@@ -834,10 +856,11 @@ Item {
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: fsec.ffOn
                     visible: pg.hit("animate the focused window enabled")
                     label: I18n.tr("Animate the focused window")
-                    desc: I18n.tr("Short effect on the window that takes focus; applies on Save only")
+                    desc: I18n.tr("A short effect on the focused window")
                     def: pg.cv("wm.hyprland.plugins.hyprfocus.enabled") ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: pg.chg("wm.hyprland.plugins.hyprfocus.enabled")
                     source: "desktop.json"
@@ -850,11 +873,12 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     visible: fsec.ffOn && pg.hit("style flash bounce slide")
                     label: I18n.tr("Style")
-                    desc: I18n.tr("Flash dips opacity, Bounce shrinks and springs, Slide nudges it")
+                    desc: I18n.tr("Flash dips, Bounce springs, Slide nudges")
                     def: pg.cap(String(pg.cv("wm.hyprland.plugins.hyprfocus.mode")))
                     changed: pg.chg("wm.hyprland.plugins.hyprfocus.mode")
                     source: "desktop.json"
@@ -870,10 +894,11 @@ Item {
                 // so map to a 0..100 percent domain and store /100.
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "flash" && pg.hit("flash opacity")
                     label: I18n.tr("Flash opacity")
-                    desc: I18n.tr("Opacity the flash dips to, lower is deeper; Flash style only")
+                    desc: I18n.tr("How far the flash dips; Flash style only")
                     unit: "%"
                     value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
                     def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
@@ -889,10 +914,11 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "bounce" && pg.hit("bounce strength")
                     label: I18n.tr("Bounce strength")
-                    desc: I18n.tr("Scale the window shrinks to, lower bounces harder; Bounce style only")
+                    desc: I18n.tr("How far the window shrinks; Bounce style only")
                     unit: "%"
                     value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
                     def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
@@ -908,6 +934,7 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
+                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "slide" && pg.hit("slide height")
                     label: I18n.tr("Slide height")

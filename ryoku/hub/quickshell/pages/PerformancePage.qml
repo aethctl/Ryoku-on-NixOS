@@ -208,52 +208,55 @@ Item {
         Component.onCompleted: if (!cfg.text()) cfg.writeAdapter()
     }
 
-    // ── the schema, regrouped by what you trade away ──
-    // EYE CANDY (visual effects), IDLE (animation that stops when nothing moves),
-    // MEMORY (surfaces unloaded to reclaim RAM). Labels are short; the cost of
-    // each tweak lives in its description, the cell's slot for explanatory prose.
+    // ── the schema, grouped by what you trade away ──
+    // POWER (the profile the desktop follows), EFFECTS (what it draws), MOTION
+    // (what keeps moving), MEMORY (what it unloads while nothing needs it). The
+    // memory knobs open parked: they are the ones a user reaches for once, and
+    // the card's caret plus search keep them a click away rather than a wall of
+    // switches in the way.
     readonly property var schema: [
-        { "tab": "", "group": I18n.tr("POWER PROFILE"), "key": "powerProfileEffects", "ctl": "sw", "src": "performance",
-          "label": "Follow the power profile",
-          "desc": "Let the system power profile shape the shell. Power Saver strips motion, blur and shadows and eases off background polling, like Low power mode; Balanced and Performance leave your switches untouched. Battery already slows polling on its own." },
-        { "tab": "", "group": I18n.tr("POWER PROFILE"), "key": "autoPowerSaverOnBattery", "ctl": "sw", "src": "performance",
-          "label": "Auto power saver on battery",
-          "desc": "Switch to the Power Saver profile automatically when you unplug, and restore your profile when you plug back in. Needs power-profiles-daemon; a manual profile change while on battery is left alone." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "lowPowerMode", "ctl": "sw", "src": "performance",
-          "label": "Low power mode",
-          "desc": "The potato switch: forces every freeze, reduce and disable tweak on. Unloads stay manual." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "reduceMotion", "ctl": "sw", "src": "performance",
-          "label": "Reduce motion",
-          "desc": "Shell transitions land instantly; the compositor's own window animations keep playing." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "disableBlur", "ctl": "sw", "src": "performance",
-          "label": "Disable blur",
-          "desc": "Kills the frosted-glass look everywhere; the compositor reloads to apply it now." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "disableShadows", "ctl": "sw", "src": "performance",
-          "label": "Disable shadows",
-          "desc": "Each shadow is its own GPU blur pass, so flat surfaces draw much cheaper." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "liveWallpaper60", "ctl": "sw", "src": "performance",
-          "label": "60fps live wallpaper",
-          "desc": "Doubles video wallpaper decode for smoother motion; the one switch here that spends instead of saves. Applies to the next wallpaper you set, and clips that cannot supply 60 stay at 30." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "ambientBarMotion", "ctl": "sw", "src": "performance",
-          "label": "Bar drifts when silent",
-          "desc": "Keep the bar's gap stream drifting when nothing is playing, on any power profile. Off by default so a quiet desktop stays cheap; music animates the bar either way." },
+        { "tab": "", "group": I18n.tr("POWER"), "key": "powerProfileEffects", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Follow the power profile"),
+          "desc": I18n.tr("Power Saver strips motion, blur and shadows.") },
+        { "tab": "", "group": I18n.tr("POWER"), "key": "autoPowerSaverOnBattery", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Auto power saver on battery"),
+          "desc": I18n.tr("Switches to Power Saver when you unplug.") },
 
-        { "tab": "", "group": I18n.tr("IDLE"), "key": "pauseLiveWallpaperWhenFullscreen", "ctl": "sw", "src": "performance",
-          "label": "Pause video wallpaper",
-          "desc": "Stops a video wallpaper while a window is fullscreen; its still frame stays underneath, so nothing changes on screen." },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "lowPowerMode", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Low power mode"),
+          "desc": I18n.tr("Turns every effect switch here on at once.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "reduceMotion", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Reduce motion"),
+          "desc": I18n.tr("Shell transitions land instantly.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableBlur", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Disable blur"),
+          "desc": I18n.tr("Drops the frosted-glass look everywhere.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableShadows", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Disable shadows"),
+          "desc": I18n.tr("Surfaces draw without a shadow pass.") },
+
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "liveWallpaper60", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("60fps live wallpaper"),
+          "desc": I18n.tr("Smoother video wallpaper, at a decode cost.") },
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "pauseLiveWallpaperWhenFullscreen", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Pause video wallpaper"),
+          "desc": I18n.tr("Stops the video behind a fullscreen window.") },
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "ambientBarMotion", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Bar drifts when silent"),
+          "desc": I18n.tr("The bar keeps drifting while nothing plays.") },
 
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadWidgetsWhenCovered", "ctl": "sw", "src": "performance",
-          "label": "Hide covered widgets",
-          "desc": "Parks desktop widgets only when every monitor is covered; the return is always instant." },
+          "label": I18n.tr("Hide covered widgets"),
+          "desc": I18n.tr("Parks widgets while every monitor is covered.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadVisualizerWhenSilent", "ctl": "sw", "src": "performance",
-          "label": "Unload the visualiser",
-          "desc": "Kills the whole process after 30s of silence, reclaiming around 250 MB." },
+          "label": I18n.tr("Unload the visualiser"),
+          "desc": I18n.tr("Frees ~250 MB after 30s of silence.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadLauncherWhenIdle", "ctl": "sw", "src": "performance",
-          "label": "Unload the launcher",
-          "desc": "Frees about 250 MB after a minute hidden; the next open cold-starts." },
+          "label": I18n.tr("Unload the launcher"),
+          "desc": I18n.tr("Frees ~250 MB a minute after closing.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadOverviewWhenIdle", "ctl": "sw", "src": "performance",
-          "label": "Unload the overview",
-          "desc": "Frees about 250 MB after a minute hidden; the next Super+Tab cold-starts it." }
+          "label": I18n.tr("Unload the overview"),
+          "desc": I18n.tr("Frees ~250 MB a minute after Super+Tab closes.") }
     ]
 
     // group order and membership come straight from the schema, so a regroup is
@@ -274,9 +277,10 @@ Item {
         id: head
         anchors.top: parent.top
         anchors.topMargin: Tokens.s6
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in the middle of a page-wide window
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
         spacing: Tokens.s2
 
         Row {
@@ -308,6 +312,36 @@ Item {
     }
 
 
+    // A page this short spreads its slack into the rows rather than ending two
+    // thirds up the window. Measured once the cards settle, never bound.
+    property int roomPad: 0
+    function tuneRoom() {
+        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
+            return;
+        var n = Math.max(1, pg.schema.length);
+        // the cards' own height, not the body the grid pads itself out to
+        var slack = flick.height - col.contentHeight;
+        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
+        var next = Math.max(0, Math.min(Tokens.s6, want));
+        if (next !== pg.roomPad)
+            pg.roomPad = next;
+    }
+    // The cards settle over a few passes (async page load, then wrapped text), so
+    // this measures until the value stops moving rather than once too early.
+    Timer {
+        id: roomTimer
+        interval: 200; running: true; repeat: true
+        property int tries: 0
+        onTriggered: {
+            tries++;
+            var before = pg.roomPad;
+            pg.tuneRoom();
+            if (tries >= 8 || (before > 0 && pg.roomPad === before))
+                running = false;
+        }
+    }
+    onHeightChanged: { roomTimer.tries = 0; roomTimer.restart() }
+
     // ── the switch grid: three meaning-groups, each a SettingCard drawer that
     // stacks its compact SettingRows; membership comes straight from the schema. ──
     Flickable {
@@ -330,6 +364,7 @@ Item {
             // balanced, instead of one column beside an empty half
             width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             Repeater {
                 model: pg.groups
@@ -339,6 +374,11 @@ Item {
                     required property string modelData
                     width: col.colWidth
                     title: sect.modelData
+                    // the memory knobs park by default: reached for once, then
+                    // left alone, so they open folded and stay out of the way
+                    expanded: sect.modelData !== I18n.tr("MEMORY")
+                    summary: pg.rowsIn(sect.modelData).length + " " + I18n.tr("SWITCHES")
+                    onExpandedChanged: roomTimer.restart()
 
                     Repeater {
                         model: pg.rowsIn(sect.modelData)
@@ -352,6 +392,7 @@ Item {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             divider: cell.index > 0
+                            roomPad: pg.roomPad
                             controlWidth: 54
                             label: I18n.tr(cell.r.label)
                             desc: I18n.tr(cell.r.desc)

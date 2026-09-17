@@ -25,8 +25,7 @@ import "schema/AddonsPage.js" as AddonsSchema
 import "schema/WindowRulesPage.js" as WindowRulesSchema
 import "schema/AppOverridesPage.js" as AppOverridesSchema
 import "schema/LayerRulesPage.js" as LayerRulesSchema
-import "schema/AutostartPage.js" as AutostartSchema
-import "schema/EnvironmentPage.js" as EnvironmentSchema
+import "schema/SessionPage.js" as SessionSchema
 import "schema/PerformancePage.js" as PerformanceSchema
 import "schema/UpdatesPage.js" as UpdatesSchema
 import "ReloadCoverModel.js" as ReloadCoverModel
@@ -63,6 +62,7 @@ Rectangle {
         // Store's "open in settings", a keybind, a script) still lands right.
         if (s === "windows") return "windowmanager";
         if (s === "cursor") return "input";
+        if (s === "autostart" || s === "environment") return "session";
         return s;
     }
     // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
@@ -117,7 +117,7 @@ Rectangle {
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
             { key: "windowrules", name: "Window Rules", adv: true } ] },
         { name: "SYSTEM", items: [
-            { key: "performance", name: "Performance" }, { key: "autostart", name: "Autostart", adv: true }, { key: "environment", name: "Environment", adv: true },
+            { key: "performance", name: "Performance" }, { key: "session", name: "Session" },
             { key: "recording", name: "Recording" }, { key: "dictation", name: "Dictation" }, { key: "fastfetch", name: "Fastfetch", adv: true },
             { key: "import", name: "Import config", adv: true, wired: true } ] },
         { name: "EXTEND", items: [
@@ -137,8 +137,7 @@ Rectangle {
         "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
-        "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
-        "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
     })
 
     // Extra search vocabulary per section: the words a user actually types that
@@ -168,8 +167,7 @@ Rectangle {
         "windowrules": "window rule float pin size place opacity class title override",
         "appoverrides": "app override per-app opacity blur corner class inherit opaque transparent",
         "layerrules": "layer rule namespace blur dim bar notification surface",
-        "autostart": "autostart startup launch login run command boot",
-        "environment": "environment variable env var session export",
+        "session": "session login startup autostart launch run command boot environment variable env var export",
         "performance": "performance battery power saving save lowpower potato lag cpu gpu ram memory idle freeze reduce motion fps",
         "rashin": "rashin agent ai assistant hermes vault memory skills chat code llm needle",
         "updates": "update upgrade version channel commit behind check origin",
@@ -193,8 +191,8 @@ Rectangle {
         "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
         "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
         "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
-        "layerrules": LayerRulesSchema.rows, "autostart": AutostartSchema.rows,
-        "environment": EnvironmentSchema.rows, "performance": PerformanceSchema.rows,
+        "layerrules": LayerRulesSchema.rows, "session": SessionSchema.rows,
+        "performance": PerformanceSchema.rows,
         "updates": UpdatesSchema.rows
     })
     readonly property var searchIndex: {
@@ -274,7 +272,7 @@ Rectangle {
         "brightness": "backlight", "backlight": "brightness", "nightlight": "night comfort backlight", "warmth": "night comfort", "bluelight": "night comfort",
         "volume": "audio sound", "sound": "audio", "font": "typeface appearance", "typeface": "font appearance",
         "screenshot": "recording capture", "screencast": "recording capture", "screensaver": "lockscreen lock", "lock": "lockscreen",
-        "startup": "autostart", "boot": "autostart", "battery": "performance power", "powersaving": "performance power", "potato": "performance", "lag": "performance",
+        "startup": "session", "boot": "session", "battery": "performance power", "powersaving": "performance power", "potato": "performance", "lag": "performance",
         "gap": "gaps spacing", "spacing": "gaps", "glass": "hyprglass blur liquid", "liquid": "hyprglass glass",
         "titlebar": "hyprbars title bar", "titlebars": "hyprbars title bar", "plugin": "plugins hyprland", "plugins": "hyprland",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
@@ -402,7 +400,7 @@ Rectangle {
     readonly property var framedSet: ({
         "bar-studio": true, "desktop": true, "plugins": true, "input": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
-        "autostart": true, "environment": true
+        "session": true
     })
     // A section drives the compositor when any of its rows targets the neutral
     // window-manager store (src desktop.json), derived from the schema so it
@@ -487,7 +485,11 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
+<<<<<<< HEAD
         var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+=======
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage" };
+>>>>>>> ca9f4f279 ([ryoku] hub: fill the window, cut the copy, group the pages)
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -1301,12 +1303,13 @@ Rectangle {
         anchors.bottom: pageArea.full ? parent.bottom : bar.top
         anchors.topMargin: pageArea.full ? 0 : Tokens.s5
         anchors.bottomMargin: pageArea.full ? 0 : Tokens.s3
-        // Framed pages read on one centred measure, placed by `x` alone (an
-        // anchor here would silently win and pin the page to the rail); a
-        // full-bleed page (art, a console, a drag-arrange) keeps the window.
-        width: pageArea.full
-            ? parent.width - rail.width
-            : Math.min(parent.width - rail.width - 2 * Tokens.s6, Tokens.pageMax)
+        // Framed pages fill the window beside the rail: the Hub opens
+        // page-wide, and a page that refuses the width it was given wastes it.
+        // Nothing needs a global cap -- a page that reads better on a shorter
+        // measure (a paragraph, a list, a release note) caps its own blocks, and
+        // a grid page caps itself through its cards. Placed by `x` alone (an
+        // anchor here would silently win and pin the page to the rail).
+        width: parent.width - rail.width - (pageArea.full ? 0 : 2 * Tokens.s6)
         x: rail.width + (pageArea.full
             ? 0
             : Math.max(Tokens.s6, Math.round((parent.width - rail.width - width) / 2)))

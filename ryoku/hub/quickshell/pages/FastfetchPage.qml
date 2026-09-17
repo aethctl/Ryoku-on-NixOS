@@ -653,6 +653,8 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.leftMargin: Tokens.s6
+        anchors.rightMargin: Tokens.s6
         anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 

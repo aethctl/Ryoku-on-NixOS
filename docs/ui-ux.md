@@ -242,8 +242,52 @@ a terminal instead of a printed instrument, which is a different product.
   `s7` 48. Nothing between them.
 - **Fixed furniture.** A settings row is `rowH` 48 tall, a cell `cellH` 104, a
   control `ctlH` 26, a nav rail `railW` 268. A page never invents these. A framed
-  page is centred on `pageMax`, and the schema sheet puts its groups in two
-  columns of cards capped at `cardMax` when the measure holds them.
+  page fills the window beside the rail, and the sheet puts its groups in as many
+  card columns as the measure holds (three on a page-wide window), each card
+  capped at `cardMax`.
+
+## A page uses the window it was given
+
+The Hub opens page-wide, and a page that refuses the width it was given is the
+bug this section exists to prevent.
+
+- **The body takes the width it is given.** A page's scroll or body region never
+  caps itself (no `Math.min(parent.width, Tokens.contentMax)` on the body). The
+  grid caps itself through its cards instead. Only *prose* keeps a reading cap: a
+  paragraph, a help line, a release note, a blurb.
+- **The head sits on the body's grid.** An eyebrow, title and blurb start at the
+  body's left inset and span its width, so a page's title aligns with its first
+  card column rather than floating in the middle of the window.
+- **A block that nearly fills the body is centred in it**, so a page reads
+  composed rather than hanging off the top of a half-empty window. The threshold
+  is `CardColumns.fillTo` plus its own rule: the cards must reach 45% of the body
+  before the block is lifted. A genuinely thin page stays at the top, because a
+  small block floated into the middle of a void reads as lost rather than
+  composed; the answer to thinness is a merge, not padding.
+- **Rows breathe before anything else fills.** A page with spare room passes
+  `CardColumns.contentHeight`'s slack down as `SettingRow.roomPad` (measured once
+  by a timer, never bound (a row's height depends on it, so a binding would chase
+  its own tail), capped at `Tokens.s6`).
+
+## Disclosure, not walls
+
+- **A page leads with what a user came for.** A rarely-touched cluster folds
+  (`SettingCard.expanded: false`) and its header says what it hides
+  (`SettingCard.summary`: "4 SWITCHES"), because a folded card with no trace of
+  its contents reads as an empty one.
+- **A deep knob is `adv: true`**, hidden behind the rail's Advanced switch and
+  still reachable from search. Nothing is ever buried beyond a search.
+- **A toggle is only for a true binary.** A choice among modes is a `Seg`, a
+  family of related on/offs is a `Multi`, a number is a `Step` or a `Slid`, and
+  `Spans.controlFor` already decides this from the value's kind. Reaching for a
+  switch because the key is a `bool` is how a page becomes a wall of switches.
+- **A control that cannot work is never offered.** An affordance beside an empty
+  list is armed only when the list has something to act on (`Btn.armed`), and a
+  row the active compositor cannot back is dropped, not shown dead.
+- **Copy is measured, not guessed.** A row's description is one line and 60
+  characters at a three-column card; a page blurb is 70. A description that only
+  restates its label is deleted. These caps are enforced by reading the live
+  page, not by counting characters in a file.
 - **No shadows in app surfaces.** The Hub and the apps are print: a flat
   instrument sheet does not cast. The brutalist offset shadow is retired; an
   overlay separates with `Tokens.paperLift` and a `lineStrong` border instead.

@@ -973,9 +973,10 @@ Item {
         id: head
         anchors.top: parent.top
         anchors.topMargin: Tokens.s6
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in the middle of a page-wide window
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
         spacing: Tokens.s2
 
         Row {
@@ -1949,8 +1950,8 @@ Item {
 
         Row {
             id: masonry
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            // the masonry fills the body it is given; the cards keep the measure
+            width: flick.width - Tokens.s3
             x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s3
 

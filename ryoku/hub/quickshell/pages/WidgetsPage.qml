@@ -388,8 +388,11 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
         anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first card
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
         spacing: Tokens.s2
 
         Row {
@@ -598,6 +601,8 @@ Item {
                     item.defaults = Qt.binding(() => pg.sheetDefaults);
                     item.tab = Qt.binding(() => pg.selected);
                     item.query = Qt.binding(() => pg.query);
+                    // the rail's Advanced toggle reveals the per-widget desktop lock
+                    item.advanced = Qt.binding(() => !!(pg.hub && pg.hub.advanced));
                     item.edited.connect(pg.onSheetEdited);
                     item.pickRequested.connect(pg.onSheetPick);
                     item.appPickRequested.connect(pg.onSheetAppPick);

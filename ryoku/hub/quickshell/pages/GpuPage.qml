@@ -449,7 +449,9 @@ done
     // ── head ───────────────────────────────────────────────────────────────────
     Column {
         id: head
-                anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.leftMargin: Tokens.s6
+        anchors.rightMargin: Tokens.s6
         anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
@@ -507,21 +509,23 @@ done
                 bottomMargin: Tokens.s5
             }
             contentWidth: width
-            contentHeight: gfxCol.height + Tokens.s5
+            contentHeight: Math.max(gfxCol.height, height)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-            Column {
+            CardColumns {
                 id: gfxCol
-                width: Math.min(gfx.width - Tokens.s3, 720)
-                spacing: Tokens.s6
+                // a body of cards fills the measure and splits into balanced columns
+                width: gfx.width - Tokens.s3
+                spacing: Tokens.s5
+                fillTo: gfx.height
 
                 // gpu caps failed: surface it up top; the sections below still
                 // render from whatever partial payload arrived.
                 Column {
                     visible: pg.capsError !== ""
-                    width: gfxCol.width; spacing: Tokens.s3
+                    width: gfxCol.colWidth; spacing: Tokens.s3
                     Text {
                         width: parent.width; wrapMode: Text.WordWrap
                         text: I18n.tr("Couldn't read your graphics hardware.")
@@ -538,7 +542,7 @@ done
 
                 // ── RYOKU RENDERS ON ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("RYOKU RENDERS ON")
                     // Hybrid/Performance/Passthrough only mean something with a
                     // second GPU to switch between; a single-GPU box always renders
@@ -601,7 +605,7 @@ done
 
                 // ── CPU POWER PROFILES ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     visible: pg.cpuTune.length > 0
                     title: I18n.tr("CPU POWER PROFILES")
 
@@ -666,7 +670,7 @@ done
 
                 // ── TUNING · THIS SESSION ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("TUNING · THIS SESSION")
 
                     // the per-session promise, said plainly and kept in view.
@@ -855,7 +859,7 @@ done
 
                 // ── BATTERY ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     visible: pg.batteryTune.length > 0
                     title: I18n.tr("BATTERY")
 
@@ -872,7 +876,7 @@ done
 
                 // ── GPU PASSTHROUGH · ADVANCED ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("GPU PASSTHROUGH · ADVANCED")
 
                     Text {

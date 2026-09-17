@@ -144,10 +144,9 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors.top: parent.top
-        // the head sits on the same centred measure as the column below
-        width: Math.min(parent.width, Tokens.contentMax)
-        x: Math.round((parent.width - width) / 2)
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in a page-wide window
+        anchors { top: parent.top; left: parent.left; right: parent.right }
         spacing: Tokens.s2
 
         Row {
@@ -254,6 +253,7 @@ Item {
             // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s2
+            fillTo: flick.height
 
             Repeater {
                 model: pg.ruleRows

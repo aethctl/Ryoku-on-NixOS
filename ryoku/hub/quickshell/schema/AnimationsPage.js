@@ -10,7 +10,7 @@ var rows = [
         "group": "GLOBAL",
         "key": "desktop.appearance.animations",
         "label": "Animations",
-        "desc": "Master switch for desktop motion; off, everything snaps into place",
+        "desc": "Master switch for desktop motion",
         "ctl": "sw",
         "src": "desktop.json"
     }

@@ -1,80 +1,72 @@
 .pragma library
 
-// PerformancePage as data. Generated from the page it replaces.
-// Descriptions are written by hand; the inventory carries engineering
-// notes, which are not user copy.
+// PerformancePage as data, for the search index: the same rows the page draws,
+// grouped the way it groups them.
 
 var rows = [
     {
-        "tab": "",
-        "group": "LOW POWER",
-        "key": "lowPowerMode",
-        "label": "Low power mode - strip every heavy effect at once (blur, shadows, animations). The potato switch: implies all four toggles below, so a weak GPU runs the shell lag-free.",
-        "desc": "Forces every freeze, reduce and disable switch on; unloads stay manual",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "POWER", "key": "powerProfileEffects", "ctl": "sw", "src": "performance.json",
+        "label": "Follow the power profile",
+        "desc": "Power Saver strips motion, blur and shadows"
     },
     {
-        "tab": "",
-        "group": "LOW POWER",
-        "key": "reduceMotion",
-        "label": "Reduce motion - make transitions instant (no per-frame animation repaints)",
-        "desc": "Shell transitions land instantly; Hyprland window animations keep playing",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "POWER", "key": "autoPowerSaverOnBattery", "ctl": "sw", "src": "performance.json",
+        "label": "Auto power saver on battery",
+        "desc": "Switches to Power Saver when you unplug"
     },
     {
-        "tab": "",
-        "group": "LOW POWER",
-        "key": "disableBlur",
-        "label": "Disable blur - shell effects and the compositor backdrop blur (the biggest GPU saving)",
-        "desc": "Kills the frosted-glass look everywhere; Hyprland reloads to apply it now",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "EFFECTS", "key": "lowPowerMode", "ctl": "sw", "src": "performance.json",
+        "label": "Low power mode",
+        "desc": "Turns every effect switch here on at once"
     },
     {
-        "tab": "",
-        "group": "LOW POWER",
-        "key": "disableShadows",
-        "label": "Disable shadows - shell drop shadows and the compositor window shadow",
-        "desc": "Each shadow is its own GPU blur pass, so flat surfaces draw much cheaper",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "EFFECTS", "key": "reduceMotion", "ctl": "sw", "src": "performance.json",
+        "label": "Reduce motion",
+        "desc": "Shell transitions land instantly"
     },
     {
-        "tab": "",
-        "group": "DESKTOP WIDGETS",
-        "key": "unloadWidgetsWhenCovered",
-        "label": "Hide desktop widgets while windows cover the desktop (frees their memory; they reappear on an empty desktop)",
-        "desc": "Parks only when every monitor is covered; the return is always instant",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "EFFECTS", "key": "disableBlur", "ctl": "sw", "src": "performance.json",
+        "label": "Disable blur",
+        "desc": "Drops the frosted-glass look everywhere"
     },
     {
-        "tab": "",
-        "group": "VISUALISER",
-        "key": "unloadVisualizerWhenSilent",
-        "label": "Unload the visualiser to free memory when silent (brief delay when audio resumes)",
-        "desc": "Kills the whole process after 30s of silence, reclaiming around 250 MB",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "EFFECTS", "key": "disableShadows", "ctl": "sw", "src": "performance.json",
+        "label": "Disable shadows",
+        "desc": "Surfaces draw without a shadow pass"
     },
     {
-        "tab": "",
-        "group": "LAUNCHER & OVERVIEW",
-        "key": "unloadLauncherWhenIdle",
-        "label": "Unload the launcher to free its memory when idle (brief delay on the next open)",
-        "desc": "Frees about 250 MB after a minute hidden; the next open cold-starts",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "MOTION", "key": "liveWallpaper60", "ctl": "sw", "src": "performance.json",
+        "label": "60fps live wallpaper",
+        "desc": "Smoother video wallpaper, at a decode cost"
     },
     {
-        "tab": "",
-        "group": "LAUNCHER & OVERVIEW",
-        "key": "unloadOverviewWhenIdle",
-        "label": "Unload the workspace overview to free its memory when idle (brief delay on the next open)",
-        "desc": "Frees about 250 MB after a minute hidden; next Super+Tab cold-starts it",
-        "ctl": "sw",
-        "src": "performance.json"
+        "tab": "", "group": "MOTION", "key": "pauseLiveWallpaperWhenFullscreen", "ctl": "sw", "src": "performance.json",
+        "label": "Pause video wallpaper",
+        "desc": "Stops the video behind a fullscreen window"
+    },
+    {
+        "tab": "", "group": "MOTION", "key": "ambientBarMotion", "ctl": "sw", "src": "performance.json",
+        "label": "Bar drifts when silent",
+        "desc": "The bar keeps drifting while nothing plays"
+    },
+    {
+        "tab": "", "group": "MEMORY", "key": "unloadWidgetsWhenCovered", "ctl": "sw", "src": "performance.json",
+        "label": "Hide covered widgets",
+        "desc": "Parks widgets while every monitor is covered"
+    },
+    {
+        "tab": "", "group": "MEMORY", "key": "unloadVisualizerWhenSilent", "ctl": "sw", "src": "performance.json",
+        "label": "Unload the visualiser",
+        "desc": "Frees ~250 MB after 30s of silence"
+    },
+    {
+        "tab": "", "group": "MEMORY", "key": "unloadLauncherWhenIdle", "ctl": "sw", "src": "performance.json",
+        "label": "Unload the launcher",
+        "desc": "Frees ~250 MB a minute after closing"
+    },
+    {
+        "tab": "", "group": "MEMORY", "key": "unloadOverviewWhenIdle", "ctl": "sw", "src": "performance.json",
+        "label": "Unload the overview",
+        "desc": "Frees ~250 MB a minute after Super+Tab closes"
     }
 ];
