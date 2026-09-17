@@ -36,7 +36,17 @@ Item {
     // its left edge.
     readonly property int capacity: width >= maxColumns * minColumnWidth + (maxColumns - 1) * columnSpacing
         ? maxColumns : 1
-    readonly property int blocks: childrenInOrder().length
+    // Counted without reading a child's width: the column count and the column
+    // width both follow from this, and the width comes back to the children, so
+    // asking childrenInOrder() (which filters on width) here is a binding loop.
+    readonly property int blocks: {
+        var n = 0;
+        for (var i = 0; i < stage.children.length; i++) {
+            var c = stage.children[i];
+            if (c && c.visible !== false) n++;
+        }
+        return n;
+    }
     readonly property int columns: Math.max(1, Math.min(capacity, blocks))
     readonly property real colWidth: Math.min(Tokens.cardWide,
         Math.max(200, Math.floor((width - (columns - 1) * columnSpacing) / columns)))
