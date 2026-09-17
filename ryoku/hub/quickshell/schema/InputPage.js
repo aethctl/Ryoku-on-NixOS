@@ -10,7 +10,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbLayout",
         "label": "Layout",
-        "desc": "Extra layout kept loaded; pick a chord below to switch between the two",
+        "desc": "The keyboard's main layout",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -49,7 +49,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbOptions",
         "label": "Switch layouts",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "The chord that moves between layouts",
         "ctl": "seg",
         "src": "desktop.json",
         "caps": "keyboardLayoutSwitch",
@@ -73,7 +73,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Caps Lock",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "What the Caps Lock key does instead",
         "ctl": "chips",
         "src": "desktop.json",
         "opts": [
@@ -89,7 +89,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Swap Alt and Super",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Swaps the two modifier keys, for macOS-style shortcuts",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -98,7 +98,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Compose key",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "The key that begins a compose sequence for accents and symbols",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -112,7 +112,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Extra options",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Extra xkb options, comma separated",
         "ctl": "text",
         "src": "desktop.json"
     },
@@ -121,7 +121,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "",
         "label": "Apply system-wide",
-        "desc": "Result of the last apply; by default these keep their own keymap",
+        "desc": "Also set the login screen, the TTYs and the boot prompt",
         "ctl": "action",
         "src": "vconsole.conf, via `localectl set-x11-keymap <kbLayout> \"\" <kbVariant> <kbOptions>`"
     },
@@ -350,5 +350,55 @@ var rows = [
         "lo": 100.0,
         "hi": 2000.0,
         "unit": "ms"
+    },
+{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.theme",
+        "label": "Theme",
+        "desc": "From installed icon sets, applies now and to newly opened apps",
+        "ctl": "seg",
+        "src": "desktop.json",
+        "opts": [
+            "DYNAMIC"
+        ]
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.material",
+        "label": "Material Bibata",
+        "desc": "Swap the pointer for the Bibata cursor recolored in the Ryoku vermillion accent",
+        "ctl": "sw",
+        "src": "desktop.json"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.size",
+        "label": "Size",
+        "desc": "How large the pointer is drawn",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": 12.0,
+        "hi": 64.0,
+        "unit": "px"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.inactiveTimeout",
+        "label": "Hide after idle",
+        "desc": "Seconds of stillness before the pointer hides, 0 never hides",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": 0.0,
+        "hi": 30.0,
+        "unit": "s"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.hideOnKeyPress",
+        "label": "Hide while typing",
+        "desc": "The pointer vanishes on a keypress and returns when moved",
+        "ctl": "sw",
+        "src": "desktop.json"
     }
 ];

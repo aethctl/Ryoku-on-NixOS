@@ -3,6 +3,22 @@
 ## Unreleased
 
 ### Added
+- **`CardColumns`: a page body of blocks, laid into balanced columns.** It takes
+  the children a page already declares, measures them at the column width, and
+  splits them so the columns end level, with a `fullWidth: true` child taking a
+  band across them; `colWidth` is published for a delegate that sizes itself to
+  its column.
+- **A numeric readout is typed into.** `SettingRow` turns a stepper's number or a
+  slider's percentage into a field on click or Enter and reports the typed text,
+  which `SettingsSheet` clamps into the row's own range and stores in the kind the
+  row speaks.
+
+### Changed
+- **`Sw` shows its state twice.** The track tints and the knob fills as the switch
+  goes on, because an off switch drawn as an empty outline reads as an unchecked
+  box at a glance.
+
+### Added
 - **Two measures a page reads on.** `Tokens.pageMax` caps a framed page's content
   column, and `Tokens.contentMax` caps a stack of settings rows, so a wider window
   buys calmer margins instead of a label at one edge and its control at the other.

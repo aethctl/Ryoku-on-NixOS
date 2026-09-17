@@ -1,4 +1,5 @@
 module Ryoku.Ui
+CardColumns 1.0 CardColumns.qml
 Cell 1.0 Cell.qml
 Section 1.0 Section.qml
 SettingRow 1.0 SettingRow.qml

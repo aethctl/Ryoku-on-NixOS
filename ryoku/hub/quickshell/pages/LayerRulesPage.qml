@@ -207,11 +207,11 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
-            id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s2
 
             Repeater {
@@ -224,7 +224,7 @@ Item {
 
                     readonly property bool needsValue: pg.valueActions.indexOf(rowItem.modelData.action) >= 0
 
-                    width: col.width
+                    width: col.colWidth
                     // the card grows a row when the action needs a value and
                     // shrinks when it does not: the reflow the old page did by
                     // recomputing the namespace field width, done by height here.

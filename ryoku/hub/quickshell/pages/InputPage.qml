@@ -39,6 +39,28 @@ Item {
     // gated so nothing paints stale before the first `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
+    // Installed cursor themes, enumerated by the backend so the row offers what
+    // this machine can actually wear (the Cursor page read the same command).
+    property var cursorThemeList: [{ "code": "DYNAMIC", "name": I18n.tr("Follow the wallpaper") }]
+    Process {
+        id: cursorEnum
+        running: false
+        command: ["ryoku-hub", "desktop", "cursors"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var names = JSON.parse(this.text);
+                    if (!Array.isArray(names)) return;
+                    var out = [{ "code": "DYNAMIC", "name": I18n.tr("Follow the wallpaper") }];
+                    for (var i = 0; i < names.length; i++)
+                        out.push({ "code": String(names[i]), "name": String(names[i]) });
+                    pg.cursorThemeList = out;
+                } catch (e) {}
+            }
+        }
+    }
+    Component.onCompleted: { pg.refreshVariants(); cursorEnum.running = true; }
+
     // ── hub access ──────────────────────────────────────────────────────────
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
     function cv(path) { return pg.hub ? pg.hub.hyprCommittedVal(path) : undefined }
@@ -231,7 +253,6 @@ Item {
     }
     readonly property string curPrimary: pg.primaryLayout(false)
     onCurPrimaryChanged: pg.refreshVariants()
-    Component.onCompleted: pg.refreshVariants()
 
     function nameIn(list, code) {
         for (var i = 0; i < list.length; i++)
@@ -640,15 +661,14 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
+        CardColumns {
             id: body
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s5
 
             SettingCard {
-                width: body.width
+                width: body.colWidth
                 title: I18n.tr("KEYBOARD")
 
                 PickCell {
@@ -696,7 +716,7 @@ Item {
             }
 
             SettingCard {
-                width: body.width
+                width: body.colWidth
                 title: I18n.tr("KEY REMAPS")
 
                 OptCell {
@@ -791,7 +811,7 @@ Item {
             }
 
             SettingCard {
-                width: body.width
+                width: body.colWidth
                 title: I18n.tr("POINTER")
 
                 Setting {
@@ -842,7 +862,50 @@ Item {
             }
 
             SettingCard {
-                width: body.width
+                id: cursorSect
+                width: body.colWidth
+                title: I18n.tr("CURSOR")
+
+                PickCell {
+                    divider: false
+                    cellLabel: I18n.tr("Theme")
+                    cellDesc: I18n.tr("The installed pointer set; applies now and to new apps.")
+                    pickTitle: I18n.tr("POINTER THEME")
+                    list: pg.cursorThemeList
+                    currentCode: pg.hub ? String(pg.hub.hyprVal("desktop.cursor.theme") || "DYNAMIC") : ""
+                    committedCode: pg.hub ? String(pg.hub.hyprCommittedVal("desktop.cursor.theme") || "DYNAMIC") : ""
+                    applyFn: function (code) { pg.he("desktop.cursor.theme", code); }
+                }
+                Setting {
+                    path: "desktop.cursor.material"
+                    ctl: "sw"
+                    label: I18n.tr("Material Bibata")
+                    desc: I18n.tr("The Bibata pointer, recoloured in the wallpaper accent.")
+                }
+                Setting {
+                    path: "desktop.cursor.size"
+                    ctl: "step"; lo: 12; hi: 64; stepBy: 2; asInt: true
+                    label: I18n.tr("Size")
+                    desc: I18n.tr("How large the pointer is drawn.")
+                    unit: "px"
+                }
+                Setting {
+                    path: "desktop.cursor.inactiveTimeout"
+                    ctl: "step"; lo: 0; hi: 30; stepBy: 1; asInt: true
+                    label: I18n.tr("Hide after idle")
+                    desc: I18n.tr("Seconds of stillness before it hides; 0 never hides.")
+                    unit: "s"
+                }
+                Setting {
+                    path: "desktop.cursor.hideOnKeyPress"
+                    ctl: "sw"
+                    label: I18n.tr("Hide while typing")
+                    desc: I18n.tr("It vanishes on a keypress and returns when moved.")
+                }
+            }
+
+            SettingCard {
+                width: body.colWidth
                 title: I18n.tr("TOUCHPAD")
 
                 Setting {
@@ -922,7 +985,7 @@ Item {
             }
 
             SettingCard {
-                width: body.width
+                width: body.colWidth
                 title: I18n.tr("KEY REPEAT")
 
                 Setting {

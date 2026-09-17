@@ -11,7 +11,6 @@ import "schema/BarStudioPage.js" as BarStudioSchema
 import "schema/WindowSettings.js" as WindowSettingsSchema
 import "schema/PluginsPage.js" as PluginsSchema
 import "schema/InputPage.js" as InputSchema
-import "schema/CursorPage.js" as CursorSchema
 import "schema/KeybindsPage.js" as KeybindsSchema
 import "schema/DisplaysPage.js" as DisplaysSchema
 import "schema/GpuPage.js" as GpuSchema
@@ -59,7 +58,13 @@ Rectangle {
     // A Hub that remembered the retired `windows` section, or a deep link that
     // still names it, lands on the compositor page that now holds those rows
     // rather than a blank pane.
-    function canonicalSection(s) { return s === "windows" ? "windowmanager" : s; }
+    function canonicalSection(s) {
+        // sections that were folded into another page: an old deep link (the
+        // Store's "open in settings", a keybind, a script) still lands right.
+        if (s === "windows") return "windowmanager";
+        if (s === "cursor") return "input";
+        return s;
+    }
     // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
     // win over the remembered section. `sectionGet` is a Process, so on a cold
     // start its stdout lands AFTER the IPC has already set the page and the
@@ -99,7 +104,7 @@ Rectangle {
         { name: "OVERVIEW", items: [ { key: "profile", name: "Profile" }, { key: "global", name: "General" }, { key: "updates", name: "Updates" } ] },
         { name: "DEVICES", items: [
             { key: "displays", name: "Displays", needs: { cap: "monitorConfig" } }, { key: "connections", name: "Connections" },
-            { key: "input", name: "Input" }, { key: "cursor", name: "Cursor" }, { key: "gpu", name: "Graphics & Power" } ] },
+            { key: "input", name: "Input" }, { key: "gpu", name: "Graphics & Power" } ] },
         { name: "LOOK", items: [
             { key: "animations", name: "Animations" }, { key: "lockscreen", name: "Lockscreen" } ] },
         { name: "COMPOSITOR", items: [
@@ -127,7 +132,7 @@ Rectangle {
     // is the texture, and every gloss is the real word, never decoration:
     // 外観 = appearance, 接続 = connections, 演算 = compute (Machine), and so on.
     readonly property var jpName: ({
-        "profile": "横顔", "displays": "画面", "input": "入力", "cursor": "矢印", "keybinds": "操作",
+        "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
         "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
@@ -146,7 +151,6 @@ Rectangle {
         "displays": "monitor screen resolution refresh scale rotation arrange mirror hidpi dual second external multiple",
         "connections": "wifi wi-fi wireless bluetooth network hotspot tether internet ethernet pair pairing device",
         "input": "keyboard mouse touchpad pointer trackpad sensitivity scroll layout dvorak remap capslock repeat gesture",
-        "cursor": "cursor pointer mouse arrow theme size hide idle timeout motion dynamic rotate tilt stretch shake magnify",
         "keybinds": "shortcuts hotkeys binds keys browser terminal editor files launch super",
         "gpu": "graphics nvidia amd vram passthrough vfio rendering hybrid performance cpu governor epp frequency thermal battery charge ceiling aspm profile",
         "recording": "screen record capture video screencast screenshot fps codec framerate",
@@ -182,7 +186,7 @@ Rectangle {
     // compositor-driving classification, so the two cannot drift apart.
     readonly property var sectionRows: ({
         "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
-        "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
+        "input": InputSchema.rows, "keybinds": KeybindsSchema.rows,
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
         "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
@@ -274,7 +278,7 @@ Rectangle {
         "gap": "gaps spacing", "spacing": "gaps", "glass": "hyprglass blur liquid", "liquid": "hyprglass glass",
         "titlebar": "hyprbars title bar", "titlebars": "hyprbars title bar", "plugin": "plugins hyprland", "plugins": "hyprland",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
-        "mouse": "cursor pointer input", "pointer": "cursor input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
+        "mouse": "input pointer", "pointer": "input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
         "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "clock": "widgets desktop", "notifications": "layerrules",
         "update": "updates upgrade", "upgrade": "updates", "blur": "windows glass", "rounding": "windows corners", "corners": "windows rounding",
         "animation": "animations motion", "motion": "animations", "gpu": "graphics", "graphics": "gpu",
@@ -396,7 +400,7 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true, "windowmanager": true,
+        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "autostart": true, "environment": true
     })
@@ -483,7 +487,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";

@@ -260,17 +260,17 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
-            id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - 14, Tokens.contentMax + 14)
-            x: Math.round((flick.width - width) / 2)
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - 14
             spacing: Tokens.s5
 
             // ── BAR STYLE: which bar the desktop draws ───────────────────────
             SettingCard {
                 id: styleSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("BAR STYLE")
 
                 Item {
@@ -281,7 +281,10 @@ Item {
                         anchors { left: parent.left; right: parent.right; top: parent.top }
                         anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
                         spacing: Tokens.s3
-                        Row {
+                        // A gallery, not a filmstrip: with a bar style per tile the
+                        // captions are what tell them apart, so the tiles wrap into
+                        // as many rows as they need instead of squeezing 8 into one.
+                        Flow {
                             id: styleRow
                             width: parent.width
                             spacing: Tokens.s2
@@ -293,7 +296,7 @@ Item {
                                     readonly property bool on: page.activeStyle === styleCard.modelData.id
 
                                     objectName: "bar-style-" + styleCard.modelData.id
-                                    width: (styleRow.width - (BarStyles.items.length - 1) * Tokens.s2) / BarStyles.items.length
+                                    width: Math.max(150, Math.floor((styleRow.width - Tokens.s2) / 2))
                                     height: 64
                                     radius: Tokens.radius
                                     color: styleCard.on ? Tokens.bone : (sma.containsMouse ? Tokens.tint5 : "transparent")
@@ -343,7 +346,7 @@ Item {
             // ── QS BAR: its layout, widgets, form and dock live in QS Bar Settings
             SettingCard {
                 id: qsbarSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "qsbar"
                 title: I18n.tr("QS BAR")
                 kana: "帯"
@@ -513,7 +516,7 @@ Item {
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
-                width: col.width
+                width: col.colWidth
                 visible: !page.sumiActive && page.activeStyle !== "qsbar" && page.activeStyle !== "chroma"
                 title: I18n.tr("LAYOUT")
 
@@ -532,7 +535,7 @@ Item {
             // OBI WIDGETS: show or hide each widget on the Obi bar.
             SettingCard {
                 id: obiSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "obi"
                 title: I18n.tr("OBI WIDGETS")
 
@@ -561,7 +564,7 @@ Item {
 
             SettingCard {
                 id: nacreSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "nacre"
                 title: I18n.tr("NACRE LAYOUT")
 
@@ -581,7 +584,7 @@ Item {
             // ── FRAME: the chrome the shell draws around the desktop ─────────
             SettingCard {
                 id: frameSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("FRAME")
                 visible: page.sumiActive
 
@@ -669,7 +672,7 @@ Item {
             // ── RAILS: pick an edge, then its own switches ───────────────────
             SettingCard {
                 id: railSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("RAILS")
                 visible: page.sumiActive
 
@@ -779,7 +782,7 @@ Item {
             // ── WIDGETS: the selected rail's three zones and its add drawers ──
             SettingCard {
                 id: zoneSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("WIDGETS ON THE %1 RAIL").arg(labels.edge(page.edge).toUpperCase())
                 visible: page.sumiActive
 

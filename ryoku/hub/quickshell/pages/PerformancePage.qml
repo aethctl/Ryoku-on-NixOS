@@ -324,11 +324,11 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
+        CardColumns {
             id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+            // the page fills its measure: groups land in as many columns as fit,
+            // balanced, instead of one column beside an empty half
+            width: flick.width - Tokens.s3
             spacing: Tokens.s5
 
             Repeater {
@@ -337,7 +337,7 @@ Item {
                 delegate: SettingCard {
                     id: sect
                     required property string modelData
-                    width: col.width
+                    width: col.colWidth
                     title: sect.modelData
 
                     Repeater {

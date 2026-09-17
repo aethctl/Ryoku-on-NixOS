@@ -571,15 +571,15 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { }
 
-        Column {
-            id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s4, Tokens.contentMax + Tokens.s4)
-            x: Math.round((flick.width - width) / 2)
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s4
             spacing: Tokens.s5
             // The shell's own motion (distinct from the Hyprland window editor below).
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("SHELL MOTION")
                 Text {
                     width: parent.width
@@ -617,7 +617,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ANIMATION PRESET")
                 visible: Settings.supports("animations") && pg.hasWindowAnims
                 Text {
@@ -645,7 +645,7 @@ Item {
 
             // MOTION -- the global motion switch plus the bespoke curve workshop
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("MOTION")
                 visible: pg.gVisible || pg.cVisible
 
@@ -815,7 +815,7 @@ Item {
             // FOCUS FLASH
             SettingCard {
                 id: fsec
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("FOCUS FLASH")
                 visible: pg.fVisible && Settings.supports("plugins")
 
@@ -929,7 +929,7 @@ Item {
 
             // ADVANCED -- per-animation control; the leaf table is a bespoke list
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ADVANCED")
                 visible: pg.aVisible && Settings.supports("animations") && pg.hasWindowAnims
 

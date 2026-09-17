@@ -153,6 +153,27 @@ Item {
         if (r.ctl === "multi") return JSON.stringify(v || []) !== JSON.stringify(d || []);
         return v !== d;
     }
+    // A typed number is clamped into the row's own range and stored in the kind
+    // the row speaks (a whole number for a stepper, a ratio for a slider), so a
+    // typo cannot write a value the control could never produce.
+    function commitNumber(r, text) {
+        var n = Number(String(text).replace(",", "."));
+        if (isNaN(n))
+            return;
+        if (r.ctl === "step") {
+            var lo = (r.from === undefined) ? 0 : Number(r.from);
+            var hi = (r.to === undefined) ? 100 : Number(r.to);
+            sheet.edited(r.key, Math.max(lo, Math.min(hi, Math.round(n))));
+            return;
+        }
+        if (r.ctl === "slid") {
+            var v = r.pct ? n / 100 : n;
+            var l = (r.lo === undefined) ? 0 : Number(r.lo);
+            var h = (r.hi === undefined) ? (r.pct ? 1 : 100) : Number(r.hi);
+            sheet.edited(r.key, Math.max(l, Math.min(h, v)));
+        }
+    }
+
     function resetRow(r) {
         if (r.ctl === "reload-cover") {
             sheet.edited(r.key, ReloadCoverModel.empty());
@@ -318,6 +339,9 @@ Item {
                                     label: I18n.tr(r.label)
                                     desc: I18n.tr(r.desc || "")
                                     eg: I18n.tr(r.eg || "")
+                                    // a number can be typed where one can be nudged
+                                    editableValue: r.ctl === "step" || r.ctl === "slid"
+                                    onValueCommitted: (text) => sheet.commitNumber(r, text)
                                     value: sheet.rowValue(r)
                                     unit: sheet.rowUnit(r)
                                     def: sheet.shownDef(r)

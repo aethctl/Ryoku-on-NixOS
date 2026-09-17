@@ -436,15 +436,15 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
-            id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s5
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("KEY PRESSES")
                 kana: "鍵"
 
@@ -554,7 +554,7 @@ Item {
 
             // ── QUALITY ──────────────────────────────────────────────────────
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("QUALITY")
                 Text {
                     width: parent.width
@@ -635,7 +635,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ENCODER")
                 Text {
                     width: parent.width
@@ -695,7 +695,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("UNDER THE HOOD")
                 Text {
                     width: parent.width

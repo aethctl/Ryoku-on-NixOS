@@ -909,8 +909,9 @@ Item {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-            Column {
-                id: col
+            CardColumns {
+
+            id: col
                 width: legend.width - Tokens.s3   // reserve a lane for the scroll rail
                 spacing: Tokens.s5
 
@@ -920,7 +921,7 @@ Item {
                     delegate: Column {
                         id: grp
                         required property var modelData
-                        width: col.width
+                        width: col.colWidth
                         spacing: 0
 
                         // section head: dot + category caps + hairline leader.
@@ -1069,7 +1070,7 @@ Item {
 
                 // footer explainer: where the legend comes from, and the caveat.
                 Text {
-                    width: col.width
+                    width: col.colWidth
                     wrapMode: Text.WordWrap
                     text: pg.wmCfgPath
                         ? I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in %1 do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.").arg(pg.wmCfgPath)
@@ -1173,9 +1174,8 @@ Item {
 
                 Column {
                     id: rowsCol
-                    // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
                     spacing: Tokens.s2
 
                     Repeater {

@@ -248,11 +248,11 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-        Column {
-            id: col
-            // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s2
 
             Repeater {
@@ -280,7 +280,7 @@ Item {
                         : act === "move" ? "100,60"
                         : act === "workspace" ? "2" : ""
 
-                    width: col.width
+                    width: col.colWidth
                     // s3 pad + match row + s2 gap + action row + s3 pad
                     height: Tokens.s3 * 2 + lineH * 2 + Tokens.s2
                     radius: Tokens.radius

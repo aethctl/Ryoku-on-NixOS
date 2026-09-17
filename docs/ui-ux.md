@@ -260,7 +260,8 @@ each surface. That is how eleven Themes happened.
 |---|---|
 |Foundation|`Btn` (a button), `IconBtn` (a square utility button), `Field` (a text input), `ScrollRail` (a flickable's thumb)|
 |A setting|`Cell` (label, value, unit, struck default, description, control) or `SettingRow` (the compact row), grouped by `SettingCard` or `Section` (spans come from `Spans`, never by hand)|
-|The eight controls|`Sw` `Step` `Slid` `Seg` `Chips` `Multi` `PickBar`+`Picker` `Gallery`|
+|A page body|`CardColumns` (a page's blocks laid into balanced columns, a `fullWidth: true` child taking a band across them)|
+|The eight controls|`Sw` `Step` `Slid` `Seg` `Chips` `Multi` `PickBar`+`Picker` `Gallery`. A numeric readout (a stepper's number, a slider's percentage) is typed into on click or Enter: a knob is right for a nudge, typing is right for an exact value, and the typed number is clamped into the row's own range. `Sw` shows two signals for one state: the track tints and the knob fills as it goes on.|
 |Save state|`ActionBar` (Save / Revert / Reset, and the dirty readout)|
 |Live preview|`Preview` (the block a live preview sits in), `SpectrumField` (the audio field, shared with the desktop)|
 |Modals|`AppPicker` (a filterable app or command list), `PickFile` (a file or folder chooser)|
@@ -336,9 +337,11 @@ not look broken; it looks fine and then eats the edit on the way out.
 
 - **The rail.** A masthead (力 seal, `RYOKU ARCH`, `SETTINGS`),
   a search field, then eight groups. A group header is its zero-padded index and
-  name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 DESKTOP`, `04 APPS &
-  KEYS`, `05 TOOLS`, `06 SYSTEM`, `07 ADD-ONS`, and a nameless eighth holding
-  Credits). Selection is typography, never a coloured bar: the live section takes
+  name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 LOOK`, `04 COMPOSITOR`,
+  `05 DESKTOP`, `06 KEYS & APPS`, `07 SYSTEM`, `08 EXTEND`, and a nameless ninth
+  holding Credits). A section can fold into another page rather than keeping a
+  row of its own (Cursor lives inside Input) and an old link to it still lands
+  right, because `canonicalSection` maps the retired key. Selection is typography, never a coloured bar: the live section takes
   a bone plate and a `//` lead, and the group header steps up the ink ramp from
   faint to dim as a quiet "you are here". Every item carries its kanji seal on
   the right.

@@ -367,11 +367,11 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
 
-                Column {
-                    id: col
-                    // one calm column: a page never stretches a row across the window
-            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
-            x: Math.round((flick.width - width) / 2)
+                CardColumns {
+
+                id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
                     spacing: Tokens.s2
 
                     Repeater {
@@ -390,7 +390,7 @@ Item {
                                 ? card.man.metadata.settings.length : 0
                             readonly property string upd: pg.updateFor(card.modelData)
 
-                            width: col.width
+                            width: col.colWidth
                             height: 64
                             radius: Tokens.radius
                             color: ch.hovered ? Tokens.tint5 : "transparent"
