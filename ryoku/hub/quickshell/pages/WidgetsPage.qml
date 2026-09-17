@@ -389,7 +389,7 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -414,7 +414,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Every widget that rides your wallpaper: the clock, the all-in-one card, system stats, calendar, now-playing, weather and notes. Pick a card to preview it live and open its settings; nothing lands on the desktop until you save.")
+            text: I18n.tr("The widgets on your wallpaper, previewed live.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

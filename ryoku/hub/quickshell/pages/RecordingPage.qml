@@ -192,12 +192,8 @@ Item {
 
     // span math for the section Flows: a cell's width comes from its control's
     // column count (Spans.of), never from a placement decision (DESIGN.md 6, 9).
-    // With the camera poster in the right rail the left column is too narrow to
-    // pack cells two-up without eliding their labels, so they run one per row
-    // (full width) while it shows.
+    // Pack n cells across the section's width, gutters between.
     function span(n, w) {
-        if (recDecor.visible)
-            return w;
         var cw = (w - (Spans.cols - 1) * Tokens.s2) / Spans.cols;
         return n * cw + (n - 1) * Tokens.s2;
     }
@@ -390,8 +386,11 @@ Item {
     // ── head: eyebrow, Fraunces title, intro blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: recDecor.visible ? recDecor.left : parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+                anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -416,7 +415,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Ryoku records with gpu-screen-recorder, hardware-encoded on your GPU (it falls back to wf-recorder on multi-GPU machines). Start and stop from the bar's screen-capture Tools; these settings shape every recording, including where it lands.")
+            text: I18n.tr("How Ryoku records: quality, encoder, and where files land.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -426,7 +425,7 @@ Item {
     Flickable {
         id: flick
         anchors {
-            left: parent.left; right: recDecor.visible ? recDecor.left : parent.right
+            left: parent.left; right: parent.right
             top: head.bottom; bottom: bar.top
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s5; bottomMargin: Tokens.s4
@@ -439,7 +438,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
 
             SettingCard {
@@ -718,30 +719,6 @@ Item {
         }
     }
 
-    // the marked right rail: a camera specimen poster (the poster layer), from
-    // the running head down to the action bar. The head and the settings form
-    // are held to its left so text and cells reflow clear of it; it hides when
-    // the window is too narrow to spare the column.
-    Placard {
-        id: recDecor
-        anchors {
-            right: parent.right; rightMargin: Tokens.s6
-            top: head.top; bottom: bar.top
-            bottomMargin: Tokens.s4
-        }
-        width: Math.round(pg.width * 0.30)
-        visible: Tokens.showPosters && (pg.width - width - Tokens.s7 >= 560)
-        code: "REC-02"
-        title: "\u9332\u753b"
-        sub: I18n.tr("ON THE RECORD")
-        motto: I18n.tr("Without creativity and obsession, everything is boring.")
-        chapter: "05"
-        label: I18n.tr("TOOLS")
-        quote: I18n.tr("THE SCREEN REMEMBERS EVERYTHING.")
-        seal: "\u9332"
-        art: "camera.png"
-        seed: 5
-    }
 
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to persist.

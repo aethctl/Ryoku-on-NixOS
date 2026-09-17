@@ -81,11 +81,15 @@ Item {
 
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors { left: parent.left; top: parent.top }
+        anchors.leftMargin: sheet.sheetX
+        width: sheet.sheetWidth
         spacing: Tokens.s2
 
         Item {
             width: parent.width
+            // an eyebrow that only repeats the title is noise, not a register
+            visible: I18n.tr(page.eyebrow).toLowerCase() !== page.title.toLowerCase()
             height: 14
             Row {
                 id: ebrow
@@ -105,25 +109,9 @@ Item {
             // the band runs to the page edge and closes with the sheet's marks:
             // a register cross and the /// cluster, per the reference poster.
             Rectangle {
-                anchors { left: ebrow.right; right: crossMark.left; verticalCenter: parent.verticalCenter }
-                anchors.leftMargin: Tokens.s3; anchors.rightMargin: Tokens.s3
+                anchors { left: ebrow.right; right: parent.right; verticalCenter: parent.verticalCenter }
+                anchors.leftMargin: Tokens.s3
                 height: 1; color: Tokens.lineSoft
-            }
-            Text {
-                visible: Tokens.showGrid
-                id: crossMark
-                anchors { right: slashMark.left; rightMargin: Tokens.s2; verticalCenter: parent.verticalCenter }
-                text: "+"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
-            }
-            Text {
-                visible: Tokens.showGrid
-                id: slashMark
-                // clear the shared top-right FILES/UPDATES chips so the register
-                // marks never ride under them.
-                anchors { right: parent.right; rightMargin: 150; verticalCenter: parent.verticalCenter }
-                text: "///"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
             }
         }
         Text {

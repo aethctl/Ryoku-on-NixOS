@@ -3,6 +3,23 @@
 ## Unreleased
 
 ### Added
+- **Two measures a page reads on.** `Tokens.pageMax` caps a framed page's content
+  column, and `Tokens.contentMax` caps a stack of settings rows, so a wider window
+  buys calmer margins instead of a label at one edge and its control at the other.
+- **The picker's option count is gone from the row.** `PickBar` showed how many
+  options the catalogue held beside its chevron; that number means nothing to a
+  reader, so the chevron alone is the affordance now.
+
+### Removed
+- **The decor level and its rich tier.** `Tokens.decor` and the flags derived
+  from it (`decorRich`, `decorMinimal`, `showPosters`, `showGrid`, `showGrain`,
+  `showSeals`, `monoHeads`) are gone, along with the `hubDecor` shell.json key
+  they read: one setting voice ships now. `fTitle` is 32 everywhere,
+  `SettingCard` and `Cell` use sentence case at every width, `Grain` keeps a
+  fixed art opacity, and the poster plates `Decor`, `Placard`, `DitherField` and
+  the `DecorStore` singleton are deleted from `Ryoku.Ui` (their only callers were
+  the Hub's rich tier and ryovm's hero plates).
+
 - **The bar stream can drift again when nothing is playing.** A new "Drift when
   silent" switch keeps the gap stream animating on any power profile, not only
   Performance. It sits next to Gap animation in the bar control centre and under

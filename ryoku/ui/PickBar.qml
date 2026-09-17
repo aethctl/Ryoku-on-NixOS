@@ -30,7 +30,9 @@ Rectangle {
     }
     Text {
         anchors { right: parent.right; rightMargin: 9; verticalCenter: parent.verticalCenter }
-        text: bar.count + " ▾"
+        // the chevron is the affordance; how many options the catalogue holds is
+        // not something a reader needs on the row.
+        text: "▾"
         color: Tokens.inkFaint
         font.family: Tokens.mono
         font.pixelSize: 9

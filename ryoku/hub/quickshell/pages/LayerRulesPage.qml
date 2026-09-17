@@ -102,7 +102,10 @@ Item {
     // nothing is a no-op.
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -127,7 +130,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Fine-tune layer-shell surfaces (the bar, launcher, notifications) by namespace: blur or dim them, drop their animations, or show them above the lockscreen. Applied on Save, not live; a namespace that matches nothing has no effect.")
+            text: I18n.tr("Layer surfaces by namespace: blur, dim, motion, order.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -206,7 +209,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s2
 
             Repeater {

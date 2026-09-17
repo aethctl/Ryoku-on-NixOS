@@ -242,7 +242,7 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -267,7 +267,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("The Ryoku update channel: how far this install sits behind origin, the commits that would land (or the recent history it already runs), and a one-click update that runs in a terminal and reports its progress here.")
+            text: I18n.tr("What sits behind origin, and a one-click update.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -621,18 +621,6 @@ Item {
                 }
             }
 
-            // section face: fills the quiet idle column (a short recent-history
-            // list leaves a long void), per DESIGN.md section 12. Ink-only poster,
-            // no control; it flows after the list so a long incoming set scrolls.
-            Decor {
-                width: idleCol.width
-                height: Tokens.cellH * 2 + Tokens.s5
-                title: "更新"; sub: "アップデート"
-                tate: "常に最新へ"
-                caption: I18n.tr("Ryoku tracks its channel; one command snapshots, pulls, and reloads.")
-                readout: ["CHANNEL|main", "METHOD|ryoku update", "SAFETY|snapshot first", "SCOPE|whole system"]
-                code: "SYS-07"; seal: "更"; boxId: "updates.channel"; seed: 3; ditherFreq: 1.0
-            }
         }
     }
 

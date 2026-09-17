@@ -57,8 +57,8 @@ its place; if it does not, remove it.
   and do not cast.
 - **The print texture rides the chrome, never the content.** The poster
   ornaments are real, but they belong on the always-present furniture, not
-  behind the thing being read: `Reg` sits behind a nav rail (the Hub's,
-  QS Bar Settings') and `Marginalia` + `Barcode` fill the rail's dead last inch.
+  behind the thing being read: `Reg` sits behind a nav rail (QS Bar Settings'),
+  and `Marginalia` + `Barcode` dress a surface that has a dead margin for them.
   A settings plate gets flat paper. `Grain` is for art surfaces only. A texture
   under a control is decoration the reader has to see past, so it is a bug.
 - **Latin names the thing, kanji seals it.** Every nav item, section eyebrow and
@@ -217,7 +217,7 @@ Self-hosted, no CDN. Four families, one role each:
 |Kanji seals (力, 接続, 断)|**Noto Sans CJK JP**|`Tokens.jp`|
 
 One size ramp, eight steps, and a step is a role rather than a number to pick:
-`fTitle` 46 (the page title, Fraunces), `fHero` 34 (a headline readout), `fValue`
+`fTitle` 32 (the page title, Fraunces), `fHero` 34 (a headline readout), `fValue`
 26 (a cell's value), `fRow` 15 (a row name), `fBody` 14, `fSmall` 13
 (descriptions), `fMicro` 11 (tracked labels), `fTiny` 9 (corner tags, struck
 defaults).
@@ -241,7 +241,9 @@ a terminal instead of a printed instrument, which is a different product.
 - **One spacing scale.** `s1` 4, `s2` 8, `s3` 12, `s4` 16, `s5` 24, `s6` 32,
   `s7` 48. Nothing between them.
 - **Fixed furniture.** A settings row is `rowH` 48 tall, a cell `cellH` 104, a
-  control `ctlH` 26, a nav rail `railW` 268. A page never invents these.
+  control `ctlH` 26, a nav rail `railW` 268. A page never invents these. A framed
+  page is centred on `pageMax`, and the schema sheet puts its groups in two
+  columns of cards capped at `cardMax` when the measure holds them.
 - **No shadows in app surfaces.** The Hub and the apps are print: a flat
   instrument sheet does not cast. The brutalist offset shadow is retired; an
   overlay separates with `Tokens.paperLift` and a `lineStrong` border instead.
@@ -265,12 +267,10 @@ each surface. That is how eleven Themes happened.
 |Navigation|`Tabs` (bone-invert plates, the `//` lead)|
 |Art texture|`Grain` (a film tooth over art, never over chrome: the recording thumbnail, the launcher preview)|
 |Poster ornament|`Reg` (registration backdrop), `Ticks` (corner ticks), `Barcode`, `Empty` (the empty-state plate), `Motif` (the line ornament inside `Empty`), `Marginalia` + `Pixel` (a running-head strip and its 1-bit dingbats), `Watermark` (a blurred background kanji behind the content)|
-|Poster filler|`Decor` (a wide plate in a dead grid slot), `Placard` (the tall one), `DitherField` (the procedural field either falls back to)|
 |Image tools|`HeroCrop` (cover plus a draggable 0..1 focal point), `DitherImage` (an image baked to 1-bit through the Bayer shader)|
 |Keyboard|`KeyboardMap` (a live diagram lighting the layout legends and remapped keys), `KeypressStack` -> `KeyChord` -> `Keycap` (the recording's keypress overlay)|
 
-Three of those look unused and are not: `Motif` is drawn only by `Empty`,
-`DitherField` only by `Decor` and `Placard` when a plate has no art, and
+Two of those look unused and are not: `Motif` is drawn only by `Empty`, and
 `KeyChord`/`Keycap` only by `KeypressStack`. They are composition, not museum
 pieces. The distinction matters, because the old table here listed `Eyebrow`,
 `SunDisc`, `RegMark` and `BrutalPanel`, which really were used zero times: the
@@ -334,7 +334,7 @@ not look broken; it looks fine and then eats the edit on the way out.
 
 `Hub.qml` owns the frame, so a page only writes its content:
 
-- **The rail.** A masthead (力 seal, `RYOKU ARCH // SETTINGS_`, a `///` mark),
+- **The rail.** A masthead (力 seal, `RYOKU ARCH`, `SETTINGS`),
   a search field, then eight groups. A group header is its zero-padded index and
   name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 DESKTOP`, `04 APPS &
   KEYS`, `05 TOOLS`, `06 SYSTEM`, `07 ADD-ONS`, and a nameless eighth holding
@@ -343,68 +343,42 @@ not look broken; it looks fine and then eats the edit on the way out.
   faint to dim as a quiet "you are here". Every item carries its kanji seal on
   the right.
 - **The Advanced gate.** Sections marked `adv` are hidden from the rail until
-  the rail-foot `Advanced settings` switch is on, and a group whose every item is
-  `adv` folds away entirely rather than leaving a bare header. Search still
-  reaches them, and the open section always counts as visible, so turning
-  Advanced off never strands you on a page the rail no longer lists.
-- **The rail foot.** A `Barcode`, the edition chip (driven by `ryoku version`,
-  e.g. `BETA // 19` on beta builds), the `RYOKU
-  HUB` label, and that Advanced switch.
+  the rail-foot `Advanced` switch is on, and a group whose every item is `adv`
+  folds away entirely rather than leaving a bare header. Search still reaches
+  them, and the open section always counts as visible, so turning Advanced off
+  never strands you on a page the rail no longer lists.
+- **The rail foot.** The `Advanced` switch, under a hairline. Nothing else: the
+  barcode plate and edition chip that used to sit here were poster ornament, and
+  the rail is navigation.
 - **The page head.** A `力 <GROUP>` eyebrow, the title in Fraunces at `fTitle`,
   and a one-sentence description.
-- **The running head.** A `Marginalia` strip across the head's right margin,
-  naming the group and its index in tracked mono.
 - **The corner chips.** `FILES` and `UPDATES` ride the empty strip above every
   page head, and `UPDATES` wears a `Tokens.alert` dot when the channel sits
   behind origin. They are opaque, so they never collide with the running head.
 - **The action bar.** Bottom, on framed pages: the dirty readout (`SAVED · LIVE
   ON YOUR DESKTOP`), its own marginalia, then `RESET TO DEFAULTS` / `REVERT` /
   `SAVE`.
-- **`Reg` and `Ticks`.** The registration crosses behind the grid and the ticks
-  on the window's corners, drawn once for the whole sheet.
+- **The page measure.** Every framed page reads on one centred column, capped at
+  `Tokens.pageMax`: a wider window buys calmer margins, never a longer row. The
+  schema sheet lays its groups into two columns of cards when the measure holds
+  them (`SettingsSheet.columns`, cards capped at `cardMax`), balanced by how tall
+  each group renders, so the page is filled from the top instead of running one
+  long column beside an empty half.
+- **Nothing floats.** There is no registration backdrop and no poster layer: the
+  sheet is paper with a hairline grid of cards, and the ornament that survives
+  (`Reg` behind a rail, `Ticks` on a framed specimen, `Marginalia`, `Barcode`,
+  `Watermark`) is used where a surface has a genuine dead margin for it, never
+  behind a control.
 
-## The poster layer
+## The retired poster layer
 
-![The Hub's profile dossier](media/profile.webp)
-
-*The Profile page: a live system dossier. Telemetry with leader lines into the
-art, tracked vertical marginalia, a barcode of the build, a Fraunces name, and a
-1-bit dithered specimen full bleed.*
-
-**The ornament is dead-zone only.** `Reg` behind everything, `Ticks` on framed
-specimens, `Marginalia` in the margins, the pixel dingbats and `Watermark` behind
-the content: they dress the sheet like a printed poster, but they live strictly
-in the chrome margins a page leaves empty (the rail foot, the action bar's
-centre, an empty head margin) and never in the content or over a control. They
-are ink only; the accent stays on state.
-
-**The one poster that enters the content grid is `Decor`, with `Placard` as its
-tall sibling.** Each takes an otherwise-empty grid cell, a section's leftover
-half-row or a full-width plate where a section ends flush, so it *fills* dead
-space rather than crowding it. It holds no control and never overlaps one; unlike
-the ink-only ornament it may carry a real image or gif and animate, because it is
-art in a dead cell, not chrome over a surface.
-
-A plate is a chapter of a printed catalogue, and its fields say so: a `code`
-(`LINK-08`, `BLADE-07`), a `title` in Japanese with a romanised `sub`, a `chapter`
-number and `label`, a `quote` or `motto`, a `seal`, its `art`, and a `boxId` that
-is the key the user's framing persists under. Right-click a `Decor` to open its
-editor: it frames the image like the launcher's hero (cover plus a 0..1 focal
-point you drag, plus zoom), with a gallery (the baked set or a custom file, which
-is desaturated to noir on the way in) and Save / Cancel. The choice and framing
-persist per box in `DecorStore` (`~/.config/ryoku/decor.json`), guarded by a 700ms
-edit timer so the file watch cannot revert a drag in progress. The baked set
-resolves through `Ryodecors.dir` (`~/Pictures/ryodecors`, seeded by the installer
-and kept current by `ryoku doctor`, so it sits beside Wallpapers where a user can
-see and swap it); a custom pick keeps its own absolute path. `Placard` is
-read-only: it is a specimen, not a widget.
-
-**The dither is one algorithm in two places.** `ryoku/ui/shaders/dither.frag`
-maps luminance against a tiled 4x4 Bayer matrix and outputs 1-bit bone (`#e8d8c9`)
-on a transparent ground; `DitherImage` runs it over a real image, and
-`DitherField` paints the same Bayer threshold over three octaves of value noise
-on a Canvas, so a plate with no art still has a field. Bone on transparent is
-what makes the whole set composite onto any surface and read as one set.
+The Hub used to wear a second skin: a `hubDecor` switch in the rail traded a
+"calm" sheet for a "rich" one with register crosshairs, a film-grain plate, a
+barcode rail foot, an oversized `fTitle` and chapter plates (`Decor`, `Placard`,
+`DitherField`) filling dead grid cells with art. Calm was the default and the
+right answer, so the switch, the components and every one of their call sites are
+gone: a settings page is one voice now. `Grain` stays for art surfaces, and
+`Ryodecors.dir` art still feeds the profile hero and its editor.
 
 ## The surfaces
 
@@ -850,8 +824,8 @@ how each shipped specimen was made is `bin/art/README.md`. In short:
 - **One home.** Both bakers write into `ryoku/assets/ryodecors`, so a new decor
   ships everywhere at once: the installer seeds it, the `ryoku-desktop` package
   carries it to `/usr/share/ryoku/ryodecors`, and `ryoku doctor` lays it into
-  every `~/Pictures/ryodecors`. Reference it by bare filename in a `Decor` or
-  `Placard` `art:`.
+  every `~/Pictures/ryodecors`. The profile hero and its editor read it by bare
+  filename.
 
 Figurative art that is not decor (the launcher hero, the welcome backdrop, the
 profile portrait) follows the same rule: generated at dev time, background

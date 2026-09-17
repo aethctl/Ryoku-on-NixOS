@@ -807,9 +807,11 @@ Item {
 
         Item {
             id: wifiContent
+            // the list reads as one column; with the poster that used to fill the
+            // right side gone, that column is centred rather than pinned left.
             anchors.top: parent.top
-            anchors.left: parent.left
             anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
             width: Math.min(parent.width, wifi.colMax)
 
             // header row: "WI-FI" label + hairline + scan button.
@@ -2038,7 +2040,7 @@ Item {
         // head: eyebrow, Fraunces title, blurb (matches every page).
         Column {
             id: head
-            anchors { left: parent.left; right: heroDecor.left; rightMargin: Tokens.s5; top: parent.top }
+            anchors { left: parent.left; right: parent.right; top: parent.top }
             spacing: Tokens.s2
 
             Row {
@@ -2063,7 +2065,7 @@ Item {
             }
             Text {
                 width: Math.min(parent.width, 720)
-                text: I18n.tr("Wi-Fi, Bluetooth and this machine's own hotspot, all live. Scan for networks and devices, connect, disconnect or forget, and share your connection. Every change applies immediately.")
+                text: I18n.tr("Wi-Fi, Bluetooth and this machine's hotspot, applied live.")
                 color: Tokens.inkMuted; font.family: Tokens.ui
                 font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
             }
@@ -2073,7 +2075,7 @@ Item {
         // copy names SSH because an activated switch severs remote sessions too.
         Rectangle {
             id: killSwitch
-            anchors { left: parent.left; right: heroDecor.left; rightMargin: Tokens.s5; top: head.bottom; topMargin: Tokens.s4 }
+            anchors { left: parent.left; right: parent.right; rightMargin: Tokens.s5; top: head.bottom; topMargin: Tokens.s4 }
             implicitHeight: killCopy.implicitHeight + Tokens.s4
             radius: Tokens.radius
             color: pg.killActive ? Tokens.bone : "transparent"
@@ -2132,17 +2134,6 @@ Item {
             wrapMode: Text.WordWrap
         }
 
-        // a decorative hero in the head's dead right, shared across every subtab
-        Decor {
-            id: heroDecor
-            anchors { right: parent.right; top: head.top; bottom: tabStrip.bottom }
-            width: Math.round(content.width * 0.42)
-            boxId: "connections.hero"
-            title: "\u63a5\u7d9a"; sub: "\u30cd\u30c3\u30c8\u30ef\u30fc\u30af"
-            tate: "\u898b\u3048\u306a\u3044\u7cf8"
-            caption: I18n.tr("Wi-Fi, Bluetooth, and this machine's own hotspot -- every link it can make, live.")
-            code: "LINK-02"; seal: "\u63a5"; seed: 6; ditherFreq: 1.1
-        }
 
         // the shared Tabs plate: selection is the // lead on bone, no slider.
         Tabs {
@@ -2167,8 +2158,8 @@ Item {
             id: body
             anchors {
                 left: parent.left
-                right: heroPlacard.visible ? heroPlacard.left : parent.right
-                rightMargin: heroPlacard.visible ? Tokens.s6 : 0
+                right: parent.right
+                rightMargin: 0
                 top: tabStrip.bottom; bottom: parent.bottom
                 topMargin: Tokens.s5
             }
@@ -2176,24 +2167,5 @@ Item {
                 : (pg.sub === "bluetooth" ? btComp : hsComp)
         }
 
-        // the head's dead right, below the hero card: a slim katana specimen
-        // poster, right-aligned and shared across every subtab. The body above
-        // is held to the poster's left edge so the lists never run under it; it
-        // hides only when the window is too narrow to spare a slim column.
-        Placard {
-            id: heroPlacard
-            anchors { right: parent.right; top: tabStrip.bottom; topMargin: Tokens.s5; bottom: parent.bottom }
-            width: 224
-            visible: Tokens.showPosters && (content.width - width - Tokens.s6 >= 320)
-            code: "BLADE-07"
-            title: "\u7cf8\u3092\u65ad\u3064"
-            sub: I18n.tr("SEVER THE THREAD")
-            chapter: "07"
-            label: I18n.tr("SEVERED LINK")
-            quote: I18n.tr("EVERY THREAD ENDS AT A BLADE.")
-            seal: "\u65ad"
-            art: "katana.png"
-            seed: 3
-        }
     }
 }

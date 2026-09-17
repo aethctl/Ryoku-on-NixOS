@@ -192,7 +192,10 @@ Item {
     // ── head: the eyebrow band, the title, the blurb ─────────────────────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Item {
@@ -239,7 +242,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Choose which bar the desktop draws, and tune the built-in styles. QS Bar keeps its layout, widgets and dock in QS Bar Settings; Sumi's frame and rails are set below. Changes land live, and Save keeps them.")
+            text: I18n.tr("Which bar the desktop draws, and how it looks.")
             color: Tokens.inkMuted
             font.family: Tokens.ui
             font.pixelSize: Tokens.fBody
@@ -259,7 +262,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - 14
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - 14, Tokens.contentMax + 14)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
 
             // ── BAR STYLE: which bar the desktop draws ───────────────────────

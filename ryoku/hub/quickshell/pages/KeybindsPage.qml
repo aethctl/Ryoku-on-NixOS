@@ -502,8 +502,11 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -528,7 +531,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Every desktop shortcut in one place. Apps sets what the launcher keys open (browser, terminal, editor, files, notes) and rebinds those keys; System rebinds the built-in shortcuts; Custom layers your own. Overlaps are flagged as you go.")
+            text: I18n.tr("Every desktop shortcut. Clashes are flagged as you go.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -1170,7 +1173,9 @@ Item {
 
                 Column {
                     id: rowsCol
-                    width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+                    // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
                     spacing: Tokens.s2
 
                     Repeater {

@@ -548,7 +548,10 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -573,7 +576,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Keyboard layout and remaps, pointer and touchpad behaviour, and key repeat for your session. Edits preview live; nothing is written until you save.")
+            text: I18n.tr("Keyboard, pointer and touchpad, and key repeat.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -596,10 +599,10 @@ Item {
     // The page's one red head -- a showcase surface, not a settings group.
     Section {
         id: kbmSect
-        anchors {
-            left: parent.left; right: parent.right; top: head.bottom
-            topMargin: Tokens.s5; rightMargin: Tokens.s3
-        }
+        anchors { top: head.bottom; topMargin: Tokens.s5 }
+        // the showcase sits on the same centred measure as the rows below it
+        width: Math.min(parent.width, Tokens.contentMax + Tokens.s3)
+        x: Math.round((parent.width - width) / 2)
         title: I18n.tr("KEYBOARD MAP")
         titleColor: Tokens.sunDeep
 
@@ -620,14 +623,6 @@ Item {
                 switchChord: pg.pickFrom(pg.grpIds, false)
                 numlock: pg.hv("desktop.input.numlockByDefault") === true
             }
-            Decor {
-                width: kbmSect.span(Spans.cols) - pinnedMap.width - Tokens.s4
-                height: pinnedMap.height
-                title: "入力"; sub: "キーボード"
-                tate: "配列と再配置"
-                caption: I18n.tr("The layout, and the keys you taught new jobs. It answers live as you edit.")
-                code: "INPUT-02"; seal: "力"; seed: 4; ditherFreq: 1.0; boxId: "input.map"
-            }
         }
     }
 
@@ -647,7 +642,9 @@ Item {
 
         Column {
             id: body
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
 
             SettingCard {

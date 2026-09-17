@@ -653,7 +653,7 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -720,7 +720,7 @@ Item {
 
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("The branded terminal readout: pick the emblem (an image, ASCII art, or a built-in), choose what shows, reorder and rename the rows, and edit the tagline, with a live preview.")
+            text: I18n.tr("The terminal readout: emblem, rows and tagline, previewed live.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

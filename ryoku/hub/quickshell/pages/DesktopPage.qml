@@ -15,7 +15,7 @@ Item {
 
     readonly property string pTitle: I18n.tr("Desktop")
     readonly property string pEyebrow: I18n.tr("DESKTOP")
-    readonly property string pBlurb: I18n.tr("What sits on your desktop: the brand mark, the pickers, and the audio visualiser.")
+    readonly property string pBlurb: I18n.tr("The brand mark, the pickers, and the audio visualiser.")
     function focusKey(k) { sp.focusKey(k) }
 
     // ── Pickers ───────────────────────────────────────────────────────────────

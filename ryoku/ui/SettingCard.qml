@@ -41,14 +41,7 @@ Item {
             anchors { left: parent.left; leftMargin: Tokens.s4; verticalCenter: parent.verticalCenter }
             spacing: Tokens.s2
             Text {
-                visible: Tokens.monoHeads
-                text: "//"
-                color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            Text {
-                text: Tokens.monoHeads ? (card.title + "_") : card.title
+                text: card.title
                 color: Tokens.inkDim
                 font.family: Tokens.ui; font.pixelSize: Tokens.fBody
                 font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel

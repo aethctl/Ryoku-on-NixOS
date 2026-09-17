@@ -1,6 +1,31 @@
 # Changelog: ryoku/hub/
 
-## Unreleased
+
+### Changed
+- **Ryoku Settings is a full-page window.** It opens at 99% of the screen (the
+  Hyprland rule floats it at the same 99% and centres it; niri sizes the column),
+  so the settings get the room the layout is designed for instead of a 1200px
+  strip (`quickshell/shell.qml`, `hyprland/modules/window_rules.lua`).
+- **One measure, and two columns of cards where they fit.** A framed page reads
+  on a centred column capped at `Tokens.pageMax`, and the schema sheet lays its
+  groups into two columns of cards when the measure holds them, balanced by how
+  tall each group renders. The result is a page that fills its width from the top
+  rather than one long column beside an empty half, with a row's control still a
+  glance from its label (`quickshell/SettingsSheet.qml`, `SchemaPage.qml`).
+- **Less text.** Every page description is one sentence now, and the longest row
+  descriptions were cut to a line (`quickshell/pages/*`, `quickshell/schema/*`).
+- **The rail breathes.** Taller nav rows, a gap between groups, and `Advanced`
+  pinned under a hairline as the only rail-foot control (`quickshell/Hub.qml`).
+
+### Removed
+- **The rich decor tier, and its code.** The rail's Calm|Rich switch turned on a
+  second skin: a register backdrop, a barcode rail foot with the build edition, a
+  film-grain plate, an oversized title, and chapter plates filling dead grid
+  cells with art. Calm was the default and the right answer, so the switch, the
+  tokens behind it (`decorRich`, `showPosters`, `showGrid`, `showGrain`,
+  `monoHeads`), the components (`Decor`, `Placard`, `DitherField`, `DecorStore`)
+  and every call site are gone; a page has one voice now (`Ryoku.Ui`,
+  `docs/ui-ux.md`, "The retired poster layer").
 
 ### Added
 - **Displays can choose their own bar style and Chroma modules.** The connector

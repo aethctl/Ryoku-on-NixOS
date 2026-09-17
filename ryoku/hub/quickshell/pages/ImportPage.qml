@@ -421,7 +421,7 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -446,7 +446,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Bring an existing setup onto Ryoku. Drop a config folder, point at an existing ~/.config, or paste a git URL; Ryoku layers it over the defaults, shows every keybind clash to resolve in place, and backs up everything so you can undo the whole import.")
+            text: I18n.tr("Bring another setup onto Ryoku. Everything it touches is backed up.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

@@ -15,7 +15,7 @@ Item {
 
     readonly property string pTitle: I18n.tr("Global")
     readonly property string pEyebrow: I18n.tr("GLOBAL")
-    readonly property string pBlurb: I18n.tr("System-wide preferences: interface language, regional formats, location, and the system font.")
+    readonly property string pBlurb: I18n.tr("Language, regional formats, location and the system font.")
     function focusKey(k) { sp.focusKey(k) }
 
     // Installed font families, read live so the System font drawer offers exactly

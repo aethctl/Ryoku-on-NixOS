@@ -698,7 +698,7 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -744,7 +744,7 @@ Item {
 
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Detect connected displays, drag to arrange them to scale, and tune resolution, scale, rotation and adaptive sync per monitor. Apply writes the layout to your live session and persists it; save a named profile to bring an arrangement back when you plug the same displays in again.")
+            text: I18n.tr("Arrange your displays and set each one's mode. Save a layout to reuse it.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

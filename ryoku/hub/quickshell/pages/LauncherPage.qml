@@ -183,8 +183,11 @@ Item {
 
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -282,7 +285,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s3
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
 
             SettingCard {

@@ -536,7 +536,10 @@ Item {
     // ── head ─────────────────────────────────────────────────────────────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -552,7 +555,7 @@ Item {
         Text { text: I18n.tr("Animations"); color: Tokens.ink; font.family: Tokens.display; font.pixelSize: Tokens.fTitle }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("How the desktop moves. Pick a feel and watch it live, set the flash on the window that takes focus, and fine-tune any single animation under Advanced.")
+            text: I18n.tr("Pick a feel and watch it live; fine-tune any one animation under Advanced.")
             color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
         Item { width: 1; height: Tokens.s1 }
@@ -570,7 +573,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s4
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s4, Tokens.contentMax + Tokens.s4)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
             // The shell's own motion (distinct from the Hyprland window editor below).
             SettingCard {
@@ -801,18 +806,6 @@ Item {
                                     text: I18n.tr("Presets set the shape; drag to fine-tune. Curves are shared by name, and Advanced animations reference them.")
                                     color: Tokens.inkFaint; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                                 }
-                            }
-                            Decor {
-                                id: motionDecor
-                                width: parent.width - bez.width - readouts.width - 2 * Tokens.s5
-                                height: bez.height
-                                images: ["bounce.gif", "cradle.gif", "horse.gif", "disc.gif", "earth.gif"]
-                                seed: 0
-                                title: "\u6ed1\u3089\u304b"
-                                sub: "\u30a4\u30fc\u30ba"
-                                tate: "\u306a\u3081\u3089\u304b\u306b"
-                                caption: I18n.tr("Every motion here rides an easing curve, so nothing on the desktop just snaps into place.")
-                                code: "MOVE-02"; seal: "\u52d5"; boxId: "anim.motion"
                             }
                         }
                     }

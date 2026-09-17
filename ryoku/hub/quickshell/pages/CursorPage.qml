@@ -19,7 +19,7 @@ Item {
 
     readonly property string pTitle: I18n.tr("Cursor")
     readonly property string pEyebrow: I18n.tr("DEVICES")
-    readonly property string pBlurb: I18n.tr("The pointer: its theme, size, idle hiding, and realistic motion.")
+    readonly property string pBlurb: I18n.tr("The pointer: theme, size, idle hiding and motion.")
 
     // the Material Bibata toggle is a synthetic key: its state mirrors whether
     // the material variant is the active cursor theme, and flipping it swaps

@@ -76,7 +76,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "Thermal profile",
-        "desc": "ACPI platform profile (fan and power envelope) for the edited profile; re-applied after power-profiles-daemon so it holds",
+        "desc": "ACPI platform profile for the edited profile's fan and power envelope.",
         "ctl": "seg",
         "src": "ryoku-power profiles (platform_profile, power.json)",
         "opts": [
@@ -90,7 +90,7 @@ var rows = [
         "group": "CPU POWER PROFILES",
         "key": "",
         "label": "CPU boost and PPT/TDP limits",
-        "desc": "Deliberately not exposed: firmware governs boost and PPT on this hardware, so a control would report success and change nothing (see docs/power.md)",
+        "desc": "Not exposed: firmware governs boost and PPT on this hardware.",
         "ctl": "readout",
         "src": "static copy"
     },

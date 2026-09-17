@@ -202,8 +202,11 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every page) ───────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -242,7 +245,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Manage installed shell plugins and extras bundles. Changes apply live; RyoStore owns browsing and installation.")
+            text: I18n.tr("Installed shell plugins and bundles. RyoStore browses and installs them.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -355,8 +358,8 @@ Item {
                 id: flick
                 anchors {
                     left: parent.left; right: parent.right
-                    top: sect.bottom; bottom: instDecor.visible ? instDecor.top : parent.bottom
-                    topMargin: Tokens.s4; bottomMargin: instDecor.visible ? Tokens.s4 : 0
+                    top: sect.bottom; bottom: parent.bottom
+                    topMargin: Tokens.s4; bottomMargin: Tokens.s4
                 }
                 contentWidth: width
                 contentHeight: Math.max(col.height, height)
@@ -366,7 +369,9 @@ Item {
 
                 Column {
                     id: col
-                    width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+                    // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
                     spacing: Tokens.s2
 
                     Repeater {
@@ -482,20 +487,6 @@ Item {
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
 
-            // fills the dead grid slot below a short plugin list, per DESIGN.md
-            // section 12: a poster gives the section its face. Ink-only, holds no
-            // control; hidden while searching so results own the full column.
-            Decor {
-                id: instDecor
-                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                height: Math.min(300, parent.height - Tokens.cellH * 2 - Tokens.s5)
-                visible: Tokens.showPosters && (pg.loaded && pg.shown.length > 0 && pg.query.trim() === "" && height > 140)
-                title: "拡張"; sub: "アドオン"
-                tate: "力を継ぎ足す"
-                caption: I18n.tr("Plugins extend the shell: live surfaces installed through RyoStore.")
-                readout: ["SOURCE|plugins.json", "APPLY|live", "SITS|frame · desktop · bar", "SCOPE|per-plugin"]
-                code: "ADDON-04"; seal: "拡"; boxId: "addons.installed"; seed: 5; ditherFreq: 1.0
-            }
         }
     }
 

@@ -83,7 +83,10 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.top: parent.top
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -108,7 +111,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Give one app its own look, layered on top of the global Appearance. Add it (or pick from an open window), match it by its window class and an optional title, then override only what you want: everything left on Inherit keeps following the global. Changes apply as a window rule when you save. Example: make a browser fully opaque, or a terminal square-cornered.")
+            text: I18n.tr("One app's own look. Anything left on Inherit follows the global.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -195,7 +198,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s3
 
             Repeater {

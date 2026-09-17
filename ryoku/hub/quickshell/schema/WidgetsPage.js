@@ -19,7 +19,7 @@ var rows = [
         "group": "WIDGET",
         "key": "clockDesign",
         "label": "Face",
-        "desc": "How the time is drawn: digits, a grand serif, a stacked column, an outline, a wide banner, analog hands, flip cards, rings, a big hour, a metal readout or a good-night card",
+        "desc": "How the time is drawn: digits, serif, banner, analog, flip cards.",
         "ctl": "chips",
         "src": "widgets.json",
         "opts": [
@@ -56,7 +56,7 @@ var rows = [
         "group": "FONT",
         "key": "widgetFont",
         "label": "Widget font",
-        "desc": "Font for the clock and every desktop widget; blank uses the built-in Space Grotesk. Bundled display faces and your installed fonts are all listed",
+        "desc": "The clock and every desktop widget; blank uses Space Grotesk.",
         "ctl": "pick",
         "src": "widgets.json",
         "opts": []
@@ -157,7 +157,7 @@ var rows = [
         "group": "PLACEMENT",
         "key": "clockAnchor",
         "label": "Anchor",
-        "desc": "Auto lands the widget on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick",
         "src": "widgets.json",
         "opts": [
@@ -284,7 +284,7 @@ var rows = [
         "group": "PLACEMENT",
         "key": "calendarAnchor",
         "label": "Anchor",
-        "desc": "Auto lands the calendar on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick",
         "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
@@ -398,7 +398,7 @@ var rows = [
         "group": "PLACEMENT",
         "key": "musicAnchor",
         "label": "Anchor",
-        "desc": "Auto lands the sheet on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick",
         "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
@@ -458,7 +458,7 @@ var rows = [
     },
     {
         "tab": "aio", "group": "PLACEMENT", "key": "aioAnchor", "label": "Anchor",
-        "desc": "Auto lands the card on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick", "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
     },
@@ -494,7 +494,7 @@ var rows = [
     },
     {
         "tab": "stats", "group": "PLACEMENT", "key": "statsAnchor", "label": "Anchor",
-        "desc": "Auto lands the panel on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick", "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
     },
@@ -535,7 +535,7 @@ var rows = [
     },
     {
         "tab": "weather", "group": "PLACEMENT", "key": "weatherAnchor", "label": "Anchor",
-        "desc": "Auto lands the widget on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick", "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
     },
@@ -581,7 +581,7 @@ var rows = [
     },
     {
         "tab": "notes", "group": "PLACEMENT", "key": "notesAnchor", "label": "Anchor",
-        "desc": "Auto lands the pad on the wallpaper's calmest region and follows it; a zone snaps to an edge or corner; free uses X/Y or dragging",
+        "desc": "Auto follows the wallpaper's calmest spot; a zone pins it; free sets X/Y.",
         "ctl": "pick", "src": "widgets.json",
         "opts": ["auto", "top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right", "free"]
     },

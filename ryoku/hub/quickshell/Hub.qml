@@ -1037,9 +1037,6 @@ Rectangle {
         }
     }
 
-    // the registration sheet: the HUD backdrop the whole instrument sits on.
-    Reg { anchors.fill: parent; visible: Tokens.showGrid }
-
     // ── rail ────────────────────────────────────────────────────────────
     Item {
         id: rail
@@ -1062,7 +1059,6 @@ Rectangle {
                 radius: Tokens.radius
                 border.width: Tokens.border
                 border.color: Tokens.line
-                Ticks { visible: Tokens.showGrid }
                 Row {
                     anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: Tokens.s4 }
                     spacing: Tokens.s3
@@ -1075,16 +1071,10 @@ Rectangle {
                             font.pixelSize: 14; font.weight: Font.Medium; font.letterSpacing: 2.4
                         }
                         Text {
-                            text: Tokens.monoHeads ? "//SETTINGS_" : I18n.tr("SETTINGS"); color: Tokens.inkMuted
+                            text: I18n.tr("SETTINGS"); color: Tokens.inkMuted
                             font.family: Tokens.mono; font.pixelSize: 10; font.letterSpacing: 1.4
                         }
                     }
-                }
-                Text {
-                    visible: Tokens.showGrid
-                    anchors { right: parent.right; top: parent.top; margins: Tokens.s2 }
-                    text: "///"; color: Tokens.inkFaint
-                    font.family: Tokens.mono; font.pixelSize: 10
                 }
             }
             Field {
@@ -1097,97 +1087,24 @@ Rectangle {
             }
         }
 
-        // the rail foot: a genuine Code 39 plate, the poster's totem. It scans.
-        Item {
-            id: railFoot
-            visible: Tokens.showGrid
-            anchors { left: parent.left; right: parent.right; bottom: decorRow.top }
-            anchors.margins: Tokens.s5
-            anchors.bottomMargin: Tokens.s4
-            height: Tokens.showGrid ? (Tokens.s3 + edition.height + Tokens.s3 + plate.implicitHeight) : 0
-            Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: Tokens.lineSoft }
-            // marginalia above the plate: an edition register, shared by every
-            // page since the rail is the one always-present chrome.
-            Marginalia {
-                id: edition
-                anchors { left: parent.left; top: parent.top; topMargin: Tokens.s3 }
-                index: Version.editionIndex; label: Version.editionNumber
-                glyph: "column"; glyph2: ""
-                chevrons: false
-            }
-            Barcode {
-                id: plate
-                anchors { left: parent.left; bottom: parent.bottom }
-                text: I18n.tr("RYOKU HUB")
-                unit: 1.1
-                barHeight: 14
-            }
-            Text {
-                anchors { right: parent.right; bottom: parent.bottom; bottomMargin: 2 }
-                text: "+"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
-            }
-        }
-
-        // the decor level: how much editorial chrome the settings wear. Calm is
-        // the quiet, function-first default; Rich restores the full poster
-        // treatment. Writes shell.json hubDecor (a daemon passthrough key), so
-        // every surface reading Tokens retints live, with no per-page wiring.
-        Item {
-            id: decorRow
-            anchors { left: parent.left; right: parent.right; bottom: advToggle.top }
-            anchors.leftMargin: Tokens.s5; anchors.rightMargin: Tokens.s5
-            anchors.bottomMargin: Tokens.s3
-            height: Tokens.ctlH
-            readonly property string cur: { void Settings.revision; return Settings.get("hubDecor") || "calm"; }
-            Text {
-                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                text: I18n.tr("Decor")
-                color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-                font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
-            }
-            Row {
-                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                spacing: Tokens.s1
-                Repeater {
-                    model: [ { "k": "calm", "n": I18n.tr("Calm") }, { "k": "rich", "n": I18n.tr("Rich") } ]
-                    Rectangle {
-                        required property var modelData
-                        readonly property bool sel: decorRow.cur === modelData.k
-                        width: optT.implicitWidth + Tokens.s3; height: Tokens.ctlH
-                        radius: Tokens.radius
-                        color: sel ? Tokens.bone : (dh.hovered ? Tokens.tint10 : "transparent")
-                        border.width: Tokens.border; border.color: sel ? "transparent" : Tokens.line
-                        Behavior on color { ColorAnimation { duration: Tokens.snap } }
-                        Text {
-                            id: optT
-                            anchors.centerIn: parent
-                            text: modelData.n
-                            color: sel ? Tokens.inkOnBone : Tokens.inkDim
-                            font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                            font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
-                        }
-                        HoverHandler { id: dh; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: Settings.patch("hubDecor", modelData.k) }
-                    }
-                }
-            }
-        }
-
-        // Two global switches at the foot: Decor (above) sets how much chrome the
-        // settings wear; Advanced reveals the deep per-page knobs inside a schema
-        // page (the rail always lists every section). Both persist and restore at
-        // startup by `advancedGet` / the settings daemon. One control each.
+        // The one global switch at the foot: Advanced reveals the deep per-page
+        // knobs inside a schema page (the rail always lists every section). It
+        // persists and restores at startup by `advancedGet` / the settings
+        // daemon.
         Item {
             id: advToggle
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             anchors.leftMargin: Tokens.s5; anchors.rightMargin: Tokens.s5
             anchors.bottomMargin: Tokens.s4
             height: Tokens.ctlH
+            Rectangle {
+                anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: -Tokens.s3 }
+                height: 1; color: Tokens.lineSoft
+            }
             Text {
                 anchors { left: parent.left; right: advSw.left; rightMargin: Tokens.s3; verticalCenter: parent.verticalCenter }
                 elide: Text.ElideRight
-                text: I18n.tr("Advanced settings")
+                text: I18n.tr("Advanced")
                 color: hub.advanced ? Tokens.ink : Tokens.inkMuted
                 font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                 font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
@@ -1202,7 +1119,7 @@ Rectangle {
 
         Flickable {
             id: navFlick
-            anchors { left: parent.left; right: parent.right; top: railHead.bottom; bottom: railFoot.top }
+            anchors { left: parent.left; right: parent.right; top: railHead.bottom; bottom: advToggle.top }
             anchors.margins: Tokens.s5
             anchors.topMargin: Tokens.s4
             contentHeight: nav.height
@@ -1240,6 +1157,11 @@ Rectangle {
                         required property int index
                         width: nav.width
                         spacing: 0
+
+                        // a breath between groups, so the rail reads as clusters
+                        // rather than one long list of rows
+                        Item { width: 1; height: grp.index === 0 ? 0 : Tokens.s2 }
+
                         // which group holds the open section: its header lifts up
                         // the ink ramp (faint -> dim) as a quiet "you are here",
                         // monochrome, never a colour, so the bone-plate item stays
@@ -1257,7 +1179,7 @@ Rectangle {
                                 return hub.needsMet(i) && (!i.adv || hub.advanced || hub.section === i.key);
                             })
                             width: parent.width
-                            height: !anyShown ? 0 : (grp.modelData.name === "" ? Tokens.s4 : 30)
+                            height: !anyShown ? 0 : (grp.modelData.name === "" ? Tokens.s4 : 34)
                             visible: anyShown
                             Row {
                                 visible: grp.modelData.name !== ""
@@ -1304,7 +1226,7 @@ Rectangle {
                                 readonly property bool shown: hub.needsMet(modelData)
                                     && (!modelData.adv || hub.advanced || hub.section === modelData.key)
                                 width: nav.width
-                                height: shown ? 34 : 0
+                                height: shown ? 36 : 0
                                 visible: shown
                                 readonly property bool sel: hub.section === modelData.key
                                 onSelChanged: if (sel) navFlick.reveal(navItem)
@@ -1371,14 +1293,19 @@ Rectangle {
         // async page swap (only the page content fades). A porting page (no
         // file) stays framed too.
         readonly property bool full: hub.pageFile(hub.section) !== "" && !hub.framedSet[hub.section]
-        anchors.left: rail.right
         anchors.top: parent.top
         anchors.bottom: pageArea.full ? parent.bottom : bar.top
-        anchors.right: parent.right
-        anchors.leftMargin: pageArea.full ? 0 : Tokens.s6
-        anchors.rightMargin: pageArea.full ? 0 : Tokens.s6
         anchors.topMargin: pageArea.full ? 0 : Tokens.s5
         anchors.bottomMargin: pageArea.full ? 0 : Tokens.s3
+        // Framed pages read on one centred measure, placed by `x` alone (an
+        // anchor here would silently win and pin the page to the rail); a
+        // full-bleed page (art, a console, a drag-arrange) keeps the window.
+        width: pageArea.full
+            ? parent.width - rail.width
+            : Math.min(parent.width - rail.width - 2 * Tokens.s6, Tokens.pageMax)
+        x: rail.width + (pageArea.full
+            ? 0
+            : Math.max(Tokens.s6, Math.round((parent.width - rail.width - width) / 2)))
 
         // Two loaders crossfade the page: the incoming page loads async into the
         // hidden loader, then fades in as the visible one fades out, so the

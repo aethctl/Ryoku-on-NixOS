@@ -272,8 +272,11 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the same centred measure as the column below
+        width: Math.min(parent.width, Tokens.contentMax)
+        x: Math.round((parent.width - width) / 2)
         spacing: Tokens.s2
 
         Row {
@@ -298,30 +301,21 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Trade a little eye-candy, idle animation or resident memory for lower CPU, GPU and RAM use. Changes preview live; nothing is written until you save.")
+            text: I18n.tr("Less eye-candy for lower CPU, GPU and RAM use. Previewed live.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
     }
 
-    // marginalia dressing the dead top-right margin beside the title. Ink only.
-    Marginalia {
-        visible: Tokens.showPosters
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "性能"
-        index: "06"; label: I18n.tr("SYSTEM")
-        glyph: "column"; glyph2: "wave"
-    }
 
     // ── the switch grid: three meaning-groups, each a SettingCard drawer that
     // stacks its compact SettingRows; membership comes straight from the schema. ──
     Flickable {
         id: flick
         anchors {
-            left: parent.left; right: hawkPlacard.visible ? hawkPlacard.left : parent.right
+            left: parent.left; right: parent.right
             top: head.bottom; bottom: bar.top
-            leftMargin: Tokens.s6; rightMargin: hawkPlacard.visible ? Tokens.s5 : Tokens.s6
+            leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s5
         }
         contentWidth: width
@@ -332,7 +326,9 @@ Item {
 
         Column {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // one calm column: a page never stretches a row across the window
+            width: Math.min(flick.width - Tokens.s3, Tokens.contentMax + Tokens.s3)
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s5
 
             Repeater {
@@ -377,26 +373,6 @@ Item {
         }
     }
 
-    // the specimen rail: a hawk -- swift, precise, lethal -- the machine at
-    // peak performance. Fills the dead right the old single grid never used.
-    Placard {
-        id: hawkPlacard
-        anchors {
-            right: parent.right; rightMargin: Tokens.s6
-            top: head.bottom; topMargin: Tokens.s5
-            bottom: bar.top; bottomMargin: Tokens.s5
-        }
-        width: Math.round((pg.width - 2 * Tokens.s6) * 0.32)
-        code: "PERF-05"
-        title: "\u75be\u98a8"
-        sub: I18n.tr("SWIFT AS THE WIND")
-        chapter: "06"
-        label: I18n.tr("SYSTEM")
-        quote: I18n.tr("TRADE THE GLOW FOR THE SPEED.")
-        seal: "\u75be"
-        art: "hawk.png"
-        seed: 4
-    }
 
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to

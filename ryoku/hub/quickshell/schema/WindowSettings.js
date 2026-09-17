@@ -63,7 +63,7 @@ var rows = [{
         "group": "OPENING WINDOWS",
         "key": "desktop.windows.tameMaximizeOnOpen",
         "label": "Tame apps that open maximised",
-        "desc": "Apps that ask to open maximised are placed as an ordinary window inside your gaps, not edge to edge. Turn it off to let them open maximised",
+        "desc": "Open maximised apps as a windowed tile inside your gaps.",
         "ctl": "sw",
         "src": "desktop.json"
     },{

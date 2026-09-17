@@ -25,7 +25,7 @@ Item {
     readonly property string providerName: Settings.provider
     readonly property string pTitle: pg.providerName !== "" ? pg.cap(pg.providerName) : I18n.tr("Window Manager")
     readonly property string pEyebrow: I18n.tr("COMPOSITOR")
-    readonly property string pBlurb: I18n.tr("Everything about how your windows look and behave, plus the extras this compositor adds. Changes apply at your next login.")
+    readonly property string pBlurb: I18n.tr("How windows look and behave here. Changes apply at your next login.")
 
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
     function cv(path) { return pg.hub ? pg.hub.hyprCommittedVal(path) : undefined }

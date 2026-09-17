@@ -5,7 +5,6 @@ singleton I18n I18n.qml
 singleton Spans Spans.qml
 singleton Silhouette Silhouette.qml
 singleton VizStyles VizStyles.qml
-singleton DecorStore DecorStore.qml
 singleton Ryodecors Ryodecors.qml
 singleton ProfileStore ProfileStore.qml
 singleton Spawn Spawn.qml

@@ -104,23 +104,13 @@ Singleton {
     property string mono: "SpaceMono Nerd Font"
     readonly property string jp: "Noto Sans CJK JP"
 
-    // ── chrome / decor level ─────────────────────────────────────────────
-    // How much decorative chrome the settings surfaces wear, from shell.json
-    // `hubDecor`. Absent reads as "calm": the quiet, function-first default.
-    // "rich" restores the full editorial treatment (chapter Placards, register
-    // crosshairs, film grain, the big display title); "minimal" is calm with an
-    // icon rail and no kanji seals. One switch, read live by every surface, so a
-    // user can strip the eye-candy without the shell hardcoding either taste.
-    property string decor: "calm"
-    readonly property bool decorRich: decor === "rich"
-    readonly property bool decorMinimal: decor === "minimal"
-    readonly property bool showPosters: decorRich   // Placard / Decor hero art
-    readonly property bool showGrid: decorRich       // register crosshair marks
-    readonly property bool showGrain: decorRich      // film-grain overlay
-    readonly property bool showSeals: !decorMinimal  // rail kanji seals
-    readonly property bool monoHeads: decorRich      // //HEADER_ vs sentence case
-
-    readonly property int fTitle: px(decorRich ? 46 : 32)    // page title, Fraunces
+    // ── chrome ───────────────────────────────────────────────────────────
+    // One setting voice: the quiet, function-first one. The poster layer that
+    // once dressed the sheet (register crosshairs, film grain, chapter plates,
+    // the oversized display title) is gone, and with it the `hubDecor` switch
+    // that used to trade it on, so a page reads as a printed instrument sheet
+    // and the ornament question does not exist.
+    readonly property int fTitle: px(32)    // page title, Fraunces
     readonly property int fHero: px(34)     // a headline readout
     readonly property int fValue: px(26)    // a cell's value
     readonly property int fRow: px(15)      // a row name
@@ -147,6 +137,13 @@ Singleton {
     readonly property int rowH: px(48)
     readonly property int cellH: px(104)
     readonly property int railW: px(268)
+    // The widest a stack of settings rows reads at before a label and its control
+    // stop being one thing. A page may cap its own column here and centre it.
+    readonly property int contentMax: px(1000)
+    // The widest a framed page's content column grows. A settings page reads as a
+    // printed column: past this, a wider window buys calmer margins instead of a
+    // label at one edge and its control at the other.
+    readonly property int pageMax: px(1200)
     readonly property int ctlH: px(26)
 
     // ── motion ───────────────────────────────────────────────────────────
@@ -217,7 +214,9 @@ Singleton {
     readonly property var curveSlowEffects: [0.34, 0.88, 0.34, 1, 1, 1]
 
     // ── grain ────────────────────────────────────────────────────────────
-    readonly property real grainOpacity: showGrain ? 0.10 : 0
+    // Art only: the film tooth rides a recording thumbnail or a launcher
+    // preview, never the paper a setting is read on (see Doc/ui-ux.md).
+    readonly property real grainOpacity: 0.10
 
     // ── palette cross-fade ───────────────────────────────────────────────────
     // A new palette used to land in one frame while the wallpaper it came from was
@@ -276,7 +275,6 @@ Singleton {
         var widgets = ({});
         var monoFont = "SpaceMono Nerd Font";
         var uiFont = "Space Grotesk";
-        var decorLevel = "calm";
         try {
             const txt = shellFile.text();
             if (txt) {
@@ -300,7 +298,6 @@ Singleton {
                 if (w && typeof w === "object" && w !== null)
                     widgets = w;
                 if (typeof o.fontFamily === "string" && o.fontFamily.length) { uiFont = o.fontFamily; monoFont = o.fontFamily; }
-                if (typeof o.hubDecor === "string" && o.hubDecor.length) decorLevel = o.hubDecor;
             }
         } catch (e) {
             pal = null;
@@ -313,7 +310,6 @@ Singleton {
         t.widgetVisibility = widgets;
         t.ui = uiFont;
         t.mono = monoFont;
-        t.decor = decorLevel;
     }
     function refreshMatch() {
         try {

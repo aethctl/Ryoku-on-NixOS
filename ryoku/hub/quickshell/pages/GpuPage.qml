@@ -449,10 +449,8 @@ done
     // ── head ───────────────────────────────────────────────────────────────────
     Column {
         id: head
-        anchors {
-            left: parent.left; right: parent.right; top: parent.top
-            leftMargin: Tokens.s6; rightMargin: Tokens.s6; topMargin: Tokens.s6
-        }
+                anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.topMargin: Tokens.s6
         spacing: Tokens.s2
 
         Row {
@@ -474,7 +472,7 @@ done
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Your silicon. Define what each power profile does to the CPU, tune the graphics hardware, cap the battery charge ceiling, and choose which GPU the desktop renders on. Passthrough (advanced) frees the discrete GPU so a virtual machine can own it.")
+            text: I18n.tr("Power profiles, graphics tuning, and which GPU renders the desktop.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }

@@ -650,9 +650,7 @@ Item {
 
         Column {
             id: head
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
+            anchors { left: parent.left; right: parent.right; top: parent.top }
             spacing: Tokens.s2
 
             Row {

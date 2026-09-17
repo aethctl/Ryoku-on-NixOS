@@ -32,9 +32,6 @@ Marginalia 1.0 Marginalia.qml
 Pixel 1.0 Pixel.qml
 Watermark 1.0 Watermark.qml
 KeyboardMap 1.0 KeyboardMap.qml
-DitherField 1.0 DitherField.qml
-Decor 1.0 Decor.qml
-Placard 1.0 Placard.qml
 DitherImage 1.0 DitherImage.qml
 HeroCrop 1.0 HeroCrop.qml
 PickFile 1.0 PickFile.qml
