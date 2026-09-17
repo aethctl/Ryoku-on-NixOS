@@ -134,14 +134,16 @@ Item {
             return;
         root._laying = true;
         try {
-            layInner();
+            // qualified: lay() is handed to Qt.callLater unbound, and a bare call
+            // inside it resolves against the wrong scope and throws
+            root.layoutCards();
         } catch (e) {
             console.warn("CardColumns: layout failed: " + e);
         }
         root._laying = false;
     }
 
-    function layInner() {
+    function layoutCards() {
 
         var kids = root.childrenInOrder();
         var heights = [];
@@ -209,11 +211,15 @@ Item {
         root._laying = false;
     }
 
-    onWidthChanged: Qt.callLater(root.lay)
-    onColumnsChanged: Qt.callLater(root.lay)
-    onFillToChanged: Qt.callLater(root.lay)
+    // passed as a closure, not as a bare method reference: Qt.callLater calls it
+    // unbound, and a method invoked that way cannot resolve the component's own
+    // members
+    function relayout() { Qt.callLater(function () { root.lay(); }); }
+    onWidthChanged: root.relayout()
+    onColumnsChanged: root.relayout()
+    onFillToChanged: root.relayout()
     Component.onCompleted: {
-        Qt.callLater(root.lay);
+        root.relayout();
         ladder.restart();
     }
 
