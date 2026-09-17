@@ -211,10 +211,12 @@ Item {
         root._laying = false;
     }
 
-    // passed as a closure, not as a bare method reference: Qt.callLater calls it
-    // unbound, and a method invoked that way cannot resolve the component's own
-    // members
-    function relayout() { Qt.callLater(function () { root.lay(); }); }
+    // A timer rather than Qt.callLater: the Hub crossfades pages, so a deferred
+    // call can outlive the grid it belongs to and run against a dead object. A
+    // timer is owned by the component and dies with it, and still keeps the lay
+    // out of the width-change notification that asked for it.
+    function relayout() { relayoutTimer.restart() }
+    Timer { id: relayoutTimer; interval: 16; repeat: false; onTriggered: root.lay() }
     onWidthChanged: root.relayout()
     onColumnsChanged: root.relayout()
     onFillToChanged: root.relayout()
