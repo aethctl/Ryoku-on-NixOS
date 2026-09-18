@@ -87,14 +87,77 @@ pkgs.writeShellApplication {
 
     ${ryoku.cli}/bin/ryoku materialize
 
-    # niri treats either missing generated include as a fatal config error.
-    # Seed both together on the first Niri-capable generation; later applies
-    # remain owned by the provider and are not overwritten here.
-    if [ ! -f "$config_home/niri/settings.kdl" ] ||
-       [ ! -f "$config_home/niri/rebinds.kdl" ]; then
-      ${ryoku.wmNiri}/bin/ryoku-wm-niri apply \
-        "$config_home/ryoku/desktop.json" >/dev/null
+    niri_gpu="$config_home/niri/gpu.kdl"
+
+    if [ -f "$niri_gpu" ]; then
+      tmp="$niri_gpu.ryoku-nix.$$"
+      in_ryoku_nvidia_block=0
+
+      : > "$tmp"
+
+      while IFS= read -r line || [ -n "$line" ]; do
+        if [ "$line" = "// BEGIN RYOKU NIXOS NVIDIA NIRI WORKAROUNDS" ]; then
+          in_ryoku_nvidia_block=1
+          continue
+        fi
+
+        if [ "$line" = "// END RYOKU NIXOS NVIDIA NIRI WORKAROUNDS" ]; then
+          in_ryoku_nvidia_block=0
+          continue
+        fi
+
+        if [ "$in_ryoku_nvidia_block" -eq 0 ]; then
+          printf '%s\n' "$line" >> "$tmp"
+        fi
+      done < "$niri_gpu"
+
+      nvidia_render=0
+      other_render=0
+
+      for driver_link in /sys/class/drm/renderD*/device/driver; do
+        [ -e "$driver_link" ] || continue
+
+        driver="$(basename "$(readlink -f "$driver_link")")"
+
+        if [ "$driver" = "nvidia" ]; then
+          nvidia_render=$((nvidia_render + 1))
+        else
+          other_render=$((other_render + 1))
+        fi
+      done
+
+      if [ "$nvidia_render" -gt 0 ] && [ "$other_render" -eq 0 ]; then
+        cat >> "$tmp" <<'EOF'
+
+// BEGIN RYOKU NIXOS NVIDIA NIRI WORKAROUNDS
+debug {
+    disable-cursor-plane
+    emulate-zero-presentation-time
+}
+// END RYOKU NIXOS NVIDIA NIRI WORKAROUNDS
+EOF
+      fi
+
+      chmod --reference="$niri_gpu" "$tmp"
+      mv "$tmp" "$niri_gpu"
     fi
+
+    # config.kdl is niri's immutable Ryoku entrypoint and autostart.kdl is
+    # the session bootstrap it includes. They track the shipped generation,
+    # unlike the machine-owned monitor/GPU/keyboard/user seeds.
+    #
+    # Restore them on every materialization: losing either leaves a currently
+    # running niri session alive only until its next restart.
+    install -Dm0644 "$base/niri/config.kdl" \
+      "$config_home/niri/config.kdl"
+    install -Dm0644 "$base/niri/autostart.kdl" \
+      "$config_home/niri/autostart.kdl"
+
+    # settings.kdl and rebinds.kdl are provider-generated effective config.
+    # Always regenerate them from desktop.json so changes to the provider
+    # itself (new/fixed bindings, defaults, syntax) reach existing installs.
+    ${ryoku.wmNiri}/bin/ryoku-wm-niri apply \
+      "$config_home/ryoku/desktop.json" >/dev/null
 
     # Keep persisted Quick Settings state in step with Ryostage.
     #
