@@ -135,6 +135,12 @@ type Unhonored struct {
 type OutputLayout struct {
 	Name    string `json:"name"`
 	Enabled bool   `json:"enabled"`
+	// Physical identity survives compositor switches where the same monitor can
+	// receive a different connector name. Empty fields keep old name-only layouts
+	// and profiles backward compatible.
+	Make          string `json:"make,omitempty"`
+	Model         string `json:"model,omitempty"`
+	PhysicalWidth int    `json:"physicalWidth,omitempty"`
 	// Mode is "WxH@Hz"; empty asks for the panel's preferred (automatic) mode.
 	Mode string `json:"mode,omitempty"`
 	// Scale 0 asks the compositor to choose the scale itself.

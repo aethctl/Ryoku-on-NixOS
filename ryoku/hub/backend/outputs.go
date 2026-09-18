@@ -127,11 +127,159 @@ func applyOutputs(raw string) error {
 	return applyLayout(layout)
 }
 
+// outputHasIdentity reports whether a saved layout carries enough physical
+// monitor metadata to require identity-safe resolution. Legacy layouts without
+// any of these fields deliberately retain connector-name semantics.
+func outputHasIdentity(spec wm.OutputLayout) bool {
+	return strings.TrimSpace(spec.Make) != "" ||
+		strings.TrimSpace(spec.Model) != "" ||
+		spec.PhysicalWidth > 0
+}
+
+func layoutHasIdentity(layout []wm.OutputLayout) bool {
+	for _, spec := range layout {
+		if outputHasIdentity(spec) {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveOutputName maps a saved physical monitor onto its connector in the
+// compositor that is live now. Connector names are a fallback only for legacy
+// layouts that carry no physical identity.
+//
+// Once identity metadata exists, guessing the old connector is unsafe: Hyprland
+// and niri may assign DP-1/DP-2 to different physical panels.
+func resolveOutputName(spec wm.OutputLayout, live []wm.Output) (string, error) {
+	makeWant := strings.TrimSpace(spec.Make)
+	modelWant := strings.TrimSpace(spec.Model)
+
+	if !outputHasIdentity(spec) {
+		return spec.Name, nil
+	}
+
+	matched := ""
+	count := 0
+
+	for _, out := range live {
+		if makeWant != "" &&
+			!strings.EqualFold(makeWant, strings.TrimSpace(out.Make)) {
+			continue
+		}
+		if modelWant != "" &&
+			!strings.EqualFold(modelWant, strings.TrimSpace(out.Model)) {
+			continue
+		}
+		if spec.PhysicalWidth > 0 &&
+			out.PhysicalWidth != spec.PhysicalWidth {
+			continue
+		}
+
+		matched = out.Name
+		count++
+	}
+
+	switch count {
+	case 1:
+		return matched, nil
+	case 0:
+		return "", fmt.Errorf(
+			"output %q: physical identity make=%q model=%q width=%d matched no connected output",
+			spec.Name,
+			makeWant,
+			modelWant,
+			spec.PhysicalWidth,
+		)
+	default:
+		return "", fmt.Errorf(
+			"output %q: physical identity make=%q model=%q width=%d is ambiguous across %d connected outputs",
+			spec.Name,
+			makeWant,
+			modelWant,
+			spec.PhysicalWidth,
+			count,
+		)
+	}
+}
+
+// resolveLayoutOutputs preserves the physical layout while translating every
+// connector reference into the names used by the compositor that is live now.
+//
+// Resolution is intentionally conservative. Identity-bearing entries must map
+// uniquely, and two saved entries may never claim the same live output.
+// Mirror targets travel through the completed old-name -> live-name map.
+func resolveLayoutOutputs(layout []wm.OutputLayout, live []wm.Output) ([]wm.OutputLayout, error) {
+	out := append([]wm.OutputLayout(nil), layout...)
+	remap := make(map[string]string, len(out))
+	claimed := make(map[string]string, len(out))
+
+	for i := range out {
+		old := out[i].Name
+
+		name, err := resolveOutputName(out[i], live)
+		if err != nil {
+			return nil, err
+		}
+
+		if previous, exists := claimed[name]; exists {
+			return nil, fmt.Errorf(
+				"outputs %q and %q both resolve to live output %q",
+				previous,
+				old,
+				name,
+			)
+		}
+
+		out[i].Name = name
+		claimed[name] = old
+
+		if old != "" {
+			remap[old] = name
+		}
+	}
+
+	for i := range out {
+		if out[i].Mirror == "" || out[i].Mirror == "none" {
+			continue
+		}
+
+		if name, ok := remap[out[i].Mirror]; ok {
+			out[i].Mirror = name
+		}
+
+		if out[i].Mirror == out[i].Name {
+			return nil, fmt.Errorf(
+				"output %q resolves to mirror itself",
+				out[i].Name,
+			)
+		}
+	}
+
+	return out, nil
+}
+
 // applyLayout hands the layout to the provider by path, like the seam wants, and
 // prints its report so the page can surface anything the compositor could not
 // honour. Shared by a direct apply and a profile load.
 func applyLayout(layout []wm.OutputLayout) error {
-	body, err := json.Marshal(layout)
+	resolved := layout
+
+	snap, stateErr := desktopClient().State()
+	if stateErr == nil {
+		var err error
+		resolved, err = resolveLayoutOutputs(layout, snap.Outputs)
+		if err != nil {
+			return fmt.Errorf("outputs: %w", err)
+		}
+	} else if layoutHasIdentity(layout) {
+		return fmt.Errorf(
+			"outputs: cannot resolve physical monitor identity without live compositor state: %w",
+			stateErr,
+		)
+	}
+
+	body, err := json.Marshal(resolved)
 	if err != nil {
 		return err
 	}
@@ -269,28 +417,34 @@ func listProfiles() error {
 	return printJSON(out)
 }
 
-// connectedOutputs is the set of output names live now, for the profile match
-// mark. nil off a session, which reads as "nothing matches".
-func connectedOutputs() map[string]bool {
+// connectedOutputs returns the live output identities for profile matching.
+// Keeping the physical identity here lets a profile remain applicable when a
+// compositor gives the same panels different connector names.
+func connectedOutputs() []wm.Output {
 	snap, err := desktopClient().State()
 	if err != nil {
 		return nil
 	}
-	set := make(map[string]bool, len(snap.Outputs))
-	for _, o := range snap.Outputs {
-		set[o.Name] = true
-	}
-	return set
+	return snap.Outputs
 }
 
-// profileMatches is true when every output the profile names is connected now,
-// so applying it would govern the whole live set rather than a partial one.
-func profileMatches(layout []wm.OutputLayout, connected map[string]bool) bool {
+// profileMatches is true when every physical output the profile describes is
+// connected now. Old profiles without identity retain their name-only behaviour.
+func profileMatches(layout []wm.OutputLayout, connected []wm.Output) bool {
 	if len(layout) == 0 || len(connected) == 0 {
 		return false
 	}
-	for _, o := range layout {
-		if !connected[o.Name] {
+
+	resolved, err := resolveLayoutOutputs(layout, connected)
+	if err != nil {
+		return false
+	}
+	names := make(map[string]bool, len(connected))
+	for _, o := range connected {
+		names[o.Name] = true
+	}
+	for _, o := range resolved {
+		if !names[o.Name] {
 			return false
 		}
 	}
