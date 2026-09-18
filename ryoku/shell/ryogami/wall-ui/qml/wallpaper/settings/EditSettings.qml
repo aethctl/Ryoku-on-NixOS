@@ -424,7 +424,18 @@ Column {
                 anchors { left: parent.left; verticalCenter: parent.verticalCenter }
                 width: parent.width - upBtn.width - 12
                 elide: Text.ElideRight
-                text: (root._up.verdict && root._up.verdict.why) ? root._up.verdict.why : I18n.tr("waifu2x-ncnn-vulkan. Writes an upscaled copy beside the original.")
+                text: {
+                    var v = root._up.verdict
+                    if (v && v.result === "done" && v.out)
+                        return I18n.tr("Upscaled. Saved: %1").arg(v.out)
+                    if (v && v.result === "sharp")
+                        return I18n.tr("Already sharp (%1px, the ceiling is %2px): nothing to do.").arg(v.px || 0).arg(v.cap || 0)
+                    if (v && v.result === "unsupported")
+                        return I18n.tr("waifu2x-ncnn-vulkan is not installed.")
+                    if (v && v.why)
+                        return I18n.tr("Upscale failed: %1").arg(v.why)
+                    return I18n.tr("waifu2x-ncnn-vulkan. Images are rewritten in place; videos save beside the original.")
+                }
                 font.family: Style.fontFamily; font.pixelSize: 10; color: root._inkDim
             }
             Text {

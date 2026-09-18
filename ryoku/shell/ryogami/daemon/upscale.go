@@ -35,6 +35,10 @@ type Upscaler struct {
 	// external binaries. Defaults wire the real exec helpers.
 	lookPath func(string) (string, error)
 	runOut   func(ctx context.Context, timeout time.Duration, name string, args ...string) ([]byte, error)
+
+	// worker seam: where the job's child process comes from. Defaults to the
+	// daemon's own binary in upscale-worker mode; tests substitute a fake.
+	spawnWorker func(upscaleSpec) (workerProcess, error)
 }
 
 // upscaleJob is the in-flight (or last-finished) run, mirroring optimize.go's
@@ -83,10 +87,11 @@ var videoUpscaleExts = map[string]bool{"mp4": true, "webm": true, "mkv": true, "
 // caches live, matching ryowalls' XDG_STATE_HOME files) and the event sink.
 func NewUpscaler(stateDir string, emit func(event string, data map[string]interface{})) *Upscaler {
 	return &Upscaler{
-		stateDir: stateDir,
-		emit:     emit,
-		lookPath: exec.LookPath,
-		runOut:   realRunOut,
+		stateDir:    stateDir,
+		emit:        emit,
+		lookPath:    exec.LookPath,
+		runOut:      realRunOut,
+		spawnWorker: spawnWorkerProcess,
 	}
 }
 
@@ -114,7 +119,7 @@ func (u *Upscaler) Start(input, kind string, scale int) error {
 	u.job = upscaleJob{running: true, phase: "probe", kind: kind, file: input, cancel: cancel}
 	u.mu.Unlock()
 
-	go u.run(ctx, input, kind, scale)
+	go u.supervise(ctx, upscaleSpec{Input: input, Kind: kind, Scale: scale})
 	return nil
 }
 
@@ -152,18 +157,112 @@ func normalizeUpscaleKind(kind, input string) string {
 	}
 }
 
-func (u *Upscaler) run(ctx context.Context, input, kind string, scale int) {
-	var verdict map[string]interface{}
-	if kind == upscaleKindVideo {
-		verdict = u.enhanceVideo(ctx, input, scale)
-	} else {
-		verdict = u.enhanceImage(ctx, input, scale)
+// upscaleWorkerCap is the failsafe ceiling on a whole job, far above every
+// per-phase budget inside the worker (probes, extract, per-GPU enhance,
+// assemble). It exists for a wedged worker, not for honest work: cancel is
+// the knob for a run the user no longer wants.
+const upscaleWorkerCap = 8 * time.Hour
+
+// supervise runs the enhance in the worker child and translates its stream
+// back into the job: progress lines become the usual broadcast events, the
+// verdict (or the worker's death, a cancel, or the failsafe cap) lands as the
+// final one, and the running lock always clears. A panic inside the pipeline
+// kills the worker, never the daemon.
+func (u *Upscaler) supervise(ctx context.Context, spec upscaleSpec) {
+	defer u.finish(spec.Kind)
+	wp, err := u.spawnWorker(spec)
+	if err != nil {
+		u.mu.Lock()
+		u.job.verdict = upscaleVerdict("error", spec.Kind, 0, 0, "", "spawn")
+		u.mu.Unlock()
+		return
 	}
 
+	// one relay owns the worker's stdout for its whole life: progress lines
+	// become the usual events, the verdict lands on the job directly. Draining
+	// to EOF here means no send can ever block, whatever the exit path.
+	relayed := make(chan struct{})
+	go func() {
+		defer close(relayed)
+		for ev := range wp.events {
+			u.mu.Lock()
+			if ev.Verdict != nil {
+				u.job.verdict = ev.Verdict
+				u.mu.Unlock()
+				continue
+			}
+			if p, ok := ev.Data["phase"].(string); ok {
+				u.job.phase = p
+			}
+			if n, ok := ev.Data["progress"].(float64); ok {
+				u.job.progress = int(n)
+			}
+			if n, ok := ev.Data["total"].(float64); ok {
+				u.job.total = int(n)
+			}
+			u.emitProgress()
+			u.mu.Unlock()
+		}
+	}()
+
+	watchdog := time.NewTimer(upscaleWorkerCap)
+	defer watchdog.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			u.fail(spec.Kind, "cancelled", wp.kill)
+			return
+		case <-watchdog.C:
+			u.fail(spec.Kind, "timeout", wp.kill)
+			return
+		case <-relayed:
+			<-wp.done
+			u.settle(ctx, spec.Kind)
+			return
+		case <-wp.done:
+			<-relayed
+			u.settle(ctx, spec.Kind)
+			return
+		}
+	}
+}
+
+// fail records the verdict for a job the daemon stopped itself, then kills
+// the worker group.
+func (u *Upscaler) fail(kind, why string, kill func()) {
+	u.mu.Lock()
+	if u.job.verdict == nil {
+		u.job.verdict = upscaleVerdict("error", kind, 0, 0, "", why)
+	}
+	u.mu.Unlock()
+	kill()
+}
+
+// settle records the terminal verdict for a worker that exited on its own:
+// whatever it reported, else cancelled (the run's context was done) or a bare
+// worker death.
+func (u *Upscaler) settle(ctx context.Context, kind string) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if u.job.verdict != nil {
+		return
+	}
+	if ctx.Err() != nil {
+		u.job.verdict = upscaleVerdict("error", kind, 0, 0, "", "cancelled")
+		return
+	}
+	u.job.verdict = upscaleVerdict("error", kind, 0, 0, "", "worker")
+}
+
+// finish clears the running lock and lands the finished event, whatever the
+// exit path was. Runs as supervise's defer.
+func (u *Upscaler) finish(kind string) {
 	u.mu.Lock()
 	u.job.running = false
-	u.job.verdict = verdict
-	if r, _ := verdict["result"].(string); r != "" {
+	if u.job.verdict == nil {
+		u.job.verdict = upscaleVerdict("error", kind, 0, 0, "", "worker")
+	}
+	if r, _ := u.job.verdict["result"].(string); r != "" {
 		u.job.phase = r
 	}
 	u.emitFinished()
