@@ -16,4 +16,3 @@ var rows = [
         "opts": ["key combo", "exec", "command", "run"]
     }
 ];
-

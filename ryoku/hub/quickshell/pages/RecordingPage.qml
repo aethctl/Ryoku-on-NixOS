@@ -392,9 +392,14 @@ Item {
         anchors.topMargin: Tokens.s6
         // the head starts at the body's left inset and spans its width
         width: parent.width - Tokens.s6 * 2
-        spacing: Tokens.s2
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink

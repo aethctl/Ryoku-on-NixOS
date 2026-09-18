@@ -87,13 +87,15 @@ Item {
         anchors { left: parent.left; top: parent.top }
         anchors.leftMargin: sheet.sheetX
         width: sheet.sheetWidth
-        spacing: Tokens.s2
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Item {
             width: parent.width
             // an eyebrow that only repeats the title is noise, not a register
             visible: I18n.tr(page.eyebrow).toLowerCase() !== page.title.toLowerCase()
-            height: 14
+            height: 18
             Row {
                 id: ebrow
                 spacing: Tokens.s2

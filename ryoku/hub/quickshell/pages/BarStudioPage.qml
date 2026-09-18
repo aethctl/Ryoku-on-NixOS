@@ -197,12 +197,17 @@ Item {
         // the title starts over the first card column instead of floating centred
         x: 0
         width: page.width - 14
-        spacing: Tokens.s2
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Item {
             width: parent.width
             height: 14
             Row {
+                // the register row holds a fixed box, so the rule and the seal keep
+                // their distance from the title on every page
+                height: Tokens.s5
                 id: ebrow
                 spacing: Tokens.s2
                 anchors.verticalCenter: parent.verticalCenter
