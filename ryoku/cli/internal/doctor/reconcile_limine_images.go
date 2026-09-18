@@ -199,6 +199,10 @@ func pruneLimineStrayImages(names []string) error {
 
 // reconcileLimineKernelImages: a no-op while every image matches its kernel.
 func reconcileLimineKernelImages(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("kernel boot images are owned by the NixOS generation")
+	}
+
 	if !sys.PkgInstalled("limine") {
 		return okRes(i18n.T("not a limine-managed boot on this box"))
 	}

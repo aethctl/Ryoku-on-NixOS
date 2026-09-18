@@ -23,6 +23,10 @@ const snapshotDrainBatch = 20
 // snapshots leak past number cleanup), and drain leaked timeline snapshots.
 // Draining runs only under a number-only config (TIMELINE_CREATE="no").
 func reconcileSnapperCleanup(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Snapper timer and cleanup policy is managed declaratively on NixOS")
+	}
+
 	if !sys.Exists("/etc/snapper/configs/root") {
 		return okRes(i18n.T("root snapshots not configured, nothing to prune"))
 	}
@@ -237,6 +241,10 @@ func allDigits(s string) bool {
 // /.snapshots, which turns updatedb into an hours-long crawl on a
 // snapshot-heavy box. No updatedb.conf means locate is not installed.
 func reconcileUpdatedbPrune(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("updatedb configuration is managed outside Ryoku Doctor on NixOS")
+	}
+
 	const path = "/etc/updatedb.conf"
 	if !sys.Exists(path) {
 		return okRes(i18n.T("no /etc/updatedb.conf (locate not installed)"))

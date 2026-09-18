@@ -186,6 +186,10 @@ func keplerGpuPresent() bool {
 }
 
 func reconcileKeplerNvidia(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("NVIDIA driver and initramfs policy is managed declaratively on NixOS")
+	}
+
 	if !keplerGpuPresent() || !nvidia580Installed() {
 		return okRes(i18n.T("no incompatible 580xx driver on Kepler hardware"))
 	}
@@ -265,6 +269,10 @@ func removeRootFiles(paths ...string) error {
 }
 
 func reconcileNvidiaModeset(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("NVIDIA boot configuration is managed declaratively on NixOS")
+	}
+
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}
@@ -367,6 +375,10 @@ func nvidiaGuardHookOK(got string) bool {
 }
 
 func reconcileNvidiaGuardHook(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("pacman NVIDIA hooks are not applicable on NixOS")
+	}
+
 	if !nvidiaDriverActive() {
 		return okRes(i18n.T("no proprietary NVIDIA driver in use"))
 	}

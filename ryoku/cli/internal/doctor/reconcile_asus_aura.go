@@ -37,6 +37,10 @@ func probeAsusAuraStatus() asusAuraStatus {
 }
 
 func reconcileAsusAura(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return noteRes("ASUS Aura host integration is not modified imperatively by Doctor on NixOS")
+	}
+
 	st := readAsusAuraStatus()
 	if !st.supported {
 		return okRes(i18n.T("this machine has no supported ASUS Aura laptop controller"))

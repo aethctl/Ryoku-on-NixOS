@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ryoku pre-commit, on staged additions:
 #   1. no em-dash in text files (prose stays plain, not machine-styled)
 #   2. bash syntax on staged shell scripts

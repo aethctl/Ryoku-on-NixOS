@@ -598,6 +598,10 @@ func gatherSnapperState() snapperState {
 // -> write the canonical installer layout. non-btrfs root -> warn honestly
 // instead of silently ok. healthy box -> consistency checks gate "ok".
 func reconcileSnapper(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Snapper configuration is managed declaratively on NixOS")
+	}
+
 	st := gatherSnapperState()
 	outcome, problems := planSnapper(st)
 	switch outcome {
@@ -817,6 +821,10 @@ func markMigration(marker string) error {
 // ---- reconciler: stale pacman lock -------------------------------------------
 
 func reconcilePacmanLock(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("pacman state is not managed by Ryoku Doctor on NixOS")
+	}
+
 	const lock = "/var/lib/pacman/db.lck"
 	if !sys.Exists(lock) {
 		return okRes(i18n.T("no stale pacman lock"))
@@ -888,6 +896,10 @@ func reconcileStaleUpdateRun(checkOnly bool) recResult {
 // Safe: a "root" node backing a live mount (the running root) is never touched,
 // only a true orphan with no mount; closing a LUKS mapper only re-locks it.
 func reconcileStaleCryptMapper(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("installer crypt mapper repair is not applicable on NixOS")
+	}
+
 	nodes := cryptMapperNodes()
 	if len(nodes) == 0 {
 		return okRes(i18n.T("no crypt mappers present"))
@@ -992,6 +1004,10 @@ func baseSource(s string) string {
 const ryokuRepoStanza = "\n[ryoku]\nSigLevel = Required\nServer = " + sys.RepoBase + "/$arch\n"
 
 func reconcileRyokuChannel(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Ryoku package channels are not used on NixOS")
+	}
+
 	if !sys.PkgInstalled("ryoku-desktop") {
 		return okRes(i18n.T("not a packaged install (desktop runs from a checkout)"))
 	}
@@ -1052,6 +1068,10 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 // read-only (`pacman -Sl` loads and verifies the cached db); the fix drops it
 // and pulls a fresh, matched pair.
 func reconcileRyokuSyncDB(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("pacman repository state is not applicable on NixOS")
+	}
+
 	if !sys.PkgInstalled("ryoku-desktop") {
 		return okRes(i18n.T("not a packaged install (desktop runs from a checkout)"))
 	}
@@ -1094,6 +1114,10 @@ func reconcileRyokuSyncDB(checkOnly bool) recResult {
 // their next full update; this heals git-channel boxes and anyone already
 // broken today.
 func reconcileIconFont(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("font packages are managed declaratively on NixOS")
+	}
+
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
 	}
@@ -2041,6 +2065,10 @@ func portalRoutesBackend(content, backend string) bool {
 // startup waits out a ~25s D-Bus timeout ("apps are slow to open"). heals boxes
 // converted before the installer started moving the user file aside, and /etc.
 func reconcilePortalRouting(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("xdg-desktop-portal routing is managed declaratively by the Ryoku NixOS module")
+	}
+
 	caps, _ := wm.Open().Caps()
 	backend := caps.PortalBackend
 	if backend == "" {
@@ -2382,6 +2410,10 @@ func greeterThemeHealthy(ownerUID uint32, dirPerm, mainPerm os.FileMode) bool {
 // normalizes on write; this backports the fix to boxes that already picked a
 // skin. only ever touches the one fixed Ryoku greeter dir.
 func reconcileGreeterTheme(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM theme ownership is managed by the Ryoku NixOS module")
+	}
+
 	di, err := os.Stat(greeterThemeDir)
 	if err != nil {
 		return okRes(i18n.T("no Ryoku greeter theme installed"))
@@ -2495,6 +2527,10 @@ func sddmWaylandBody() string {
 // depend `pacman -Syu` lands before doctor runs, so this is unmet only on a box
 // that has not pulled the package yet.
 func reconcileGreeterDisplayServer(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM display-server configuration is managed declaratively on NixOS")
+	}
+
 	if !sys.Exists(greeterThemeDir) {
 		return okRes(i18n.T("no Ryoku greeter installed"))
 	}
@@ -2565,6 +2601,10 @@ func defaultCursorEstablished() bool {
 // login boxes (a Ryoku greeter is installed) and only once ryoku-cursors, which
 // ships Bibata, has landed.
 func reconcileGreeterCursor(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("SDDM cursor configuration is managed declaratively on NixOS")
+	}
+
 	if !sys.Exists(greeterThemeDir) {
 		return okRes(i18n.T("no Ryoku greeter installed"))
 	}
@@ -3712,6 +3752,10 @@ func trimTrailing(b []byte) []byte { return bytes.TrimRight(b, " \t\r\n") }
 // packaged default. genuine merges are reported for `sudo pacdiff`. idempotent:
 // once the safe ones are gone a re-run only sees (and reports) the conflicts.
 func reconcilePacnew(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("pacman configuration repair is not applicable on NixOS")
+	}
+
 	out, _ := sys.RunOut("find", "/etc", "-name", "*.pacnew")
 	files := nonEmptyLines(out)
 	if len(files) == 0 {
@@ -3940,6 +3984,10 @@ func strayRyokuFiles(globs []string, glob func(string) ([]string, error), owned 
 }
 
 func reconcileConflictingRyokuFiles(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("package ownership repair is not applicable on NixOS")
+	}
+
 	// Only a packaged box hits the conflict. A dev checkout has no ryoku-desktop,
 	// and deploy.sh's unowned helpers there are correct, so leave them be.
 	if !sys.PkgInstalled("ryoku-desktop") {

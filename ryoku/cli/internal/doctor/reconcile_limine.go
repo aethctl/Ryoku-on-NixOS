@@ -130,6 +130,10 @@ func gatherLimineLayoutState() limineLayoutState {
 }
 
 func reconcileLimineLayout(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("bootloader layout is managed declaratively on NixOS")
+	}
+
 	st := gatherLimineLayoutState()
 	outcome, actions := planLimineLayout(st)
 	switch outcome {
@@ -597,6 +601,10 @@ func registerRyokuBootEntry() error {
 // bootloader, and it stands aside for the layout migration while a legacy entry
 // is still there to convert.
 func reconcileLimineBootEntry(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("firmware boot-entry management is outside Ryoku Doctor on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") || !sys.Exists(limineToolEFI) {
 		return okRes(i18n.T("not a limine-managed boot on this box"))
 	}
@@ -669,6 +677,10 @@ func writeBootFile(path, contents string) error {
 // flat placeholder the way the installer's finalize does, and run one sync so
 // the snapshots show up now, not at the next snapper event.
 func reconcileLimineUKITree(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine UKI management is not applicable on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") {
 		return okRes(i18n.T("not a limine-managed boot on this box"))
 	}
@@ -781,6 +793,10 @@ func limineDropFlat(conf string) (string, bool) {
 }
 
 func reconcileLimineOSName(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine snapshot naming is not applicable on NixOS")
+	}
+
 	const path = "/etc/default/limine"
 	cur := readFileSafe(path)
 	if cur == "" {
@@ -1049,6 +1065,10 @@ func limineIsNumeric(s string) bool {
 // kernel. Runs on every `ryoku update`, so existing boxes heal without a
 // reinstall; idempotent once the prelude is right.
 func reconcileLimineAutoboot(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("Limine autoboot configuration is not applicable on NixOS")
+	}
+
 	if !sys.PkgInstalled("limine") {
 		return okRes(i18n.T("not a limine-managed boot on this box"))
 	}

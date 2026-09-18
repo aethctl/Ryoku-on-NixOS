@@ -98,6 +98,10 @@ func zenInstallRoots() []string {
 // the default browser and never edits a user profile, so a Zen user's own
 // choices stand.
 func reconcileZen(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("system browser policy is not rewritten imperatively by Doctor on NixOS")
+	}
+
 	return reconcileZenInto(zenInstallRoots(), checkOnly)
 }
 

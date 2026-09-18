@@ -52,9 +52,17 @@ func main() {
 	case "reset":
 		err = updater.Reset(os.Args[2:])
 	case "rollback":
-		err = updater.Rollback(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package rollback is an Arch feature; use NixOS generation rollback on this system")
+		} else {
+			err = updater.Rollback(os.Args[2:])
+		}
 	case "boot-guard":
-		err = updater.BootGuard(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("the Arch Ryoku boot guard is not used on NixOS; recovery belongs to NixOS generations")
+		} else {
+			err = updater.BootGuard(os.Args[2:])
+		}
 	case "snapshots":
 		err = updater.Snapshots()
 	case "status":
@@ -68,9 +76,17 @@ func main() {
 	case "deploy":
 		err = updater.Deploy(os.Args[2:])
 	case "recovery":
-		err = cmdRecovery(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package recovery is unavailable on NixOS; recover through the configured flake and NixOS generations")
+		} else {
+			err = cmdRecovery(os.Args[2:])
+		}
 	case "track":
-		err = cmdTrack(os.Args[2:])
+		if sys.NixBackend() {
+			err = fmt.Errorf("Ryoku package channels are not used on NixOS; the Ryoku flake input is the update source")
+		} else {
+			err = cmdTrack(os.Args[2:])
+		}
 	case "plugin":
 		err = cmdPlugin(os.Args[2:])
 	case "doctor":

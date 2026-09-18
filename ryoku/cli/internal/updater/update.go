@@ -89,6 +89,13 @@ func Update(args []string) error {
 		}
 	}
 
+	if nixBackend() {
+		if stage2 {
+			return fmt.Errorf("the Arch update handoff is unavailable on NixOS")
+		}
+		return nixUpdate()
+	}
+
 	// One update at a time: a second run mid-transaction (a double-click, a timer
 	// racing a manual update) can corrupt pacman or the config swap. Best-effort
 	// -- a lock we cannot even create never blocks an update, only a held one does.
@@ -1038,6 +1045,25 @@ func Status(args []string) error {
 		}
 	}
 	fmt.Printf(i18n.T("installed:     %s\n"), orDash(r.Installed))
+	if r.Backend == "nix" {
+		if r.Available {
+			fmt.Printf(i18n.T("available:     %s\n"), orDash(r.Latest))
+			fmt.Printf(i18n.T("behind:        %d commit(s)\n"), r.Behind)
+		} else {
+			fmt.Println(i18n.T("behind:        up to date"))
+		}
+		fmt.Printf("backend:       NixOS\n")
+		if r.Source != "" {
+			fmt.Printf("source:        %s\n", r.Source)
+		}
+		if r.CanUpdate {
+			fmt.Println("updates:       Ryoku flake input only")
+		} else {
+			fmt.Println("updates:       local Nix source (manual checkout)")
+		}
+		fmt.Println("rollback:      NixOS generations")
+		return nil
+	}
 	if r.Available {
 		fmt.Printf(i18n.T("available:     %s\n"), orDash(r.Latest))
 		fmt.Printf(i18n.T("behind:        %d commit(s)\n"), r.Behind)
@@ -1089,6 +1115,9 @@ type statusReport struct {
 	// the update button never offers a run that would move none of them.
 	Packages      []updateItem `json:"packages"`
 	SystemPending int          `json:"systemUpdates"`
+	Backend       string       `json:"backend,omitempty"`
+	CanUpdate     bool         `json:"canUpdate"`
+	Source        string       `json:"source,omitempty"`
 	// packaged boxes: the release this box runs (/etc/ryoku-release) and the
 	// one its channel serves now (release.json beside the channel's db), so
 	// the island and the Hub can say "v0.55.7 -> v0.55.9" instead of a sha.
@@ -1113,6 +1142,10 @@ func withSpace(name string) string {
 // lists what is incoming via the public GitHub compare API, so the Hub's list
 // is the same commit subjects a dev box shows, not bare package names.
 func buildStatus() statusReport {
+	if nixBackend() {
+		return nixStatus()
+	}
+
 	r := baseStatus()
 	// The user's lane, check-only. It never sets Available: `ryoku update`
 	// would not move any of it, and a button that promises otherwise is how a

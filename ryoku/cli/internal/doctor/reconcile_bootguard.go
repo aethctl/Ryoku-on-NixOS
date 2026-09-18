@@ -20,6 +20,10 @@ import (
 // the pre-update snapshot. The notice is a one-time report and is cleared
 // once shown, so it never nags.
 func reconcileBootGuard(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("boot recovery is owned by NixOS generations; the Arch boot guard is not applicable")
+	}
+
 	if sys.ResolveRepo() != "" || !sys.PkgInstalled("ryoku-desktop") {
 		return okRes(i18n.T("not a packaged install; the boot guard watches package updates only"))
 	}

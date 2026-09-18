@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Ryoku Arch pre-push.
 # safety net for pushes to origin:

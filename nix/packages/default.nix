@@ -1,0 +1,311 @@
+{
+  pkgs,
+  src,
+  hyprglassSrc,
+  bibataMaterialSrc,
+  imgbordersSrc,
+  ryotunesSrc,
+  version,
+}:
+
+let
+  qmlRoot = "lib/qt-6/qml";
+
+  shell = import ./ryoku-shell.nix {
+    inherit pkgs src;
+  };
+
+  desktopData = import ./ryoku-desktop-data.nix {
+    inherit pkgs src;
+  };
+
+  wmHyprland = import ./ryoku-wm-provider.nix {
+    inherit pkgs src;
+    provider = "hyprland";
+  };
+
+  wmNiri = import ./ryoku-wm-provider.nix {
+    inherit pkgs src;
+    provider = "niri";
+  };
+
+  cli = import ./ryoku-cli.nix {
+    inherit
+      pkgs
+      src
+      version
+      desktopData
+      ;
+  };
+
+  nixUpdate = import ./ryoku-nix-update.nix {
+    inherit pkgs src;
+  };
+
+  hub = import ./ryoku-hub.nix {
+    inherit pkgs src;
+  };
+
+  rashin = import ./ryoku-rashin.nix {
+    inherit pkgs src desktopData;
+  };
+
+  prowlAgent = import ./prowl-agent.nix {
+    inherit pkgs;
+  };
+
+  ryostore = import ./ryoku-ryostore.nix {
+    inherit pkgs src;
+  };
+
+  ryomotion = import ./ryoku-ryomotion.nix {
+    inherit pkgs;
+  };
+
+  ryovmHelpers = import ./ryoku-ryovm-helpers.nix {
+    inherit pkgs src;
+  };
+
+  livewall = import ./ryoku-livewall.nix {
+    inherit pkgs src;
+  };
+
+  qmkHid = import ./qmk-hid.nix {
+    inherit pkgs;
+  };
+
+  waifu2x = import ./waifu2x-ncnn-vulkan.nix {
+    inherit pkgs;
+  };
+
+  ryogami = import ./ryoku-ryogami.nix {
+    inherit
+      pkgs
+      src
+      livewall
+      waifu2x
+      ;
+  };
+
+  ryotunes = import ./ryoku-ryotunes.nix {
+    inherit
+      pkgs
+      ryotunesSrc
+      ;
+  };
+
+  keysounds = import ./ryoku-keysounds.nix {
+    inherit pkgs src;
+  };
+
+  helpers = import ./ryoku-helpers.nix {
+    inherit pkgs src;
+  };
+
+  hyprglass = import ./ryoku-hyprglass.nix {
+    inherit pkgs;
+    src = hyprglassSrc;
+  };
+
+  imgborders = pkgs.hyprlandPlugins.imgborders.overrideAttrs (_: {
+    pname = "ryoku-imgborders";
+    version = "unstable";
+    src = imgbordersSrc;
+  });
+
+  hyprPlugins = import ./ryoku-hypr-plugins.nix {
+    inherit
+      pkgs
+      hyprglass
+      imgborders
+      keysounds
+      ;
+  };
+
+  cursorMaterial = import ./ryoku-cursor-material.nix {
+    inherit pkgs;
+    ryokuSrc = src;
+    bibataSrc = bibataMaterialSrc;
+  };
+
+  mapleMonoNF = import ./ryoku-maple-mono-nf.nix {
+    inherit pkgs;
+  };
+
+  nixosSystemBridge = import ./ryoku-nixos-system-bridge.nix {
+    inherit pkgs src;
+  };
+
+  blobs = import ./ryoku-blobs.nix {
+    inherit pkgs src qmlRoot;
+  };
+
+  mkPureQmlModule =
+    {
+      pname,
+      moduleName,
+      sourcePath,
+      description,
+    }:
+    pkgs.stdenvNoCC.mkDerivation {
+      inherit pname;
+
+      version = "unstable";
+      src = src + sourcePath;
+
+      dontBuild = true;
+
+      installPhase = ''
+        runHook preInstall
+
+        dest="$out/${qmlRoot}/Ryoku/${moduleName}"
+
+        mkdir -p "$dest"
+        cp -a ./. "$dest/"
+
+        rm -f "$dest/install.sh"
+
+        runHook postInstall
+      '';
+
+      meta = {
+        inherit description;
+        homepage = "https://github.com/Ryoku-dev/ryoku-arch";
+        license = pkgs.lib.licenses.gpl3Only;
+        platforms = [ "x86_64-linux" ];
+      };
+    };
+
+  ui = mkPureQmlModule {
+    pname = "ryoku-ui";
+    moduleName = "Ui";
+    sourcePath = "/ryoku/ui";
+    description = "Shared Ryoku Qt/QML user interface module";
+  };
+
+  pluginKit = mkPureQmlModule {
+    pname = "ryoku-plugin-kit";
+    moduleName = "PluginKit";
+    sourcePath = "/ryoku/shell/quickshell/plugins/kit";
+    description = "Ryoku shell plugin Qt/QML framework";
+  };
+
+  frameBars = mkPureQmlModule {
+    pname = "ryoku-framebars";
+    moduleName = "FrameBars";
+    sourcePath = "/ryoku/shell/framebars";
+    description = "Ryoku FrameBars Qt/QML module";
+  };
+
+  wmHyprlandQml = mkPureQmlModule {
+    pname = "ryoku-wm-hyprland-qml";
+    moduleName = "Wm/Hyprland";
+    sourcePath = "/ryoku/wm/hyprland/qml";
+    description = "Ryoku Hyprland-specific Qt/QML bridge module";
+  };
+
+  qml = pkgs.runCommand "ryoku-qml-modules" {
+    meta = {
+      description = "Combined Ryoku Qt/QML module tree";
+      homepage = "https://github.com/Ryoku-dev/ryoku-arch";
+      license = pkgs.lib.licenses.gpl3Only;
+      platforms = [ "x86_64-linux" ];
+    };
+  } ''
+    mkdir -p "$out/${qmlRoot}/Ryoku"
+
+    cp -a \
+      ${ui}/${qmlRoot}/Ryoku/Ui \
+      "$out/${qmlRoot}/Ryoku/Ui"
+
+    cp -a \
+      ${pluginKit}/${qmlRoot}/Ryoku/PluginKit \
+      "$out/${qmlRoot}/Ryoku/PluginKit"
+
+    cp -a \
+      ${frameBars}/${qmlRoot}/Ryoku/FrameBars \
+      "$out/${qmlRoot}/Ryoku/FrameBars"
+
+    mkdir -p "$out/${qmlRoot}/Ryoku/Wm"
+
+    cp -a \
+      ${wmHyprlandQml}/${qmlRoot}/Ryoku/Wm/Hyprland \
+      "$out/${qmlRoot}/Ryoku/Wm/Hyprland"
+
+    cp -a \
+      ${blobs}/${qmlRoot}/Ryoku/Blobs \
+      "$out/${qmlRoot}/Ryoku/Blobs"
+  '';
+
+  bundle = pkgs.symlinkJoin {
+    name = "ryoku-desktop-bundle";
+
+    meta = {
+      description = "Complete Ryoku desktop runtime bundle";
+      homepage = "https://github.com/Ryoku-dev/ryoku-arch";
+      license = pkgs.lib.licenses.gpl3Only;
+      platforms = [ "x86_64-linux" ];
+    };
+
+    paths = [
+      shell
+      cli
+      nixUpdate
+      hub
+      rashin
+      prowlAgent
+      ryostore
+      ryomotion
+      ryovmHelpers
+      livewall
+      ryogami
+      ryotunes
+      qmkHid
+      waifu2x
+      desktopData
+      wmHyprland
+      wmNiri
+      helpers
+      nixosSystemBridge
+      qml
+    ];
+  };
+in
+{
+  inherit
+    shell
+    cli
+    nixUpdate
+    hub
+    rashin
+    prowlAgent
+    ryostore
+    ryomotion
+    ryovmHelpers
+    livewall
+    ryogami
+    ryotunes
+    keysounds
+    qmkHid
+    waifu2x
+    desktopData
+    wmHyprland
+    wmNiri
+    helpers
+    nixosSystemBridge
+    hyprglass
+    imgborders
+    hyprPlugins
+    cursorMaterial
+    mapleMonoNF
+
+    ui
+    pluginKit
+    frameBars
+    wmHyprlandQml
+    blobs
+    qml
+
+    bundle
+    ;
+}

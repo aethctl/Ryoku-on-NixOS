@@ -179,6 +179,10 @@ func lockscreenInstaller() string {
 }
 
 func reconcileLockscreen(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("the in-session lockscreen is materialized by the Ryoku NixOS module")
+	}
+
 	lockerPresent := sys.Exists(lockerPath())
 	legacyTape := sys.Exists(legacyTapePath())
 	if !needsLockscreenInstaller(lockerPresent, legacyTape) {
@@ -228,6 +232,10 @@ func reconcileLockscreen(checkOnly bool) recResult {
 // default and only when a sudo is available without a prompt (an update has
 // one cached; a plain doctor run may not, and reports instead).
 func reconcileLockscreenDrift(checkOnly bool) recResult {
+	if sys.NixBackend() {
+		return okRes("lockscreen payload refresh is owned by the Ryoku NixOS module")
+	}
+
 	bundle := lockBundle()
 	if bundle == "" {
 		return okRes(i18n.T("in-session lockscreen installed"))
