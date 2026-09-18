@@ -333,20 +333,31 @@ Scope {
                         anchors.margins: 4
                         clip: true
                         model: ScriptModel { values: root.rows }
-                        currentIndex: root.sel
-                        highlightFollowsCurrentItem: true
-                        preferredHighlightBegin: 0
-                        preferredHighlightEnd: height
-                        highlightRangeMode: ListView.ApplyRange
+                        // root.sel is the selection, not the view's own current item:
+                        // a ListView rewrites currentIndex when its model changes or an
+                        // ApplyRange pulls it into view, which killed the binding and
+                        // left the plate parked on one row while Enter ran another. The
+                        // plate is placed from sel below, and the list scrolls to it.
+                        currentIndex: -1
+                        highlightFollowsCurrentItem: false
                         boundsBehavior: Flickable.StopAtBounds
                         cacheBuffer: root.rowH * 8
 
+                        Connections {
+                            target: root
+                            function onSelChanged() { list.positionViewAtIndex(root.sel, ListView.Contain) }
+                        }
                         highlight: Rectangle {
+                            y: root.sel * root.rowH
+                            width: list.width
+                            height: root.rowH
                             radius: 11
                             color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.10)
+                            Behavior on y {
+                                enabled: !root.settling
+                                NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
+                            }
                         }
-                        highlightMoveDuration: root.settling ? 0 : 200
-                        highlightResizeDuration: 0
 
                         delegate: Item {
                             id: appRow

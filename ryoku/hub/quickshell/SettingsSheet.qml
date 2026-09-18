@@ -80,6 +80,68 @@ Item {
         return g;
     }
 
+    // ── card grid ─────────────────────────────────────────────────────────
+    // A row wants its control within a glance of its label, so a card never
+    // grows past `cardMax`: a wide page gets another column of cards instead of
+    // a longer eye-travel, and a narrow one stays a single column. Group order is
+    // preserved, filled sequentially, so a reader walks column one top to bottom
+    // and then column two rather than zig-zagging across the page.
+    // Derived from the PAGE width, never the flick's: the flick is sized from
+    // these, and reading them back would be a binding loop that silently pins the
+    // sheet to one column.
+    // The Hub fills the screen, so the grid uses it: three columns of cards once
+    // the page can hold them, which is what keeps a page-wide window from being
+    // a narrow ribbon of cards floating in a field of paper.
+    readonly property int cardMax: 520
+    function fitsColumns(n) { return (width - 28) >= (n * cardMax + (n - 1) * Tokens.s5) }
+    readonly property int capacity: fitsColumns(3) ? 3 : (fitsColumns(2) ? 2 : 1)
+    // The grid's geometry follows the PAGE WIDTH alone, never how many groups the
+    // open tab happens to have. Deriving it from the tab's group count made a
+    // one-group tab (BORDERS, MOTION) shrink the sheet to a narrow column in the
+    // middle of the window and drag the page's head and tabs sideways with it, so
+    // switching tabs read as the whole page shuffling.
+    readonly property int gridColumns: capacity
+    // how many columns the groups are BUCKETED into: a page with two groups does
+    // not get three columns, so the cards take the space instead of hugging the
+    // left edge with one column empty beside them
+    readonly property int columns: Math.max(1, Math.min(capacity, groups.length))
+    readonly property int cardW: Math.min(Tokens.cardWide,
+        Math.max(360, Math.floor((width - 28 - (gridColumns - 1) * Tokens.s5) / gridColumns)))
+    // The column's own geometry, so a page's head can sit on the same grid.
+    readonly property real sheetWidth: col.width
+    readonly property real sheetX: flick.x + col.x
+
+    // Split `all` into `count` buckets, shortest column first, so the two sides
+    // end up the same height instead of one long column beside one card and a
+    // void. A group keeps its order inside its column; several short groups can
+    // therefore land in one column past a taller one, which is the price of a
+    // balanced page and reads as a grid rather than a queue.
+    function bucketGroups(all, count) {
+        if (count <= 1 || all.length <= 1) return [all];
+        var heights = [];
+        for (var g = 0; g < all.length; g++) {
+            // every group carries its card's own header (~46px, three compact
+            // rows): counting only the rows made a column holding many short
+            // cards look light and took more of them, which is how one column
+            // ended up far taller than the others
+            var n = 3;
+            for (var r = 0; r < rows.length; r++)
+                if (rows[r].group === all[g]) n += sheet.ctlBlock(rows[r]) ? 6 : 1;
+            heights.push(n);
+        }
+        var buckets = [];
+        var loads = [];
+        for (var c = 0; c < count; c++) { buckets.push([]); loads.push(0); }
+        for (var i = 0; i < all.length; i++) {
+            var least = 0;
+            for (var k = 1; k < count; k++)
+                if (loads[k] < loads[least] - 0.001) least = k;
+            buckets[least].push(all[i]);
+            loads[least] += heights[i] + 1;
+        }
+        return buckets;
+    }
+
     function val(r) {
         if (!draft) return "";
         var v = draft[r.key];
@@ -110,6 +172,27 @@ Item {
         if (r.ctl === "multi") return JSON.stringify(v || []) !== JSON.stringify(d || []);
         return v !== d;
     }
+    // A typed number is clamped into the row's own range and stored in the kind
+    // the row speaks (a whole number for a stepper, a ratio for a slider), so a
+    // typo cannot write a value the control could never produce.
+    function commitNumber(r, text) {
+        var n = Number(String(text).replace(",", "."));
+        if (isNaN(n))
+            return;
+        if (r.ctl === "step") {
+            var lo = (r.from === undefined) ? 0 : Number(r.from);
+            var hi = (r.to === undefined) ? 100 : Number(r.to);
+            sheet.edited(r.key, Math.max(lo, Math.min(hi, Math.round(n))));
+            return;
+        }
+        if (r.ctl === "slid") {
+            var v = r.pct ? n / 100 : n;
+            var l = (r.lo === undefined) ? 0 : Number(r.lo);
+            var h = (r.hi === undefined) ? (r.pct ? 1 : 100) : Number(r.hi);
+            sheet.edited(r.key, Math.max(l, Math.min(h, v)));
+        }
+    }
+
     function resetRow(r) {
         if (r.ctl === "reload-cover") {
             sheet.edited(r.key, ReloadCoverModel.empty());
@@ -153,7 +236,7 @@ Item {
         if (c === "sw") return 54;
         if (c === "step") return 58;
         if (c === "slid") return Math.min(240, Math.max(160, Math.round(w * 0.34)));
-        if (c === "seg") return Math.max(120, 62 * Math.max(2, n));
+        if (c === "seg") return Math.max(140, 74 * Math.max(2, n));
         return 54;
     }
     // the compact readout: a number for a stepper or slider; nothing for a
@@ -200,17 +283,35 @@ Item {
 
     Flickable {
         id: flick
-        anchors.fill: parent
-        contentHeight: col.height + Tokens.s5
+        // The sheet IS the column: the flick is sized to the cards it holds and
+        // centred in the page, so the scroll rail hangs off the column's edge
+        // instead of the window's, and the margins either side stay equal.
+        width: Math.min(parent.width - 14, sheet.gridColumns * sheet.cardW + (sheet.gridColumns - 1) * Tokens.s5 + 14)
+        x: Math.round((parent.width - width) / 2)
+        // The card columns span the column they were given, so a two-column sheet
+        // fills the measure and a one-column one is not left-aligned in it.
+        property int columnSpan: sheet.gridColumns
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        contentHeight: Math.max(col.height + Tokens.s5, height)
         clip: true
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
+        // The sheet uses the page it was given. A settings row wants its control
+        // within a short glance of its label, so a wide window gets TWO bounded
+        // columns of cards rather than one column with a label at the left edge
+        // and its control a screen away. `sheet.columns` decides from the width
+        // available; groups keep their order down column one, then column two, so
+        // reading stays top-to-bottom inside a column instead of zig-zagging.
         Column {
             id: col
-            // a settings sheet reads better bounded than sprawled edge to edge:
-            // cap the column so rows do not run a label metres from its control.
-            width: Math.min(flick.width - 14, 1000)
-            spacing: Tokens.s4
+            width: flick.width - 14
+            spacing: Tokens.s5
+            // Content anchors to the top on every page: a centred block's place
+            // depends on its height, so centring hopped visibly as cards measured
+            // in, and the same card sat at two heights on two pages. One place,
+            // always the top, is what lets a reader build a map of the page.
 
             // A Column, not an Item measured by childrenRect: it sizes itself
             // from its visible children, so a page that hides its block on a
@@ -221,512 +322,549 @@ Item {
                 width: col.width
             }
 
-            Repeater {
-                model: sheet.groups
-                SettingCard {
-                    id: card
-                    required property string modelData
-                    width: col.width
-                    title: I18n.tr(modelData === "" ? "OTHER" : modelData)
 
-                    readonly property var groupRows: sheet.rows.filter(function (r) { return r.group === card.modelData })
+            Row {
+                id: cardColumns
+                width: col.width
+                spacing: Tokens.s5
+                readonly property var buckets: sheet.bucketGroups(sheet.groups, sheet.columns)
 
-                    Repeater {
-                        model: card.groupRows
-                        SettingRow {
-                            id: srow
-                            required property var modelData
-                            required property int index
-                            readonly property var r: modelData
+                // A tab change swaps the whole card set, which otherwise snaps.
+                // A fade is the right motion for a content exchange: nothing
+                // travels, and opacity cannot move a card.
+                Connections {
+                    target: sheet
+                    function onTabChanged() { tabFade.restart() }
+                }
+                NumberAnimation {
+                    id: tabFade
+                    target: cardColumns; property: "opacity"
+                    from: 0; to: 1
+                    duration: Tokens.swap; easing.type: Tokens.ease
+                }
 
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            divider: index > 0
+                Repeater {
+                    model: cardColumns.buckets
 
-                            label: I18n.tr(r.label)
-                            desc: I18n.tr(r.desc || "")
-                            eg: I18n.tr(r.eg || "")
-                            value: sheet.rowValue(r)
-                            unit: sheet.rowUnit(r)
-                            def: sheet.shownDef(r)
-                            changed: sheet.isChanged(r)
-                            source: r.src ? (r.src.slice(-5) === ".json" ? r.src : r.src + ".json") : ""
-                            block: sheet.ctlBlock(r)
-                            footH: sheet.ctlBlock(r) ? 0 : sheet.ctlFoot(r)
-                            controlWidth: sheet.ctlWidth(r, card.width)
-                            spotlight: sheet.spotlightKey !== "" && sheet.spotlightKey === r.key
-                            onResetRequested: sheet.resetRow(r)
+                    Column {
+                        id: cardColumn
+                        required property var modelData
+                        width: sheet.cardW
+                        spacing: Tokens.s5
 
-                            Component.onCompleted: { var m = sheet.rowItems; m[r.key] = srow; sheet.rowItems = m; }
-                            Component.onDestruction: { if (sheet.rowItems[r.key] === srow) delete sheet.rowItems[r.key]; }
+                        Repeater {
+                            model: cardColumn.modelData
 
-                            Loader {
-                                anchors.fill: parent
-                                sourceComponent: {
-                                    switch (srow.r.ctl) {
-                                    case "sw": return swC;
-                                    case "step": return stepC;
-                                    case "slid": return slidC;
-                                    case "seg": return segC;
-                                    case "chips": return chipsC;
-                                    case "multi": return multiC;
-                                    case "pick": return pickC;
-                                    case "gallery": return galleryC;
-                                    case "reload-cover": return reloadCoverC;
-                                    case "image": return imageC;
-                                    case "app": return appC;
-                                    case "location": return locationC;
-                                    case "color": return colorC;
-                                    case "action": return actionC;
-                                    case "layoutdemo": return layoutDemoC;
-                                    case "timezone": return timezoneC;
-                                    default: return textC;
-                                    }
-                                }
-                            }
+                                    SettingCard {
+                                        id: card
+                                        required property string modelData
+                                        width: cardColumn.width
+                                        title: I18n.tr(modelData === "" ? "OTHER" : modelData)
+                                        summary: card.groupRows.length + " " + I18n.tr("SETTINGS")
 
-                            Component {
-                                id: actionC
-                                Btn {
-                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                                    text: I18n.tr(srow.r.actionLabel || "Generate")
-                                    onAct: {
-                                        if (srow.r.key === "i18nGenerate")
-                                            Spawn.run(["kitty", "--class", "ryoku-i18n", "-e", "sh", "-c",
-                                                "ryoku-i18n llm " + I18n.lang + "; echo; read -n1 -rsp 'Done. Press any key to close…'; echo"]);
-                                        // hands the shell its placement mode: the look becomes draggable
-                                        // on the desktop, which no slider in here can be.
-                                        else if (srow.r.key === "vizPlace")
-                                            Spawn.run(["qs", "-c", "shell", "ipc", "call", "visualizer", "place"]);
-                                    }
-                                }
-                            }
-                            Component {
-                                id: timezoneC
-                                Row {
-                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                                    spacing: Tokens.s3
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: (srow.r.tzCurrent && ("" + srow.r.tzCurrent).length) ? ("" + srow.r.tzCurrent).replace(/_/g, " ") : "\u2014"
-                                        color: Tokens.ink
-                                        font.family: Tokens.mono
-                                        font.pixelSize: Tokens.fSmall
-                                    }
-                                    Btn {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: I18n.tr("CHANGE ON MAP")
-                                        onAct: sheet.timezonePick(srow.r)
-                                    }
-                                }
-                            }
-                            Component {
-                                id: layoutDemoC
-                                Item {
-                                    id: demo
-                                    anchors.fill: parent
-                                    implicitHeight: 168
-                                    readonly property string layout: {
-                                        var v = sheet.draft ? sheet.draft["appearance.layout"] : "";
-                                        return (v === "master" || v === "scrolling") ? v : "dwindle";
-                                    }
-                                    readonly property var blurbs: ({
-                                        "dwindle": "Each new window splits the focused frame in two, so the layout spirals into smaller and smaller frames.",
-                                        "master": "One big master frame keeps the focus; every other window stacks down the side beside it.",
-                                        "scrolling": "Windows line up in one endless horizontal row; the strip pans sideways to keep the focused column in view."
-                                    })
-                                    Rectangle {
-                                        id: demoScreen
-                                        anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
-                                        width: Math.min(360, demo.width * 0.5)
-                                        color: "transparent"
-                                        radius: Tokens.radius
-                                        border.width: Tokens.border
-                                        border.color: Tokens.line
-                                        AnimatedImage {
-                                            anchors.fill: parent
-                                            anchors.margins: Tokens.s3
-                                            source: Qt.resolvedUrl("art/tiling-" + demo.layout + ".gif")
-                                            fillMode: Image.PreserveAspectFit
-                                            playing: true
-                                            cache: false
-                                            asynchronous: true
-                                            onStatusChanged: if (status === Image.Ready) playing = true
-                                        }
-                                    }
-                                    Column {
-                                        anchors { left: demoScreen.right; leftMargin: Tokens.s5; right: parent.right; verticalCenter: demoScreen.verticalCenter }
-                                        spacing: Tokens.s2
-                                        Text {
-                                            text: demo.layout.toUpperCase()
-                                            color: Tokens.ink
-                                            font.family: Tokens.ui
-                                            font.pixelSize: Tokens.fValue
-                                            font.weight: Font.Light
-                                        }
-                                        Text {
-                                            width: parent.width
-                                            text: demo.blurbs[demo.layout]
-                                            color: Tokens.inkMuted
-                                            font.family: Tokens.ui
-                                            font.pixelSize: 12
-                                            wrapMode: Text.WordWrap
-                                        }
-                                    }
-                                }
-                            }
-                            Component {
-                                id: swC
-                                Sw {
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    on: !!sheet.val(srow.r)
-                                    onToggled: (v) => sheet.edited(srow.r.key, v)
-                                }
-                            }
-                            Component {
-                                id: stepC
-                                Step {
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    value: Number(sheet.val(srow.r)) || 0
-                                    from: Number(srow.r.lo) || 0
-                                    to: Number(srow.r.hi) || 100
-                                    onModified: (v) => sheet.edited(srow.r.key, v)
-                                }
-                            }
-                            Component {
-                                id: slidC
-                                Slid {
-                                    anchors.fill: parent
-                                    value: Number(sheet.val(srow.r)) || 0
-                                    from: Number(srow.r.lo) || 0
-                                    to: Number(srow.r.hi) || 1
-                                    onModified: (v) => sheet.edited(srow.r.key, v)
-                                }
-                            }
-                            Component {
-                                id: segC
-                                Seg {
+                            readonly property var groupRows: sheet.rows.filter(function (r) { return r.group === card.modelData })
+
+                                        Repeater {
+                                            model: card.groupRows
+                                            SettingRow {
+                                    id: srow
+                                    required property var modelData
+                                    required property int index
+                                    readonly property var r: modelData
+
                                     anchors.left: parent.left
                                     anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    options: sheet.optsFor(srow.r)
-                                    current: String(sheet.val(srow.r))
-                                    onChose: (k) => sheet.edited(srow.r.key, k)
-                                }
-                            }
-                            Component {
-                                id: chipsC
-                                Chips {
-                                    anchors.fill: parent
-                                    options: sheet.optsFor(srow.r)
-                                    // optLabels lets a row offer readable chips over
-                                    // literal stored values, so a user picks "Thirds"
-                                    // rather than typing proportions.
-                                    labels: srow.r.optLabels || ({})
-                                    current: String(sheet.val(srow.r))
-                                    onChose: (k) => sheet.edited(srow.r.key, k)
-                                }
-                            }
-                            Component {
-                                id: multiC
-                                Multi {
-                                    anchors.fill: parent
-                                    options: sheet.optsFor(srow.r)
-                                    chosen: sheet.val(srow.r) || []
-                                    onToggled: (k) => {
-                                        var l = (sheet.val(srow.r) || []).slice();
-                                        var i = l.indexOf(k);
-                                        if (i >= 0) l.splice(i, 1); else l.push(k);
-                                        sheet.edited(srow.r.key, l);
-                                    }
-                                }
-                            }
-                            Component {
-                                id: galleryC
-                                Gallery {
-                                    // `set: "viz"` draws from the visualiser
-                                    // look catalogue, which paints its own tiles;
-                                    // an unset row keeps the bar-skin gallery.
-                                    readonly property bool viz: srow.r.set === "viz"
-                                    anchors.fill: parent
-                                    painter: viz ? VizStyles : null
-                                    options: viz
-                                        ? VizStyles.styles.map((s) => ({ key: s.key, origin: s.kind, draw: s.key }))
-                                        : Silhouette.skins.filter((skin) => !srow.r.opts || srow.r.opts.indexOf(skin.key) >= 0)
-                                    current: String(sheet.val(srow.r))
-                                    onChose: (k) => sheet.edited(srow.r.key, k)
-                                }
-                            }
-                            Component {
-                                id: reloadCoverC
-                                ReloadCoverControl {
-                                    anchors.fill: parent
-                                    descriptor: ReloadCoverModel.normalize(sheet.val(srow.r))
-                                    errorText: sheet.reloadCoverError
-                                    busy: sheet.reloadCoverImportBusy
-                                    onAddRequested: sheet.reloadCoverPick(srow.r)
-                                    onDefaultRequested: sheet.reloadCoverDefault(srow.r)
-                                    onEnabledToggled: (enabled) => {
-                                        var descriptor = Object.assign({}, ReloadCoverModel.normalize(sheet.val(srow.r)));
-                                        descriptor.enabled = enabled;
-                                        sheet.edited(srow.r.key, descriptor);
-                                    }
-                                }
-                            }
-                            Component {
-                                id: pickC
-                                PickBar {
-                                    anchors.fill: parent
-                                    value: String(sheet.val(srow.r))
-                                    count: sheet.optsFor(srow.r).length
-                                    labels: sheet.labelsFor(srow.r)
-                                    onOpened: sheet.openPick(srow.r)
-                                }
-                            }
-                            Component {
-                                id: textC
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: "transparent"
-                                    radius: Tokens.radius
-                                    border.width: ti.activeFocus ? 2 : Tokens.border
-                                    border.color: ti.activeFocus ? Tokens.ink : Tokens.line
-                                    TextInput {
-                                        id: ti
+                                    divider: index > 0
+
+                                    label: I18n.tr(r.label)
+                                    desc: I18n.tr(r.desc || "")
+                                    eg: I18n.tr(r.eg || "")
+                                    // a number can be typed where one can be nudged
+                                    editableValue: r.ctl === "step" || r.ctl === "slid"
+                                    onValueCommitted: (text) => sheet.commitNumber(r, text)
+                                    value: sheet.rowValue(r)
+                                    unit: sheet.rowUnit(r)
+                                    def: sheet.shownDef(r)
+                                    changed: sheet.isChanged(r)
+                                    source: r.src ? (r.src.slice(-5) === ".json" ? r.src : r.src + ".json") : ""
+                                    block: sheet.ctlBlock(r)
+                                    footH: sheet.ctlBlock(r) ? 0 : sheet.ctlFoot(r)
+                                    controlWidth: sheet.ctlWidth(r, card.width)
+                                    spotlight: sheet.spotlightKey !== "" && sheet.spotlightKey === r.key
+                                    onResetRequested: sheet.resetRow(r)
+
+                                    Component.onCompleted: { var m = sheet.rowItems; m[r.key] = srow; sheet.rowItems = m; }
+                                    Component.onDestruction: { if (sheet.rowItems[r.key] === srow) delete sheet.rowItems[r.key]; }
+
+                                    Loader {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 8
-                                        anchors.rightMargin: 8
-                                        verticalAlignment: Text.AlignVCenter
-                                        clip: true
-                                        autoScroll: activeFocus
-                                        color: Tokens.ink
-                                        font.family: Tokens.ui
-                                        font.pixelSize: 12
-                                        selectByMouse: true
-                                        text: String(sheet.val(srow.r))
-                                        onEditingFinished: sheet.edited(srow.r.key, text)
-                                        onTextEdited: sheet.edited(srow.r.key, text)
-                                    }
-                                }
-                            }
-                            Component {
-                                id: colorC
-                                ColorField {
-                                    anchors.fill: parent
-                                    value: String(sheet.val(srow.r))
-                                    onChosen: (v) => sheet.edited(srow.r.key, v)
-                                }
-                            }
-                            Component {
-                                id: imageC
-                                Row {
-                                    anchors.fill: parent
-                                    spacing: Tokens.s2
-                                    Rectangle {
-                                        id: imgThumb
-                                        width: 46; height: 28
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        radius: Tokens.radius
-                                        color: "transparent"
-                                        border.width: Tokens.border
-                                        border.color: Tokens.line
-                                        clip: true
-                                        readonly property string src: String(sheet.val(srow.r))
-                                        Image {
-                                            anchors.fill: parent
-                                            anchors.margins: 1
-                                            visible: imgThumb.src !== ""
-                                            source: imgThumb.src === "" ? "" : (imgThumb.src.indexOf("://") >= 0 ? imgThumb.src : "file://" + imgThumb.src)
-                                            fillMode: Image.PreserveAspectCrop
-                                            asynchronous: true
-                                            sourceSize.width: 140
-                                        }
-                                        Text {
-                                            anchors.centerIn: parent
-                                            visible: imgThumb.src === ""
-                                            text: "力"
-                                            color: Tokens.inkFaint
-                                            font.family: Tokens.jp
-                                            font.pixelSize: 13
-                                        }
-                                    }
-                                    Btn {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: I18n.tr("CHOOSE…")
-                                        onAct: sheet.imagePick(srow.r)
-                                    }
-                                    Btn {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        visible: String(sheet.val(srow.r)) !== ""
-                                        text: I18n.tr("CLEAR")
-                                        onAct: sheet.edited(srow.r.key, "")
-                                    }
-                                }
-                            }
-                            Component {
-                                id: appC
-                                Item {
-                                    anchors.fill: parent
-                                    Btn {
-                                        id: defBtn
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        visible: String(sheet.val(srow.r)) !== ""
-                                        text: I18n.tr("DEFAULT")
-                                        onAct: sheet.edited(srow.r.key, "")
-                                    }
-                                    Btn {
-                                        id: chooseBtn
-                                        anchors.right: defBtn.visible ? defBtn.left : parent.right
-                                        anchors.rightMargin: defBtn.visible ? Tokens.s2 : 0
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: I18n.tr("CHOOSE…")
-                                        onAct: sheet.appPick(srow.r)
-                                    }
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: chooseBtn.left
-                                        anchors.rightMargin: Tokens.s2
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        elide: Text.ElideRight
-                                        readonly property string cmd: String(sheet.val(srow.r))
-                                        text: cmd.length ? cmd : I18n.tr("ryotunes (YouTube Music)")
-                                        color: cmd.length ? Tokens.ink : Tokens.inkMuted
-                                        font.family: Tokens.ui
-                                        font.pixelSize: 12
-                                    }
-                                }
-                            }
-                            Component {
-                                id: locationC
-                                Item {
-                                    id: locRoot
-                                    anchors.fill: parent
-                                    readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/ryoku"
-
-                                    Rectangle {
-                                        id: locField
-                                        anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
-                                        height: 30
-                                        color: "transparent"
-                                        radius: Tokens.radius
-                                        border.width: lti.activeFocus ? 2 : Tokens.border
-                                        border.color: lti.activeFocus ? Tokens.ink : Tokens.line
-                                        TextInput {
-                                            id: lti
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 8
-                                            anchors.rightMargin: 8
-                                            verticalAlignment: Text.AlignVCenter
-                                            clip: true
-                                            autoScroll: activeFocus
-                                            color: Tokens.ink
-                                            font.family: Tokens.ui
-                                            font.pixelSize: 12
-                                            selectByMouse: true
-                                            text: String(sheet.val(srow.r))
-                                            onTextEdited: debounce.restart()
-                                            onEditingFinished: sheet.edited(srow.r.key, text)
-                                        }
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            anchors.left: parent.left
-                                            anchors.leftMargin: 8
-                                            visible: lti.text === "" && !lti.activeFocus
-                                            text: I18n.tr("Empty locates by IP")
-                                            color: Tokens.inkFaint
-                                            font.family: Tokens.ui
-                                            font.pixelSize: 12
-                                        }
-                                    }
-
-                                    Timer {
-                                        id: debounce
-                                        interval: 300
-                                        onTriggered: {
-                                            var q = lti.text.trim();
-                                            if (q.length < 2) { locPop.close(); return; }
-                                            geo.command = ["curl", "-s", "--max-time", "6",
-                                                "https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=" + encodeURIComponent(q)];
-                                            geo.running = false;
-                                            geo.running = true;
-                                        }
-                                    }
-
-                                    Process {
-                                        id: geo
-                                        stdout: StdioCollector {
-                                            onStreamFinished: {
-                                                var out = [];
-                                                try {
-                                                    var j = JSON.parse(this.text);
-                                                    if (j && Array.isArray(j.results)) {
-                                                        for (var i = 0; i < j.results.length; i++) {
-                                                            var rr = j.results[i];
-                                                            if (typeof rr.latitude === "number" && typeof rr.longitude === "number")
-                                                                out.push({ name: rr.name || "", admin1: rr.admin1 || "", country: rr.country || "", lat: rr.latitude, lon: rr.longitude });
-                                                        }
-                                                    }
-                                                } catch (e) {}
-                                                locList.model = out;
-                                                if (out.length > 0 && lti.activeFocus) locPop.open(); else locPop.close();
+                                        sourceComponent: {
+                                            switch (srow.r.ctl) {
+                                            case "sw": return swC;
+                                            case "step": return stepC;
+                                            case "slid": return slidC;
+                                            case "seg": return segC;
+                                            case "chips": return chipsC;
+                                            case "multi": return multiC;
+                                            case "pick": return pickC;
+                                            case "gallery": return galleryC;
+                                            case "reload-cover": return reloadCoverC;
+                                            case "image": return imageC;
+                                            case "app": return appC;
+                                            case "location": return locationC;
+                                            case "color": return colorC;
+                                            case "action": return actionC;
+                                            case "layoutdemo": return layoutDemoC;
+                                            case "timezone": return timezoneC;
+                                            default: return textC;
                                             }
                                         }
                                     }
 
-                                    FileView {
-                                        id: locCache
-                                        path: locRoot.stateDir + "/weather-loc.json"
-                                        blockLoading: true
-                                        printErrors: false
-                                    }
-
-                                    Popup {
-                                        id: locPop
-                                        parent: locField
-                                        y: -locPop.height - 2
-                                        width: locField.width
-                                        padding: 1
-                                        focus: false
-                                        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                                        implicitHeight: Math.min(locList.count, 6) * 28 + 2
-                                        background: Rectangle {
-                                            color: Tokens.paperLift
-                                            radius: Tokens.radius
-                                            border.width: Tokens.border
-                                            border.color: Tokens.lineStrong
+                                    Component {
+                                        id: actionC
+                                        Btn {
+                                            anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                            text: I18n.tr(srow.r.actionLabel || "Generate")
+                                            onAct: {
+                                                if (srow.r.key === "i18nGenerate")
+                                                    Spawn.run(["kitty", "--class", "ryoku-i18n", "-e", "sh", "-c",
+                                                        "ryoku-i18n llm " + I18n.lang + "; echo; read -n1 -rsp 'Done. Press any key to close…'; echo"]);
+                                                // hands the shell its placement mode: the look becomes draggable
+                                                // on the desktop, which no slider in here can be.
+                                                else if (srow.r.key === "vizPlace")
+                                                    Spawn.run(["qs", "-c", "shell", "ipc", "call", "visualizer", "place"]);
+                                            }
                                         }
-                                        contentItem: ListView {
-                                            id: locList
-                                            clip: true
-                                            model: []
-                                            delegate: Rectangle {
-                                                id: lrow
-                                                required property var modelData
-                                                width: ListView.view.width
-                                                height: 28
-                                                color: lhov.hovered ? Tokens.tint10 : "transparent"
+                                    }
+                                    Component {
+                                        id: timezoneC
+                                        Row {
+                                            anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                            spacing: Tokens.s3
+                                            Text {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: (srow.r.tzCurrent && ("" + srow.r.tzCurrent).length) ? ("" + srow.r.tzCurrent).replace(/_/g, " ") : "\u2014"
+                                                color: Tokens.ink
+                                                font.family: Tokens.mono
+                                                font.pixelSize: Tokens.fSmall
+                                            }
+                                            Btn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: I18n.tr("CHANGE ON MAP")
+                                                onAct: sheet.timezonePick(srow.r)
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: layoutDemoC
+                                        Item {
+                                            id: demo
+                                            anchors.fill: parent
+                                            implicitHeight: 168
+                                            readonly property string layout: {
+                                                var v = sheet.draft ? sheet.draft["appearance.layout"] : "";
+                                                return (v === "master" || v === "scrolling") ? v : "dwindle";
+                                            }
+                                            readonly property var blurbs: ({
+                                                "dwindle": "Each new window splits the focused frame in two, so the layout spirals into smaller and smaller frames.",
+                                                "master": "One big master frame keeps the focus; every other window stacks down the side beside it.",
+                                                "scrolling": "Windows line up in one endless horizontal row; the strip pans sideways to keep the focused column in view."
+                                            })
+                                            Rectangle {
+                                                id: demoScreen
+                                                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
+                                                width: Math.min(360, demo.width * 0.5)
+                                                color: "transparent"
+                                                radius: Tokens.radius
+                                                border.width: Tokens.border
+                                                border.color: Tokens.line
+                                                AnimatedImage {
+                                                    anchors.fill: parent
+                                                    anchors.margins: Tokens.s3
+                                                    source: Qt.resolvedUrl("art/tiling-" + demo.layout + ".gif")
+                                                    fillMode: Image.PreserveAspectFit
+                                                    playing: true
+                                                    cache: false
+                                                    asynchronous: true
+                                                    onStatusChanged: if (status === Image.Ready) playing = true
+                                                }
+                                            }
+                                            Column {
+                                                anchors { left: demoScreen.right; leftMargin: Tokens.s5; right: parent.right; verticalCenter: demoScreen.verticalCenter }
+                                                spacing: Tokens.s2
                                                 Text {
-                                                    anchors.verticalCenter: parent.verticalCenter
-                                                    anchors.left: parent.left
-                                                    anchors.right: parent.right
+                                                    text: demo.layout.toUpperCase()
+                                                    color: Tokens.ink
+                                                    font.family: Tokens.ui
+                                                    font.pixelSize: Tokens.fValue
+                                                    font.weight: Font.Light
+                                                }
+                                                Text {
+                                                    width: parent.width
+                                                    text: demo.blurbs[demo.layout]
+                                                    color: Tokens.inkMuted
+                                                    font.family: Tokens.ui
+                                                    font.pixelSize: 12
+                                                    wrapMode: Text.WordWrap
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: swC
+                                        Sw {
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            on: !!sheet.val(srow.r)
+                                            onToggled: (v) => sheet.edited(srow.r.key, v)
+                                        }
+                                    }
+                                    Component {
+                                        id: stepC
+                                        Step {
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            value: Number(sheet.val(srow.r)) || 0
+                                            from: Number(srow.r.lo) || 0
+                                            to: Number(srow.r.hi) || 100
+                                            onModified: (v) => sheet.edited(srow.r.key, v)
+                                        }
+                                    }
+                                    Component {
+                                        id: slidC
+                                        Slid {
+                                            anchors.fill: parent
+                                            value: Number(sheet.val(srow.r)) || 0
+                                            from: Number(srow.r.lo) || 0
+                                            to: Number(srow.r.hi) || 1
+                                            onModified: (v) => sheet.edited(srow.r.key, v)
+                                        }
+                                    }
+                                    Component {
+                                        id: segC
+                                        Seg {
+                                            anchors.left: parent.left
+                                            anchors.right: parent.right
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            options: sheet.optsFor(srow.r)
+                                            current: String(sheet.val(srow.r))
+                                            onChose: (k) => sheet.edited(srow.r.key, k)
+                                        }
+                                    }
+                                    Component {
+                                        id: chipsC
+                                        Chips {
+                                            anchors.fill: parent
+                                            options: sheet.optsFor(srow.r)
+                                            // optLabels lets a row offer readable chips over
+                                            // literal stored values, so a user picks "Thirds"
+                                            // rather than typing proportions.
+                                            labels: srow.r.optLabels || ({})
+                                            current: String(sheet.val(srow.r))
+                                            onChose: (k) => sheet.edited(srow.r.key, k)
+                                        }
+                                    }
+                                    Component {
+                                        id: multiC
+                                        Multi {
+                                            anchors.fill: parent
+                                            options: sheet.optsFor(srow.r)
+                                            chosen: sheet.val(srow.r) || []
+                                            onToggled: (k) => {
+                                                var l = (sheet.val(srow.r) || []).slice();
+                                                var i = l.indexOf(k);
+                                                if (i >= 0) l.splice(i, 1); else l.push(k);
+                                                sheet.edited(srow.r.key, l);
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: galleryC
+                                        Gallery {
+                                            // `set: "viz"` draws from the visualiser
+                                            // look catalogue, which paints its own tiles;
+                                            // an unset row keeps the bar-skin gallery.
+                                            readonly property bool viz: srow.r.set === "viz"
+                                            anchors.fill: parent
+                                            painter: viz ? VizStyles : null
+                                            options: viz
+                                                ? VizStyles.styles.map((s) => ({ key: s.key, origin: s.kind, draw: s.key }))
+                                                : Silhouette.skins.filter((skin) => !srow.r.opts || srow.r.opts.indexOf(skin.key) >= 0)
+                                            current: String(sheet.val(srow.r))
+                                            onChose: (k) => sheet.edited(srow.r.key, k)
+                                        }
+                                    }
+                                    Component {
+                                        id: reloadCoverC
+                                        ReloadCoverControl {
+                                            anchors.fill: parent
+                                            descriptor: ReloadCoverModel.normalize(sheet.val(srow.r))
+                                            errorText: sheet.reloadCoverError
+                                            busy: sheet.reloadCoverImportBusy
+                                            onAddRequested: sheet.reloadCoverPick(srow.r)
+                                            onDefaultRequested: sheet.reloadCoverDefault(srow.r)
+                                            onEnabledToggled: (enabled) => {
+                                                var descriptor = Object.assign({}, ReloadCoverModel.normalize(sheet.val(srow.r)));
+                                                descriptor.enabled = enabled;
+                                                sheet.edited(srow.r.key, descriptor);
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: pickC
+                                        PickBar {
+                                            anchors.fill: parent
+                                            value: String(sheet.val(srow.r))
+                                            count: sheet.optsFor(srow.r).length
+                                            labels: sheet.labelsFor(srow.r)
+                                            onOpened: sheet.openPick(srow.r)
+                                        }
+                                    }
+                                    Component {
+                                        id: textC
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            color: "transparent"
+                                            radius: Tokens.radius
+                                            border.width: ti.activeFocus ? 2 : Tokens.border
+                                            border.color: ti.activeFocus ? Tokens.ink : Tokens.line
+                                            TextInput {
+                                                id: ti
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 8
+                                                anchors.rightMargin: 8
+                                                verticalAlignment: Text.AlignVCenter
+                                                clip: true
+                                                autoScroll: activeFocus
+                                                color: Tokens.ink
+                                                font.family: Tokens.ui
+                                                font.pixelSize: 12
+                                                selectByMouse: true
+                                                text: String(sheet.val(srow.r))
+                                                onEditingFinished: sheet.edited(srow.r.key, text)
+                                                onTextEdited: sheet.edited(srow.r.key, text)
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: colorC
+                                        ColorField {
+                                            anchors.fill: parent
+                                            value: String(sheet.val(srow.r))
+                                            onChosen: (v) => sheet.edited(srow.r.key, v)
+                                        }
+                                    }
+                                    Component {
+                                        id: imageC
+                                        Row {
+                                            anchors.fill: parent
+                                            spacing: Tokens.s2
+                                            Rectangle {
+                                                id: imgThumb
+                                                width: 46; height: 28
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                radius: Tokens.radius
+                                                color: "transparent"
+                                                border.width: Tokens.border
+                                                border.color: Tokens.line
+                                                clip: true
+                                                readonly property string src: String(sheet.val(srow.r))
+                                                Image {
+                                                    anchors.fill: parent
+                                                    anchors.margins: 1
+                                                    visible: imgThumb.src !== ""
+                                                    source: imgThumb.src === "" ? "" : (imgThumb.src.indexOf("://") >= 0 ? imgThumb.src : "file://" + imgThumb.src)
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    asynchronous: true
+                                                    sourceSize.width: 140
+                                                }
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    visible: imgThumb.src === ""
+                                                    text: "力"
+                                                    color: Tokens.inkFaint
+                                                    font.family: Tokens.jp
+                                                    font.pixelSize: 13
+                                                }
+                                            }
+                                            Btn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: I18n.tr("CHOOSE…")
+                                                onAct: sheet.imagePick(srow.r)
+                                            }
+                                            Btn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: String(sheet.val(srow.r)) !== ""
+                                                text: I18n.tr("CLEAR")
+                                                onAct: sheet.edited(srow.r.key, "")
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: appC
+                                        Item {
+                                            anchors.fill: parent
+                                            Btn {
+                                                id: defBtn
+                                                anchors.right: parent.right
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: String(sheet.val(srow.r)) !== ""
+                                                text: I18n.tr("DEFAULT")
+                                                onAct: sheet.edited(srow.r.key, "")
+                                            }
+                                            Btn {
+                                                id: chooseBtn
+                                                anchors.right: defBtn.visible ? defBtn.left : parent.right
+                                                anchors.rightMargin: defBtn.visible ? Tokens.s2 : 0
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                text: I18n.tr("CHOOSE…")
+                                                onAct: sheet.appPick(srow.r)
+                                            }
+                                            Text {
+                                                anchors.left: parent.left
+                                                anchors.right: chooseBtn.left
+                                                anchors.rightMargin: Tokens.s2
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                elide: Text.ElideRight
+                                                readonly property string cmd: String(sheet.val(srow.r))
+                                                text: cmd.length ? cmd : I18n.tr("ryotunes (YouTube Music)")
+                                                color: cmd.length ? Tokens.ink : Tokens.inkMuted
+                                                font.family: Tokens.ui
+                                                font.pixelSize: 12
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: locationC
+                                        Item {
+                                            id: locRoot
+                                            anchors.fill: parent
+                                            readonly property string stateDir: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/ryoku"
+
+                                            Rectangle {
+                                                id: locField
+                                                anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter }
+                                                height: 30
+                                                color: "transparent"
+                                                radius: Tokens.radius
+                                                border.width: lti.activeFocus ? 2 : Tokens.border
+                                                border.color: lti.activeFocus ? Tokens.ink : Tokens.line
+                                                TextInput {
+                                                    id: lti
+                                                    anchors.fill: parent
                                                     anchors.leftMargin: 8
                                                     anchors.rightMargin: 8
-                                                    elide: Text.ElideRight
-                                                    text: lrow.modelData.name + (lrow.modelData.admin1 ? "  ·  " + lrow.modelData.admin1 : "") + (lrow.modelData.country ? "  ·  " + lrow.modelData.country : "")
+                                                    verticalAlignment: Text.AlignVCenter
+                                                    clip: true
+                                                    autoScroll: activeFocus
                                                     color: Tokens.ink
                                                     font.family: Tokens.ui
                                                     font.pixelSize: 12
+                                                    selectByMouse: true
+                                                    text: String(sheet.val(srow.r))
+                                                    onTextEdited: debounce.restart()
+                                                    onEditingFinished: sheet.edited(srow.r.key, text)
                                                 }
-                                                HoverHandler { id: lhov; cursorShape: Qt.PointingHandCursor }
-                                                TapHandler {
-                                                    onTapped: {
-                                                        lti.text = lrow.modelData.name;
-                                                        sheet.edited(srow.r.key, lrow.modelData.name);
-                                                        locCache.setText(JSON.stringify({ query: lrow.modelData.name, city: lrow.modelData.name, lat: lrow.modelData.lat, lon: lrow.modelData.lon }));
-                                                        locPop.close();
+                                                Text {
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.left: parent.left
+                                                    anchors.leftMargin: 8
+                                                    visible: lti.text === "" && !lti.activeFocus
+                                                    text: I18n.tr("Empty locates by IP")
+                                                    color: Tokens.inkFaint
+                                                    font.family: Tokens.ui
+                                                    font.pixelSize: 12
+                                                }
+                                            }
+
+                                            Timer {
+                                                id: debounce
+                                                interval: 300
+                                                onTriggered: {
+                                                    var q = lti.text.trim();
+                                                    if (q.length < 2) { locPop.close(); return; }
+                                                    geo.command = ["curl", "-s", "--max-time", "6",
+                                                        "https://geocoding-api.open-meteo.com/v1/search?count=6&language=en&format=json&name=" + encodeURIComponent(q)];
+                                                    geo.running = false;
+                                                    geo.running = true;
+                                                }
+                                            }
+
+                                            Process {
+                                                id: geo
+                                                stdout: StdioCollector {
+                                                    onStreamFinished: {
+                                                        var out = [];
+                                                        try {
+                                                            var j = JSON.parse(this.text);
+                                                            if (j && Array.isArray(j.results)) {
+                                                                for (var i = 0; i < j.results.length; i++) {
+                                                                    var rr = j.results[i];
+                                                                    if (typeof rr.latitude === "number" && typeof rr.longitude === "number")
+                                                                        out.push({ name: rr.name || "", admin1: rr.admin1 || "", country: rr.country || "", lat: rr.latitude, lon: rr.longitude });
+                                                                }
+                                                            }
+                                                        } catch (e) {}
+                                                        locList.model = out;
+                                                        if (out.length > 0 && lti.activeFocus) locPop.open(); else locPop.close();
+                                                    }
+                                                }
+                                            }
+
+                                            FileView {
+                                                id: locCache
+                                                path: locRoot.stateDir + "/weather-loc.json"
+                                                blockLoading: true
+                                                printErrors: false
+                                            }
+
+                                            Popup {
+                                                id: locPop
+                                                parent: locField
+                                                y: -locPop.height - 2
+                                                width: locField.width
+                                                padding: 1
+                                                focus: false
+                                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                                implicitHeight: Math.min(locList.count, 6) * 28 + 2
+                                                background: Rectangle {
+                                                    color: Tokens.paperLift
+                                                    radius: Tokens.radius
+                                                    border.width: Tokens.border
+                                                    border.color: Tokens.lineStrong
+                                                }
+                                                contentItem: ListView {
+                                                    id: locList
+                                                    clip: true
+                                                    model: []
+                                                    delegate: Rectangle {
+                                                        id: lrow
+                                                        required property var modelData
+                                                        width: ListView.view.width
+                                                        height: 28
+                                                        color: lhov.hovered ? Tokens.tint10 : "transparent"
+                                                        Text {
+                                                            anchors.verticalCenter: parent.verticalCenter
+                                                            anchors.left: parent.left
+                                                            anchors.right: parent.right
+                                                            anchors.leftMargin: 8
+                                                            anchors.rightMargin: 8
+                                                            elide: Text.ElideRight
+                                                            text: lrow.modelData.name + (lrow.modelData.admin1 ? "  ·  " + lrow.modelData.admin1 : "") + (lrow.modelData.country ? "  ·  " + lrow.modelData.country : "")
+                                                            color: Tokens.ink
+                                                            font.family: Tokens.ui
+                                                            font.pixelSize: 12
+                                                        }
+                                                        HoverHandler { id: lhov; cursorShape: Qt.PointingHandCursor }
+                                                        TapHandler {
+                                                            onTapped: {
+                                                                lti.text = lrow.modelData.name;
+                                                                sheet.edited(srow.r.key, lrow.modelData.name);
+                                                                locCache.setText(JSON.stringify({ query: lrow.modelData.name, city: lrow.modelData.name, lat: lrow.modelData.lat, lon: lrow.modelData.lon }));
+                                                                locPop.close();
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -735,8 +873,9 @@ Item {
                                 }
                             }
                         }
-                    }
-                }
+                     }
+                 }
+             }
             }
         }
     }

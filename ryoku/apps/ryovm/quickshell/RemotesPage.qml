@@ -180,19 +180,6 @@ Item {
                 visible: opacity > 0
                 Behavior on opacity { NumberAnimation { duration: Tokens.swap } }
 
-                Decor {
-                    width: parent.width
-                    height: 190
-                    boxId: "ryoport.remotes.poster"
-                    title: "遠隔"
-                    sub: "えんかく"
-                    tate: "糸 を 手 繰 る"
-                    caption: I18n.tr("Every distant machine on one line you can pull.")
-                    code: I18n.tr("RYOPORT-LINK")
-                    seal: "力"
-                    images: ["earth.gif", "moon.png", "compass.gif", "render.gif"]
-                }
-
                 Rectangle {
                     width: parent.width
                     height: 150

@@ -16,6 +16,11 @@ on:
           - alpha
           - beta
           - stable
+      repo_url:
+        description: '[ryoku] repo to bake from (a releases/<tag>/x86_64 URL); empty = stable pointer'
+        required: false
+        default: ''
+        type: string
   push:
     tags:
       - 'v*'
@@ -31,4 +36,5 @@ jobs:
     with:
       variant: plain
       release_stage: ${{ github.event.inputs.release_stage || 'beta' }}
+      repo_url: ${{ github.event.inputs.repo_url || '' }}
     secrets: inherit

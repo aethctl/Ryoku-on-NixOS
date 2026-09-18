@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Fixed
+- **Converting a box no longer aborts on the Plymouth splash theme.**
+  `ryoku-desktop` owns `/usr/share/plymouth/themes/ryoku/`, so a resume after a
+  killed run, a box carrying an older Ryoku deploy, or the ISO installer's seeded
+  theme made `pacman -Syu ryoku-desktop` die with
+  `/usr/share/plymouth/themes/ryoku/bullet.png exists in filesystem`. The desktop
+  transaction now `--overwrite`s that path alongside the privileged helpers and
+  polkit rules (`ryokuOverwriteGlob`), matching the ISO installer and `ryoku
+  update`, so the package adopts the unowned copies instead of aborting. Rebuilt
+  the committed binary + checksum.
 - **Converting a host that keeps its own bootloader no longer aborts on the
   limine hooks.** `limine-mkinitcpio-hook` and `limine-snapper-sync` pull limine
   and mkinitcpio back in as depends and ship hooks under `/etc/pacman.d/hooks`,

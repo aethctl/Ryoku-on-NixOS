@@ -25,7 +25,7 @@ Item {
     readonly property string providerName: Settings.provider
     readonly property string pTitle: pg.providerName !== "" ? pg.cap(pg.providerName) : I18n.tr("Window Manager")
     readonly property string pEyebrow: I18n.tr("COMPOSITOR")
-    readonly property string pBlurb: I18n.tr("Everything about how your windows look and behave, plus the extras this compositor adds. Changes apply at your next login.")
+    readonly property string pBlurb: I18n.tr("How windows look and behave here. Changes apply at your next login.")
 
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
     function cv(path) { return pg.hub ? pg.hub.hyprCommittedVal(path) : undefined }
@@ -129,11 +129,17 @@ Item {
                 onChose: (target, current) => wmSheet.open(target, current)
             }
 
-            Section {
+            // A rarely-touched list: folded, and its header says what it holds, so the
+            // tab reads as a page rather than a wall of near-identical lines on
+            // first sight. It opens in place when asked.
+            SettingCard {
                 id: cannotSec
                 width: parent.width
                 visible: pg.cannotDo.length > 0
+                collapsible: true
+                expanded: false
                 title: I18n.tr("WHAT %1 CANNOT DO").arg(pg.pTitle.toUpperCase())
+                summary: pg.cannotDo.length + " " + I18n.tr("SETTINGS")
 
                 Column {
                     width: cannotSec.width
@@ -141,6 +147,7 @@ Item {
 
                     Text {
                         width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4; topPadding: Tokens.s3
                         wrapMode: Text.WordWrap
                         text: I18n.tr("These settings have no equivalent here. They stay in your store and return if you switch back.")
                         color: Tokens.inkFaint
@@ -154,14 +161,16 @@ Item {
                             required property var modelData
                             width: cannotSec.width
                             spacing: Tokens.s2
+                            bottomPadding: Tokens.s1
                             Text {
                                 text: "\u00b7"
+                                leftPadding: Tokens.s4
                                 color: Tokens.inkFaint
                                 font.family: Tokens.mono
                                 font.pixelSize: Tokens.fSmall
                             }
                             Text {
-                                width: cannotSec.width - Tokens.s3
+                                width: cannotSec.width - Tokens.s6
                                 wrapMode: Text.WordWrap
                                 text: parent.modelData
                                 color: Tokens.inkMuted
@@ -171,6 +180,7 @@ Item {
                             }
                         }
                     }
+                    Item { width: 1; height: Tokens.s2 }
                 }
             }
         }

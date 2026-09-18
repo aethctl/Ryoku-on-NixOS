@@ -536,10 +536,18 @@ Item {
     // ── head ─────────────────────────────────────────────────────────────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        // framed page: the pageArea already insets it, so the head starts at the
+        // body's own left edge, over the first card column
+        width: Math.max(320, pg.width - Tokens.s4)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle { width: 16; height: 1; color: Tokens.ink; anchors.verticalCenter: parent.verticalCenter }
             Text { text: "力"; color: Tokens.ink; font.family: Tokens.jp; font.pixelSize: Tokens.fMicro; anchors.verticalCenter: parent.verticalCenter }
@@ -552,7 +560,7 @@ Item {
         Text { text: I18n.tr("Animations"); color: Tokens.ink; font.family: Tokens.display; font.pixelSize: Tokens.fTitle }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("How the desktop moves. Pick a feel and watch it live, set the flash on the window that takes focus, and fine-tune any single animation under Advanced.")
+            text: I18n.tr("Pick a feel and watch it live; fine-tune any one animation under Advanced.")
             color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
         Item { width: 1; height: Tokens.s1 }
@@ -567,14 +575,18 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { }
+        WheelScroll { }
 
-        Column {
-            id: col
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s4
             spacing: Tokens.s5
+            fillTo: flick.height
             // The shell's own motion (distinct from the Hyprland window editor below).
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("SHELL MOTION")
                 Text {
                     width: parent.width
@@ -612,7 +624,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ANIMATION PRESET")
                 visible: Settings.supports("animations") && pg.hasWindowAnims
                 Text {
@@ -640,7 +652,7 @@ Item {
 
             // MOTION -- the global motion switch plus the bespoke curve workshop
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("MOTION")
                 visible: pg.gVisible || pg.cVisible
 
@@ -649,7 +661,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     visible: pg.hit("animations master switch desktop motion")
                     label: I18n.tr("Animations")
-                    desc: I18n.tr("Master switch for desktop motion; off, everything snaps into place")
+                    desc: I18n.tr("Master switch for desktop motion")
                     def: pg.cv("desktop.appearance.animations") ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: pg.chg("desktop.appearance.animations")
                     source: "desktop.json"
@@ -802,18 +814,6 @@ Item {
                                     color: Tokens.inkFaint; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                                 }
                             }
-                            Decor {
-                                id: motionDecor
-                                width: parent.width - bez.width - readouts.width - 2 * Tokens.s5
-                                height: bez.height
-                                images: ["bounce.gif", "cradle.gif", "horse.gif", "disc.gif", "earth.gif"]
-                                seed: 0
-                                title: "\u6ed1\u3089\u304b"
-                                sub: "\u30a4\u30fc\u30ba"
-                                tate: "\u306a\u3081\u3089\u304b\u306b"
-                                caption: I18n.tr("Every motion here rides an easing curve, so nothing on the desktop just snaps into place.")
-                                code: "MOVE-02"; seal: "\u52d5"; boxId: "anim.motion"
-                            }
                         }
                     }
                 }
@@ -822,7 +822,7 @@ Item {
             // FOCUS FLASH
             SettingCard {
                 id: fsec
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("FOCUS FLASH")
                 visible: pg.fVisible && Settings.supports("plugins")
 
@@ -844,7 +844,7 @@ Item {
                     divider: fsec.ffOn
                     visible: pg.hit("animate the focused window enabled")
                     label: I18n.tr("Animate the focused window")
-                    desc: I18n.tr("Short effect on the window that takes focus; applies on Save only")
+                    desc: I18n.tr("A short effect on the focused window")
                     def: pg.cv("wm.hyprland.plugins.hyprfocus.enabled") ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: pg.chg("wm.hyprland.plugins.hyprfocus.enabled")
                     source: "desktop.json"
@@ -861,7 +861,7 @@ Item {
                     block: true
                     visible: fsec.ffOn && pg.hit("style flash bounce slide")
                     label: I18n.tr("Style")
-                    desc: I18n.tr("Flash dips opacity, Bounce shrinks and springs, Slide nudges it")
+                    desc: I18n.tr("Flash dips, Bounce springs, Slide nudges")
                     def: pg.cap(String(pg.cv("wm.hyprland.plugins.hyprfocus.mode")))
                     changed: pg.chg("wm.hyprland.plugins.hyprfocus.mode")
                     source: "desktop.json"
@@ -880,7 +880,7 @@ Item {
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "flash" && pg.hit("flash opacity")
                     label: I18n.tr("Flash opacity")
-                    desc: I18n.tr("Opacity the flash dips to, lower is deeper; Flash style only")
+                    desc: I18n.tr("How far the flash dips; Flash style only")
                     unit: "%"
                     value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
                     def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.opacity")) || 0) * 100))
@@ -899,7 +899,7 @@ Item {
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "bounce" && pg.hit("bounce strength")
                     label: I18n.tr("Bounce strength")
-                    desc: I18n.tr("Scale the window shrinks to, lower bounces harder; Bounce style only")
+                    desc: I18n.tr("How far the window shrinks; Bounce style only")
                     unit: "%"
                     value: String(Math.round((Number(pg.hv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
                     def: String(Math.round((Number(pg.cv("wm.hyprland.plugins.hyprfocus.bounce")) || 0) * 100))
@@ -936,7 +936,7 @@ Item {
 
             // ADVANCED -- per-animation control; the leaf table is a bespoke list
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ADVANCED")
                 visible: pg.aVisible && Settings.supports("animations") && pg.hasWindowAnims
 
@@ -1106,6 +1106,7 @@ Item {
                     contentHeight: pkList.height
                     clip: true
                     ScrollBar.vertical: ScrollRail { }
+                    WheelScroll { }
                     Column {
                         id: pkList
                         width: parent.width

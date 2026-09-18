@@ -244,10 +244,15 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.topMargin: Tokens.s6
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -277,14 +282,6 @@ Item {
         }
     }
 
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: 150; anchors.topMargin: Tokens.s1  // clear the top-right chips
-        kana: "更新"
-        glyph: "wave"; glyph2: "column"
-    }
-
     // ── idle: live status + the commit list, in one scroll container ─────────
     Flickable {
         id: idle
@@ -300,6 +297,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         Column {
             id: idleCol
@@ -515,11 +513,19 @@ Item {
                             color: rowHover.hovered ? Tokens.tint5 : "transparent"
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
+                        // parted from the row above the way every card's rows are
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                            anchors.leftMargin: 28; anchors.rightMargin: Tokens.s4
+                            height: 1
+                            color: Tokens.lineSoft
+                            visible: !row.isFirst
+                        }
 
                         Text {
                             id: subj
                             anchors.left: parent.left; anchors.leftMargin: 40
-                            anchors.right: ver.left; anchors.rightMargin: Tokens.s3
+                            anchors.right: ver.left; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
                             text: row.modelData.name
                             color: rowHover.hovered ? Tokens.ink : Tokens.inkDim
@@ -528,13 +534,29 @@ Item {
                             elide: Text.ElideRight
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
-                        Text {
+                        Row {
                             id: ver
-                            anchors.right: parent.right; anchors.rightMargin: Tokens.s3
+                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
-                            text: row.fromVersion !== "" ? (row.fromVersion + "  \u2192  " + row.toVersion) : row.toVersion
-                            color: Tokens.inkFaint; font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny
+                            spacing: Tokens.s2
+                            Text {
+                                visible: row.fromVersion !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.fromVersion
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                visible: row.fromVersion !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\u2192"
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.toVersion
+                                color: Tokens.inkMuted; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                                font.weight: Font.Medium
+                            }
                         }
 
                         HoverHandler { id: rowHover }
@@ -601,8 +623,11 @@ Item {
                     delegate: Item {
                         id: prow
                         required property var modelData
+                        required property int index
                         width: idleCol.width
-                        height: 34
+                        // the same row rhythm as the commit list above and the
+                        // settings cards: one height, one hairline between rows
+                        height: 44
 
                         Rectangle {
                             anchors.fill: parent
@@ -611,8 +636,17 @@ Item {
                             color: pkgHover.hovered ? Tokens.tint5 : "transparent"
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
+                        // the row law: a hairline between rows, the same rhythm the
+                        // settings cards use
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                            anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                            height: 1
+                            color: Tokens.lineSoft
+                            visible: prow.index > 0
+                        }
                         Text {
-                            anchors.left: parent.left; anchors.leftMargin: Tokens.s3
+                            anchors.left: parent.left; anchors.leftMargin: Tokens.s4
                             anchors.right: pver.left; anchors.rightMargin: Tokens.s3
                             anchors.verticalCenter: parent.verticalCenter
                             text: prow.modelData.name
@@ -621,46 +655,38 @@ Item {
                             elide: Text.ElideRight
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
-                        Text {
+                        Row {
                             id: pver
-                            anchors.right: parent.right; anchors.rightMargin: Tokens.s3
+                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
-                            text: (prow.modelData.old || "") !== ""
-                                ? (prow.modelData.old + "  \u2192  " + prow.modelData.new)
-                                : (prow.modelData.new || "")
-                            color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+                            spacing: Tokens.s2
+                            // the pair reads as two columns rather than one run-on
+                            // string, and the incoming version carries more ink
+                            // than the one being replaced
+                            Text {
+                                visible: (prow.modelData.old || "") !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: prow.modelData.old || ""
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                visible: (prow.modelData.old || "") !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\u2192"
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: prow.modelData.new || ""
+                                color: Tokens.inkMuted; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                                font.weight: Font.Medium
+                            }
                         }
                         HoverHandler { id: pkgHover }
                     }
                 }
             }
 
-            // section face: fills the quiet idle column (a short recent-history
-            // list leaves a long void), per DESIGN.md section 12. Ink-only poster,
-            // no control; it flows after the list so a long incoming set scrolls.
-            Decor {
-                width: idleCol.width
-                height: Tokens.cellH * 2 + Tokens.s5
-                title: "更新"; sub: "アップデート"
-                tate: "常に最新へ"
-                caption: pg.nixBackend
-                    ? I18n.tr("Ryoku for NixOS follows its own version channel and leaves the rest of your flake alone.")
-                    : I18n.tr("Ryoku tracks its channel; one command snapshots, pulls, and reloads.")
-                readout: pg.nixBackend
-                    ? [
-                        "CHANNEL|" + Updates.branch,
-                        "METHOD|Nix flake input",
-                        "SAFETY|NixOS generation",
-                        "SCOPE|Ryoku only"
-                    ]
-                    : [
-                        "CHANNEL|main",
-                        "METHOD|ryoku update",
-                        "SAFETY|snapshot first",
-                        "SCOPE|whole system"
-                    ]
-                code: "SYS-07"; seal: "更"; boxId: "updates.channel"; seed: 3; ditherFreq: 1.0
-            }
         }
     }
 
@@ -966,14 +992,6 @@ Item {
         Rectangle {
             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the footer's dead centre, between status and verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "更新"
-            glyph: "wave"; glyph2: "column"
         }
 
         Text {

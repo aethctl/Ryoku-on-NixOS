@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# ryoku-dev-lint-qml: fail on QML that cannot load.
+#
+# qmllint is advisory in general (unqualified access, unused imports), but a few
+# of its findings mean the file will not instantiate at all, and one such file
+# takes its whole surface down: a Hub page renders blank, a shell root paints a
+# bare Hyprland desktop. Those classes are hard failures here; everything else
+# is ignored. The Keybinds page shipped for a day with `onChosen` bound on a type
+# whose signal is `picked`; qmllint had said so.
+#
+# Types resolve against the installed Qt import path (Quickshell, Ryoku.Ui,
+# Ryoku.FrameBars, ...), so run this where those modules are installed: the
+# container-install gate after `pacman -S ryoku-desktop`, or a dev box after
+# `ryoku deploy`. Extra import roots come from RYOKU_QML_IMPORTS (colon-separated).
+#
+# Usage: ryoku-dev-lint-qml <config-root>...
+set -euo pipefail
+
+qmllint_bin="${QMLLINT_BIN:-/usr/lib/qt6/bin/qmllint}"
+[[ -x $qmllint_bin ]] || qmllint_bin="$(command -v qmllint || true)"
+if [[ -z $qmllint_bin ]]; then
+  echo "ryoku-dev-lint-qml: qmllint not found (qt6-declarative)" >&2
+  exit 2
+fi
+(( $# )) || { echo "usage: ryoku-dev-lint-qml <config-root>..." >&2; exit 2; }
+
+imports=(-I /usr/lib/qt6/qml)
+IFS=':' read -r -a extra <<< "${RYOKU_QML_IMPORTS:-}"
+for p in "${extra[@]}"; do
+  [[ -n $p ]] && imports+=(-I "$p")
+done
+
+# the findings that mean "this file will not load".
+fatal='no matching signal found for handler|Cannot assign to non-existent property|is not a type\b|Could not compile binding|Duplicate signal name|Duplicate method name|Syntax error'
+
+status=0
+for root in "$@"; do
+  [[ -d $root ]] || { echo "ryoku-dev-lint-qml: no such directory: $root" >&2; status=2; continue; }
+  mapfile -t files < <(find "$root" -name '*.qml' -type f | sort)
+  (( ${#files[@]} )) || continue
+  hits="$(
+    (cd "$root" && "$qmllint_bin" "${imports[@]}" -I . --compiler disable "${files[@]#"$root"/}" 2>&1 || true) \
+      | grep -E "$fatal" || true
+  )"
+  if [[ -n $hits ]]; then
+    echo "ryoku-dev-lint-qml: $root: QML that cannot load:" >&2
+    printf '  %s\n' "$hits" >&2
+    status=1
+  fi
+done
+exit "$status"

@@ -28,4 +28,11 @@ build() {
 
 package() {
   install -Dm755 "$srcdir/ryoku" "$pkgdir/usr/bin/ryoku"
+  # the boot guard: a system unit `ryoku boot-guard` runs from early in every
+  # boot (enabled by the doctor on every update, so existing boxes get it),
+  # and the tmpfiles entries for its marker and the sessions' boot-ok files.
+  install -Dm644 "$_repo/ryoku/cli/systemd/ryoku-boot-guard.service" \
+    "$pkgdir/usr/lib/systemd/system/ryoku-boot-guard.service"
+  install -Dm644 "$_repo/ryoku/cli/systemd/ryoku.tmpfiles.conf" \
+    "$pkgdir/usr/lib/tmpfiles.d/ryoku.conf"
 }

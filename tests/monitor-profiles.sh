@@ -168,6 +168,41 @@ RYOKU_MONITOR_JSON="$tmp/two.json" RYOKU_MONITORS_CONF="$conf" RYOKU_MONITORS_DI
 grep -qF 'output = "DP-1"' "$conf" && fail "autoscale wrote a rule for pinned DP-1 (should defer to monitors.user.lua)"
 has "$conf" 'output = "DP-2"' "autoscale dropped the non-pinned DP-2"
 
+# --- carried DE pins retire on a Hub edit: a monitor layout salvaged onto a
+# fresh install (KDE/GNOME/etc.) lands in monitors_user.lua with the installer's
+# marker in the header, and being require()d after monitors.lua it outranks every
+# Hub edit. Applying a display in Ryoku Settings must drop that output's carried
+# pin so the Hub choice wins; a hand-written monitors_user.lua (no marker) is left
+# untouched, and a carried file with nothing left is removed entirely.
+carried="$tmp/carried-user.lua"
+runU() { RYOKU_MONITOR_JSON="$tmp/two.json" RYOKU_MONITORS_CONF="$conf" \
+  RYOKU_MONITORS_DIR="$tmp/none-c" RYOKU_MONITORS_APPLIED="$tmp/carried-applied.json" \
+  RYOKU_MONITORS_USER="$carried" "$mon" "$@"; }
+printf '%s\n' \
+  '-- migrated from your KDE output settings by ryoku-shell-install.' \
+  'hl.monitor({ output = "DP-1", mode = "3840x2160@60", position = "0x0", scale = 1 })' \
+  'hl.monitor({ output = "DP-2", mode = "1920x1080@60", position = "3840x0", scale = 1 })' >"$carried"
+runU apply '[{"id":"Dell|U2720Q|ABC123","output":"DP-1","mode":"highrr","position":"0x0","scale":1,"disabled":false}]' >/dev/null
+grep -qF 'output = "DP-1"' "$carried" && fail "Hub apply did not retire the carried DP-1 pin"
+has "$carried" 'output = "DP-2"' "Hub apply wrongly dropped the untouched carried DP-2 pin"
+has "$carried" 'ryoku-shell-install' "Hub apply dropped the installer marker"
+
+# A hand-written monitors_user.lua (no installer marker) is sacred: apply leaves it.
+hand="$tmp/hand-user.lua"
+echo 'hl.monitor({ output = "DP-1", mode = "3840x2160@60", position = "0x0", scale = 1 })' >"$hand"
+hand_before="$(md5sum "$hand" | cut -d' ' -f1)"
+RYOKU_MONITOR_JSON="$tmp/two.json" RYOKU_MONITORS_CONF="$conf" RYOKU_MONITORS_DIR="$tmp/none-h" \
+  RYOKU_MONITORS_APPLIED="$tmp/hand-applied.json" RYOKU_MONITORS_USER="$hand" "$mon" \
+  apply '[{"id":"Dell|U2720Q|ABC123","output":"DP-1","mode":"highrr","position":"0x0","scale":1,"disabled":false}]' >/dev/null
+[[ "$(md5sum "$hand" | cut -d' ' -f1)" == "$hand_before" ]] || fail "Hub apply modified a hand-written monitors_user.lua"
+
+# Retiring the last carried pin removes the file so it stops overriding monitors.lua.
+printf '%s\n' \
+  '-- migrated from your KDE output settings by ryoku-shell-install.' \
+  'hl.monitor({ output = "DP-1", mode = "3840x2160@60", position = "0x0", scale = 1 })' >"$carried"
+runU apply '[{"id":"Dell|U2720Q|ABC123","output":"DP-1","mode":"highrr","position":"0x0","scale":1,"disabled":false}]' >/dev/null
+[[ -f "$carried" ]] && fail "a fully-retired carried monitors_user.lua was not removed"
+
 # --- applied layout: Apply persists across login (the scale-reset fix) --------
 # One HiDPI panel whose live scale (2.5) differs from both an applied 1.0 and its
 # DPI bucket, so each code path is distinguishable in fixture mode.
@@ -263,6 +298,9 @@ cat >"$tmp/evil.json" <<'JSON'
 JSON
 RYOKU_MONITOR_JSON="$tmp/evil.json" RYOKU_MONITORS_CONF="$tmp/evil.lua" \
   RYOKU_MONITORS_DIR="$tmp/none-evil" RYOKU_MONITORS_APPLIED="$tmp/evil-applied.json" RYOKU_MONITOR_VM=0 "$mon" autoscale >/dev/null 2>&1 || true
-luac -p "$tmp/evil.lua" 2>/dev/null || fail "a quoted monitor name produced invalid Lua in monitors.lua"
+luac_bin="$(command -v luac || command -v luac5.4 || command -v luac5.3 || true)"
+if [[ -n $luac_bin ]]; then
+  "$luac_bin" -p "$tmp/evil.lua" 2>/dev/null || fail "a quoted monitor name produced invalid Lua in monitors.lua"
+fi
 
 echo "monitor-profiles: all checks passed"

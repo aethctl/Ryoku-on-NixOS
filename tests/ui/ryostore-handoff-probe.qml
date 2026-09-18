@@ -16,7 +16,6 @@ ShellRoot {
     }
 
     Pages.LockscreenPage { id: locks; width: 1180; height: 760; visible: false; hub: hub }
-    Pages.AppearancePage { id: appearance; width: 1180; height: 760; visible: false; hub: hub }
     Pages.AddonsPage { id: addons; width: 1180; height: 760; visible: false; hub: hub }
     Pages.BarStudioPage { id: bars; width: 1180; height: 760; visible: false; hub: hub }
     Pages.FastfetchPage { id: fastfetch; width: 1180; height: 760; visible: false; hub: hub }
@@ -41,7 +40,6 @@ ShellRoot {
             require(addons.updateFor(addons.plugins[0]) === "2.0.0", "plugin update from RyoStore");
             require(addons.bundles[0].installedCount === 1, "partial bundle retained");
             require(addons.bundles[0].metadata.items.length === 2, "bundle components rendered");
-            appearance.browseRices();
             locks.browseStore();
             addons.tab = "Plugins";
             addons.browseStore();

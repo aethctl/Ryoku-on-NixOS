@@ -183,13 +183,22 @@ Item {
     // ── head: the eyebrow band, the title, the blurb ─────────────────────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        // the head sits on the body's grid: full body width from the left, so
+        // the title starts over the first card column instead of floating centred
+        x: 0
+        width: page.width - 14
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Item {
             width: parent.width
             height: 14
             Row {
+                // the register row holds a fixed box, so the rule and the seal keep
+                // their distance from the title on every page
+                height: Tokens.s5
                 id: ebrow
                 spacing: Tokens.s2
                 anchors.verticalCenter: parent.verticalCenter
@@ -230,7 +239,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Choose which bar the desktop draws, and tune the built-in styles. QS Bar keeps its layout, widgets and dock in QS Bar Settings; Sumi's frame and rails are set below. Changes land live, and Save keeps them.")
+            text: I18n.tr("Which bar the desktop draws, and how it looks.")
             color: Tokens.inkMuted
             font.family: Tokens.ui
             font.pixelSize: Tokens.fBody
@@ -243,20 +252,29 @@ Item {
         id: flick
         anchors { left: parent.left; right: parent.right; top: head.bottom; bottom: parent.bottom; topMargin: Tokens.s5 }
         contentWidth: width
-        contentHeight: col.height + Tokens.s5
+        contentHeight: Math.max(col.height, flick.height)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
-            id: col
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
             width: flick.width - 14
             spacing: Tokens.s5
+            fillTo: flick.height
 
             // ── BAR STYLE: which bar the desktop draws ───────────────────────
             SettingCard {
                 id: styleSect
-                width: col.width
+                // The primary choice of the page takes the band across the
+                // columns: eight style tiles need the room, and a column-width
+                // card crams them two to a row while the page's other half
+                // sits empty.
+                property bool fullWidth: true
+                width: col.colWidth
                 title: I18n.tr("BAR STYLE")
 
                 Item {
@@ -267,11 +285,22 @@ Item {
                         anchors { left: parent.left; right: parent.right; top: parent.top }
                         anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
                         spacing: Tokens.s3
-                        Row {
+                        // A gallery, not a filmstrip: with a bar style per tile the
+                        // captions are what tell them apart, so the tiles wrap into
+                        // as many rows as they need instead of squeezing 8 into one.
+                        // The height is computed, not measured: a Flow reports its
+                        // post-wrap height a polish pass late, and CardColumns would
+                        // place the next card over this one's second row.
+                        Flow {
                             id: styleRow
                             width: parent.width
                             spacing: Tokens.s2
+                            readonly property int perRow: Math.max(2, Math.floor((width + Tokens.s2) / 210))
+                            readonly property int tileH: 64
+                            readonly property int rowCount: Math.max(1, Math.ceil(styleRep.count / perRow))
+                            height: rowCount * tileH + (rowCount - 1) * spacing
                             Repeater {
+                                id: styleRep
                                 model: page.barStyles
                                 delegate: Rectangle {
                                     id: styleCard
@@ -279,8 +308,10 @@ Item {
                                     readonly property bool on: page.activeStyle === styleCard.modelData.id
 
                                     objectName: "bar-style-" + styleCard.modelData.id
-                                    width: (styleRow.width - (page.barStyles.length - 1) * Tokens.s2) / page.barStyles.length
-                                    height: 64
+                                    // fill the row evenly: as many ~210px tiles as the
+                                    // measure holds, stretched to close the last gap.
+                                    width: Math.floor((styleRow.width - (styleRow.perRow - 1) * Tokens.s2) / styleRow.perRow)
+                                    height: styleRow.tileH
                                     radius: Tokens.radius
                                     color: styleCard.on ? Tokens.bone : (sma.containsMouse ? Tokens.tint5 : "transparent")
                                     border.width: Tokens.border
@@ -329,7 +360,7 @@ Item {
             // ── QS BAR: its layout, widgets, form and dock live in QS Bar Settings
             SettingCard {
                 id: qsbarSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "qsbar"
                 title: I18n.tr("QS BAR")
                 kana: "帯"
@@ -371,7 +402,7 @@ Item {
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
-                width: col.width
+                width: col.colWidth
                 visible: !page.sumiActive && page.activeStyle !== "qsbar"
                 title: I18n.tr("LAYOUT")
 
@@ -379,7 +410,7 @@ Item {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s4
-                    text: I18n.tr("The %1 style manages its own layout in barstyles/%2. Its controls are below.").arg(page.activeName).arg(page.activeStyle)
+                    text: I18n.tr("The %1 style manages its own layout in barstyles/%2.").arg(page.activeName).arg(page.activeStyle)
                     color: Tokens.inkMuted
                     font.family: Tokens.ui
                     font.pixelSize: Tokens.fBody
@@ -390,7 +421,7 @@ Item {
             // OBI WIDGETS: show or hide each widget on the Obi bar.
             SettingCard {
                 id: obiSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "obi"
                 title: I18n.tr("OBI WIDGETS")
 
@@ -419,7 +450,7 @@ Item {
 
             SettingCard {
                 id: nacreSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "nacre"
                 title: I18n.tr("NACRE LAYOUT")
 
@@ -439,7 +470,7 @@ Item {
             // ── FRAME: the chrome the shell draws around the desktop ─────────
             SettingCard {
                 id: frameSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("FRAME")
                 visible: page.sumiActive
 
@@ -450,7 +481,7 @@ Item {
                     label: I18n.tr("Draw frame")
                     def: page.fwas("frameEnabled") === undefined ? "" : (page.fwas("frameEnabled") ? I18n.tr("ON") : I18n.tr("OFF"))
                     changed: page.fwas("frameEnabled") !== undefined && !!page.fval("frameEnabled", true) !== !!page.fwas("frameEnabled")
-                    desc: I18n.tr("Draw the bounded frame around the desktop at all.")
+                    desc: I18n.tr("The bounded band drawn around the desktop.")
                     source: "shell.json"
                     Sw {
                         objectName: "frame-enabled"
@@ -485,12 +516,12 @@ Item {
                     anchors.right: parent.right
                     divider: true
                     controlWidth: 58
-                    label: I18n.tr("Frame thickness")
+                    label: I18n.tr("Thickness")
                     unit: "px"
                     value: String(page.fnum("frameThickness", 2))
                     def: page.fwas("frameThickness") === undefined ? "" : String(page.fwas("frameThickness"))
                     changed: page.fwas("frameThickness") !== undefined && page.fnum("frameThickness", 2) !== Number(page.fwas("frameThickness"))
-                    desc: I18n.tr("How thick the frame band around the desktop is drawn.")
+                    desc: I18n.tr("How far the band stands into the screen.")
                     source: "shell.json"
                     Step {
                         objectName: "frame-thickness"
@@ -527,7 +558,7 @@ Item {
             // ── RAILS: pick an edge, then its own switches ───────────────────
             SettingCard {
                 id: railSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("RAILS")
                 visible: page.sumiActive
 
@@ -637,7 +668,7 @@ Item {
             // ── WIDGETS: the selected rail's three zones and its add drawers ──
             SettingCard {
                 id: zoneSect
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("WIDGETS ON THE %1 RAIL").arg(labels.edge(page.edge).toUpperCase())
                 visible: page.sumiActive
 

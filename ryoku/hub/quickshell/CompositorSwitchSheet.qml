@@ -187,6 +187,7 @@ Item {
             contentHeight: bodyCol.height
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: bodyCol

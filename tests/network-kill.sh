@@ -22,7 +22,13 @@ grep -qF 'ryoku-network-kill-guard.service' "$pkgbuild"
 grep -qF 'RequiredBy=NetworkManager.service' "$guard"
 grep -qF 'WantedBy=multi-user.target NetworkManager.service' "$disconnect"
 grep -qF 'ryoku-network-kill-disconnect.service' "$pkgbuild"
-grep -qF '_network_kill_units' "$install_hook"
+post_install="$(sed -n '/^post_install()/,/^}/p' "$install_hook")"
+post_upgrade="$(sed -n '/^post_upgrade()/,/^}/p' "$install_hook")"
+if grep -qF '_network_kill_units' <<<"$post_install"; then
+  echo "package install must leave kill-switch units disabled" >&2
+  exit 1
+fi
+grep -qF '_network_kill_units' <<<"$post_upgrade"
 
 grep -qF '["pkexec", "/usr/bin/ryoku-network-kill", "status"]' "$page"
 grep -qF 'killSetProc.target = killActive ? "off" : "on";' "$page"
@@ -116,6 +122,7 @@ run off
 [[ ! -e $work/state/enabled ]] || { echo "off did not clear armed state" >&2; exit 1; }
 [[ ! -e $work/table ]] || { echo "off did not remove firewall" >&2; exit 1; }
 grep -qxF 'nmcli networking on' "$work/log"
+grep -qxF 'systemctl disable --quiet ryoku-network-kill-guard.service ryoku-network-kill-disconnect.service' "$work/log"
 [[ $(line_of 'nft delete table inet ryoku_kill_switch') -lt $(line_of 'nmcli networking on') ]] || {
   echo "NetworkManager was enabled before firewall was removed" >&2; exit 1;
 }

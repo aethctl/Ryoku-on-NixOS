@@ -166,14 +166,85 @@ untouched; recovery deliberately resets both when both are installed.
   removal plan, re-checked immediately before the transaction. Full switch
   contract in `docs/compositors.md`.
 
-## Publishing: how a commit becomes a user update
+## Publishing: releases and channels
 
-The `[ryoku]` repo publishes on a push to `main` (or a release tag). `main`
-advances only when a maintainer fast-forwards it from `unstable-dev` or runs the
-stable release. Each advance rebuilds the packages with a strictly increasing
-version (`core.r<commit-count>.g<sha>`) that `pacman -Syu` upgrades to.
+The `[ryoku]` repo is published into named states, all under the one bucket
+mount the repo domain serves (`repo.ryoku.dev/stable/<key>` is bucket object
+`<key>`; the `stable` path segment is the mount, not the channel):
 
-**Work on `unstable-dev` does not reach users until `main` fast-forwards.**
+| Directory | Channel | Written when |
+|---|---|---|
+| `x86_64/` | **stable**: the URL every installed box has | a release tag is published: a byte copy of that release |
+| `releases/<tag>/x86_64/` | one frozen release; never rewritten | the tag is published (`publish-repo.yml` refuses an existing directory) |
+| `releases/index.json` | the release ledger, newest first, with each release's ISO per variant (`images.plain`, `images.cachyos`) | after each release |
+| `channels/testing/x86_64/` | **testing** | every push to `unstable-dev` |
+
+So a box on stable moves between named releases, and can be put back on any
+earlier one, on either variant: the `[ryoku]` packages are one `x86_64` build
+that both variants install, the frozen release directories are never pruned,
+and the ledger's `images` map names the Arch and CachyOS ISO of each release
+(derived from the per-ISO manifests in the bucket, so it heals on every
+rebuild) for a reinstall of an older release. Each build carries a strictly
+increasing package version (`core.r<commit-count>.g<sha>`) that the Ryoku
+upgrade moves to, and the `ryoku-desktop` package writes `/etc/ryoku-release`
+(`RELEASE=`, `CHANNEL=`, `VERSION=`, `COMMIT=`) so a box can say which release
+it runs; `release.json` beside each channel's db says which one the channel
+serves.
+
+A release is a tag: `main` advances only by fast-forward from `unstable-dev`,
+and publishing nothing on that push. The maintainer runs **Stable Release**
+(`bump_type: none` tags the `VERSION` main already carries; a bump rewrites it
+first), which tags `main`, publishes `releases/<tag>/`, moves the stable
+pointer onto it, records the ledger entry, and dispatches both release ISOs
+(plain Arch and CachyOS) from that frozen directory, so an ISO named for a
+release installs exactly that release. Arch itself keeps rolling between
+releases; only the Ryoku set is frozen.
+
+**Work on `unstable-dev` reaches testing on every push, and stable only when a
+release is tagged.**
+
+On a packaged box the channel is nothing but the `Server` line of the `[ryoku]`
+stanza, so there is no second state to drift from it:
+
+- `ryoku track unstable-dev` turns any box into a **testing box**: it follows the
+  `testing` channel, rebuilt on every push to `unstable-dev`, so a tester gets
+  each push as signed packages through `ryoku update`. `ryoku track main` returns
+  it to **stable** (named releases). The two are aliases for `ryoku track testing`
+  and `ryoku track stable`.
+- `ryoku track stable | testing | v<tag>` rewrites that line and runs an update
+  that moves the Ryoku set to what the channel serves, down as well as up: the
+  databases are force-refreshed (a frozen release's db is older than the
+  channel's, so pacman would keep the cached one), then the installed
+  `ryoku/<pkg>` set is installed at the versions that channel publishes. A tag
+  pins the box to that release until it is tracked away.
+- `ryoku rollback --to v<tag>` is `track` onto a frozen release: the Ryoku set
+  goes back in one pacman transaction while Arch stays current. Bare
+  `ryoku rollback` lists the ledger and the snapshots.
+- `ryoku status` reports `release` (this box) and `channelRelease` (what the
+  channel serves); `ryoku version` prints the release tag.
+- The doctor names the channel it finds and warns, without touching it, when
+  `[ryoku]` points at a mirror Ryoku does not publish.
+
+`ryoku track main | unstable-dev --source` is the developer path: it builds and
+tracks a git checkout instead of packages (see `docs/development.md`). A box
+already on a checkout is migrated onto packages by a plain track without
+`--source`: the checkout is retired as the update source (the `~/ryoku-arch`
+clone stays on disk) and `ryoku update` runs `pacman` from then on.
+
+### Release names
+
+Every release line has a name from the creation stories Ryoku draws on (the
+Kojiki and the Theogony), in the order those stories tell them; `CODENAME`
+holds the current one and `release/names.md` tells each name's story. The
+name changes when a line begins (the pre-1.0 line is Onogoro, the first
+island; 1.0 is Amaterasu) and every release inside the line keeps it. It
+travels with the release: `build-repo.sh` writes it into `release.json` and
+the ryoku-desktop package into `/etc/ryoku-release` (`NAME=`), the publish
+copies it into `releases/index.json`, the Stable Release and Release Notes
+workflows title the tag and the GitHub release with it (a line's first release
+opens with its story), and a box shows it in `ryoku version --pretty` (which
+fastfetch's OS line uses), `ryoku status`, `ryoku rollback`, the update
+island (when the channel serves the next line) and the Hub's Updates page.
 
 ## The contract
 

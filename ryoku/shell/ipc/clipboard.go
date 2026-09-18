@@ -521,12 +521,28 @@ func (s *clipState) publish() {
 	s.topic.publish(frame)
 }
 
+// browserInternalMime reports a selection type that carries no user content.
+// Chromium publishes a private frame/tab token as well as the real write, and
+// sometimes as a write of its own; the token is a marker for the browser, not
+// something the user copied, so a write offering only markers is skipped rather
+// than stored as an entry of its own.
+func browserInternalMime(t string) bool {
+	return strings.HasPrefix(t, "chromium/x-internal-")
+}
+
 // pickBestMime chooses which offered type to store, matching the reference
 // priority: the text types first, then the image types, then whatever is offered
-// first.
+// first. Types that carry no user content are dropped before the choice, so a
+// marker alone yields no type (the caller stores nothing) and a marker listed
+// ahead of a real type cannot be picked by the fallback.
 func pickBestMime(offered []string) string {
+	usable := make([]string, 0, len(offered))
 	has := make(map[string]bool, len(offered))
 	for _, t := range offered {
+		if browserInternalMime(t) {
+			continue
+		}
+		usable = append(usable, t)
 		has[t] = true
 	}
 	for _, t := range []string{"text/plain;charset=utf-8", "text/plain", "UTF8_STRING", "STRING", "TEXT"} {
@@ -539,8 +555,8 @@ func pickBestMime(offered []string) string {
 			return t
 		}
 	}
-	if len(offered) > 0 {
-		return offered[0]
+	if len(usable) > 0 {
+		return usable[0]
 	}
 	return ""
 }

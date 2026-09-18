@@ -374,6 +374,10 @@ EOF
   install -Dm644 "$_repo/ryoku/shell/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settings.ini"
   install -Dm644 "$_repo/ryoku/apps/btop/btop.conf"       "$cfg/btop/btop.conf"
   install -Dm644 "$_repo/ryoku/apps/starship/starship.toml" "$cfg/starship.toml"
+  # session environment: Hyprland sets its own from env.lua, which never reaches
+  # niri; the user manager reads this at login, so both compositors get it.
+  install -Dm644 "$_repo/ryoku/shell/environment.d/ryoku-session.conf" \
+    "$cfg/environment.d/ryoku-session.conf"
   install -Dm644 "$_repo/ryoku/apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
   # the fastfetch logo the config above draws. ships beside config.jsonc so
   # `ryoku materialize` lays both together on every update; seeding it only as a
@@ -468,6 +472,14 @@ EOF
     "$pkgdir/usr/lib/systemd/user/ryoku-ai-usage.service"
   install -Dm644 "$_repo/ryoku/shell/systemd/user/ryoku-ai-usage.timer" \
     "$pkgdir/usr/lib/systemd/user/ryoku-ai-usage.timer"
+  # the config bootstrap: a package install lays nothing into ~/.config, so the
+  # first login after it boots a bare compositor unless this runs first.
+  install -Dm644 "$_repo/ryoku/shell/systemd/user/ryoku-bootstrap.service" \
+    "$pkgdir/usr/lib/systemd/user/ryoku-bootstrap.service"
+
+  # the same file for every user, so a session that never materialized still has it
+  install -Dm644 "$_repo/ryoku/shell/environment.d/ryoku-session.conf" \
+    "$pkgdir/usr/lib/environment.d/99-ryoku-session.conf"
 
   # the decor art the Decor/Placard components render. shipped here so `ryoku
   # doctor` can seed it into ~/Pictures/ryodecors on a user box (beside

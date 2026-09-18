@@ -468,6 +468,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         Column {
             id: body
@@ -647,7 +648,7 @@ Item {
 
                     FnCard {
                         width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: I18n.tr("VAULT"); accent: hx.teal
-                        desc: I18n.tr("The living map your agents read - every config beside the binary that owns it.")
+                        desc: I18n.tr("The living map your agents read, beside each binary.")
                         stat: pg.vaultExists ? I18n.tr("%1 files").arg(pg.vaultFiles) : ""
                     }
                     FnCard {
@@ -656,7 +657,7 @@ Item {
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: I18n.tr("SKILLS"); accent: hx.slate
-                        desc: I18n.tr("Toolsets Hermes wields on demand - search, files, the web, more.")
+                        desc: I18n.tr("Toolsets Hermes wields: search, files, the web.")
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: I18n.tr("AGENTS"); accent: hx.tan
@@ -665,11 +666,110 @@ Item {
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: I18n.tr("CHAT"); accent: hx.red
-                        desc: I18n.tr("Talk to Hermes - in the dashboard, or run it in any terminal.")
+                        desc: I18n.tr("Talk to Hermes in the dashboard or a terminal.")
                     }
                     FnCard {
                         width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: I18n.tr("CODE"); accent: hx.teal
-                        desc: I18n.tr("prowl-agent code intelligence - cited answers over your repos.")
+                        desc: I18n.tr("Code intelligence: cited answers over your repos.")
+                    }
+                }
+            }
+
+            // ── YOUR AGENTS: one-click wire any coding CLI to the vault ───────
+            Column {
+                width: parent.width
+                spacing: Tokens.s4
+                Head { kanji: "\u4e94\u4eba\u8846"; title: I18n.tr("YOUR AGENTS") }
+                Text {
+                    width: parent.width
+                    text: I18n.tr("Wire any coding agent to the same living map of this machine. One click drops a pointer into its instructions, links the ryoku skill, and installs prowl-agent's code-intelligence skill.")
+                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                }
+                Column {
+                    width: parent.width
+                    spacing: Tokens.s2
+                    Repeater {
+                        model: pg.agentList
+                        delegate: AgentRow {
+                            required property var modelData
+                            width: parent.width
+                            agent: modelData
+                            canChat: pg.agentCanChat(modelData.id)
+                        }
+                    }
+                }
+                PosterBtn { label: I18n.tr("WIRE ALL PRESENT"); on: pg.installed; onAct: pg.wireAll() }
+            }
+
+            // ── POINT ANY AGENT: the paths, and a paste snippet for the rest ──
+            Column {
+                width: parent.width
+                spacing: Tokens.s4
+                Head { kanji: "\u9023\u643a"; title: I18n.tr("POINT ANY AGENT") }
+                Text {
+                    width: parent.width
+                    text: I18n.tr("On an agent Rashin doesn't wire for you? Point it at these yourself, or copy the ready-made instructions and paste them into its config.")
+                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                }
+                Column {
+                    width: parent.width
+                    spacing: Tokens.s2
+                    PathRow { label: I18n.tr("skill"); path: pg.skillPath; owner: I18n.tr("read-only"); ok: pg.skillPath !== "" }
+                    PathRow { label: I18n.tr("prowl-agent"); path: pg.prowlPath; owner: I18n.tr("tool"); ok: pg.prowlPath !== "" }
+                    Repeater {
+                        model: pg.vaultItems
+                        delegate: PathRow {
+                            required property var modelData
+                            width: parent.width
+                            label: modelData.label
+                            path: modelData.path
+                            owner: modelData.owner
+                            ok: modelData.exists === true
+                        }
+                    }
+                }
+                PosterBtn { label: I18n.tr("COPY AGENT SNIPPET"); primary: true; on: pg.installed; onAct: pg.copySnippet() }
+            }
+
+            // ── CHAT BACKEND: who answers Super+S (Hermes recommended) ────────
+            Column {
+                width: parent.width
+                spacing: Tokens.s3
+                Head { kanji: "\u5bfe\u8a71"; title: I18n.tr("CHAT BACKEND") }
+                Text {
+                    width: parent.width
+                    text: I18n.tr("Which agent answers the Super+S chat. Hermes is recommended; others need their own ACP adapter installed.")
+                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                }
+                Flow {
+                    width: parent.width
+                    spacing: Tokens.s2
+                    Repeater {
+                        model: pg.chatBackends
+                        delegate: Rectangle {
+                            id: cb
+                            required property var modelData
+                            readonly property bool sel: cb.modelData.active === true
+                            height: 34
+                            width: cbT.implicitWidth + Tokens.s4 * 2
+                            color: cb.sel ? hx.ink : "transparent"
+                            opacity: cb.modelData.available ? 1 : 0.45
+                            border.width: 1
+                            border.color: cb.sel ? hx.ink : hx.line
+                            Text {
+                                id: cbT
+                                anchors.centerIn: parent
+                                text: (cb.modelData.name || cb.modelData.id) + (cb.modelData.recommended ? "  \u2605" : "")
+                                color: cb.sel ? hx.paper : (cb.modelData.available ? hx.ink : hx.inkDim)
+                                font.family: pg.fMono; font.pixelSize: 11; font.letterSpacing: 1
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: cb.modelData.available === true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: pg.useChatAgent(cb.modelData.id)
+                            }
+                        }
                     }
                 }
             }

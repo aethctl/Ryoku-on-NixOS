@@ -100,37 +100,34 @@ to the cmdline for that boot to get in and investigate.
 **Symptom.** An alongside install fails partway through (out of space); or not
 enough free space to start; or the other OS will not boot after the install.
 
-**Cause.** The OEM ESP is typically 100-260 MiB. Ryoku does not replace it: it
-keeps its kernels on their own FAT partition and only adds its loader beside the
-existing one on the shared ESP.
+**Cause.** OEM ESPs are often only 96-260 MiB. Ryoku needs 8 MiB of free
+headroom to share one safely; a nearly full Windows ESP must not be resized,
+moved, or cleaned by guessing at Microsoft files.
 
-**Not Windows-only.** The strategy shares whatever single ESP the disk already
-has -- Windows', another Linux distribution's, or a previous Ryoku's. The TUI
-names Windows in the option label only when it actually finds an NTFS volume;
-otherwise it reads "Install alongside (keep existing OS)". A Linux neighbour is
-chainloaded from its own EFI binary when it has one (systemd-boot, GRUB, another
-Limine); if it has none it stays reachable from the firmware boot menu.
+**Not Windows-only.** The strategy keeps any existing OS and uses its EFI
+loader for the Limine menu when one is available. The TUI names Windows only
+when it finds NTFS.
 
-**What the installer does.** The `alongside` strategy shares the disk's single ESP.
-It creates a 2 GiB XBOOTLDR boot partition (partlabel `ryokuboot`, mounted at
-`/boot`, holding the kernels + initramfs) plus the Btrfs root (partlabel `ryoku`)
-at explicit sectors in the chosen free region, and proves both are brand new
-partitions before formatting. Before writing anything to the shared ESP it tars
-that ESP's contents to `/var/backups/ryoku/` (`windows-esp-<date>.tar` for a
-Windows ESP, `esp-<kind>-<date>.tar` otherwise), then drops Limine at
-`/EFI/ryoku/BOOTX64.EFI` with `limine.conf` beside it and registers a "Ryoku"
-NVRAM entry first in the boot order; no other vendor's directory (`/EFI/Microsoft`,
-`/EFI/systemd`, another `/EFI/limine`) is ever touched, and `/EFI/BOOT/BOOTX64.EFI`
-is written only when absent. It also pins `EFI_REGISTER=no` in
-`/etc/default/limine`, so limine's own upgrade hook cannot add a second, broken
-"Limine" NVRAM entry pointing at our XBOOTLDR. Partitions labeled
-exactly `ryoku`/`ryokuboot` (leftovers of a prior failed run) abort the install
-unless `RYOKU_RECLAIM_LEFTOVERS=1` (the TUI's typed `ERASE` ack) deletes only the
-unmounted ones, so re-runs never stack; a mounted match is always left alone. It
-adds a chainload entry for the existing OS's loader (Windows'
-`bootmgfw.efi`, or the Linux neighbour's EFI binary) so it stays in the Limine
-menu, and the first reboot targets the installed disk. It needs `2 + 20 + swap`
-GiB of contiguous free space (a 2 GiB boot partition plus the root floor).
+**What the installer does.** Alongside always creates a 2 GiB FAT32 boot
+partition plus the Btrfs root in the chosen free region. The boot mode is
+automatic:
+
+- With at least 8 MiB free on the existing ESP, the new FAT partition is an
+  XBOOTLDR. The existing ESP is backed up, then Ryoku writes only
+  `/EFI/ryoku/*` there as a static hop to the XBOOTLDR.
+- With less than 8 MiB free, the new FAT partition is a dedicated Ryoku ESP.
+  Loader, menu, kernels and initramfs stay on it; the existing ESP is never
+  mounted read-write or modified.
+
+Both modes register the Ryoku NVRAM entry against the partition that holds its
+loader. Windows or another Linux remains in its existing firmware entry and is
+also added to the Limine menu by its ESP partition GUID when a chainloadable EFI
+binary is found; managed entries are restored after menu updates. Verified
+failed-run partitions labeled `ryoku` or `ryokuboot`
+still require the TUI's typed `ERASE` acknowledgement before reclamation.
+
+The free-space requirement remains `2 + 20 + swap` GiB: 2 GiB boot plus the
+20 GiB root floor.
 
 **What the user must do.**
 
@@ -157,22 +154,23 @@ GiB of contiguous free space (a 2 GiB boot partition plus the root floor).
   NVRAM entry are untouched, so pick **Windows Boot Manager** directly from the
   firmware boot menu (usually F12 / F9 / Esc at power-on) to boot Windows; use
   that as the everyday Windows path if the chainload never settles.
-- **After a Windows feature update.** A major Windows update can rewrite the
-  firmware boot order or drop the Ryoku NVRAM entry, so the machine boots
-  straight into Windows. The `EFI/BOOT` fallback loader on the shared ESP still
-  boots the disk, so select the Ryoku disk from the firmware boot menu; to make
-  it persist, re-register the entry (point `--disk`/`--part` at the Windows ESP
-  that Ryoku shares -- usually partition 1):
+- **After a Windows feature update.** A major update can reset boot order or
+  drop the Ryoku NVRAM entry. The fallback loader remains on the volume selected
+  during install. Re-register the matching path (`lsblk -o NAME,SIZE,PARTLABEL`
+  shows the partition number):
 
   ```
+  # shared mode: the existing Windows ESP
   efibootmgr --create --disk /dev/nvme0n1 --part 1 \
     --loader '\EFI\ryoku\BOOTX64.EFI' --label 'Ryoku'
+
+  # dedicated mode: the new 2 GiB ryokuboot ESP
+  efibootmgr --create --disk /dev/nvme0n1 --part N \
+    --loader '\EFI\limine\limine_x64.efi' --label 'Ryoku'
   ```
-- **No in-place Windows reinstalls or upgrades on this layout.** Microsoft does
-  not officially support two ESPs on one disk; a Windows setup or in-place upgrade
-  can write to the wrong ESP or reshuffle boot entries. If you must reinstall
-  Windows, use clean Windows media and expect to re-register the Ryoku boot entry
-  (above) afterward.
+- **Avoid in-place Windows reinstalls on dedicated mode.** Microsoft setup does
+  not officially support two ESPs on one disk and may choose the Ryoku ESP or
+  reshuffle boot entries. Expect to re-register Ryoku after a reinstall.
 
 ## Broadcom Wi-Fi
 

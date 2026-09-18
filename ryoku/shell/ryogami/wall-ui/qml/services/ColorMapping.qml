@@ -3,7 +3,7 @@ import QtQuick
 
 QtObject {
     id: cm
-
+    
     readonly property var colorAliases: ({
         "red": 0, "crimson": 0, "scarlet": 0, "maroon": 0, "burgundy": 0, "wine": 0,
         "orange": 1, "amber": 1, "gold": 2, "golden": 2, "coral": 1, "peach": 1,

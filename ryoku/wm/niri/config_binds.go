@@ -41,6 +41,10 @@ func spawnArgs(args ...string) string {
 
 func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 
+// A bind-spawned qs surface never passes through ryoku-shell's daemon, which is
+// what injects the shared QML module path into the configs it supervises.
+const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
+
 // defaultBinds is the shipped Ryoku bind set, lifted from
 // ryoku/hyprland/modules/binds.lua and translated to niri actions. Compositor
 // behaviours map to niri actions; app and shell launches spawn the same commands
@@ -97,12 +101,12 @@ func defaultBinds() []defBind {
 
 		{chord: "ALT + Space", action: spawnArgs("ryoku-shell", "launcher")},
 		{chord: "SUPER + Space", action: spawnArgs("ryoku-shell", "launcher")},
-		{chord: "SUPER + K", action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
+		{chord: "SUPER + K", action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || " + qmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
 		{chord: "SUPER + L", action: spawnArgs("ryoku-shell", "lock")},
 		{chord: "SUPER + Escape", action: spawnArgs("ryoku-shell", "quicksettings")},
 		{chord: "SUPER + W", action: spawnArgs("ryogami", "wallpaper", "ui")},
 		{chord: "SUPER + SHIFT + W", action: spawnArgs("ryogami", "wallpaper", "random")},
-		{chord: "SUPER + SHIFT + V", action: spawnSh("ryoku-summon ryovm flock -n -o /tmp/ryovm.lock qs -c ryovm")},
+		{chord: "SUPER + SHIFT + V", action: spawnSh("ryoku-summon ryovm " + qmlEnv + " flock -n -o /tmp/ryovm.lock qs -c ryovm")},
 		{chord: "SUPER + V", action: spawnArgs("ryoku-shell", "clipboard")},
 		{chord: "SUPER + Tab", action: "toggle-overview"},
 		{chord: "SUPER + ALT + Tab", reason: "niri has no desktop blocks to step through, so this would only open the same overview as SUPER + Tab."},
@@ -112,13 +116,13 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + grave", action: spawnArgs("ryoku-shell", "voice")},
 		{chord: "SUPER + comma", action: spawnArgs("ryoku-shell", "hub", "open")},
 		{chord: "SUPER + S", action: spawnArgs("ryoku-shell", "stash")},
-		{chord: "SUPER + SHIFT + S", action: spawnSh("flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
+		{chord: "SUPER + SHIFT + S", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
 		// Hyprland gives ryoshot three entry points, so niri gets the same
 		// three: without Print the key a user reaches for does nothing, and
 		// monitor mode would otherwise only be reachable by cycling inside
 		// the tool.
-		{chord: "Print", action: spawnSh("flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		{chord: "SHIFT + Print", action: spawnSh("flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
+		{chord: "Print", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
+		{chord: "SHIFT + Print", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
 		{chord: "SUPER + SHIFT + C", action: spawnArgs("hyprpicker", "-a")},
 
 		{chord: "SUPER + mouse:272", reason: "niri moves windows with Mod and drag natively."},

@@ -17,13 +17,13 @@ ryoku_drivers() {
 	fi
 	for vendor in amd intel nvidia vulkan; do
 		[[ -f "$dir/$vendor.sh" ]] || {
-			log "skip: $vendor.sh not present"
+			log 'skip: %s.sh not present' "$vendor"
 			continue
 		}
 		name="ryoku-driver-$vendor.sh"
 		run cp "$dir/$vendor.sh" "/mnt/root/$name"
 		if ! run timeout 900 arch-chroot /mnt env RYOKU_DRYRUN="${RYOKU_DRYRUN:-}" RYOKU_PACMAN_CONF="$pmconf" bash "/root/$name"; then
-			log "drivers: WARNING, the $vendor driver install timed out (>15m) or failed and was skipped; the desktop will run on the integrated GPU. Run 'ryoku doctor' after first boot to install the $vendor driver. Continuing so the install finishes."
+			log 'drivers: WARNING, the %s driver install timed out (>15m) or failed and was skipped; the desktop will run on the integrated GPU. Run '\''ryoku doctor'\'' after first boot to install the %s driver. Continuing so the install finishes.' "$vendor" "$vendor"
 		fi
 		run rm -f "/mnt/root/$name"
 	done
@@ -53,7 +53,9 @@ ryoku_drivers() {
 # run `ryoku-gpu mode <mapped>` as the user against the provider's gpu.lua render
 # pin, via runuser like deploy.sh's materialize. only a compositor whose config
 # ships that Lua pin has a writer here: niri picks its own render device and ships
-# gpu.kdl, so the step is skipped for it. ryoku-gpu's analyze reads /sys/class/drm,
+# gpu.kdl, so the render pin is skipped for it (niri's gpu.kdl still gets the
+# cursor half of the policy from `ryoku-gpu persist`, which lands at login).
+# ryoku-gpu's analyze reads /sys/class/drm,
 # which arch-chroot bind-mounts, so detection sees the real target GPUs; the tool
 # self-gates (a single GPU no-ops, a missing iGPU refuses passthrough), so a
 # non-hybrid box is harmless. best-effort: a failure only skips the pin.
@@ -74,7 +76,7 @@ ryoku_gpu_mode() {
 		offload) mapped=hybrid ;;
 		sync)    mapped=performance ;;
 		vfio)    mapped=passthrough ;;
-		*) log "GPU mode: ignoring unknown RYOKU_GPU_MODE='$RYOKU_GPU_MODE' (want offload|sync|vfio)"; return 0 ;;
+		*) log 'GPU mode: ignoring unknown RYOKU_GPU_MODE='\''%s'\'' (want offload|sync|vfio)' "$RYOKU_GPU_MODE"; return 0 ;;
 	esac
 	local u=$RYOKU_USERNAME dest="/home/$RYOKU_USERNAME/.config/$RYOKU_COMPOSITOR_CONFIG_DIR/gpu.lua"
 	if [[ -n ${RYOKU_DRYRUN:-} ]]; then
@@ -91,8 +93,8 @@ ryoku_gpu_mode() {
 		log "GPU mode: skipped (ryoku-gpu not installed; offline or partial desktop set)"
 		return 0
 	fi
-	log "GPU mode: applying '$RYOKU_GPU_MODE' -> ryoku-gpu mode $mapped for $u"
+	log 'GPU mode: applying '\''%s'\'' -> ryoku-gpu mode %s for %s' "$RYOKU_GPU_MODE" "$mapped" "$u"
 	arch-chroot /mnt runuser -u "$u" -- env "HOME=/home/$u" "USER=$u" "LOGNAME=$u" \
 		ryoku-gpu mode "$mapped" "$dest" \
-		|| log "GPU mode: warning, 'ryoku-gpu mode $mapped' failed (continuing; set it later from Ryoku Settings > GPU)"
+		|| log 'GPU mode: warning, '\''ryoku-gpu mode %s'\'' failed (continuing; set it later from Ryoku Settings > GPU)' "$mapped"
 }

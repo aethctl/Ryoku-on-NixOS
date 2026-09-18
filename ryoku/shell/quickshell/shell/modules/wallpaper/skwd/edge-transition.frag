@@ -21,7 +21,7 @@ const float edge_thickness = 0.001;
 const float edge_brightness = 8.0;
 
 vec4 detectEdgeColor(vec3[9] c) {
-
+  
   vec3 dx = 2.0 * abs(c[7]-c[1]) + abs(c[2] - c[6]) + abs(c[8] - c[0]);
 	vec3 dy = 2.0 * abs(c[3]-c[5]) + abs(c[6] - c[8]) + abs(c[0] - c[2]);
   float delta = length(0.25 * (dx + dy) * 0.5);

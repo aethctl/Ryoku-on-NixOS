@@ -1,4 +1,5 @@
 module Ryoku.Ui
+CardColumns 1.0 CardColumns.qml
 Cell 1.0 Cell.qml
 Section 1.0 Section.qml
 SettingRow 1.0 SettingRow.qml
@@ -12,6 +13,7 @@ Field 1.0 Field.qml
 FingerprintScan 1.0 FingerprintScan.qml
 IconBtn 1.0 IconBtn.qml
 ScrollRail 1.0 ScrollRail.qml
+WheelScroll 1.0 WheelScroll.qml
 Sw 1.0 Sw.qml
 Step 1.0 Step.qml
 Slid 1.0 Slid.qml
@@ -32,9 +34,6 @@ Marginalia 1.0 Marginalia.qml
 Pixel 1.0 Pixel.qml
 Watermark 1.0 Watermark.qml
 KeyboardMap 1.0 KeyboardMap.qml
-DitherField 1.0 DitherField.qml
-Decor 1.0 Decor.qml
-Placard 1.0 Placard.qml
 DitherImage 1.0 DitherImage.qml
 HeroCrop 1.0 HeroCrop.qml
 PickFile 1.0 PickFile.qml

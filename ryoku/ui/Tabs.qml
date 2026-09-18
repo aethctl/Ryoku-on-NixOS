@@ -3,7 +3,9 @@ import "Singletons"
 
 // The tab bar, once. Selection is typography, not a coloured bar: the active
 // plate inverts to bone and its label takes the sheet's // lead, the reference
-// poster's `001 // ABOUT` register. Plates size to their labels.
+// poster's `001 // ABOUT` register. One fixed layout on every page: the lead is
+// a slot reserved on EVERY plate and only inked when active, so selecting a tab
+// never widens it or shoves the tabs beside it sideways.
 Row {
     id: tabs
 
@@ -20,7 +22,9 @@ Row {
             required property string modelData
             readonly property bool on: tabs.current === modelData
 
-            width: lab.implicitWidth + (tabs.options.length > 6 ? 16 : 26)
+            // the lead slot is in the row on every plate, so the width is the
+            // same whether the plate is inked or not
+            width: lab.implicitWidth + Tokens.s3 * 2
             height: 34
             radius: Tokens.radius
             color: on ? Tokens.bone : (tap.pressed ? Tokens.tint16 : (th.hovered ? Tokens.tint5 : "transparent"))
@@ -33,12 +37,14 @@ Row {
                 anchors.centerIn: parent
                 spacing: Tokens.s2
                 Text {
-                    visible: plate.on
+                    id: lead
                     text: "//"
+                    opacity: plate.on ? 1 : 0
                     color: Tokens.inkOnBoneDim
                     font.family: Tokens.mono
                     font.pixelSize: 10
                     anchors.verticalCenter: parent.verticalCenter
+                    Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
                 }
                 Text {
                     // translate the display, emit the original value on tap so the

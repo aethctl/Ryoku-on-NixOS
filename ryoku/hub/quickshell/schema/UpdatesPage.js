@@ -10,7 +10,7 @@ var rows = [
         "group": "AUTOMATIC CHECKS",
         "key": "update_interval",
         "label": "Automatic checks",
-        "desc": "How often the hub checks for updates by itself: off means manual only",
+        "desc": "How often the hub checks for updates; off is manual only",
         "ctl": "seg",
         "src": "hub.toml), TOML table [ui], field update_interval",
         "opts": [

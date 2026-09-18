@@ -83,6 +83,25 @@ var configDirs = map[string]string{
 
 func ConfigDir(name string) string { return configDirs[name] }
 
+// configEntries is the file each provider's config tree is read from: the one
+// whose absence means the compositor boots its own defaults instead of Ryoku's
+// tree (no keybinds, no autostart). Named per provider because it is the
+// provider's own file, in its own format.
+var configEntries = map[string]string{
+	ProviderHyprland: "hyprland.lua",
+	ProviderNiri:     "config.kdl",
+}
+
+// ConfigEntry returns the entry point of a provider's config tree as a path
+// relative to ~/.config, or "" for an unknown provider.
+func ConfigEntry(name string) string {
+	dir, leaf := configDirs[name], configEntries[name]
+	if dir == "" || leaf == "" {
+		return ""
+	}
+	return dir + "/" + leaf
+}
+
 // configSeeds are the per-machine files under a provider's config dir that are
 // seeded once and then owned by the machine: the runtime rewrites them (display
 // and GPU pins) or the user edits them in place. Delivery reads this for EVERY

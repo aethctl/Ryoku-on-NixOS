@@ -70,7 +70,7 @@ mapfile -t PKGS < <(
     intel-media-driver vpl-gpu-rt vulkan-intel lib32-vulkan-intel sof-firmware \
     nvidia-utils lib32-nvidia-utils libva-nvidia-driver \
     vulkan-icd-loader lib32-vulkan-icd-loader \
-    broadcom-wl
+    broadcom-wl-dkms
   # The desktop set plus the hardware-only ASUS Aura provider: the target
   # installer selects asusctl only on a matching laptop.
   printf '%s\n' ryoku-keyring ryoku-desktop asusctl
@@ -286,27 +286,33 @@ bake_aur_set() {
       | grep -oE '"PackageBase":[[:space:]]*"[^"]+"' | head -1 | sed -E 's/.*"([^"]+)"$/\1/') || base=""
     [[ -n $base ]] || base=$n
     src="$bdir/$base"
-    # One retry per package: a release build died on "offline repo is missing
-    # required packages: yay-bin" because a single AUR clone or source download
-    # blipped, and the whole ISO went with it. Cheap to try twice, and the bake's
-    # own required-package check still fails the build when it genuinely is not
-    # there.
-    local attempt ok=0
-    for attempt in 1 2; do
+    # Retry with backoff: a release build died on "offline repo is missing
+    # required packages: yay-bin" because AUR clones blip under the runner's
+    # shared IP, and one quick retry still lost 1-2 random packages per run.
+    # Back off so the AUR per-IP throttle window clears; the required-package
+    # check below still fails the build if a package is genuinely absent.
+    local attempt ok=0 reason="" delay
+    for attempt in 1 2 3 4; do
       rm -rf "$src"
-      if ! git clone -q --depth 1 "https://aur.archlinux.org/$base.git" "$src" 2>/dev/null \
-        || [[ ! -f $src/PKGBUILD ]]; then
-        (( attempt == 1 )) && { sleep 5; continue; }
-        log "AUR bake: skip $n (could not fetch '$base' from the AUR)"; break
+      if git clone -q --depth 1 "https://aur.archlinux.org/$base.git" "$src" 2>/dev/null \
+        && [[ -f $src/PKGBUILD ]]; then
+        (( EUID == 0 )) && chown -R "$builder:$builder" "$src"
+        local -a envv=(env "PKGDEST=$out")
+        [[ -n $builder ]] && envv=(env "HOME=/home/$builder" "PKGDEST=$out")
+        if ( cd "$src" && "${as[@]}" "${envv[@]}" makepkg -s --noconfirm --skippgpcheck --needed >/dev/null 2>&1 ); then
+          ok=1; break
+        fi
+        reason="build failed"
+      else
+        reason="could not fetch '$base' from the AUR"
       fi
-      (( EUID == 0 )) && chown -R "$builder:$builder" "$src"
-      local -a envv=(env "PKGDEST=$out")
-      [[ -n $builder ]] && envv=(env "HOME=/home/$builder" "PKGDEST=$out")
-      if ( cd "$src" && "${as[@]}" "${envv[@]}" makepkg -s --noconfirm --skippgpcheck --needed >/dev/null 2>&1 ); then
-        ok=1; break
+      if (( attempt < 4 )); then
+        delay=$(( attempt * 10 ))
+        log "AUR bake: $n $reason; retry $attempt/3 in ${delay}s"
+        sleep "$delay"
+      else
+        log "AUR bake: skip $n ($reason)"
       fi
-      (( attempt == 1 )) && { log "AUR bake: $n failed to build; retrying once"; sleep 5; continue; }
-      log "AUR bake: skip $n (build failed)"
     done
     if (( ok )); then built+=("$n"); else failed+=("$n"); fi
   done

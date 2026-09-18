@@ -140,6 +140,9 @@ done
 install -m755 "$here/scripts/ryoku-reload-cover" "$bindir/ryoku-reload-cover"
 install -m755 "$here/scripts/ryostage" "$bindir/ryostage"
 install -m755 "$here/scripts/ryoku-eq" "$bindir/ryoku-eq"
+# Keep-Awake's durable idle inhibitor: systemd-inhibit, not compositor config, so
+# it rides the shell and holds on a compositor whose package ships no scripts.
+install -m755 "$here/scripts/ryoku-cmd-caffeine" "$bindir/ryoku-cmd-caffeine"
 # The Stash sidebar's helpers. Shell scripts, not compositor config, so they ride
 # the shell to PATH and work with no compositor config tree.
 for s in "$here/scripts"/stash-*.sh; do
@@ -635,6 +638,14 @@ if [[ -d $cfg/$wm_dir ]]; then
   bak="$cfg/$wm_dir.bak-$(date +%Y%m%d%H%M%S)"
   mv "$cfg/$wm_dir" "$bak"
   say "backed up existing $wm_dir -> $bak"
+  # Keep the newest only: a deploy per session otherwise fills ~/.config with
+  # trees, and an older backup recovers nothing the newest does not.
+  shopt -s nullglob
+  for old in "$cfg/$wm_dir".bak-*; do
+    [[ $old == "$bak" ]] && continue
+    rm -rf -- "$old"
+  done
+  shopt -u nullglob
 fi
 mv "$staging" "$cfg/$wm_dir"
 fi
@@ -708,6 +719,9 @@ seed_once "$here/../apps/ghostty/config" "$cfg/ghostty/config"
 seed_once "$here/../apps/ghostty/ryoku-colors" "$cfg/ghostty/ryoku-colors"
 mkdir -p "$cfg/wireplumber"; cp -a "$here/../apps/wireplumber/." "$cfg/wireplumber/"
 mkdir -p "$cfg/systemd/user"; cp -a "$here/systemd/user/." "$cfg/systemd/user/"
+# session environment: read at the next login, so niri and its spawns carry what
+# env.lua gives a Hyprland session
+mkdir -p "$cfg/environment.d"; cp -a "$here/environment.d/." "$cfg/environment.d/"
 # dev deploy runs the daemon from ~/.local/bin; the package ships /usr/bin.
 sed -i -e "s|^ExecStart=.*|ExecStart=$bindir/ryoku-shell daemon|" \
   -e "s|^ExecStartPre=.*|ExecStartPre=-$bindir/ryoku-shell quit|" "$cfg/systemd/user/ryoku-shell.service"

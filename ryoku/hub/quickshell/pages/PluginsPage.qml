@@ -26,8 +26,8 @@ Item {
     readonly property string pTitle: I18n.tr("Plugins")
     readonly property string pEyebrow: I18n.tr("COMPOSITOR")
     readonly property string pBlurb: pg.managedByNix
-        ? I18n.tr("Hyprland compositor plugins provided by the active NixOS Ryoku generation. Enable and configure them here; Nix owns their binaries and ABI.")
-        : I18n.tr("Hyprland compositor plugins: what is installed, whether it runs on this Hyprland, their settings, and new ones from any git repository.")
+        ? I18n.tr("Compositor plugins provided by the active NixOS Ryoku generation. Enable and configure them here; Nix owns their binaries and ABI.")
+        : I18n.tr("Compositor plugins: what runs here, their settings, and new ones.")
 
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
     function cv(path) { return pg.hub ? pg.hub.hyprCommittedVal(path) : undefined }

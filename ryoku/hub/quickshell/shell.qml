@@ -10,15 +10,14 @@ ShellRoot {
     FloatingWindow {
         id: win
         title: I18n.tr("Ryoku Settings")
-        // The window rule floats this at 1360x880, which a 720p-class (or
-        // scaled low-res) screen cannot hold -- the bottom action bar and the
-        // right-hand controls land off screen. maximumSize is the
-        // counterweight: Hyprland clamps the rule's size into the client's
-        // hint and centres the result in the usable area, so the ideal size
-        // wins where it fits and a small screen gets a window that actually
-        // fits (margins leave room for the shell bar). minimumSize shrinks
-        // with it, else the compositor refuses to go down. Roomy screens keep
-        // an unbounded maximum, so manual resizing stays possible.
+        // Ryoku Settings is a page, not a dialog: it opens at 99% of the screen
+        // width, filling the height the shell bar leaves, so the settings get the
+        // room the layout is designed for instead of a fixed 1200px strip. The
+        // size is requested here and honoured by whichever compositor owns
+        // placement: the Hyprland rule floats it at the same 99% and centres it,
+        // niri sizes the column, and a small screen simply gets 99% of a small
+        // screen. maximumSize is the same request, so the window can never open
+        // larger than the screen and a manual resize has a sane ceiling.
         // Guard on a positive width/height, not just a non-null screen: during a
         // monitor switch Quickshell hides/reshows the window and the screen object
         // briefly dangles -- still non-null, but reporting size 0. Unguarded, fitW/
@@ -26,11 +25,10 @@ ShellRoot {
         // set_min_size/set_max_size, sizing the toplevel to ~0: invisible, no input
         // region (click-dead), while qs keeps running and pins the single-instance
         // lock so reopening no-ops.
-        readonly property int fitW: (win.screen && win.screen.width > 0) ? Math.min(1200, win.screen.width - 24) : 1200
-        readonly property int fitH: (win.screen && win.screen.height > 0) ? Math.min(880, win.screen.height - 56) : 880
-        readonly property bool cramped: win.fitW < 1360 || win.fitH < 880
+        readonly property int fitW: (win.screen && win.screen.width > 0) ? Math.round(win.screen.width * 0.99) : 1200
+        readonly property int fitH: (win.screen && win.screen.height > 0) ? Math.round((win.screen.height - 56) * 0.99) : 880
         minimumSize: Qt.size(Math.min(1120, win.fitW), Math.min(820, win.fitH))
-        maximumSize: win.cramped ? Qt.size(win.fitW, win.fitH) : Qt.size(16777215, 16777215)
+        maximumSize: Qt.size(win.fitW, win.fitH)
         color: Tokens.paper
 
         // Honour this monitor's Interface scale (Displays page): scale the whole

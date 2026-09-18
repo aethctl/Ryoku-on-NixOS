@@ -90,6 +90,34 @@ everything listed there as the user's own choices, distinct from Ryoku
 defaults. On a dev checkout without the base tree, the layer degrades to a
 note saying the diff is unavailable.
 
+## The ryoku skill
+
+Rashin ships an agent skill, `ryoku`, so any agent finds the desktop's safety
+rules and command catalogue the way it finds a hub- or agent-grown skill, not
+only through the vault pointer block. It lives in the repo at
+`ryoku/rashin/skills/ryoku/` (`SKILL.md`, `bar.md`, `plugins.md`); the package
+installs it to `/usr/share/ryoku/skills/ryoku`, and a dev deploy resolves the
+checkout copy through the repo pointer.
+
+`SKILL.md` covers when to use it, the vault-first rule, the safety split (never
+edit a shipped file; a user override goes to `~/.config/ryoku/user_edits` or a
+command), the command catalogue (`ryoku`, `ryoku-shell`, `ryoku-hub`,
+`ryogami`, `ryoku-rashin`), the decision framework, and worked examples.
+`bar.md` is the QS Bar and dock guide; `plugins.md` is the plugin contract and
+the `ryoku plugin` CLI.
+
+`ryoku-rashin wire` symlinks the skill dir into every agent's skills directory:
+`~/.agents/skills/ryoku`, `~/.claude/skills/ryoku`, `~/.codex/skills/ryoku`,
+`~/.omp/agent/skills/ryoku`, `~/.hermes/skills/ryoku`, and each
+`~/.hermes/profiles/*/skills/ryoku`. `~/.agents` and `~/.hermes` are created;
+the rest are wired only when the agent's home already exists. `unwire` removes
+only the symlinks that point at the skill dir, and `status --json` reports a
+`skillWired` flag per agent. The skill dir resolves in one order:
+`RYOKU_RASHIN_SKILLS`, then `/usr/share/ryoku/skills`, then
+`<repo>/ryoku/rashin/skills` via `~/.local/state/ryoku/repo`. The doctor's
+rashin reconciler re-runs `wire` whenever a link is missing, so an update keeps
+the skill in place.
+
 ## The daemon: `ryoku-rashin`
 
 One Go program (module `ryoku-rashin`), stdlib plus one dependency
@@ -263,14 +291,63 @@ tool cards, and permission prompts, it carries:
 Terminal `hermes` and web chat share the same memory, because both run in the
 vault workspace.
 
+## Prowl ships with Rashin
+
+`prowl-agent` is Prowl, the code-intelligence indexer and MCP server Rashin's
+agent brain uses to read this system's source: it builds a `.prowl` index over a
+tree and answers structural questions (where a symbol is defined, who calls it, a
+change's blast radius) in one call instead of grepping. It is no longer an
+optional hand-install: `ryoku-rashin` depends on the `prowl-agent` package, so
+the desktop set ships it and every rashin box has it.
+
+- **`ryoku update` keeps it current.** A packaged box gets new Prowl builds with
+  the rest of the system through `pacman -Syu`; the packaged binary carries a
+  managed-build guard, so a hand-run `prowl-agent update` defers to the package
+  manager instead of overwriting the pacman-owned file. On a dev box (Prowl
+  installed by hand, not owned by pacman) `ryoku update` runs `prowl-agent
+  update` for you. Either way the update logs one line saying which path it took.
+  If a box enabled rashin before the dependency shipped and lacks the binary,
+  `ryoku doctor` reports it with the fix `sudo pacman -S prowl-agent`.
+- **The mirror index lives with the vault.** `ryoku-rashin index` builds a
+  read-only mirror of the live config at `~/.local/share/ryoku/rashin/source/`
+  and indexes it with Prowl (see "The source mirror" below), so `search_code`
+  and the prowl MCP server answer on a packaged box with no checkout.
+- **Agents get Prowl's skill.** `ryoku-rashin wire` also runs `prowl-agent
+  skills --yes --clients <detected>` for the clients Rashin detects (claude, omp,
+  and hermes), installing Prowl's own agent skill alongside the `ryoku` skill, so
+  an agent gains its code-intelligence guide in the same pass. It is skipped on a
+  Prowl too old to apply non-interactively (no `--yes` in `skills --help`).
+
 ## Prowl-agent integration
 
 When `prowl-agent` (the code-intelligence indexer) is on PATH and a repo with a
-`.prowl/` index is found (`RYOKU_RASHIN_REPO`, else the Ryoku checkout), the
-daemon surfaces it read-only: doctor finding counts, files and symbols, top
-hotspots on the Overview card, and `GET /api/prowl/search?q=` for content
-search. Prowl is optional and user-installed; everything degrades to a hidden
-card without it.
+`.prowl/` index is found, the daemon surfaces it read-only: doctor finding
+counts, files and symbols, top hotspots on the Overview card, and
+`GET /api/prowl/search?q=` for content search. The repo is a dev checkout when
+one carries an index, else the vault's config mirror (see "The source mirror"
+below), so a packaged box answers too. Prowl is optional and user-installed;
+everything degrades to a hidden card without it.
+
+## The source mirror
+
+On a packaged box there is no source checkout for prowl-agent to index, so the
+prowl MCP server and `search_code` would otherwise answer only on a
+maintainer's machine. Every reindex closes that gap: when prowl-agent is on
+PATH, Rashin mirrors the live config (`~/.config/quickshell`, `~/.config/hypr`,
+and `~/.config/ryoku/*.json`) into `~/.local/share/ryoku/rashin/source/` (with
+rsync when available, else a Go copy that skips symlinks and files over 2 MB),
+writes a short `README.md` marking it read-only, and runs `prowl-agent init
+--integrations agents,agent-skills,claude,omp` and `overview` there under a
+120 s budget, so the mirror carries Prowl's index plus its AGENTS.md block, MCP
+config, and skills. It is a read-only copy for the index alone; edits there are
+overwritten and never reach the desktop.
+
+`prowlRepo()` prefers a dev checkout that carries a `.prowl` index (the
+deploy-recorded checkout, honouring `RYOKU_RASHIN_REPO` and
+`~/.local/state/ryoku/repo`), and falls back to the mirror when it carries one,
+so the code index answers everywhere while a dev checkout still wins on a
+maintainer's machine. The whole step is best effort and bounded: a missing
+prowl-agent or a copy error degrades it and never fails the reindex.
 
 ## One-click setup
 

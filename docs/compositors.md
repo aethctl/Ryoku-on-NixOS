@@ -129,7 +129,9 @@ bind block to subtract from.
 
 Two seeds are Hyprland-only in practice. `ryoku-gpu` writes a render-device pin
 into `gpu.lua` because Hyprland needs one on a multi-GPU box; niri picks its own
-render device, so `gpu.kdl` stays comments and the installer's GPU step skips.
+render device, so no pin is written for it. The tool does write niri's
+software-cursor route into `gpu.kdl` on a multi-GPU machine, because the
+cross-GPU cursor plane fails niri's atomic commit there.
 `ryoku-monitor` is the same story for `monitors.lua`. Both seeds still exist on
 niri, because `config.kdl` has to be able to include them, and both are yours to
 fill in by hand if you ever need to.
@@ -142,7 +144,9 @@ It previews first: what carries over, what the target cannot honour and why, and
 that the compositor you are leaving keeps its `wm.<name>.*` settings in the store
 so they return if you come back. Then it installs `ryoku-desktop-<name>` as a
 plain pacman transaction, which is what lets `ryoku rollback` undo the switch.
-The Hub offers the same flow on its Global page.
+Both variants may be installed at once, so the switch never removes the desktop
+you are leaving unless you ask it to: a second switch is a config change with no
+package transaction at all. The Hub offers the same flow on its Global page.
 
 Keeping the old compositor installed means switching back needs no download, at
 the cost of its packages staying on disk. Removing it reclaims those, which

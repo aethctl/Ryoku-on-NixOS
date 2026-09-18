@@ -18,6 +18,10 @@ on:
         description: 'Public release stage: alpha, beta, or stable'
         type: string
         default: beta
+      repo_url:
+        description: '[ryoku] repo the ISO bakes its offline closure from; empty = the stable pointer'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -77,6 +81,10 @@ jobs:
     env:
       RELEASE_STAGE: ${{ inputs.release_stage }}
       RYOKU_VARIANT: ${{ inputs.variant }}
+      # a release ISO bakes from its frozen releases/<tag>/ directory, so the
+      # ISO named for a release installs exactly that release (publish-repo
+      # passes it); a dispatch without it bakes from the moving stable pointer.
+      RYOKU_ISO_REPO_URL: ${{ inputs.repo_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -100,7 +108,9 @@ jobs:
             echo "RYOKU_ISO_RUN_NUMBER=$GITHUB_RUN_NUMBER"
             echo "RYOKU_ISO_RUN_URL=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "RYOKU_ISO_CHANNEL=$RELEASE_STAGE"
-            echo "RYOKU_ISO_INSTALLER_REF=main"
+            ref=main
+            [[ $GITHUB_REF_NAME == v* ]] && ref=$GITHUB_REF_NAME
+            echo "RYOKU_ISO_INSTALLER_REF=$ref"
             echo "RYOKU_ISO_VARIANT=$RYOKU_VARIANT"
             # public base the manifest urls point at: where R2 actually serves
             # these files and where the site reads them (ryoku-site
@@ -180,9 +190,13 @@ jobs:
               # packages signed by newly-added packager keys and the upgrade
               # aborts. then full upgrade + install (never a partial -Sy alone).
               pacman -Sy --noconfirm archlinux-keyring
+              # hyprcursor (its hyprcursor-util) and xcur2png are the
+              # ryoku-cursors makedepends; the local cursors build below runs
+              # makepkg --nodeps, so they must be on the host or build() fails.
               pacman -Su --noconfirm --needed \
                 archiso git go base-devel cmake ninja \
-                qt6-base qt6-declarative qt6-shadertools qt6-multimedia
+                qt6-base qt6-declarative qt6-shadertools qt6-multimedia \
+                hyprcursor xcur2png
               # checkout is owned by the runner UID, not container root;
               # build.sh runs `git archive` against it.
               git config --global --add safe.directory /repo
@@ -226,9 +240,12 @@ jobs:
           iso=$(ls -t installation/iso/out/*.iso | head -n1)
           base=$(basename "$iso")
           # rename to the tracked public name the manifest + website expect:
-          # ryoku-<date>-r<run>-<sha>-x86_64-<installer_ref>.iso
+          # ryoku-<date>-r<run>-<sha>-x86_64-<ref>[-cachyos].iso, where <ref>
+          # is the release tag on a release build and main otherwise
+          suffix=""
+          [[ $RYOKU_VARIANT == cachyos ]] && suffix="-cachyos"
           if [[ $base =~ ^(ryoku-[0-9]{4}\.[0-9]{2}\.[0-9]{2})-(x86_64)\.iso$ ]]; then
-            tracked="$(dirname "$iso")/${BASH_REMATCH[1]}-${RYOKU_ISO_TRACKING_ID}-${BASH_REMATCH[2]}-${RYOKU_ISO_INSTALLER_REF}.iso"
+            tracked="$(dirname "$iso")/${BASH_REMATCH[1]}-${RYOKU_ISO_TRACKING_ID}-${BASH_REMATCH[2]}-${RYOKU_ISO_INSTALLER_REF}${suffix}.iso"
             mv "$iso" "$tracked"
             iso="$tracked"
           fi
@@ -404,19 +421,7 @@ jobs:
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf <<EOF
-          [Ryoku]
-          type = s3
-          provider = Cloudflare
-          access_key_id = ${R2_ACCESS_KEY_ID}
-          secret_access_key = ${R2_SECRET_ACCESS_KEY}
-          endpoint = ${R2_ENDPOINT}
-          # The scoped R2 API token has Object Read+Write only, not bucket-level
-          # perms. Without this flag rclone calls HeadBucket then CreateBucket,
-          # both of which 403, and the upload aborts. The bucket already exists.
-          no_check_bucket = true
-          EOF
+          ./bin/ryoku-r2-config
 
           # R2_BUCKET = the shared release bucket, served at the channel root
           # (iso.ryoku.dev/<channel>/). publish the tracked ISO, signature,

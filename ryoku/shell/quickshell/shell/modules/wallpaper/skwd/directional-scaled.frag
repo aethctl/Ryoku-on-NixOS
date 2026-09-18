@@ -31,16 +31,16 @@ vec4 transition (vec2 uv) {
   float easedProgress = pow(sin(progress  * PI / 2.), 3.);
   vec2 p = uv + easedProgress * sign(direction);
   vec2 f = fract(p);
-
+  
   float s = 1. - (1. - (1. / scale)) * parabola(progress);
   f = (f - 0.5) * s  + 0.5;
-
+  
   float mixer = step(0.0, p.y) * step(p.y, 1.0) * step(0.0, p.x) * step(p.x, 1.0);
   vec4 col = mix(texture(newTex, f), texture(oldTex, f), mixer);
-
+  
   float border = step(0., f.x) * step(0., (1. - f.x)) * step(0., f.y) * step(0., 1. - f.y);
   col *= border;
-
+  
   return col;
 }
 void main() {

@@ -35,16 +35,32 @@ func reconcileDesktopStore(checkOnly bool) recResult {
 	if !sys.Exists(old) {
 		return okRes(i18n.T("settings store is on the neutral desktop.json"))
 	}
-	// The Hub writes desktop.json now, so an old file beside it is stale residue.
+	// The Hub writes desktop.json now. An old file beside it is residue from an
+	// older build or a hand edit, so its fields are folded in before it goes:
+	// dropping the file outright lost whatever had been set only there, which is
+	// how a chosen Default Apps role disappeared on the next update.
 	if sys.Exists(neu) {
 		if checkOnly {
 			return wouldRes(i18n.T("the retired hypr.json lingers beside desktop.json")).
-				withFix(i18n.T("ryoku doctor removes it"))
+				withFix(i18n.T("ryoku doctor migrates it to desktop.json"))
+		}
+		raw, err := os.ReadFile(old)
+		if err != nil {
+			return failRes(i18n.T("could not read hypr.json to migrate it: %v"), err)
+		}
+		merged, err := mergeDesktopStore(neu, raw)
+		if err != nil {
+			return failRes(i18n.T("hypr.json does not parse, so it cannot be migrated: %v"), err).
+				withFix(i18n.T("fix or delete %s, then re-run ryoku doctor"), old)
+		}
+		if err := writeStore(neu, merged); err != nil {
+			return failRes(i18n.T("could not write desktop.json: %v"), err)
 		}
 		if err := os.Remove(old); err != nil {
-			return failRes(i18n.T("could not remove the retired hypr.json: %v"), err)
+			return warnRes(i18n.T("migrated settings to desktop.json but could not remove the old hypr.json: %v"), err).
+				withFix(i18n.T("delete %s by hand"), old)
 		}
-		return fixedRes(i18n.T("removed the retired hypr.json; desktop.json is the settings store"))
+		return fixedRes(i18n.T("migrated the settings store from hypr.json to desktop.json"))
 	}
 	if checkOnly {
 		return wouldRes(i18n.T("settings live in the retired hypr.json; the Hub reads desktop.json now")).
@@ -100,6 +116,37 @@ func migrateDesktopStore(raw []byte) ([]byte, error) {
 		return nil, err
 	}
 	return append(b, '\n'), nil
+}
+
+// mergeDesktopStore folds a legacy hypr.json into the store that already
+// exists, re-rooting the old fields on the way. Where both files carry the same
+// leaf the store wins, so a Hub-written value is never rolled back; a leaf only
+// the old file has is kept rather than dropped.
+func mergeDesktopStore(storePath string, legacyRaw []byte) ([]byte, error) {
+	migrated, err := migrateDesktopStore(legacyRaw)
+	if err != nil {
+		return nil, err
+	}
+	legacy := map[string]any{}
+	if err := json.Unmarshal(migrated, &legacy); err != nil {
+		return nil, err
+	}
+	cur, err := os.ReadFile(storePath)
+	if err != nil {
+		return nil, err
+	}
+	stored := map[string]any{}
+	if strings.TrimSpace(string(cur)) != "" {
+		if err := json.Unmarshal(cur, &stored); err != nil {
+			return nil, err
+		}
+	}
+	deepMerge(legacy, stored)
+	out, err := json.MarshalIndent(legacy, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(out, '\n'), nil
 }
 
 // writeStore atomically replaces a settings store file.

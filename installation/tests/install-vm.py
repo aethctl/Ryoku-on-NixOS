@@ -56,6 +56,7 @@ INSTALLED_CHECKS = [
     # rewritten on every update is what threw away "Set as default" picks.
     ("!", "home/{user}/.config/mimeapps.list"),
     ("f", "home/{user}/.config/chromium-flags.conf"),
+    ("f", "home/{user}/.config/chrome-flags.conf"),
     ("f", "usr/share/applications/ryoku-nvim.desktop"),
     ("d", "boot/EFI"),
 ]

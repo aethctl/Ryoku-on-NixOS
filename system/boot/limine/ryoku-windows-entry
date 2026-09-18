@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# ryoku-windows-entry: keep a Windows chainload entry in the Limine boot menu,
-# auto-detected on any drive.
+# ryoku-windows-entry: keep Windows and a recorded neighboring ESP in the Limine
+# boot menu.
 #
 # why: Limine's own FIND_BOOTLOADERS only scans the ESP that holds limine.conf,
 # so a Windows install on a *separate* drive is never picked up -- once Ryoku
@@ -25,6 +25,7 @@
 #   RYOKU_WINDOWS_GUID  set short-circuits the scan; empty => "no Windows",
 #                       non-empty => report that GUID as the detected Windows ESP.
 #   RYOKU_WINDOWS_DEV   device string paired with RYOKU_WINDOWS_GUID (display only).
+#   RYOKU_EXISTING_ESP_STATE overrides the recorded neighbor metadata path.
 #
 # mounting to probe an ESP needs root; run as root (the installer and the
 # limine-entry-tool post.d hook both do).
@@ -36,6 +37,9 @@ set -euo pipefail
 readonly BEGIN_MARK="# >>> ryoku-windows-entry (managed) >>>"
 readonly END_MARK="# <<< ryoku-windows-entry (managed) <<<"
 readonly WIN_PATH="/EFI/Microsoft/Boot/bootmgfw.efi"
+readonly EXISTING_BEGIN="# >>> ryoku-existing-esp-entry (managed) >>>"
+readonly EXISTING_END="# <<< ryoku-existing-esp-entry (managed) <<<"
+readonly EXISTING_STATE="${RYOKU_EXISTING_ESP_STATE:-/etc/ryoku/limine-existing-esp}"
 
 # ── detection ─────────────────────────────────────────────────────────────────
 
@@ -109,6 +113,26 @@ EOF
   fi
 }
 
+read_existing() {
+  [[ -r $EXISTING_STATE ]] || return 1
+  local kind guid path
+  IFS=$'\t' read -r kind guid path <"$EXISTING_STATE" || return 1
+  case $kind in linux|ryoku) ;; *) return 1 ;; esac
+  [[ -n $guid && $path == /EFI/* ]] || return 1
+  printf '%s\t%s\t%s\n' "$kind" "$guid" "$path"
+}
+
+emit_existing_entry() {
+  local kind=$1 guid=$2 path=$3 title
+  [[ $kind == ryoku ]] && title="Ryoku (existing)" || title="Linux (existing)"
+  cat <<EOF
+/$title
+    comment: Existing $kind install
+    protocol: efi_chainload
+    path: uuid($guid):$path
+EOF
+}
+
 # conf_partuuid CONF: GPT PARTUUID of the volume backing CONF -- the partition
 # Limine boots from when CONF is the live config. RYOKU_CONF_PARTUUID overrides
 # for hermetic tests.
@@ -144,6 +168,18 @@ strip_managed() {
   ' "$1"
 }
 
+strip_existing() {
+  awk -v b="$EXISTING_BEGIN" -v e="$EXISTING_END" '
+    { t = $0; sub(/^[[:space:]]+/, "", t) }
+    t == b || t == e                                      { skip = 0; next }
+    t == "/Linux (existing)" || t == "/Ryoku (existing)" { skip = 1; next }
+    skip && t ~ /^\//                                     { skip = 0; print; next }
+    skip && $0 ~ /^[[:space:]]/                           { next }
+    skip                                                  { skip = 0 }
+    { print }
+  ' "$1"
+}
+
 # rewrite CONF so it carries exactly one managed Windows block for GUID.
 # atomic: write a temp, then mv into place.
 sync_conf() {
@@ -156,6 +192,20 @@ sync_conf() {
     printf '%s\n' "$BEGIN_MARK"
     emit_entry "$guid" "$same_volume"
     printf '%s\n' "$END_MARK"
+  } >>"$tmp"
+  mv "$tmp" "$conf"
+}
+
+sync_existing_conf() {
+  local conf=$1 kind=$2 guid=$3 path=$4 tmp
+  tmp="$(mktemp)" || return 1
+  if [[ -f $conf ]]; then
+    strip_existing "$conf" >"$tmp"
+  fi
+  {
+    printf '%s\n' "$EXISTING_BEGIN"
+    emit_existing_entry "$kind" "$guid" "$path"
+    printf '%s\n' "$EXISTING_END"
   } >>"$tmp"
   mv "$tmp" "$conf"
 }
@@ -195,7 +245,7 @@ cmd_sync() {
       return 0
     }
   fi
-  local out guid confuuid same_volume=""
+  local out guid confuuid same_volume="" existing existing_kind existing_guid existing_path
   if out="$(detect_windows)"; then
     guid="${out%%$'\t'*}"
     # same volume as Limine's own config = a shared ESP: use boot(), not uuid().
@@ -212,18 +262,23 @@ cmd_sync() {
     # existing managed block stays put rather than getting ripped out.
     echo "ryoku-windows-entry: no Windows boot manager found; left $conf unchanged"
   fi
+  if existing="$(read_existing)"; then
+    IFS=$'\t' read -r existing_kind existing_guid existing_path <<<"$existing"
+    sync_existing_conf "$conf" "$existing_kind" "$existing_guid" "$existing_path"
+    echo "ryoku-windows-entry: existing $existing_kind entry -> uuid($existing_guid) in $conf"
+  fi
 }
 
 usage() {
   cat <<'USAGE'
 Usage: ryoku-windows-entry <command>
 
-Keep a Windows chainload entry in the Limine boot menu, auto-detected on any drive.
+Keep Windows and a recorded neighboring ESP chainload entry in the Limine menu.
 
 Commands:
   detect          Print "<gpt-part-guid>\t<device>" for the Windows ESP, if any.
   emit <guid>     Print the Limine entry block for a partition GUID.
-  sync [conf]     Add or update the managed Windows entry in limine.conf
+  sync [conf]     Add or update managed external-OS entries in limine.conf
                   (default: the live limine.conf). Idempotent.
 USAGE
 }

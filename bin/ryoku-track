@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# ryoku track: point a Ryoku box at an update channel and make `ryoku update`
-# follow it. It installs the build tools, clones/updates the repo, checks out the
-# channel branch, records the channel, and rebuilds + redeploys the desktop from
-# the checkout. Non-destructive: your user_edits overlay and Hub settings survive
-# (deploy re-applies them). `ryoku recovery` is the heavy factory reset to main.
+# ryoku track --source: build a Ryoku box from a git checkout and make `ryoku
+# update` follow the branch. Installs build tools, clones/updates the repo,
+# checks out the branch, records it, and rebuilds + redeploys from the checkout.
+# The developer path; plain `ryoku track main|unstable-dev` tracks packages.
+# Non-destructive: user_edits and Hub settings survive. `ryoku recovery` resets.
 #
-#   main          the stable channel everyone runs (packages)
-#   unstable-dev  the bleeding edge, rebuilt from source (at your own risk)
+#   main          build from the stable branch
+#   unstable-dev  build from the bleeding edge (at your own risk)
 #
-#   curl -fsSL https://raw.githubusercontent.com/Ryoku-dev/ryoku-arch/main/bin/ryoku-track | bash -s -- unstable-dev
+#   curl -fsSL https://raw.githubusercontent.com/ryoku-dev/ryoku-arch/main/bin/ryoku-track | bash -s -- unstable-dev
 set -euo pipefail
 
 CHANNEL="${1:-unstable-dev}"
@@ -16,14 +16,14 @@ case "$CHANNEL" in
   main | unstable-dev) ;;
   -h | --help)
     sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'
-    echo "usage: ryoku track <main|unstable-dev>"
+    echo "usage: ryoku track <main|unstable-dev> --source"
     exit 0
     ;;
   *) echo "ryoku-track: unknown channel '$CHANNEL' (use: main or unstable-dev)" >&2; exit 1 ;;
 esac
 
 REPO="$HOME/ryoku-arch"
-REPO_URL="${RYOKU_TRACK_URL:-https://github.com/Ryoku-dev/ryoku-arch.git}"
+REPO_URL="${RYOKU_TRACK_URL:-https://github.com/ryoku-dev/ryoku-arch.git}"
 say() { printf '\n==> %s\n' "$*"; }
 
 if [[ $CHANNEL == unstable-dev ]]; then
@@ -56,6 +56,12 @@ fi
 say "Setting the update channel to $CHANNEL"
 mkdir -p "$HOME/.config/environment.d"
 printf 'RYOKU_CHANNEL=%s\n' "$CHANNEL" >"$HOME/.config/environment.d/ryoku.conf"
+# the running session captured the old channel at login; push the new one into
+# the user manager and the D-Bus activation env now, so the shell daemon and
+# Hub started below (and anything launched after) carry it without a relogin.
+systemctl --user set-environment "RYOKU_CHANNEL=$CHANNEL" 2>/dev/null || true
+dbus-update-activation-environment "RYOKU_CHANNEL=$CHANNEL" 2>/dev/null || true
+export RYOKU_CHANNEL="$CHANNEL"
 
 say "Building and deploying the desktop from the checkout"
 bash "$REPO/ryoku/shell/deploy.sh"
@@ -73,10 +79,9 @@ grep -v 'hl.env("RYOKU_CHANNEL"' "$ulua" >"$ulua.tmp" 2>/dev/null || true
 printf '%s\n' "$line" >>"$ulua.tmp"
 mv "$ulua.tmp" "$ulua"
 
-say "Done. Log out and back in, then:  ryoku status  (should say $CHANNEL)."
+say "Done. ryoku status should say $CHANNEL now (a relogin picks it up everywhere)."
 cat <<EOF
 
 Every update after: ryoku update. Full reset to stable main: ryoku recovery.
 Keep no local edits in $REPO (ryoku update resets it to origin/$CHANNEL).
-If ryoku status still shows the old channel, reboot so the session picks it up.
 EOF

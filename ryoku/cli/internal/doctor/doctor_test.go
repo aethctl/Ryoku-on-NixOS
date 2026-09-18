@@ -292,6 +292,7 @@ func TestHyprLuaSane(t *testing.T) {
 // so the test never touches luac/the provider/ryoku-monitor: just the structural
 // check + the safe-seed fallback, deterministically.
 func TestReconcileHyprlandConfigRepairsCorruptDropin(t *testing.T) {
+	t.Setenv("RYOKU_WM", "hyprland") // this reconciler is Hyprland's; pin the provider
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -340,6 +341,7 @@ func TestReconcileHyprlandConfigRepairsCorruptDropin(t *testing.T) {
 }
 
 func TestReconcileHyprlandConfigNoConfig(t *testing.T) {
+	t.Setenv("RYOKU_WM", "hyprland") // this reconciler is Hyprland's; pin the provider
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -2229,6 +2231,7 @@ func TestStripLegacyStyleKnobs(t *testing.T) {
 // mode with no way back (a snapshot restores /, not ~/.config on /home).
 // doctor must reseed it like any other drop-in.
 func TestReconcileHyprlandConfigRepairsCorruptKeyboard(t *testing.T) {
+	t.Setenv("RYOKU_WM", "hyprland") // this reconciler is Hyprland's; pin the provider
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
@@ -2389,6 +2392,48 @@ func TestStaleUserRyotunesSpotsTheWrapperOnly(t *testing.T) {
 	}
 	if got := staleUserRyotunes(filepath.Join(dir, "missing")); got != "" {
 		t.Fatalf("missing file must be nothing, got %q", got)
+	}
+}
+
+// The portal frontend a session needs is the one its compositor declares
+// (wm.Caps.PortalBackend): a niri box must not be told to install Hyprland's.
+func TestPortalFrontendCheckFollowsTheDeclaredBackend(t *testing.T) {
+	cases := []struct{ provider, backend, wantPkg string }{
+		{"niri", "gnome", "xdg-desktop-portal-gnome"},
+		{"hyprland", "hyprland", "xdg-desktop-portal-hyprland"},
+	}
+	for _, c := range cases {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+		bin := filepath.Join(home, "bin")
+		if err := os.MkdirAll(bin, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		caps := "#!/bin/sh\n[ \"$1\" = caps ] && echo '{\"name\":\"" + c.provider +
+			"\",\"portalBackend\":\"" + c.backend + "\",\"supports\":[],\"workspaceModel\":\"fixed\"}'\nexit 0\n"
+		if err := os.WriteFile(filepath.Join(bin, "ryoku-wm-"+c.provider), []byte(caps), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PATH", bin)
+		t.Setenv("RYOKU_WM", c.provider)
+
+		fix, pkgs := portalFrontendCheck()
+		if len(pkgs) != 1 || pkgs[0] != c.wantPkg {
+			t.Errorf("%s: pkgs=%v, want [%s]", c.provider, pkgs, c.wantPkg)
+		}
+		if !strings.Contains(fix, c.wantPkg) {
+			t.Errorf("%s: fix hint %q should name %s", c.provider, fix, c.wantPkg)
+		}
+	}
+
+	// With no provider answering, every frontend is accepted rather than one
+	// compositor's: the old behaviour pointed a niri box at Hyprland's portal.
+	t.Setenv("RYOKU_WM", "none")
+	t.Setenv("PATH", t.TempDir())
+	fix, pkgs := portalFrontendCheck()
+	if fix != "" || len(pkgs) < 2 {
+		t.Fatalf("no provider: fix=%q pkgs=%v, want no hint and every frontend", fix, pkgs)
 	}
 }
 

@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 #
-# limine-entry-tool post.d hook. fires after Limine rewrites the boot menu
-# (kernel install/upgrade/remove), so a Windows install on a separate drive
-# keeps its chainload entry across updates, and gets picked up if it turns
-# up later. no-op when the helper or Windows isn't around. never fatal.
+# limine-entry-tool post.d hook. Re-asserts Windows and any installer-recorded
+# neighboring ESP after menu regeneration. No-op when absent; never fatal.
 command -v ryoku-windows-entry >/dev/null 2>&1 || exit 0
 ryoku-windows-entry sync >/dev/null 2>&1 || true
 exit 0

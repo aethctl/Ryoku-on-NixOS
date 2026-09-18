@@ -84,4 +84,42 @@ while read -r _ local_sha _ remote_sha; do
   done < <(git log --no-merges --format='%s' "$remote_sha..$local_sha")
 done <"$push_updates"
 
+# 4. PKGBUILD dependency resolution. A depends/provides change that no longer
+#    resolves (a typo, an AUR-only name, a virtual nothing provides) builds fine
+#    with makepkg --nodeps but fails the publish gate AFTER the push, stranding a
+#    whole release on the testing channel. Run the same check the publish uses,
+#    but only when a pushed commit touches release/packages, so an ordinary push
+#    pays nothing. Skips itself when pacman is absent (the script handles that).
+while read -r _ local_sha _ remote_sha; do
+  [[ $local_sha == "$zero" ]] && continue
+  base=$remote_sha
+  [[ $base == "$zero" || -z $base ]] && base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+  if git diff --name-only "$base" "$local_sha" -- 'release/packages/**/PKGBUILD' | grep -q .; then
+    repo_root="$(git rev-parse --show-toplevel)"
+    if [[ -x $repo_root/bin/ryoku-dev-verify-pkgbuild-deps ]]; then
+      "$repo_root/bin/ryoku-dev-verify-pkgbuild-deps" \
+        || fail "a PKGBUILD dependency does not resolve; fix it or the publish will fail after this push."
+    fi
+    break
+  fi
+done <"$push_updates"
+
+# 5. Vendored window-manager seam copies. They are checked in, so a change to
+#    ryoku/wm leaves every consumer running the old detection and capability
+#    rules until someone re-copies them. Only runs when the push touches the seam
+#    or a copy, so an ordinary push pays nothing.
+while read -r _ local_sha _ remote_sha; do
+  [[ $local_sha == "$zero" ]] && continue
+  base=$remote_sha
+  [[ $base == "$zero" || -z $base ]] && base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+  if git diff --name-only "$base" "$local_sha" -- 'ryoku/wm/**' '**/vendor/ryoku-wm/**' | grep -q .; then
+    repo_root="$(git rev-parse --show-toplevel)"
+    if [[ -x $repo_root/bin/ryoku-dev-verify-wm-vendor ]]; then
+      "$repo_root/bin/ryoku-dev-verify-wm-vendor" \
+        || fail "a vendored window-manager seam copy is stale; re-copy it from ryoku/wm."
+    fi
+    break
+  fi
+done <"$push_updates"
+
 exit 0

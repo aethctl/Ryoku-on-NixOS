@@ -83,6 +83,25 @@ var configDirs = map[string]string{
 
 func ConfigDir(name string) string { return configDirs[name] }
 
+// configEntries is the file each provider's config tree is read from: the one
+// whose absence means the compositor boots its own defaults instead of Ryoku's
+// tree (no keybinds, no autostart). Named per provider because it is the
+// provider's own file, in its own format.
+var configEntries = map[string]string{
+	ProviderHyprland: "hyprland.lua",
+	ProviderNiri:     "config.kdl",
+}
+
+// ConfigEntry returns the entry point of a provider's config tree as a path
+// relative to ~/.config, or "" for an unknown provider.
+func ConfigEntry(name string) string {
+	dir, leaf := configDirs[name], configEntries[name]
+	if dir == "" || leaf == "" {
+		return ""
+	}
+	return dir + "/" + leaf
+}
+
 // configSeeds are the per-machine files under a provider's config dir that are
 // seeded once and then owned by the machine: the runtime rewrites them (display
 // and GPU pins) or the user edits them in place. Delivery reads this for EVERY
@@ -127,6 +146,47 @@ func ConfigUserOwned(name string) []string {
 		return append(seeds, dir+"/monitors_user.lua")
 	}
 	return seeds
+}
+
+// configFiles are the hand-edit escape hatches a user owns under a provider's
+// config dir, as paths relative to ~/.config, most useful first. The Hub offers
+// these to open, and a factory reset clears them, because they are the user's
+// own config rather than the machine state the seeds hold. The raw-config
+// include is first, so a caller that wants one file wants this one.
+var configFiles = map[string][]string{
+	ProviderHyprland: {"hypr/user.lua", "hypr/monitors_user.lua", "hypr/modules"},
+	ProviderNiri:     {"niri/user.kdl", "niri/monitors_user.kdl"},
+}
+
+// generatedConfig are the files a provider's apply authors from the store, as
+// paths relative to ~/.config: the generated config and the user_edits overlay
+// copy the updater re-lays. A pure function of the store, so clearing the store
+// clears these, and a reset that restores pure defaults removes them.
+var generatedConfig = map[string][]string{
+	ProviderHyprland: {"hypr/settings.lua", "hypr/rebinds.lua", "ryoku/user_edits/hypr/settings.lua", "ryoku/user_edits/hypr/rebinds.lua"},
+	ProviderNiri:     {"niri/settings.kdl", "niri/rebinds.kdl", "ryoku/user_edits/niri/settings.kdl", "ryoku/user_edits/niri/rebinds.kdl"},
+}
+
+// ConfigFiles are a provider's user-editable config paths (the hand-edit escape
+// hatches the Hub offers), relative to ~/.config. Empty for an unknown provider.
+func ConfigFiles(name string) []string {
+	return append([]string(nil), configFiles[name]...)
+}
+
+// GeneratedConfig are the config files a provider's apply authors, relative to
+// ~/.config. Empty for an unknown provider.
+func GeneratedConfig(name string) []string {
+	return append([]string(nil), generatedConfig[name]...)
+}
+
+// ResetPaths are the config files a factory reset removes for a provider, as
+// paths relative to ~/.config: its generated config and its hand-edit files. It
+// never names the per-machine seeds (the display, GPU and keyboard pins), which
+// a reset keeps, since those are not among these. Pure Go, so recovery can ask
+// for the set with no compositor running and no provider binary built, which is
+// what lets the rescue clear a box whose desktop is down.
+func ResetPaths(name string) []string {
+	return append(GeneratedConfig(name), ConfigFiles(name)...)
 }
 
 // Providers is stable order, so generated config and installer prompts do not

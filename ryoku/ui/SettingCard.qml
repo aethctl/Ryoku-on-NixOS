@@ -14,6 +14,9 @@ Item {
     property string kana: ""          // optional section seal, Latin + JP side by side
     property bool collapsible: true
     property bool expanded: true
+    // What a folded card is hiding, said in the header. A collapsed group with
+    // no trace of what is inside reads as an empty card, not a drawer.
+    property string summary: ""
 
     default property alias content: body.data
 
@@ -41,14 +44,7 @@ Item {
             anchors { left: parent.left; leftMargin: Tokens.s4; verticalCenter: parent.verticalCenter }
             spacing: Tokens.s2
             Text {
-                visible: Tokens.monoHeads
-                text: "//"
-                color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
-                anchors.verticalCenter: parent.verticalCenter
-            }
-            Text {
-                text: Tokens.monoHeads ? (card.title + "_") : card.title
+                text: card.title
                 color: Tokens.inkDim
                 font.family: Tokens.ui; font.pixelSize: Tokens.fBody
                 font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
@@ -64,11 +60,22 @@ Item {
         }
 
         Text {
+            id: folded
+            visible: !card.expanded && card.summary !== ""
+            anchors { right: caret.left; rightMargin: Tokens.s3; verticalCenter: parent.verticalCenter }
+            text: card.summary
+            color: Tokens.inkFaint
+            font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+            font.letterSpacing: Tokens.trackMark
+        }
+
+        Text {
             id: caret
             visible: card.collapsible
             anchors { right: parent.right; rightMargin: Tokens.s4; verticalCenter: parent.verticalCenter }
             text: "\u25b8"
-            color: hh.hovered ? (tap.pressed ? Tokens.ink : Tokens.inkDim) : Tokens.inkFaint
+            color: hh.hovered ? (tap.pressed ? Tokens.ink : Tokens.inkDim)
+                : (card.expanded ? Tokens.inkFaint : Tokens.inkDim)
             font.family: Tokens.ui; font.pixelSize: 10
             rotation: card.expanded ? 90 : 0
             Behavior on rotation { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }

@@ -42,6 +42,7 @@ few commands belong to only one world; that is called out per command below.
 |`deploy`|Build and lay the desktop from a checkout|dev checkout|a maintainer|
 |`recovery`|Last resort: reset to main and redeploy|both|you, when broken|
 |`doctor`|Run idempotent reconcilers for stateful drift|both|you, the updater|
+|`plugin <cmd>`|Install, remove, list, or validate a shell plugin from git|both|you, an agent|
 
 ## Everyday commands
 
@@ -57,8 +58,13 @@ anything else changes). What it actually runs depends on the world:
   branch (`main` for everyone), fast-forwards the checkout when it is sitting
   cleanly on that branch, and redeploys with `deploy.sh`. A feature branch or a
   dirty tree is left to git only the redeploy runs.
-- **Packaged install:** `sudo pacman -Syu`, then `yay -Sua` if yay is present,
-  then `ryoku materialize`, then a shell reload.
+- **Packaged install:** the packages the `[ryoku]` repo serves, by name
+  (`pacman -Sy`, then `pacman -S --needed ryoku/<pkg>...`), then
+  `ryoku materialize`, then a shell reload. It is not a sysupgrade: the base
+  system and its kernel come from Arch or CachyOS, and `sudo pacman -Syu` is
+  what moves them. The run reports how many packages that lane is holding, and
+  `ryoku update --system` runs it too (the full `pacman -Syu`, `yay -Sua`, and
+  `flatpak update`) for a box that wants one command.
 
 Throughout, it publishes progress to `$XDG_RUNTIME_DIR/ryoku-update.json` so the
 shell's update island can show the run.
@@ -68,8 +74,9 @@ shell's update island can show the run.
 A read-only report. It always prints the active config base. On a checkout it
 shows the channel, the deployed commit (`installed`), and how many commits behind
 the channel you are; on a packaged install it shows the installed `ryoku-desktop`
-version, what the `[ryoku]` repo offers, and the count of pending package updates
-(via `checkupdates` from `pacman-contrib`). It ends with the snapshot count.
+version, what the `[ryoku]` repo offers, and the count of pending package
+updates (via `checkupdates` from `pacman-contrib`), listed as `system:` because
+`ryoku update` does not take them. It ends with the snapshot count.
 
 `--json` is the data seam the Hub and the update island read; it is not meant for
 humans.
@@ -229,6 +236,91 @@ it never runs anything, so a wrong answer can only mislead. It is opt-in and use
 **your own key**: nothing is sent unless you set one. Defaults target Groq (free,
 fast); OpenRouter's free models work by overriding the URL and model. See the
 environment variables below.
+
+## Plugins
+
+### `ryoku plugin`
+
+Install, remove, list, and validate shell plugins: small widgets a user drops
+into the desktop (see `docs/plugins.md`). Ryostore stays the curated front;
+`ryoku plugin add` is the open door for any git repo.
+
+- `ryoku plugin add <git-url> [--bar] [--yes]` clones the repo to a staging dir,
+  validates its `manifest.json`, and, only if it holds together, installs it with
+  `ryostore install plugins <id> --from <dir>`. Going through the store's install
+  transaction (rather than a plain copy) is what lets the shell load it: the
+  transaction writes the receipt, the content-hashed view, and the journal that
+  `discover.sh` requires, into `~/.local/share/ryoku/plugins/<id>` and
+  `~/.local/state/ryoku/store`. Validation refuses a manifest whose id is
+  malformed, is a reserved built-in widget id, or is already installed, whose
+  entry points are absolute, escape the tree with `..`, or do not exist, whose
+  hosts are not a subset of `framePopout`, `desktopWidget`, `topbarGlyph`, or
+  whose tree contains a symlink. A plugin runs unsandboxed inside your shell, so
+  the command prints a warning and asks for confirmation (`--yes` skips the
+  prompt; a non-interactive run without it declines). `--bar` enables it on the
+  bar. It never executes anything from the plugin.
+  `ryoku plugin add https://github.com/you/weather-card --bar`
+- `ryoku plugin remove <id>` uninstalls through `ryostore remove plugins <id>`
+  (dropping the receipt, view, and files together) and clears the plugin's
+  placement so the shell stops loading it. `ryoku plugin remove weather-card`
+- `ryoku plugin list [--json]` lists installed plugins merged with their
+  placement; each row carries a `source` of `store` (a receipt-owned install) or
+  `dev` (a `RYOSTORE_PLUGINS_DIR` override, which shadows the store). `--json` is
+  the data seam for agents and Rashin. `ryoku plugin list --json`
+- `ryoku plugin validate <dir>` runs the same manifest checks against a local
+  tree without installing it, for plugin authors. `ryoku plugin validate .`
+
+## The bar and dock CLI
+
+The bar layout is data: `shell.json` holds `qsbar.layout` as three ordered lists
+of stable widget ids (`left`, `center`, `right`), where built-in widgets and
+installed store plugins are entries of the same list. The daemon owns
+`shell.json`, so these verbs live on `ryoku-shell`, not `ryoku`. Every widget id
+comes from one catalogue file the shell, the settings panel and this CLI share,
+and every mutation is validated against it (an unknown id, an unknown setting
+key, or an option that is not in the list is an error, never a silent write) and
+written through the settings store. A script, a keybind, or an agent drives the
+bar without touching JSON.
+
+### `ryoku-shell bar`
+
+- `bar list [--json]` every widget with its section, index, and shown flag.
+  `ryoku-shell bar list --json`
+- `bar catalog [--json]` the built-in catalogue merged with installed
+  bar-capable plugins and their settings schema. `ryoku-shell bar catalog --json`
+- `bar move <id> --section <left|center|right> [--index N | --before <id> |
+  --after <id>]` reorder a widget within a lane or move it across lanes.
+  `ryoku-shell bar move clock --section right --after media`
+- `bar show <id>` / `bar hide <id>` toggle a widget's visibility (a built-in
+  keeps its place and stops rendering; a plugin is enabled or disabled on the
+  bar). `ryoku-shell bar hide battery`
+- `bar set <id> <key> <value>` set one of a widget's own settings, validated
+  against the catalogue (built-in) or the plugin manifest.
+  `ryoku-shell bar set launcher launcherLogoText arch`
+- `bar position top|bottom` move the bar to the top or bottom edge.
+  `ryoku-shell bar position bottom`
+- `bar form full|fit|dock|notch|islands` set the shell shape the bar takes.
+  `ryoku-shell bar form islands`
+- `bar defaults` restore the shipped layout and visibility, leaving presentation
+  keys (separators, density, per-widget colour) untouched. `ryoku-shell bar defaults`
+- `bar settings [route|close]` open QS Bar Settings on the active monitor,
+  optionally on a named route (`bars`, `layout`, `widgets`, `dock`, `community`); `close`
+  puts it away. `ryoku-shell bar settings layout`
+
+### `ryoku-shell dock`
+
+The dock is a first-class shell surface on the edge opposite the bar; its state
+is the top-level `dock` object in `shell.json`.
+
+- `dock show` / `dock hide` turn the dock on or off. `ryoku-shell dock show`
+- `dock edge auto|top|bottom|left|right` anchor the dock (`auto` tracks the edge
+  opposite the bar). `ryoku-shell dock edge bottom`
+- `dock autohide on|off` keep the dock as a peek strip until hovered.
+  `ryoku-shell dock autohide on`
+- `dock pin <app-id>` / `dock unpin <app-id>` add or remove a pinned app.
+  `ryoku-shell dock pin org.kitty`
+- `dock list [--json]` report the dock's enabled, edge, autohide, and pinned
+  state. `ryoku-shell dock list --json`
 
 ## Environment and state
 

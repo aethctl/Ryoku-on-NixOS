@@ -184,8 +184,28 @@ Item
   id, category, name, summary, description
   art, screenshots, author, version, compatibility
   installed, active, enabled, installedCount, totalCount
-  updateAvailable, metadata
+  updateAvailable, downloadPaused, downloadPauseReason
+  requiredWindowManager, unavailable, unavailableReason, metadata
 ```
+
+A source may pause a product's downloads without delisting it: the registry
+entry carries `downloadPaused` and a human `downloadPauseReason`, which flow
+through to the item unchanged. A paused product stays listed and removable, but
+the shared transaction engine re-reads the authoritative registry and refuses
+an install or update before fetching any manifest or payload byte. The check is
+keyed by category and id alone, so no client request can bypass it, and a
+default (absent) flag leaves normal behavior untouched.
+
+A catalogue item may also name the window manager it is written for, with the
+provider name `ryoku wm use <name>` takes: the registry entry carries
+`windowManager` and an optional human `windowManagerReason`, the backend compares
+it against the running provider (asked through the seam, never assumed), and the
+item comes back `unavailable` with `requiredWindowManager` named, so the store
+greys the tile out and says why instead of offering a control that cannot work.
+Install and update are refused the same way a pause is, on a fresh registry read,
+so the item stays listed and an installed copy stays removable. A catalogue built
+under one window manager is rebuilt rather than served after a switch, since the
+answer to "does this run here?" belongs to the desktop it was computed on.
 
 The public command surface is deliberately small:
 

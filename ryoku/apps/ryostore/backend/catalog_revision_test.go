@@ -31,6 +31,35 @@ func TestCatalogRevisionIgnoresOrderAndVolatileState(t *testing.T) {
 	}
 }
 
+// A pause or resume is catalogue state the user acts on -- it blocks installs and
+// shows as Under construction -- so it must move the revision. Otherwise a store
+// that cached the paused catalogue keeps serving it: no refresh dot, and no way
+// to reach the resume.
+func TestCatalogRevisionTracksDownloadPause(t *testing.T) {
+	active := catalogRevision(Catalog{Items: []Item{
+		{Category: "barstyles", ID: "ricelin", Version: "1.0.0", ManifestSHA256: "x"},
+	}})
+	paused := catalogRevision(Catalog{Items: []Item{
+		{Category: "barstyles", ID: "ricelin", Version: "1.0.0", ManifestSHA256: "x",
+			DownloadPaused: true, DownloadPauseReason: "Has known issues. The developer is working on fixes."},
+	}})
+	if paused == active {
+		t.Fatal("pausing an item must change the revision")
+	}
+	if catalogRevision(Catalog{Items: []Item{
+		{Category: "barstyles", ID: "ricelin", Version: "1.0.0", ManifestSHA256: "x", DownloadPaused: true},
+	}}) == paused {
+		t.Fatal("a changed pause reason must change the revision")
+	}
+	// The reason alone, without the gate, is not part of what the catalogue offers.
+	if catalogRevision(Catalog{Items: []Item{
+		{Category: "barstyles", ID: "ricelin", Version: "1.0.0", ManifestSHA256: "x",
+			DownloadPauseReason: "Has known issues. The developer is working on fixes."},
+	}}) != active {
+		t.Fatal("a reason without the pause flag must not change the revision")
+	}
+}
+
 func TestCatalogRevisionChangesOnRealContentChange(t *testing.T) {
 	base := catalogRevision(Catalog{Items: []Item{
 		{Category: "rices", ID: "a", Version: "1", ManifestSHA256: "x"},

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Verify every hard dependency in release/packages/*/PKGBUILD actually resolves,
+# before a push or a publish, not after users' next `pacman -Syu` breaks.
+#
+# build-repo.sh builds with --nodeps, so a typo'd or AUR-only entry in a depends
+# array publishes cleanly and then bricks every box on its next upgrade with an
+# unresolvable target. One resolution pass here turns that into a rejected push
+# (pre-push hook) or a failed publish (publish-repo.yml) instead. This script is
+# the single source of truth both call, so the check can never drift between the
+# local gate and CI.
+#
+#   ryoku-dev-verify-pkgbuild-deps         exit 1 if any depend is unresolvable
+#
+# Needs pacman with synced dbs to resolve official packages; when it is absent
+# (a non-Arch contributor) the check is skipped rather than failing, matching the
+# ShellCheck-if-present policy in the git hooks.
+set -euo pipefail
+
+cd "$(git rev-parse --show-toplevel)"
+
+# annotate: emit a GitHub Actions annotation when running in CI, a plain line
+# otherwise, so the same message reads well in a workflow log and a local push.
+annotate() {
+	local level=$1 msg=$2
+	if [[ -n ${GITHUB_ACTIONS:-} ]]; then
+		printf '::%s::%s\n' "$level" "$msg"
+	else
+		printf '%s: %s\n' "$level" "$msg" >&2
+	fi
+}
+
+if ! command -v pacman >/dev/null 2>&1; then
+	annotate notice "pacman not available; skipping [ryoku] PKGBUILD dependency resolution"
+	exit 0
+fi
+
+# internal = pkgname AND provides of every in-repo PKGBUILD, with any version
+# constraint stripped. A depend satisfied from inside [ryoku] needs no external
+# resolution -- including a virtual a variant provides (ryoku-desktop-hyprland
+# and ryoku-desktop-niri both provide ryoku-desktop-compositor), which is not a
+# real name pacman can resolve against the official dbs and does not exist there
+# yet at publish time. Deriving the exempt set from the PKGBUILDs (not a hand-kept
+# list) means a typo'd internal name is still caught, while a real internal
+# virtual is recognised. bash sources the file the way makepkg does; hand-parsing
+# trips over single-line arrays and comments.
+internal=$(for p in release/packages/*/PKGBUILD; do
+	bash -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${pkgname[@]}" "${provides[@]:-}"' _ "$p"
+done | sed 's/[<>=].*//')
+# Ryotunes is imported as an official binary, not built from a local PKGBUILD.
+internal+=$'\n'ryotunes
+
+missing=0
+for p in release/packages/*/PKGBUILD; do
+	mapfile -t deps < <(bash -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${depends[@]:-}"' _ "$p")
+	for d in "${deps[@]}"; do
+		d="${d%%[<>=]*}"
+		[[ -z $d ]] && continue
+		grep -qxF "$d" <<<"$internal" && continue
+		# -Si matches a real package name; it does NOT resolve a virtual provide,
+		# so a valid depend like `udev` (provided by systemd) reads as missing.
+		# -Sp resolves provides against the same sync dbs, so try the cheap
+		# exact-name path first and fall back to it.
+		if ! pacman -Si "$d" >/dev/null 2>&1 && ! pacman -Sp "$d" >/dev/null 2>&1; then
+			annotate error "$p: dependency '$d' not found in the official repos or [ryoku]"
+			missing=1
+		fi
+	done
+done
+
+if ((missing == 0)); then
+	echo "pkgbuild-deps: every hard dependency resolves in the official repos or [ryoku]"
+fi
+exit "$missing"

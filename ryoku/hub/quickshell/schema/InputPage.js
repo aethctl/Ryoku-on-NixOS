@@ -10,7 +10,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbLayout",
         "label": "Layout",
-        "desc": "Extra layout kept loaded; pick a chord below to switch between the two",
+        "desc": "What your keys type: QWERTY, AZERTY, Dvorak.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -22,7 +22,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbVariant",
         "label": "Style",
-        "desc": "Variant of the main layout, like Dvorak; the second layout stays plain",
+        "desc": "A tweak on the layout, like intl or Colemak.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -35,7 +35,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbLayout",
         "label": "Second layout",
-        "desc": "Extra layout kept loaded; pick a chord below to switch between the two",
+        "desc": "A spare layout kept loaded; a chord switches to it.",
         "ctl": "seg",
         "src": "desktop.json",
         "caps": "keyboardLayoutSwitch",
@@ -49,7 +49,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.kbOptions",
         "label": "Switch layouts",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "The chord that flips between your two layouts.",
         "ctl": "seg",
         "src": "desktop.json",
         "caps": "keyboardLayoutSwitch",
@@ -64,7 +64,7 @@ var rows = [
         "group": "KEYBOARD",
         "key": "desktop.input.numlockByDefault",
         "label": "Numlock on at login",
-        "desc": "Starts the session with the keypad typing digits, not arrows",
+        "desc": "Start each session with the keypad typing digits.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -73,7 +73,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Caps Lock",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Remap it to Escape, Ctrl, or switch it off.",
         "ctl": "chips",
         "src": "desktop.json",
         "opts": [
@@ -89,7 +89,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Swap Alt and Super",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Trade the two keys for macOS-style shortcuts.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -98,7 +98,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Compose key",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Starts a sequence for accents like é and ñ.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -112,7 +112,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "desktop.input.kbOptions",
         "label": "Extra options",
-        "desc": "Raw xkb options, comma separated; the pickers above manage their own",
+        "desc": "Raw xkb options, comma separated, for power users.",
         "ctl": "text",
         "src": "desktop.json"
     },
@@ -121,7 +121,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "",
         "label": "Apply system-wide",
-        "desc": "Result of the last apply; by default these keep their own keymap",
+        "desc": "Match the login screen, TTYs, and boot prompt too.",
         "ctl": "action",
         "src": "vconsole.conf, via `localectl set-x11-keymap <kbLayout> \"\" <kbVariant> <kbOptions>`"
     },
@@ -130,7 +130,7 @@ var rows = [
         "group": "KEY REMAPS",
         "key": "",
         "label": "Login screen and TTY keymap status",
-        "desc": "Result of the last apply; by default these keep their own keymap",
+        "desc": "Result of the last apply; each keeps its own keymap.",
         "ctl": "readout",
         "src": "shell"
     },
@@ -139,7 +139,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.sensitivity",
         "label": "Sensitivity",
-        "desc": "Pointer speed offset; 0 is the device default, negative slows it down",
+        "desc": "Pointer speed offset; 0 is the device default.",
         "ctl": "slid",
         "src": "desktop.json",
         "lo": -1.0,
@@ -150,7 +150,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.followMouse",
         "label": "Focus behavior",
-        "desc": "Click to focus keeps newly launched and dock-selected apps in front",
+        "desc": "How windows take focus as the pointer moves.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -164,7 +164,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.accelProfile",
         "label": "Acceleration",
-        "desc": "Flat ties pointer travel to hand travel; Adaptive speeds up quick moves",
+        "desc": "Flat ties travel to the hand; Adaptive speeds quick moves.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -178,7 +178,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.leftHanded",
         "label": "Left-handed buttons",
-        "desc": "Swaps the left and right mouse buttons",
+        "desc": "Swap the left and right mouse buttons.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -187,7 +187,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.mouseNaturalScroll",
         "label": "Natural scroll",
-        "desc": "The wheel drags the content, touchscreen style: roll up, page moves up",
+        "desc": "Roll the wheel up and the page moves up.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -196,7 +196,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.mouseScrollFactor",
         "label": "Scroll speed",
-        "desc": "Multiplies each wheel notch; 1 is normal, 3 jumps three times as far",
+        "desc": "Multiplier on each wheel notch.",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 0.2,
@@ -207,7 +207,7 @@ var rows = [
         "group": "POINTER",
         "key": "desktop.input.middleClickPaste",
         "label": "Middle-click pastes",
-        "desc": "Pressing the wheel inserts the last text you highlighted",
+        "desc": "Press the wheel to insert the last highlighted text.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -216,7 +216,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.naturalScroll",
         "label": "Natural scroll",
-        "desc": "Two-finger scrolling drags the content like a touchscreen",
+        "desc": "Two fingers drag the content like a touchscreen.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -225,7 +225,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.tapToClick",
         "label": "Tap to click",
-        "desc": "A tap is a click: one finger left, two right, three middle",
+        "desc": "A tap counts as a click; two fingers right, three middle.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -234,7 +234,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.tapAndDrag",
         "label": "Tap and drag",
-        "desc": "Tap, then keep the finger down to drag what you tapped",
+        "desc": "Tap, then hold the finger down to drag what you tapped.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -243,7 +243,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.disableWhileTyping",
         "label": "Disable while typing",
-        "desc": "Ignores the touchpad while you type so the palm cannot move the cursor",
+        "desc": "Ignore the pad while typing so a palm can't nudge it.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -252,7 +252,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.clickfinger",
         "label": "Click by finger count",
-        "desc": "One-finger press clicks left, two right, three middle, ignoring position",
+        "desc": "One finger clicks left, two right, three middle.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -270,7 +270,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.touchScrollFactor",
         "label": "Scroll speed",
-        "desc": "Multiplies two-finger scroll distance; 1 matches finger travel",
+        "desc": "Multiplier on two-finger scroll distance.",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 0.2,
@@ -281,7 +281,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.workspaceSwipe",
         "label": "Swipe between workspaces",
-        "desc": "A horizontal swipe slides to the next workspace; unlocks the rows below",
+        "desc": "A horizontal swipe slides to the next workspace.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -290,7 +290,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.swipeFingers",
         "label": "Swipe fingers",
-        "desc": "How many fingers count as a workspace swipe",
+        "desc": "How many fingers count as a workspace swipe.",
         "ctl": "seg",
         "src": "desktop.json",
         "opts": [
@@ -303,7 +303,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.swipeInvert",
         "label": "Natural swipe direction",
-        "desc": "The workspace row follows your fingers, like dragging a sheet of paper",
+        "desc": "The workspace row follows your fingers.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -312,7 +312,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.swipeCreateNew",
         "label": "Swipe past the last workspace to add one",
-        "desc": "Continuing past the end opens an empty workspace instead of stopping",
+        "desc": "Swiping past the end opens a fresh workspace.",
         "ctl": "sw",
         "src": "desktop.json"
     },
@@ -321,7 +321,7 @@ var rows = [
         "group": "TOUCHPAD",
         "key": "desktop.input.swipeDistance",
         "label": "Swipe distance",
-        "desc": "Finger travel in pixels for a full switch; lower flips with less motion",
+        "desc": "Finger travel for a full switch; lower flips sooner.",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 100.0,
@@ -332,7 +332,7 @@ var rows = [
         "group": "KEY REPEAT",
         "key": "desktop.input.repeatRate",
         "label": "Repeat rate",
-        "desc": "Characters per second while a key is held down",
+        "desc": "Characters per second while a key is held.",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 1.0,
@@ -344,11 +344,61 @@ var rows = [
         "group": "KEY REPEAT",
         "key": "desktop.input.repeatDelay",
         "label": "Repeat delay",
-        "desc": "Pause before a held key starts repeating",
+        "desc": "Pause before a held key starts repeating.",
         "ctl": "step",
         "src": "desktop.json",
         "lo": 100.0,
         "hi": 2000.0,
         "unit": "ms"
+    },
+{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.theme",
+        "label": "Theme",
+        "desc": "The installed pointer set; applies now and to new apps.",
+        "ctl": "seg",
+        "src": "desktop.json",
+        "opts": [
+            "DYNAMIC"
+        ]
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.material",
+        "label": "Material Bibata",
+        "desc": "The Bibata pointer, recoloured in the wallpaper accent.",
+        "ctl": "sw",
+        "src": "desktop.json"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.size",
+        "label": "Size",
+        "desc": "How large the pointer is drawn.",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": 12.0,
+        "hi": 64.0,
+        "unit": "px"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.inactiveTimeout",
+        "label": "Hide after idle",
+        "desc": "Seconds of stillness before it hides; 0 never hides.",
+        "ctl": "step",
+        "src": "desktop.json",
+        "lo": 0.0,
+        "hi": 30.0,
+        "unit": "s"
+    },{
+        "tab": "",
+        "group": "CURSOR",
+        "key": "desktop.cursor.hideOnKeyPress",
+        "label": "Hide while typing",
+        "desc": "It vanishes on a keypress and returns when moved.",
+        "ctl": "sw",
+        "src": "desktop.json"
     }
 ];

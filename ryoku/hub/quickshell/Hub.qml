@@ -11,7 +11,6 @@ import "schema/BarStudioPage.js" as BarStudioSchema
 import "schema/WindowSettings.js" as WindowSettingsSchema
 import "schema/PluginsPage.js" as PluginsSchema
 import "schema/InputPage.js" as InputSchema
-import "schema/CursorPage.js" as CursorSchema
 import "schema/KeybindsPage.js" as KeybindsSchema
 import "schema/DisplaysPage.js" as DisplaysSchema
 import "schema/GpuPage.js" as GpuSchema
@@ -26,8 +25,7 @@ import "schema/AddonsPage.js" as AddonsSchema
 import "schema/WindowRulesPage.js" as WindowRulesSchema
 import "schema/AppOverridesPage.js" as AppOverridesSchema
 import "schema/LayerRulesPage.js" as LayerRulesSchema
-import "schema/AutostartPage.js" as AutostartSchema
-import "schema/EnvironmentPage.js" as EnvironmentSchema
+import "schema/SessionPage.js" as SessionSchema
 import "schema/PerformancePage.js" as PerformanceSchema
 import "schema/UpdatesPage.js" as UpdatesSchema
 import "ReloadCoverModel.js" as ReloadCoverModel
@@ -59,7 +57,14 @@ Rectangle {
     // A Hub that remembered the retired `windows` section, or a deep link that
     // still names it, lands on the compositor page that now holds those rows
     // rather than a blank pane.
-    function canonicalSection(s) { return s === "windows" ? "windowmanager" : s; }
+    function canonicalSection(s) {
+        // sections that were folded into another page: an old deep link (the
+        // Store's "open in settings", a keybind, a script) still lands right.
+        if (s === "windows") return "windowmanager";
+        if (s === "cursor") return "input";
+        if (s === "autostart" || s === "environment") return "session";
+        return s;
+    }
     // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
     // win over the remembered section. `sectionGet` is a Process, so on a cold
     // start its stdout lands AFTER the IPC has already set the page and the
@@ -73,9 +78,11 @@ Rectangle {
         hub.section = target;
     }
     property bool navigated: false
-    // Musubi-only navigation. The Arch build never sees this page.
-    readonly property bool nixManaged: (Quickshell.env("RYOKU_UPDATE_BACKEND") || "") === "nix"
     property string query: ""
+
+    // The port's declarative-ness, for surfaces that must not offer mutable
+    // package flows: set by the Nix package wrapper.
+    readonly property bool nixManaged: (Quickshell.env("RYOKU_UPDATE_BACKEND") || "") === "nix"
 
     // progressive disclosure: one global Advanced switch (in the rail) reveals the
     // deep knobs across every schema page. persisted like `section`, restored at
@@ -100,7 +107,7 @@ Rectangle {
         { name: "OVERVIEW", items: [ { key: "profile", name: "Profile" }, { key: "global", name: "General" }, { key: "updates", name: "Updates" } ] },
         { name: "DEVICES", items: [
             { key: "displays", name: "Displays", needs: { cap: "monitorConfig" } }, { key: "connections", name: "Connections" },
-            { key: "input", name: "Input" }, { key: "cursor", name: "Cursor" }, { key: "gpu", name: "Graphics & Power" } ] },
+            { key: "input", name: "Input" }, { key: "gpu", name: "Graphics & Power" } ] },
         { name: "LOOK", items: [
             { key: "animations", name: "Animations" }, { key: "lockscreen", name: "Lockscreen" } ] },
         { name: "COMPOSITOR", items: [
@@ -113,7 +120,7 @@ Rectangle {
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
             { key: "windowrules", name: "Window Rules", adv: true } ] },
         { name: "SYSTEM", items: [
-            { key: "performance", name: "Performance" }, { key: "autostart", name: "Autostart", adv: true }, { key: "environment", name: "Environment", adv: true },
+            { key: "performance", name: "Performance" }, { key: "session", name: "Session" },
             { key: "recording", name: "Recording" }, { key: "dictation", name: "Dictation" }, { key: "fastfetch", name: "Fastfetch", adv: true },
             { key: "import", name: "Import config", adv: true, wired: true } ] },
         { name: "EXTEND", items: [
@@ -128,12 +135,12 @@ Rectangle {
     // is the texture, and every gloss is the real word, never decoration:
     // 外観 = appearance, 接続 = connections, 演算 = compute (Machine), and so on.
     readonly property var jpName: ({
-        "profile": "横顔", "displays": "画面", "input": "入力", "cursor": "矢印", "keybinds": "操作",
+        "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
         "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
-        "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
+        "session": "起動", "performance": "性能", "rashin": "羅針",
         "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
     })
 
@@ -147,7 +154,6 @@ Rectangle {
         "displays": "monitor screen resolution refresh scale rotation arrange mirror hidpi dual second external multiple",
         "connections": "wifi wi-fi wireless bluetooth network hotspot tether internet ethernet pair pairing device",
         "input": "keyboard mouse touchpad pointer trackpad sensitivity scroll layout dvorak remap capslock repeat gesture",
-        "cursor": "cursor pointer mouse arrow theme size hide idle timeout motion dynamic rotate tilt stretch shake magnify",
         "keybinds": "shortcuts hotkeys binds keys browser terminal editor files launch super",
         "gpu": "graphics nvidia amd vram passthrough vfio rendering hybrid performance cpu governor epp frequency thermal battery charge ceiling aspm profile",
         "recording": "screen record capture video screencast screenshot fps codec framerate",
@@ -165,8 +171,7 @@ Rectangle {
         "windowrules": "window rule float pin size place opacity class title override",
         "appoverrides": "app override per-app opacity blur corner class inherit opaque transparent",
         "layerrules": "layer rule namespace blur dim bar notification surface",
-        "autostart": "autostart startup launch login run command boot",
-        "environment": "environment variable env var session export",
+        "session": "session login startup autostart launch run command boot environment variable env var export",
         "performance": "performance battery power saving save lowpower potato lag cpu gpu ram memory idle freeze reduce motion fps",
         "rashin": "rashin agent ai assistant hermes vault memory skills chat code llm needle",
         "updates": "update upgrade version channel commit behind check origin",
@@ -183,15 +188,15 @@ Rectangle {
     // compositor-driving classification, so the two cannot drift apart.
     readonly property var sectionRows: ({
         "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
-        "input": InputSchema.rows, "cursor": CursorSchema.rows, "keybinds": KeybindsSchema.rows,
+        "input": InputSchema.rows, "keybinds": KeybindsSchema.rows,
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
         "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
         "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
         "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
         "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
-        "layerrules": LayerRulesSchema.rows, "autostart": AutostartSchema.rows,
-        "environment": EnvironmentSchema.rows, "performance": PerformanceSchema.rows,
+        "layerrules": LayerRulesSchema.rows, "session": SessionSchema.rows,
+        "performance": PerformanceSchema.rows,
         "updates": UpdatesSchema.rows
     })
     readonly property var searchIndex: {
@@ -271,11 +276,11 @@ Rectangle {
         "brightness": "backlight", "backlight": "brightness", "nightlight": "night comfort backlight", "warmth": "night comfort", "bluelight": "night comfort",
         "volume": "audio sound", "sound": "audio", "font": "typeface appearance", "typeface": "font appearance",
         "screenshot": "recording capture", "screencast": "recording capture", "screensaver": "lockscreen lock", "lock": "lockscreen",
-        "startup": "autostart", "boot": "autostart", "battery": "performance power", "powersaving": "performance power", "potato": "performance", "lag": "performance",
+        "startup": "session", "boot": "session", "battery": "performance power", "powersaving": "performance power", "potato": "performance", "lag": "performance",
         "gap": "gaps spacing", "spacing": "gaps", "glass": "hyprglass blur liquid", "liquid": "hyprglass glass",
         "titlebar": "hyprbars title bar", "titlebars": "hyprbars title bar", "plugin": "plugins hyprland", "plugins": "hyprland",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
-        "mouse": "cursor pointer input", "pointer": "cursor input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
+        "mouse": "input pointer", "pointer": "input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
         "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "clock": "widgets desktop", "notifications": "layerrules",
         "update": "updates upgrade", "upgrade": "updates", "blur": "windows glass", "rounding": "windows corners", "corners": "windows rounding",
         "animation": "animations motion", "motion": "animations", "gpu": "graphics", "graphics": "gpu",
@@ -397,9 +402,9 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "cursor": true, "animations": true, "global": true, "windowmanager": true,
+        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
-        "autostart": true, "environment": true
+        "session": true
     })
     // A section drives the compositor when any of its rows targets the neutral
     // window-manager store (src desktop.json), derived from the schema so it
@@ -484,7 +489,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage", "nixos-info": "NixOSInfoPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -1038,9 +1043,6 @@ Rectangle {
         }
     }
 
-    // the registration sheet: the HUD backdrop the whole instrument sits on.
-    Reg { anchors.fill: parent; visible: Tokens.showGrid }
-
     // ── rail ────────────────────────────────────────────────────────────
     Item {
         id: rail
@@ -1063,7 +1065,6 @@ Rectangle {
                 radius: Tokens.radius
                 border.width: Tokens.border
                 border.color: Tokens.line
-                Ticks { visible: Tokens.showGrid }
                 Row {
                     anchors { left: parent.left; verticalCenter: parent.verticalCenter; leftMargin: Tokens.s4 }
                     spacing: Tokens.s3
@@ -1072,20 +1073,14 @@ Rectangle {
                         spacing: 1
                         anchors.verticalCenter: parent.verticalCenter
                         Text {
-                            text: I18n.tr("RYOKU NIXOS"); color: Tokens.ink; font.family: Tokens.ui
+                            text: I18n.tr("RYOKU ARCH"); color: Tokens.ink; font.family: Tokens.ui
                             font.pixelSize: 14; font.weight: Font.Medium; font.letterSpacing: 2.4
                         }
                         Text {
-                            text: Tokens.monoHeads ? "//SETTINGS_" : I18n.tr("SETTINGS"); color: Tokens.inkMuted
+                            text: I18n.tr("SETTINGS"); color: Tokens.inkMuted
                             font.family: Tokens.mono; font.pixelSize: 10; font.letterSpacing: 1.4
                         }
                     }
-                }
-                Text {
-                    visible: Tokens.showGrid
-                    anchors { right: parent.right; top: parent.top; margins: Tokens.s2 }
-                    text: "///"; color: Tokens.inkFaint
-                    font.family: Tokens.mono; font.pixelSize: 10
                 }
             }
             Field {
@@ -1098,97 +1093,24 @@ Rectangle {
             }
         }
 
-        // the rail foot: a genuine Code 39 plate, the poster's totem. It scans.
-        Item {
-            id: railFoot
-            visible: Tokens.showGrid
-            anchors { left: parent.left; right: parent.right; bottom: decorRow.top }
-            anchors.margins: Tokens.s5
-            anchors.bottomMargin: Tokens.s4
-            height: Tokens.showGrid ? (Tokens.s3 + edition.height + Tokens.s3 + plate.implicitHeight) : 0
-            Rectangle { anchors { left: parent.left; right: parent.right; top: parent.top } height: 1; color: Tokens.lineSoft }
-            // marginalia above the plate: an edition register, shared by every
-            // page since the rail is the one always-present chrome.
-            Marginalia {
-                id: edition
-                anchors { left: parent.left; top: parent.top; topMargin: Tokens.s3 }
-                index: Version.editionIndex; label: Version.editionNumber
-                glyph: "column"; glyph2: ""
-                chevrons: false
-            }
-            Barcode {
-                id: plate
-                anchors { left: parent.left; bottom: parent.bottom }
-                text: I18n.tr("RYOKU HUB")
-                unit: 1.1
-                barHeight: 14
-            }
-            Text {
-                anchors { right: parent.right; bottom: parent.bottom; bottomMargin: 2 }
-                text: "+"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
-            }
-        }
-
-        // the decor level: how much editorial chrome the settings wear. Calm is
-        // the quiet, function-first default; Rich restores the full poster
-        // treatment. Writes shell.json hubDecor (a daemon passthrough key), so
-        // every surface reading Tokens retints live, with no per-page wiring.
-        Item {
-            id: decorRow
-            anchors { left: parent.left; right: parent.right; bottom: advToggle.top }
-            anchors.leftMargin: Tokens.s5; anchors.rightMargin: Tokens.s5
-            anchors.bottomMargin: Tokens.s3
-            height: Tokens.ctlH
-            readonly property string cur: { void Settings.revision; return Settings.get("hubDecor") || "calm"; }
-            Text {
-                anchors { left: parent.left; verticalCenter: parent.verticalCenter }
-                text: I18n.tr("Decor")
-                color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-                font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
-            }
-            Row {
-                anchors { right: parent.right; verticalCenter: parent.verticalCenter }
-                spacing: Tokens.s1
-                Repeater {
-                    model: [ { "k": "calm", "n": I18n.tr("Calm") }, { "k": "rich", "n": I18n.tr("Rich") } ]
-                    Rectangle {
-                        required property var modelData
-                        readonly property bool sel: decorRow.cur === modelData.k
-                        width: optT.implicitWidth + Tokens.s3; height: Tokens.ctlH
-                        radius: Tokens.radius
-                        color: sel ? Tokens.bone : (dh.hovered ? Tokens.tint10 : "transparent")
-                        border.width: Tokens.border; border.color: sel ? "transparent" : Tokens.line
-                        Behavior on color { ColorAnimation { duration: Tokens.snap } }
-                        Text {
-                            id: optT
-                            anchors.centerIn: parent
-                            text: modelData.n
-                            color: sel ? Tokens.inkOnBone : Tokens.inkDim
-                            font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                            font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
-                        }
-                        HoverHandler { id: dh; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: Settings.patch("hubDecor", modelData.k) }
-                    }
-                }
-            }
-        }
-
-        // Two global switches at the foot: Decor (above) sets how much chrome the
-        // settings wear; Advanced reveals the deep per-page knobs inside a schema
-        // page (the rail always lists every section). Both persist and restore at
-        // startup by `advancedGet` / the settings daemon. One control each.
+        // The one global switch at the foot: Advanced reveals the deep per-page
+        // knobs inside a schema page (the rail always lists every section). It
+        // persists and restores at startup by `advancedGet` / the settings
+        // daemon.
         Item {
             id: advToggle
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             anchors.leftMargin: Tokens.s5; anchors.rightMargin: Tokens.s5
             anchors.bottomMargin: Tokens.s4
             height: Tokens.ctlH
+            Rectangle {
+                anchors { left: parent.left; right: parent.right; top: parent.top; topMargin: -Tokens.s3 }
+                height: 1; color: Tokens.lineSoft
+            }
             Text {
                 anchors { left: parent.left; right: advSw.left; rightMargin: Tokens.s3; verticalCenter: parent.verticalCenter }
                 elide: Text.ElideRight
-                text: I18n.tr("Advanced settings")
+                text: I18n.tr("Advanced")
                 color: hub.advanced ? Tokens.ink : Tokens.inkMuted
                 font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                 font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
@@ -1203,12 +1125,13 @@ Rectangle {
 
         Flickable {
             id: navFlick
-            anchors { left: parent.left; right: parent.right; top: railHead.bottom; bottom: railFoot.top }
+            anchors { left: parent.left; right: parent.right; top: railHead.bottom; bottom: advToggle.top }
             anchors.margins: Tokens.s5
             anchors.topMargin: Tokens.s4
             contentHeight: nav.height
             clip: true
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             // keep the active section on screen: jumping there by search, IPC or
             // a config-restored section must never leave the selection clipped at
@@ -1241,6 +1164,11 @@ Rectangle {
                         required property int index
                         width: nav.width
                         spacing: 0
+
+                        // a breath between groups, so the rail reads as clusters
+                        // rather than one long list of rows
+                        Item { width: 1; height: grp.index === 0 ? 0 : Tokens.s2 }
+
                         // which group holds the open section: its header lifts up
                         // the ink ramp (faint -> dim) as a quiet "you are here",
                         // monochrome, never a colour, so the bone-plate item stays
@@ -1258,7 +1186,7 @@ Rectangle {
                                 return hub.needsMet(i) && (!i.adv || hub.advanced || hub.section === i.key);
                             })
                             width: parent.width
-                            height: !anyShown ? 0 : (grp.modelData.name === "" ? Tokens.s4 : 30)
+                            height: !anyShown ? 0 : (grp.modelData.name === "" ? Tokens.s4 : 34)
                             visible: anyShown
                             Row {
                                 visible: grp.modelData.name !== ""
@@ -1305,7 +1233,7 @@ Rectangle {
                                 readonly property bool shown: hub.needsMet(modelData)
                                     && (!modelData.adv || hub.advanced || hub.section === modelData.key)
                                 width: nav.width
-                                height: shown ? 34 : 0
+                                height: shown ? 36 : 0
                                 visible: shown
                                 readonly property bool sel: hub.section === modelData.key
                                 onSelChanged: if (sel) navFlick.reveal(navItem)
@@ -1372,14 +1300,20 @@ Rectangle {
         // async page swap (only the page content fades). A porting page (no
         // file) stays framed too.
         readonly property bool full: hub.pageFile(hub.section) !== "" && !hub.framedSet[hub.section]
-        anchors.left: rail.right
         anchors.top: parent.top
         anchors.bottom: pageArea.full ? parent.bottom : bar.top
-        anchors.right: parent.right
-        anchors.leftMargin: pageArea.full ? 0 : Tokens.s6
-        anchors.rightMargin: pageArea.full ? 0 : Tokens.s6
         anchors.topMargin: pageArea.full ? 0 : Tokens.s5
         anchors.bottomMargin: pageArea.full ? 0 : Tokens.s3
+        // Framed pages fill the window beside the rail: the Hub opens
+        // page-wide, and a page that refuses the width it was given wastes it.
+        // Nothing needs a global cap -- a page that reads better on a shorter
+        // measure (a paragraph, a list, a release note) caps its own blocks, and
+        // a grid page caps itself through its cards. Placed by `x` alone (an
+        // anchor here would silently win and pin the page to the rail).
+        width: parent.width - rail.width - (pageArea.full ? 0 : 2 * Tokens.s6)
+        x: rail.width + (pageArea.full
+            ? 0
+            : Math.max(Tokens.s6, Math.round((parent.width - rail.width - width) / 2)))
 
         // Two loaders crossfade the page: the incoming page loads async into the
         // hidden loader, then fades in as the visible one fades out, so the
@@ -1465,16 +1399,18 @@ Rectangle {
     // Updates left the rail for a button in the top-right corner: an English
     // UPDATES chip that opens the Updates page and wears a red dot
     // (`Tokens.alert`, a fixed attention red) when the channel sits behind
-    // origin. It rides the empty top strip above every page's head, and is
-    // opaque, so it never collides with a page's running-head marginalia. The
-    // `Updates` singleton self-checks on load and on cadence, so the dot is live.
+    // origin. It rides the top strip beside every page's head: same right inset
+    // as the page's content (S6, so it lines up with the last card rather than
+    // floating inside it) and a box tall enough to read as a control next to the
+    // head instead of a scrap of chrome above it. The `Updates` singleton
+    // self-checks on load and on cadence, so the dot is live.
     Item {
         id: updatesBtn
         anchors { top: parent.top; right: parent.right }
-        anchors.topMargin: Tokens.s2; anchors.rightMargin: Tokens.s4
+        anchors.topMargin: Tokens.s4; anchors.rightMargin: Tokens.s6
         z: 60
-        width: ubLabel.implicitWidth + Tokens.s3 * 2
-        height: 24
+        width: ubLabel.implicitWidth + Tokens.s4 * 2
+        height: 30
         readonly property bool here: hub.section === "updates"
         Rectangle {
             anchors.fill: parent
@@ -1490,8 +1426,8 @@ Rectangle {
             id: ubLabel
             anchors.centerIn: parent
             text: I18n.tr("UPDATES")
-            color: updatesBtn.here ? Tokens.inkOnBone : Tokens.inkMuted
-            font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+            color: updatesBtn.here ? Tokens.inkOnBone : Tokens.inkDim
+            font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
             Behavior on color { ColorAnimation { duration: Tokens.snap } }
         }
@@ -1502,7 +1438,7 @@ Rectangle {
             color: Tokens.alert
             border.width: 1; border.color: Tokens.paper
             antialiasing: true
-            anchors { right: parent.right; top: parent.top; rightMargin: -3; topMargin: -3 }
+            anchors { right: parent.right; top: parent.top; rightMargin: -2; topMargin: -2 }
         }
         HoverHandler { id: ubh; cursorShape: Qt.PointingHandCursor }
         TapHandler { onTapped: hub.section = "updates" }
@@ -1514,11 +1450,11 @@ Rectangle {
     Item {
         id: filesBtn
         anchors { top: parent.top; right: updatesBtn.left }
-        anchors.topMargin: Tokens.s2; anchors.rightMargin: Tokens.s2
+        anchors.topMargin: Tokens.s4; anchors.rightMargin: Tokens.s3
         z: 60
         visible: hub.settingsFiles().length > 0
-        width: fbLabel.implicitWidth + Tokens.s3 * 2
-        height: 24
+        width: fbLabel.implicitWidth + Tokens.s4 * 2
+        height: 30
         Rectangle {
             anchors.fill: parent
             radius: Tokens.radius
@@ -1533,8 +1469,8 @@ Rectangle {
             id: fbLabel
             anchors.centerIn: parent
             text: I18n.tr("FILES")
-            color: filesPop.open ? Tokens.inkOnBone : Tokens.inkMuted
-            font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+            color: filesPop.open ? Tokens.inkOnBone : Tokens.inkDim
+            font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
             Behavior on color { ColorAnimation { duration: Tokens.snap } }
         }
@@ -1670,6 +1606,7 @@ Rectangle {
             model: hub.searchResults
             spacing: 1
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
             delegate: Rectangle {
                 id: rr
                 required property var modelData
@@ -1755,6 +1692,7 @@ Rectangle {
                 contentHeight: dcol.height
                 clip: true
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
                 Column {
                     id: dcol
                     width: dflick.width - 12
@@ -1830,6 +1768,7 @@ Rectangle {
                 contentHeight: fcol.height
                 clip: true
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
                 Column {
                     id: fcol
                     width: parent.width - 12

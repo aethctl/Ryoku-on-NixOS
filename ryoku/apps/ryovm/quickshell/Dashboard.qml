@@ -179,23 +179,6 @@ Item {
                         }
                     }
                 }
-
-                Decor {
-                    id: heroArt
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: Math.min(420, parent.width * 0.42)
-                    boxId: "ryoport.harbour.hero"
-                    title: "港"
-                    sub: "みなと"
-                    tate: "力 を 統 べ る"
-                    caption: I18n.tr("A working harbour: local iron and distant ports, one console.")
-                    code: I18n.tr("RYOPORT-COMMAND")
-                    seal: "力"
-                    seed: 0
-                    images: ["lighthouse.png", "compass.gif", "moon.png", "earth.gif"]
-                }
             }
 
             // ── MACHINES ──

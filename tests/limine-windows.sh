@@ -8,6 +8,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 tool="$here/../system/boot/limine/ryoku-windows-entry"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
+state="$tmp/limine-existing-esp"
+export RYOKU_EXISTING_ESP_STATE="$state"
 
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
@@ -158,6 +160,32 @@ RYOKU_CONF_PARTUUID="aaaaaaaa-0000-0000-0000-000000000000" \
   "$tool" sync "$cross" >/dev/null
 grep -qF 'path: uuid(5eaf9964-1111-2222-3333-444455556666):/EFI/Microsoft/Boot/bootmgfw.efi' "$cross" \
   || fail "cross-drive Windows must stay uuid()"
+
+# --- recorded non-Windows ESP survives future menu rewrites ----------------
+neighbor="$tmp/neighbor.conf"
+printf '/Ryoku Linux\n    protocol: linux\n' >"$neighbor"
+printf 'linux\t9999-aaaa\t/EFI/systemd/systemd-bootx64.efi\n' >"$state"
+RYOKU_WINDOWS_GUID="" "$tool" sync "$neighbor" >/dev/null
+grep -qF '/Linux (existing)' "$neighbor" || fail "recorded Linux entry was not added"
+grep -qF 'path: uuid(9999-aaaa):/EFI/systemd/systemd-bootx64.efi' "$neighbor" \
+  || fail "recorded Linux entry did not use its preserved ESP metadata"
+
+cp "$neighbor" "$tmp/neighbor-before.conf"
+RYOKU_WINDOWS_GUID="" "$tool" sync "$neighbor" >/dev/null
+diff -q "$tmp/neighbor-before.conf" "$neighbor" >/dev/null \
+  || fail "recorded Linux entry sync is not idempotent"
+
+printf 'ryoku\tbbbb-cccc\t/EFI/limine/limine_x64.efi\n' >"$state"
+RYOKU_WINDOWS_GUID="" "$tool" sync "$neighbor" >/dev/null
+grep -qF '/Ryoku (existing)' "$neighbor" || fail "recorded Ryoku entry was not updated"
+grep -qF 'uuid(bbbb-cccc):/EFI/limine/limine_x64.efi' "$neighbor" \
+  || fail "recorded Ryoku entry did not use the updated metadata"
+grep -qF '/Linux (existing)' "$neighbor" && fail "recorded entry update left the old Linux title"
+
+printf '/Ryoku Linux\n    protocol: efi\n' >"$neighbor"
+RYOKU_WINDOWS_GUID="" "$tool" sync "$neighbor" >/dev/null
+grep -qF '/Ryoku (existing)' "$neighbor" \
+  || fail "post-update sync did not restore the recorded neighboring OS"
 
 # --- alongside TWO-STAGE limine generator (stage-1 hop + stage-2 /boot conf) -----
 # stage 1 lives on the shared ESP beside our BOOTX64.EFI: a STATIC hop that only

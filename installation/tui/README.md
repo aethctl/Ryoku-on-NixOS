@@ -78,11 +78,12 @@ mid-install:
 - `minRootGiB = 20` -- the minimum root partition; matches the backend's
   `ryoku_min_root_gib` (`20 + swap`).
 - `availRoot()` -- the root size: the free region (alongside) or the disk minus
-  kept partitions (whole), less the ESP. The swapfile is carved from root.
+  kept partitions (whole), less the boot partition. Alongside always reserves
+  2 GiB; it is an XBOOTLDR when the existing ESP has at least 8 MiB free and a
+  dedicated Ryoku ESP otherwise.
 - `swapCeil()` -- caps swap at 64 GiB and always leaves at least `minRootGiB` of
   usable root, so swap can never starve the system partition.
-- alongside `partReady` requires `minRootGiB + espG` GiB free -- the same
-  `20 + swap + ESP` floor the backend enforces in `ryoku_partition_alongside`.
+- alongside `partReady` requires `minRootGiB + 2` GiB free, matching the backend.
 
 ## Running it off-ISO
 

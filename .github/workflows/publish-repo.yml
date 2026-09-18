@@ -1,71 +1,78 @@
 name: "Publish [ryoku] repo"
 
-# Publishes the signed [ryoku] pacman repo to https://repo.ryoku.dev/stable/x86_64/.
-# Triggers on a push to main (the user update channel), on a release tag
-# (git push tag v*), and on manual dispatch. The Stable Release workflow also
-# dispatches it, because a tag pushed by GITHUB_TOKEN does not fire the tag
-# trigger. A push to unstable-dev never publishes; main only advances when the
-# maintainer fast-forwards it, so each advance rebuilds the repo with a new
-# commit-versioned package set that `ryoku update` (pacman -Syu) upgrades to.
-# The publish is gated on the container-install smoke test below: the repo is
-# signed and uploaded only after ryoku-desktop builds, installs, and materializes
-# a complete config on Arch and CachyOS, so a broken build fails the publish
-# instead of becoming a user-visible update.
+# Publishes the signed [ryoku] pacman repo into one of two channels, laid out
+# under the one bucket mount every domain serves (repo.ryoku.dev/stable/<key>
+# is bucket object <key>; the "stable" path segment is the mount, not the
+# channel):
+#
+#   x86_64/                         stable: the URL every installed box has
+#   releases/<tag>/x86_64/          one frozen, immutable copy per release tag
+#   releases/index.json             the release ledger the Hub and the site read
+#   channels/testing/x86_64/        testing: rebuilt on every push to unstable-dev
+#
+# A release tag (git push tag v*, or the Stable Release workflow dispatching
+# this on the tag) builds the set once into releases/<tag>/ -- an existing
+# release directory is never overwritten -- and only then copies it over the
+# stable pointer, so a box on stable moves between named states and can be put
+# back on any earlier one (ryoku track <tag>, ryoku rollback --to <tag>). A push
+# to unstable-dev republishes testing; a push to main publishes nothing, since
+# main advancing is not a release, tagging it is. Each channel publish is gated
+# on the container-install smoke test below: the repo is signed and uploaded
+# only after ryoku-desktop builds, installs, and materializes a complete config
+# on Arch and CachyOS, so a broken build fails the publish instead of becoming a
+# user-visible update.
 on:
   push:
     branches:
-      - main
+      - unstable-dev
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      force_release:
+        description: 'Overwrite an existing releases/<tag>/ (tag runs only; normally refused)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
+  actions: write
 
-# one publish at a time, never cancelled mid-flight: two interleaved uploads
-# can leave run A's packages under run B's db, exactly the skew the
-# packages-first-db-last ordering below exists to prevent.
+# one publish per channel at a time: two interleaved uploads can leave run A's
+# packages under run B's db, exactly the skew the packages-first-db-last
+# ordering below exists to prevent. stable and testing write different
+# prefixes, so they may run side by side. a stable run is never cancelled; a
+# testing run is superseded by the next push, since only the newest matters
+# and the upload order keeps a cut-off run harmless (the old db keeps its
+# packages until the new db is live, and the prune only removes what neither
+# lists).
 concurrency:
-  group: publish-repo
-  cancel-in-progress: false
+  group: publish-repo-${{ github.ref_type == 'tag' && 'stable' || 'testing' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
+# build once, test those bytes, publish those bytes:
+#   build              signs the repo with the release key -> workflow artifact
+#   container-install  installs ryoku-desktop from that artifact on Arch and
+#                      CachyOS and materializes a full config (the gate)
+#   publish            uploads the same artifact to the bucket
+# the gate used to build its own throwaway-key repo per base and the publish
+# built a third time; three source builds a run, none of them the bytes that
+# shipped, and at 90 minutes the gate timed out and the publish was skipped.
 jobs:
-  # gate: build the packages, install ryoku-desktop, and materialize a full
-  # config on Arch and CachyOS before anything is signed or uploaded. an
-  # unresolved dependency, or a config file no package ships, fails here, so a
-  # broken build never becomes a user-visible update (the Hub sees the repo the
-  # moment its db lands). mirrors the install-test container tier.
-  container-install:
-    name: "container install (${{ matrix.base }})"
+  build:
+    name: Build and sign the [ryoku] repo
     runs-on: ubuntu-latest
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        base: [arch, cachyos]
-    container:
-      image: ${{ matrix.base == 'cachyos' && 'cachyos/cachyos:latest' || 'archlinux:latest' }}
-    steps:
-      - name: Install git
-        run: pacman -Sy --noconfirm --needed git
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-      - name: Build, install, and verify the config
-        run: installation/tests/container-install.sh ${{ matrix.base }}
-
-  publish:
-    # only publish after the container-install gate passes on every base.
-    needs: container-install
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
     # makepkg, repo-add, and pacman only exist on Arch, so the whole build runs
     # inside the official Arch image. Steps run as root; the actual makepkg work
     # is dropped to an unprivileged user below.
     container:
       image: archlinux:latest
+    outputs:
+      channel: ${{ steps.channel.outputs.channel }}
+      release: ${{ steps.channel.outputs.release }}
+      prefix: ${{ steps.channel.outputs.prefix }}
     steps:
       - name: Verify required secrets are present
         env:
@@ -100,6 +107,35 @@ jobs:
           # version (bin/ryoku-release-version --pkgver) from `git rev-list`.
           fetch-depth: 0
 
+      - name: Resolve the channel this run publishes
+        id: channel
+        run: |
+          set -euo pipefail
+          # the ref decides the channel: a v* tag is a stable release, the
+          # unstable-dev branch is testing. anything else (a dispatch on main,
+          # a feature branch) is refused here rather than landing in a channel
+          # by accident: main advances by fast-forward and ships when tagged.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          case "$GITHUB_REF" in
+            refs/tags/v*)
+              tag="${GITHUB_REF#refs/tags/}"
+              echo "channel=stable"            >> "$GITHUB_OUTPUT"
+              echo "release=$tag"              >> "$GITHUB_OUTPUT"
+              echo "prefix=releases/$tag"      >> "$GITHUB_OUTPUT"
+              ;;
+            refs/heads/unstable-dev)
+              ver="$(./bin/ryoku-release-version --channel unstable-dev --build-number "$GITHUB_RUN_NUMBER" --sha "$GITHUB_SHA")"
+              echo "channel=testing"           >> "$GITHUB_OUTPUT"
+              echo "release=$ver"              >> "$GITHUB_OUTPUT"
+              echo "prefix=channels/testing"   >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::publish-repo runs on a v* tag (stable) or unstable-dev (testing); got $GITHUB_REF"
+              exit 1
+              ;;
+          esac
+          cat "$GITHUB_OUTPUT"
+
       - name: Install build toolchain
         run: |
           set -euo pipefail
@@ -117,66 +153,55 @@ jobs:
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          PREFIX: ${{ steps.channel.outputs.prefix }}
+          FORCE: ${{ inputs.force_release }}
         run: |
           set -euo pipefail
-          # one rclone config for this job (the upload and verify steps reuse it).
-          mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf <<EOF
-          [Ryoku]
-          type = s3
-          provider = Cloudflare
-          access_key_id = ${R2_ACCESS_KEY_ID}
-          secret_access_key = ${R2_SECRET_ACCESS_KEY}
-          endpoint = ${R2_ENDPOINT}
-          # The scoped R2 token has Object Read+Write only, not bucket-level
-          # perms; without this rclone calls HeadBucket/CreateBucket and 403s.
-          # The bucket already exists, so skip the check (matches build-iso.yml).
-          no_check_bucket = true
-          EOF
-          # build-repo.sh adopts these bytes for any filename it rebuilds, so
-          # a live name keeps its live bytes. read from the bucket, not the
-          # public domain: Cloudflare 403s datacenter runners.
-          rclone copy "Ryoku:$R2_BUCKET/x86_64/" "$GITHUB_WORKSPACE/.published-mirror/" --include '*.pkg.tar.zst'
+          ./bin/ryoku-r2-config
+          # a release directory is written once. a second run on the same tag
+          # (a re-dispatch, a re-pushed tag) would rebuild non-reproducible
+          # bytes under a name boxes may already hold, which is the skew the
+          # whole layout exists to rule out. refuse unless forced by hand.
+          if [[ $CHANNEL == stable ]] && [[ "${FORCE:-false}" != true ]]; then
+            if [[ -n "$(rclone lsf "Ryoku:$R2_BUCKET/$PREFIX/x86_64/" 2>/dev/null | head -n1)" ]]; then
+              echo "::error::$PREFIX/ already exists in the bucket; a release is published once. Re-run with force_release to overwrite."
+              exit 1
+            fi
+          fi
+          # build-repo.sh adopts these bytes for any filename it rebuilds, so a
+          # live name keeps its live bytes. a stable release mirrors the stable
+          # pointer first, then testing: the tagged commit was already built for
+          # testing, so a name published there is promoted rather than rebuilt,
+          # and the release carries the bytes testing users ran. read from the
+          # bucket, not the public domain: Cloudflare 403s datacenter runners.
+          # ryoku-desktop is the one channel-specific package: it carries
+          # /etc/ryoku-release naming the channel and the release, so a
+          # stable build never adopts testing's copy (same commit, same
+          # filename, wrong marker); it is a plain file copy to rebuild.
+          mirror="$GITHUB_WORKSPACE/.published-mirror"
+          mkdir -p "$mirror"
+          rclone copy "Ryoku:$R2_BUCKET/$PREFIX/x86_64/" "$mirror/" --include '*.pkg.tar.zst' || true
+          if [[ $CHANNEL == stable ]]; then
+            rclone copy "Ryoku:$R2_BUCKET/x86_64/" "$mirror/" --include '*.pkg.tar.zst' --ignore-existing || true
+            # rclone applies filter rules in order and stops at the first match, so
+            # the exclude must come before the include or ryoku-desktop's
+            # testing bytes are adopted anyway (they carry CHANNEL=testing, and
+            # the container install then fails the release).
+            rclone copy "Ryoku:$R2_BUCKET/channels/testing/x86_64/" "$mirror/" --exclude 'ryoku-desktop-*' --include '*.pkg.tar.zst' --ignore-existing || true
+          fi
 
       - name: Verify hard dependencies exist in the official repos or [ryoku]
-        run: |
-          set -euo pipefail
-          # build-repo.sh builds with --nodeps, so a typo'd or AUR-only entry in
-          # a depends array publishes cleanly and then bricks every user's next
-          # pacman -Syu with an unresolvable target. One -Si per dependency
-          # here turns that into a failed publish instead.
-          # bash reads the array the same way makepkg does; hand-parsing the
-          # file trips over single-line arrays and comments.
-          # internal deps resolve inside [ryoku] itself, so they are exempt from
-          # the -Si check; the exempt list is derived from the PKGBUILDs rather
-          # than hand-kept, so a typo'd internal name (say ryoku-cursor) is
-          # caught here instead of skipped into a broken publish.
-          internal=$(for p in release/packages/*/PKGBUILD; do
-            bash -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${pkgname[@]}"' _ "$p"
-          done)
-          missing=0
-          for p in release/packages/*/PKGBUILD; do
-            mapfile -t deps < <(bash -c 'source "$1" >/dev/null 2>&1; printf "%s\n" "${depends[@]:-}"' _ "$p")
-            for d in "${deps[@]}"; do
-              d="${d%%[<>=]*}"
-              [[ -z $d ]] && continue
-              grep -qxF "$d" <<<"$internal" && continue
-              # -Si matches a real package name. It does NOT resolve a virtual
-              # provide, so a perfectly valid depend like `udev` (provided by
-              # systemd) read as missing and failed the publish. -Sp resolves
-              # provides against the same sync dbs, so try the cheap exact-name
-              # path first and fall back to it.
-              if ! pacman -Si "$d" >/dev/null 2>&1 && ! pacman -Sp "$d" >/dev/null 2>&1; then
-                echo "::error::$p: dependency '$d' not found in the official repos or [ryoku]"
-                missing=1
-              fi
-            done
-          done
-          exit "$missing"
+        # Shared with the pre-push hook (bin/ryoku-dev-verify-pkgbuild-deps), so
+        # the local gate and this one can never drift. A broken depends/provides
+        # is caught before publish instead of after users' next `pacman -Syu`.
+        run: bin/ryoku-dev-verify-pkgbuild-deps
 
       - name: Build and sign the [ryoku] repo
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          RYOKU_RELEASE: ${{ steps.channel.outputs.release }}
+          RYOKU_CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           set -euo pipefail
 
@@ -193,10 +218,16 @@ jobs:
           chown builder:builder "$key_file"
           chmod 600 "$key_file"
 
+          # RYOKU_RELEASE / RYOKU_CHANNEL name the state this build is: the
+          # ryoku-desktop package writes them to /etc/ryoku-release, and
+          # build-repo.sh writes release.json beside the db, so a box and the
+          # Hub can say which release they run and which the channel serves.
           runuser -u builder -- env \
             KEY_FILE="$key_file" \
             RYOKU_REPO_OUT="$GITHUB_WORKSPACE/release/repo/out" \
             RYOKU_REPO_MIRROR="$GITHUB_WORKSPACE/.published-mirror" \
+            RYOKU_RELEASE="$RYOKU_RELEASE" \
+            RYOKU_CHANNEL="$RYOKU_CHANNEL" \
             bash -euo pipefail -c '
               export GNUPGHOME="$(mktemp -d)"
               chmod 700 "$GNUPGHOME"
@@ -210,54 +241,216 @@ jobs:
 
           rm -f "$key_file"
 
+      - name: Keep the signed repo for the gate and the publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryoku-repo-${{ github.run_id }}
+          path: release/repo/out/x86_64
+          if-no-files-found: error
+          retention-days: 3
+          # packages are already zstd; recompressing them only costs minutes
+          compression-level: 0
+
+  # gate: install ryoku-desktop from the signed repo the build job produced
+  # and materialize a full config on Arch and CachyOS before anything is
+  # uploaded. an unresolvable dependency, or a config file no package ships,
+  # fails here, so a broken build never becomes a user-visible update (the Hub
+  # sees the repo the moment its db lands). the install verifies the release
+  # key's signatures exactly as a user's pacman does.
+  container-install:
+    name: "container install (${{ matrix.base }})"
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        base: [arch, cachyos]
+    container:
+      image: ${{ matrix.base == 'cachyos' && 'cachyos/cachyos:latest' || 'archlinux:latest' }}
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm --needed git
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch the signed repo
+        uses: actions/download-artifact@v4
+        with:
+          name: ryoku-repo-${{ github.run_id }}
+          path: release/repo/out/x86_64
+      - name: Install and verify the config
+        run: RYOKU_PREBUILT_REPO=1 installation/tests/container-install.sh ${{ matrix.base }}
+
+  publish:
+    # only after the gate passes on every base; uploads the bytes it tested.
+    needs: [build, container-install]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install git for checkout
+        run: pacman -Sy --noconfirm --needed git
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the publish tools
+        # rclone uploads, jq and bsdtar verify, gh dispatches the release ISO
+        run: pacman -Syu --noconfirm --needed rclone jq libarchive github-cli
+      - name: Fetch the signed repo
+        uses: actions/download-artifact@v4
+        with:
+          name: ryoku-repo-${{ github.run_id }}
+          path: release/repo/out/x86_64
+      - name: Configure the bucket
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: ./bin/ryoku-r2-config
+
       - name: Upload [ryoku] repo to Cloudflare R2
         env:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
+          PREFIX: ${{ needs.build.outputs.prefix }}
         run: |
           set -euo pipefail
-          # rclone config written by the snapshot step above.
 
-          # Build output publishes into <bucket>/x86_64/ (served at
-          # repo.ryoku.dev/stable/x86_64/). Order matters (issue #21): if ryoku.db
-          # goes live before the packages and .sig files it lists, SigLevel=Required
-          # installs fail with "Maximum file size exceeded", because a missing .sig
-          # returns an HTML 404 that overruns pacman's signature size cap. So push
-          # packages and sigs first, the db last, then prune superseded versions.
-          dest="$R2_BUCKET"
+          # Order matters (issue #21): if ryoku.db goes live before the packages
+          # and .sig files it lists, SigLevel=Required installs fail with
+          # "Maximum file size exceeded", because a missing .sig returns an HTML
+          # 404 that overruns pacman's signature size cap. So push packages and
+          # sigs first, the db last, then prune superseded versions. Keep each db
+          # and its .sig in one transfer: pacman fetches a db's sig even when the
+          # db is unchanged (304), so a db and sig from different builds served at
+          # once wedge a box on "invalid or corrupted database"; the client heals
+          # it (ryoku update, doctor).
+          publish() {
+            local src=$1 remote=$2
+            rclone copy "$src" "$remote" --exclude 'ryoku.db*' --exclude 'ryoku.files*' -P
+            rclone copy "$src" "$remote" --include 'ryoku.db*' --include 'ryoku.files*' -P
+            rclone sync "$src" "$remote" -P
+          }
           src="$GITHUB_WORKSPACE/release/repo/out/x86_64"
-          remote="Ryoku:$dest/x86_64/"
-          rclone copy "$src" "$remote" --exclude 'ryoku.db*' --exclude 'ryoku.files*' -P
-          rclone copy "$src" "$remote" --include 'ryoku.db*' --include 'ryoku.files*' -P
-          rclone sync "$src" "$remote" -P
-          echo "::notice::Published [ryoku] repo to $remote (packages first, db last, stale pruned)"
+          publish "$src" "Ryoku:$R2_BUCKET/$PREFIX/x86_64/"
+          echo "::notice::Published [ryoku] $CHANNEL to $PREFIX/x86_64/ (packages first, db last, stale pruned)"
+          if [[ $CHANNEL == stable ]]; then
+            # the release directory is complete and verified below before the
+            # pointer moves, so a box that syncs mid-run sees either the old
+            # stable or the new one, never a half-copied set.
+            publish "$src" "Ryoku:$R2_BUCKET/x86_64/"
+            echo "::notice::Stable pointer x86_64/ now serves $PREFIX"
+          fi
 
       - name: Verify the published repo against the bucket
         env:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          CHANNEL: ${{ needs.build.outputs.channel }}
+          PREFIX: ${{ needs.build.outputs.prefix }}
         run: |
           set -euo pipefail
           # every file the served db lists must exist at the recorded size
           # with its .sig, or the publish fails here instead of failing user
           # installs (issue #21). the bucket is checked, not the public
           # domain: Cloudflare 403s datacenter runners there.
-          remote="Ryoku:$R2_BUCKET/x86_64"
-          tmp=$(mktemp -d)
-          rclone cat "$remote/ryoku.db" > "$tmp/db"
-          mkdir "$tmp/x"
-          bsdtar -xf "$tmp/db" -C "$tmp/x"
-          rclone lsl "$remote/" > "$tmp/ls"
-          bad=0
-          for d in "$tmp"/x/*/desc; do
-            fn=$(awk '/%FILENAME%/{getline; print; exit}' "$d")
-            cs=$(awk '/%CSIZE%/{getline; print; exit}' "$d")
-            got=$(awk -v f="$fn" '$NF==f{print $1; exit}' "$tmp/ls")
-            if [[ "$got" != "$cs" ]]; then
-              echo "::error::$fn: db records $cs bytes, bucket holds ${got:-nothing}"
-              bad=1
-            fi
-            if ! awk -v f="$fn.sig" '$NF==f{found=1} END{exit !found}' "$tmp/ls"; then
-              echo "::error::$fn.sig missing from the bucket"
-              bad=1
-            fi
+          verify() {
+            local remote=$1 tmp bad=0
+            tmp=$(mktemp -d)
+            rclone cat "$remote/ryoku.db" > "$tmp/db"
+            mkdir "$tmp/x"
+            bsdtar -xf "$tmp/db" -C "$tmp/x"
+            rclone lsl "$remote/" > "$tmp/ls"
+            for d in "$tmp"/x/*/desc; do
+              fn=$(awk '/%FILENAME%/{getline; print; exit}' "$d")
+              cs=$(awk '/%CSIZE%/{getline; print; exit}' "$d")
+              got=$(awk -v f="$fn" '$NF==f{print $1; exit}' "$tmp/ls")
+              if [[ "$got" != "$cs" ]]; then
+                echo "::error::$remote: $fn: db records $cs bytes, bucket holds ${got:-nothing}"
+                bad=1
+              fi
+              if ! awk -v f="$fn.sig" '$NF==f{found=1} END{exit !found}' "$tmp/ls"; then
+                echo "::error::$remote: $fn.sig missing from the bucket"
+                bad=1
+              fi
+            done
+            return "$bad"
+          }
+          verify "Ryoku:$R2_BUCKET/$PREFIX/x86_64"
+          if [[ $CHANNEL == stable ]]; then
+            verify "Ryoku:$R2_BUCKET/x86_64"
+          fi
+
+      - name: Record the release in the ledger
+        if: needs.build.outputs.channel == 'stable'
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          RELEASE: ${{ needs.build.outputs.release }}
+        run: |
+          set -euo pipefail
+          # releases/index.json is derived from the release directories the
+          # bucket holds (bin/ryoku-release-ledger), never edited in place: an
+          # in-place edit once read a missing ledger as empty input and
+          # published a zero-byte file. release-ledger.yml rebuilds it on
+          # demand with the same script.
+          ./bin/ryoku-release-ledger "Ryoku:$R2_BUCKET" | jq -e --arg tag "$RELEASE" '.latest == $tag' >/dev/null \
+            || { echo "::error::releases/index.json does not list $RELEASE as latest"; exit 1; }
+          echo "::notice::releases/index.json now lists $RELEASE as latest"
+
+      - name: Dispatch the release ISO builds
+        if: needs.build.outputs.channel == 'stable'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE: ${{ needs.build.outputs.release }}
+          PREFIX: ${{ needs.build.outputs.prefix }}
+        run: |
+          set -euo pipefail
+          # the ISO bakes its offline package closure from the frozen release
+          # directory, not from the moving pointer, so the ISO named for a
+          # release installs exactly that release. dispatched only after the
+          # directory is verified above; the Stable Release workflow no longer
+          # races the publish by dispatching the ISO itself.
+          stage=beta
+          [[ $RELEASE == *-alpha* ]] && stage=alpha
+          [[ $RELEASE != *-* ]] && stage=stable
+          for wf in build-iso.yml build-iso-cachyos.yml; do
+            gh workflow run "$wf" -R "$GITHUB_REPOSITORY" --ref "$RELEASE" \
+              -f release_stage="$stage" \
+              -f repo_url="https://repo.ryoku.dev/stable/$PREFIX/x86_64"
+            echo "::notice::Dispatched $wf on $RELEASE from $PREFIX"
           done
-          exit "$bad"
+
+  # A failed publish strands a whole set of commits on the channel: testers keep
+  # running the last good build with no sign anything broke (a wm/niri release sat
+  # unpublished for days behind a dependency-gate failure exactly this alert would
+  # have surfaced). Fires on a genuine failure, never on a run the next push
+  # superseded (that reports cancelled, not failed). Best-effort: a missing
+  # webhook downgrades to a workflow error annotation, never masks the failure.
+  notify-failure:
+    name: Announce a failed publish
+    needs: [build, container-install, publish]
+    if: ${{ failure() && github.event_name == 'push' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+    steps:
+      - name: Report the failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          channel="${{ needs.build.outputs.channel }}"
+          [[ -n $channel ]] || channel="unknown (build stage did not resolve it)"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          msg="Ryoku [ryoku] repo publish FAILED on the ${channel} channel (${GITHUB_REF#refs/heads/}, ${GITHUB_SHA:0:9}). These commits are NOT on the channel; boxes stay on the last good build until this is fixed and re-run. ${run_url}"
+          echo "::error::${msg}"
+          if [[ -z ${DISCORD_WEBHOOK_URL:-} ]]; then
+            echo "::notice::DISCORD_WEBHOOK_URL not configured; failure reported as an annotation only."
+            exit 0
+          fi
+          jq -nc --arg content "$msg" '{content: $content}' \
+            | curl -fsS -X POST -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL" \
+            || echo "::warning::could not post the failure notice to Discord"

@@ -27,7 +27,7 @@ vec4 transition (vec2 uv) {
   // Multipliers
   float from_m = 1.0 - progress + sin(PI * progress) * strength;
   float to_m = progress + sin(PI * progress) * strength;
-
+  
   return vec4(
     from.r * from.a * from_m + to.r * to.a * to_m,
     from.g * from.a * from_m + to.g * to.a * to_m,

@@ -1,398 +1,195 @@
 # Ryoku Roadmap
 
-This roadmap captures the additions and hardening opportunities identified by reviewing all 94 QML files in Omarchy Quattro at commit [`fd1034f`](https://github.com/basecamp/omarchy/tree/fd1034f71b16aa45d5431ab41ed9e48c89fdac8e). Each item names the corresponding Omarchy Quattro source path so the behavior can be re-examined without creating a second Ryoku architecture.
+This roadmap is about how the desktop *feels*: how fast it gets to first frame
+after login, how quiet it idles, and whether interactions stay smooth while the
+shell is doing real work. It supersedes the earlier feature-derived roadmap. The
+features list still lives in the docs that describe each surface; this file is
+for the performance work and the people who want to do it.
 
-## Adoption principles
+One rule governs every item in here: **it lands with a number or it does not
+land.** I'd rather close a ticket with a measurement than a theory. The shell
+has already been tuned this way once (the idle-cost pass that killed the
+always-on analysers), so the loop is proven: measure, change, measure again,
+keep the change only if the number moved.
 
-- Port behavior into Ryoku's existing typed daemon, QML services, launcher providers, bar products, package delivery, and receipt-gated plugin system.
-- Do not introduce a second menu, theme, plugin, service, or configuration convention.
-- Keep privileged operations, long-running processes, polling, validation, and sensitive data outside QML.
-- Preserve upstream MIT attribution when code or data is reused rather than independently reimplemented.
-- Deliver shared behavior through both QSBar and FrameBars unless an item explicitly targets one product.
+Roughly 190k lines of QML across 870 files stand between login and a usable
+desktop. That is not a problem by itself. It is a budget. This roadmap spends
+that budget deliberately, cheapest wins first.
 
-## Phase 1: Correctness and lifecycle foundations
+## Where we stand before touching anything
 
-These changes reduce contradictory state, duplicated work, and monitor-specific failures before more product surfaces are added.
+I refuse to guess. The first deliverable is a baseline, and it is also the
+cheapest item in this file.
 
-### Centralize media-player selection
+**What we need to know, on a clean reference session, for both compositors:**
 
-**Outcome:** `shell.services.Media` becomes the sole owner of active MPRIS selection, stable player preference, play ordering, and source cycling. QSBar and FrameBars consume the same selected player, including when `playerctld` or multiple playing applications are present.
+- login to first painted surface
+- per-surface frame cost while idling, while animating, and while playing audio
+- resident memory of every QML process and daemon at login
+- idle CPU and power draw, matching the numbers in `docs/power.md`
 
-**Ryoku integration:** Reuse the existing `Audio.streams` metadata to prefer players with active playback streams. Remove local active-player selectors after all consumers migrate.
+**How:** reuse what exists. `Perf.qml` already owns the shell's eye-candy
+policy; `ryoku-compositor-resource-compare` measures footprint across
+compositors; the dev-deploy and scripted `grim` workflow already exercises live
+surfaces. What is missing is a single repeatable script that produces the whole
+table and a place the numbers live where reviewers can see them.
 
-**Omarchy Quattro reference:**
+**Done means:**
 
-- `shell/plugins/services/media/Service.qml:17-30,82-136,425-444`
+- one committed script that prints the full baseline table on a clean session
+- baseline recorded on the reference hardware for Hyprland and niri
+- the numbers are visible in the repo, not in someone's notes
 
-**Cost:** Low to medium. No new dependency, privilege, or network surface.
+This phase has no hard part and no design decisions. It is also the prerequisite
+for every other phase, because nothing below can claim a win without it.
 
-### Centralize plugin discovery and service instances
+## Phase 1: stop paying the parse tax
 
-**Outcome:** Plugin discovery runs once per shell process, and every enabled plugin has at most one service instance shared by desktop and popout hosts. Multi-monitor setups no longer duplicate plugin polling, CLI processes, or state.
+Easiest real change in this file, and likely the biggest win per hour spent.
 
-**Ryoku integration:** Move the existing receipt-aware registry into a process-wide service owner. Retain Store receipt checks, version checks, explicit enablement, and `PluginObjectSlot`'s construct-before-swap behavior.
+Today the gates lint QML (`qmllint`, via `bin/ryoku-dev-lint-qml`) but nothing
+**compiles** it. Every process that loads a surface parses and compiles its QML
+at runtime, at login, separately: the shell, the hub, and each of the smaller
+surfaces each pay the same tax on the same 190k lines.
 
-**Omarchy Quattro reference:**
+**Change:** verify the compiled-cache path Quickshell supports, build the
+compiled QML into the package, ship the cache, and make the publish gate
+compile QML the same way it lints it today.
 
-- `shell/shell.qml:274-337`
-- `shell/services/PluginRegistry.qml:576-665`
+**Done means:**
 
-**Cost:** Medium. The existing unsandboxed-QML plugin trust boundary remains unchanged.
+- cold login-to-first-surface is measurably faster than the baseline
+- the compiled cache ships inside the package and is exercised by the publish
+  gate, so a shipped box really gets it
+- the dev gate and the publish gate agree on how QML is compiled, so a config
+  that builds locally cannot pass CI while failing the packaged build
 
-### Add monitor-origin remap recovery
+This is a packaging and CI change. It touches no QML semantics. It is the one
+item on this page I would take even if users never notice a single frame.
 
-**Outcome:** Long-lived bar, frame, wallpaper, and desktop layer surfaces recover when an existing screen changes global `x` or `y` during dock, undock, rotation, or topology changes.
+## Phase 2: build only what you see
 
-**Ryoku integration:** Watch the surviving screen object, settle topology movement briefly, then unmap and remap the affected surface. Compose this with existing resource-loss and closed-window recovery rather than replacing it.
+The tree already leans on `Loader` for deferred construction, but nothing audits
+who actually constructs at startup. Every singleton that initializes eagerly in
+the shell, the hub, and the peripheral surfaces is a bill paid at login that
+should be paid on first use.
 
-**Omarchy Quattro reference:**
+**Change:** audit startup construction surface by surface; move everything that
+is not visible to the user at login behind a loader or a lazy singleton;
+preserve the load-on-open timings so a lazy surface does not feel slower when
+it is finally opened.
 
-- `shell/Ui/ScreenMoveRemap.qml:3-40`
-- `shell/plugins/bar/Bar.qml:938-946`
-- `shell/plugins/background/Background.qml:181-195`
+**Done means:**
 
-**Cost:** Low for the helper and medium to apply it across all long-lived surfaces.
+- the startup construction log for each resident process fits on one screen
+- no user-facing surface constructs until it is requested
+- opening a lazily loaded surface shows no regression against today's timing
 
-### Introduce a shared keyboard-panel interaction contract
+## Phase 3: make animation cost what it shows
 
-**Outcome:** Shortcut-opened panels acquire focus reliably and share semantic Escape, Tab, Shift-Tab, arrows, vim movement, Enter, Space, Delete, and text-key behavior. Pointer-only dismissal layers on other outputs do not monopolize keyboard focus.
+The shell animates a lot, and most of it stops when it should (that is
+`Perf.qml`'s job and it is good at it). What is left is the visible-and-audible
+case: waveform and particle surfaces ticking on JavaScript `Timer`s at
+25–40fps, and view models rebuilt from scratch on change.
 
-**Ryoku integration:** Create a Ryoku-owned semantic key dispatcher and input-mode-aware focus primitive. Migrate panels incrementally, beginning with clipboard, network, and audio. Preserve each panel's own cursor and action state machine.
+**Change:** convert hot surfaces from timer-driven ticks to frame-driven
+updates; make the hot per-frame path allocate nothing; sweep the binding-heavy
+surfaces (the bar carries over a thousand `Behavior` and `NumberAnimation`
+declarations) for storms that recompute more than they draw. Extend `Perf.qml`'s
+policy, never bypass it: the idle, battery, and game-mode rules stay the single
+source of truth.
 
-**Omarchy Quattro reference:**
+**Done means:**
 
-- `shell/Ui/PanelKeyCatcher.qml:3-85`
-- `shell/Ui/KeyboardPanel.qml:80-101,248-260,333-378`
-- `shell/plugins/bar/Bar.qml:391-446`
+- a profiler run on the bar shows no per-frame JavaScript allocation
+- idle bar CPU is effectively zero on a default session
+- every surface animates only when heard and seen, and only at the rate it needs
 
-**Cost:** Medium to high because the QSBar (across its `barShellStyle` forms) and applicable FrameBars menus require compositor and multi-monitor interaction testing.
+## Phase 4: fewer resident processes
 
-### Centralize screen-fitted popup geometry
+This one is hard because it is deliberate, not because it is tricky. A login
+today brings up several QML processes, each with its own QML runtime, startup
+parse, and memory: the shell, the hub, the screenshot surface, the pin surface,
+the wallpaper UI, plus the Go daemons.
 
-**Outcome:** Popups remain fully operable on compact, portrait, scaled, and mixed-resolution displays. Content exceeding available space scrolls instead of clipping off-screen.
+**Change:** cost every resident process in the baseline table, then decide per
+process whether it stays resident or becomes a spawn-on-demand surface inside
+the shell. Earlier decisions kept some of these separate deliberately for crash
+isolation and safety; folding any of them back in must preserve what the
+isolation bought. A surface that spawns on demand keeps that property while
+losing the always-on cost. This is a case for a maintainer conversation, not a
+lone PR.
 
-**Ryoku integration:** Add one shared fitted-card geometry primitive that accounts for bar thickness and margins, caps width and height, and exposes a bounded viewport. Migrate fixed-width QSBar panels and unbounded FrameBars surfaces.
+**Done means:**
 
-**Omarchy Quattro reference:**
+- the baseline table lists every resident process with its cost
+- each fold keeps feature parity and states, in the commit, what isolation
+  property it preserves and how
+- net resident process count and login memory are down, measured
 
-- `shell/Ui/PopupCard.qml:28-58`
-- `shell/plugins/panels/audio/Panel.qml:649-672`
+## Phase 5: the hardest surface
 
-**Cost:** Medium. No dependency or security cost.
+The wallpaper engine is the largest per-frame consumer in the desktop: video
+decode, shader surfaces, and cache management in one place. It is also the most
+visible surface when it misbehaves.
 
-### Extract pointer-movement gating for hybrid lists
+**Change:** move decode work off the UI thread, bound the shader surfaces,
+cost the cache policy. If the baseline says some of this is already fine, the
+phase shrinks to what the numbers justify; the numbers decide, not this file.
 
-**Outcome:** Keyboard selection no longer jumps when scrolling moves a delegate underneath a stationary pointer.
+**Done means:**
 
-**Ryoku integration:** Extract the equivalent guard already used by Ryoku's launcher and reuse it in network and future keyboard-plus-pointer lists. Reset the gate only after real pointer movement in stable coordinates.
+- decode never blocks the UI thread, measured under load
+- the worst-case wallpaper per-frame cost is recorded and under the target set
+  after the baseline
 
-**Omarchy Quattro reference:**
+## Phase 6: keep it from creeping back
 
-- `shell/Ui/PointerMoveGate.qml:3-51`
-- `shell/plugins/clipboard/Clipboard.qml:181-194,245-248,520-521`
+A regression gate is the difference between a tuning pass and a discipline. The
+repo already gates shell IPC parity in CI; performance deserves the same
+treatment.
 
-**Cost:** Low. No dependency or security cost.
+**Change:** a CI check on the reference profile that fails when idle CPU, login
+time, or the resident process count creeps past the recorded baseline. Nominate
+a perf guardian: the person who owns the numbers, reviews the per-frame
+changes, and turns every "the shell feels heavy" report into a measurement
+first.
 
-## Phase 2: Highest-value user features
+**Done means:**
 
-### Add on-demand Wi-Fi QR sharing
+- the gate runs on every change touching the shell and is green on main
+- the first real regression caught by it is fixed with the number it produced,
+  as proof the gate works
 
-**Outcome:** The active Wi-Fi connection can be shared with a phone or another device using a QR code. Open, WPA, WEP, and hidden networks are represented correctly; enterprise connections are rejected. Password reveal is explicit, and all secret-bearing UI state is cleared when the overlay closes.
+## For contributors
 
-**Ryoku integration:**
+The same ordering works for people. Pick the row that matches where you are;
+every row is finished work, not a training exercise.
 
-- Add a typed, one-shot `network.wifiShare` daemon call.
-- Return the result only to the requesting call; never publish a password-bearing QR or plaintext password on the persistent `network` topic.
-- Keep secrets out of argv and logs.
-- Ignore late replies after close, disconnect, interface change, or request replacement.
-- Render the QR as one image or `Canvas` node rather than thousands of QML rectangles.
-- Invoke one shared overlay from QSBar and FrameBars network surfaces.
+**First patch (no shell experience needed)**
 
-**Omarchy Quattro reference:**
+- run the baseline script, file the results, and open a ticket for anything
+  that looks off; reporting a regression with a number is already a
+  contribution
+- audit `Loader` usage and startup construction; the audit is the deliverable,
+  one list per surface
+- `qmllint` cleanups on files you have read that pass the existing gates
 
-- `shell/plugins/panels/network/Panel.qml:460-517,941-991`
-- `shell/plugins/panels/network/WifiQrPanel.qml:39-139`
-- `bin/omarchy-network-qr:19-80`
+**Building confidence (know the shell a little)**
 
-**Cost:** Medium. Requires NetworkManager secret access and either `qrencode` or a small in-process Go QR encoder.
+- Phase 1: compile QML in the package and the gates; you will learn the whole
+  delivery pipeline and it is all packaging, none of it QML semantics
+- Phase 3, one surface: convert one hot timer-driven animation to frame-driven
+  and prove it with the profiler
+- Phase 2, one surface: defer one eagerly constructed surface and keep the
+  open timing honest
 
-### Add searchable, keyboard-driven clipboard history
+**Hard hat (know the shell and the decisions behind it)**
 
-**Outcome:** Users can filter the existing typed clipboard history and operate it entirely from the keyboard. Selection remains stable across filtering and model updates.
+- Phase 4: process consolidation, paired with a maintainer, because it revises
+  earlier architecture decisions
+- Phase 5: the wallpaper engine threading work
+- Phase 6: build the perf gate and volunteer as its first guardian
 
-**Ryoku integration:**
-
-- Filter by preview, filename, kind, and MIME type.
-- Preserve selection by entry ID rather than row index.
-- Keep the selected row visible.
-- Map Enter to copy, Delete to remove, and Shift+Delete to guarded clear.
-- Preserve Ryoku's no-synthetic-paste contract.
-- Add clipboard to FrameBars' keyboard-focus policy.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/clipboard/Clipboard.qml:133-194,337-380`
-- `shell/plugins/clipboard/ClipboardHistory.js:92-95,155-189`
-
-**Cost:** Medium. No new dependency, privilege, or clipboard exposure.
-
-### Add a blocking select/input prompt broker
-
-**Outcome:** Ryoku helpers and plugins can request a shell-native choice or text prompt and wait for a typed accept or cancel result without temporary-file polling.
-
-**Ryoku integration:**
-
-- Add typed `prompt.pick` and `prompt.reply` calls plus a `prompt` topic.
-- Publish `{active, requestId, mode, prompt, options:[{label,value,icon?}]}`.
-- Distinguish cancellation from empty input.
-- Return opaque values so duplicate labels remain safe.
-- Guarantee timeout, daemon shutdown, replacement, and close unblock the caller exactly once.
-- Treat returned values as data and never execute them automatically.
-- Follow the existing screenshare request/reply lifecycle.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/menu/Menu.qml:117-134,715-833`
-- `bin/omarchy-menu-select:67-93`
-
-**Cost:** Medium. No new runtime dependency or privilege.
-
-### Add a built-in emoji launcher provider
-
-**Outcome:** Emoji search and copy are available directly in Ryoku's launcher without configuring `rofimoji` or a separate fullscreen overlay.
-
-**Ryoku integration:** Bundle a keyworded Unicode catalogue, add a non-default `emoji:` or `:` provider, cap results before creating rows, and reuse the existing launcher dispatcher, virtualization, keyboard navigation, and clipboard action. Synthetic paste, if offered, must remain an explicit secondary action with short-lived clipboard ownership.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/emojis/EmojiSearch.js:18-37`
-- `shell/plugins/emojis/Emojis.qml:69-150,199-239`
-- `shell/plugins/emojis/emojis.json`
-- `bin/omarchy-menu-emoji-insert`
-
-**Cost:** Small. Preserve the upstream MIT notice if the catalogue or helper is reused.
-
-### Remember and switch power profiles per source
-
-**Outcome:** An opt-in setting applies one profile on AC and another on battery. Manual choices update the mapping for the current source.
-
-**Ryoku integration:** Persist `{autoSwitch, acProfile, batteryProfile}`, observe UPower's source state beside the existing power-profiles service, and coalesce rapid changes to the latest state. Missing batteries, unknown source state, unavailable profiles, and desktops must not force a profile. Default `autoSwitch` to false.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/services/battery/Service.qml:43-72`
-- `bin/omarchy-powerprofiles-set:13-69`
-
-**Cost:** Low. No new dependency or privilege beyond the existing D-Bus setter.
-
-### Add session reminders with visible outstanding state
-
-**Outcome:** Users can create multiple lightweight reminders with a duration and optional message, inspect due times, and cancel or clear them. Reminders survive shell reloads and arrive through the normal notification path.
-
-**Ryoku integration:** Add a daemon-owned `reminders` topic and typed `reminders.add`, `reminders.cancel`, and `reminders.clear` calls. Use user-systemd timers or equivalent durable scheduling, store messages as data rather than command arguments, and reuse the prompt broker for minutes and optional text. Explicitly define login and reboot survival semantics.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/reminders/ReminderFlow.qml:34-96`
-- `shell/plugins/reminders/ReminderFlowModel.js:1-13`
-- `shell/plugins/bar/indicators/Reminder.qml:10-48`
-- `bin/omarchy-reminder:24-62,78-135,180-225`
-
-**Cost:** Medium. Uses the existing systemd user manager and notification service.
-
-### Make audio surfaces bounded and keyboard-operable
-
-**Outcome:** Large device and application-stream lists remain on-screen and can be controlled without a pointer.
-
-**Ryoku integration:** Add a bounded vertical viewport, one section-and-row cursor, visible-selection scrolling, Left/Right volume changes, Enter/Space device or mute actions, and consistent behavior across QSBar and FrameBars. Search is unnecessary for normally short audio lists.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/audio/Panel.qml:250-355,649-689`
-
-**Cost:** Medium. No new dependency or privilege.
-
-### Stabilize FrameBars Wi-Fi ordering
-
-**Outcome:** FrameBars shows the connected network first, then saved networks, then remaining networks by signal strength, matching QSBar and avoiding NetworkManager enumeration-order churn.
-
-**Ryoku integration:** Sort the typed daemon snapshot or the FrameBars list after SSID deduplication. Keep selection stable while scans update raw access points.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/network/Model.js:267-282`
-
-**Cost:** Low. No new dependency or security boundary.
-
-## Phase 3: Platform extensions
-
-### Add slow-application launch feedback
-
-**Outcome:** Applications that take longer than two seconds to present a window receive persistent launch feedback that closes when a new or newly active top-level appears, or after a bounded timeout. Normal launches remain flash-free.
-
-**Ryoku integration:** Keep one launcher-level owner with a serial guard so overlapping launches cannot close each other's feedback. Render through Ryoku's existing OSD language rather than creating a parallel notification history entry or copying Quattro's generic OSD bus.
-
-**Omarchy Quattro reference:**
-
-- `shell/services/AppLibrary.qml:157-188,225-258`
-- `shell/plugins/osd/Osd.qml:54-80,115-136`
-
-**Cost:** Medium. No new dependency.
-
-### Add a host-owned plugin glyph trigger
-
-**Outcome:** Installed frame-popout plugins can expose a discoverable bar glyph without loading arbitrary third-party QML directly into latency-sensitive bar layout.
-
-**Ryoku integration:** Render the glyph from receipt-validated manifest icon and label metadata and toggle the plugin's existing frame popout. Support both active bar products while keeping plugin code in its current content and service hosts.
-
-**Omarchy Quattro reference:**
-
-- `shell/services/BarWidgetRegistry.qml:10-33`
-- `shell/shell.qml:666-708`
-- `shell/plugins/bar/Bar.qml:1458-1466`
-
-**Cost:** Medium. Does not expand the existing plugin trust boundary.
-
-### Add an optional Tailscale Store plugin
-
-**Outcome:** Tailscale users can see connection state, connect or disconnect, copy peer addresses, and select an exit node without making Tailscale a core desktop dependency.
-
-**Ryoku integration:** Begin with `tailscale status --json`, up/down, peer copy, and exit-node selection. Keep bounded CLI execution and parsing in a daemon-owned optional capability or one shared plugin service. Treat operator authorization as an explicit one-time setup action. Keep peer data and authentication URLs memory-only. Defer accounts, Mullvad, Taildrop, and high-frequency polling.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/tailscale/Service.qml:16-20,123-192,336-455`
-- `shell/plugins/panels/tailscale/Panel.qml:44-49,193-304,415-429,579-706`
-- `shell/plugins/panels/tailscale/Model.js`
-- `shell/plugins/panels/tailscale/TailscaleIcon.qml`
-
-**Cost:** Medium to high. Optional `tailscale`/`tailscaled`, browser login, and one-time PolicyKit authorization.
-
-### Add opt-in persistent notification history and media
-
-**Outcome:** Missed notifications and allowed thumbnails survive shell or daemon restarts while retaining bounded history and clear-all behavior.
-
-**Ryoku integration:** Keep live notification QObjects and actions in QML, send plain snapshots to a daemon ingestion call, and publish a daemon-owned history topic. Store data atomically under owner-only permissions, canonicalize allowed temporary image paths, cap item and byte counts, enforce retention, and make persistence explicitly configurable.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/notifications/Service.qml:79-98,451-655`
-
-**Cost:** Medium. No new dependency, but bodies and images are privacy-sensitive.
-
-### Add fingerprint enrollment and qylock authentication
-
-**Outcome:** Enrolled users can unlock with a fingerprint while password PAM remains available in parallel and continues to be the failure-safe fallback.
-
-**Ryoku integration:** Add enrollment, removal, and status to Lockscreen settings. Ship `fprintd`/libfprint and a narrowly reviewed root-owned Ryoku PAM service. Start the fingerprint PAM conversation only after `WlSessionLock.secure`, suppress it in preview/testing, retry failures with a bound, abort on unlock or teardown, and make simultaneous password/fingerprint success idempotent. Keep authentication inside qylock rather than daemon IPC.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/lock/Service.qml:87-218,304-368`
-
-**Cost:** High. Authentication-critical packaging, PAM policy, hardware gating, and security review are required.
-
-## Explicit non-goals
-
-### Do not port the Quattro plugin host or global hot reload
-
-Quattro destroys all panels, services, and widgets before clearing the component cache and rescanning. Ryoku's receipt-owned, versioned, explicit-enable, swap-on-success loader has the stronger lifecycle and delivery model.
-
-**Omarchy Quattro reference:**
-
-- `shell/services/PluginRegistry.qml:576-665`
-- `shell/shell.qml:739-758`
-
-### Do not port the full command menu or icon indexer
-
-Ryoku already has the stronger launcher: federated providers, frecency, desktop actions, script compatibility, virtualized results, and dedicated settings. A second menu and action configuration convention would add arbitrary-command and maintenance surface without a missing capability. Only the external prompt protocol is additive.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/menu/Menu.qml:508-559,945-1091`
-- `shell/services/AppLibrary.qml`
-
-### Do not port Dropbox into the core desktop
-
-The Quattro implementation repeatedly walks the entire Dropbox tree, depends on Python, `dropbox-cli`, and Nautilus, exposes private paths, and uses hard-coded quota assumptions. If demand appears, a Store plugin should use bounded status calls or a supported API without recursive periodic scans.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/dropbox/Service.qml:34-65,155-255`
-- `shell/plugins/panels/dropbox/status.py:10-16,46-96`
-
-### Do not port the custom border, theme, and control stack
-
-It duplicates Ryoku's established visual language and adds shape nodes, broad token parsing, bindings, and a second component convention for no missing user capability.
-
-**Omarchy Quattro reference:**
-
-- `shell/Ui/BorderOverlay.qml`
-- `shell/Commons/Border.qml`
-- `shell/Commons/BorderGeometry.js`
-- `shell/Commons/Color.qml`
-- `shell/Commons/Style.qml`
-
-### Do not port the image picker
-
-Ryoku already has bounded asynchronous thumbnail decoding, nearby-item loading, wallpaper and theme catalogues, screenshot/video routes, and a better lifecycle. A future arbitrary-directory picker must retain those bounds and use typed daemon requests.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/image-picker/ImagePicker.qml:89-135,408-512`
-
-### Do not port the speed test
-
-Ryoku's Cloudflare implementation already has calibrated samples, latency, retry, cancellation, per-request and overall timeouts, edge and country data, and immediate offline transitions.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/network/Panel.qml:706-770,1021-1053`
-
-### Do not port the generic payload OSD wholesale
-
-Ryoku's volume, microphone, and brightness OSD observes real source state, suppresses login-sync flashes, and cancels cleanly. Arbitrary status text should remain a notification unless it belongs to the bounded slow-launch feedback use case.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/osd/Osd.qml:54-80,115-136`
-
-### Do not port the draggable four-edge bar
-
-FrameBars already provides four independently configurable per-monitor rails. Adding the same capability to QSBar would duplicate behavior and multiply panel anchoring and layout paths.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/bar/Bar.qml:238-263,938-970`
-
-### Do not port notification-card styling directly
-
-Ryoku already has stronger explicit default and secondary notification actions. If unread/read parity or persistent media is added, extend the shared Ryoku notification model and card rather than introducing a second notification UI.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/notifications/components/NotificationCard.qml`
-
-### Do not reproduce QR matrices with one delegate per module
-
-The feature is valuable, but `Repeater { model: qrSize * qrSize }` creates thousands of QML objects for larger QR codes. Use one rendered image or canvas-backed node.
-
-**Omarchy Quattro reference:**
-
-- `shell/plugins/panels/network/WifiQrPanel.qml:103-139`
-
-## Recommended execution order
-
-1. Centralize media-player selection.
-2. Centralize plugin discovery and service ownership.
-3. Add monitor-origin remap recovery.
-4. Introduce shared keyboard-panel and fitted-popup primitives.
-5. Add Wi-Fi QR sharing.
-6. Add searchable keyboard clipboard history.
-7. Add the prompt broker.
-8. Add the emoji launcher provider.
-9. Add per-source automatic power profiles.
-10. Build reminders using the prompt broker.
-11. Bound and keyboard-enable audio surfaces.
-12. Add slow-launch feedback and host-owned plugin glyphs.
-13. Evaluate Tailscale, persistent notifications, and fingerprint unlock as separate security and product projects.
+If you are new here, start with the first row and the baseline. Everything else
+in this file will still be waiting with the numbers attached.

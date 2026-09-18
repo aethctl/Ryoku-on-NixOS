@@ -60,7 +60,7 @@ Item {
         NumberAnimation { duration: Style.animNormal; easing.type: Easing.OutCubic }
     }
 
-
+    
     Item {
         id: maskShape
         anchors.fill: parent
@@ -96,7 +96,7 @@ Item {
         }
     }
 
-
+    
     Rectangle {
         anchors.fill: parent
         color: cell.colors ? Qt.rgba(cell.colors.surfaceContainer.r, cell.colors.surfaceContainer.g, cell.colors.surfaceContainer.b, 0.5)

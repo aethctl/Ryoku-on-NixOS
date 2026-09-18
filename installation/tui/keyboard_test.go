@@ -83,3 +83,44 @@ func TestStepsOmitKeyboardOnPreset(t *testing.T) {
 		t.Errorf("with preset, step count = %d, want %d (one fewer)", len(s), full-1)
 	}
 }
+
+// A Belgian keyboard (be-latin1) must float the Belgian locales to the top of the
+// picker and never let the Belarusian be_BY -- which shares the "be" prefix and a
+// Cyrillic script -- lead or outrank them, which is how a Belgian install ended up
+// with a Russian-looking shell.
+func TestPromoteKbLocalesFloatsCountry(t *testing.T) {
+	items := []item{
+		{"en_US.UTF-8", "en_US.UTF-8", ""},
+		{"be_BY.UTF-8", "be_BY.UTF-8", ""},
+		{"ru_RU.UTF-8", "ru_RU.UTF-8", ""},
+		{"fr_BE.UTF-8", "fr_BE.UTF-8", ""},
+		{"nl_BE.UTF-8", "nl_BE.UTF-8", ""},
+	}
+	got := promoteKbLocales(items, "be-latin1")
+	if got[0].key != "fr_BE.UTF-8" && got[0].key != "nl_BE.UTF-8" {
+		t.Fatalf("first locale = %q, want a *_BE locale on top for a Belgian keyboard", got[0].key)
+	}
+	pos := map[string]int{}
+	for i, it := range got {
+		pos[it.key] = i
+	}
+	if pos["be_BY.UTF-8"] < pos["fr_BE.UTF-8"] || pos["be_BY.UTF-8"] < pos["nl_BE.UTF-8"] {
+		t.Errorf("Belarusian be_BY ranked above a Belgian locale (fr_BE=%d nl_BE=%d be_BY=%d)",
+			pos["fr_BE.UTF-8"], pos["nl_BE.UTF-8"], pos["be_BY.UTF-8"])
+	}
+	// a us keyboard has nothing to disambiguate: order is untouched.
+	if same := promoteKbLocales(items, "us"); same[0].key != "en_US.UTF-8" {
+		t.Errorf("us keyboard reordered the locale list: first = %q", same[0].key)
+	}
+}
+
+func TestLocaleTerritory(t *testing.T) {
+	for in, want := range map[string]string{
+		"fr_BE.UTF-8": "BE", "be_BY.UTF-8": "BY", "en_US.UTF-8": "US",
+		"pt_BR": "BR", "C": "", "C.UTF-8": "",
+	} {
+		if got := localeTerritory(in); got != want {
+			t.Errorf("localeTerritory(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

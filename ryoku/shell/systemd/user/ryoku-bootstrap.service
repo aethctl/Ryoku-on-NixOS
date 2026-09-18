@@ -1,0 +1,30 @@
+[Unit]
+# A machine whose config was never laid down boots a bare compositor: no keybinds,
+# no shell autostart, no wallpaper, just the compositor's own defaults. Nothing
+# materializes on a plain package install (the installer, the dev deploy, and an
+# update on a box that already has it are the only callers), so the first login
+# after `pacman -S ryoku-desktop-<wm>` had nothing to run. This lays the packaged
+# base config before the session's compositor reads its own tree: niri.service
+# pulls it in and orders itself after it, and it is enabled globally as a fallback
+# for sessions that are not a systemd user unit.
+Description=Ryoku configuration bootstrap
+
+# Run when the box has never been materialized, or when the shell tree it needs is
+# missing (the two ways a session comes up bare). One marker keeps it one-shot in
+# practice: after a successful run both exist and the unit does nothing.
+ConditionPathExists=|!%h/.config/ryoku
+ConditionPathExists=|!%h/.config/quickshell/shell/shell.qml
+
+Before=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# the dev deploy rewrites this to ~/.local/bin; the package ships /usr/bin.
+ExecStart=/usr/bin/ryoku materialize
+# materialize is declarative and preserves user files, so a second run (an update
+# racing a login) is harmless rather than a reason to refuse to start.
+TimeoutStartSec=120
+
+[Install]
+WantedBy=default.target

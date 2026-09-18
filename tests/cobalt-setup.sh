@@ -156,16 +156,14 @@ out="$("$server" status)"
 [[ "$(field docker <<<"$out")" == ready ]] || fail "status: direct access should report ready, got: $out"
 [[ "$(field cobalt <<<"$out")" == running ]] || fail "status: should report the running container, got: $out"
 
-# helper: `docker info` fails but the helper is present, so the state is the
-# actionable "setup" rather than the dead-end "denied", and the container state
-# is still answerable through the helper.
+# helper-only status must never authenticate. It can report that setup is
+# available, but only a deliberate setup/start action may reach pkexec.
 rm -f "$tmp/DOCKER_UP"
-# The seam stands in for pkexec here: the point of this case is the door the
-# script chooses, not the escalation itself, which the negative tests above
-# already pin.
-out="$(RYOKU_DOCKER_ASSUME_ROOT=1 "$server" status)"
+clear_escalated
+out="$("$server" status)"
 [[ "$(field docker <<<"$out")" == setup ]] || fail "status: with a helper present the state should be setup, got: $out"
-[[ "$(field cobalt <<<"$out")" == running ]] || fail "status: helper door should still report the container, got: $out"
+[[ "$(field cobalt <<<"$out")" == unknown ]] || fail "status: helper-only status must not inspect the container, got: $out"
+escalated && fail "status escalated through pkexec; it must remain read-only"
 
 # none: no helper on PATH and no direct access degrades to denied, and `up` says
 # so instead of pretending.

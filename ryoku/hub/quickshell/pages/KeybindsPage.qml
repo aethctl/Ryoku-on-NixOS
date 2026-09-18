@@ -502,11 +502,20 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in the middle of a page-wide window
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -528,19 +537,10 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Every desktop shortcut in one place. Apps sets what the launcher keys open (browser, terminal, editor, files, notes) and rebinds those keys; System rebinds the built-in shortcuts; Custom layers your own. Overlaps are flagged as you go.")
+            text: I18n.tr("Every desktop shortcut. Clashes are flagged as you go.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    // marginalia in the head's right margin, dressing the dead space beside the title. Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "操作"
-        index: "04"; label: I18n.tr("APPS & KEYS")
-        glyph: "meander"; glyph2: "torii"
     }
 
     // ── tab switch: Shortcuts (legend) | Custom (editor) ──
@@ -590,6 +590,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: appsCol
@@ -905,9 +906,11 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
-            Column {
-                id: col
+            CardColumns {
+
+            id: col
                 width: legend.width - Tokens.s3   // reserve a lane for the scroll rail
                 spacing: Tokens.s5
 
@@ -917,7 +920,7 @@ Item {
                     delegate: Column {
                         id: grp
                         required property var modelData
-                        width: col.width
+                        width: col.colWidth
                         spacing: 0
 
                         // section head: dot + category caps + hairline leader.
@@ -1066,7 +1069,7 @@ Item {
 
                 // footer explainer: where the legend comes from, and the caveat.
                 Text {
-                    width: col.width
+                    width: col.colWidth
                     wrapMode: Text.WordWrap
                     text: pg.wmCfgPath
                         ? I18n.tr("Read live from Ryoku's binds plus your Hub custom shortcuts. Binds added by hand in %1 do not appear here and are not conflict-checked, so add custom shortcuts in the Custom tab.").arg(pg.wmCfgPath)
@@ -1167,10 +1170,12 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: rowsCol
-                    width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
                     spacing: Tokens.s2
 
                     Repeater {
@@ -1363,7 +1368,6 @@ Item {
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
 
-
             // ── the action catalogue overlay (Picker), shared across rows ──
             MouseArea {
                 id: scrim
@@ -1475,12 +1479,6 @@ Item {
             }
         }
 
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "操作"
-            glyph: "meander"; glyph2: "torii"
-        }
     }
 
     // ── the app catalogue picker (shared: Apps roles + custom Run binds) ─────

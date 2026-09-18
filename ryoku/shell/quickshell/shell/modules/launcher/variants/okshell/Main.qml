@@ -348,25 +348,37 @@ Scope {
                             anchors.fill: parent
                             anchors.margins: root.pad
                             model: ScriptModel { values: root.rows }
-                            currentIndex: root.sel
-                            highlightFollowsCurrentItem: true
-                            preferredHighlightBegin: 0
-                            preferredHighlightEnd: height
-                            highlightRangeMode: ListView.ApplyRange
+                            // root.sel is the selection, not the view's own current
+                            // item: a ListView rewrites currentIndex when its model
+                            // changes or an ApplyRange pulls it into view, which
+                            // killed the binding and left the plate parked on one
+                            // row while Enter ran another. The plate is placed from
+                            // sel below, and the list scrolls to keep sel in view.
+                            currentIndex: -1
+                            highlightFollowsCurrentItem: false
                             clip: true
                             boundsBehavior: Flickable.StopAtBounds
                             cacheBuffer: root.rowH * 8
 
+                            Connections {
+                                target: root
+                                function onSelChanged() { list.positionViewAtIndex(root.sel, ListView.Contain) }
+                            }
                             // the plate slides between rows rather than fading
                             highlight: Rectangle {
+                                y: root.sel * root.rowH
+                                width: list.width
+                                height: root.rowH
                                 radius: root.rad
                                 color: root.onBg
                                 border.width: 1
                                 border.color: root.onLine
                                 Sumi {}
+                                Behavior on y {
+                                    enabled: !root.settling
+                                    NumberAnimation { duration: 260; easing.type: Easing.OutCubic }
+                                }
                             }
-                            highlightMoveDuration: root.settling ? 0 : 260
-                            highlightResizeDuration: 0
 
                             delegate: Item {
                                 id: li

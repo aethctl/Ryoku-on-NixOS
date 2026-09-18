@@ -234,7 +234,7 @@ QtObject {
         if (scheme) knobs.schemeType = scheme
         if (typeof colorIndex === "number") knobs.sourceColorIndex = colorIndex | 0
         _rethemeProc.running = false
-        _rethemeProc.command = ["ryoku-hub", "hypr", "matugen", "set", JSON.stringify(knobs)]
+        _rethemeProc.command = ["ryoku-hub", "desktop", "matugen", "set", JSON.stringify(knobs)]
         _rethemeProc.running = true
         if (callback) callback({ ok: true }, null)
     }

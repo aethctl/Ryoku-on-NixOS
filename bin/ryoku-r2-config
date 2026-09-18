@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# ryoku-r2-config: write the rclone remote the release workflows upload
+# through (the [ryoku] repo channels and the ISO), from the R2_* secrets in the
+# environment. One place for the remote's shape, used by publish-repo.yml (the
+# build and publish jobs) and build-iso-reusable.yml.
+set -euo pipefail
+: "${R2_ACCESS_KEY_ID:?}" "${R2_SECRET_ACCESS_KEY:?}" "${R2_ENDPOINT:?}"
+mkdir -p ~/.config/rclone
+cat > ~/.config/rclone/rclone.conf <<EOF
+[Ryoku]
+type = s3
+provider = Cloudflare
+access_key_id = ${R2_ACCESS_KEY_ID}
+secret_access_key = ${R2_SECRET_ACCESS_KEY}
+endpoint = ${R2_ENDPOINT}
+# The scoped R2 token has Object Read+Write only, not bucket-level perms;
+# without this rclone calls HeadBucket/CreateBucket and 403s. The bucket
+# already exists, so skip the check.
+no_check_bucket = true
+EOF
+chmod 600 ~/.config/rclone/rclone.conf

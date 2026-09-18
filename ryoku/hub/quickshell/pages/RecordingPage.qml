@@ -192,12 +192,8 @@ Item {
 
     // span math for the section Flows: a cell's width comes from its control's
     // column count (Spans.of), never from a placement decision (DESIGN.md 6, 9).
-    // With the camera poster in the right rail the left column is too narrow to
-    // pack cells two-up without eliding their labels, so they run one per row
-    // (full width) while it shows.
+    // Pack n cells across the section's width, gutters between.
     function span(n, w) {
-        if (recDecor.visible)
-            return w;
         var cw = (w - (Spans.cols - 1) * Tokens.s2) / Spans.cols;
         return n * cw + (n - 1) * Tokens.s2;
     }
@@ -390,11 +386,20 @@ Item {
     // ── head: eyebrow, Fraunces title, intro blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: recDecor.visible ? recDecor.left : parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.left: parent.left
+        anchors.leftMargin: Tokens.s6
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head starts at the body's left inset and spans its width
+        width: parent.width - Tokens.s6 * 2
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -416,7 +421,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Ryoku records with gpu-screen-recorder, hardware-encoded on your GPU (it falls back to wf-recorder on multi-GPU machines). Start and stop from the bar's screen-capture Tools; these settings shape every recording, including where it lands.")
+            text: I18n.tr("How Ryoku records: quality, encoder, and where files land.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -426,24 +431,27 @@ Item {
     Flickable {
         id: flick
         anchors {
-            left: parent.left; right: recDecor.visible ? recDecor.left : parent.right
+            left: parent.left; right: parent.right
             top: head.bottom; bottom: bar.top
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s5; bottomMargin: Tokens.s4
         }
         contentWidth: width
-        contentHeight: col.height + Tokens.s5
+        contentHeight: Math.max(col.height, height)
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
+        CardColumns {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("KEY PRESSES")
                 kana: "鍵"
 
@@ -451,7 +459,7 @@ Item {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s2
-                    text: I18n.tr("Show polished keycaps in tutorials and recordings. Turn the desktop preview on, drag it where viewers can read it, then record when you are ready. Enabling this never starts a recording.")
+                    text: I18n.tr("Polished keycaps for tutorials and demos; turning this on never records.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
@@ -493,7 +501,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Keycap style")
-                    desc: I18n.tr("Dark is black with white type; Light is white with black type.")
+                    desc: I18n.tr("Dark keycaps, or light.")
                     source: "keypresses.json"
                     def: pg.keyCommitted ? pg.keyCommitted.theme : ""
                     changed: pg.keyDraft && pg.keyCommitted ? pg.keyDraft.theme !== pg.keyCommitted.theme : false
@@ -510,7 +518,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Visible keys")
-                    desc: I18n.tr("All keys is most expressive; Shortcuts only hides ordinary typing.")
+                    desc: I18n.tr("Every key, or only shortcuts.")
                     source: "keypresses.json"
                     def: pg.keyCommitted ? pg.keyCommitted.mode : ""
                     changed: pg.keyDraft && pg.keyCommitted ? pg.keyDraft.mode !== pg.keyCommitted.mode : false
@@ -529,7 +537,7 @@ Item {
                     label: I18n.tr("Desktop placement")
                     desc: pg.keySettingsError !== "" ? pg.keySettingsError
                         : (pg.keyBackendStatus === "error" ? pg.keyBackendError
-                        : I18n.tr("Show the animated sample, then drag the keycaps anywhere on the chosen monitor."))
+                        : I18n.tr("Show the sample, drag the keycaps"))
                     controlWidth: 282
                     Row {
                         anchors.right: parent.right
@@ -553,13 +561,13 @@ Item {
 
             // ── QUALITY ──────────────────────────────────────────────────────
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("QUALITY")
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s1
-                    text: I18n.tr("Higher framerate is smoother (120 gets closer to a high-refresh panel); higher quality and HEVC/AV1 are crisper but larger. Constant framerate plays and edits correctly everywhere; variable is smaller but can look choppy or import as 30fps.")
+                    text: I18n.tr("Higher framerate and quality look better but make larger files.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
@@ -567,7 +575,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Framerate")
-                    desc: I18n.tr("Frames captured per second; higher is smoother but files are larger.")
+                    desc: I18n.tr("Frames per second; higher is smoother but larger.")
                     unit: "fps"
                     source: "recording.json"
                     value: pg.draft ? String(pg.draft.fps) : ""
@@ -585,7 +593,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Framerate mode")
-                    desc: I18n.tr("Constant plays everywhere; variable is smaller but may import as 30fps.")
+                    desc: I18n.tr("Constant plays anywhere; variable is smaller.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.framerateMode) : ""
                     changed: pg.draft && pg.committed ? pg.draft.framerateMode !== pg.committed.framerateMode : false
@@ -619,7 +627,7 @@ Item {
                     divider: true
                     block: true
                     label: I18n.tr("Codec")
-                    desc: I18n.tr("H.264 plays anywhere; HEVC and AV1 are crisper, AV1 needs a newer GPU.")
+                    desc: I18n.tr("H.264 plays anywhere; AV1 is crisper but needs a newer GPU.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.codec) : ""
                     changed: pg.draft && pg.committed ? pg.draft.codec !== pg.committed.codec : false
@@ -634,13 +642,13 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("ENCODER")
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s1
-                    text: I18n.tr("GPU encoding is fast and barely touches your CPU. CPU is a fallback if the GPU encoder misbehaves.")
+                    text: I18n.tr("GPU encoding is fast; CPU is the fallback if it misbehaves.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
@@ -648,7 +656,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Encoder")
-                    desc: I18n.tr("GPU encoding barely loads the CPU; pick CPU if the GPU encoder fails.")
+                    desc: I18n.tr("GPU offloads the CPU; CPU if GPU fails.")
                     source: "recording.json"
                     def: pg.committed ? String(pg.committed.encoder) : ""
                     changed: pg.draft && pg.committed ? pg.draft.encoder !== pg.committed.encoder : false
@@ -664,7 +672,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Show the cursor")
-                    desc: I18n.tr("The mouse pointer is drawn into the video when on, hidden when off.")
+                    desc: I18n.tr("Draws the mouse pointer into the video.")
                     source: "recording.json"
                     changed: pg.draft && pg.committed ? pg.draft.cursor !== pg.committed.cursor : false
                     controlWidth: 54
@@ -679,7 +687,7 @@ Item {
                     divider: true
                     footH: 32
                     label: I18n.tr("Save recordings to")
-                    desc: I18n.tr("Every recording lands here, the editor included. Leave it empty to follow your Videos folder.")
+                    desc: I18n.tr("Leave empty to follow your Videos folder.")
                     source: "recording.json"
                     changed: pg.draft && pg.committed ? pg.draft.directory !== pg.committed.directory : false
                     Field {
@@ -694,8 +702,10 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("UNDER THE HOOD")
+                expanded: false
+                summary: I18n.tr("AUTO-DETECTED")
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -718,31 +728,6 @@ Item {
         }
     }
 
-    // the marked right rail: a camera specimen poster (the poster layer), from
-    // the running head down to the action bar. The head and the settings form
-    // are held to its left so text and cells reflow clear of it; it hides when
-    // the window is too narrow to spare the column.
-    Placard {
-        id: recDecor
-        anchors {
-            right: parent.right; rightMargin: Tokens.s6
-            top: head.top; bottom: bar.top
-            bottomMargin: Tokens.s4
-        }
-        width: Math.round(pg.width * 0.30)
-        visible: Tokens.showPosters && (pg.width - width - Tokens.s7 >= 560)
-        code: "REC-02"
-        title: "\u9332\u753b"
-        sub: I18n.tr("ON THE RECORD")
-        motto: I18n.tr("Without creativity and obsession, everything is boring.")
-        chapter: "05"
-        label: I18n.tr("TOOLS")
-        quote: I18n.tr("THE SCREEN REMEMBERS EVERYTHING.")
-        seal: "\u9332"
-        art: "camera.png"
-        seed: 5
-    }
-
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to persist.
     // RESET walks every key to stock (creating dirt), REVERT drops the unsaved
@@ -758,14 +743,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the bar's dead centre, between the status and the verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "録画"
-            glyph: "column"; glyph2: "wave"
         }
 
         Row {

@@ -202,11 +202,20 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every page) ───────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid: left-inset and body-wide, so the
+        // title starts over the first card column instead of floating centred
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -242,20 +251,12 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Manage installed shell plugins and extras bundles. Changes apply live; RyoStore owns browsing and installation.")
+            text: I18n.tr("Installed plugins and bundles. RyoStore installs new ones.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
     }
 
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "拡張"
-        index: "07"; label: I18n.tr("ADD-ONS")
-        glyph: "asanoha"; glyph2: "meander"
-    }
     Tabs {
         id: tabs
         anchors.left: parent.left
@@ -355,18 +356,21 @@ Item {
                 id: flick
                 anchors {
                     left: parent.left; right: parent.right
-                    top: sect.bottom; bottom: instDecor.visible ? instDecor.top : parent.bottom
-                    topMargin: Tokens.s4; bottomMargin: instDecor.visible ? Tokens.s4 : 0
+                    top: sect.bottom; bottom: parent.bottom
+                    topMargin: Tokens.s4; bottomMargin: Tokens.s4
                 }
                 contentWidth: width
                 contentHeight: Math.max(col.height, height)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
-                Column {
-                    id: col
-                    width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+                CardColumns {
+
+                id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
                     spacing: Tokens.s2
 
                     Repeater {
@@ -385,7 +389,7 @@ Item {
                                 ? card.man.metadata.settings.length : 0
                             readonly property string upd: pg.updateFor(card.modelData)
 
-                            width: col.width
+                            width: col.colWidth
                             height: 64
                             radius: Tokens.radius
                             color: ch.hovered ? Tokens.tint5 : "transparent"
@@ -482,20 +486,6 @@ Item {
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
 
-            // fills the dead grid slot below a short plugin list, per DESIGN.md
-            // section 12: a poster gives the section its face. Ink-only, holds no
-            // control; hidden while searching so results own the full column.
-            Decor {
-                id: instDecor
-                anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-                height: Math.min(300, parent.height - Tokens.cellH * 2 - Tokens.s5)
-                visible: Tokens.showPosters && (pg.loaded && pg.shown.length > 0 && pg.query.trim() === "" && height > 140)
-                title: "拡張"; sub: "アドオン"
-                tate: "力を継ぎ足す"
-                caption: I18n.tr("Plugins extend the shell: live surfaces installed through RyoStore.")
-                readout: ["SOURCE|plugins.json", "APPLY|live", "SITS|frame · desktop · bar", "SCOPE|per-plugin"]
-                code: "ADDON-04"; seal: "拡"; boxId: "addons.installed"; seed: 5; ditherFreq: 1.0
-            }
         }
     }
 
@@ -531,6 +521,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: bundleList
@@ -726,6 +717,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: dcol

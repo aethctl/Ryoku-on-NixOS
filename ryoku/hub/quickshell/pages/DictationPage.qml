@@ -200,12 +200,17 @@ Item {
     Column {
         id: head
         anchors {
-            left: parent.left; right: micDecor.visible ? micDecor.left : parent.right; top: parent.top
+            left: parent.left; right: parent.right; top: parent.top
             leftMargin: Tokens.s6; rightMargin: Tokens.s6; topMargin: Tokens.s6
         }
-        spacing: Tokens.s2
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -227,7 +232,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Switch voice typing on, pick a speech-to-text engine and model, download models in place, and add an API key for the cloud engine.")
+            text: I18n.tr("Voice typing: engine, model, and the key the cloud one needs.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -237,7 +242,7 @@ Item {
     Item {
         id: below
         anchors {
-            left: parent.left; right: micDecor.visible ? micDecor.left : parent.right; top: head.bottom; bottom: parent.bottom
+            left: parent.left; right: parent.right; top: head.bottom; bottom: parent.bottom
             leftMargin: Tokens.s6; rightMargin: Tokens.s6; topMargin: Tokens.s5; bottomMargin: Tokens.s6
         }
 
@@ -291,15 +296,17 @@ Item {
             visible: !pg.loaded || pg.installed
             anchors.fill: parent
             contentWidth: width
-            contentHeight: content.height + Tokens.s5
+            contentHeight: Math.max(content.height, height)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
-            Column {
+            CardColumns {
                 id: content
-                width: Math.min(flick.width - Tokens.s3, 720)   // reserve a scroll lane
+                width: flick.width - Tokens.s3
                 spacing: Tokens.s5
+                fillTo: flick.height
 
                 // a one-shot info note (tap to dismiss), e.g. after a download.
                 Rectangle {
@@ -326,7 +333,7 @@ Item {
 
                 // ── DICTATION: the voice-typing switch and its guidance ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("DICTATION")
 
                     Text {
@@ -363,7 +370,7 @@ Item {
 
                 // ── ENGINE & MODEL: the click-to-select card list ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("ENGINE & MODEL")
 
                     Item {
@@ -556,7 +563,7 @@ Item {
 
                 // ── API KEY: only for a cloud engine that needs one ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     visible: pg.needsKey
                     title: I18n.tr("API KEY")
 
@@ -647,8 +654,10 @@ Item {
 
                 // ── PACKAGE: uninstall handoff ──
                 SettingCard {
-                    width: content.width
+                    width: content.colWidth
                     title: I18n.tr("PACKAGE")
+                    expanded: false
+                    summary: I18n.tr("VOXTYPE-BIN")
 
                     Text {
                         width: parent.width
@@ -715,45 +724,8 @@ Item {
                     }
                 }
 
-                // a live audio-wave specimen dressing the page foot: voice made
-                // visible, in the reference's dither (reuses the Input decor idiom).
-                Decor {
-                    width: parent.width
-                    height: Tokens.cellH + Tokens.s5
-                    title: "\u97f3\u58f0"
-                    sub: "\u30dc\u30a4\u30b9"
-                    tate: "\u58f0\u3092\u6587\u5b57\u306b"
-                    caption: I18n.tr("Speak, and the words land in whatever app has focus.")
-                    code: "VOICE-02"
-                    seal: "\u58f0"
-                    seed: 8
-                    ditherFreq: 1.0
-                    boxId: "dictation.voice"
-                }
             }
         }
     }
 
-    // fill the head's dead right the way Connections and Recording do: a mic
-    // specimen (the 1938 RCA ribbon-mic patent) baked smooth so its line-art
-    // reads, right-aligned from the head to the page foot. Head and content are
-    // held to its left; it hides on a window too narrow to spare the rail.
-    Placard {
-        id: micDecor
-        anchors {
-            right: parent.right; rightMargin: Tokens.s6
-            top: head.top; bottom: parent.bottom
-            bottomMargin: Tokens.s6
-        }
-        width: Math.round(pg.width * 0.28)
-        visible: Tokens.showPosters && (pg.width - width - Tokens.s7 >= 460)
-        code: "MIC-02"
-        title: "\u30de\u30a4\u30af"
-        sub: I18n.tr("RIBBON \u00b7 1938")
-        chapter: "05"
-        label: I18n.tr("TOOLS")
-        quote: I18n.tr("SPEAK, AND IT LISTENS.")
-        seal: "\u97f3"
-        art: "mic.png"
-    }
 }

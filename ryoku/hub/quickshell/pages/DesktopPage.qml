@@ -15,7 +15,7 @@ Item {
 
     readonly property string pTitle: I18n.tr("Desktop")
     readonly property string pEyebrow: I18n.tr("DESKTOP")
-    readonly property string pBlurb: I18n.tr("What sits on your desktop: the brand mark, the pickers, and the audio visualiser.")
+    readonly property string pBlurb: I18n.tr("The brand mark, the pickers, and the audio visualiser.")
     function focusKey(k) { sp.focusKey(k) }
 
     // ── Pickers ───────────────────────────────────────────────────────────────
@@ -65,12 +65,15 @@ Item {
         // gap on Visualizer, the way the visualiser preview folds off General.
         SettingCard {
             id: pickersCard
+            // one card on the page's own measure: a lone control stretched across
+            // the window leaves its right half empty
             anchors.left: parent.left
-            anchors.right: parent.right
+            width: sp.cardWidth
             title: I18n.tr("PICKERS")
-            kana: "選"
+            // the shared extras slot is a Column, which sizes itself from its
+            // VISIBLE children: a height binding here would be the trap of
+            // measuring the card by its own implicitHeight, and is not needed
             visible: sp.tab === "General"
-            height: visible ? implicitHeight : 0
 
             SettingRow {
                 anchors.left: parent.left

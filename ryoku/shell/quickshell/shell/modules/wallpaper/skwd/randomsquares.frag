@@ -19,7 +19,7 @@ layout(binding = 2) uniform sampler2D newTex;
 
 const ivec2 size = ivec2(10, 10);
 const float smoothness = 0.5;
-
+ 
 float rand (vec2 co) {
   return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
 }

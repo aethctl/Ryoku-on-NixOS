@@ -1,0 +1,9 @@
+languages = ["auto"]
+ignore = [".mcp.json", "opencode.json", "*.log", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.ttf", "*.otf", "*.woff", "*.woff2"]
+
+[ai]
+  enabled = true
+  rerank_model = ""
+  assist_model = "ornith:latest"
+  ollama_url = "http://localhost:11434"
+  provider = "ollama"

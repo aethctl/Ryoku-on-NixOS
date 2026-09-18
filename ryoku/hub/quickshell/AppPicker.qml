@@ -113,6 +113,8 @@ Item {
             clip: true
             model: root.filtered
             spacing: 1
+            ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             delegate: Rectangle {
                 id: appRow

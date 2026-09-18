@@ -1,0 +1,46 @@
+name: SDDM Wayland greeter
+
+on:
+  pull_request:
+    paths:
+      - 'ryoku/lockscreen/sddm/setup'
+      - 'ryoku/cli/internal/doctor/doctor.go'
+      - 'system/packages/base.packages'
+      - 'release/packages/ryoku-desktop/PKGBUILD'
+      - 'tests/sddm-wayland.sh'
+      - '.github/workflows/sddm-wayland.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'ryoku/lockscreen/sddm/setup'
+      - 'ryoku/cli/internal/doctor/doctor.go'
+      - 'system/packages/base.packages'
+      - 'release/packages/ryoku-desktop/PKGBUILD'
+      - 'tests/sddm-wayland.sh'
+      - '.github/workflows/sddm-wayland.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  greeter-contract:
+    name: Greeter uses Qt Wayland end to end
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ryoku/cli/go.mod
+
+      - name: Check Doctor's SDDM configuration
+        shell: bash
+        working-directory: ryoku/cli
+        run: go test ./internal/doctor -run '^TestSDDMWaylandBodyForcesQtWayland$'
+      - name: Check the installer and packages
+        shell: bash
+        run: RYOKU_PATH="$PWD" tests/sddm-wayland.sh

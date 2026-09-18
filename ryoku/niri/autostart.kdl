@@ -75,8 +75,9 @@ spawn-sh-at-startup "command -v ryoku-i18n >/dev/null 2>&1 && ryoku-i18n ensure 
 // box already on this version is left alone. The version is written only after
 // qs actually runs the tour, so a first-boot launch failure retries next login,
 // and the flock guards a double fire. Bump the version when the tour changes.
-spawn-sh-at-startup "s=\"${XDG_STATE_HOME:-$HOME/.local/state}/ryoku\"; v=$(head -n1 \"$s/welcome-seen\" 2>/dev/null); case \"$v\" in ''|*[!0-9]*) v=0;; esac; [ \"$v\" -lt 18 ] && flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-welcome.lock\" qs -c welcome && mkdir -p \"$s\" && printf 18 > \"$s/welcome-seen\""
+// qs surfaces spawned here bypass ryoku-shell's daemon, which injects the QML module path.
+spawn-sh-at-startup "s=\"${XDG_STATE_HOME:-$HOME/.local/state}/ryoku\"; v=$(head -n1 \"$s/welcome-seen\" 2>/dev/null); case \"$v\" in ''|*[!0-9]*) v=0;; esac; [ \"$v\" -lt 18 ] && flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-welcome.lock\" env QML_IMPORT_PATH=\"$HOME/.local/lib/qt6/qml\" QML2_IMPORT_PATH=\"$HOME/.local/lib/qt6/qml\" qs -c welcome && mkdir -p \"$s\" && printf 18 > \"$s/welcome-seen\""
 
 // First-boot keyboard hint, shown exactly once ever. The marker is written
 // before the async launch, so a reboot before it is dismissed cannot bring it back.
-spawn-sh-at-startup "s=\"${XDG_STATE_HOME:-$HOME/.local/state}/ryoku\"; [ -e \"$s/keys-hint-seen\" ] || { mkdir -p \"$s\" && printf seen > \"$s/keys-hint-seen\" && flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-keys-hint.lock\" qs -c keys-hint; }"
+spawn-sh-at-startup "s=\"${XDG_STATE_HOME:-$HOME/.local/state}/ryoku\"; [ -e \"$s/keys-hint-seen\" ] || { mkdir -p \"$s\" && printf seen > \"$s/keys-hint-seen\" && flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-keys-hint.lock\" env QML_IMPORT_PATH=\"$HOME/.local/lib/qt6/qml\" QML2_IMPORT_PATH=\"$HOME/.local/lib/qt6/qml\" qs -c keys-hint; }"

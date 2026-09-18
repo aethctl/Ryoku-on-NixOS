@@ -36,6 +36,8 @@ source "$SCRIPT_DIR/ryoku-gpu-detect"
 
 # the Hyprland drop-in we write to (require()d by hyprland.lua).
 GPU_CONF_DEFAULT="${RYOKU_GPU_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/gpu.lua}"
+# the niri drop-in we write to (included by niri's config.kdl).
+NIRI_CONF_DEFAULT="${RYOKU_GPU_NIRI_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/niri/gpu.kdl}"
 # udev rule destination and its source (rule shipped next to this script).
 UDEV_RULE="${RYOKU_GPU_UDEV_RULE:-/etc/udev/rules.d/90-ryoku-gpu.rules}"
 RULE_SRC="${RYOKU_GPU_RULE_SRC:-$SCRIPT_DIR/90-ryoku-gpu.rules}"
@@ -139,6 +141,58 @@ write_snippet() {
   emit_snippet "$value" "$primary" >"$dest"
 }
 
+# ── niri drop-in ──────────────────────────────────────────────────────────────
+
+emit_niri_snippet() {
+  cat <<'EOF'
+// Managed by ryoku-gpu. niri picks its own render device, so nothing is pinned
+// here; a multi-GPU machine needs the cursor composited in software, because the
+// cross-GPU cursor plane fails niri's atomic commit (EINVAL) on some panels.
+debug {
+    disable-cursor-plane
+}
+EOF
+}
+
+emit_niri_disabled() {
+  cat <<'EOF'
+// Written at runtime by the GPU tooling, which pins the render device when a
+// machine has more than one and niri's own pick is wrong.
+//
+// Empty means niri chooses, which is right on a single-GPU box. Hand edits are
+// lost on the next GPU reset; put yours in user.kdl.
+EOF
+}
+
+write_niri_snippet() {
+  # Always written: niri includes this file unconditionally, and a missing
+  # include is a hard config error.
+  local dest="${1:-$NIRI_CONF_DEFAULT}"
+  analyze
+  _niri_dir="$(dirname "$dest")"
+  if [[ $dest == "-" ]]; then
+    niri_snippet
+    return 0
+  fi
+  mkdir -p "$_niri_dir"
+  niri_snippet >"$dest"
+}
+
+niri_snippet() {
+  _niri_dir="${_niri_dir:-$(dirname "$NIRI_CONF_DEFAULT")}"
+  if (( _ngpu >= 2 )); then
+    # niri rejects a duplicate `debug` node outright, so a box that already has
+    # the cursor route in user.kdl keeps its own and gets the template here.
+    if [[ -r $_niri_dir/user.kdl ]] && grep -q 'disable-cursor-plane' "$_niri_dir/user.kdl"; then
+      emit_niri_disabled
+      return 0
+    fi
+    emit_niri_snippet
+  else
+    emit_niri_disabled
+  fi
+}
+
 # ── subcommands ───────────────────────────────────────────────────────────────
 
 cmd_detect() {
@@ -187,6 +241,10 @@ cmd_order() {
 cmd_persist() {
   local dest="${1:-$GPU_CONF_DEFAULT}"
   analyze
+  # The niri half of the policy is independent of the render pin: the cursor
+  # route is about the frame, not about which GPU renders it, so it is written
+  # on every machine, pin or no pin.
+  [[ $dest == "-" ]] || write_niri_snippet
   if ! beneficial; then
     if (( _ngpu >= 2 )); then
       echo "ryoku-gpu: strongest GPU is ${_slots[0]} but it is not pinned" \
@@ -309,6 +367,9 @@ cmd_disable() {
   fi
   mkdir -p "$(dirname "$dest")"
   emit_disabled >"$dest"
+  # Clearing the pin says nothing about the cursor route: recompute the niri
+  # file from the hardware instead of resetting it, so a multi-GPU box keeps it.
+  write_niri_snippet
   echo "ryoku-gpu: reset $dest to Hyprland's default GPU selection (active on next login)"
 }
 

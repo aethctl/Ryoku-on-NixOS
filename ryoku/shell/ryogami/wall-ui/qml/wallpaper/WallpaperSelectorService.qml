@@ -130,11 +130,11 @@ QtObject {
       console.log("[WSS] onWeItemAdded: " + weId + " dir=" + weDir)
     }
 
-
+    
     function onWallpaperApplied(type, name, path, weId, key) {
       var matchKey = key || weId || (name || "").replace(/\.[^.]+$/, "")
       if (!matchKey) return
-
+      
       for (var i = 0; i < service._wallpaperData.length; i++) {
         var item = service._wallpaperData[i]
         var itemKey = item.weId || (item.name || "").replace(/\.[^.]+$/, "")
@@ -143,7 +143,7 @@ QtObject {
           break
         }
       }
-
+      
       for (var j = 0; j < service.filteredModel.count; j++) {
         var row = service.filteredModel.get(j)
         var rowKey = (row.weId || "")

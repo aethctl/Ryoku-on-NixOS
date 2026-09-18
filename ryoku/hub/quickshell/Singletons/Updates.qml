@@ -8,16 +8,6 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // The packaged Nix CLI owns a Ryoku-only Nix backend. An older session may
-    // still carry the external-updates flag, so a live Nix status frame wins.
-    property string backend:
-        Quickshell.env("RYOKU_UPDATE_BACKEND") || ""
-    property bool canUpdate: backend !== "nix"
-    property string source: ""
-    readonly property bool externalSystemUpdates:
-        Quickshell.env("RYOKU_SYSTEM_UPDATES_EXTERNAL") === "1"
-        && backend !== "nix"
-
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
     property bool available: false
@@ -56,22 +46,13 @@ Singleton {
         return Math.floor(h / 24) + "d ago";
     }
 
-    function check() {
-        if (root.externalSystemUpdates)
-            return;
-
-        root.send("updates.check", {});
-    }
+    function check() { root.send("updates.check", {}); }
 
     function apply(t) {
         try {
             var o = JSON.parse(t);
-            root.backend = o.backend || root.backend;
-            root.canUpdate = root.backend !== "nix" || o.canUpdate === true;
-            root.source = o.source || "";
-
-            // Packaged releases expose named release metadata. Nix/source
-            // backends fall back to their installed/latest version pair.
+            // a packaged box on a named release: show the release names,
+            // else the commit pair a checkout reports.
             var named = !!(o.release && o.channelRelease);
             root.currentVersion = named ? o.release : (o.installedVersion || "");
             root.latestVersion = named ? o.channelRelease : (o.latestVersion || "");

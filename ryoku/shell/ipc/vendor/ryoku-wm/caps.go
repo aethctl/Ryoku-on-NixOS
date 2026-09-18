@@ -103,6 +103,14 @@ type Caps struct {
 	// the preferred default. Doctor repairs portals.conf against it, so the
 	// backend name lives with the compositor rather than in a reconciler.
 	PortalBackend string `json:"portalBackend,omitempty"`
+	// Packages are the pacman packages this compositor is made of: the
+	// compositor package and the satellites ryoku-desktop-<name> installs for
+	// it, most significant first. Provider-owned because only a provider knows
+	// what it is made of, and it is what lets a switch reclaim a compositor's
+	// space without the CLI or the Hub ever spelling a package name. The
+	// private dependencies these orphan with are pacman's to cascade, so they
+	// are not listed here.
+	Packages []string `json:"packages,omitempty"`
 }
 
 // Has reports whether the provider can honour want. A zero Caps supports

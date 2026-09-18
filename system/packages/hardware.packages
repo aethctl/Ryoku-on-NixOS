@@ -27,6 +27,10 @@ lib32-vulkan-radeon
 intel-ucode
 vulkan-intel
 lib32-vulkan-intel
+# intel-media-driver is the iHD VA-API driver for Gen8+ Intel, so the live
+# wallpaper and media players hardware-decode instead of burning a CPU core.
+# AMD VA-API already ships in mesa and libva comes with ffmpeg, both in base.
+intel-media-driver
 
 [nvidia]
 # NVIDIA is a GPU vendor; its kernel module comes from drivers/nvidia.sh. This

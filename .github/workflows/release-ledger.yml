@@ -1,0 +1,49 @@
+name: Release Ledger
+
+# Rebuilds releases/index.json (the release ledger the Hub, `ryoku rollback`
+# and the site read) from the release directories the bucket holds, with the
+# same script the publish runs after a release lands (bin/ryoku-release-ledger).
+# Dispatch it when the ledger is missing or wrong; it is derived, so a rebuild
+# is always safe.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ledger:
+    name: Rebuild releases/index.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install git for checkout
+        run: pacman -Sy --noconfirm --needed git
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install rclone and jq
+        run: pacman -Syu --noconfirm --needed rclone jq
+      - name: Configure the bucket
+        env:
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: ./bin/ryoku-r2-config
+      - name: Rebuild the ledger
+        env:
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          ./bin/ryoku-release-ledger "Ryoku:$R2_BUCKET" | tee "$RUNNER_TEMP/index.json"
+          {
+            echo "### Release ledger"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/index.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

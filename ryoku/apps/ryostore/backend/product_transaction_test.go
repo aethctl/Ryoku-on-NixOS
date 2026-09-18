@@ -803,3 +803,34 @@ func TestRemoveGuestUnlinksReceiptlessPlugin(t *testing.T) {
 		t.Fatalf("plugin directory remains: %v", err)
 	}
 }
+
+// TestForeignWindowManagerRefusesDownloadBeforeFetch proves a product written for
+// another window manager is refused before any byte is fetched and nothing lands
+// on disk, so a tile that cannot work here cannot be installed by a client that
+// asks anyway. It stays listed, and an installed copy stays removable.
+func TestForeignWindowManagerRefusesDownloadBeforeFetch(t *testing.T) {
+	setTransactionXDG(t)
+	stubWindowManager(t, runningManager)
+	ctx := context.Background()
+
+	foreign := newTransactionFixture(t, "1.0.0", []byte("payload\n"), []byte("payload\n"), func(e *ProductEntry) {
+		e.WindowManager = declaredManager
+		e.WindowManagerReason = "Built against another window manager."
+	})
+	err := installProduct(ctx, foreign.cache, "plugins", foreign.entry)
+	if err == nil {
+		t.Fatal("installProduct accepted a product for another window manager")
+	}
+	if !strings.Contains(err.Error(), declaredManager) || !strings.Contains(err.Error(), runningManager) {
+		t.Fatalf("refusal = %v, want both window managers named", err)
+	}
+	if foreign.requests.hit("/plugins/demo/product-manifest.json") {
+		t.Error("refused install fetched the product manifest")
+	}
+	if foreign.requests.hit("/plugins/demo/content/Plugin.qml") {
+		t.Error("refused install fetched a payload file")
+	}
+	if _, err := os.Stat(installedPluginPath()); !os.IsNotExist(err) {
+		t.Errorf("refused install wrote to the destination: %v", err)
+	}
+}

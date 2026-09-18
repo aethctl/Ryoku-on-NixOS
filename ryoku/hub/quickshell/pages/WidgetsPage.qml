@@ -388,11 +388,19 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first card
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -414,19 +422,10 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Every widget that rides your wallpaper: the clock, the all-in-one card, system stats, calendar, now-playing, weather and notes. Pick a card to preview it live and open its settings; nothing lands on the desktop until you save.")
+            text: I18n.tr("The widgets on your wallpaper, previewed live.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    // marginalia dressing the head's empty right margin (running head). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "部品"
-        index: "03"; label: I18n.tr("DESKTOP")
-        glyph: "wave"; glyph2: "column"
     }
 
     // ── the widget catalogue: a card per widget; a card opens its settings ────
@@ -482,6 +481,7 @@ Item {
             enabled: pg.selected === ""
             Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Flow {
                 id: grid
@@ -513,15 +513,25 @@ Item {
                             id: pbody
                             anchors { left: parent.left; right: parent.right; top: parent.top }
                             anchors.margins: Tokens.s3
-                            height: wcard.height - footer.height - Tokens.s3 * 2
+                            height: wcard.height - footer.height - Tokens.s3 * 3
                             clip: true
                             opacity: wcard.on ? 1 : 0.45
                             Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
                             Item {
-                                width: wcard.modelData.natW; height: wcard.modelData.natH
+                                id: pwrap
+                                width: wcard.modelData.natW
+                                // the preview's own natural height when it reports one,
+                                // so a face with a date line is scaled to fit whole
+                                // rather than clipped at the card's edge.
+                                readonly property real natH: (pv.item && pv.item.implicitHeight > 0)
+                                    ? pv.item.implicitHeight : wcard.modelData.natH
+                                height: natH
                                 anchors.centerIn: parent
-                                scale: Math.min(pbody.width / wcard.modelData.natW, pbody.height / wcard.modelData.natH, 1.25)
-                                Loader { anchors.fill: parent; sourceComponent: pg.previewFor(wcard.modelData.tab) }
+                                // never upscale past natural size: a preview blown
+                                // up to fill clips flush against the footer and its
+                                // glyphs read as overlapping the label row.
+                                scale: Math.min(pbody.width / pwrap.width, pbody.height / pwrap.natH, 1.0)
+                                Loader { id: pv; anchors.fill: parent; sourceComponent: pg.previewFor(wcard.modelData.tab) }
                             }
                         }
 
@@ -598,6 +608,8 @@ Item {
                     item.defaults = Qt.binding(() => pg.sheetDefaults);
                     item.tab = Qt.binding(() => pg.selected);
                     item.query = Qt.binding(() => pg.query);
+                    // the rail's Advanced toggle reveals the per-widget desktop lock
+                    item.advanced = Qt.binding(() => !!(pg.hub && pg.hub.advanced));
                     item.edited.connect(pg.onSheetEdited);
                     item.pickRequested.connect(pg.onSheetPick);
                     item.appPickRequested.connect(pg.onSheetAppPick);
@@ -631,14 +643,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the bar's dead centre, between the status and the verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "部品"
-            glyph: "wave"; glyph2: "column"
         }
 
         Row {

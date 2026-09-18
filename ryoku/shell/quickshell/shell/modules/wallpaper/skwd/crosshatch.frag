@@ -27,7 +27,7 @@ float rand(vec2 co) {
 vec4 transition(vec2 p) {
   float dist = distance(center, p) / threshold;
   float r = progress - min(rand(vec2(p.y, 0.0)), rand(vec2(0.0, p.x)));
-  return mix(texture(oldTex, p), texture(newTex, p), mix(0.0, mix(step(dist, r), 1.0, smoothstep(1.0-fadeEdge, 1.0, progress)), smoothstep(0.0, fadeEdge, progress)));
+  return mix(texture(oldTex, p), texture(newTex, p), mix(0.0, mix(step(dist, r), 1.0, smoothstep(1.0-fadeEdge, 1.0, progress)), smoothstep(0.0, fadeEdge, progress)));    
 }
 void main() {
     vec2 v_uv = qt_TexCoord0;

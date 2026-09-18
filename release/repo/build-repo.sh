@@ -83,6 +83,19 @@ export PKGEXT='.pkg.tar.zst'
 : "${RYOKU_PKGVER:=$("$RELEASE_DIR/../bin/ryoku-release-version" --pkgver)}"
 export RYOKU_PKGVER
 log "Monorepo package version -> $RYOKU_PKGVER"
+
+# the named state this build is (publish-repo.yml sets both): a release tag on
+# the stable channel, or the dev version on testing. ryoku-desktop writes them
+# to /etc/ryoku-release so a box can say which release it runs; release.json
+# beside the db says which one the channel serves. a dev box building by hand
+# gets a local marker, never a name that looks like a published release.
+: "${RYOKU_RELEASE:=local-$RYOKU_PKGVER}"
+: "${RYOKU_CHANNEL:=local}"
+# the line's name (CODENAME, see release/names.md): every release in a line
+# carries it, and a box shows it next to the release it runs.
+RYOKU_NAME=$(tr -d '[:space:]' < "$RELEASE_DIR/../CODENAME")
+export RYOKU_RELEASE RYOKU_CHANNEL RYOKU_NAME
+log "Release -> $RYOKU_NAME $RYOKU_RELEASE ($RYOKU_CHANNEL)"
 # makepkg's VCS sources (imgborders clones from Codeberg) make a build only as
 # reliable as that host, and a Codeberg 5xx has repeatedly aborted the whole
 # publish. Retry a failed build with backoff so a transient fetch outage rides
@@ -100,18 +113,15 @@ build_pkg() {
   done
 }
 
-for pkgbuild in "${pkgbuilds[@]}"; do
-  pkgdir=$(dirname "$pkgbuild")
-  log "Building $(basename "$pkgdir")"
-  build_pkg "$pkgdir" || die "makepkg failed for $(basename "$pkgdir") after retries"
-done
-
-# 3. a published filename never changes bytes. makepkg is not reproducible,
-#    so a fixed-version package (gpk, ryoku-keyring) rebuilt here would
-#    overwrite its live file with new bytes and break every client holding
-#    the previous db ("Maximum file size exceeded", issue #21). a name the
-#    mirror already serves keeps its served bytes, re-signed; shipping a
-#    change means bumping pkgrel.
+# a published filename never changes bytes. makepkg is not reproducible, so
+# a fixed-version package (gpk, ryoku-keyring) rebuilt here would overwrite
+# its live file with new bytes and break every client holding the previous db
+# ("Maximum file size exceeded", issue #21). so a package whose output names
+# the mirror already serves is not built at all: its served bytes are copied
+# in and re-signed. this is what makes a release a promotion of the testing
+# build (same commit, same names, same bytes) instead of a rebuild, and spares
+# a pinned external (ryotunes, ryomotion, prowl-agent) its compile on every
+# push. shipping a change to a fixed-version package means bumping pkgrel.
 MIRROR=${RYOKU_REPO_MIRROR:-https://repo.ryoku.dev/stable/$REPO_ARCH}
 
 # from the mirror URL on a dev box, or from a directory when CI pre-fetched
@@ -123,6 +133,49 @@ fetch_published() {
   esac
 }
 
+# adopt_published <pkgdir>: 0 when every package the PKGBUILD would produce is
+# already on the mirror and has been copied in and signed; 1 when it must be
+# built. a -debug companion is taken when present and not required: makepkg
+# only emits one when the build leaves debug files behind.
+adopt_published() {
+  local pkgdir=$1 names=() f tmp main_missing=0
+  mapfile -t names < <(cd "$pkgdir" && makepkg --packagelist 2>/dev/null | xargs -rn1 basename)
+  (( ${#names[@]} > 0 )) || return 1
+  tmp=$(mktemp -d)
+  for f in "${names[@]}"; do
+    if fetch_published "$f" "$tmp/$f" && bsdtar -tf "$tmp/$f" >/dev/null 2>&1; then
+      continue
+    fi
+    rm -f "$tmp/$f"
+    [[ $f == *-debug-* ]] || main_missing=1
+  done
+  if (( main_missing )); then
+    rm -rf "$tmp"
+    return 1
+  fi
+  for f in "$tmp"/*.pkg.tar.zst; do
+    mv -f "$f" "$ARCH_DIR/$(basename "$f")"
+    gpg --batch --yes --detach-sign -u "$KEY_ID" -o "$ARCH_DIR/$(basename "$f").sig" "$ARCH_DIR/$(basename "$f")"
+  done
+  rm -rf "$tmp"
+  return 0
+}
+
+for pkgbuild in "${pkgbuilds[@]}"; do
+  pkgdir=$(dirname "$pkgbuild")
+  if adopt_published "$pkgdir"; then
+    log "Adopted published bytes for $(basename "$pkgdir") (already on the mirror; filenames are immutable once live)"
+    continue
+  fi
+  log "Building $(basename "$pkgdir")"
+  build_pkg "$pkgdir" || die "makepkg failed for $(basename "$pkgdir") after retries"
+done
+
+
+# 3. a published filename never changes bytes (see adopt_published above):
+#    a name that was built here anyway but which the mirror already serves
+#    keeps the served bytes, re-signed. the normal path adopts before
+#    building; this catches a name that appeared on the mirror meanwhile.
 for pkg in "$ARCH_DIR"/*.pkg.tar.zst; do
   name=$(basename "$pkg")
   if ! fetch_published "$name" "$pkg.published"; then
@@ -142,6 +195,13 @@ for pkg in "$ARCH_DIR"/*.pkg.tar.zst; do
   mv -f "$pkg.published" "$pkg"
   gpg --batch --yes --detach-sign -u "$KEY_ID" -o "$pkg.sig" "$pkg"
 done
+
+# Import after mirror adoption: verified official bytes must not be replaced by
+# a cached distro build. The shared importer verifies checksum/identity/epoch
+# and re-signs the unchanged package; the scheduled refresh uses it too.
+log "Importing ryotunes from its GitHub release channel"
+RYOKU_REPO_KEY="$KEY_ID" "$SCRIPT_DIR/import-ryotunes.sh" "$ARCH_DIR" >/dev/null \
+  || die "could not import the official ryotunes release into $ARCH_DIR"
 
 # 4. collect built packages, confirm each is signed before indexing.
 packages=("$ARCH_DIR"/*.pkg.tar.zst)
@@ -170,5 +230,13 @@ done
 [[ -e $ARCH_DIR/$REPO_NAME.db ]]     || die "$REPO_NAME.db missing after repo-add"
 [[ -e $ARCH_DIR/$REPO_NAME.db.sig ]] || die "$REPO_NAME.db.sig missing; signing failed"
 
+# 7. release.json beside the db: what this directory serves. `ryoku status`
+#    reads it from the channel to name the release a box would move to, and
+#    publish-repo.yml copies its version into releases/index.json.
+commit=$(git -C "$RELEASE_DIR/.." rev-parse HEAD 2>/dev/null || echo unknown)
+printf '{"schema":1,"release":"%s","name":"%s","channel":"%s","version":"%s","commit":"%s","date":"%s"}\n' \
+  "$RYOKU_RELEASE" "$RYOKU_NAME" "$RYOKU_CHANNEL" "$RYOKU_PKGVER" "$commit" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  > "$ARCH_DIR/release.json"
+
 log "Repo ready at $ARCH_DIR"
-log "Serves: https://repo.ryoku.dev/stable/$REPO_ARCH/ (Server = https://repo.ryoku.dev/stable/\$arch)"
+log "Serves as stable at https://repo.ryoku.dev/stable/$REPO_ARCH/, as testing under channels/testing/, or frozen under releases/<tag>/ (publish-repo.yml)"

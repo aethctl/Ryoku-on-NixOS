@@ -10,6 +10,16 @@ pkgdesc="Oh My Zsh framework for the Ryoku Zsh integration"
 arch=('any')
 url='https://github.com/ohmyzsh/ohmyzsh'
 license=('MIT')
+# Supersede the AUR builds that own /usr/share/oh-my-zsh: without this, a box
+# that already has oh-my-zsh-git installed aborts the update with hundreds of
+# "exists in filesystem" file conflicts, and replaces makes pacman swap them
+# out. Providing them matters just as much: CachyOS-era installs carry
+# cachyos-zsh-config, which depends on 'oh-my-zsh-git', so a conflict without
+# the provide deadlocks the whole upgrade (pacman offers the removal, then
+# refuses it because the removal breaks that dependency).
+provides=("oh-my-zsh=$pkgver" "oh-my-zsh-git=$pkgver")
+conflicts=('oh-my-zsh' 'oh-my-zsh-git')
+replaces=('oh-my-zsh' 'oh-my-zsh-git')
 makedepends=('git')
 _omz_commit=4b657407c98bbc8830ae66c2ac7ff3d737c55a83
 source=("oh-my-zsh::git+$url.git#commit=$_omz_commit")

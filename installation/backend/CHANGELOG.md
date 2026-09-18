@@ -10,6 +10,10 @@
   from the matching `ryoku doctor` reconciler (`lib/mirrors.sh`).
 
 ### Fixed
+- **Alongside installation no longer blocks on a nearly full Windows ESP.**
+  Auto mode shares an existing ESP only with at least 8 MiB free; otherwise the
+  existing 2 GiB Ryoku boot partition becomes a dedicated ESP and Windows' ESP
+  is never mounted read-write or modified. The same backend serves Arch and CachyOS.
 - **The backend README no longer claims the install is online-only.** Offline
   installs from the baked `[offline]` repo have been the ISO default for a while
   (`lib/offline.sh`, `SigLevel = Never` on local packages), but the README still

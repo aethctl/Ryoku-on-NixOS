@@ -4,9 +4,8 @@
 # Carries niri, the xwayland-satellite X11 bridge, the GNOME portal backend niri's
 # caps report, the niri config tree, and the ryoku-wm-niri provider binary
 # (ryoku/wm/niri). It provides the ryoku-desktop-compositor virtual, so an
-# installed ryoku-desktop is satisfied by it, and conflicts with the same virtual
-# so a box carries exactly one compositor variant. `ryoku wm use` swaps it with
-# ryoku-desktop-hyprland as a plain, reversible pacman transaction.
+# installed ryoku-desktop is satisfied by it, and may be installed beside
+# ryoku-desktop-hyprland: a switch is then a config change, not a package swap.
 #
 # There is no plugin subsystem here: niri has no plugins, and its caps say so.
 #
@@ -32,10 +31,8 @@ depends=(
   'xdg-desktop-portal-gnome'
 )
 provides=('ryoku-desktop-compositor')
-# one compositor variant at a time: this and ryoku-desktop-hyprland both provide
-# AND conflict with the virtual, so installing this one removes the other and
-# `ryoku rollback` can put it back.
-conflicts=('ryoku-desktop-compositor')
+# deliberately not exclusive: both variants may be installed, so a switch is a
+# config change with no download and a switch back is instant.
 source=()
 
 _repo="$startdir/../../.."
@@ -61,4 +58,8 @@ package() {
   ( cd "$_repo/ryoku/wm/niri" && go build -o ryoku-wm-niri . )
   install -Dm755 "$_repo/ryoku/wm/niri/ryoku-wm-niri" \
     "$pkgdir/usr/bin/ryoku-wm-niri"
+  # order the config bootstrap ahead of niri.service, so the session's first login
+  # reads a laid-down ~/.config/niri instead of the compositor's own defaults.
+  install -Dm644 "$_repo/ryoku/shell/systemd/user/niri.service.d/ryoku-bootstrap.conf" \
+    "$pkgdir/usr/lib/systemd/user/niri.service.d/ryoku-bootstrap.conf"
 }

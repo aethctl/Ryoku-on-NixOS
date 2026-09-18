@@ -27,6 +27,10 @@ Item {
     readonly property var status: StoreLogic.statusLabels(item)
     readonly property string statusTag: (status.length > 0 && status[0] !== "AVAILABLE") ? status[0] : ""
     readonly property bool flagged: statusTag === "UPDATE" || statusTag === "ACTIVE" || statusTag === "ENABLED"
+    // A product written for another window manager is drawn, not offered: the
+    // tile stays in the grid so the catalogue reads whole, and desaturates with
+    // its tag carrying the reason, the way an unavailable option should.
+    readonly property bool foreign: StoreLogic.isUnavailable(item)
 
     clip: true
     Accessible.role: Accessible.Graphic
@@ -97,6 +101,16 @@ Item {
             GradientStop { position: 0.58; color: "#b0000000" }
             GradientStop { position: 1; color: "#ec000000" }
         }
+    }
+
+    // A product written for another window manager reads as a greyed-out option:
+    // the art is veiled, the tag and the metadata stay crisp so the tile still
+    // says what it is and why it cannot run here. Drawn after the art and before
+    // the tag for exactly that reason.
+    Rectangle {
+        anchors.fill: parent
+        visible: cover.foreign
+        color: Qt.rgba(0.06, 0.06, 0.06, 0.62)
     }
 
     // status tag, accent-tinted for a live product, so a glance finds the

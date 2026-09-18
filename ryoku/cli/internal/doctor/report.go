@@ -39,11 +39,28 @@ func writeReport(override string, findings []finding) (string, error) {
 // are otherwise absent from a report a maintainer reads.
 var diagnosticPackages = []string{
 	"ryoku-desktop", "ryoku", "ryoku-shell", "ryoku-hub", "ryoku-blobs", "ryoku-rashin",
-	"quickshell", "hyprland", "xdg-desktop-portal-hyprland",
+	"quickshell",
 	"qt6-base", "qt6-declarative", "qt6-wayland",
 	"pipewire", "wireplumber", "nvidia-utils", "mesa", "limine", "snapper",
 }
 
+// compositorDiagnosticPackages: the live compositor's own stack, so a report
+// carries the versions that decide the session instead of naming another
+// compositor's. With nothing live (the case a report is usually read for) both
+// providers' stacks are listed, since which one was meant may be the question.
+func compositorDiagnosticPackages() []string {
+	byName := map[string][]string{
+		"hyprland": {"hyprland", "xdg-desktop-portal-hyprland"},
+		"niri":     {"niri", "xwayland-satellite", "xdg-desktop-portal-gnome"},
+	}
+	if name := wm.Detect().Name; byName[name] != nil {
+		return byName[name]
+	}
+	return []string{"hyprland", "xdg-desktop-portal-hyprland", "niri", "xwayland-satellite", "xdg-desktop-portal-gnome"}
+}
+
+// reportNixOS is explicit rather than inferred from /etc/NIXOS: the wrapper,
+// the system bridge, or the file itself all mean the declarative desktop.
 func reportNixOS() bool {
 	return os.Getenv("RYOKU_UPDATE_BACKEND") == "nix" ||
 		os.Getenv("RYOKU_NIX_SYSTEM_BRIDGE") == "1" ||
@@ -99,6 +116,7 @@ func gatherReport(findings []finding) string {
 		cmd("sudo", "-n", "btrfs", "device", "stats", "/")
 	}
 	line("/proc/swaps:\n%s", readFileSafe("/proc/swaps"))
+	line("/etc/conf.d/snapper:\n%s", readFileSafe("/etc/conf.d/snapper"))
 
 	if reportNixOS() {
 		section("packages")
@@ -108,7 +126,7 @@ func gatherReport(findings []finding) string {
 		cmd("ryoku-nix-update", "status", "--json")
 	} else {
 		section("packages")
-		cmd("pacman", append([]string{"-Q"}, diagnosticPackages...)...)
+		cmd("pacman", append(append([]string{"-Q"}, diagnosticPackages...), compositorDiagnosticPackages()...)...)
 		cmd("pacman", "-Qtdq")
 		cmd("pacman", "-Dk")
 		line(".pacnew files:\n%s", captureOut("find", "/etc", "-name", "*.pacnew"))

@@ -114,28 +114,32 @@ FocusScope {
     }
 
     function triggerInstall() {
-        if (item && busyKey === "" && StoreLogic.primaryAction(actionItem) !== "INSTALLED" && !StoreLogic.isDownloadPaused(actionItem)) {
+        if (item && busyKey === "" && StoreLogic.primaryAction(actionItem) !== "INSTALLED"
+                && !StoreLogic.isDownloadPaused(actionItem) && !StoreLogic.isUnavailable(actionItem)) {
             lastComponents = null;
             installRequested(actionItem, ditherOn, null);
         }
     }
 
     function triggerInstallAll() {
-        if (item && busyKey === "" && !StoreLogic.isDownloadPaused(actionItem)) {
+        if (item && busyKey === "" && !StoreLogic.isDownloadPaused(actionItem)
+                && !StoreLogic.isUnavailable(actionItem)) {
             lastComponents = allNames;
             installRequested(actionItem, false, allNames);
         }
     }
 
     function triggerInstallSelected() {
-        if (item && busyKey === "" && selectedNames.length > 0 && !StoreLogic.isDownloadPaused(actionItem)) {
+        if (item && busyKey === "" && selectedNames.length > 0 && !StoreLogic.isDownloadPaused(actionItem)
+                && !StoreLogic.isUnavailable(actionItem)) {
             lastComponents = selectedNames;
             installRequested(actionItem, false, selectedNames);
         }
     }
 
     function triggerRetry() {
-        if (item && busyKey === "" && errorText !== "" && !StoreLogic.isDownloadPaused(actionItem))
+        if (item && busyKey === "" && errorText !== "" && !StoreLogic.isDownloadPaused(actionItem)
+                && !StoreLogic.isUnavailable(actionItem))
             retryRequested(actionItem, ditherOn, lastComponents);
     }
 
@@ -501,6 +505,22 @@ FocusScope {
             }
 
             Text {
+                objectName: "ryostore-detail-foreign-wm"
+                width: parent.width
+                visible: StoreLogic.isUnavailable(detail.actionItem)
+                text: StoreLogic.unavailableReason(detail.actionItem).length > 0
+                    ? StoreLogic.unavailableReason(detail.actionItem)
+                    : StoreLogic.unavailableLabel(detail.actionItem)
+                color: Tokens.inkDim
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                maximumLineCount: 3
+                elide: Text.ElideRight
+            }
+
+            Text {
                 objectName: "ryostore-detail-pause"
                 width: parent.width
                 visible: StoreLogic.isDownloadPaused(detail.actionItem)
@@ -545,7 +565,8 @@ FocusScope {
                             ? I18n.tr(detail.installStage)
                             : I18n.tr("INSTALL SELECTED")
                     primary: true
-                    armed: detail.item !== null && detail.busyKey === "" && detail.selectedNames.length > 0 && !StoreLogic.isDownloadPaused(detail.actionItem)
+                    armed: detail.item !== null && detail.busyKey === "" && detail.selectedNames.length > 0
+                            && !StoreLogic.isDownloadPaused(detail.actionItem) && !StoreLogic.isUnavailable(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstallSelected()
@@ -556,7 +577,8 @@ FocusScope {
                     objectName: "ryostore-detail-install-all"
                     visible: detail.isBundle
                     text: I18n.tr("INSTALL ALL")
-                    armed: detail.item !== null && detail.busyKey === "" && !StoreLogic.isDownloadPaused(detail.actionItem)
+                    armed: detail.item !== null && detail.busyKey === ""
+                            && !StoreLogic.isDownloadPaused(detail.actionItem) && !StoreLogic.isUnavailable(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstallAll()
@@ -573,6 +595,7 @@ FocusScope {
                     armed: detail.item !== null && detail.busyKey === ""
                             && StoreLogic.primaryAction(detail.actionItem) !== "INSTALLED"
                             && !StoreLogic.isDownloadPaused(detail.actionItem)
+                            && !StoreLogic.isUnavailable(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerInstall()
@@ -583,7 +606,8 @@ FocusScope {
                     objectName: "ryostore-detail-retry"
                     text: I18n.tr("RETRY")
                     visible: detail.errorText !== ""
-                    armed: visible && detail.busyKey === "" && !StoreLogic.isDownloadPaused(detail.actionItem)
+                    armed: visible && detail.busyKey === ""
+                            && !StoreLogic.isDownloadPaused(detail.actionItem) && !StoreLogic.isUnavailable(detail.actionItem)
                     Accessible.role: Accessible.Button
                     Accessible.name: text
                     onAct: detail.triggerRetry()

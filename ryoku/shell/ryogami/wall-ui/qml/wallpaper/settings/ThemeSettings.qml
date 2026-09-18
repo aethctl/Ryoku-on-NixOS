@@ -25,7 +25,7 @@ Column {
     })
 
     function _runHub(args) { Quickshell.execDetached(["ryoku-hub"].concat(args)) }
-    function _matugenSet(patch) { Quickshell.execDetached(["ryoku-hub", "hypr", "matugen", "set", JSON.stringify(patch)]) }
+    function _matugenSet(patch) { Quickshell.execDetached(["ryoku-hub", "desktop", "matugen", "set", JSON.stringify(patch)]) }
 
     FileView {
         id: themeFile
@@ -98,7 +98,6 @@ Column {
             ]
             onSelect: function(v) {
                 var full = "scheme-" + v
-                if (root.saveConfigKey) root.saveConfigKey("matugen.schemeType", full)
                 if (root.notifyThemeChanged) root.notifyThemeChanged(full, Config.matugenMode, root._mat.sourceColorIndex)
             }
         }
@@ -113,8 +112,7 @@ Column {
                 var n = parseFloat(v)
                 if (isNaN(n)) n = 0
                 n = Math.max(-1, Math.min(1, n))
-                if (root.saveConfigKey) root.saveConfigKey("matugen.contrast", n)
-                if (root.notifyThemeChanged) root.notifyThemeChanged(Config.matugenScheme, Config.matugenMode, root._mat.sourceColorIndex)
+                root._matugenSet({ contrast: n })
             }
         }
     }
@@ -148,7 +146,6 @@ Column {
                         { mode: "smart", label: I18n.tr("Smart") }
                     ]
                     onSelect: function(v) {
-                        if (root.saveConfigKey) root.saveConfigKey("matugen.mode", v)
                         if (root.notifyThemeChanged) root.notifyThemeChanged(Config.matugenScheme, v, root._mat.sourceColorIndex)
                     }
                 }
@@ -167,7 +164,6 @@ Column {
                     ]
                     onSelect: function(v) {
                         var idx = parseInt(v, 10) | 0
-                        if (root.saveConfigKey) root.saveConfigKey("matugen.colorIndex", idx)
                         if (root.notifyThemeChanged) root.notifyThemeChanged(Config.matugenScheme, Config.matugenMode, idx)
                     }
                 }
@@ -229,7 +225,7 @@ Column {
             title: I18n.tr("Theme apps")
             description: I18n.tr("Recolour GTK and app themes to match the scheme.")
             checked: root._theme.themeApps
-            onToggle: function(v) { root._theme.themeApps = v; root._runHub(["hypr", "theme-apps", v ? "on" : "off"]) }
+            onToggle: function(v) { root._theme.themeApps = v; root._runHub(["desktop", "theme-apps", v ? "on" : "off"]) }
         }
 
         RowDropdown {
@@ -238,7 +234,7 @@ Column {
             description: I18n.tr("Base GTK theme that apps build on.")
             value: root._theme.gtkTheme
             model: [ { mode: "adw", label: "Adw" }, { mode: "adwaita", label: "Adwaita" }, { mode: "system", label: I18n.tr("System") } ]
-            onSelect: function(v) { root._theme.gtkTheme = v; root._runHub(["hypr", "gtk-theme", v]) }
+            onSelect: function(v) { root._theme.gtkTheme = v; root._runHub(["desktop", "gtk-theme", v]) }
         }
 
         RowToggle {
@@ -246,7 +242,7 @@ Column {
             title: I18n.tr("GNOME accent")
             description: I18n.tr("Sync the GNOME accent colour to the scheme.")
             checked: root._theme.gnomeAccent
-            onToggle: function(v) { root._theme.gnomeAccent = v; root._runHub(["hypr", "gnome-accent", v ? "on" : "off"]) }
+            onToggle: function(v) { root._theme.gnomeAccent = v; root._runHub(["desktop", "gnome-accent", v ? "on" : "off"]) }
         }
 
         RowAction {
@@ -254,7 +250,7 @@ Column {
             title: I18n.tr("Ryoku signature")
             description: I18n.tr("Apply the Ryoku theme: frame bars, zero roundness, mono scheme.")
             valueLabel: I18n.tr("APPLY")
-            onClicked: root._runHub(["hypr", "ryoku-theme"])
+            onClicked: root._runHub(["desktop", "ryoku-theme"])
         }
     }
 

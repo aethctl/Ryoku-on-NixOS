@@ -28,6 +28,9 @@ Item {
     property string blurb: ""
     property string query: ""
     property alias tab: sheet.tab
+    // The card measure the grid below uses, so a page's own block can sit on the
+    // same grid instead of spanning the window with an empty half.
+    readonly property alias cardWidth: sheet.cardW
     property alias advanced: sheet.advanced
     // extras ride inside the sheet's scroll area, not pinned above it, so a page
     // with a tall extra block still scrolls as one surface.
@@ -81,12 +84,18 @@ Item {
 
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        spacing: Tokens.s2
+        anchors { left: parent.left; top: parent.top }
+        anchors.leftMargin: sheet.sheetX
+        width: sheet.sheetWidth
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Item {
             width: parent.width
-            height: 14
+            // an eyebrow that only repeats the title is noise, not a register
+            visible: I18n.tr(page.eyebrow).toLowerCase() !== page.title.toLowerCase()
+            height: 18
             Row {
                 id: ebrow
                 spacing: Tokens.s2
@@ -105,25 +114,9 @@ Item {
             // the band runs to the page edge and closes with the sheet's marks:
             // a register cross and the /// cluster, per the reference poster.
             Rectangle {
-                anchors { left: ebrow.right; right: crossMark.left; verticalCenter: parent.verticalCenter }
-                anchors.leftMargin: Tokens.s3; anchors.rightMargin: Tokens.s3
+                anchors { left: ebrow.right; right: parent.right; verticalCenter: parent.verticalCenter }
+                anchors.leftMargin: Tokens.s3
                 height: 1; color: Tokens.lineSoft
-            }
-            Text {
-                visible: Tokens.showGrid
-                id: crossMark
-                anchors { right: slashMark.left; rightMargin: Tokens.s2; verticalCenter: parent.verticalCenter }
-                text: "+"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
-            }
-            Text {
-                visible: Tokens.showGrid
-                id: slashMark
-                // clear the shared top-right FILES/UPDATES chips so the register
-                // marks never ride under them.
-                anchors { right: parent.right; rightMargin: 150; verticalCenter: parent.verticalCenter }
-                text: "///"; color: Tokens.inkFaint
-                font.family: Tokens.mono; font.pixelSize: 10
             }
         }
         Text {

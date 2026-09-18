@@ -213,6 +213,36 @@ instability, but the saving was not separately measured, so treat it as a small
 bonus rather than a headline. Set it back to `default` if you ever suspect a
 device is misbehaving after a link-state change.
 
+## The desktop's own footprint
+
+What the shell costs at idle is Ryoku's to fix, not the laptop's. Measured on
+the reference box (7940HS + 4060, checkout build) on 2026-09-04, before and
+after the fixes that ship in Onogoro 0.57.8:
+
+| Where | Before | After | What it was |
+|---|---|---|---|
+| `$XDG_RUNTIME_DIR` (tmpfs, so RAM) | 4.3 GB, 100% full | 3 MB | Quickshell keeps two unbounded logs per instance and never removes a dead instance; one warning storm wrote 4.3 GB and 113 dead instances kept theirs. The shell daemon now prunes dead instances and caps a live log at 32 MB. |
+| Wallpaper picker, hidden | 410 MB | 164 MB | The picker's QML tree was built at daemon boot and kept for the session. It is built on the first Super+W and torn down after close; the process stays warm, a reopen takes 36 ms. |
+| `bluetoothctl` processes | grew without bound | 0 | The bar widget polled `bluetoothctl` every few seconds even when hidden and with no adapter, and each poll orphaned the last. The widget reads BlueZ over D-Bus now and runs nothing in the background. |
+| `makoctl mode` every 1.5 s | a failing spawn per tick | none | Polled on boxes without mako. Gone. |
+
+What is left, in the order to take it:
+
+1. The shell process at 700 MB to 1.2 GB. The overlays it keeps warm (launcher,
+   control panel, overview) should follow the picker: build on show, drop on
+   hide. Same pattern, same file per surface.
+2. Thumbnails and previews without `sourceSize`: a 4K wallpaper decoded at full
+   size for a 240 px card costs 60 MB where it should cost 1.
+3. The bar's polling timers (CPU, GPU, thermal, storage) fire on separate
+   clocks; one 5 s tick would halve the wakeups.
+4. On battery, Perf.qml already freezes the visualizer and the pill; the video
+   wallpaper decode rate and the blur behind overlays should follow the same
+   `lowPower` flag.
+
+How to measure before claiming a win: `for p in $(pgrep -f 'quickshell|^qs');
+do grep VmRSS /proc/$p/status; done`, `df -h $XDG_RUNTIME_DIR`, `pgrep -c
+bluetoothctl`, and `top -H -p $(pgrep -x qs)` for the thread that is awake.
+
 ## What Ryoku deliberately does not ship
 
 These were implemented, measured, and rejected. They are recorded here so nobody

@@ -183,4 +183,50 @@ printf 'ESP_PATH="/boot"\n' >"$defaults"
 grep -qxF 'EFI_REGISTER=no' "$defaults" || fail "alongside does not pin EFI_REGISTER=no in /etc/default/limine"
 grep -qxF 'FIND_BOOTLOADERS=no' "$defaults" || fail "alongside stopped pinning FIND_BOOTLOADERS=no"
 
+# --- dedicated alongside: preserve a detected Linux loader by PARTUUID -----
+dedicated_conf="$tmp/dedicated-limine.conf"
+dedicated_state="$tmp/limine-existing-esp"
+printf 'timeout: 3\n/Ryoku Linux\n    protocol: linux\n' >"$dedicated_conf"
+(
+  RYOKU_DRYRUN=""
+  RYOKU_DISK_STRATEGY=alongside
+  RYOKU_ESP_MODE=dedicated
+  RYOKU_DISK=/dev/loop0
+  ESP_DEV=/dev/loop0p2
+  RYOKU_PF_ESP=/dev/loop0p1
+  RYOKU_PF_ESP_KIND=linux
+  RYOKU_PF_ESP_BOOT=/EFI/systemd/systemd-bootx64.efi
+  blkid() {
+    [[ $* == *"/dev/loop0p1"* ]] || fail "dedicated entry used the new Ryoku ESP"
+    printf '11111111-2222-3333-4444-555555555555\n'
+  }
+  log() { :; }
+  ryoku_dedicated_existing_entry "$dedicated_conf" "$dedicated_state"
+  ryoku_dedicated_existing_entry "$dedicated_conf" "$dedicated_state"
+) || fail "dedicated existing-Linux entry generation failed"
+[[ $(grep -c '^/Linux (existing)$' "$dedicated_conf") -eq 1 ]] \
+  || fail "dedicated mode did not add exactly one existing-Linux entry"
+grep -qF 'image_path: guid(11111111-2222-3333-4444-555555555555):/EFI/systemd/systemd-bootx64.efi' "$dedicated_conf" \
+  || fail "dedicated existing-Linux entry is not addressed by ESP PARTUUID"
+[[ $(cat "$dedicated_state") == $'linux\t11111111-2222-3333-4444-555555555555\t/EFI/systemd/systemd-bootx64.efi' ]] \
+  || fail "dedicated mode did not persist the existing ESP metadata"
+
+# --- dedicated alongside: use the own-ESP boot path, never shared stage 1 ---
+calls=$(
+  RYOKU_DISK_STRATEGY=alongside RYOKU_ESP_MODE=dedicated bash -c '
+    source "'"$repo"'/installation/backend/lib/common.sh"
+    source "'"$repo"'/installation/backend/lib/bootloader.sh"
+    ryoku_cmdline() { :; }
+    ryoku_boot_plymouth() { :; }
+    ryoku_boot_default_limine() { :; }
+    ryoku_boot_vmd() { :; }
+    ryoku_bootloader_alongside() { echo shared; }
+    ryoku_bootloader_own_esp() { echo dedicated; }
+    run() { :; }
+    ryoku_bootloader
+  '
+)
+grep -qx 'dedicated' <<<"$calls" || fail "dedicated alongside did not use its own ESP path: $calls"
+! grep -qx 'shared' <<<"$calls" || fail "dedicated alongside touched the shared-ESP path: $calls"
+
 echo "limine-bootloader: all checks passed"

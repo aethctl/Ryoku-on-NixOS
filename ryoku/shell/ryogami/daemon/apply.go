@@ -302,6 +302,16 @@ func (d *daemon) restoreOutputs() (want, applied int) {
 		live := e["type"] == "video"
 		paint := p
 		prefs := wallPrefs()
+		// The clip's poster frame, resolved here the same way the apply path does
+		// it. Without this the stored .mp4 is published as the frame's image, the
+		// shell's Image cannot decode it, and the desktop paints nothing (a grey
+		// wallpaper) until the next manual apply. The engine-specific branches
+		// below override paint with their own frame when they have one.
+		if live {
+			if still := liveStill(p, d.config().videoFrame()); still != "" {
+				paint = still
+			}
+		}
 		if live && prefs.Engine == "in_shell" {
 			name := filepath.Base(p)
 			key := strings.TrimSuffix(name, filepath.Ext(name))
@@ -339,9 +349,6 @@ func (d *daemon) restoreOutputs() (want, applied int) {
 			var outs []string
 			if out != "*" {
 				outs = []string{out}
-			}
-			if still := liveStill(p, d.config().videoFrame()); still != "" {
-				paint = still
 			}
 			seq := d.paintSeq.Add(1)
 			repaint := func(l bool) {

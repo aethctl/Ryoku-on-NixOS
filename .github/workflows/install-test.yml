@@ -129,15 +129,16 @@ jobs:
           # the guest pulls the desktop from this locally served repo instead of
           # the public one (Cloudflare 403s CI datacenter IPs). build it with the
           # Arch toolchain in a container; the qemu host itself is Ubuntu.
+          # the toolchain comes from the one shared list (as publish-repo does)
+          # so this container cannot drift and lose a makedep: it had lost meson,
+          # clang and llvm, and the controller packages failed to build.
+          pkgs="$(grep -vE '^[[:space:]]*(#|$)' release/repo/build-toolchain.packages | tr '\n' ' ')"
           docker run --rm -v "$PWD":/repo -w /repo \
             -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+            -e RYOKU_PKGS="$pkgs" \
             archlinux:latest bash -euo pipefail -c '
               pacman -Sy --noconfirm --needed archlinux-keyring
-              pacman -Su --noconfirm --needed \
-                base-devel git go rust cmake ninja gnupg gradle \
-                qt6-base qt6-declarative qt6-shadertools qt6-multimedia \
-                hyprland hyprcursor pango cairo pixman libdrm libinput libxkbcommon wayland wayland-protocols ffmpeg pkgconf lz4 gtk4 gtk4-layer-shell \
-                fish jq librsvg xorg-xcursorgen python
+              pacman -Su --noconfirm --needed $RYOKU_PKGS
               git config --global --add safe.directory /repo
               installation/tests/build-ryoku-repo.sh
               chown -R "$HOST_UID:$HOST_GID" /repo

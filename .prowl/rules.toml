@@ -1,0 +1,4 @@
+[[rule]]
+  name = "no-dangling-includes"
+  kind = "dangling_includes"
+  description = "every source/include/import/require must resolve to a file in the project"

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Fail when a vendored copy of the window-manager seam drifts from ryoku/wm.
+# The cli, hub, rashin, shell/ipc and ryogami vendor the seam so each builds
+# standalone; a stale copy silently runs older detection and capability rules
+# than the providers beside it. Only the files a copy carries are checked -- a
+# consumer vendors the seam files it uses, never the tests.
+#
+#   ryoku-dev-verify-wm-vendor           run the check (exit 1 on drift)
+#   ryoku-dev-verify-wm-vendor --quiet   same, only print drift
+set -euo pipefail
+
+quiet=0
+[[ ${1:-} == --quiet ]] && quiet=1
+say() { (( quiet )) || printf '%s\n' "$*"; }
+
+repo="$(git rev-parse --show-toplevel)"
+cd "$repo"
+
+seam=ryoku/wm
+shopt -s nullglob
+status=0
+
+mapfile -t dirs < <(git ls-files | grep -E '/vendor/ryoku-wm/[^/]+\.go$' | sed -E 's|/[^/]+$||' | sort -u)
+for dir in "${dirs[@]}"; do
+  for f in "$dir"/*.go; do
+    base="$(basename "$f")"
+    case $base in *_test.go) continue ;; esac
+    if [[ ! -f "$seam/$base" ]] || ! cmp -s "$f" "$seam/$base"; then
+      printf 'wm-vendor: %s differs from %s/%s\n' "$f" "$seam" "$base"
+      status=1
+    fi
+  done
+done
+
+(( status == 0 )) && say "wm-vendor: every vendored seam copy matches $seam"
+exit "$status"

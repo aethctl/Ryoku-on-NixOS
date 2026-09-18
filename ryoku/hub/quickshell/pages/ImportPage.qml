@@ -421,10 +421,15 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.topMargin: Tokens.s6
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -446,18 +451,10 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Bring an existing setup onto Ryoku. Drop a config folder, point at an existing ~/.config, or paste a git URL; Ryoku layers it over the defaults, shows every keybind clash to resolve in place, and backs up everything so you can undo the whole import.")
+            text: I18n.tr("Bring another setup onto Ryoku. Everything it touches is backed up.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "取込"
-        index: "05"; label: I18n.tr("IMPORT")
-        glyph: "meander"; glyph2: "torii"
     }
 
     // ── the step rail: where you are in the five-step wizard ───────────────────
@@ -477,7 +474,17 @@ Item {
                 required property int index
                 readonly property bool active: pg.step === stepPip.modelData.key
                 readonly property bool done: pg.stepIndex(pg.step) > stepPip.index
-                spacing: Tokens.s2
+                // a little air around the hairline connectors, so the numbers and
+                // labels do not sit on the line that joins them
+                spacing: Tokens.s3
+                // a hairline between the steps, so the row reads as one path
+                // walked left to right rather than five loose labels
+                Rectangle {
+                    visible: stepPip.index > 0
+                    width: 20; height: 1
+                    color: stepPip.active || stepPip.done ? Tokens.line : Tokens.lineSoft
+                    anchors.verticalCenter: parent.verticalCenter
+                }
                 Text {
                     text: (stepPip.index + 1)
                     color: stepPip.active ? Tokens.sun : (stepPip.done ? Tokens.inkDim : Tokens.inkFaint)
@@ -486,7 +493,7 @@ Item {
                 }
                 Text {
                     text: I18n.tr(stepPip.modelData.label)
-                    color: stepPip.active ? Tokens.ink : (stepPip.done ? Tokens.inkDim : Tokens.inkFaint)
+                    color: stepPip.active ? Tokens.ink : (stepPip.done ? Tokens.inkDim : Tokens.inkMuted)
                     font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
                     font.weight: stepPip.active ? Font.Medium : Font.Normal
                     font.letterSpacing: Tokens.trackLabel
@@ -520,53 +527,37 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: srcCol
                 width: parent.width - Tokens.s3
                 spacing: Tokens.s4
 
-                // what Ryoku can bring over: mirrors the engine's scanners
-                // (import_parse.go). Shown first so you know what to drop.
-                Plate {
+                // What Ryoku can bring over, on the same row rhythm as every other
+                // sheet in the Hub: a card with value rows parted by hairlines,
+                // rather than a bespoke plate with its own tighter spacing.
+                SettingCard {
                     width: srcCol.width
-                    height: supCol.implicitHeight + Tokens.s4 * 2
-                    Column {
-                        id: supCol
-                        anchors.fill: parent
-                        anchors.margins: Tokens.s4
-                        spacing: Tokens.s2
-                        Text {
-                            text: I18n.tr("WHAT IT BRINGS OVER")
-                            color: Tokens.inkMuted; font.family: Tokens.ui
-                            font.pixelSize: Tokens.fMicro; font.weight: Font.Medium
-                            font.letterSpacing: Tokens.trackMark
-                        }
-                        Repeater {
-                            model: [
-                                { app: "Hyprland", note: "keybinds and window rules become Ryoku settings; the rest layers into hypr/user.lua and wins" },
-                                { app: "Kitty", note: "kitty.conf, layered into kitty/user.conf" },
-                                { app: "Fish", note: "config.fish, functions and conf.d, layered into fish/user.fish" },
-                                { app: "Fastfetch", note: "config.jsonc, layered into fastfetch/user.jsonc" },
-                                { app: "Other apps", note: "any other config folder, dropped into its own override slot" }
-                            ]
-                            delegate: Row {
-                                required property var modelData
-                                width: supCol.width
-                                spacing: Tokens.s3
-                                Text {
-                                    width: 96
-                                    text: I18n.tr(modelData.app)
-                                    color: Tokens.ink; font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fSmall; font.weight: Font.Medium
-                                }
-                                Text {
-                                    width: supCol.width - 96 - Tokens.s3
-                                    text: I18n.tr(modelData.note)
-                                    color: Tokens.inkMuted; font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
-                                }
-                            }
+                    collapsible: false
+                    title: I18n.tr("WHAT IT BRINGS OVER")
+
+                    Repeater {
+                        model: [
+                            { app: "Hyprland", note: "keybinds and window rules become Ryoku settings; the rest layers into hypr/user.lua and wins" },
+                            { app: "Kitty", note: "kitty.conf, layered into kitty/user.conf" },
+                            { app: "Fish", note: "config.fish, functions and conf.d, layered into fish/user.fish" },
+                            { app: "Fastfetch", note: "config.jsonc, layered into fastfetch/user.jsonc" },
+                            { app: "Other apps", note: "any other config folder, dropped into its own override slot" }
+                        ]
+                        delegate: SettingRow {
+                            required property var modelData
+                            required property int index
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            divider: index > 0
+                            label: I18n.tr(modelData.app)
+                            desc: I18n.tr(modelData.note)
                         }
                     }
                 }
@@ -705,6 +696,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: revCol
@@ -802,6 +794,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: resCol
@@ -970,6 +963,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: preCol
@@ -1053,6 +1047,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: doneCol

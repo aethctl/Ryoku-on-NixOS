@@ -712,7 +712,7 @@ Scope {
         }
       }
     }
-
+    
     MouseArea {
       id: filterHoverZone
       anchors.top: parent.top

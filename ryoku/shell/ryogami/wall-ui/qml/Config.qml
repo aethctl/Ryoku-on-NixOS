@@ -225,10 +225,38 @@ QtObject {
     readonly property string matugenConfig: cacheDir + "/matugen-config.toml"
     readonly property string defaultMatugenConfig: _resolve(_data.defaultMatugenConfig ?? "~/.config/matugen/config.toml")
     readonly property string externalMatugenCommand: _data.externalMatugenCommand ?? "matugen -c %config% image %path% -t %scheme% -m %mode% --source-color-index %index%"
-    readonly property string matugenScheme: (_data.matugen && _data.matugen.schemeType) ? _data.matugen.schemeType : "scheme-fidelity"
-    readonly property string matugenMode: (_data.matugen && _data.matugen.mode) ? _data.matugen.mode : "dark"
-    readonly property int matugenColorIndex: (_data.matugen && typeof _data.matugen.colorIndex === "number") ? Math.max(0, Math.min(3, _data.matugen.colorIndex | 0)) : 0
-    readonly property real matugenContrast: (_data.matugen && typeof _data.matugen.contrast === "number") ? Math.max(-1, Math.min(1, _data.matugen.contrast)) : 0
+    // The matugen knobs live in the shell's own store, not in this vendored
+    // config: ryoku-hub is their single writer and ryoku-shell retints from that
+    // file, so the picker reads them there and falls back to the vendored block
+    // only for a box that has never saved one.
+    property var _matugenKnobs: ({})
+    function _reparseMatugenKnobs() {
+        try { config._matugenKnobs = JSON.parse(_matugenKnobsFile.text() || "") || {} }
+        catch (e) { config._matugenKnobs = {} }
+    }
+    property var _matugenKnobsFile: FileView {
+        path: (Quickshell.env("XDG_CONFIG_HOME") || (homeDir + "/.config")) + "/ryoku/matugen.json"
+        watchChanges: true
+        onLoaded: config._reparseMatugenKnobs()
+        onFileChanged: { reload(); config._reparseMatugenKnobs() }
+    }
+
+    readonly property string matugenScheme: _matugenKnobs.schemeType || (_data.matugen && _data.matugen.schemeType) || "scheme-fidelity"
+    readonly property string matugenMode: _matugenKnobs.mode || (_data.matugen && _data.matugen.mode) || "dark"
+    // The hub's source index runs 0..4 and the picker offers all five, so the
+    // clamp has to allow 4: at 3 a stored 4 displayed as 3.
+    readonly property int matugenColorIndex: {
+        var v = _matugenKnobs.sourceColorIndex
+        if (typeof v !== "number" && _data.matugen && typeof _data.matugen.colorIndex === "number")
+            v = _data.matugen.colorIndex
+        return (typeof v === "number") ? Math.max(0, Math.min(4, v | 0)) : 0
+    }
+    readonly property real matugenContrast: {
+        var v = _matugenKnobs.contrast
+        if (typeof v !== "number" && _data.matugen && typeof _data.matugen.contrast === "number")
+            v = _data.matugen.contrast
+        return (typeof v === "number") ? Math.max(-1, Math.min(1, v)) : 0
+    }
 
     readonly property var integrations: _data.integrations ?? []
     onIntegrationsChanged: _generateMatugenConfig()
@@ -363,7 +391,7 @@ QtObject {
         function onReadyChanged() { if (DaemonClient.ready) config._loadCaps() }
     }
 
-    readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled === true
+    readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled !== false
     readonly property string overviewBackdropPath: _data.overviewBackdrop?.path ?? ""
     readonly property bool overviewBackdropFollowWallpaper: _data.overviewBackdrop?.followWallpaper === true
     readonly property int overviewBackdropDim: Math.max(0, Math.min(100, _data.overviewBackdrop?.dim ?? 0))

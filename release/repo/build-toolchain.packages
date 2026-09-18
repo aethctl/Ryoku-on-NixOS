@@ -6,8 +6,8 @@
 # uses". It drifted, and the drift is silent until a package needs the missing
 # tool: `meson` was added for the controller packages in one copy only, and the
 # container-install gate went red on the first main sync, which skipped the
-# publish job entirely. `pnpm`/`nodejs` had drifted the same way earlier and were
-# worse, because spicetify-cli builds without its wrapper rather than failing.
+# publish job entirely. `pnpm`/`nodejs` had drifted the same way earlier, and
+# ryotunes' Svelte UI does not build without them.
 #
 # build-repo.sh runs makepkg --nodeps, so every makedepends a recipe needs must
 # already be on the host. Anything used only to UPLOAD a built repo (rclone)
@@ -18,7 +18,7 @@ base-devel
 git
 
 # Language toolchains. go and cmake/ninja build the monorepo components; rust
-# (cargo) builds awww, hyprland-preview-share-picker and asusctl; asusctl also
+# (cargo) builds hyprland-preview-share-picker and asusctl; asusctl also
 # needs clang, llvm and libusb. meson drives the two controller packages
 # (game-devices-udev, dualsensectl) through arch-meson; ninja alone does not
 # drive itself. gradle native-compiles the vendored limine-entry-tool stack.
@@ -39,10 +39,12 @@ qt6-shadertools
 qt6-multimedia
 
 # Compositor plugin packages (hypr-dynamic-cursors, ryoku-hypr-plugins,
-# hyprglass, imgborders) plus their makedepends. awww's common/build.rs probes
-# liblz4; hyprland-preview-share-picker needs gtk4 + gtk4-layer-shell.
+# hyprglass, imgborders, ryoku-keysounds) plus their makedepends: keysounds
+# links libcanberra. hyprland-preview-share-picker needs gtk4 +
+# gtk4-layer-shell.
 hyprland
 hyprcursor
+libcanberra
 pango
 cairo
 pixman
@@ -53,26 +55,30 @@ wayland
 wayland-protocols
 ffmpeg
 pkgconf
-lz4
 gtk4
 gtk4-layer-shell
 
 # ryoku-cursor-material compiles a Bibata variant at build time: fish + jq run
 # the vendored recipe, and python + librsvg (rsvg-convert) + xorg-xcursorgen
-# (xcursorgen) rasterise the cursors.
+# (xcursorgen) plus xcur2png (the recipe's -x PNG export) rasterise the cursors.
 fish
 jq
 librsvg
 xorg-xcursorgen
+xcur2png
 python
 
-# pnpm (which pulls nodejs) builds spicetify-cli's jsHelper wrapper:
-# `pnpm build:wrapper` generates jsHelper/spicetifyWrapper.js, the `Spicetify`
-# global every extension is written against. It is absent from the release
-# tarball, so without pnpm the package builds clean and silently breaks the
-# Ryoku Canvas extension.
+# pnpm (which pulls nodejs) builds the ryotunes web UI: its PKGBUILD runs
+# `pnpm install --frozen-lockfile && pnpm build` to produce the SvelteKit bundle
+# the Tauri binary embeds, so without pnpm on the host the package cannot build
+# at all.
 pnpm
 nodejs
 
 # gnupg signs every built package and the repo db.
 gnupg
+
+# ryotunes (Tauri + libmpv): WebKitGTK and libmpv headers, the tray dlopen target.
+webkit2gtk-4.1
+mpv
+libappindicator-gtk3

@@ -47,7 +47,17 @@ func Run(args []string) error {
 // DesktopLayout reads the layout the desktop uses, from the Hub's store. That
 // store is the source of truth: settings.lua is generated from it.
 func DesktopLayout() Layout {
-	b, err := os.ReadFile(filepath.Join(sys.ConfigHome(), "ryoku", "hypr.json"))
+	if l := readDesktopLayout(filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json"), true); l != (Layout{}) {
+		return l
+	}
+	return readDesktopLayout(filepath.Join(sys.ConfigHome(), "ryoku", "hypr.json"), false)
+}
+
+// readDesktopLayout pulls the input leaves out of one store file. The Hub writes
+// them under desktop.input; the retired hypr.json carried them at the top level
+// and is still read, so a box the doctor has not migrated keeps its layout.
+func readDesktopLayout(path string, nested bool) Layout {
+	b, err := os.ReadFile(path)
 	if err != nil {
 		return Layout{}
 	}
@@ -57,11 +67,22 @@ func DesktopLayout() Layout {
 			KbVariant string `json:"kbVariant"`
 			KbOptions string `json:"kbOptions"`
 		} `json:"input"`
+		Desktop struct {
+			Input struct {
+				KbLayout  string `json:"kbLayout"`
+				KbVariant string `json:"kbVariant"`
+				KbOptions string `json:"kbOptions"`
+			} `json:"input"`
+		} `json:"desktop"`
 	}
 	if json.Unmarshal(b, &o) != nil {
 		return Layout{}
 	}
-	return Layout{Layout: o.Input.KbLayout, Variant: o.Input.KbVariant, Options: o.Input.KbOptions}
+	in := o.Input
+	if nested {
+		in = o.Desktop.Input
+	}
+	return Layout{Layout: in.KbLayout, Variant: in.KbVariant, Options: in.KbOptions}
 }
 
 // State is every layer at once, plus whether they agree.

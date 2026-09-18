@@ -77,6 +77,15 @@ Item {
                 retry.restart();
             }
         }
+        // A peer close (the daemon restarting under us, which is what login does
+        // with the session daemons) arrives as a socket error and leaves
+        // `connected` true, so the branch above never ran: the desktop kept a
+        // grey wallpaper until something re-applied by hand. Drop the link on the
+        // error so the reconnect path takes over and re-requests the frame.
+        onError: {
+            connected = false;
+            retry.restart();
+        }
     }
 
     // Ryogami may be down when the shell loads (or restart under it); retry

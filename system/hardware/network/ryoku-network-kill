@@ -96,11 +96,13 @@ on() {
 off() {
     require "$nft"
     require "$nmcli"
+    require "$systemctl"
     lock_transitions
     if firewall_present; then
         "$nft" delete table inet "$table"
     fi
     rm -f "$state"
+    "$systemctl" disable --quiet ryoku-network-kill-guard.service ryoku-network-kill-disconnect.service || true
     "$nmcli" networking on
 }
 

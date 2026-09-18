@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
-# REAL loop-device integration test for ryoku_partition_alongside + the sfdisk
-# probe (installation/backend/lib/disk.sh): the P0 dual-boot fix. 'alongside'
-# shares Windows' single ESP and creates a 2 GiB XBOOTLDR /boot + root in the
-# chosen free region, touching NOTHING that exists. we build sparse disks with
-# real Windows-shaped GPT tables on loop devices and prove, against the real
-# sgdisk/sfdisk/wipefs: the two new partitions carry our partlabels, ryoku-boot
-# is XBOOTLDR (not a second ESP) so exactly one EF00 remains, every pre-existing
-# partition is byte-identical afterward, leftover ryoku/ryokuboot partitions are
-# REFUSED without the RYOKU_RECLAIM_LEFTOVERS ack and reclaimed (not stacked)
-# with it, a retry that finds /mnt still mounted releases it and succeeds, and a
-# disk with too little free space is refused before anything is written. The D4
-# fixtures additionally assert the probe's byte-exact regions and sector-exact
-# creation across canonical, trailing-gap, fragmented, and 4Kn layouts.
+# Real loop-device coverage for alongside partitioning. Shared mode creates an
+# EA00 XBOOTLDR; dedicated mode creates an EF00 Ryoku ESP. Both place boot + root
+# in verified free sectors and must leave every existing partition intact.
+# Fixtures also cover leftover reclamation, stale mounts, insufficient space,
+# fragmented layouts, and 4Kn sector math.
 #
 # needs root + loop devices; on EUID!=0 or a missing tool it prints a skip and
 # exits 0 (so a non-root CI job stays green). run: sudo bash "$0".
@@ -71,16 +63,15 @@ fake_windows() {
   [[ -b ${1}p3 ]] || fail "loop partition nodes never appeared for $1"
 }
 
-# run_alongside <loop> [ack]: run ryoku_partition_alongside in a subshell (so a
-# die's exit can't kill the test), RYOKU_ESP_GIB=1 RYOKU_SWAP_GIB=0. [ack] non-
-# empty sets RYOKU_RECLAIM_LEFTOVERS. leaves the log in $out, exit code in $rc,
-# resolved devices in $esp / $root_part.
+# run_alongside <loop> [ack] [shared|dedicated]: run the partitioner in a
+# subshell and capture its resolved devices.
 run_alongside() {
   rc=0
-  out="$(ROOT="$root" DISK="$1" ACK="${2:-}" bash -c '
+  out="$(ROOT="$root" DISK="$1" ACK="${2:-}" MODE="${3:-shared}" bash -c '
     source "$ROOT/installation/backend/lib/common.sh"
     source "$ROOT/installation/backend/lib/disk.sh"
     export RYOKU_DISK="$DISK" RYOKU_ESP_GIB=1 RYOKU_SWAP_GIB=0
+    export RYOKU_RESOLVED_ESP_MODE="$MODE"
     [[ -n $ACK ]] && export RYOKU_RECLAIM_LEFTOVERS=$ACK
     set -euo pipefail
     ryoku_partition_alongside
@@ -115,6 +106,7 @@ snap_parts() { local n; for n in 1 2 3; do echo "== p$n =="; sgdisk -i "$n" "$1"
 
 XBOOTLDR_GUID=bc13c2ff-59e6-4262-a352-b275fd6f7172
 
+ESP_GUID=c12a7328-f81f-11d2-ba4b-00a0c93ec93b
 # settle <loop> <last-partnum>: partprobe + wait for the by-index node to appear.
 settle() {
   partprobe "$1"; udevadm settle
@@ -127,6 +119,20 @@ settle() {
 fmt_win_esp() {
   mkfs.vfat -F 32 -n ESP "$1" >/dev/null 2>&1 || fail "could not format Windows ESP $1"
   local mp; mp="$(mktemp -d)"; mount "$1" "$mp"; mkdir -p "$mp/EFI/Microsoft/Boot"; umount "$mp"; rmdir "$mp"
+}
+
+fill_win_esp() {
+  local part=$1 mib=$2 mp
+  mp=$(mktemp -d)
+  mount "$part" "$mp"
+  if ! dd if=/dev/zero of="$mp/EFI/Microsoft/fill.bin" bs=1M count="$mib" status=none; then
+    umount "$mp" 2>/dev/null || true
+    rmdir "$mp" 2>/dev/null || true
+    fail "could not fill Windows ESP fixture"
+  fi
+  sync
+  umount "$mp"
+  rmdir "$mp"
 }
 
 # region_top <loop>: the probe's largest free region as "START END MIB".
@@ -246,7 +252,7 @@ run_reclaim() {
 }
 
 # ==========================================================================
-# 1. dedicated ESP + root in free space, nothing existing touched
+# 1. shared XBOOTLDR + root in free space, nothing existing touched
 # ==========================================================================
 make_disk 40G; disk=$DISK
 fake_windows "$disk" 12G
@@ -278,6 +284,43 @@ vfat_uuid_after="$(blkid -s UUID -o value "${disk}p1")"
 # exactly two partitions were added.
 [[ "$(part_count "$disk")" -eq $(( pre_count + 2 )) ]] \
   || fail "expected $(( pre_count + 2 )) partitions, got $(part_count "$disk")"
+
+# Dedicated mode uses the same free-space footprint. The Windows ESP stays
+# byte-identical and a second EF00 partition is added for Ryoku.
+make_disk 40G; dedicated=$DISK
+fake_windows "$dedicated" 12G
+fmt_win_esp "${dedicated}p1"
+fill_win_esp "${dedicated}p1" 92
+esp_free=$("$root/installation/backend/ryoku-install" probe alongside "$dedicated" |
+  awk '$1=="esp_free_kib"{print $2}')
+[[ $esp_free =~ ^[0-9]+$ && $esp_free -lt 8192 ]] ||
+  fail "full Windows ESP fixture has ${esp_free:-unknown} KiB free, expected less than 8192"
+mode_out=$(ROOT="$root" DISK="$dedicated" bash -c '
+  source "$ROOT/installation/backend/lib/common.sh"
+  source "$ROOT/installation/backend/lib/disk.sh"
+  source "$ROOT/installation/backend/lib/preflight.sh"
+  export RYOKU_DISK="$DISK" RYOKU_ESP_MODE=auto
+  ryoku_require_existing_esp
+  printf "RESOLVED=%s\n" "$RYOKU_RESOLVED_ESP_MODE"
+')
+auto_mode=$(sed -n 's/^RESOLVED=//p' <<<"$mode_out")
+[[ $auto_mode == dedicated ]] ||
+  fail "auto mode resolved a ${esp_free} KiB Windows ESP as '${auto_mode:-unset}'"
+win_uuid_before=$(blkid -s UUID -o value "${dedicated}p1")
+win_edge_before=$(edge_sha "${dedicated}p1")
+dedicated_parts_before=$(snap_parts "$dedicated")
+run_alongside "$dedicated" "" "$auto_mode"
+[[ $rc -eq 0 ]] || fail "dedicated alongside failed (rc=$rc): $out"
+[[ "$dedicated_parts_before" == "$(snap_parts "$dedicated")" ]] ||
+  fail "dedicated mode changed an existing partition"
+[[ "$(type_guid "$dedicated" "$(part_num "$esp")")" == "$ESP_GUID" ]] ||
+  fail "dedicated boot partition is not EF00"
+[[ "$(ef00_count "$dedicated")" -eq 2 ]] ||
+  fail "dedicated mode must keep Windows ESP and add one Ryoku ESP"
+[[ "$(blkid -s UUID -o value "${dedicated}p1")" == "$win_uuid_before" ]] ||
+  fail "dedicated mode changed the Windows ESP"
+[[ "$(edge_sha "${dedicated}p1")" == "$win_edge_before" ]] ||
+  fail "dedicated mode wrote to the Windows ESP"
 
 # ==========================================================================
 # 2. leftovers present, NO reclaim ack: refuse, list them, touch nothing

@@ -9,7 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"ryoku-cli/internal/doctor"
 	"ryoku-cli/internal/sys"
+	"ryoku-cli/internal/updater"
 
 	i18n "ryoku-i18n"
 	wm "ryoku-wm"
@@ -219,10 +221,37 @@ func cmdWmUse(args []string) {
 		if !packageAvailable(pkg) {
 			die(i18n.T("cannot switch to %s yet: the %s package is not available on this channel"), name, pkg)
 		}
+		// The variants are not exclusive, so the install leaves the outgoing
+		// compositor in place and "keep" means what it says. A box whose packages
+		// predate that still declares the shared virtual as a conflict and pacman
+		// refuses the install under --noconfirm; only then drop it first.
 		if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
-			die(i18n.T("could not install %s: %v"), pkg, err)
+			out := "ryoku-desktop-" + active
+			if active == "" || active == name || !packageInstalled(out) {
+				die(i18n.T("could not install %s: %v"), pkg, err)
+			}
+			if err := sys.Sudo("pacman", "-Rdd", "--noconfirm", out); err != nil {
+				die(i18n.T("could not install %s, and could not remove %s first: %v"), pkg, out, err)
+			}
+			if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+				die(i18n.T("could not install %s after removing %s: %v"), pkg, out, err)
+			}
 		}
 		fmt.Printf(i18n.T("Installed %s; %s is the compositor at the next login.\n"), pkg, name)
+	}
+
+	// The switch is not complete until the target's config is laid down. A package
+	// install writes nothing into ~/.config, so a switch that stopped at the
+	// package left the next login on a bare compositor (no keybinds, no shell, a
+	// grey desktop) until an update happened to materialize it. Runs after the
+	// install, so the base carries the target's tree, and before any removal, so a
+	// refusal there still leaves a working desktop. A checkout box deploys its own
+	// trees and has no packaged base to lay.
+	if sys.Exists(sys.BaseConfigDir()) {
+		if err := laySwitchConfig(); err != nil {
+			die(i18n.T("installed %s but could not lay its config down (%v); run `ryoku materialize` before logging out"), pkg, err)
+		}
+		fmt.Printf(i18n.T("Laid down the %s config; log out and pick %s at the greeter.\n"), name, name)
 	}
 
 	// Removing the outgoing compositor's packages is a second transaction on
@@ -233,6 +262,21 @@ func cmdWmUse(args []string) {
 	if !keepPrevious && active != "" && active != name {
 		removePreviousCompositor(active, name)
 	}
+}
+
+// laySwitchConfig brings the target desktop up as a desktop: materialize lays
+// the shipped tree, the doctor reconciles the rest (session target, portal
+// routing, wallpaper). Running `ryoku doctor` by hand was the switch's own gap.
+func laySwitchConfig() error {
+	if err := updater.Materialize(); err != nil {
+		return err
+	}
+	if err := doctor.Run(nil); err != nil {
+		// The tree is down, so the desktop comes up; a reconciler that could not
+		// finish (a privileged fix with no terminal) is worth saying, not failing.
+		fmt.Printf(i18n.T("  Some post-switch checks did not finish (%v); run `ryoku doctor` after logging in.\n"), err)
+	}
+	return nil
 }
 
 // deployedProvider reports whether a provider is usable without its package:
@@ -375,5 +419,12 @@ func rawLen(raw json.RawMessage) int {
 
 func packageAvailable(pkg string) bool {
 	_, err := sys.RunOut("pacman", "-Si", pkg)
+	return err == nil
+}
+
+// packageInstalled reports whether pkg is installed here, which decides whether
+// a switch has an outgoing variant package to drop.
+func packageInstalled(pkg string) bool {
+	_, err := sys.RunOut("pacman", "-Qq", pkg)
 	return err == nil
 }

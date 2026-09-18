@@ -57,7 +57,7 @@ Item {
     // hyprEdit swaps the whole array, so the Repeater rebinds and rebuilds the
     // card owning a focused field. cards therefore commit on editing-finished
     // only, and every helper hands hyprEdit a fresh slice rather than mutating
-    // the live list. (Same discipline as EnvironmentPage.)
+    // the live list. (Same discipline as SessionPage.)
     function patch(i, key, val) {
         if (!pg.hub)
             return;
@@ -102,10 +102,17 @@ Item {
     // nothing is a no-op.
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        spacing: Tokens.s2
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in a page-wide window
+        anchors { top: parent.top; left: parent.left; right: parent.right }
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -127,7 +134,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Fine-tune layer-shell surfaces (the bar, launcher, notifications) by namespace: blur or dim them, drop their animations, or show them above the lockscreen. Applied on Save, not live; a namespace that matches nothing has no effect.")
+            text: I18n.tr("Layer surfaces by namespace: blur, dim, motion, order.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -203,11 +210,15 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
-            id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s2
+            fillTo: flick.height
 
             Repeater {
                 model: pg.rules
@@ -219,7 +230,7 @@ Item {
 
                     readonly property bool needsValue: pg.valueActions.indexOf(rowItem.modelData.action) >= 0
 
-                    width: col.width
+                    width: col.colWidth
                     // the card grows a row when the action needs a value and
                     // shrinks when it does not: the reflow the old page did by
                     // recomputing the namespace field width, done by height here.

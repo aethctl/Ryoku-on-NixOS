@@ -184,14 +184,21 @@ Item {
         view.yieldScheduled = false;
         yieldDelay.stop();
         player.source = view.videoUrl;
-        startWatch.restart();
     }
 
-    // Watchdog: a clip whose still never decoded must still play.
+    // Watchdog: a clip whose still never decoded must still play, and the yield is
+    // re-attempted until the player owns the surface. Playback starts
+    // asynchronously, so the single attempt at the reveal's end lands before the
+    // player is playing; this keeps trying until videoOn flips, then stops.
     Timer {
         id: startWatch
-        interval: 3000
-        onTriggered: view.startVideo()
+        interval: 400
+        repeat: true
+        running: view.videoUrl !== "" && !view.videoOn
+        onTriggered: {
+            view.startVideo();
+            view.maybeYield();
+        }
     }
 
     // Begin playback at the still's moment (the daemon extracts the frame at
@@ -207,11 +214,12 @@ Item {
     }
 
     // The video takes the surface once the reveal is done and frames present.
-    // The QML MediaPlayer does not expose playbackStateChanged/hasVideoChanged,
-    // so maybeYield hooks videoFrameChanged and reads the player.playing property.
+    // MediaPlayer exposes playbackStateChanged (there is no videoFrameChanged
+    // signal, which is why the yield used to be attempted once and never again),
+    // so the yield is driven from the state it actually reports.
     Connections {
         target: player
-        function onVideoFrameChanged() { view.maybeYield() }
+        function onPlaybackStateChanged() { view.maybeYield() }
         function onErrorChanged() {
             if (player.error !== MediaPlayer.NoError && view.videoUrl !== "") {
                 player.position = 0;

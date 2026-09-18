@@ -142,7 +142,6 @@ Item {
     function horizonModeLabel(k) { return k === "fixed" ? "Fixed" : k === "off" ? "Off" : "Palette"; }
     function horizonModeKey(l) { return l === "Fixed" ? "fixed" : l === "Off" ? "off" : "auto"; }
 
-
     FileView {
         id: catalogFile
         path: pg.launcherRoot + "/catalog.json"
@@ -180,14 +179,21 @@ Item {
         }
     }
 
-
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first card
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -208,18 +214,11 @@ Item {
             font.family: Tokens.display; font.pixelSize: Tokens.fTitle
         }
         Text {
-            width: Math.min(parent.width, 760)
-            text: I18n.tr("Tune the command palette you open with Super+Space: its corners, local frost, and the hero's greeting, weather and image. Nothing is written until you save.")
+            width: Math.min(parent.width, 720)
+            text: I18n.tr("The command palette on Super+Space; nothing saves until you do.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "ランチャー"
-        index: "003"; label: I18n.tr("PALETTE")
     }
 
     Preview {
@@ -279,14 +278,18 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
-            id: col
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
             width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("LAUNCHER")
 
                 SettingRow {
@@ -308,7 +311,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("PALETTE")
                 visible: pg.supports("shape") || pg.supports("background")
 
@@ -316,7 +319,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     visible: pg.supports("shape")
                     label: I18n.tr("Corner radius")
-                    desc: I18n.tr("Rounds the palette window corners; inner cards follow 4 px tighter.")
+                    desc: I18n.tr("Rounds the palette corners; inner cards 4 px tighter.")
                     unit: "px"
                     value: String(pg.draft.radius)
                     def: String(pg.committed.radius)
@@ -336,7 +339,7 @@ Item {
                     visible: pg.supports("background")
                     divider: pg.supports("shape")
                     label: I18n.tr("Backdrop frost")
-                    desc: I18n.tr("Blurs the frozen desktop visible through the result drawer. 0 keeps the drawer solid.")
+                    desc: I18n.tr("Frosts the frozen desktop behind the result drawer.")
                     unit: "px"
                     value: String(pg.draft.bgBlur)
                     def: String(pg.committed.bgBlur)
@@ -354,14 +357,14 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("RESULT MOTION")
                 visible: pg.supports("results")
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     label: I18n.tr("Type settle")
-                    desc: I18n.tr("Waits for a pause before the finished result deck fades in. Higher values feel calmer; lower values respond sooner.")
+                    desc: I18n.tr("Pause before the results fade in.")
                     unit: "ms"
                     value: String(pg.draft.resultSettleMs)
                     def: String(pg.committed.resultSettleMs)
@@ -379,7 +382,7 @@ Item {
             }
 
             SettingCard {
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("HERO")
                 visible: pg.supports("hero")
 
@@ -402,7 +405,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Show weather")
-                    desc: I18n.tr("Current conditions and temperature on the hero; off shows the date.")
+                    desc: I18n.tr("Weather and temperature on the hero; off shows the date.")
                     def: pg.committed.showWeather ? I18n.tr("ON") : I18n.tr("OFF")
                     changed: !pg.same(pg.draft.showWeather, pg.committed.showWeather)
                     source: "launcher.json"
@@ -436,7 +439,7 @@ Item {
                     divider: true
                     block: true
                     label: I18n.tr("Solar line")
-                    desc: I18n.tr("The warm line under the clock. Palette follows the wallpaper, Fixed uses a colour you pick, Off hides it.")
+                    desc: I18n.tr("Warm line under the clock: Palette, Fixed or Off.")
                     def: I18n.tr(pg.horizonModeLabel(pg.committed.horizonMode))
                     changed: !pg.same(pg.draft.horizonMode, pg.committed.horizonMode)
                     source: "launcher.json"
@@ -454,7 +457,7 @@ Item {
                     divider: true
                     block: true
                     label: I18n.tr("Line colour")
-                    desc: I18n.tr("Colour of the solar line and its marker when Solar line is set to Fixed.")
+                    desc: I18n.tr("Colour of the solar line when it is set to Fixed.")
                     def: String(pg.committed.horizonColor)
                     changed: !pg.same(pg.draft.horizonColor, pg.committed.horizonColor)
                     source: "launcher.json"
@@ -470,7 +473,7 @@ Item {
 
             SettingCard {
                 id: heroImgCard
-                width: col.width
+                width: col.colWidth
                 title: I18n.tr("HERO IMAGE")
                 visible: pg.supports("hero")
 
@@ -478,7 +481,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     footH: 32
                     label: I18n.tr("Image")
-                    desc: I18n.tr("A landscape PNG or JPG, ideally 1600 px wide or more. It is cropped to a wide banner and dimmed; drag the preview to pick the part that shows.")
+                    desc: I18n.tr("Wide banner behind the palette; drag to reframe it.")
                     changed: !pg.same(pg.draft.heroImage, pg.committed.heroImage)
                     source: "launcher.json"
                     Item {
@@ -517,7 +520,7 @@ Item {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
                     label: I18n.tr("Strength")
-                    desc: I18n.tr("How visible the hero image is; 0 hides it completely.")
+                    desc: I18n.tr("How visible the hero image is.")
                     unit: "%"
                     value: String(Math.round((Number(pg.draft.heroStrength) || 0) * 100))
                     def: String(Math.round((Number(pg.committed.heroStrength) || 0) * 100))
@@ -545,13 +548,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "起動"
-            index: "SUPER"; label: I18n.tr("SPACE")
         }
 
         Row {
@@ -713,6 +709,7 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 model: fm
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 delegate: Item {
                     id: tile

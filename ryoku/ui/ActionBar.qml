@@ -76,15 +76,6 @@ Item {
         TapHandler { enabled: bar.dirty > 0; onTapped: bar.diffRequested() }
     }
 
-    // marginalia in the bar's dead centre: a running register shared by every
-    // framed page, ink only so the accent stays on state.
-    Marginalia {
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.verticalCenter: parent.verticalCenter
-        kana: "設定"
-        chevrons: true
-    }
-
     Row {
         anchors.verticalCenter: parent.verticalCenter
         anchors.right: parent.right

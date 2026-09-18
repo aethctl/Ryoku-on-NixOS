@@ -612,10 +612,15 @@ Item {
     Column {
         id: head
         anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.topMargin: Tokens.s6
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -658,7 +663,7 @@ Item {
 
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Detect connected displays, drag to arrange them to scale, and tune resolution, scale, rotation and adaptive sync per monitor. Apply writes the layout to your live session and persists it; save a named profile to bring an arrangement back when you plug the same displays in again.")
+            text: I18n.tr("Arrange your displays and set each one's mode. Save a layout to reuse it.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -853,6 +858,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: ctlCol
@@ -1137,19 +1143,38 @@ Item {
                         Repeater {
                             model: pg.profiles
 
-                            delegate: Rectangle {
+                            delegate: Item {
                                 id: prof
                                 required property var modelData
+                                required property int index
                                 width: parent.width
+                                // the row law the settings cards use: one row
+                                // height, a hairline between rows, no per-row box
                                 height: Tokens.rowH
-                                radius: Tokens.radius
-                                color: phov.hovered ? Tokens.tint5 : "transparent"
-                                border.width: Tokens.border
-                                // an ink border marks the profile whose displays are
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.topMargin: 1; anchors.bottomMargin: 1
+                                    radius: Tokens.radius
+                                    color: phov.hovered ? Tokens.tint5 : "transparent"
+                                    Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                                }
+                                Rectangle {
+                                    anchors { left: parent.left; right: parent.right; top: parent.top }
+                                    anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                                    height: 1
+                                    color: Tokens.lineSoft
+                                    visible: prof.index > 0
+                                }
+                                // an ink edge marks the profile whose displays are
                                 // connected now; emphasis without colour.
-                                border.color: prof.modelData.matches ? Tokens.ink : Tokens.line
-                                Behavior on color { ColorAnimation { duration: Tokens.snap } }
-                                Behavior on border.color { ColorAnimation { duration: Tokens.snap } }
+                                Rectangle {
+                                    visible: prof.modelData.matches
+                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                    width: 2
+                                    height: parent.height - Tokens.s3
+                                    color: Tokens.ink
+                                }
 
                                 HoverHandler { id: phov }
 
@@ -1250,13 +1275,6 @@ Item {
             Btn { text: I18n.tr("APPLY"); primary: true; armed: pg.dirty; onAct: pg.apply() }
         }
 
-        // marginalia dressing the empty bar centre between status and actions -- a dead margin. Ink only.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "画面"
-            glyph: "column"; glyph2: "wave"
-        }
     }
 
     // ── the resolution / mirror catalogue overlay, shared across controls ───

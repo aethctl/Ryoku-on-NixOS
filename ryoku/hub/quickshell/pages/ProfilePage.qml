@@ -44,7 +44,7 @@ Item {
     Process {
         id: idp
         running: true
-        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else echo; fi"]
+        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else head -1 /var/log/pacman.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; fi"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const l = text.split("\n");
@@ -633,7 +633,9 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.rightMargin: Tokens.s6
-        anchors.topMargin: Tokens.s6
+        // below the corner chrome strip (the FILES and UPDATES chips end at 46):
+        // EDIT used to stack directly under UPDATES and read as a stray
+        anchors.topMargin: Tokens.s6 * 2
         onAct: pg.editing = !pg.editing
     }
 
@@ -650,12 +652,15 @@ Item {
 
         Column {
             id: head
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: parent.top
-            spacing: Tokens.s2
+            anchors { left: parent.left; right: parent.right; top: parent.top }
+            // the register row sits off the title: a rule over a 32px
+            // title needs more than the gap between two lines of body text
+            spacing: Tokens.s3
 
             Row {
+                // the register row holds a fixed box, so the rule and the seal keep
+                // their distance from the title on every page
+                height: Tokens.s5
                 spacing: Tokens.s2
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
@@ -727,7 +732,7 @@ Item {
                     }
                     SpecRow {
                         k: I18n.tr("Compositor")
-                        v: SysInfo.sysWM + (SysInfo.sysHyprVer && SysInfo.sysHyprVer !== "-" ? " v" + SysInfo.sysHyprVer : "")
+                        v: SysInfo.sysWM + (SysInfo.sysWmVer && SysInfo.sysWmVer !== "-" ? " v" + SysInfo.sysWmVer : "")
                     }
                     SpecRow {
                         k: I18n.tr("Uptime")
@@ -755,10 +760,7 @@ Item {
                         }
                     }
                     Text {
-                        text: I18n.tr("%1 SYSTEM · %2 USER · %3 TOTAL")
-                            .arg(SysInfo.sysPkgExplicit)
-                            .arg(SysInfo.sysPkgAur)
-                            .arg(SysInfo.sysPackages)
+                        text: I18n.tr("%1 EXPLICIT · %2 AUR · %3 TOTAL").arg(SysInfo.sysPkgExplicit).arg(SysInfo.sysPkgAur).arg(SysInfo.sysPackages)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
                         font.pixelSize: 10

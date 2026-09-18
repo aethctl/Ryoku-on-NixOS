@@ -79,7 +79,7 @@ Item {
 
         Text {
             width: parent.width
-            text: Tokens.monoHeads ? cell.label.toUpperCase() : I18n.tr(cell.label)
+            text: I18n.tr(cell.label)
             color: Tokens.inkMuted
             font.family: Tokens.ui
             font.pixelSize: 10

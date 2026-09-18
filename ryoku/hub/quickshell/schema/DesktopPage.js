@@ -23,7 +23,7 @@ var rows = [{
         "group": "BRAND",
         "key": "markImage",
         "label": "Logo image",
-        "desc": "Pick an image to use as the mark instead of the glyph",
+        "desc": "An image mark, used instead of the glyph",
         "ctl": "image",
         "src": "brand"
     },{
@@ -31,7 +31,6 @@ var rows = [{
         "group": "BRAND",
         "key": "markTint",
         "label": "Tint image to accent",
-        "desc": "Tint the mark image to the accent",
         "ctl": "sw",
         "src": "brand"
     },{
@@ -39,7 +38,7 @@ var rows = [{
         "group": "SHELL RELOAD",
         "key": "reloadCover",
         "label": "Reload cover",
-        "desc": "Shown while the desktop shell restarts; media is fitted without cropping and video is always muted",
+        "desc": "Shown while the desktop shell restarts",
         "ctl": "reload-cover",
         "src": "brand"
     },{
@@ -91,7 +90,7 @@ var rows = [{
         "group": "COLOUR",
         "key": "gradient",
         "label": "Gradient",
-        "desc": "Sweep from the colour above to a second one across the spectrum",
+        "desc": "Sweep from the colour above to a second one",
         "ctl": "sw",
         "src": "viz"
     },{
@@ -120,7 +119,7 @@ var rows = [{
         "group": "PLACEMENT",
         "key": "vizPlace",
         "label": "Place on the desktop",
-        "desc": "Drag it and size it on the desktop",
+        "desc": "Drag and size it directly on screen",
         "ctl": "action",
         "actionLabel": "PLACE"
     },{
@@ -261,7 +260,6 @@ var rows = [{
         "adv": true,
         "key": "gain",
         "label": "Sensitivity",
-        "desc": "Input sensitivity",
         "ctl": "slid",
         "src": "viz",
         "lo": 0.5,
@@ -351,7 +349,7 @@ var rows = [{
         "group": "QUICK SETTINGS",
         "key": "frameBars.menus.quick-settings.anchor",
         "label": "Sidebar edge",
-        "desc": "Which screen edge the Super+Esc quick settings sidebar opens from",
+        "desc": "Which edge the Super+Esc sidebar opens from",
         "ctl": "seg",
         "src": "shell",
         "opts": ["left","right","top","bottom"]
@@ -360,7 +358,7 @@ var rows = [{
         "group": "QUICK SETTINGS",
         "key": "frameBars.menus.quick-settings.expansion",
         "label": "Fill the edge",
-        "desc": "Stretch the sidebar to its whole edge, or size it to its content",
+        "desc": "Stretch to the edge, or fit its content",
         "ctl": "seg",
         "src": "shell",
         "opts": ["always","never"]

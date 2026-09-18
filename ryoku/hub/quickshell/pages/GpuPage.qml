@@ -449,13 +449,18 @@ done
     // ── head ───────────────────────────────────────────────────────────────────
     Column {
         id: head
-        anchors {
-            left: parent.left; right: parent.right; top: parent.top
-            leftMargin: Tokens.s6; rightMargin: Tokens.s6; topMargin: Tokens.s6
-        }
-        spacing: Tokens.s2
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        anchors.leftMargin: Tokens.s6
+        anchors.rightMargin: Tokens.s6
+        anchors.topMargin: Tokens.s6
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle { width: 16; height: 1; color: Tokens.ink; anchors.verticalCenter: parent.verticalCenter }
             Text {
@@ -474,7 +479,7 @@ done
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Your silicon. Define what each power profile does to the CPU, tune the graphics hardware, cap the battery charge ceiling, and choose which GPU the desktop renders on. Passthrough (advanced) frees the discrete GPU so a virtual machine can own it.")
+            text: I18n.tr("Power profiles, graphics tuning, and which GPU renders the desktop.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -484,14 +489,6 @@ done
             color: Tokens.inkDim; font.family: Tokens.ui
             font.pixelSize: Tokens.fSmall; font.weight: Font.Medium
         }
-    }
-
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "演算"
-        index: "02"; label: I18n.tr("DEVICES")
-        glyph: "asanoha"; glyph2: "meander"
     }
 
     // ── content: one full-width scrolling column above the render hero ─────────
@@ -509,21 +506,24 @@ done
                 bottomMargin: Tokens.s5
             }
             contentWidth: width
-            contentHeight: gfxCol.height + Tokens.s5
+            contentHeight: Math.max(gfxCol.height, height)
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
-            Column {
+            CardColumns {
                 id: gfxCol
-                width: Math.min(gfx.width - Tokens.s3, 720)
-                spacing: Tokens.s6
+                // a body of cards fills the measure and splits into balanced columns
+                width: gfx.width - Tokens.s3
+                spacing: Tokens.s5
+                fillTo: gfx.height
 
                 // gpu caps failed: surface it up top; the sections below still
                 // render from whatever partial payload arrived.
                 Column {
                     visible: pg.capsError !== ""
-                    width: gfxCol.width; spacing: Tokens.s3
+                    width: gfxCol.colWidth; spacing: Tokens.s3
                     Text {
                         width: parent.width; wrapMode: Text.WordWrap
                         text: I18n.tr("Couldn't read your graphics hardware.")
@@ -540,7 +540,7 @@ done
 
                 // ── RYOKU RENDERS ON ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("RYOKU RENDERS ON")
                     // Hybrid/Performance/Passthrough only mean something with a
                     // second GPU to switch between; a single-GPU box always renders
@@ -603,7 +603,7 @@ done
 
                 // ── CPU POWER PROFILES ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     visible: pg.cpuTune.length > 0
                     title: I18n.tr("CPU POWER PROFILES")
 
@@ -668,7 +668,7 @@ done
 
                 // ── TUNING · THIS SESSION ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("TUNING · THIS SESSION")
 
                     // the per-session promise, said plainly and kept in view.
@@ -857,7 +857,7 @@ done
 
                 // ── BATTERY ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     visible: pg.batteryTune.length > 0
                     title: I18n.tr("BATTERY")
 
@@ -874,7 +874,7 @@ done
 
                 // ── GPU PASSTHROUGH · ADVANCED ──
                 SettingCard {
-                    width: gfxCol.width
+                    width: gfxCol.colWidth
                     title: I18n.tr("GPU PASSTHROUGH · ADVANCED")
 
                     Text {
@@ -935,6 +935,7 @@ done
                                 contentWidth: width; contentHeight: planView.height
                                 clip: true; boundsBehavior: Flickable.StopAtBounds
                                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                                WheelScroll { }
                                 Text {
                                     id: planView
                                     width: planFlick.width

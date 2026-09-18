@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
-# end-to-end smoke test of the install backend (installation/backend/ryoku-install)
-# under RYOKU_DRYRUN across the strategy x encrypt x swap matrix: every
-# combination must run clean, emit the six staged @@RYOKU_STEP sentinels in the
-# canonical order the TUI tracks, and print exactly one @@RYOKU_DONE as the LAST
-# sentinel (the TUI treats @@RYOKU_DONE as the success signal; a stray or early
-# one would falsely mark a failed install complete). also pins the per-mode
-# narration a reviewer relies on: the shared-Windows-ESP dual-boot promise (a
-# dedicated XBOOTLDR /boot, Windows' own /EFI/Microsoft left alone), the pinned
-# LUKS KDF, and the hibernation resume line. dry-run, so no disk is touched.
+# End-to-end dry-run coverage for strategy, encryption, swap, ESP mode, and ISO
+# variant. Every successful run must emit the canonical stage sentinels and end
+# with exactly one @@RYOKU_DONE.
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -16,14 +10,13 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 
 canonical="partition filesystems mount pacstrap configure bootloader"
 
-# run_backend <strategy> <encrypt> <swap>: run ryoku-install in dry-run with the
-# repo payload pointed at the checkout. leaves the full output in $out and the
-# exit code in $rc.
+# run_backend <strategy> <encrypt> <swap> [esp-mode] [variant]
 run_backend() {
   rc=0
   out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" \
     RYOKU_DISK=/dev/vda RYOKU_PASSWORD_HASH='$6$fake$hash' \
     RYOKU_DISK_STRATEGY="$1" RYOKU_ENCRYPT="$2" RYOKU_SWAP_GIB="$3" \
+    RYOKU_ESP_MODE="${4:-auto}" RYOKU_VARIANT="${5:-plain}" \
     RYOKU_LUKS_PASSPHRASE=passphrase \
     bash "$root/installation/backend/ryoku-install" 2>&1)" || rc=$?
 }
@@ -31,8 +24,10 @@ run_backend() {
 for strategy in whole alongside; do
   for encrypt in 0 1; do
     for swap in 0 8; do
-      tag="strategy=$strategy encrypt=$encrypt swap=$swap"
-      run_backend "$strategy" "$encrypt" "$swap"
+      mode=auto
+      [[ $strategy == alongside ]] && mode=shared
+      tag="strategy=$strategy encrypt=$encrypt swap=$swap mode=$mode"
+      run_backend "$strategy" "$encrypt" "$swap" "$mode"
       [[ $rc -eq 0 ]] || fail "$tag: dry run exited $rc: $out"
 
       # exactly six @@RYOKU_STEP sentinels, in the canonical order.
@@ -50,9 +45,9 @@ for strategy in whole alongside; do
 
       # per-strategy narration.
       if [[ $strategy == alongside ]]; then
-        grep -qF 'XBOOTLDR' <<<"$out"        || fail "$tag: alongside missing the dedicated XBOOTLDR /boot narration"
-        grep -qF '/EFI/Microsoft' <<<"$out"  || fail "$tag: alongside missing the shared-Windows-ESP (/EFI/Microsoft) promise"
-        grep -qF 'ryokuboot' <<<"$out"    || fail "$tag: alongside missing the ryokuboot partlabel"
+        grep -qF 'XBOOTLDR' <<<"$out"        || fail "$tag: shared mode missing the XBOOTLDR /boot narration"
+        grep -qF '/EFI/Microsoft' <<<"$out"  || fail "$tag: shared mode missing the existing-ESP safety promise"
+        grep -qF 'ryokuboot' <<<"$out"       || fail "$tag: alongside missing the ryokuboot partlabel"
       else
         grep -qF '/EFI/Microsoft' <<<"$out" && fail "$tag: whole-disk wrongly narrated Windows' ESP (/EFI/Microsoft)"
       fi
@@ -75,6 +70,27 @@ for strategy in whole alongside; do
   done
 done
 
+# Auto cannot be resolved without probing a real ESP, so an alongside dry-run
+# must choose the path it wants narrated.
+run_backend alongside 0 0 auto
+[[ $rc -ne 0 ]] || fail "alongside auto dry-run silently selected an ESP mode"
+grep -qF 'set RYOKU_ESP_MODE=shared or dedicated' <<<"$out" \
+  || fail "alongside auto dry-run did not explain how to select a mode"
+
+# Dedicated mode must stay entirely on the new ESP for both ISO variants.
+for variant in plain cachyos; do
+  run_backend alongside 0 0 dedicated "$variant"
+  [[ $rc -eq 0 ]] || fail "$variant dedicated-ESP dry run exited $rc: $out"
+  grep -qF 'mode=dedicated' <<<"$out" \
+    || fail "$variant dedicated-ESP dry run lost the partition mode"
+  grep -qF '/mnt/boot/EFI/limine/limine_x64.efi' <<<"$out" \
+    || fail "$variant dedicated-ESP dry run did not install Limine on the new ESP"
+  grep -qF '/mnt/efi/EFI/ryoku' <<<"$out" \
+    && fail "$variant dedicated-ESP dry run touched the existing ESP path"
+  grep -qF '@@RYOKU_DONE' <<<"$out" \
+    || fail "$variant dedicated-ESP dry run did not complete"
+done
+
 # RYOKU_GPU_MODE wiring: the value is now CONSUMED. under dry-run the mapped
 # `ryoku-gpu mode` call is narrated against the user's gpu.lua; sync->performance.
 out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
@@ -89,4 +105,4 @@ out="$(RYOKU_DRYRUN=1 RYOKU_REPO="$root" RYOKU_DISK=/dev/vda \
   bash "$root/installation/backend/ryoku-install" 2>&1)" || fail "no-gpu-mode dry run exited nonzero: $out"
 grep -qF 'ryoku-gpu mode' <<<"$out" && fail "ryoku-gpu mode narrated when RYOKU_GPU_MODE was unset"
 
-echo "install-dryrun-matrix: all 8 combinations passed"
+echo "install-dryrun-matrix: all checks passed"

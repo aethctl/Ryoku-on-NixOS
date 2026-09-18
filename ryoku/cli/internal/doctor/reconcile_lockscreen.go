@@ -111,6 +111,47 @@ func refreshGreeter(bundle string) error {
 	return sys.Run("sudo", "mv", tmp, greeterThemeDir)
 }
 
+// greeterScriptSource is the shipped greeter compositor script. On a package box
+// the ryoku-desktop package owns and updates /usr/share/ryoku/lockscreen/ryoku-greeter
+// itself, so there is nothing to reconcile; a dev checkout, whose deploy flow
+// never lays the script down, is the only place doctor must keep it current.
+// Return the checkout copy when a repo resolves, else "" to skip.
+func greeterScriptSource() string {
+	if repo := sys.ResolveRepo(); repo != "" {
+		if p := filepath.Join(repo, "ryoku", "lockscreen", "sddm", "ryoku-greeter"); sys.Exists(p) {
+			return p
+		}
+	}
+	return ""
+}
+
+// greeterScriptStale reports whether the installed greeter compositor script is
+// missing or drifted from the checkout copy. A stale script strands greeter
+// fixes -- the NVIDIA software-cursor renderer among them -- on a box that only
+// ever ran an older deploy.
+func greeterScriptStale(src string) bool {
+	return src != "" && fileDiffers(src, greeterCompositorBin)
+}
+
+// fileDiffers reports whether dst is missing or differs byte-for-byte from src.
+func fileDiffers(src, dst string) bool {
+	a, err := os.ReadFile(src)
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(dst)
+	if err != nil {
+		return true
+	}
+	return !bytes.Equal(a, b)
+}
+
+// refreshGreeterScript installs the shipped greeter compositor script over the
+// stale one, executable and root-owned like the package lays it down.
+func refreshGreeterScript(src string) error {
+	return sys.Run("sudo", "install", "-Dm755", src, greeterCompositorBin)
+}
+
 func lockerPath() string {
 	return filepath.Join(os.Getenv("HOME"), ".local", "share", "quickshell-lockscreen", "lock.sh")
 }
@@ -199,7 +240,9 @@ func reconcileLockscreenDrift(checkOnly bool) recResult {
 	}
 	lockStale := lockscreenStale(bundle)
 	greeter := greeterStale(bundle)
-	if !lockStale && !greeter {
+	gscriptSrc := greeterScriptSource()
+	gscriptStale := greeterScriptStale(gscriptSrc)
+	if !lockStale && !greeter && !gscriptStale {
 		return okRes(i18n.T("in-session lockscreen installed and current"))
 	}
 	if checkOnly {
@@ -221,16 +264,25 @@ func reconcileLockscreenDrift(checkOnly bool) recResult {
 		}
 		did = append(did, i18n.T("in-session lock"))
 	}
-	if greeter {
+	if greeter || gscriptStale {
 		if exec.Command("sudo", "-n", "true").Run() != nil {
-			return noteRes(i18n.T("the SDDM greeter predates the shipped skin; refreshing it needs sudo")).
+			return noteRes(i18n.T("the SDDM greeter predates the shipped bundle; refreshing it needs sudo")).
 				withFix(i18n.T("sudo ryoku doctor (or the next ryoku update)"))
 		}
-		if err := refreshGreeter(bundle); err != nil {
-			return failRes(i18n.T("could not refresh the SDDM greeter skin: %v"), err).
-				withFix("sudo " + lockscreenInstaller())
+		if greeter {
+			if err := refreshGreeter(bundle); err != nil {
+				return failRes(i18n.T("could not refresh the SDDM greeter skin: %v"), err).
+					withFix("sudo " + lockscreenInstaller())
+			}
+			did = append(did, i18n.T("SDDM greeter"))
 		}
-		did = append(did, i18n.T("SDDM greeter"))
+		if gscriptStale {
+			if err := refreshGreeterScript(gscriptSrc); err != nil {
+				return failRes(i18n.T("could not refresh the SDDM greeter compositor: %v"), err).
+					withFix("sudo ryoku doctor")
+			}
+			did = append(did, i18n.T("greeter compositor"))
+		}
 	}
 	return fixedRes(i18n.T("refreshed the %s to the shipped lockscreen bundle"), strings.Join(did, " and "))
 }

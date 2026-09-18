@@ -154,6 +154,7 @@ Item {
                 contentHeight: ctl.height
                 clip: true
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: ctl

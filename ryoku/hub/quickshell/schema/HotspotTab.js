@@ -10,7 +10,7 @@ var rows = [
         "group": "OTHER",
         "key": "",
         "label": "Hotspot",
-        "desc": "Shares this machine's connection over Wi-Fi; generates a password if unset",
+        "desc": "Shares this connection over Wi-Fi",
         "ctl": "sw",
         "src": "down); nothing is written to any Ryoku config file"
     },
@@ -19,7 +19,7 @@ var rows = [
         "group": "DETAILS",
         "key": "802-11-wireless.ssid",
         "label": "Network name",
-        "desc": "Name nearby devices see; edits take effect at once if the hotspot is live",
+        "desc": "The name nearby devices see",
         "ctl": "text",
         "src": "RyokuHotspot.nmconnection (written via `nmcli connection add|modify`, read back via `nmcli -t -s -g 802-11-wireless.ssid,802-11-wireless-security.psk connection show RyokuHotspot`)"
     },
@@ -28,7 +28,7 @@ var rows = [
         "group": "DETAILS",
         "key": "802-11-wireless-security.psk",
         "label": "Password",
-        "desc": "WPA2 key for joining; entries under 8 characters are silently dropped",
+        "desc": "WPA2 key to join; under 8 characters is dropped",
         "ctl": "text",
         "src": "RyokuHotspot.nmconnection (written via `nmcli connection add|modify`, read back via `nmcli -t -s -g \u2026802-11-wireless-security.psk connection show RyokuHotspot` - the -s secrets flag is required)",
         "lo": 8.0,

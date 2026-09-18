@@ -19,9 +19,9 @@ layout(binding = 2) uniform sampler2D newTex;
 
 const vec2 direction = vec2(1.0, -1.0);
 const float smoothness = 0.5;
-
+ 
 const vec2 center = vec2(0.5, 0.5);
-
+ 
 vec4 transition (vec2 uv) {
   vec2 v = normalize(direction);
   v /= abs(v.x)+abs(v.y);

@@ -57,8 +57,8 @@ its place; if it does not, remove it.
   and do not cast.
 - **The print texture rides the chrome, never the content.** The poster
   ornaments are real, but they belong on the always-present furniture, not
-  behind the thing being read: `Reg` sits behind a nav rail (the Hub's, the
-  Shell Studio's) and `Marginalia` + `Barcode` fill the rail's dead last inch.
+  behind the thing being read: `Reg` sits behind a nav rail (QS Bar Settings'),
+  and `Marginalia` + `Barcode` dress a surface that has a dead margin for them.
   A settings plate gets flat paper. `Grain` is for art surfaces only. A texture
   under a control is decoration the reader has to see past, so it is a bug.
 - **Latin names the thing, kanji seals it.** Every nav item, section eyebrow and
@@ -217,7 +217,7 @@ Self-hosted, no CDN. Four families, one role each:
 |Kanji seals (力, 接続, 断)|**Noto Sans CJK JP**|`Tokens.jp`|
 
 One size ramp, eight steps, and a step is a role rather than a number to pick:
-`fTitle` 46 (the page title, Fraunces), `fHero` 34 (a headline readout), `fValue`
+`fTitle` 32 (the page title, Fraunces), `fHero` 34 (a headline readout), `fValue`
 26 (a cell's value), `fRow` 15 (a row name), `fBody` 14, `fSmall` 13
 (descriptions), `fMicro` 11 (tracked labels), `fTiny` 9 (corner tags, struck
 defaults).
@@ -241,7 +241,67 @@ a terminal instead of a printed instrument, which is a different product.
 - **One spacing scale.** `s1` 4, `s2` 8, `s3` 12, `s4` 16, `s5` 24, `s6` 32,
   `s7` 48. Nothing between them.
 - **Fixed furniture.** A settings row is `rowH` 48 tall, a cell `cellH` 104, a
-  control `ctlH` 26, a nav rail `railW` 268. A page never invents these.
+  control `ctlH` 26, a nav rail `railW` 268. A page never invents these. A framed
+  page fills the window beside the rail, and the sheet puts its groups in as many
+  card columns as the measure holds (three on a page-wide window), each card
+  capped at `cardMax`.
+
+## A page uses the window it was given
+
+The Hub opens page-wide, and a page that refuses the width it was given is the
+bug this section exists to prevent.
+
+- **The body takes the width it is given.** A page's scroll or body region never
+  caps itself (no `Math.min(parent.width, Tokens.contentMax)` on the body). The
+  grid caps itself through its cards instead. Only *prose* keeps a reading cap: a
+  paragraph, a help line, a release note, a blurb.
+- **The head sits on the body's grid.** An eyebrow, title and blurb start at the
+  body's left inset and span its width, so a page's title aligns with its first
+  card column rather than floating in the middle of the window.
+- **Content anchors to the top, always.** No block is centred by height, and no
+  page spreads spare room into its rows: a block whose place depends on its height
+  visibly hops as cards measure in ("flickers when I switch to it"), and the same
+  first card then sits at two different heights on two pages. One place, always
+  the top, is what lets a reader build a map of the page. A sparse page is honest
+  empty paper below the cards; the answer to thinness is a merge, not padding.
+- **A page that fits does not scroll, and a page that overflows does.** Every
+  scroller carries a `ScrollRail` and declares `WheelScroll { }` inside it, because
+  a plain `Flickable` does not answer the wheel on this stack (see Motion below).
+  A scroller with nothing to scroll clamps and stays put.
+
+## Motion and input
+
+- **Every scroller answers the wheel.** `WheelScroll` (declared inside the
+  `Flickable`/`ListView`, beside its `ScrollRail`) scrolls it one notch per 120
+  units of `angleDelta`, clamped to its bounds. A handler only receives events over
+  its own parent, so it cannot live in the rail: a handler inside a `Flickable` is
+  reparented to that flickable's `contentItem`, which is why the component walks up
+  to the item that owns `contentHeight`. A control that wants the wheel for itself
+  keeps it, since an inner handler accepts the event first.
+- **A page swap does not reflow.** The two loaders crossfade the incoming page, and
+  the page's own first layout is synchronous, so nothing moves after the fade
+  starts. Length-dependent placement and post-load measurement timers are what make
+  a page jump; there are none.
+
+## Disclosure, not walls
+
+- **A page leads with what a user came for.** A rarely-touched cluster folds
+  (`SettingCard.expanded: false`) and its header says what it hides
+  (`SettingCard.summary`: "4 SWITCHES"), because a folded card with no trace of
+  its contents reads as an empty one.
+- **A deep knob is `adv: true`**, hidden behind the rail's Advanced switch and
+  still reachable from search. Nothing is ever buried beyond a search.
+- **A toggle is only for a true binary.** A choice among modes is a `Seg`, a
+  family of related on/offs is a `Multi`, a number is a `Step` or a `Slid`, and
+  `Spans.controlFor` already decides this from the value's kind. Reaching for a
+  switch because the key is a `bool` is how a page becomes a wall of switches.
+- **A control that cannot work is never offered.** An affordance beside an empty
+  list is armed only when the list has something to act on (`Btn.armed`), and a
+  row the active compositor cannot back is dropped, not shown dead.
+- **Copy is measured, not guessed.** A row's description is one line and 60
+  characters at a three-column card; a page blurb is 70. A description that only
+  restates its label is deleted. These caps are enforced by reading the live
+  page, not by counting characters in a file.
 - **No shadows in app surfaces.** The Hub and the apps are print: a flat
   instrument sheet does not cast. The brutalist offset shadow is retired; an
   overlay separates with `Tokens.paperLift` and a `lineStrong` border instead.
@@ -258,19 +318,18 @@ each surface. That is how eleven Themes happened.
 |---|---|
 |Foundation|`Btn` (a button), `IconBtn` (a square utility button), `Field` (a text input), `ScrollRail` (a flickable's thumb)|
 |A setting|`Cell` (label, value, unit, struck default, description, control) or `SettingRow` (the compact row), grouped by `SettingCard` or `Section` (spans come from `Spans`, never by hand)|
-|The eight controls|`Sw` `Step` `Slid` `Seg` `Chips` `Multi` `PickBar`+`Picker` `Gallery`|
+|A page body|`CardColumns` (a page's blocks laid into balanced columns, a `fullWidth: true` child taking a band across them)|
+|The eight controls|`Sw` `Step` `Slid` `Seg` `Chips` `Multi` `PickBar`+`Picker` `Gallery`. A numeric readout (a stepper's number, a slider's percentage) is typed into on click or Enter: a knob is right for a nudge, typing is right for an exact value, and the typed number is clamped into the row's own range. `Sw` shows two signals for one state: the track tints and the knob fills as it goes on.|
 |Save state|`ActionBar` (Save / Revert / Reset, and the dirty readout)|
 |Live preview|`Preview` (the block a live preview sits in), `SpectrumField` (the audio field, shared with the desktop)|
 |Modals|`AppPicker` (a filterable app or command list), `PickFile` (a file or folder chooser)|
 |Navigation|`Tabs` (bone-invert plates, the `//` lead)|
 |Art texture|`Grain` (a film tooth over art, never over chrome: the recording thumbnail, the launcher preview)|
 |Poster ornament|`Reg` (registration backdrop), `Ticks` (corner ticks), `Barcode`, `Empty` (the empty-state plate), `Motif` (the line ornament inside `Empty`), `Marginalia` + `Pixel` (a running-head strip and its 1-bit dingbats), `Watermark` (a blurred background kanji behind the content)|
-|Poster filler|`Decor` (a wide plate in a dead grid slot), `Placard` (the tall one), `DitherField` (the procedural field either falls back to)|
 |Image tools|`HeroCrop` (cover plus a draggable 0..1 focal point), `DitherImage` (an image baked to 1-bit through the Bayer shader)|
 |Keyboard|`KeyboardMap` (a live diagram lighting the layout legends and remapped keys), `KeypressStack` -> `KeyChord` -> `Keycap` (the recording's keypress overlay)|
 
-Three of those look unused and are not: `Motif` is drawn only by `Empty`,
-`DitherField` only by `Decor` and `Placard` when a plate has no art, and
+Two of those look unused and are not: `Motif` is drawn only by `Empty`, and
 `KeyChord`/`Keycap` only by `KeypressStack`. They are composition, not museum
 pieces. The distinction matters, because the old table here listed `Eyebrow`,
 `SunDisc`, `RegMark` and `BrutalPanel`, which really were used zero times: the
@@ -334,76 +393,75 @@ not look broken; it looks fine and then eats the edit on the way out.
 
 `Hub.qml` owns the frame, so a page only writes its content:
 
-- **The rail.** A masthead (力 seal, `RYOKU ARCH // SETTINGS_`, a `///` mark),
+- **The rail.** A masthead (力 seal, `RYOKU ARCH`, `SETTINGS`),
   a search field, then eight groups. A group header is its zero-padded index and
-  name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 DESKTOP`, `04 APPS &
-  KEYS`, `05 TOOLS`, `06 SYSTEM`, `07 ADD-ONS`, and a nameless eighth holding
-  Credits). Selection is typography, never a coloured bar: the live section takes
+  name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 LOOK`, `04 COMPOSITOR`,
+  `05 DESKTOP`, `06 KEYS & APPS`, `07 SYSTEM`, `08 EXTEND`, and a nameless ninth
+  holding Credits). A section can fold into another page rather than keeping a
+  row of its own (Cursor lives inside Input) and an old link to it still lands
+  right, because `canonicalSection` maps the retired key. Selection is typography, never a coloured bar: the live section takes
   a bone plate and a `//` lead, and the group header steps up the ink ramp from
   faint to dim as a quiet "you are here". Every item carries its kanji seal on
   the right.
 - **The Advanced gate.** Sections marked `adv` are hidden from the rail until
-  the rail-foot `Advanced settings` switch is on, and a group whose every item is
-  `adv` folds away entirely rather than leaving a bare header. Search still
-  reaches them, and the open section always counts as visible, so turning
-  Advanced off never strands you on a page the rail no longer lists.
-- **The rail foot.** A `Barcode`, the edition chip (`BETA // 18`), the `RYOKU
-  HUB` label, and that Advanced switch.
+  the rail-foot `Advanced` switch is on, and a group whose every item is `adv`
+  folds away entirely rather than leaving a bare header. Search still reaches
+  them, and the open section always counts as visible, so turning Advanced off
+  never strands you on a page the rail no longer lists.
+- **The rail foot.** The `Advanced` switch, under a hairline. Nothing else: the
+  barcode plate and edition chip that used to sit here were poster ornament, and
+  the rail is navigation.
 - **The page head.** A `力 <GROUP>` eyebrow, the title in Fraunces at `fTitle`,
   and a one-sentence description.
-- **The running head.** A `Marginalia` strip across the head's right margin,
-  naming the group and its index in tracked mono.
-- **The corner chips.** `FILES` and `UPDATES` ride the empty strip above every
-  page head, and `UPDATES` wears a `Tokens.alert` dot when the channel sits
-  behind origin. They are opaque, so they never collide with the running head.
+- **The corner chips.** `FILES` and `UPDATES` ride the strip beside every page
+  head. They take the page's own right inset (`Tokens.s6`, so they line up with
+  the last card rather than floating inside it), a control-sized box (`30` tall,
+  `S4` of padding, `fSmall` label), and a page that draws its own top-right
+  control (`Profile`'s `EDIT`) sits below them rather than stacking under
+  `UPDATES`. `UPDATES` wears a `Tokens.alert` dot when the channel sits behind
+  origin. Both are opaque, so they never collide with a page's head.
+- **The tab bar is one fixed layout, on every page.** Every plate reserves the
+  `//` lead as a slot and only INKS it when active, and one padding applies to
+  every page, so selecting a tab never widens that plate or shoves its neighbours
+  sideways. A tab-switch is a fade of the card set, not a reflow: nothing
+  travels, and opacity cannot move a card.
+- **The grid's geometry comes from the page width, never from the open tab.**
+  `SettingsSheet.gridColumns` is the page's capacity while `columns` is only how
+  many columns the open tab's groups are bucketed into. Deriving geometry from
+  the tab made a one-group tab (Window Manager's `BORDERS`) shrink the sheet and
+  drag the head and tab row sideways with it, so the whole page read as shuffling
+  when the reader switched. `CardColumns` keeps its column split until the SET of
+  visible blocks changes, so a drawer that unfolds changes only its own column.
 - **The action bar.** Bottom, on framed pages: the dirty readout (`SAVED · LIVE
   ON YOUR DESKTOP`), its own marginalia, then `RESET TO DEFAULTS` / `REVERT` /
   `SAVE`.
-- **`Reg` and `Ticks`.** The registration crosses behind the grid and the ticks
-  on the window's corners, drawn once for the whole sheet.
+- **The page measure.** A framed page takes the width beside the rail: a wider
+  window buys more columns, never a longer row and never a wider void. The sheet
+  lays its groups into as many card columns as the measure holds
+  `SettingsSheet.gridColumns`), each card capped at `cardW`, bucketed shortest
+  column first from an estimate that counts each card's own header as well as its
+  rows, so the columns end as level as the groups allow. Prose keeps its own
+  reading cap.
+- **A list of values is rows, wherever it lives.** The same rhythm as the settings
+  cards: card insets (`S4`), one row height, a hairline between rows, label in
+  `ink` over its note in `inkMuted`. A hand-built page that draws its own plate
+  with tighter spacing is the drift this rule exists to stop (Import's
+  bring-over list, Updates' package and commit rows, Displays' saved profiles).
+- **Nothing floats.** There is no registration backdrop and no poster layer: the
+  sheet is paper with a hairline grid of cards, and the ornament that survives
+  (`Reg` behind a rail, `Ticks` on a framed specimen, `Marginalia`, `Barcode`,
+  `Watermark`) is used where a surface has a genuine dead margin for it, never
+  behind a control.
 
-## The poster layer
+## The retired poster layer
 
-![The Hub's profile dossier](media/profile.webp)
-
-*The Profile page: a live system dossier. Telemetry with leader lines into the
-art, tracked vertical marginalia, a barcode of the build, a Fraunces name, and a
-1-bit dithered specimen full bleed.*
-
-**The ornament is dead-zone only.** `Reg` behind everything, `Ticks` on framed
-specimens, `Marginalia` in the margins, the pixel dingbats and `Watermark` behind
-the content: they dress the sheet like a printed poster, but they live strictly
-in the chrome margins a page leaves empty (the rail foot, the action bar's
-centre, an empty head margin) and never in the content or over a control. They
-are ink only; the accent stays on state.
-
-**The one poster that enters the content grid is `Decor`, with `Placard` as its
-tall sibling.** Each takes an otherwise-empty grid cell, a section's leftover
-half-row or a full-width plate where a section ends flush, so it *fills* dead
-space rather than crowding it. It holds no control and never overlaps one; unlike
-the ink-only ornament it may carry a real image or gif and animate, because it is
-art in a dead cell, not chrome over a surface.
-
-A plate is a chapter of a printed catalogue, and its fields say so: a `code`
-(`LINK-08`, `BLADE-07`), a `title` in Japanese with a romanised `sub`, a `chapter`
-number and `label`, a `quote` or `motto`, a `seal`, its `art`, and a `boxId` that
-is the key the user's framing persists under. Right-click a `Decor` to open its
-editor: it frames the image like the launcher's hero (cover plus a 0..1 focal
-point you drag, plus zoom), with a gallery (the baked set or a custom file, which
-is desaturated to noir on the way in) and Save / Cancel. The choice and framing
-persist per box in `DecorStore` (`~/.config/ryoku/decor.json`), guarded by a 700ms
-edit timer so the file watch cannot revert a drag in progress. The baked set
-resolves through `Ryodecors.dir` (`~/Pictures/ryodecors`, seeded by the installer
-and kept current by `ryoku doctor`, so it sits beside Wallpapers where a user can
-see and swap it); a custom pick keeps its own absolute path. `Placard` is
-read-only: it is a specimen, not a widget.
-
-**The dither is one algorithm in two places.** `ryoku/ui/shaders/dither.frag`
-maps luminance against a tiled 4x4 Bayer matrix and outputs 1-bit bone (`#e8d8c9`)
-on a transparent ground; `DitherImage` runs it over a real image, and
-`DitherField` paints the same Bayer threshold over three octaves of value noise
-on a Canvas, so a plate with no art still has a field. Bone on transparent is
-what makes the whole set composite onto any surface and read as one set.
+The Hub used to wear a second skin: a `hubDecor` switch in the rail traded a
+"calm" sheet for a "rich" one with register crosshairs, a film-grain plate, a
+barcode rail foot, an oversized `fTitle` and chapter plates (`Decor`, `Placard`,
+`DitherField`) filling dead grid cells with art. Calm was the default and the
+right answer, so the switch, the components and every one of their call sites are
+gone: a settings page is one voice now. `Grain` stays for art surfaces, and
+`Ryodecors.dir` art still feeds the profile hero and its editor.
 
 ## The surfaces
 
@@ -849,8 +907,8 @@ how each shipped specimen was made is `bin/art/README.md`. In short:
 - **One home.** Both bakers write into `ryoku/assets/ryodecors`, so a new decor
   ships everywhere at once: the installer seeds it, the `ryoku-desktop` package
   carries it to `/usr/share/ryoku/ryodecors`, and `ryoku doctor` lays it into
-  every `~/Pictures/ryodecors`. Reference it by bare filename in a `Decor` or
-  `Placard` `art:`.
+  every `~/Pictures/ryodecors`. The profile hero and its editor read it by bare
+  filename.
 
 Figurative art that is not decor (the launcher hero, the welcome backdrop, the
 profile portrait) follows the same rule: generated at dev time, background

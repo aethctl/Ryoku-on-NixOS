@@ -22,6 +22,11 @@ Item {
     property string value: ""       // compact readout (a slider number, a count); empty hides
     property string unit: ""
     property string def: ""         // factory value, struck when changed
+    // A numeric readout (+/- steppers, sliders) can be typed into: a knob is
+    // fine for a nudge, and typing is what you want for an exact value.
+    property bool editableValue: false
+    signal valueCommitted(string text)
+    property bool editingValue: false
     property string source: ""      // owning file, faint on hover
     property bool changed: false
     property bool block: false      // control band whose height is the control's own (chips, gallery)
@@ -171,6 +176,23 @@ Item {
         }
     }
 
+    function beginEdit() {
+        if (!row.editableValue)
+            return;
+        row.editingValue = true;
+        valueEdit.text = row.value;
+        valueEdit.forceActiveFocus();
+        valueEdit.selectAll();
+    }
+
+    function commitEdit() {
+        if (!row.editingValue)
+            return;
+        row.editingValue = false;
+        var text = valueEdit.text;
+        if (text.length) row.valueCommitted(text);
+    }
+
     // the inline right cluster, seated LEFT of the control so nothing overlaps
     // it: the compact value readout (a slider or stepper number) always, plus,
     // on hover when changed, the struck default and a revert glyph.
@@ -180,11 +202,50 @@ Item {
         anchors { right: slot.left; rightMargin: Tokens.s3; verticalCenter: parent.verticalCenter }
         spacing: Tokens.s2
         Text {
-            visible: row.value !== ""
+            id: valueText
+            visible: row.value !== "" && !row.editingValue
             text: row.value
             color: Tokens.ink
             font.family: Tokens.ui; font.pixelSize: Tokens.fBody; font.weight: Font.Light
             anchors.verticalCenter: parent.verticalCenter
+            activeFocusOnTab: row.editableValue
+            focus: false
+            Rectangle {
+                visible: parent.activeFocus
+                anchors.fill: parent
+                anchors.margins: -4
+                color: "transparent"
+                border.width: Tokens.border
+                border.color: Tokens.bone
+            }
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    row.beginEdit();
+                    event.accepted = true;
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                anchors.margins: -4
+                enabled: row.editableValue
+                cursorShape: Qt.IBeamCursor
+                onClicked: row.beginEdit()
+            }
+        }
+        TextInput {
+            id: valueEdit
+            visible: row.editingValue
+            width: Math.max(30, implicitWidth)
+            color: Tokens.ink
+            font.family: Tokens.ui; font.pixelSize: Tokens.fBody; font.weight: Font.Light
+            selectionColor: Tokens.bone
+            selectedTextColor: Tokens.inkOnBone
+            anchors.verticalCenter: parent.verticalCenter
+            horizontalAlignment: TextInput.AlignRight
+            inputMethodHints: Qt.ImhFormattedNumbersOnly
+            onAccepted: row.commitEdit()
+            onActiveFocusChanged: if (!activeFocus && row.editingValue) row.commitEdit()
+            Keys.onEscapePressed: { row.editingValue = false; row.editingValue = false }
         }
         Text {
             visible: row.value !== "" && row.unit !== ""

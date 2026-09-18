@@ -10,7 +10,7 @@ var rows = [
         "group": "DICTATION",
         "key": "enabled",
         "label": "Voice typing",
-        "desc": "Tap Super+` to dictate into the focused app; needs a model or key first",
+        "desc": "Tap Super+` to dictate into the focused app",
         "ctl": "sw",
         "src": " disable --now (off). Read back via `systemctl --user is-enabled --quiet voxtype.service`."
     },
@@ -19,7 +19,7 @@ var rows = [
         "group": "ENGINE & MODEL",
         "key": "# ryoku-preset: <key>",
         "label": "Speech engine",
-        "desc": "Which engine turns speech into text; a missing model downloads on click",
+        "desc": "Which engine turns speech into text",
         "ctl": "seg",
         "src": "voxtype.go, mode 0600, atomicWrite. Selection is persisted ONLY as a TOML *comment* marker `# ryoku-preset: <key>` and read back by selectedPreset() scanning for that comment prefix.",
         "opts": [
@@ -33,7 +33,7 @@ var rows = [
         "group": "ENGINE & MODEL",
         "key": "whisper.model = \"base.en\" + whisper.language = \"en\"",
         "label": "Whisper - Fast",
-        "desc": "Transcribes English offline with the small base.en model, quick to load",
+        "desc": "English, offline, small model, quick to load",
         "ctl": "action",
         "src": "ggml-base.en.bin"
     },
@@ -42,7 +42,7 @@ var rows = [
         "group": "ENGINE & MODEL",
         "key": "whisper.model = \"large-v3-turbo\" + whisper.language = \"auto\"",
         "label": "Whisper - Accurate",
-        "desc": "Transcribes any language offline with large-v3-turbo, a 1.6 GB download",
+        "desc": "Any language, offline, a 1.6 GB download",
         "ctl": "action",
         "src": "ggml-large-v3-turbo.bin"
     },
@@ -51,7 +51,7 @@ var rows = [
         "group": "ENGINE & MODEL",
         "key": "whisper.mode = \"remote\" + whisper.remote_model = \"whisper-1\" + whisper.remote_endpoint = \"https://api.openai.com/v1\"",
         "label": "OpenAI API",
-        "desc": "Transcribes in OpenAI's cloud; audio leaves your machine, key required",
+        "desc": "Cloud transcription; audio leaves your machine",
         "ctl": "action",
         "src": "config.toml"
     },
@@ -60,7 +60,7 @@ var rows = [
         "group": "API KEY",
         "key": "remote_api_key",
         "label": "OpenAI API key",
-        "desc": "Writes the key into config.toml; it can be replaced later but never shown",
+        "desc": "Your OpenAI key, kept in config.toml",
         "ctl": "text",
         "src": "config.toml, under [whisper], mode 0600. Also satisfied read-only by env VOXTYPE_WHISPER_API_KEY."
     },
@@ -69,7 +69,7 @@ var rows = [
         "group": "API KEY",
         "key": "remote_api_key",
         "label": "Save key",
-        "desc": "Writes the key into config.toml; it can be replaced later but never shown",
+        "desc": "Writes the key and checks that it works",
         "ctl": "action",
         "src": "config.toml"
     },

@@ -1,26 +1,12 @@
 #!/usr/bin/env bash
-# Partition the target disk. two strategies, both set ESP_DEV + ROOT_PART:
+# Whole disk creates an ESP + root. Alongside keeps existing partitions and
+# creates a 2 GiB FAT boot partition + root in free space; auto mode makes that
+# boot partition an ESP when the existing ESP is too full, otherwise XBOOTLDR.
 #
-#   whole     wipe the disk, fresh GPT: ESP + a root that takes the rest.
-#             destroys everything on the disk.
-#   alongside keep every existing partition (e.g. Windows on the same drive):
-#             create a 2 GiB XBOOTLDR boot partition + root in the chosen free
-#             region. ESP_DEV is that XBOOTLDR (/boot); Windows' own ESP is SHARED
-#             by the bootloader step (limine lands beside Windows' loader), never
-#             wiped or moved. the user makes room first by shrinking Windows.
-
-# free region 'alongside' needs = the 2 GiB XBOOTLDR boot partition plus the
-# root, whose floor is the base system closure + the swapfile (which lives inside
-# root, @swap subvolume). base raised 15->20 after measuring the base+dev+desktop
-# closure at ~13-15 GiB plus AUR build/snapshot headroom.
+# The root floor covers the base closure plus swap and build/snapshot headroom.
 ryoku_min_root_gib() { echo $(( 20 + ${RYOKU_SWAP_GIB:-0} )); }
 
-# alongside boot partition: a 2 GiB FAT32 XBOOTLDR that holds the kernels/initramfs
-# at /boot. limine + limine.conf live on Windows' shared ESP; limine reads FAT only
-# (limine FAQ.md), so the kernels get their own FAT here, addressed from limine.conf
-# by its FAT label. limine 12.4.0 does NOT resolve guid(<GPT-PARTUUID>) to a FAT
-# volume (verified under OVMF), so a DISTINCT label is the reliable handle -- and
-# distinct so it can never collide with a stray "BOOT"-labeled ESP.
+# Both alongside modes use this distinct FAT label for kernel discovery.
 RYOKU_ALONGSIDE_BOOT_MIB=2048
 RYOKU_ALONGSIDE_BOOT_LABEL=RYOKUBOOT
 
@@ -61,7 +47,7 @@ ryoku_partition() {
     whole)     ryoku_partition_whole ;;
     alongside) ryoku_partition_alongside ;;
     '')        die "RYOKU_DISK_STRATEGY is required (use 'whole' or 'alongside'); refusing to wipe disk on empty strategy." ;;
-    *)         die "disk strategy '$RYOKU_DISK_STRATEGY' not supported (use 'whole' or 'alongside')" ;;
+    *)         die 'disk strategy '\''%s'\'' not supported (use '\''whole'\'' or '\''alongside'\'')' "$RYOKU_DISK_STRATEGY" ;;
   esac
 }
 
@@ -73,7 +59,7 @@ ryoku_free_mapper() {
   local name=$1 node="/dev/mapper/$1" mp
   [[ -n $name ]] || return 0
   dmsetup info -- "$name" >/dev/null 2>&1 || return 0
-  log "freeing stale mapper /dev/mapper/$name held by a previous run"
+  log 'freeing stale mapper /dev/mapper/%s held by a previous run' "$name"
   # unmount and swapoff first (a swapfile inside the fs pins the mapper), then close.
   while IFS= read -r mp; do
     [[ -n $mp ]] || continue
@@ -140,7 +126,7 @@ ryoku_disk_swapfiles() {
 ryoku_release_disk() {
   local disk=$1
   [[ -b $disk || -n ${RYOKU_DRYRUN:-} ]] || return 0
-  log "releasing $disk before wipe (swapoff, unmount, close holders)"
+  log 'releasing %s before wipe (swapoff, unmount, close holders)' "$disk"
 
   local mounts_src=${RYOKU_PROC_MOUNTS:-/proc/mounts}
   local swaps_src=${RYOKU_PROC_SWAPS:-/proc/swaps}
@@ -243,12 +229,12 @@ ryoku_partition_whole() {
   # under dry-run the disk may be absent and ryoku_disk_populated fails closed,
   # so narrate the guard instead of probing; the real check stands in real mode.
   if [[ -n ${RYOKU_DRYRUN:-} ]]; then
-    log "DRYRUN: would refuse to wipe $disk if it holds partitions and RYOKU_WIPE_CONFIRMED != 1"
+    log 'DRYRUN: would refuse to wipe %s if it holds partitions and RYOKU_WIPE_CONFIRMED != 1' "$disk"
   elif [[ ${RYOKU_WIPE_CONFIRMED:-} != 1 ]] && ryoku_disk_populated "$disk"; then
-    die "refusing to wipe $disk: it already holds partitions and RYOKU_WIPE_CONFIRMED is not set. Pick 'alongside' to keep them, or set RYOKU_WIPE_CONFIRMED=1 to wipe explicitly."
+    die 'refusing to wipe %s: it already holds partitions and RYOKU_WIPE_CONFIRMED is not set. Pick '\''alongside'\'' to keep them, or set RYOKU_WIPE_CONFIRMED=1 to wipe explicitly.' "$disk"
   fi
 
-  log "partitioning $disk (whole disk, GPT: ${RYOKU_ESP_GIB}GiB ESP + root)"
+  log 'partitioning %s (whole disk, GPT: %sGiB ESP + root)' "$disk" "${RYOKU_ESP_GIB}"
 
   # free the disk before touching it: on the live medium the target may be held
   # by an auto-mounted partition (udisks), leftover state from a previous run,
@@ -283,33 +269,41 @@ ryoku_partition_whole() {
   # and the later mount fails with "unknown filesystem type".
   run wipefs --all "$ESP_DEV"
   run wipefs --all "$ROOT_PART"
-  log "ESP=$ESP_DEV root partition=$ROOT_PART"
+  log 'ESP=%s root partition=%s' "$ESP_DEV" "$ROOT_PART"
 }
 
 ryoku_partition_alongside() {
-  local disk=$RYOKU_DISK
-  log "partitioning $disk (alongside existing OS: 2GiB XBOOTLDR /boot + root in free space, nothing wiped, the existing ESP is shared, not touched)"
+  local disk=$RYOKU_DISK mode=${RYOKU_RESOLVED_ESP_MODE:-${RYOKU_ESP_MODE:-shared}}
+  [[ $mode != auto ]] || die "alongside ESP mode is unresolved; preflight must select shared or dedicated."
+  if [[ $mode == dedicated ]]; then
+    log 'partitioning %s (alongside existing OS: dedicated 2GiB Ryoku ESP + root in free space; existing ESP untouched)' "$disk"
+  else
+    log 'partitioning %s (alongside existing OS: 2GiB XBOOTLDR + root in free space; existing ESP shared)' "$disk"
+  fi
 
   # under dry-run the disk may not exist; narrate what we'd do and pick
   # plausible device names so the rest of the flow can be exercised.
   if [[ -n ${RYOKU_DRYRUN:-} ]]; then
-    local d_min d_need d_max
+    local d_min d_max
     d_min=$(ryoku_min_root_gib)
-    d_need=$(( d_min + 2 ))
-    log "DRYRUN: would require a GPT disk with a Windows ESP and >= ${d_need}GiB contiguous free (2GiB boot + ${d_min}GiB root); Windows' ESP is shared, never wiped"
+    if [[ $mode == dedicated ]]; then
+      log 'DRYRUN: would create a dedicated 2GiB Ryoku ESP + %sGiB root; the existing ESP stays untouched' "${d_min}"
+    else
+      log 'DRYRUN: would create a 2GiB XBOOTLDR + %sGiB root and share the existing ESP' "${d_min}"
+    fi
     log "DRYRUN: with RYOKU_RECLAIM_LEFTOVERS=1 would reclaim UNMOUNTED leftover partitions labeled exactly ryoku/ryokuboot from a prior failed run; without the ack, existing such partitions abort the install"
     d_max=$(ryoku_max_partnum "$disk" 2>/dev/null || true)
-    { [[ $d_max =~ ^[0-9]+$ ]] && (( d_max > 0 )); } || d_max=3   # disk absent on dev box: assume ESP+MSR+C:
+    { [[ $d_max =~ ^[0-9]+$ ]] && (( d_max > 0 )); } || d_max=3
     ESP_DEV=$(part_dev "$disk" "$(( d_max + 1 ))")
     ROOT_PART=$(part_dev "$disk" "$(( d_max + 2 ))")
-    log "DRYRUN: new ryoku-boot (XBOOTLDR)=$ESP_DEV (2GiB, label ryokuboot) root=$ROOT_PART (label ryoku)"
+    log 'DRYRUN: new ryoku-boot=%s (2GiB, mode=%s, label ryokuboot) root=%s (label ryoku)' "$ESP_DEV" "$mode" "$ROOT_PART"
     return 0
   fi
 
   # UEFI dual-boot needs a GPT label. refuse MBR rather than guess at a remap.
   local pttype
   pttype=$(blkid -o value -s PTTYPE "$disk" 2>/dev/null || true)
-  [[ $pttype == gpt ]] || die "alongside needs a GPT disk; $disk has '${pttype:-no}' partition table. Use whole-disk, or convert to GPT."
+  [[ $pttype == gpt ]] || die 'alongside needs a GPT disk; %s has '\''%s'\'' partition table. Use whole-disk, or convert to GPT.' "$disk" "${pttype:-no}"
 
   # reclaim leftovers of a previous failed run BEFORE measuring free space, so
   # the region they hold is available again and retries don't stack partitions.
@@ -324,7 +318,7 @@ ryoku_partition_alongside() {
   # can't match; a reclaimed leftover was already deleted above.
   local clash
   clash=$(lsblk -rpno NAME,LABEL 2>/dev/null | awk -v l="$RYOKU_ALONGSIDE_BOOT_LABEL" '$2==l{print $1}' | head -n1)
-  [[ -z $clash ]] || die "a partition ($clash) already has the FAT label '$RYOKU_ALONGSIDE_BOOT_LABEL' that alongside needs for its boot partition; refusing to create a colliding label. Relabel or remove $clash, then retry."
+  [[ -z $clash ]] || die 'a partition (%s) already has the FAT label '\''%s'\'' that alongside needs for its boot partition; refusing to create a colliding label. Relabel or remove %s, then retry.' "$clash" "$RYOKU_ALONGSIDE_BOOT_LABEL" "$clash"
 
   # pick the free region. the TUI ran the same sfdisk probe and passes the chosen
   # region's exact sectors; a direct backend/test call falls back to the largest.
@@ -337,14 +331,14 @@ ryoku_partition_alongside() {
   if [[ -n ${RYOKU_REGION_START:-} && -n ${RYOKU_REGION_END:-} ]]; then
     region_start=$RYOKU_REGION_START; region_end=$RYOKU_REGION_END
     ryoku_region_is_free "$disk" "$region_start" "$region_end" \
-      || die "requested region ${region_start}-${region_end} is not inside a free area of $disk (did the disk change since it was probed?); refusing to partition."
+      || die 'requested region %s-%s is not inside a free area of %s (did the disk change since it was probed?); refusing to partition.' "${region_start}" "${region_end}" "$disk"
   else
     read -r region_start region_end _ < <(ryoku_free_regions "$disk" | sort -k3,3 -nr | head -n1) || true
     [[ -n ${region_start:-} && -n ${region_end:-} ]] \
-      || die "no unallocated region >= ${need_gib}GiB on $disk; shrink a Windows partition first, then retry."
+      || die 'no unallocated region >= %sGiB on %s; shrink a Windows partition first, then retry.' "${need_gib}" "$disk"
   fi
   region_mib=$(( (region_end - region_start + 1) / spm ))
-  (( region_mib >= need_gib * 1024 )) || die "not enough free space on $disk: $(( region_mib / 1024 ))GiB in the chosen region, need >= ${need_gib}GiB (2GiB boot + ${min_root}GiB root). Shrink the Windows partition first, then retry."
+  (( region_mib >= need_gib * 1024 )) || die 'not enough free space on %s: %sGiB in the chosen region, need >= %sGiB (2GiB boot + %sGiB root). Shrink the Windows partition first, then retry.' "$disk" "$(( region_mib / 1024 ))" "${need_gib}" "${min_root}"
 
   # boot fills the region head; root fills the remainder of THE SAME region.
   # region_start/end are already 1 MiB-aligned by ryoku_free_regions, so every
@@ -353,7 +347,7 @@ ryoku_partition_alongside() {
   boot_start=$region_start
   boot_end=$(( boot_start + RYOKU_ALONGSIDE_BOOT_MIB * spm - 1 ))
   root_start=$(( boot_end + 1 ))
-  log "alongside region: sectors ${region_start}-${region_end} ($(( region_mib / 1024 ))GiB); boot ${boot_start}-${boot_end}, root ${root_start}-${region_end}"
+  log 'alongside region: sectors %s-%s (%sGiB); boot %s-%s, root %s-%s' "${region_start}" "${region_end}" "$(( region_mib / 1024 ))" "${boot_start}" "${boot_end}" "${root_start}" "${region_end}"
 
   # snapshot the pre-existing partition set so we can prove (after sgdisk) that
   # BOTH new partitions landed in free space without overwriting an existing one.
@@ -363,13 +357,13 @@ ryoku_partition_alongside() {
     [[ -n $p ]] && pre_parts+=("$p")
   done < <(ryoku_partitions "$disk")
 
-  # create ryoku-boot (XBOOTLDR ea00, label ryokuboot) then root (8300, label
-  # ryoku) at EXPLICIT sector ranges from the chosen region -- never 0:0 first-fit,
-  # which could land the root in some OTHER free block. type ea00 (not EF00) keeps
-  # exactly one ESP on the disk: Windows'. one invocation = one atomic table write;
-  # 0: for the number lets sgdisk assign the next free partition slots.
+  # Create the boot partition and root at explicit ranges. Shared mode uses an
+  # XBOOTLDR (EA00); dedicated mode makes the same 2 GiB FAT partition an ESP
+  # (EF00), so a full Windows ESP is never touched.
+  local boot_type=ea00
+  [[ $mode == dedicated ]] && boot_type=ef00
   run sgdisk \
-    -n "0:${boot_start}:${boot_end}" -t 0:ea00 -c 0:ryokuboot \
+    -n "0:${boot_start}:${boot_end}" -t "0:${boot_type}" -c 0:ryokuboot \
     -n "0:${root_start}:${region_end}" -t 0:8300 -c 0:ryoku \
     "$disk"
   run partprobe "$disk"
@@ -395,7 +389,7 @@ ryoku_partition_alongside() {
     for q in "${pre_parts[@]}"; do [[ $q == "$p" ]] && { seen=1; break; }; done
     (( seen )) || new_parts+=("$p")
   done < <(ryoku_partitions "$disk")
-  (( ${#new_parts[@]} == 2 )) || die "alongside expected to create 2 new partitions (ESP + root) but sees ${#new_parts[@]} (${new_parts[*]:-none}); refusing to continue."
+  (( ${#new_parts[@]} == 2 )) || die 'alongside expected to create 2 new partitions (ESP + root) but sees %d (%s); refusing to continue.' "${#new_parts[@]}" "${new_parts[*]:-none}"
 
   # map the two new partitions to ESP/root by our exact GPT partlabels.
   ESP_DEV=""; ROOT_PART=""
@@ -409,7 +403,7 @@ ryoku_partition_alongside() {
   done
   [[ -n $ESP_DEV ]]   || die "alongside could not find the new ryoku-boot partition (partlabel ryokuboot) after sgdisk; refusing to continue."
   [[ -n $ROOT_PART ]] || die "alongside could not find the new Ryoku root (partlabel ryoku) after sgdisk; refusing to continue."
-  [[ $ESP_DEV != "$ROOT_PART" ]] || die "alongside boot and root resolved to the same device $ESP_DEV; refusing to continue."
+  [[ $ESP_DEV != "$ROOT_PART" ]] || die 'alongside boot and root resolved to the same device %s; refusing to continue.' "$ESP_DEV"
 
   # hard safety, applied to BOTH new partitions: each must be a real NEW block
   # device, must not be the disk itself, must not have existed before sgdisk, and
@@ -417,13 +411,13 @@ ryoku_partition_alongside() {
   # existing OS partition, so abort before any wipefs/mkfs.
   local dev parent disk_base=${disk##*/}
   for dev in "$ESP_DEV" "$ROOT_PART"; do
-    [[ $dev != "$disk" ]] || die "alongside partition resolves to disk $disk; refusing to format."
-    [[ -b $dev ]] || die "alongside created a partition but $dev is not a block device."
+    [[ $dev != "$disk" ]] || die 'alongside partition resolves to disk %s; refusing to format.' "$disk"
+    [[ -b $dev ]] || die 'alongside created a partition but %s is not a block device.' "$dev"
     for p in "${pre_parts[@]}"; do
-      [[ $p != "$dev" ]] || die "alongside partition $dev existed before sgdisk; refusing to format an existing partition."
+      [[ $p != "$dev" ]] || die 'alongside partition %s existed before sgdisk; refusing to format an existing partition.' "$dev"
     done
     parent=$(lsblk -no PKNAME "$dev" 2>/dev/null | head -n1)
-    [[ $parent == "$disk_base" ]] || die "alongside partition $dev parent='$parent' does not match disk '$disk_base'; refusing to format."
+    [[ $parent == "$disk_base" ]] || die 'alongside partition %s parent='\''%s'\'' does not match disk '\''%s'\''; refusing to format.' "$dev" "$parent" "$disk_base"
   done
 
   # clear any stale sig in the two NEW partitions only (never the disk or any
@@ -431,7 +425,7 @@ ryoku_partition_alongside() {
   # fail the later mkfs/mount.
   run wipefs --all "$ESP_DEV"
   run wipefs --all "$ROOT_PART"
-  log "boot=$ESP_DEV (new ryoku-boot XBOOTLDR, /boot) root partition=$ROOT_PART"
+  log 'boot=%s (new ryoku-boot, mode=%s, /boot) root partition=%s' "$ESP_DEV" "$mode" "$ROOT_PART"
 }
 
 # ryoku_reclaim_leftovers deletes partitions that are VERIFIED failed-alongside
@@ -458,13 +452,13 @@ ryoku_reclaim_leftovers() {
     [[ $lbl == ryoku || $lbl == ryokuboot ]] || continue
     mnt=$(lsblk -nrpo MOUNTPOINT "$p" 2>/dev/null | awk 'NF' | head -n1)
     if [[ -n $mnt ]]; then
-      log "leaving $p alone: labeled '$lbl' but mounted at $mnt (not a leftover)"
+      log 'leaving %s alone: labeled '\''%s'\'' but mounted at %s (not a leftover)' "$p" "$lbl" "$mnt"
       continue
     fi
     # living-install guard (defense in depth, same test the probe applies): a
     # real existing OS carrying our label is NOT debris, even with the ack.
     if ! ryoku_is_leftover "$p"; then
-      log "leaving $p alone: labeled '$lbl' but it holds a living install (or could not be inspected); never reclaimed"
+      log 'leaving %s alone: labeled '\''%s'\'' but it holds a living install (or could not be inspected); never reclaimed' "$p" "$lbl"
       continue
     fi
     num=$(part_num "$p")
@@ -481,14 +475,14 @@ ryoku_reclaim_leftovers() {
   if [[ ${RYOKU_RECLAIM_LEFTOVERS:-} != 1 ]]; then
     list=""
     for info in "${dinfo[@]}"; do list+="  $info"$'\n'; done
-    die "existing Ryoku-labeled partition(s) on $disk (a previous Ryoku install or a failed run):
-${list}alongside will NOT delete these automatically -- they may be a working Ryoku install. To proceed, either:
+    die 'existing Ryoku-labeled partition(s) on %s (a previous Ryoku install or a failed run):
+%salongside will NOT delete these automatically -- they may be a working Ryoku install. To proceed, either:
   1) restart the installer so it rescans the disk, then confirm reclaim on the Review screen (the typed ERASE ack, which sets RYOKU_RECLAIM_LEFTOVERS=1; a mid-session retry keeps the pre-failure scan and never arms the ack), or
-  2) delete or keep them yourself with another tool, then retry."
+  2) delete or keep them yourself with another tool, then retry.' "$disk" "$list"
   fi
 
   for info in "${dinfo[@]}"; do
-    log "reclaiming leftover $info from a previous failed run"
+    log 'reclaiming leftover %s from a previous failed run' "$info"
   done
   # delete them all in ONE sgdisk call: a single table re-read at the end, so
   # removing one partition can't disturb the kernel's node for another.
@@ -527,15 +521,20 @@ ryoku_max_partnum() {
 # trusting parted here: dirty NTFS makes it lie, and archinstall crashes on the
 # same disks (KPMcore reads the table with sfdisk for exactly this reason). start
 # aligns UP to 1 MiB, end DOWN, in the disk's real sector size (512 and 4096 both
-# correct). sfdisk's lastlba already excludes the backup GPT, so a gap never eats it.
+# correct). sfdisk emits firstlba/lastlba only for GPT (lastlba already excludes
+# the backup GPT); a dos/MBR table has neither, so fall back to 1 MiB in and the
+# whole-disk last sector, else free space on an MBR data disk is never listed.
 ryoku_free_regions() {
-  local disk=$1 json
+  local disk=$1 json ss first last
   json=$(sfdisk --json "$disk" 2>/dev/null) || return 0
   [[ -n $json ]] || return 0
-  printf '%s\n' "$json" | jq -r '
-    .partitiontable |
-    "meta \(.sectorsize) \(.firstlba) \(.lastlba)",
-    (.partitions[]? | "part \(.start) \(.size)")
+  read -r ss first last < <(printf '%s' "$json" | jq -r \
+    '.partitiontable | "\(.sectorsize // 512) \(.firstlba // "-") \(.lastlba // "-")"')
+  [[ $first == - ]] && first=$(( 1048576 / ss ))                                   # dos: 1 MiB in
+  [[ $last == - ]] && last=$(( $(blockdev --getsize64 "$disk" 2>/dev/null || echo 0) / ss - 1 ))
+  printf '%s\n' "$json" | jq -r --arg ss "$ss" --arg first "$first" --arg last "$last" '
+    "meta \($ss) \($first) \($last)",
+    (.partitiontable.partitions[]? | "part \(.start) \(.size)")
   ' | awk '
     function emit(gs, ge,   as, ae, mib) {
       as = int((gs + spm - 1) / spm) * spm         # align start up to 1 MiB
@@ -574,11 +573,8 @@ ryoku_region_is_free() {
   '
 }
 
-# ryoku_windows_esp <disk>: the EF00 partition on <disk> that holds /EFI/Microsoft
-# -- Windows' own ESP, the single ESP we share. mounts each ESP-type partition
-# read-only just long enough to look, never writes. prints the device (empty +
-# non-zero when none). the single-ESP doctrine hinges on this: we add our loader
-# beside Windows' on THIS partition, never a second ESP.
+# ryoku_windows_esp <disk>: print the EF00 partition containing /EFI/Microsoft.
+# Probes candidate ESPs read-only and returns non-zero when none matches.
 ryoku_windows_esp() {
   local disk=$1 p typ tmpd found="" hit
   tmpd=$(mktemp -d) || return 1
@@ -688,8 +684,8 @@ ryoku_disk_os_kind() {
   return 1
 }
 
-# ryoku_esp_scan <disk>: classify the EF00 ESP we would share and name the EFI
-# binary of the existing system to chainload. prefers a Windows ESP if any; else
+# ryoku_esp_scan <disk>: classify the selected existing EF00 ESP and name its
+# EFI binary for chainloading. Prefers a Windows ESP if any; otherwise
 # the ESP's own bootloader markers decide (limine/ryoku, then a foreign vendor
 # dir), and an empty/ambiguous ESP is classified by the disk's living root fs.
 # prints "<dev> <windows|ryoku|linux> <existing_boot|->" (existing_boot '-' means
@@ -731,6 +727,18 @@ ryoku_esp_scan() {
   printf '%s\n' "$out"
 }
 
+ryoku_esp_free_kib() {
+  local dev=$1 tmpd avail=0
+  tmpd=$(mktemp -d) || { printf '0\n'; return; }
+  if mount -o ro "$dev" "$tmpd" 2>/dev/null; then
+    avail=$(df -k --output=avail "$tmpd" 2>/dev/null | tail -1 | tr -d ' ')
+    umount "$tmpd" 2>/dev/null || true
+  fi
+  rmdir "$tmpd" 2>/dev/null || true
+  [[ $avail =~ ^[0-9]+$ ]] || avail=0
+  printf '%s\n' "$avail"
+}
+
 # ryoku_emit_leftovers <disk>: one `leftover <dev> <partlabel> <sizeMiB>` line per
 # VERIFIED failed-alongside debris partition (ryoku_is_leftover). read-only.
 ryoku_emit_leftovers() {
@@ -762,45 +770,63 @@ ryoku_any_shrinkable() {
 
 # ryoku_probe_alongside <disk>: read-only report the TUI renders. machine lines:
 #   sectorsize <bytes>
-#   esp_kind windows|ryoku|linux    kind of the ESP we would share (when one exists)
+#   esp_kind windows|ryoku|linux    kind of the selected existing ESP
 #   existing_boot <path>|none       EFI binary of the existing system to chainload
-#   esp <device>                    the ESP we share (any kind, not just Windows')
+#   esp <device>                    selected existing ESP
 #   region <start> <end> <mib>      zero or more, largest first
 #   leftover <dev> <label> <mib>    zero or more, VERIFIED failed-run debris only
-#   verdict ok|none|no-gpt|no-esp|error
+#   verdict ok|none|no-gpt|no-esp|error|create-esp
 #   message <text>                  present on every non-ok verdict
 # lines are ADDED, never reordered, so the TUI's keyword parser stays stable.
-# verdict is ok whenever a usable ESP exists AND there is somewhere to put us --
-# a free region OR a shrinkable partition (the carve path); one source of truth.
+# sectorsize + region are reported for ANY readable disk (even non-GPT/ESP-less)
+# so a prepared secondary disk isn't shown as blank; the verdict still gates it.
+# ok = a usable existing ESP + a free region or shrinkable partition. create-esp =
+# GPT, free space, but no ESP: Ryoku makes a dedicated one in the free space.
 ryoku_probe_alongside() {
-  local disk=$1 pttype ss regions espinfo esp esp_kind esp_boot shrinkable=no
+  local disk=$1 pttype ss regions espinfo esp esp_kind esp_boot shrinkable=no esp_found=no readable=no
   [[ -b $disk ]] || { printf 'verdict error\nmessage %s is not a block device\n' "$disk"; return 0; }
   pttype=$(blkid -o value -s PTTYPE "$disk" 2>/dev/null || true)
-  if [[ $pttype != gpt ]]; then
-    printf 'verdict no-gpt\nmessage %s has a '\''%s'\'' partition table; alongside needs GPT. Use whole-disk, or convert to GPT.\n' "$disk" "${pttype:-none}"
-    return 0
-  fi
   ss=$(blockdev --getss "$disk" 2>/dev/null || echo 512)
   printf 'sectorsize %s\n' "$ss"
-  if espinfo=$(ryoku_esp_scan "$disk"); then
+  # Report free space for every readable disk before the gate below, so a prepared
+  # secondary disk isn't blank; the verdict (unchanged) still keeps it non-target.
+  sfdisk --json "$disk" >/dev/null 2>&1 && readable=yes
+  [[ $readable == yes ]] && regions=$(ryoku_free_regions "$disk" | sort -k3,3 -nr)
+  # esp_scan reads via lsblk+mount, so it holds even when sfdisk can't parse.
+  if [[ $pttype == gpt ]] && espinfo=$(ryoku_esp_scan "$disk"); then
+    esp_found=yes
     read -r esp esp_kind esp_boot <<<"$espinfo"
     printf 'esp_kind %s\n' "$esp_kind"
     [[ $esp_boot == - ]] && esp_boot=none
     printf 'existing_boot %s\n' "$esp_boot"
     printf 'esp %s\n' "$esp"
     printf 'esp_count %s\n' "$(sgdisk -p "$disk" 2>/dev/null | awk '$6=="EF00"' | wc -l | tr -d ' ')"
-  else
-    printf 'verdict no-esp\nmessage no EFI System Partition (EF00) found on %s; alongside needs an existing ESP to share. Use whole-disk, or create an ESP first.\n' "$disk"
+    printf 'esp_free_kib %s\n' "$(ryoku_esp_free_kib "$esp")"
+  fi
+  [[ -n $regions ]] && printf '%s\n' "$regions" | while read -r s e m; do printf 'region %s %s %s\n' "$s" "$e" "$m"; done
+  # Leftovers are matched by partlabel, so they are found with or without an ESP:
+  # a create-esp disk can carry debris from a failed run too.
+  [[ $readable == yes ]] && ryoku_emit_leftovers "$disk"
+  # Verdict gate. alongside runs on a GPT disk with somewhere to place us and an
+  # ESP: an existing one to share/identify, or -- on a disk with free space but no
+  # ESP of its own -- a dedicated one Ryoku creates in that free space (verdict
+  # create-esp; nothing existing is touched). Size sufficiency is gated downstream.
+  if [[ $pttype != gpt ]]; then
+    printf 'verdict no-gpt\nmessage %s has a '\''%s'\'' partition table; alongside needs GPT, so its free space is listed but cannot be used as an install target here. Use whole-disk, or convert this disk to GPT.\n' "$disk" "${pttype:-none}"
     return 0
   fi
-  # a table sfdisk can't read is NOT a free-space problem: say so.
-  if ! sfdisk --json "$disk" >/dev/null 2>&1; then
+  if [[ $readable != yes ]]; then
     printf 'verdict error\nmessage could not read the partition table on %s (sfdisk failed); the disk may be unreadable or lack a usable GPT. This is not a free-space problem.\n' "$disk"
     return 0
   fi
-  regions=$(ryoku_free_regions "$disk" | sort -k3,3 -nr)
-  [[ -n $regions ]] && printf '%s\n' "$regions" | while read -r s e m; do printf 'region %s %s %s\n' "$s" "$e" "$m"; done
-  ryoku_emit_leftovers "$disk"
+  if [[ $esp_found != yes ]]; then
+    if [[ -n $regions ]]; then
+      printf 'verdict create-esp\nmessage no existing EFI System Partition on %s; Ryoku will create a dedicated 2 GiB ESP plus its root in the free space and leave the existing partitions untouched.\n' "$disk"
+    else
+      printf 'verdict no-esp\nmessage no EFI System Partition on %s and no free space to create one; free space by shrinking a partition, or use whole-disk.\n' "$disk"
+    fi
+    return 0
+  fi
   [[ -z $regions ]] && ryoku_any_shrinkable "$disk" && shrinkable=yes
   if [[ -n $regions || $shrinkable == yes ]]; then
     printf 'verdict ok\n'

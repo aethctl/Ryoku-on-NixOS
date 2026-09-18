@@ -14,6 +14,7 @@ func TestProbeAlongsideParsesNewLines(t *testing.T) {
 		"existing_boot /EFI/BOOT/BOOTX64.EFI",
 		"esp /dev/loop0p1",
 		"esp_count 2",
+		"esp_free_kib 6144",
 		"leftover /dev/loop0p3 ryoku 8192",
 		"leftover /dev/loop0p4 ryokuboot 1024",
 		"verdict ok",
@@ -39,6 +40,21 @@ func TestProbeAlongsideParsesNewLines(t *testing.T) {
 	}
 	if r.espCount != 2 {
 		t.Fatalf("espCount = %d, want 2", r.espCount)
+	}
+	if r.espFreeKiB != 6144 {
+		t.Fatalf("espFreeKiB = %d, want 6144", r.espFreeKiB)
+	}
+}
+
+func TestAlongsideESPModeFallsBackToDedicated(t *testing.T) {
+	m := alongsideModel(100, 16)
+	m.espFreeKiB = 6144
+	if env := strings.Join(m.installEnv(), "\n"); !strings.Contains(env, "RYOKU_ESP_MODE=dedicated") {
+		t.Fatalf("small Windows ESP must select dedicated mode:\n%s", env)
+	}
+	m.espFreeKiB = 8192
+	if env := strings.Join(m.installEnv(), "\n"); !strings.Contains(env, "RYOKU_ESP_MODE=shared") {
+		t.Fatalf("ESP with 8 MiB free must select shared mode:\n%s", env)
 	}
 }
 
@@ -148,7 +164,7 @@ func reviewModel() model {
 		picks: map[string]string{"disk": "alongside", "keyboard": "us", "locale": "en_US.UTF-8",
 			"timezone": "Europe/Madrid", "profile": "amd", "hostname": "ryoku", "username": "me",
 			"password": "x", "encryption": "none"},
-		diskDev: "/dev/loop0", gpt: true, freeG: 200, espG: 1, swapG: 8,
+		diskDev: "/dev/loop0", gpt: true, freeG: 200, espG: 1, espFreeKiB: 8192, swapG: 8,
 		kept:      []part{{dev: "EFI System", size: 1}, {dev: "ryoku", size: 931}},
 		netOnline: true,
 	}
@@ -190,6 +206,18 @@ func TestReviewCopyLinuxEspWithBoot(t *testing.T) {
 	}
 	if strings.Contains(body, "firmware menu only") {
 		t.Fatal("a chainloadable binary must not trigger the firmware-only caveat")
+	}
+}
+
+func TestReviewCopyDedicatedESP(t *testing.T) {
+	m := reviewModel()
+	m.espKind, m.existingBoot, m.espFreeKiB = "windows", "/EFI/Microsoft/Boot/bootmgfw.efi", 6144
+	body := m.reviewBody(100)
+	if !strings.Contains(body, "dedicated Ryoku ESP") || !strings.Contains(body, "existing Windows ESP is untouched") {
+		t.Fatalf("dedicated fallback is not explicit in review: %q", body)
+	}
+	if strings.Contains(body, "backed up first") {
+		t.Fatal("dedicated mode must not claim it mounts or backs up the Windows ESP")
 	}
 }
 

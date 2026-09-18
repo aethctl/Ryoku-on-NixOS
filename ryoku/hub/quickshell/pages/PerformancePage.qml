@@ -208,52 +208,55 @@ Item {
         Component.onCompleted: if (!cfg.text()) cfg.writeAdapter()
     }
 
-    // ── the schema, regrouped by what you trade away ──
-    // EYE CANDY (visual effects), IDLE (animation that stops when nothing moves),
-    // MEMORY (surfaces unloaded to reclaim RAM). Labels are short; the cost of
-    // each tweak lives in its description, the cell's slot for explanatory prose.
+    // ── the schema, grouped by what you trade away ──
+    // POWER (the profile the desktop follows), EFFECTS (what it draws), MOTION
+    // (what keeps moving), MEMORY (what it unloads while nothing needs it). The
+    // memory knobs open parked: they are the ones a user reaches for once, and
+    // the card's caret plus search keep them a click away rather than a wall of
+    // switches in the way.
     readonly property var schema: [
-        { "tab": "", "group": I18n.tr("POWER PROFILE"), "key": "powerProfileEffects", "ctl": "sw", "src": "performance",
-          "label": "Follow the power profile",
-          "desc": "Let the system power profile shape the shell. Power Saver strips motion, blur and shadows and eases off background polling, like Low power mode; Balanced and Performance leave your switches untouched. Battery already slows polling on its own." },
-        { "tab": "", "group": I18n.tr("POWER PROFILE"), "key": "autoPowerSaverOnBattery", "ctl": "sw", "src": "performance",
-          "label": "Auto power saver on battery",
-          "desc": "Switch to the Power Saver profile automatically when you unplug, and restore your profile when you plug back in. Needs power-profiles-daemon; a manual profile change while on battery is left alone." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "lowPowerMode", "ctl": "sw", "src": "performance",
-          "label": "Low power mode",
-          "desc": "The potato switch: forces every freeze, reduce and disable tweak on. Unloads stay manual." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "reduceMotion", "ctl": "sw", "src": "performance",
-          "label": "Reduce motion",
-          "desc": "Shell transitions land instantly; the compositor's own window animations keep playing." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "disableBlur", "ctl": "sw", "src": "performance",
-          "label": "Disable blur",
-          "desc": "Kills the frosted-glass look everywhere; the compositor reloads to apply it now." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "disableShadows", "ctl": "sw", "src": "performance",
-          "label": "Disable shadows",
-          "desc": "Each shadow is its own GPU blur pass, so flat surfaces draw much cheaper." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "liveWallpaper60", "ctl": "sw", "src": "performance",
-          "label": "60fps live wallpaper",
-          "desc": "Doubles video wallpaper decode for smoother motion; the one switch here that spends instead of saves. Applies to the next wallpaper you set, and clips that cannot supply 60 stay at 30." },
-        { "tab": "", "group": I18n.tr("EYE CANDY"), "key": "ambientBarMotion", "ctl": "sw", "src": "performance",
-          "label": "Bar drifts when silent",
-          "desc": "Keep the bar's gap stream drifting when nothing is playing, on any power profile. Off by default so a quiet desktop stays cheap; music animates the bar either way." },
+        { "tab": "", "group": I18n.tr("POWER"), "key": "powerProfileEffects", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Follow the power profile"),
+          "desc": I18n.tr("Power Saver strips motion, blur and shadows.") },
+        { "tab": "", "group": I18n.tr("POWER"), "key": "autoPowerSaverOnBattery", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Auto power saver on battery"),
+          "desc": I18n.tr("Switches to Power Saver when you unplug.") },
 
-        { "tab": "", "group": I18n.tr("IDLE"), "key": "pauseLiveWallpaperWhenFullscreen", "ctl": "sw", "src": "performance",
-          "label": "Pause video wallpaper",
-          "desc": "Stops a video wallpaper while a window is fullscreen; its still frame stays underneath, so nothing changes on screen." },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "lowPowerMode", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Low power mode"),
+          "desc": I18n.tr("Turns every effect switch here on at once.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "reduceMotion", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Reduce motion"),
+          "desc": I18n.tr("Shell transitions land instantly.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableBlur", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Disable blur"),
+          "desc": I18n.tr("Drops the frosted-glass look everywhere.") },
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableShadows", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Disable shadows"),
+          "desc": I18n.tr("Surfaces draw without a shadow pass.") },
+
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "liveWallpaper60", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("60fps live wallpaper"),
+          "desc": I18n.tr("Smoother video wallpaper, at a decode cost.") },
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "pauseLiveWallpaperWhenFullscreen", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Pause video wallpaper"),
+          "desc": I18n.tr("Stops the video behind a fullscreen window.") },
+        { "tab": "", "group": I18n.tr("MOTION"), "key": "ambientBarMotion", "ctl": "sw", "src": "performance",
+          "label": I18n.tr("Bar drifts when silent"),
+          "desc": I18n.tr("The bar keeps drifting while nothing plays.") },
 
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadWidgetsWhenCovered", "ctl": "sw", "src": "performance",
-          "label": "Hide covered widgets",
-          "desc": "Parks desktop widgets only when every monitor is covered; the return is always instant." },
+          "label": I18n.tr("Hide covered widgets"),
+          "desc": I18n.tr("Parks widgets while every monitor is covered.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadVisualizerWhenSilent", "ctl": "sw", "src": "performance",
-          "label": "Unload the visualiser",
-          "desc": "Kills the whole process after 30s of silence, reclaiming around 250 MB." },
+          "label": I18n.tr("Unload the visualiser"),
+          "desc": I18n.tr("Frees ~250 MB after 30s of silence.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadLauncherWhenIdle", "ctl": "sw", "src": "performance",
-          "label": "Unload the launcher",
-          "desc": "Frees about 250 MB after a minute hidden; the next open cold-starts." },
+          "label": I18n.tr("Unload the launcher"),
+          "desc": I18n.tr("Frees ~250 MB a minute after closing.") },
         { "tab": "", "group": I18n.tr("MEMORY"), "key": "unloadOverviewWhenIdle", "ctl": "sw", "src": "performance",
-          "label": "Unload the overview",
-          "desc": "Frees about 250 MB after a minute hidden; the next Super+Tab cold-starts it." }
+          "label": I18n.tr("Unload the overview"),
+          "desc": I18n.tr("Frees ~250 MB a minute after Super+Tab closes.") }
     ]
 
     // group order and membership come straight from the schema, so a regroup is
@@ -272,11 +275,20 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in the middle of a page-wide window
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -298,20 +310,10 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Trade a little eye-candy, idle animation or resident memory for lower CPU, GPU and RAM use. Changes preview live; nothing is written until you save.")
+            text: I18n.tr("Less eye-candy for lower CPU, GPU and RAM use. Previewed live.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    // marginalia dressing the dead top-right margin beside the title. Ink only.
-    Marginalia {
-        visible: Tokens.showPosters
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "性能"
-        index: "06"; label: I18n.tr("SYSTEM")
-        glyph: "column"; glyph2: "wave"
     }
 
     // ── the switch grid: three meaning-groups, each a SettingCard drawer that
@@ -319,9 +321,9 @@ Item {
     Flickable {
         id: flick
         anchors {
-            left: parent.left; right: hawkPlacard.visible ? hawkPlacard.left : parent.right
+            left: parent.left; right: parent.right
             top: head.bottom; bottom: bar.top
-            leftMargin: Tokens.s6; rightMargin: hawkPlacard.visible ? Tokens.s5 : Tokens.s6
+            leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s5
         }
         contentWidth: width
@@ -329,11 +331,15 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
+        CardColumns {
             id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // the page fills its measure: groups land in as many columns as fit,
+            // balanced, instead of one column beside an empty half
+            width: flick.width - Tokens.s3
             spacing: Tokens.s5
+            fillTo: flick.height
 
             Repeater {
                 model: pg.groups
@@ -341,8 +347,12 @@ Item {
                 delegate: SettingCard {
                     id: sect
                     required property string modelData
-                    width: col.width
+                    width: col.colWidth
                     title: sect.modelData
+                    // the memory knobs park by default: reached for once, then
+                    // left alone, so they open folded and stay out of the way
+                    expanded: sect.modelData !== I18n.tr("MEMORY")
+                    summary: pg.rowsIn(sect.modelData).length + " " + I18n.tr("SWITCHES")
 
                     Repeater {
                         model: pg.rowsIn(sect.modelData)
@@ -377,27 +387,6 @@ Item {
         }
     }
 
-    // the specimen rail: a hawk -- swift, precise, lethal -- the machine at
-    // peak performance. Fills the dead right the old single grid never used.
-    Placard {
-        id: hawkPlacard
-        anchors {
-            right: parent.right; rightMargin: Tokens.s6
-            top: head.bottom; topMargin: Tokens.s5
-            bottom: bar.top; bottomMargin: Tokens.s5
-        }
-        width: Math.round((pg.width - 2 * Tokens.s6) * 0.32)
-        code: "PERF-05"
-        title: "\u75be\u98a8"
-        sub: I18n.tr("SWIFT AS THE WIND")
-        chapter: "06"
-        label: I18n.tr("SYSTEM")
-        quote: I18n.tr("TRADE THE GLOW FOR THE SPEED.")
-        seal: "\u75be"
-        art: "hawk.png"
-        seed: 4
-    }
-
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to
     // persist. RESET walks every key to stock (creating dirt), REVERT drops the
@@ -412,14 +401,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia dressing the bar's dead centre, between status and verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "性能"
-            glyph: "column"; glyph2: "wave"
         }
 
         Row {

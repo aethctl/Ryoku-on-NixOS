@@ -95,14 +95,13 @@ func TestESPBumpClampsSwap(t *testing.T) {
 }
 
 // alongsideModel: a dual-boot layout on a 256 GiB disk with the given free
-// region. The kept partitions model a real Windows install (its ESP + an NTFS
-// data partition). Alongside carves a fixed 2 GiB XBOOTLDR /boot inside the free
-// region (Windows' ESP is shared, not counted), so readiness/sizing depend on
-// the free region and alongsideBootGiB, never on espG or the kept Windows ESP.
+// region. The kept partitions model a real Windows install. Alongside reserves
+// a fixed 2 GiB FAT boot partition inside the free region, so readiness depends
+// on that region rather than the size of the kept ESP.
 func alongsideModel(freeG, swapG int) model {
 	return model{
 		// a real dual-boot disk is GPT; the GPT-only guard is exercised separately.
-		picks: map[string]string{"disk": "alongside"}, gpt: true, diskG: 256, freeG: freeG, espG: 1, swapG: swapG,
+		picks: map[string]string{"disk": "alongside"}, gpt: true, diskG: 256, freeG: freeG, espG: 1, espFreeKiB: 8192, swapG: swapG,
 		kept: []part{
 			{dev: "EFI (Windows)", size: 1, fs: "fat32", mount: "-", flags: "esp", status: "keep"},
 			{dev: "Windows (NTFS)", size: 120, fs: "ntfs", mount: "Windows", flags: "-", status: "keep"},
@@ -110,9 +109,8 @@ func alongsideModel(freeG, swapG int) model {
 	}
 }
 
-// alongside drops root into the detected free region and carves a fixed 2 GiB
-// XBOOTLDR /boot from that region (never the Windows ESP), so usable root =
-// free - 2 GiB boot - swap.
+// Alongside puts root and its fixed 2 GiB boot partition in the detected free
+// region, so usable root = free - boot - swap.
 func TestAlongsideRootUsesFreeSpace(t *testing.T) {
 	m := alongsideModel(100, 16)
 	if got := m.availRoot(); got != 98 {
@@ -125,7 +123,7 @@ func TestAlongsideRootUsesFreeSpace(t *testing.T) {
 	// A fresh 2 GiB boot partition for OUR install must exist in the free region.
 	var newBoot bool
 	for _, s := range m.layoutSegs() {
-		if s.status == "new" && strings.Contains(s.flags, "esp") {
+		if s.status == "new" && (strings.Contains(s.flags, "esp") || strings.Contains(s.flags, "xbootldr")) {
 			newBoot = true
 			if s.size != alongsideBootGiB {
 				t.Fatalf("new boot size = %d, want %d", s.size, alongsideBootGiB)
@@ -535,14 +533,13 @@ func TestReviewWipeGateEnterWithoutEraseDoesNotLaunch(t *testing.T) {
 	}
 }
 
-// alongside no longer shows the ESP-size row: its boot partition is a fixed 2
-// GiB XBOOTLDR carved in the free region, so there is nothing to size. Whole
-// still exposes the ESP-size control.
+// Alongside does not show an ESP-size row because its boot partition is fixed at
+// 2 GiB. Whole-disk installs still expose the ESP-size control.
 func TestAlongsideLayoutHasNoESPRow(t *testing.T) {
 	along := alongsideModel(100, 16)
 	for _, r := range along.layoutRows() {
 		if r.kind == "size" && r.key == "esp" {
-			t.Fatal("alongside must not show an ESP-size row; its boot partition is a fixed 2 GiB XBOOTLDR")
+			t.Fatal("alongside must not show an ESP-size row; its boot partition is fixed at 2 GiB")
 		}
 	}
 	whole := model{picks: map[string]string{"disk": "whole"}, diskG: 256, espG: 1}
@@ -558,8 +555,8 @@ func TestAlongsideLayoutHasNoESPRow(t *testing.T) {
 }
 
 // swapCeil uses the same minRootGiB floor for whole and alongside (the old 8/15
-// split is gone): identical usable space must yield an identical ceiling. Whole's
-// ESP is sized to 2 here to match alongside's fixed 2 GiB XBOOTLDR boot.
+// split is gone): identical usable space must yield an identical ceiling.
+// Whole's ESP is sized to 2 here to match alongside's fixed boot partition.
 func TestSwapCeilFloorBothStrategies(t *testing.T) {
 	whole := model{picks: map[string]string{"disk": "whole"}, diskG: 40, espG: alongsideBootGiB}
 	along := alongsideModel(40, 0)

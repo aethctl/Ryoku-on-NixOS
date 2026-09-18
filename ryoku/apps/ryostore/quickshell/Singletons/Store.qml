@@ -72,10 +72,11 @@ Singleton {
     }
 
     function install(item, dither, components) {
-        // A paused item stays listed but never downloads: install and update are
-        // refused here so no UI path (button, keyboard, or accessibility) can
-        // start a fetch. Remove is a separate flow and stays allowed.
-        if (!item || busyKey !== "" || item.downloadPaused === true)
+        // A paused item, or one written for another window manager, stays listed
+        // but never downloads: install and update are refused here so no UI path
+        // (button, keyboard, or accessibility) can start a fetch. Remove is a
+        // separate flow and stays allowed.
+        if (!item || busyKey !== "" || item.downloadPaused === true || item.unavailable === true)
             return;
         busyKey = itemKey(item);
         root._op = "install";
@@ -132,7 +133,7 @@ Singleton {
         var q = [];
         var src = Array.isArray(list) ? list : [];
         for (var i = 0; i < src.length; i++)
-            if (src[i] && src[i].installed !== true && src[i].downloadPaused !== true)
+            if (src[i] && src[i].installed !== true && src[i].downloadPaused !== true && src[i].unavailable !== true)
                 q.push(src[i]);
         _queue = q;
         _pumpQueue();

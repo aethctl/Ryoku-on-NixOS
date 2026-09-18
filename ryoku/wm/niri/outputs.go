@@ -48,16 +48,15 @@ func runOutputs(args []string) error {
 	return encodeReport(rep)
 }
 
-// monitorsKdl renders one output block per layout entry. A disabled output is a
-// bare `off`; an enabled one carries only the lines it needs, so an omitted mode
-// or scale leaves niri to choose. Position is always written for an enabled
-// output, since the editor lays every screen on one canvas.
 const ryokuWorkspaceSlots = 5
 
 func ryokuWorkspaceName(output string, slot int) string {
 	return fmt.Sprintf("ryoku:%s:%d", output, slot)
 }
 
+// monitorsKdl renders one output block per layout entry. A disabled output is a
+// bare `off`; an enabled one carries only the lines it needs, so an omitted mode
+// or scale leaves niri to choose.
 func monitorsKdl(layout []wm.OutputLayout) []byte {
 	return monitorsKdlForConnected(layout, nil)
 }
@@ -69,16 +68,13 @@ func monitorsKdl(layout []wm.OutputLayout) []byte {
 func monitorsKdlForConnected(layout []wm.OutputLayout, connected map[string]bool) []byte {
 	var b strings.Builder
 	b.WriteString(monitorsHeader)
-
 	for _, o := range layout {
 		if o.Name == "" {
 			continue
 		}
-
 		b.WriteString("output ")
 		b.WriteString(kdlStr(o.Name))
 		b.WriteString(" {\n")
-
 		if !o.Enabled {
 			b.WriteString("    off\n")
 		} else {
@@ -88,9 +84,7 @@ func monitorsKdlForConnected(layout []wm.OutputLayout, connected map[string]bool
 			if o.Scale > 0 {
 				b.WriteString("    scale " + kdlNum(o.Scale) + "\n")
 			}
-
 			b.WriteString(fmt.Sprintf("    position x=%d y=%d\n", o.X, o.Y))
-
 			if t := waylandTransformToNiri(o.Transform); t != "" {
 				b.WriteString("    transform " + kdlStr(t) + "\n")
 			}

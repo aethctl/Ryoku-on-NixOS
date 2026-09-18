@@ -32,16 +32,20 @@ set -u
 export XCURSOR_THEME="${XCURSOR_THEME:-Bibata-Modern-Ice}"
 export XCURSOR_SIZE="${XCURSOR_SIZE:-24}"
 
-# On NVIDIA the DRM backend hands that surface to the hardware cursor plane
-# and the driver accepts it without ever displaying it, so the login pointer
-# vanishes (issue #184). The pixman renderer skips plane assignment entirely
-# (no GBM device, so weston never promotes views to planes), so the sprite is
-# composited into the scanout: a software cursor that always shows. A login
-# screen is transient, so software rendering there costs nothing worth
-# missing.
+# The login pointer vanishes on NVIDIA: its DRM backend hands the cursor to a
+# hardware plane the driver accepts but never displays (issue #184). Dropping to
+# the pixman renderer avoids plane promotion and fixes it there. But pixman is a
+# trap everywhere else: under it weston uses no cursor plane AND composites none
+# (weston #375), so forcing it on an Intel/AMD iGPU panel -- where the GL
+# renderer's hardware cursor works -- hides the pointer entirely (issue #191).
+# So only use pixman when NVIDIA actually drives the connected internal panel the
+# greeter lands on, mirroring how the session picks its GPU env.
 weston_args=""
-for vendor in /sys/class/drm/card*/device/vendor; do
-  [ "$(cat "$vendor" 2>/dev/null)" = "0x10de" ] && weston_args="--renderer=pixman" && break
+for conn in /sys/class/drm/card*-eDP-* /sys/class/drm/card*-LVDS-* /sys/class/drm/card*-DSI-*; do
+  [ -e "$conn/status" ] && [ "$(cat "$conn/status")" = connected ] || continue
+  card=${conn%-*}; card=${card%-*}
+  [ "$(cat "$card/device/vendor" 2>/dev/null)" = "0x10de" ] && weston_args="--renderer=pixman"
+  break
 done
 
 # weston reads no X11 keyboard config, so without this the greeter is on the
@@ -83,8 +87,20 @@ choose_primary() {
   printf '%s\n' "$names" | grep -m1 -E '^(eDP|LVDS|DSI)' || true
 }
 
-# exec plain weston (preferred mode); the login screen must always start.
-weston_plain() { exec weston --shell=kiosk $weston_args "$@"; }
+# The kiosk shell draws no pointer of its own for a cursor-shape client, and
+# weston only learns which theme to draw from a [shell] block, so every config we
+# hand it carries one; without it the login pointer never renders (issue #191).
+shell_ini() { printf '[shell]\ncursor-theme=%s\ncursor-size=%s\n\n' "${XCURSOR_THEME:-Bibata-Modern-Ice}" "${XCURSOR_SIZE:-24}"; }
+
+# exec plain weston (preferred mode); the login screen must always start. Hand it
+# a [core]+[shell] config too so the pointer has a theme even when no modes parse.
+weston_plain() {
+  local pini
+  pini="$(mktemp --tmpdir ryoku-greeter.XXXXXX.ini 2>/dev/null)" &&
+    { printf '[core]\nidle-time=0\n\n'; shell_ini; } >"$pini" &&
+    exec weston --shell=kiosk $weston_args --config="$pini" "$@"
+  exec weston --shell=kiosk $weston_args "$@"
+}
 
 command -v weston >/dev/null 2>&1 || { echo "ryoku-greeter: weston not found" >&2; exit 127; }
 command -v modetest >/dev/null 2>&1 || weston_plain "$@"
@@ -117,6 +133,7 @@ gen_ini() {
   # user. One [output] per connected panel at its top mode; the chosen primary
   # also carries app-ids so kiosk-shell drops the greeter window there.
   printf '[core]\nidle-time=0\n\n'
+  shell_ini
   while read -r name w h rr; do
     [ -n "$name" ] && [ "${w:-0}" -gt 0 ] && [ "${h:-0}" -gt 0 ] || continue
     printf '[output]\nname=%s\nmode=%sx%s@%s\n' "$name" "$w" "$h" "$rr"

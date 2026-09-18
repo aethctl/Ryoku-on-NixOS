@@ -687,7 +687,7 @@ Item {
                     width: parent.width; height: 30
                     spacing: 6
 
-
+                    
                     property int _slotCount: delegateItem.model.type === "we" ? 3 : 2
                     property real _slotWidth: (width - spacing * (_slotCount - 1)) / _slotCount
 

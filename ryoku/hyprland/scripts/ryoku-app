@@ -4,10 +4,10 @@
 #	ryoku-app terminal              open the terminal
 #	ryoku-app terminal -- btop      run btop inside it
 #
-# The choice lives in the Hub's store (~/.config/ryoku/hypr.json, "apps"); the
-# Default Apps page (Ryoku Settings) writes it. Reading it here means a swap takes
-# effect on the next launch with no reload. The fallbacks match the shipped binds,
-# so an unconfigured system behaves exactly as before.
+# The choice lives in the Hub's store (~/.config/ryoku/desktop.json,
+# "desktop.apps"); the Default Apps page (Ryoku Settings) writes it. Reading it
+# here means a swap takes effect on the next launch with no reload. The fallbacks
+# match the shipped binds, so an unconfigured system behaves exactly as before.
 set -euo pipefail
 
 # Everything the desktop opens through here inherits this environment, and a
@@ -29,7 +29,12 @@ if [ "${1:-}" = "--" ]; then
 	[ ${#inner[@]} -gt 0 ] || { echo "ryoku-app: -- needs a program to run" >&2; exit 2; }
 fi
 
-store="${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/hypr.json"
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/ryoku"
+# The Hub writes the role under desktop.json's desktop.apps.
+store="$conf/desktop.json"
+# The retired store is still honoured so a box the doctor has not migrated yet
+# keeps the role it set there.
+legacy="$conf/hypr.json"
 
 fallback() {
 	case "$1" in
@@ -45,9 +50,14 @@ fallback() {
 }
 
 cmd=""
-if [ -r "$store" ] && command -v jq >/dev/null 2>&1; then
-	cmd="$(jq -r --arg r "$role" '.apps[$r] // empty' "$store" 2>/dev/null || true)"
-fi
+read_role() {
+	local file="$1" query="$2"
+	[ -r "$file" ] || return 0
+	command -v jq >/dev/null 2>&1 || return 0
+	jq -r --arg r "$role" "$query" "$file" 2>/dev/null || true
+}
+cmd="$(read_role "$store" ".desktop.apps[\$r] // empty")"
+[ -n "$cmd" ] || cmd="$(read_role "$legacy" ".apps[\$r] // empty")"
 [ -n "$cmd" ] || cmd="$(fallback "$role")"
 
 if [ -z "$cmd" ]; then

@@ -181,11 +181,13 @@ func reconcilers() []reconciler {
 		{i18n.T("brand mark image"), reconcileBrandLogo},
 		{i18n.T("decor art"), reconcileRyodecors},
 		{i18n.T("Hyprland config integrity"), reconcileHyprlandConfig},
+		{i18n.T("niri config integrity"), reconcileNiriConfig},
 		{i18n.T("window manager plugin builds"), reconcileWmPlugins},
 		{i18n.T("stale window-border pin"), reconcileBorderPin},
 		{i18n.T("orphaned theme.lua"), reconcileThemeLua},
 		{i18n.T("follow-mouse default"), reconcileFollowMouseDefault},
 		{i18n.T("quickshell runtime"), reconcileQuickshell},
+		{i18n.T("compositor config tree"), reconcileConfigTree},
 		{i18n.T("desktop loads"), reconcileShellLoad},
 		{i18n.T("ryoku shell daemon"), reconcileShellDaemon},
 		{i18n.T("duplicate desktop instances"), reconcileShellInstances},
@@ -1965,6 +1967,38 @@ func migrateShellConfig(raw []byte) ([]byte, []string, error) {
 
 // ---- reconciler: desktop session components ----------------------------------
 
+// portalFrontends maps a declared backend to the frontend package that serves
+// it, keyed by the seam's own provider constant so no bare compositor name is
+// branched on here.
+var portalFrontends = map[string]struct {
+	fix  string
+	pkgs []string
+}{
+	wm.ProviderHyprland: {"sudo pacman -S xdg-desktop-portal-hyprland", []string{"xdg-desktop-portal-hyprland"}},
+	"gnome":             {"sudo pacman -S xdg-desktop-portal-gnome", []string{"xdg-desktop-portal-gnome"}},
+	"kde":               {"sudo pacman -S xdg-desktop-portal-kde", []string{"xdg-desktop-portal-kde"}},
+	"wlr":               {"sudo pacman -S xdg-desktop-portal-wlr", []string{"xdg-desktop-portal-wlr"}},
+}
+
+// portalFrontendCheck resolves the xdg-desktop-portal frontend this session
+// needs from the live provider's declared backend, with the command to install
+// it. With no provider answering (a broken or headless box) every frontend is
+// accepted rather than pointing at one compositor's, which is what the check
+// did before the backend was read.
+func portalFrontendCheck() (fix string, pkgs []string) {
+	backend := ""
+	if caps, err := wm.Open().Caps(); err == nil {
+		backend = caps.PortalBackend
+	}
+	if f, ok := portalFrontends[backend]; ok {
+		return f.fix, f.pkgs
+	}
+	return "", []string{
+		"xdg-desktop-portal-hyprland", "xdg-desktop-portal-gnome",
+		"xdg-desktop-portal-kde", "xdg-desktop-portal-wlr",
+	}
+}
+
 func reconcileSessionComponents(_ bool) recResult {
 	if !sys.Has("pacman") {
 		return okRes("desktop session packages are managed outside pacman")
@@ -1972,12 +2006,16 @@ func reconcileSessionComponents(_ bool) recResult {
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
 	}
+	portalFix, portalPkgs := portalFrontendCheck()
 	checks := []struct {
 		role, fix string
 		any       []string
 	}{
 		{i18n.T("authentication agent"), "sudo pacman -S hyprpolkitagent", []string{"hyprpolkitagent", "polkit-gnome", "polkit-kde-agent", "lxsession"}},
-		{i18n.T("desktop portal"), "sudo pacman -S xdg-desktop-portal-hyprland", []string{"xdg-desktop-portal-hyprland"}},
+		// The frontend the session needs is the one its compositor declares
+		// (Caps.PortalBackend): checking Hyprland's on a niri box reported the
+		// portal missing and told the user to install the wrong backend.
+		{i18n.T("desktop portal"), portalFix, portalPkgs},
 		{i18n.T("audio server"), "sudo pacman -S pipewire wireplumber", []string{"pipewire"}},
 		{i18n.T("network manager"), "sudo pacman -S networkmanager", []string{"networkmanager"}},
 	}
@@ -3369,7 +3407,13 @@ func hyprDropins() []hyprDropin {
 // regenerates a corrupt one, reloading a live session after. Whether the emitted
 // config is honoured is the provider's ApplyReport, not a live buffer doctor probes.
 func reconcileHyprlandConfig(checkOnly bool) recResult {
-	dir := filepath.Join(sys.ConfigHome(), "hypr")
+	// Hyprland's drop-ins are only in play while Hyprland is the live window
+	// manager: a niri session neither reads them nor can reload them, so the
+	// check would report on and repair files nothing in that session uses.
+	if name := wm.Detect().Name; name != "" && name != wm.ProviderHyprland {
+		return okRes(i18n.T("no Hyprland session"))
+	}
+	dir := filepath.Join(sys.ConfigHome(), wm.ConfigDir(wm.ProviderHyprland))
 	if !sys.Exists(filepath.Join(dir, "hyprland.lua")) {
 		return okRes(i18n.T("no Hyprland config present"))
 	}
@@ -3416,6 +3460,73 @@ func reconcileHyprlandConfig(checkOnly bool) recResult {
 		return fixedRes(i18n.T("regenerated corrupt Hyprland drop-in(s): %s; the config loads cleanly again"), strings.Join(repaired, ", "))
 	}
 	return okRes(i18n.T("Hyprland config loads cleanly"))
+}
+
+// ---- reconciler: niri config integrity ---------------------------------------
+
+// missingInclude reports that niri could not read a file config.kdl includes.
+// niri says "failed to read included config from \"<path>\": No such file or
+// directory"; both halves are niri's own vocabulary, checked here so doctor can
+// tell "not applied yet" from "written badly".
+func missingInclude(out []byte) bool {
+	s := string(out)
+	return strings.Contains(s, "failed to read included config") &&
+		strings.Contains(s, "No such file or directory")
+}
+
+// reconcileNiriConfig validates the config the session will read, the way niri
+// itself reads it. config.kdl includes the generated files by name, and a
+// missing or unparseable include is fatal to the session rather than a rejected
+// reload, so a file an update authored badly costs the user the login. The
+// provider validates nothing before writing, so niri's own parser is the only
+// oracle: doctor runs it over the installed tree.
+//
+// Repair re-authors the provider's config from the neutral store, the same way a
+// store fix reaches the session elsewhere in doctor, then validates again.
+func reconcileNiriConfig(checkOnly bool) recResult {
+	if wm.Detect().Name != wm.ProviderNiri {
+		return okRes(i18n.T("no niri session"))
+	}
+	entry := filepath.Join(sys.ConfigHome(), wm.ConfigDir(wm.ProviderNiri), "config.kdl")
+	if !sys.Exists(entry) {
+		return okRes(i18n.T("no niri config present"))
+	}
+	if _, err := exec.LookPath("niri"); err != nil {
+		return noteRes(i18n.T("niri config not checked (niri is not on PATH)"))
+	}
+	failure := func(out []byte) string {
+		first := strings.TrimSpace(string(out))
+		if i := strings.IndexByte(first, '\n'); i >= 0 {
+			first = first[:i]
+		}
+		return first
+	}
+	out, err := exec.Command("niri", "validate", "-c", entry).CombinedOutput()
+	if err == nil {
+		return okRes(i18n.T("niri config loads cleanly"))
+	}
+	// The provider generates the files config.kdl includes (settings.kdl,
+	// rebinds.kdl) when it applies, so a config that is missing an include has
+	// simply not been applied yet on this box: the next apply writes it. That is
+	// news for a report, not a fault, and nothing to repair by hand.
+	if missingInclude(out) {
+		if checkOnly {
+			return noteRes(i18n.T("niri config is not applied yet (an include is still to be written)"))
+		}
+	}
+	if checkOnly {
+		return warnRes(i18n.T("niri config does not load: %s"), failure(out)).
+			withFix(i18n.T("ryoku doctor"))
+	}
+	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
+	if _, err := wm.Open().Apply(store); err != nil {
+		return failRes(i18n.T("niri config does not load and re-applying the settings failed: %v"), err)
+	}
+	if out, err := exec.Command("niri", "validate", "-c", entry).CombinedOutput(); err != nil {
+		return failRes(i18n.T("niri config still does not load: %s"), failure(out)).
+			withFix(i18n.T("fix %s by hand"), entry)
+	}
+	return fixedRes(i18n.T("re-authored the niri config; it loads cleanly again"))
 }
 
 // reconcileThemeLua prunes an orphaned ~/.config/hypr/theme.lua. The Appearance

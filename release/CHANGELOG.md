@@ -3,6 +3,197 @@
 ## Unreleased
 
 ### Added
+- **`ryoku-desktop` ships the `ryoku-gpu-trim` initramfs hook.**
+  `/usr/lib/initcpio/install/ryoku-gpu-trim`, from
+  `system/boot/mkinitcpio/install/`. The HOOKS drop-in names it and mkinitcpio
+  aborts on a hook it cannot find, so the package has to own it on every box;
+  it keeps the denylisted nouveau driver and its GSP firmware out of each
+  kernel image, about 107 MiB of a 2 GiB boot partition per kernel.
+- **The release ledger names the ISO of each variant.** `releases/index.json`
+  entries gain an `images` map (`plain`, `cachyos`), each with the ISO,
+  signature, checksum, per-ISO manifest and public URL, derived from the
+  per-ISO manifests already at the bucket root (keyed by their `installer_ref`,
+  which is the release tag on a release build, and `variant`). Both variants
+  are dispatched and uploaded per release already, but only the mutable
+  `latest.json` / `latest-cachyos.json` pointers named them, so an older
+  release's image was in the bucket and discoverable by nobody: a CachyOS box
+  could roll its packages back and not find the matching installer. The rebuild
+  stays derived and idempotent, skips `latest*.json` and anything that is not a
+  manifest (with a message, never an abort), and keeps every existing field, so
+  a consumer that ignores `images` reads byte-identical entries
+  (`bin/ryoku-release-ledger`).
+
+- **`ryoku-keysounds`: the key sounds compositor plugin.** Built from
+  `ryoku/hyprland/plugins/keysounds` (depends on `hyprland`, `libcanberra`),
+  it installs `keysounds.so` under `/usr/lib/hyprland/plugins/`, eleven
+  sample profiles cut at build time from the pinned MIT-licensed Mechvibes
+  packs under `/usr/share/ryoku/keysounds/` (the licence beside them), and the
+  plugin source under `/usr/share/ryoku/hypr-plugins/keysounds/` so a box with
+  no checkout can rebuild it for a newer Hyprland. `ryoku-desktop` pins it like
+  the other plugin packages.
+
+### Removed
+- **The `awww` package is gone from `[ryoku]`.** The wallpaper backend moved to
+  Ryogami, which paints and animates its own transitions from the built-in
+  engine, so nothing on the box drives `awww` any more: the shell talks to
+  `ryogami.sock` and `ryoku doctor` retires a leftover `awww-daemon`. The recipe
+  and its vendored 136K Rust snapshot still built a package on every repo pass
+  and kept the daemon installable, so `release/packages/awww/` is deleted and the
+  build toolchain drops `lz4` (awww's only pkg-config probe). `ryoku recovery`
+  ensures `ryogami` instead of `awww` when it puts the wallpaper daemon back.
+
+### Changed
+- **Ryotunes updates on its own release channel, not the `[ryoku]` repo.**
+- **Ryotunes also updates on its own GitHub release channel.**
+  Ryotunes is released independently as a prebuilt Arch package on
+  ryoku-dev/ryotunes' GitHub releases (`ryotunes-<ver>-1-x86_64.pkg.tar.zst` and a
+  `.sha256` beside it). `ryoku update` now tracks those directly
+  (`ryoku/cli/internal/ryotunesrelease`): it verifies the download by sha256 and
+  by its own pacman name/version/arch, installs it with `pacman -U`, and only
+  ever moves the version forward, so an external build is never downgraded.
+  `ryoku doctor` reports a pending release without installing it, and Ryotunes is
+  dropped from the explicit `[ryoku]` update set so the repo's base build cannot
+  overwrite a newer one. The `[ryoku]` repo still builds the `ryotunes` package
+  (the retained sha256-pinned source tarball) for the initial install only. The
+  old auto-bump path is retired with it: `.github/workflows/ryotunes-release.yml`
+  and `bin/ryoku-release-ryotunes` are gone, and the Ryotunes release dispatch
+  into this repo with them.
+- **`ryoku-shell` ships `ryostage`, not the two old engines.** Depth and Parallax
+  merged into one engine: the package installs `/usr/bin/ryostage` and no longer
+  ships `ryoku-depth` or `ryoku-parallax-engine`. `deploy.sh` removes the two old
+  binaries from checkout boxes (pacman drops them from packaged boxes on upgrade).
+- **The apps Ryoku ships are optdepends, not depends.** pacman re-satisfies a
+  dependency list on every upgrade of the package that carries it, so a hard
+  depend meant `ryoku update` reinstalled kitty, Nautilus, Ryotunes or the
+  gaming stack for anyone who had deleted them. `ryoku-desktop` now names them
+  as optdepends; the ISO pacstraps them and `ryoku doctor` delivers them once to
+  an existing box, then honours a removal for good. Feature tools the shell
+  calls by name (grim, matugen, cava, mpv, the OCR/capture backends) stay hard
+  depends. Present apps are re-marked explicitly installed so leaving `depends`
+  cannot turn them into orphan-sweep casualties.
+- **Spotify and spicetify are gone.** `spotify-launcher`, `spicetify-cli` and
+  `spicetify-marketplace` no longer ship, the two [ryoku] spicetify packages are
+  retired, and the Ryoku Canvas extension and its loopback relay are removed
+  with them. Ryotunes is the music app Ryoku ships. An already-installed Spotify
+  is left alone.
+  `ryoku doctor` reports a pending release without installing it. The `[ryoku]`
+  repo still builds and ships the `ryotunes` package (the retained sha256-pinned
+  source tarball). The old auto-bump path is retired with it:
+  `.github/workflows/ryotunes-release.yml` and `bin/ryoku-release-ryotunes` are
+  gone, and the Ryotunes release dispatch into this repo with them.
+- **`ryotunes` 2.5.1-1 tracks ryoku-dev/ryotunes v2.5.1.** The heart saves without an account. Liking a track when there is no YouTube Music session (or on a SoundCloud/local track) lands it in a device-local Liked...
+- **`ryotunes` 2.5.0-1 tracks ryoku-dev/ryotunes v2.5.0.** The package follows
+  Ryotunes' GitHub releases (a sha256-pinned source tarball) instead of a
+  hand-pinned commit, and enables `ryotunesd.socket` for every user, so
+  `ryotunes` opens the native client on a fresh install instead of the old Tauri
+  app.
+- **Every Hyprland plugin package lays an `.abi` receipt beside its `.so`.**
+  `hypr-dynamic-cursors`, `ryoku-hypr-plugins`, `hyprglass`, `imgborders` and
+  `ryoku-keysounds` write `<name>.abi` from the build host's `version.h`, the
+  plugin ABI string Hyprland checks on load (commit plus the major.minor of
+  aquamarine, hyprutils, hyprgraphics, hyprcursor, hyprlang). The Hub's Plugins
+  page, the generated `settings.lua` and `ryoku doctor` read it to tell a copy
+  an Arch bump left behind from a working one without loading it, and rebuild
+  it locally until the next publish ships a fresh package.
+- **`ryotunes` 2.4.1-7 tracks ryoku-dev/ryotunes `43d063f`.** SoundCloud as a
+  third provider (guest, waveform seek bar, Orange-style artist pages), the
+  Discover home, the skin system (ten shipped skins under
+  `/usr/share/ryotunes/skins`, the matugen template under
+  `/usr/share/ryotunes/matugen`, RyoStore's `ryotunes-skins` category as the
+  store source), the static cover wash (the client dropped from ~35 % of a core
+  to ~2 % while playing), pause-to-quit (client after a minute parked, daemon a
+  minute later), and the Spotify Premium gate that says why a sign-in failed.
+- **`ryotunes` 2.4.1-4 ships the native client.** The package now tracks
+  ryoku-dev/ryotunes `73e4e96` and carries `ryotunesd` (socket-activated daemon
+  owning playback, MPRIS and the tray), `ryotunes-cli`, and the pure-QML
+  Quickshell client `ryotunes-qml` at `/usr/share/ryotunes/client`, next to the
+  unchanged Tauri app. Measured on a 7940HS laptop the native client idles at
+  0.1% CPU paused and 0.7% playing where the WebKit app spent 2% plus three
+  helper processes, and scrolls Home at under 1% of a core instead of 76%.
+  Only one player runs at a time: `ryotunes` hands off to a live daemon
+  (raise its client, or open `ryotunes-qml`) and is the standalone Tauri app
+  only when no daemon runs, so Super+J, the dock and the launcher keep
+  running plain `ryotunes`, and reopening after Super+Q remaps the client window (2.4.1-4). Hyprland floats its window (`float-ryotunes-qml`, the
+  Quickshell class with title `Ryotunes`) like the Tauri one.
+- **A release dispatches both ISOs.** The publish ran only `build-iso.yml`
+  (plain Arch) after a release; `build-iso-cachyos.yml` is dispatched from the
+  same frozen release directory now, so the CachyOS ISO carries the release
+  too (`publish-repo.yml`).
+- **The release ledger is derived, not edited.** `bin/ryoku-release-ledger`
+  rebuilds `releases/index.json` from every `releases/<tag>/x86_64/release.json`
+  the bucket holds (newest first, `latest` = newest); the publish runs it
+  after a release lands and asserts the new tag is `latest`, and the Release
+  Ledger workflow rebuilds it on demand. The in-place jq edit it replaces read
+  a missing ledger as empty input (rclone cat of a missing key succeeds with
+  nothing) and published a zero-byte file on the first release. The publish
+  job also installs `github-cli` again, which the release ISO dispatch needs.
+- **`build-repo.sh` adopts before it builds.** A package whose output names
+  (`makepkg --packagelist`) the mirror already serves is not built: its bytes
+  are copied in and re-signed, the immutability rule applied up front instead
+  of after a wasted compile. A release is now a promotion of the testing build
+  (same commit, same names, same bytes; only ryoku-desktop, which carries the
+  channel marker, is rebuilt) and a testing push no longer recompiles a pinned
+  external (ryotunes, ryomotion, prowl-agent). The first tag publish spent 40
+  minutes hung inside ryotunes' upstream `cargo test` (an mpv integration
+  test) and hit the job timeout; that `check()` is gone from the PKGBUILD too:
+  the package build proves the binary builds, upstream CI owns its tests.
+- **The publish builds once and ships the bytes it tested.** `publish-repo.yml`
+  is now build -> gate -> publish: the build job signs the repo with the
+  release key and keeps it as a workflow artifact; the container gate installs
+  ryoku-desktop from that artifact on Arch and CachyOS with `SigLevel=Required`
+  against the release keyring (`container-install.sh RYOKU_PREBUILT_REPO=1`,
+  which skips the build toolchain and asserts the real release and channel
+  in `/etc/ryoku-release`); the publish job uploads the same artifact. The
+  gate used to build its own throwaway-key repo per base and the publish built
+  a third time (none of them the shipped bytes), and at 90 minutes the gate
+  timed out and the publish was silently skipped, which is how users sat on
+  an old stable for days. The rclone remote is written by one script,
+  `bin/ryoku-r2-config`, shared with the ISO workflow.
+
+### Added
+- **Release lines have names.** `CODENAME` holds the current line's name
+  (Onogoro before 1.0; Amaterasu for 1.0) and `release/names.md` tells each
+  name's story. `build-repo.sh` writes the name into `release.json`, the
+  ryoku-desktop package into `/etc/ryoku-release` (`NAME=`), the publish into
+  `releases/index.json`; the Stable Release summary and the Release Notes
+  workflow title the release "Ryoku <name> <version>", and a line's first
+  release opens its notes with the story (`bin/ryoku-release-notes --intro`).
+  The ISO manifests (`<iso>.json`, `latest.json`) carry `name` and `version`
+  too, so the site can title the download (`bin/ryoku-iso-manifest`).
+- **The `[ryoku]` repo publishes named releases and a testing channel.** Under
+  the one bucket mount (`repo.ryoku.dev/stable/`), `x86_64/` is the stable
+  pointer every installed box already has, `releases/<tag>/x86_64/` is one
+  frozen copy per release tag (never rewritten; the publish refuses an existing
+  directory), `releases/index.json` is the ledger, and
+  `channels/testing/x86_64/` is rebuilt on every push to `unstable-dev`. A
+  push to `main` publishes nothing: a release is the Stable Release workflow
+  run on `main` (`bump_type: none` tags the version `main` carries), which
+  publishes the frozen directory, moves the stable pointer onto it, records
+  the ledger, and dispatches the release ISO from that directory (the ISO
+  workflows take a `repo_url`, threaded into `offline-repo.sh`). A stable
+  publish mirrors testing first, so a name testing already served is promoted
+  rather than rebuilt. `build-repo.sh` writes `release.json` beside the db and
+  `ryoku-desktop` ships `/etc/ryoku-release` naming the build. Existing boxes
+  need no change: their `Server` line is the stable pointer, and the next
+  update lands the client that understands channels.
+
+- `ryotunes` joins the signed repository at 2.4.1: the Ryoku music app (Tauri +
+  WebKitGTK + libmpv, built from `ryoku-dev/ryotunes` at a pinned commit, the
+  Ryostore submission adopted as the official app). `ryoku-desktop` depends on
+  it and no longer installs the Chromium app-window wrapper of the same name;
+  the package takes over `/usr/bin/ryotunes`, the `.desktop` entry and the icon
+  in the same `pacman -Syu`, so existing boxes switch on `ryoku update`. The
+  desktop follows it over `org.mpris.MediaPlayer2.ryotunes` exactly as before
+  (now-playing widget, dock pill, media keys), and the Hyprland float rule and
+  `ryoku-music-toggle` match its `ryotunes` window class. The build toolchain
+  list gains `webkit2gtk-4.1`, `mpv` and `libappindicator-gtk3`. The package
+  `conflicts`/`replaces` every side-by-side build the author shipped before
+  (`ryotunes-v1.4` through `ryotunes-v2.4`, AUR `ryotunes-bin`), so a box that
+  installed one of those gets it removed in the same `pacman -Syu`, leaving one
+  launcher entry, one `/usr/bin/ryotunes` and no replacement hook. The old
+  Chromium profile at `~/.config/ryotunes` is left in place; delete it by hand
+  to reclaim the space.
+
 - `blesh` joins the signed repository at 0.4.0-devel3, and `ryoku-desktop` depends on
   it plus Zsh and the official Zsh editing plugins. The package now materializes
   the managed Bash/Zsh adapters and their shared terminal environment beside the
@@ -428,7 +619,7 @@
   wallust in its official-repo dependency check.
 - **`ryomotion` ships from the `[ryoku]` repo**: Ryoku Motion, the screen-demo
   recorder and editor, built from the OpenScreen fork
-  (github.com/neur0map/ryomotion) and rebranded to Ryo Motion. The PKGBUILD
+  (github.com/ryoku-dev/ryomotion) and rebranded to Ryo Motion. The PKGBUILD
   builds the Electron app from a pinned commit, fetching the fork's pinned node
   22 at build time (its npm 10 runs the electron/esbuild/sharp install scripts a
   newer npm blocks by default) and rebranding name, binary, and appId with

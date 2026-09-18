@@ -89,7 +89,7 @@ func TestReconcileDesktopStoreKeepsNewerDesktopJSON(t *testing.T) {
 	if err := os.MkdirAll(ryoku, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	os.WriteFile(filepath.Join(ryoku, "hypr.json"), []byte(`{"cursor":{"theme":"Old"}}`), 0o644)
+	os.WriteFile(filepath.Join(ryoku, "hypr.json"), []byte(`{"cursor":{"theme":"Old"},"apps":{"browser":"google-chrome-stable"}}`), 0o644)
 	os.WriteFile(filepath.Join(ryoku, "desktop.json"), []byte(`{"desktop":{"cursor":{"theme":"New"}}}`), 0o644)
 
 	if r := reconcileDesktopStore(false); r.status != recFixed {
@@ -101,5 +101,18 @@ func TestReconcileDesktopStoreKeepsNewerDesktopJSON(t *testing.T) {
 	raw, _ := os.ReadFile(filepath.Join(ryoku, "desktop.json"))
 	if th, _ := configuredCursor(raw); th != "New" {
 		t.Fatalf("Hub's desktop.json must be preserved (theme=%q, want New)", th)
+	}
+	// A key only the old file carried has to survive the fold: an app role set
+	// there used to vanish with the file.
+	var store struct {
+		Desktop struct {
+			Apps map[string]string `json:"apps"`
+		} `json:"desktop"`
+	}
+	if err := json.Unmarshal(raw, &store); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.Desktop.Apps["browser"]; got != "google-chrome-stable" {
+		t.Fatalf("legacy-only app role reads back %q, want google-chrome-stable", got)
 	}
 }

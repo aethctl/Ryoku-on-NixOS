@@ -82,6 +82,7 @@ jobs:
               [[ -f $f ]] || continue
               case "$f" in
                 ryoku/lockscreen/qylock/*) ;;   # vendored upstream, exempt
+                ryoku/shell/ryogami/wall-ui/*) ;; # vendored skwd-wall fork, exempt
                 *.qml) printf '%s\0' "$f" >>"$files" ;;
               esac
             done

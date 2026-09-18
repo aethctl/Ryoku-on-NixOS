@@ -20,6 +20,47 @@ Rectangle {
 
     property bool isQuickshell: typeof sddm === "undefined" || sddm.hostName === undefined
 
+    // --- Software cursor for the SDDM login screen --------------------------
+    // weston (the greeter's compositor) implements no wp_cursor_shape, and its
+    // wl_pointer.set_cursor fallback never renders on this hybrid GPU, so the
+    // login pointer is invisible (issue #191). Draw one in the scene instead: a
+    // passive HoverHandler tracks the pointer without stealing clicks or hover,
+    // and an arrow follows it. Only under the SDDM greeter -- the in-session lock
+    // runs on the shell's own compositor, which draws a real cursor, so off there.
+    HoverHandler {
+        id: swPointer
+        enabled: !root.isQuickshell
+    }
+    Canvas {
+        id: swCursor
+        width: 26 * root.s
+        height: 26 * root.s
+        z: 2000000
+        visible: !root.isQuickshell && swPointer.hovered
+        x: swPointer.point.position.x
+        y: swPointer.point.position.y
+        antialiasing: true
+        onPaint: {
+            var ctx = getContext("2d");
+            ctx.reset();
+            ctx.scale(root.s, root.s);
+            ctx.beginPath();
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, 16);
+            ctx.lineTo(4, 12.5);
+            ctx.lineTo(6.5, 19);
+            ctx.lineTo(9, 18);
+            ctx.lineTo(6.5, 11.5);
+            ctx.lineTo(11, 11.5);
+            ctx.closePath();
+            ctx.fillStyle = "#ffffff";
+            ctx.fill();
+            ctx.lineWidth = 1.2;
+            ctx.strokeStyle = "#000000";
+            ctx.stroke();
+        }
+    }
+
     // The 60fps clock timer below only feeds the smooth second-hand, so keep it
     // awake only while this surface is on screen. Under the SDDM greeter that is
     // when the window is focused; a backgrounded or orphaned greeter then stops

@@ -39,17 +39,28 @@ sig="$iso_dir/$sig_name"
   exit 1
 }
 
-if [[ $iso_name =~ ^ryoku-([0-9]{4}\.[0-9]{2}\.[0-9]{2})-([A-Za-z0-9._-]+)-x86_64-([A-Za-z0-9._-]+)\.iso$ ]]; then
+core=$iso_name
+if [[ $iso_name == *-cachyos.iso ]]; then
+  core=${iso_name%-cachyos.iso}.iso
+  : "${RYOKU_ISO_VARIANT:=cachyos}"
+fi
+if [[ $core =~ ^ryoku-([0-9]{4}\.[0-9]{2}\.[0-9]{2})-(r[0-9]+-[0-9a-f]+)-x86_64-([A-Za-z0-9._-]+)\.iso$ ]]; then
   iso_date=${BASH_REMATCH[1]}
   tracking_id=${BASH_REMATCH[2]}
   installer_ref=${BASH_REMATCH[3]}
 else
-  echo "ryoku-iso-manifest: expected tracked ISO name like ryoku-YYYY.MM.DD-r12-deadbee-x86_64-main.iso: $iso_name" >&2
+  echo "ryoku-iso-manifest: expected a tracked ISO name like ryoku-YYYY.MM.DD-r12-deadbee-x86_64-v1.0.0[-cachyos].iso: $iso_name" >&2
   exit 1
 fi
 
 channel=${RYOKU_ISO_CHANNEL:-${CHANNEL:-main}}
 variant=${RYOKU_ISO_VARIANT:-plain}
+# the release line's name and version the ISO's payload carries (CODENAME and
+# VERSION at the build), so the site can say "Ryoku Onogoro 0.56.0" over the
+# download instead of a bare tracking id.
+root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+name=${RYOKU_ISO_NAME:-$(tr -d '[:space:]' <"$root/CODENAME" 2>/dev/null || true)}
+version=${RYOKU_ISO_VERSION:-$(tr -d '[:space:]' <"$root/VERSION" 2>/dev/null || true)}
 commit=${RYOKU_ISO_COMMIT:-unknown}
 run_id=${RYOKU_ISO_RUN_ID:-}
 run_number=${RYOKU_ISO_RUN_NUMBER:-}
@@ -90,6 +101,8 @@ cat >"$manifest" <<JSON
   "schema": 1,
   "project": "ryoku",
   "channel": $(json_string "$channel"),
+  "name": $(json_string "$name"),
+  "version": $(json_string "$version"),
   "tracking_id": $(json_string "$tracking_id"),
   "variant": $(json_string "$variant"),
   "date": $(json_string "$iso_date"),

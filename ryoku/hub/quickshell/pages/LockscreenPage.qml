@@ -971,11 +971,20 @@ Item {
     // ── head: eyebrow, Fraunces title + refresh, blurb, error line ──────────
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s6
-        spacing: Tokens.s2
+        anchors.top: parent.top
+        anchors.topMargin: Tokens.s6
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in the middle of a page-wide window
+        x: Tokens.s6
+        width: Math.max(320, pg.width - Tokens.s6 * 2 - Tokens.s3)
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -1029,15 +1038,6 @@ Item {
             color: Tokens.ink; font.family: Tokens.ui
             font.pixelSize: Tokens.fSmall; font.weight: Font.Medium; wrapMode: Text.WordWrap
         }
-    }
-
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "施錠"
-        index: "03"; label: I18n.tr("DESKTOP")
-        glyph: "column"; glyph2: "wave"
     }
 
     // ── loading / none-installed / read-failure state ───────────────────────
@@ -1162,6 +1162,7 @@ Item {
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                    WheelScroll { }
 
                     Column {
                         id: settingsLeftCol
@@ -1606,7 +1607,6 @@ Item {
                             }
                         }
 
-
                         Text {
                             width: parent.width
                             visible: pg.skSupported
@@ -1676,7 +1676,6 @@ Item {
                         color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                         wrapMode: Text.WordWrap
                     }
-
 
                     // enrolled fingers: one quiet row each, delete behind an
                     // armed second click so nothing vanishes on a stray tap.
@@ -1943,10 +1942,13 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         Row {
             id: masonry
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+            // the masonry fills the body it is given; the cards keep the measure
+            width: flick.width - Tokens.s3
+            x: Math.round((flick.width - width) / 2)
             spacing: Tokens.s3
 
             Repeater {

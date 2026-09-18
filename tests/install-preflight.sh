@@ -73,4 +73,19 @@ off="$(sb_var '\x00')"
 rc=0; out="$(gate '' "$off")" || rc=$?
 [[ $rc -eq 0 ]] || fail "a Secure Boot-off box must pass the gate without the override (rc=$rc): $out"
 
+
+esp_mode() {
+  RYOKU_ESP_MODE=$1 AVAIL=$2 ROOT=$root bash -c '
+    source "$ROOT/installation/backend/lib/common.sh"
+    source "$ROOT/installation/backend/lib/preflight.sh"
+    ryoku_resolve_esp_mode "$AVAIL"
+  '
+}
+
+[[ $(esp_mode auto 6144) == dedicated ]] || fail "auto mode must avoid a 6 MiB shared ESP"
+[[ $(esp_mode auto 8192) == shared ]] || fail "auto mode must share an ESP with 8 MiB free"
+[[ $(esp_mode dedicated 0) == dedicated ]] || fail "explicit dedicated mode must not require shared ESP space"
+rc=0; out=$(esp_mode shared 6144 2>&1) || rc=$?
+[[ $rc -ne 0 ]] || fail "explicit shared mode must refuse a 6 MiB ESP"
+grep -q 'needs >= 8 MiB' <<<"$out" || fail "shared-mode refusal lacks the 8 MiB explanation"
 echo "install-preflight: all checks passed"

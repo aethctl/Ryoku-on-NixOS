@@ -45,6 +45,7 @@ export SOURCE_DATE_EPOCH
 PAYLOAD_COMMIT=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)
 PAYLOAD_DATE=$(git -C "$REPO_ROOT" log -1 --pretty=%cI 2>/dev/null || date -Iseconds)
 PAYLOAD_VERSION=$(tr -d '[:space:]' <"$REPO_ROOT/VERSION" 2>/dev/null || echo unknown)
+PAYLOAD_NAME=$(tr -d '[:space:]' <"$REPO_ROOT/CODENAME" 2>/dev/null || echo unknown)
 
 STAGE_ONLY=0
 [[ ${1:-} == --stage-only ]] && STAGE_ONLY=1
@@ -101,6 +102,7 @@ stage_ryoku_repo() {
       || die "local [ryoku] repo $src has no ryoku-cursors package; rebuild it (release/repo/build-repo.sh) or repoint RYOKU_ISO_LOCAL_REPO"
   else
     local base=${RYOKU_ISO_REPO_URL:-https://repo.ryoku.dev/stable/$arch}
+    base=${base%/}
     log "Fetching [ryoku] db + ryoku-cursors from $base"
     curl -fsSL --retry 2 --max-time 30 -o "$dst/ryoku.db" "$base/ryoku.db" \
       || die "cannot reach the [ryoku] repo at $base -- publish the repo first, or set RYOKU_ISO_LOCAL_REPO to a build-repo.sh out/ tree"
@@ -165,6 +167,14 @@ install -d "$AIROOTFS/usr/local/lib/ryoku/backend"
 install -m0755 "$BACKEND_DIR/ryoku-install" "$AIROOTFS/usr/local/lib/ryoku/backend/ryoku-install"
 cp -a "$BACKEND_DIR/lib" "$AIROOTFS/usr/local/lib/ryoku/backend/lib"
 
+# 3b. the translation catalog at the path the backend's i18n.sh and the CLI's
+#     Go runtime both look for. The TUI compiles its own copy in (it must work
+#     with nothing mounted), but the shell libs read it from here.
+log "Installing translation catalog -> /usr/share/ryoku/i18n"
+install -d "$AIROOTFS/usr/share/ryoku/i18n"
+install -m0644 "$REPO_ROOT"/ryoku/i18n/catalog/*.json "$AIROOTFS/usr/share/ryoku/i18n/"
+install -m0644 "$REPO_ROOT/ryoku/i18n/langs.json" "$AIROOTFS/usr/share/ryoku/i18n/langs.json"
+
 # 4. bake the repo payload at /usr/share/ryoku (RYOKU_REPO).
 log "Baking repo payload -> /usr/share/ryoku"
 stage_repo "$REPO_ROOT" "$AIROOTFS/usr/share/ryoku"
@@ -176,6 +186,7 @@ cat >"$AIROOTFS/usr/share/ryoku/.payload" <<EOF
 commit=$PAYLOAD_COMMIT
 date=$PAYLOAD_DATE
 version=$PAYLOAD_VERSION
+name=$PAYLOAD_NAME
 EOF
 
 # variant marker: the installer (ryoku-install) reads this to decide whether to
@@ -185,6 +196,7 @@ printf '%s\n' "$VARIANT" >"$AIROOTFS/usr/share/ryoku/variant"
 # fill the motd placeholders on the STAGED copy only (the committed motd keeps
 # the @...@ tokens), so the live shell greets with the baked version + commit.
 sed -i \
+  -e "s|@RYOKU_NAME@|$PAYLOAD_NAME|g" \
   -e "s|@RYOKU_VERSION@|$PAYLOAD_VERSION|g" \
   -e "s|@RYOKU_COMMIT@|${PAYLOAD_COMMIT:0:12}|g" \
   "$AIROOTFS/etc/motd"
@@ -218,9 +230,13 @@ RYOKU_BLOBS_BUILD="$STAGE_DIR/blobs-build" \
 #     reused across builds; RYOKU_OFFLINE_SKIP=1 builds a networked ISO instead.
 if [[ ${RYOKU_OFFLINE_SKIP:-0} != 1 ]]; then
   log "Baking offline package closure ($VARIANT) -> /usr/share/ryoku/offline/repo"
+  # the same [ryoku] source the live ISO's own stanza uses (RYOKU_ISO_REPO_URL,
+  # a frozen releases/<tag>/ directory for a release ISO), so the offline
+  # closure and the live media agree on which release this ISO is.
   RYOKU_OFFLINE_CACHE=${RYOKU_OFFLINE_CACHE:-$PROFILE_DIR/offline-cache-$VARIANT} \
   RYOKU_VARIANT="$VARIANT" \
-    "$PROFILE_DIR/offline-repo.sh" "$REPO_ROOT" "$AIROOTFS/usr/share/ryoku/offline/repo"
+    "$PROFILE_DIR/offline-repo.sh" "$REPO_ROOT" "$AIROOTFS/usr/share/ryoku/offline/repo" \
+      "${RYOKU_ISO_REPO_URL:-https://repo.ryoku.dev/stable/x86_64}"
 else
   log "RYOKU_OFFLINE_SKIP=1: skipping the offline repo bake (networked ISO)"
 fi
@@ -273,24 +289,6 @@ else
   sudo --preserve-env=SOURCE_DATE_EPOCH mkarchiso -v -w "$WORK_DIR" -o "$OUT_DIR" "$PROFILE_STAGE"
 fi
 
-# Broadcom ABI guard. broadcom-wl ships a precompiled wl.ko matched to one exact
-# linux ABI. A [core]/[extra] mirror-sync window can pair a `linux` from one
-# snapshot with a `broadcom-wl` built against another, so the module lands under
-# a kernel dir the live image never boots: modprobe finds nothing at `uname -r`
-# and Broadcom BCM43xx laptops lose live Wi-Fi with no error. The live set ships
-# exactly one kernel, so require exactly one kernel module dir and prove wl.ko
-# sits in it. Guarded on the mkarchiso work airootfs existing.
-for wl_modroot in "$WORK_DIR"/*/airootfs/usr/lib/modules; do
-  [[ -d $wl_modroot ]] || continue
-  mapfile -t _kdirs < <(find "$wl_modroot" -mindepth 1 -maxdepth 1 -type d | sort)
-  _wl_kdirs=()
-  for _kd in "${_kdirs[@]}"; do
-    compgen -G "$_kd/extramodules/wl.ko*" >/dev/null 2>&1 && _wl_kdirs+=("$_kd")
-  done
-  if (( ${#_kdirs[@]} != 1 || ${#_wl_kdirs[@]} != 1 )); then
-    die "Broadcom wl.ko kernel mismatch: ${#_kdirs[@]} kernel module dir(s), ${#_wl_kdirs[@]} carrying extramodules/wl.ko* under $wl_modroot. A [core]/[extra] mirror-sync window baked broadcom-wl against a kernel this ISO does not ship, so Broadcom Wi-Fi would fail silently. Rebuild once 'pacman -Syu' has settled (or pin versions with RYOKU_ISO_REPRO=1)."
-  fi
-done
 log "ISO written to $OUT_DIR"
 
 # checksums next to the ISO for verification. deterministic for a fixed commit,

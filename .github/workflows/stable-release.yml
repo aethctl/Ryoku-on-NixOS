@@ -4,28 +4,25 @@ on:
   workflow_dispatch:
     inputs:
       bump_type:
-        description: Release number to bump
+        description: Release number to bump (none tags the VERSION main already carries)
         required: true
-        default: minor
+        default: none
         type: choice
         options:
+          - none
           - patch
           - minor
           - major
       release_stage:
-        description: Public release stage
+        description: Public release stage (keep leaves the current suffix)
         required: true
-        default: alpha
+        default: keep
         type: choice
         options:
+          - keep
           - alpha
           - beta
           - stable
-      dispatch_iso:
-        description: Dispatch the stable ISO build after tagging
-        required: true
-        default: true
-        type: boolean
 
 permissions:
   contents: write
@@ -61,15 +58,26 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="$(./bin/ryoku-release-bump "${{ inputs.bump_type }}" "${{ inputs.release_stage }}")"
+          # bump none: a release is a named, frozen copy of what main already
+          # is, so the tag takes VERSION as it stands (the unstable bump bot
+          # advances it on every unstable-dev push; main inherits the value at
+          # fast-forward). a bump rewrites VERSION on main first.
+          if [[ "${{ inputs.bump_type }}" == none ]]; then
+            if [[ "${{ inputs.release_stage }}" != keep ]]; then
+              echo "::error::bump_type none tags the current VERSION; release_stage must be keep."
+              exit 1
+            fi
+            version="$(tr -d '[:space:]' < VERSION)"
+          else
+            version="$(./bin/ryoku-release-bump "${{ inputs.bump_type }}" "${{ inputs.release_stage }}")"
+            printf '%s\n' "$version" > VERSION
+          fi
           tag="v$version"
 
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "::error::Release tag $tag already exists."
             exit 1
           fi
-
-          printf '%s\n' "$version" > VERSION
 
           {
             echo "version=$version"
@@ -79,6 +87,7 @@ jobs:
           {
             echo "### Stable release"
             echo
+            echo "- Name: \`$(tr -d '[:space:]' < CODENAME)\`"
             echo "- Version: \`$version\`"
             echo "- Tag: \`$tag\`"
             echo "- Stage: \`${{ inputs.release_stage }}\`"
@@ -92,15 +101,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          if git diff --quiet -- VERSION; then
-            echo "::error::VERSION did not change."
-            exit 1
+          if ! git diff --quiet -- VERSION; then
+            git add VERSION
+            git commit -m "release: $RELEASE_TAG"
+            git push origin HEAD:main
           fi
-
-          git add VERSION
-          git commit -m "release: $RELEASE_TAG"
           git tag -a "$RELEASE_TAG" -m "Ryoku $RELEASE_TAG"
-          git push origin HEAD:main
           git push origin "refs/tags/$RELEASE_TAG"
 
       - name: Dispatch repo publish
@@ -112,7 +118,10 @@ jobs:
           set -euo pipefail
 
           # a tag pushed by GITHUB_TOKEN doesn't fire publish-repo's tag
-          # trigger, so dispatch it explicitly to republish the signed [ryoku] repo.
+          # trigger, so dispatch it explicitly. publish-repo builds the frozen
+          # releases/<tag>/ set, moves the stable pointer onto it, records the
+          # release in the ledger, and dispatches the ISO build from that
+          # directory once it is verified, so nothing here races the upload.
           gh workflow run publish-repo.yml --ref "$RELEASE_TAG"
           echo "::notice::Dispatched publish-repo.yml on $RELEASE_TAG."
 
@@ -131,22 +140,3 @@ jobs:
           else
             echo "::warning::release-notes.yml not dispatched: $(cat /tmp/rn.err)"
           fi
-
-      - name: Dispatch ISO build
-        if: ${{ inputs.dispatch_iso }}
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: |
-          set -euo pipefail
-
-          gh workflow run build-iso.yml --ref "$RELEASE_TAG" -f release_stage="${{ inputs.release_stage }}"
-
-          {
-            echo "### ISO dispatch"
-            echo
-            echo "- Workflow: \`build-iso.yml\`"
-            echo "- Ref: \`$RELEASE_TAG\`"
-            echo "- Stage: \`${{ inputs.release_stage }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"

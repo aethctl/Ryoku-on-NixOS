@@ -89,13 +89,25 @@ jobs:
             # the most recent stable tag before this one bounds the range; a
             # first-ever release has none, so the notes span all history.
             from="$(git describe --tags --abbrev=0 --match 'v*' "${REF}^" 2>/dev/null || true)"
-            title="Ryoku ${version}"
+            # the line's name (CODENAME) titles the release; the first release
+            # of a line opens with its story from release/names.md.
+            name="$(git show "$REF:CODENAME" 2>/dev/null | tr -d '[:space:]' || true)"
+            title="Ryoku ${name:+$name }${version}"
+            intro="$(mktemp)"
+            if [[ -n $name ]]; then
+              prev_name=""
+              [[ -n $from ]] && prev_name="$(git show "$from:CODENAME" 2>/dev/null | tr -d '[:space:]' || true)"
+              if [[ $prev_name != "$name" ]]; then
+                git show "$REF:release/names.md" 2>/dev/null \
+                  | awk -v h="## $name" '$0 == h {on=1; next} /^## / {on=0} on && (NF || seen) {seen=1; print}' >"$intro"
+              fi
+            fi
             prerelease=""
             case "$version" in
               *alpha* | *beta* | *rc*) prerelease="--prerelease" ;;
             esac
 
-            MEDIA_REF="$REF" ./bin/ryoku-release-notes "$from" "$REF" --title "$title" >"$body"
+            MEDIA_REF="$REF" ./bin/ryoku-release-notes "$from" "$REF" --title "$title" --intro "$intro" >"$body"
 
             if gh release view "$REF" >/dev/null 2>&1; then
               gh release edit "$REF" --title "$title" --notes-file "$body"

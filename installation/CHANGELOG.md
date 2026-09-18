@@ -2,10 +2,74 @@
 
 ## Unreleased
 
+### Fixed
+- **A second disk shows its partitions and its free space.** The alongside probe
+  returned before reporting anything when the target disk was not GPT or had no
+  EFI System Partition, and the free-region math read `firstlba`/`lastlba`, which
+  `sfdisk --json` emits only for GPT. A prepared data disk therefore looked empty
+  in the installer and "Erase whole disk" was the only committable strategy. Every
+  readable disk now reports its sector size and free regions before the verdict
+  gate, MBR free space is computed from the device size, and a non-GPT disk says
+  its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
+
+### Added
+- **Install into the free space on a disk that has no ESP.** A GPT disk with free
+  space but no EFI System Partition of its own (a second, OS-less drive) now gets
+  the `create-esp` verdict: the installer offers "Install in the free space",
+  creates a dedicated 2 GiB ESP plus root inside the free region, and leaves every
+  existing partition byte-identical. Non-destructive, so it needs no ERASE
+  acknowledgement, and the review screen states exactly what will be created
+  (`backend/lib/disk.sh`, `backend/lib/preflight.sh`, `backend/lib/bootloader.sh`,
+  `tui/main.go`).
+
+### Changed
+- **ISOs are named for their release and variant.** A release build produces
+  `ryoku-<date>-r<run>-<sha>-x86_64-v0.57.0-beta.19.iso` and, for CachyOS,
+  the same name ending `-cachyos.iso`; a build off `main` keeps `-main`. The
+  manifest reads the ref and variant back from the name, and the live ISO's
+  motd and payload stamp carry the line's name ("Ryoku Onogoro 0.57.0-beta.19
+  installer") (`build-iso-reusable.yml`, `bin/ryoku-iso-manifest`,
+  `iso/build.sh`, `iso/airootfs/etc/motd`).
+- `tests/container-install.sh`: **installs a prebuilt signed repo when
+  `RYOKU_PREBUILT_REPO=1`** (the publish's artifact, verified with the release
+  keyring at `SigLevel=Required`, no build toolchain) and asserts the release
+  and channel the publish named; a hand build still builds with a throwaway
+  key. Also asserts the boot guard ships and disarms on a proven boot.
+- `iso/build.sh`: **A release ISO bakes from its frozen release directory.**
+  `RYOKU_ISO_REPO_URL` (the `repo_url` input of the ISO workflows, which
+  `publish-repo.yml` passes for a tagged release) now reaches
+  `offline-repo.sh` too, so the live media's `[ryoku]` and the offline closure
+  agree on which release the ISO installs; without it both fall back to the
+  stable pointer as before.
+- `tests/container-install.sh`: asserts the `/etc/ryoku-release` marker, that
+  `ryoku version` prints it, and that `ryoku track` refuses to move a box whose
+  `[ryoku]` points at a mirror Ryoku does not publish.
+- **The locale picker leads with the keyboard's own country.** `be` is both the
+  Belgian keyboard layout and the Belarusian language code, and `be_BY.UTF-8`
+  sorts and fuzzy-matches ahead of `fr_BE`/`nl_BE` for "be", so a Belgian could
+  pick Belarusian (a Cyrillic locale) by mistake and land in a Russian-looking
+  shell. The locale step now floats the chosen keyboard's country locales to the
+  top and makes one the default highlight, so the intended pick is the obvious
+  one (`tui/main.go`, `tui/system.go`).
+
 A ground-up hardening of the installer for real hardware. Granular backend and
 ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.
 
 ### Added
+- **The publish gate lints the materialized QML for load failures.**
+  `tests/container-install.sh` runs `bin/ryoku-dev-lint-qml` over the shell and
+  Hub trees against the installed Qt modules after `ryoku materialize`, so a
+  file that cannot instantiate (a handler on a signal the type lacks) fails the
+  publish instead of blanking a page on every user's box.
+- **Zen is the default browser on new installs.** The ISO and install script
+  now install `zen-browser-bin` (post-install, best-effort, online-only) and set
+  it as the default web browser. `ryoku update` never installs Zen or repoints a
+  browser, so existing boxes are untouched; the Super+B browser role prefers Zen
+  when present and falls back to Chromium otherwise.
+- **Dual-boot handles old 96 MiB Windows EFI partitions.** The installer
+  automatically uses a dedicated Ryoku ESP when the existing ESP lacks 8 MiB
+  free, without moving Windows partitions or changing the required free-space
+  footprint.
 - **5 GHz Wi-Fi works after install.** The configure stage now pins the Wi-Fi
   regulatory domain (the country) in the target, so the kernel leaves world
   domain `00` and stops hiding most 5 GHz channels; resolved from `RYOKU_REGDOM`,

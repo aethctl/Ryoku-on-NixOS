@@ -42,6 +42,12 @@ package() {
     "$pkgdir/usr/bin/ryostage"
   install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-eq" \
     "$pkgdir/usr/bin/ryoku-eq"
+  # Keep-Awake's durable idle inhibitor. It is systemd-inhibit, not compositor
+  # config, and the shell calls it by bare name on every compositor, so it ships
+  # here rather than with one compositor's payload: a niri box has no leaf
+  # scripts at all, and Keep-Awake must still hold the screen awake there.
+  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-cmd-caffeine" \
+    "$pkgdir/usr/bin/ryoku-cmd-caffeine"
   # the Stash sidebar's helpers: shell scripts, so they ship with the shell and
   # resolve on PATH with no compositor config tree.
   local s

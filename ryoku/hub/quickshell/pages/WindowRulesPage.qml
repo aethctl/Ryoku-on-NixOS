@@ -144,10 +144,17 @@ Item {
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
         id: head
-        anchors { left: parent.left; right: parent.right; top: parent.top }
-        spacing: Tokens.s2
+        // the head sits on the body's grid, so the title starts over the first
+        // card column instead of floating in a page-wide window
+        anchors { top: parent.top; left: parent.left; right: parent.right }
+        // the register row sits off the title: a rule over a 32px
+        // title needs more than the gap between two lines of body text
+        spacing: Tokens.s3
 
         Row {
+            // the register row holds a fixed box, so the rule and the seal keep
+            // their distance from the title on every page
+            height: Tokens.s5
             spacing: Tokens.s2
             Rectangle {
                 width: 16; height: 1; color: Tokens.ink
@@ -169,7 +176,7 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Custom rules layered over the ones Ryoku ships. Match a window by its class and/or title, then pick what to do: float a dialog, pin a video, force it opaque, and more. Changes apply when you save.")
+            text: I18n.tr("Rules for how one window opens, applied on Save.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
@@ -244,11 +251,15 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
-        Column {
-            id: col
-            width: flick.width - Tokens.s3   // reserve a lane for the scroll rail
+        CardColumns {
+
+        id: col
+            // a body of cards fills the measure and splits into balanced columns
+            width: flick.width - Tokens.s3
             spacing: Tokens.s2
+            fillTo: flick.height
 
             Repeater {
                 model: pg.ruleRows
@@ -275,7 +286,7 @@ Item {
                         : act === "move" ? "100,60"
                         : act === "workspace" ? "2" : ""
 
-                    width: col.width
+                    width: col.colWidth
                     // s3 pad + match row + s2 gap + action row + s3 pad
                     height: Tokens.s3 * 2 + lineH * 2 + Tokens.s2
                     radius: Tokens.radius
