@@ -38,6 +38,9 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		problems = append(problems, i18n.Tf("%s in ~/.local/bin shadows the packaged app", stale))
 		fixes = append(fixes, "rm -f ~/.local/bin/ryotunes ~/.local/share/applications/ryotunes.desktop")
 	}
+	if sys.NixBackend() {
+		return reconcileRyotunesNixOS(checkOnly, bin, stale, problems, fixes)
+	}
 	// A box that runs the Ryoku desktop is expected to have Ryotunes: a dev
 	// checkout (all Ryoku managed by `ryoku deploy`, so ryoku-desktop is not a
 	// pacman package) or a packaged install (ryoku-desktop present). Either way,
@@ -104,6 +107,72 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 	return fixedRes(i18n.T("ryotunes opens the packaged app (%s)"), strings.Join(problems, "; "))
+}
+
+func reconcileRyotunesNixOS(
+	checkOnly bool,
+	bin string,
+	stale string,
+	problems []string,
+	fixes []string,
+) recResult {
+	available := sys.Has("ryotunes")
+	if !available {
+		problems = append(problems, i18n.T("ryotunes is not available from the active NixOS generation"))
+		fixes = append(fixes, i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
+	}
+
+	socketMissing := available && !ryotunesSocketEnabled()
+	if socketMissing {
+		problems = append(problems, i18n.T("the declarative ryotunesd socket is not enabled"))
+		fixes = append(fixes, i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
+	}
+
+	if len(problems) == 0 {
+		return okRes(i18n.T("ryotunes runtime is healthy"))
+	}
+
+	if checkOnly {
+		return wouldRes("%s", strings.Join(problems, "; ")).
+			withFix(strings.Join(fixes, " && "))
+	}
+
+	if stale != "" {
+		removeStaleUserRyotunes(bin)
+	}
+
+	if !available {
+		return warnRes(i18n.T("ryotunes is not available from the active NixOS generation")).
+			withFix(i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
+	}
+
+	if socketMissing {
+		_ = exec.Command("systemctl", "--user", "daemon-reload").Run()
+		if err := exec.Command("systemctl", "--user", "start", ryotunesSocketUnit).Run(); err != nil {
+			return warnRes(i18n.T("could not start %s: %v"), ryotunesSocketUnit, err).
+				withFix(i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
+		}
+	}
+
+	return fixedRes(i18n.T("repaired Ryotunes runtime state"))
+}
+
+func removeStaleUserRyotunes(bin string) {
+	appshare := sys.Xdg("XDG_DATA_HOME", ".local/share")
+
+	for _, path := range []string{
+		bin,
+		filepath.Join(appshare, "applications", "ryotunes.desktop"),
+		filepath.Join(appshare, "ryoku", "ryotunes.commit"),
+		filepath.Join(appshare, "icons", "hicolor", "scalable", "apps", "ryotunes.svg"),
+	} {
+		_ = os.Remove(path)
+	}
+
+	icons, _ := filepath.Glob(filepath.Join(appshare, "icons", "hicolor", "*", "apps", "ryotunes.png"))
+	for _, path := range icons {
+		_ = os.Remove(path)
+	}
 }
 
 // Release availability is advisory: doctor checks but never installs. A lookup

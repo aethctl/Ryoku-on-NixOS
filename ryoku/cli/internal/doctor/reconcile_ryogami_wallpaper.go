@@ -76,9 +76,64 @@ func awwwDaemonRunning() bool {
 	return exec.Command("pgrep", "-x", "awww-daemon").Run() == nil
 }
 
+func reconcileRyogamiWallpaperNixOS(checkOnly bool) recResult {
+	state := ryogamiWallpaperState{
+		enabled:     true,
+		active:      ryogamiUnitActive(),
+		failed:      ryogamiUnitFailed(),
+		awwwRunning: awwwDaemonRunning(),
+		inSession:   inGraphicalSession(),
+	}
+
+	_, clearFailed, start, stopAwww := ryogamiWallpaperActions(state)
+
+	if !clearFailed && !start && !stopAwww {
+		return okRes(i18n.T("ryogami runtime is healthy"))
+	}
+
+	if checkOnly {
+		switch {
+		case stopAwww:
+			return wouldRes(i18n.T("the retired awww wallpaper daemon is still running")).
+				withFix(i18n.T("ryoku doctor stops it and refreshes Ryogami"))
+		case clearFailed:
+			return wouldRes(i18n.T("the declarative Ryogami service is in a failed state")).
+				withFix(i18n.T("ryoku doctor restarts Ryogami"))
+		default:
+			return wouldRes(i18n.T("the declarative Ryogami service is inactive in this session")).
+				withFix(i18n.T("ryoku doctor starts Ryogami"))
+		}
+	}
+
+	var repaired []string
+
+	if clearFailed || start {
+		_ = exec.Command("systemctl", "--user", "reset-failed", ryogamiUserUnit).Run()
+	}
+
+	if stopAwww {
+		_ = exec.Command("pkill", "-x", "awww-daemon").Run()
+		repaired = append(repaired, i18n.T("stopped awww-daemon"))
+	}
+
+	_ = exec.Command("systemctl", "--user", "try-restart", ryogamiUserUnit).Run()
+	_ = exec.Command("systemctl", "--user", "start", ryogamiUserUnit).Run()
+
+	if clearFailed {
+		repaired = append(repaired, i18n.T("restarted Ryogami"))
+	} else if start {
+		repaired = append(repaired, i18n.T("started Ryogami"))
+	}
+
+	return fixedRes(i18n.T("repaired the Ryogami runtime: ") + strings.Join(repaired, ", "))
+}
+
 func reconcileRyogamiWallpaper(checkOnly bool) recResult {
 	if !sys.Has("ryogami") {
 		return okRes(i18n.T("ryogami not installed yet (arrives with the ryoku-desktop update)"))
+	}
+	if sys.NixBackend() {
+		return reconcileRyogamiWallpaperNixOS(checkOnly)
 	}
 	state := ryogamiWallpaperState{
 		enabled:     ryogamiUnitEnabled(),

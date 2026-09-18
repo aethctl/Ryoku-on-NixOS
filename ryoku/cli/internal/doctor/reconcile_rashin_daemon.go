@@ -98,6 +98,9 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	if !sys.Has("ryoku-rashin") {
 		return okRes(i18n.T("ryoku-rashin not installed"))
 	}
+	if sys.NixBackend() {
+		return reconcileRashinDaemonNixOS(checkOnly)
+	}
 	if !rashinUnitEnabled() {
 		if rashinOptedOut() {
 			return okRes(i18n.T("rashin left off by choice (`ryoku-rashin disable`)"))
@@ -165,12 +168,57 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	return fixedRes(i18n.T("converged the rashin daemon: ") + strings.Join(did, " and "))
 }
 
+func reconcileRashinDaemonNixOS(checkOnly bool) recResult {
+	if !rashinUnitEnabled() {
+		return warnRes("rashin is declared by NixOS but is not enabled in the active generation").
+			withFix("rebuild the NixOS configuration with Ryoku enabled")
+	}
+
+	failed := rashinUnitFailed()
+	wireSkill := rashinSkillLinksMissing()
+
+	if !failed && !wireSkill {
+		return okRes("rashin runtime is healthy")
+	}
+
+	if checkOnly {
+		if failed {
+			return wouldRes("the declarative rashin service is in a failed state").
+				withFix("ryoku doctor restarts the service")
+		}
+		return wouldRes("the ryoku agent skill is not wired into every agent").
+			withFix("ryoku doctor runs `ryoku-rashin wire`")
+	}
+
+	var repaired []string
+
+	if failed {
+		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
+		_ = exec.Command("systemctl", "--user", "restart", rashinUserUnit).Run()
+		repaired = append(repaired, "restarted rashin")
+	}
+
+	if wireSkill {
+		_ = exec.Command("ryoku-rashin", "wire").Run()
+		repaired = append(repaired, "wired the ryoku agent skill")
+	}
+
+	return fixedRes("repaired rashin runtime: " + strings.Join(repaired, " and "))
+}
+
 // reconcileAiUsageTimer keeps the bar AI pill fed: the usage-collector timer
 // should run whenever the user has not opted out of the AI. Enabling a user
 // timer is per-user, so the package cannot do it; doctor (in the session) can.
 func reconcileAiUsageTimer(checkOnly bool) recResult {
 	if !aiUsageTimerKnown() || rashinOptedOut() {
 		return okRes(i18n.T("AI usage collector timer not applicable"))
+	}
+	if sys.NixBackend() {
+		if aiUsageTimerEnabled() {
+			return okRes(i18n.T("AI usage collector timer enabled"))
+		}
+		return warnRes(i18n.T("the AI usage timer is not enabled in the active NixOS generation")).
+			withFix(i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
 	}
 	if aiUsageTimerEnabled() {
 		return okRes(i18n.T("AI usage collector timer enabled"))
@@ -201,6 +249,11 @@ func reconcileProwlAgent(checkOnly bool) recResult {
 		}
 		return okRes(i18n.T("prowl-agent is present for the rashin agent index"))
 	}
+	if sys.NixBackend() {
+		return warnRes(i18n.T("rashin is enabled but prowl-agent is missing from the active NixOS generation; the vault code index and agent skills will not refresh")).
+			withFix(i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
+	}
+
 	return warnRes(i18n.T("rashin is enabled but prowl-agent is missing; the vault code index and agent skills will not refresh")).
 		withFix("sudo pacman -S prowl-agent")
 }
