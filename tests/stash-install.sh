@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hermetic test for ryoku/hyprland/scripts/stash-install.sh. stash makes dropped
+# hermetic test for ryoku/shell/scripts/stash-install.sh. stash makes dropped
 # files launchable: AppImages + self-contained tarballs get a synth desktop
 # entry; an Arch package (.pkg.tar.zst, recognised by its .PKGINFO member) must
 # go through `pacman -U` via pkexec, never extracted into ~/.local where its
@@ -8,7 +8,7 @@
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-SCRIPT="$ROOT/ryoku/hyprland/scripts/stash-install.sh"
+SCRIPT="$ROOT/ryoku/shell/scripts/stash-install.sh"
 [[ -f $SCRIPT ]] || { echo "::error::missing $SCRIPT" >&2; exit 1; }
 
 work=$(mktemp -d)

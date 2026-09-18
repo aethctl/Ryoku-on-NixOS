@@ -14,7 +14,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 helper="$here/../system/containers/ryoku-docker"
-server="$here/../ryoku/hyprland/scripts/stash-cobalt-server.sh"
+server="$here/../ryoku/shell/scripts/stash-cobalt-server.sh"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 fail() { echo "FAIL: $1" >&2; exit 1; }

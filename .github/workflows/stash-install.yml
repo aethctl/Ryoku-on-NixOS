@@ -1,6 +1,6 @@
 name: Stash installer
 
-# stash-install (hyprland/scripts/stash-install.sh) turns a dropped file into a
+# stash-install (shell/scripts/stash-install.sh) turns a dropped file into a
 # launcher entry: an Arch pkg (.pkg.tar.zst) goes through pacman -U, a flatpak
 # bundle through flatpak install, .deb/.rpm payloads get cracked open with
 # bsdtar. tests stub pkexec/pacman/flatpak and check each dispatch (and that a
@@ -9,13 +9,13 @@ name: Stash installer
 on:
   pull_request:
     paths:
-      - 'ryoku/hyprland/scripts/stash-install.sh'
+      - 'ryoku/shell/scripts/stash-install.sh'
       - 'tests/stash-install.sh'
   push:
     branches:
       - main
     paths:
-      - 'ryoku/hyprland/scripts/stash-install.sh'
+      - 'ryoku/shell/scripts/stash-install.sh'
       - 'tests/stash-install.sh'
   workflow_dispatch:
 

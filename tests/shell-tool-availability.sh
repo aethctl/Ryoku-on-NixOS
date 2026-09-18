@@ -18,18 +18,26 @@ ships() {
 # reach: a tool merely in base.packages ships on the ISO (pacstrap) but NEVER
 # reaches an already-installed box on `ryoku update` (that is a pacman -Syu, and
 # base.packages is not a package) nor a shell-installer box unless it is also a
-# hard depend of the ryoku-desktop umbrella. hard_depend() checks exactly that:
-# is $1 in the ryoku-desktop depends=() array (version pin ignored). This is the
-# guard the ddcutil regression slipped past -- ddcutil was added to base.packages
-# but not to depends, so the pill DISPLAY faders were dead on every packaged box.
-desktop_pkgbuild="$ROOT/release/packages/ryoku-desktop/PKGBUILD"
+# hard depend of the ryoku-desktop umbrella, or of a compositor variant the
+# umbrella pulls through its ryoku-desktop-compositor virtual (a tool only that
+# compositor's features shell out to, like hypridle, reaches every box that can
+# run them that way). hard_depend() checks exactly that: is $1 in a depends=()
+# array of one of those PKGBUILDs (version pin ignored). This is the guard the
+# ddcutil regression slipped past -- ddcutil was added to base.packages but not
+# to depends, so the pill DISPLAY faders were dead on every packaged box.
+desktop_pkgbuilds=("$ROOT/release/packages/ryoku-desktop/PKGBUILD"
+  "$ROOT"/release/packages/ryoku-desktop-*/PKGBUILD)
 hard_depend() {
   # capture the block first, then grep a here-string: piping awk into `grep -q`
   # lets grep close the pipe on the first match, and under `set -o pipefail`
   # awk's SIGPIPE would make the pipeline (nondeterministically) report failure.
-  local block
-  block=$(awk '/^depends=\(/{d=1;next} d&&/^\)/{d=0} d' "$desktop_pkgbuild")
-  grep -qE "[\"']$1(=[^\"']*)?[\"']" <<<"$block"
+  local pkgbuild block
+  for pkgbuild in "${desktop_pkgbuilds[@]}"; do
+    [[ -f $pkgbuild ]] || continue
+    block=$(awk '/^depends=\(/{d=1;next} d&&/^\)/{d=0} d' "$pkgbuild")
+    grep -qE "[\"']$1(=[^\"']*)?[\"']" <<<"$block" && return 0
+  done
+  return 1
 }
 # official_repo: shipped from base/dev (an Arch repo), not AUR, not first-party
 # [ryoku]. AUR tools reach boxes via the post-install AUR step; first-party
