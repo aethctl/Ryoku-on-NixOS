@@ -391,7 +391,7 @@ QtObject {
         function onReadyChanged() { if (DaemonClient.ready) config._loadCaps() }
     }
 
-    readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled === true
+    readonly property bool overviewBackdropEnabled: _data.overviewBackdrop?.enabled !== false
     readonly property string overviewBackdropPath: _data.overviewBackdrop?.path ?? ""
     readonly property bool overviewBackdropFollowWallpaper: _data.overviewBackdrop?.followWallpaper === true
     readonly property int overviewBackdropDim: Math.max(0, Math.min(100, _data.overviewBackdrop?.dim ?? 0))

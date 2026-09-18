@@ -24,9 +24,11 @@ Singleton {
     // The overviewBackdrop sub-object, refreshed on every file write below.
     property var _ob: ({})
 
-    // Map the blurred wallpaper into the overview backdrop at all. Off by default,
-    // so a user who never opened the panel gets no extra surface.
-    readonly property bool enabled: root._ob.enabled === true
+    // Map the blurred wallpaper into the overview backdrop at all. On by
+    // default: the surface is capability-gated, so it can only ever map on a
+    // compositor that hosts it, and a box that never opened the picker should
+    // still see its wallpaper in the overview.
+    readonly property bool enabled: root._ob.enabled !== false
     // A sharp copy when off; a Gaussian blur when on (the picker's default).
     readonly property bool blurEnabled: root._ob.blurEnabled !== false
     // Blur radius, matching the picker's 1..200 range and 30 default.
