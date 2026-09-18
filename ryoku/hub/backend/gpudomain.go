@@ -23,6 +23,7 @@ import (
 // engine (slot + sibling functions); KvmfrMB is the host's kvmfr static size.
 type vmSpec struct {
 	Domain     string
+	Emulator   string
 	MemMB      int
 	Pin        pinPlan
 	Disk       string
@@ -177,7 +178,11 @@ func buildDomainXML(s vmSpec) string {
 	p("  <on_poweroff>destroy</on_poweroff>\n  <on_reboot>restart</on_reboot>\n  <on_crash>destroy</on_crash>\n")
 
 	p("  <devices>\n")
-	p("    <emulator>/usr/bin/qemu-system-x86_64</emulator>\n")
+	emulator := s.Emulator
+	if emulator == "" {
+		emulator = "/usr/bin/qemu-system-x86_64"
+	}
+	p("    <emulator>%s</emulator>\n", emulator)
 	// virtio system disk, tuned for passthrough throughput.
 	p("    <disk type='file' device='disk'>\n")
 	p("      <driver name='qemu' type='qcow2' cache='none' io='native' discard='unmap'/>\n")

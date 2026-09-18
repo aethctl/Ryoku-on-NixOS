@@ -97,6 +97,7 @@ type capInputs struct {
 	ramFreeMB      int
 	tooling        tooling
 	inLibvirtGroup bool
+	nixManaged     bool
 }
 
 // buildCapability = the pure verdict. gathered inputs in, Capability out.
@@ -273,19 +274,26 @@ func buildChecks(in capInputs, host, pass *GPU) (checks []Check, hardFail bool) 
 		add(Check{ID: "ram", Level: "warn", Label: "Memory", Value: itoa(in.ramFreeMB) + " MB free", Hint: "A VM wants 8 GB+; close apps or lower the VM's RAM."})
 	}
 
+	qemuHint := "A plain VM needs QEMU: pacman -S qemu-desktop."
+	passthroughHint := "Only for the GPU-passthrough VM; plain VMs need none of it. Looking Glass + kvmfr are AUR: yay -S looking-glass looking-glass-module-dkms."
+	if in.nixManaged {
+		qemuHint = "QEMU is owned by the active NixOS generation; rebuild if it is missing."
+		passthroughHint = "GPU passthrough is declarative on NixOS; enable programs.ryoku.gpuPassthrough and rebuild."
+	}
+
 	switch miss := toolingMissing(in.tooling); {
 	case len(miss) == 0:
 		add(Check{ID: "tooling", Level: "ok", Label: "Virtualization stack", Value: "installed"})
 	case !in.tooling.qemu:
-		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: "A plain VM needs QEMU: pacman -S qemu-desktop."})
+		add(Check{ID: "tooling", Level: "warn", Label: "Virtualization stack", Value: "QEMU not installed", Hint: qemuHint})
 	default:
-		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: "Only for the GPU-passthrough VM; plain VMs need none of it. Looking Glass + kvmfr are AUR: yay -S looking-glass looking-glass-module-dkms."})
+		add(Check{ID: "tooling", Level: "warn", Label: "Passthrough stack", Value: "missing: " + strings.Join(miss, ", ") + " (passthrough only)", Hint: passthroughHint})
 	}
 	if in.tooling.libvirt {
 		if in.inLibvirtGroup {
 			add(Check{ID: "session", Level: "ok", Label: "libvirt access", Value: "active"})
 		} else {
-			add(Check{ID: "session", Level: "warn", Label: "libvirt access", Value: "log in again", Hint: "You were added to the libvirt group; log out and back in before launching the VM."})
+			add(Check{ID: "session", Level: "warn", Label: "libvirt access", Value: "log in again", Hint: "Your virtualization group membership is not active yet; log out and back in before launching the VM."})
 		}
 	}
 	return checks, hardFail
@@ -395,7 +403,14 @@ func detectCapability() (Capability, error) {
 		}
 	}
 	in.tooling = detectTooling(root)
-	in.inLibvirtGroup = userInGroup("libvirt")
+	in.nixManaged = nixManagedHost()
+
+	group := "libvirt"
+	if in.nixManaged {
+		group = "libvirtd"
+	}
+	in.inLibvirtGroup = userInGroup(group)
+
 	return buildCapability(in), nil
 }
 

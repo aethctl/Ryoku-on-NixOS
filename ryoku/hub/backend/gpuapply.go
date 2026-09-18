@@ -17,6 +17,11 @@ import (
 	"strings"
 )
 
+func nixGpuPassthroughConfigured() bool {
+	b, err := os.ReadFile("/etc/ryoku/gpu-passthrough-ready")
+	return err == nil && strings.TrimSpace(string(b)) == "1"
+}
+
 func runGpuApply(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("gpu apply needs enable|disable [--dry-run]")
@@ -24,6 +29,12 @@ func runGpuApply(args []string) error {
 	action := args[0]
 	if action != "enable" && action != "disable" {
 		return fmt.Errorf("gpu apply: action must be enable or disable")
+	}
+	if nixManagedHost() {
+		if nixGpuPassthroughConfigured() {
+			return fmt.Errorf("GPU passthrough is managed declaratively on NixOS; change programs.ryoku.gpuPassthrough and rebuild")
+		}
+		return fmt.Errorf("GPU passthrough is disabled on NixOS; enable programs.ryoku.gpuPassthrough and rebuild")
 	}
 	dryRun := false
 	for _, a := range args[1:] {
