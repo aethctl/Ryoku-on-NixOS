@@ -6,6 +6,7 @@ import shell.services
 Item {
     id: wsWidget
     required property var root
+    property string screenName: ""
 
     // Workspace cells intentionally stay dense without a local surface. A widget
     // border needs its own breathing room, though: make that padding part of the
@@ -21,6 +22,25 @@ Item {
     // between in-range workspaces keeps the model stable and the delegate
     // Behaviors animating.
     readonly property bool dynamicModel: Wm.workspaceModel === "dynamic"
+
+    readonly property var activeWorkspace: {
+        if (!wsWidget.dynamicModel)
+            return Wm.focusedWorkspace
+
+        var list = Wm.workspaces
+        for (var i = 0; i < list.length; i++) {
+            if (!list[i].special
+                    && list[i].active
+                    && list[i].output === wsWidget.screenName)
+                return list[i]
+        }
+
+        return null
+    }
+
+    function niriSlotKey(slot) {
+        return "ryoku:" + wsWidget.screenName + ":" + slot
+    }
     readonly property string extraWs: {
         if (root.workspaceMode === "active" || wsWidget.dynamicModel) return ""
         var n = root.workspaceMode === "5" ? 5 : 10
@@ -29,13 +49,16 @@ Item {
         return (num > n) ? f.name : ""
     }
 
-    // A dynamic model follows the live workspace list with no invented slots; a
-    // fixed model shows a stable numbered row plus the focused-beyond-range one.
+    // Dynamic providers expose five stable Ryoku slots local to this output.
+    // Fixed providers keep their normal numbered model and overflow behaviour.
     readonly property var workspaceList: {
         if (wsWidget.dynamicModel) {
             var live = []
-            var lw = Wm.workspaces
-            for (var k = 0; k < lw.length; k++) if (!lw[k].special) live.push(lw[k].name)
+            if (wsWidget.screenName === "") return live
+
+            for (var k = 1; k <= 5; k++)
+                live.push(wsWidget.niriSlotKey(k))
+
             return live
         }
         if (root.workspaceMode === "active") {
@@ -55,8 +78,11 @@ Item {
     //    mark occupied cells, dimmed dots the empty ones. On a focus change a
     //    runner pacman travels from the old cell to the new one, chomping as it
     //    goes; the destination pellet is eaten (fades/shrinks) as it arrives. ──
-    readonly property string focusedWorkspaceKey: Wm.focusedWorkspace
-        && !Wm.focusedWorkspace.special ? Wm.focusedWorkspace.name : ""
+    readonly property string focusedWorkspaceKey: {
+        var f = wsWidget.activeWorkspace
+        if (!f || f.special) return ""
+        return String(f.name || "")
+    }
 
     property string pacmanLastFocusedWorkspaceKey: ""
     property string pacmanTargetWorkspaceKey: ""
@@ -195,17 +221,26 @@ Item {
                 required property var modelData
                 readonly property string wsKey: String(modelData)
 
+                readonly property var workspace: wsWidget.dynamicModel
+                    ? Wm.workspaceByName(wsKey, wsWidget.screenName)
+                    : Wm.workspaceByName(wsKey)
+
+                readonly property string wsLabel: wsWidget.dynamicModel
+                    ? wsKey.substring(wsKey.lastIndexOf(":") + 1)
+                    : wsKey
+
                 // hover feedback works in every style (the old code scaled the
                 // default-only `dot`, invisible in numbers/magic)
                 Behavior on scale { NumberAnimation { duration: 120 } }
 
-                readonly property bool isFocused: Wm.focusedWorkspace !== null
-                                               && Wm.focusedWorkspace.name === wsKey
-
-                readonly property bool isOccupied: {
-                    var w = Wm.workspaceByName(wsKey)
-                    return !!w && w.occupied && !isFocused
+                readonly property bool isFocused: {
+                    var f = wsWidget.activeWorkspace
+                    if (!f) return false
+                    return String(f.name || "") === wsKey
                 }
+
+                readonly property bool isOccupied:
+                    !!workspace && workspace.occupied && !isFocused
 
                 readonly property bool isEmpty: !isFocused && !isOccupied
 
@@ -271,7 +306,7 @@ Item {
                     Behavior on color { ColorAnimation { duration: 200 } }
                     Text {
                         anchors.centerIn: parent
-                        text: wsKey
+                        text: wsLabel
                         // focused = the only BRIGHT digit (lightened seal + bold + bigger);
                         // others dimmed so the active workspace is unmistakable
                         color: isFocused  ? wsWidget.contentColor
@@ -308,9 +343,9 @@ Item {
                 Text {
                     visible: root.workspaceStyle === "kanji"
                     anchors.centerIn: parent
-                    text: (Number(wsKey) >= 1 && Number(wsKey) <= 10)
-                        ? ["一","二","三","四","五","六","七","八","九","十"][Number(wsKey) - 1]
-                        : wsKey
+                    text: (Number(wsLabel) >= 1 && Number(wsLabel) <= 10)
+                        ? ["一","二","三","四","五","六","七","八","九","十"][Number(wsLabel) - 1]
+                        : wsLabel
                     color: isFocused  ? wsWidget.contentColor
                          : isOccupied ? Qt.rgba(wsWidget.contentColor.r, wsWidget.contentColor.g, wsWidget.contentColor.b, 0.7)
                                       : Qt.rgba(wsWidget.contentColor.r, wsWidget.contentColor.g, wsWidget.contentColor.b, 0.3)
@@ -328,7 +363,7 @@ Item {
                     id: frameLabel
                     visible: root.workspaceStyle === "rings"
                     anchors.centerIn: parent
-                    text: wsKey
+                    text: wsLabel
                     color: wsWidget.contentColor
                     opacity: wsMa.containsMouse ? 1.0
                         : isFocused ? 1.0
@@ -430,9 +465,9 @@ Item {
         visible: root.workspaceStyle === "rings" && targetIndex >= 0
 
         readonly property int targetIndex: {
-            var focused = Wm.focusedWorkspace
+            var focused = wsWidget.activeWorkspace
             if (!focused || focused.special) return -1
-            return wsWidget.workspaceList.indexOf(focused.name)
+            return wsWidget.workspaceList.indexOf(String(focused.name || ""))
         }
         readonly property real targetLeft: targetIndex >= 0
             ? wsRow.x + targetIndex * (20 + wsRow.spacing) + 1 : 0

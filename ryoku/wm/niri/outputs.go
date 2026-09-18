@@ -52,16 +52,25 @@ func runOutputs(args []string) error {
 // bare `off`; an enabled one carries only the lines it needs, so an omitted mode
 // or scale leaves niri to choose. Position is always written for an enabled
 // output, since the editor lays every screen on one canvas.
+const ryokuWorkspaceSlots = 5
+
+func ryokuWorkspaceName(output string, slot int) string {
+	return fmt.Sprintf("ryoku:%s:%d", output, slot)
+}
+
 func monitorsKdl(layout []wm.OutputLayout) []byte {
 	var b strings.Builder
 	b.WriteString(monitorsHeader)
+
 	for _, o := range layout {
 		if o.Name == "" {
 			continue
 		}
+
 		b.WriteString("output ")
 		b.WriteString(kdlStr(o.Name))
 		b.WriteString(" {\n")
+
 		if !o.Enabled {
 			b.WriteString("    off\n")
 		} else {
@@ -71,7 +80,9 @@ func monitorsKdl(layout []wm.OutputLayout) []byte {
 			if o.Scale > 0 {
 				b.WriteString("    scale " + kdlNum(o.Scale) + "\n")
 			}
+
 			b.WriteString(fmt.Sprintf("    position x=%d y=%d\n", o.X, o.Y))
+
 			if t := waylandTransformToNiri(o.Transform); t != "" {
 				b.WriteString("    transform " + kdlStr(t) + "\n")
 			}
@@ -79,8 +90,31 @@ func monitorsKdl(layout []wm.OutputLayout) []byte {
 				b.WriteString("    variable-refresh-rate\n")
 			}
 		}
+
 		b.WriteString("}\n")
 	}
+
+	// Niri's normal workspaces are dynamic and disappear when empty. Ryoku's
+	// desktop presents five stable local slots on every enabled output, so back
+	// those slots with uniquely named workspaces pinned to their own display.
+	//
+	// The user-facing number remains 1..5; this internal name only gives IPC a
+	// globally unique handle when several outputs all have a workspace "1".
+	for _, o := range layout {
+		if o.Name == "" || !o.Enabled {
+			continue
+		}
+
+		for slot := 1; slot <= ryokuWorkspaceSlots; slot++ {
+			b.WriteString("\nworkspace ")
+			b.WriteString(kdlStr(ryokuWorkspaceName(o.Name, slot)))
+			b.WriteString(" {\n")
+			b.WriteString("    open-on-output ")
+			b.WriteString(kdlStr(o.Name))
+			b.WriteString("\n}\n")
+		}
+	}
+
 	return []byte(b.String())
 }
 

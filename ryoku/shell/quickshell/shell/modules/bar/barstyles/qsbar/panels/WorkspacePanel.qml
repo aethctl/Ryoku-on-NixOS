@@ -34,12 +34,58 @@ PanelWindow {
     Rectangle {
         id: card
         property int navIndex: -1
+        readonly property var panelWorkspaces: {
+            var rows = []
+
+            if (Wm.workspaceModel === "dynamic") {
+                var output = root.activePopupScreenName
+                if (output === "") return rows
+
+                for (var slot = 1; slot <= 5; slot++) {
+                    var name = "ryoku:" + output + ":" + slot
+                    var workspace = Wm.workspaceByName(name, output)
+
+                    rows.push(workspace || ({
+                        id: "",
+                        name: name,
+                        active: false,
+                        focused: false,
+                        occupied: false,
+                        windows: 0,
+                        fullscreen: false,
+                        special: false,
+                        output: output,
+                        layout: ""
+                    }))
+                }
+
+                return rows
+            }
+
+            var live = Wm.workspaces
+            for (var i = 0; i < live.length; i++) {
+                if (!live[i].special)
+                    rows.push(live[i])
+            }
+
+            rows.sort(function(x, y) {
+                return Number(x.name) - Number(y.name)
+            })
+
+            return rows
+        }
+
         readonly property var wsIds: {
-            var a = []
-            var vs = Wm.workspaces
-            for (var i = 0; i < vs.length; i++) if (!vs[i].special) a.push(vs[i].name)
-            a.sort(function(x, y) { return Number(x) - Number(y) })
-            return a
+            var ids = []
+
+            for (var i = 0; i < panelWorkspaces.length; i++) {
+                var workspace = panelWorkspaces[i]
+                ids.push(Wm.workspaceModel === "dynamic"
+                    ? String(workspace.name)
+                    : String(workspace.id || workspace.name))
+            }
+
+            return ids
         }
         width: 240
         height: col.implicitHeight + 24
@@ -102,13 +148,32 @@ PanelWindow {
                 width: parent.width
                 spacing: 4
                 Repeater {
-                    model: Wm.workspaces
+                    model: card.panelWorkspaces
 
                     delegate: Rectangle {
                         required property var modelData
                         visible: !modelData.special
-                        readonly property bool isActive: Wm.focusedWorkspace && Wm.focusedWorkspace.name === modelData.name
-                        readonly property bool navOn: card.navIndex >= 0 && card.navIndex < card.wsIds.length && card.wsIds[card.navIndex] === modelData.name
+                        readonly property string wsName:
+                            String(modelData.name || "")
+                        readonly property string wsHandle:
+                            Wm.workspaceModel === "dynamic"
+                                ? wsName
+                                : String(modelData.id || modelData.name)
+                        readonly property string wsLabel:
+                            Wm.workspaceModel === "dynamic"
+                                ? wsName.substring(wsName.lastIndexOf(":") + 1)
+                                : wsName
+                        readonly property bool isActive: {
+                            if (Wm.workspaceModel === "dynamic")
+                                return modelData.active === true
+
+                            var f = Wm.focusedWorkspace
+                            return !!f && String(f.id || f.name) === wsHandle
+                        }
+                        readonly property bool navOn:
+                            card.navIndex >= 0
+                            && card.navIndex < card.wsIds.length
+                            && card.wsIds[card.navIndex] === wsHandle
                         width: col.width
                         height: 30; radius: root.panelButtonRadius
                         color: isActive ? root.fillActive
@@ -120,7 +185,7 @@ PanelWindow {
                         UiText {
                             anchors.left: parent.left; anchors.leftMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            text: I18n.tr("Workspace %1").arg(modelData.name)
+                            text: I18n.tr("Workspace %1").arg(wsLabel)
                             color: (ma.containsMouse || isActive) ? root.seal : root.ink
                             font.family: root.mono; font.pixelSize: 12
                             font.weight: isActive ? Font.Medium : Font.Normal
@@ -128,7 +193,9 @@ PanelWindow {
                         UiText {
                             anchors.right: parent.right; anchors.rightMargin: 10
                             anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.windows
+                            text: modelData.windows !== undefined
+                               ? String(modelData.windows)
+                               : ""
                             color: root.sumiHi; font.family: root.mono; font.pixelSize: 10
                         }
 
@@ -138,7 +205,7 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.gotoWorkspace(modelData.name)
+                                root.gotoWorkspace(wsHandle)
                                 root.workspaceVisible = false
                             }
                         }

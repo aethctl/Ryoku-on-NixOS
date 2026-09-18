@@ -53,6 +53,29 @@ Singleton {
     // ext-workspace-v1 windowsets joined with the daemon's occupancy residue by
     // name (windowset.id is empty on Hyprland; name is the stable key).
     readonly property var workspaces: {
+        // Dynamic providers such as niri have per-output workspace indices.
+        // "1" on DP-1 and "1" on DP-2 are different workspaces, so preserve
+        // the provider's stable id instead of collapsing them by display name.
+        if (root.workspaceModel === "dynamic" && root._wsResidue.length > 0) {
+            const live = [];
+            for (let i = 0; i < root._wsResidue.length; i++) {
+                const w = root._wsResidue[i];
+                live.push({
+                    id: String(w.id || ""),
+                    name: String(w.name || ""),
+                    active: w.active === true,
+                    focused: w.focused === true,
+                    occupied: (w.windows || 0) > 0,
+                    windows: Number(w.windows || 0),
+                    fullscreen: w.fullscreen === true,
+                    special: w.special === true,
+                    output: w.output || "",
+                    layout: w.layout || ""
+                });
+            }
+            return live;
+        }
+
         const res = {};
         for (let i = 0; i < root._wsResidue.length; i++) {
             const w = root._wsResidue[i];
@@ -68,8 +91,8 @@ Singleton {
                 active: s.active === true,
                 urgent: s.urgent === true,
                 canActivate: s.canActivate === true,
-                windows: r.windows || 0,
                 occupied: (r.windows || 0) > 0,
+                windows: Number(r.windows || 0),
                 fullscreen: r.fullscreen === true,
                 special: r.special === true,
                 output: r.output || "",
@@ -79,10 +102,20 @@ Singleton {
         return out;
     }
 
-    function workspaceByName(name) {
+    function workspaceById(id) {
+        const key = String(id);
         const list = root.workspaces;
         for (let i = 0; i < list.length; i++)
-            if (list[i].name === name)
+            if (String(list[i].id || "") === key)
+                return list[i];
+        return null;
+    }
+
+    function workspaceByName(name, output) {
+        const list = root.workspaces;
+        for (let i = 0; i < list.length; i++)
+            if (list[i].name === name
+                    && (!output || list[i].output === output))
                 return list[i];
         return null;
     }
@@ -104,7 +137,7 @@ Singleton {
         const o = root.outputByName(name);
         if (!o || !o.activeWorkspace)
             return false;
-        const ws = root.workspaceByName(o.activeWorkspace);
+        const ws = root.workspaceByName(o.activeWorkspace, name);
         return !!ws && ws.fullscreen === true;
     }
 

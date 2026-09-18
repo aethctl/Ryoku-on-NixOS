@@ -52,6 +52,40 @@ func TestMonitorsKdl(t *testing.T) {
 	validateGen(t, dir, "monitors.kdl")
 }
 
+func TestMonitorsKdlAddsFiveRyokuWorkspacesPerEnabledOutput(t *testing.T) {
+	got := string(monitorsKdl([]wm.OutputLayout{
+		{Name: "DP-1", Enabled: true},
+		{Name: "DP-2", Enabled: false},
+		{Name: "HDMI-A-1", Enabled: true},
+	}))
+
+	for _, output := range []string{"DP-1", "HDMI-A-1"} {
+		if count := strings.Count(got, `workspace "ryoku:`+output+`:`); count != ryokuWorkspaceSlots {
+			t.Errorf("%s: got %d Ryoku workspaces, want %d\n%s",
+				output, count, ryokuWorkspaceSlots, got)
+		}
+
+		previous := -1
+		for slot := 1; slot <= ryokuWorkspaceSlots; slot++ {
+			needle := "workspace " + kdlStr(ryokuWorkspaceName(output, slot)) +
+				" {\n    open-on-output " + kdlStr(output) + "\n}"
+
+			index := strings.Index(got, needle)
+			if index < 0 {
+				t.Fatalf("%s: missing workspace slot %d\n%s", output, slot, got)
+			}
+			if index <= previous {
+				t.Fatalf("%s: workspace slot %d rendered out of order\n%s", output, slot, got)
+			}
+			previous = index
+		}
+	}
+
+	if strings.Contains(got, `workspace "ryoku:DP-2:`) {
+		t.Errorf("disabled output DP-2 must not receive Ryoku workspaces\n%s", got)
+	}
+}
+
 // An untransformed, non-VRR output emits neither node, so the block stays minimal
 // and a 0 transform never reads back as a rotation.
 func TestMonitorsKdlOmitsDefaults(t *testing.T) {
