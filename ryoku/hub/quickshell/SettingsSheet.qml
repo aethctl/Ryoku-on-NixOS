@@ -120,7 +120,11 @@ Item {
         if (count <= 1 || all.length <= 1) return [all];
         var heights = [];
         for (var g = 0; g < all.length; g++) {
-            var n = 0;
+            // every group carries its card's own header (~46px, three compact
+            // rows): counting only the rows made a column holding many short
+            // cards look light and took more of them, which is how one column
+            // ended up far taller than the others
+            var n = 3;
             for (var r = 0; r < rows.length; r++)
                 if (rows[r].group === all[g]) n += sheet.ctlBlock(rows[r]) ? 6 : 1;
             heights.push(n);

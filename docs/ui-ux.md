@@ -438,8 +438,10 @@ not look broken; it looks fine and then eats the edit on the way out.
 - **The page measure.** A framed page takes the width beside the rail: a wider
   window buys more columns, never a longer row and never a wider void. The sheet
   lays its groups into as many card columns as the measure holds
-  (`SettingsSheet.gridColumns`), each card capped at `cardW`, bucketed so the
-  columns end as level as the groups allow. Prose keeps its own reading cap.
+  `SettingsSheet.gridColumns`), each card capped at `cardW`, bucketed shortest
+  column first from an estimate that counts each card's own header as well as its
+  rows, so the columns end as level as the groups allow. Prose keeps its own
+  reading cap.
 - **Nothing floats.** There is no registration backdrop and no poster layer: the
   sheet is paper with a hairline grid of cards, and the ornament that survives
   (`Reg` behind a rail, `Ticks` on a framed specimen, `Marginalia`, `Barcode`,
