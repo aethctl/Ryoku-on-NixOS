@@ -105,6 +105,9 @@ PanelWindow {
             C.WorkspaceRail {
                 height: parent.height
                 colors: chroma
+                screenName: win.modelData && win.modelData.name
+                    ? String(win.modelData.name)
+                    : ""
             }
         }
 
