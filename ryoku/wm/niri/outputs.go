@@ -41,7 +41,7 @@ func runOutputs(args []string) error {
 	rep.Unhonored = outputsUnhonored(layout)
 
 	path := filepath.Join(niriConfigDir(), "monitors.kdl")
-	if err := atomicWrite(path, monitorsKdl(layout), 0o644); err != nil {
+	if err := atomicWrite(path, monitorsKdlForConnected(layout, liveOutputNames()), 0o644); err != nil {
 		return err
 	}
 	rep.Written = []string{path}
@@ -59,6 +59,14 @@ func ryokuWorkspaceName(output string, slot int) string {
 }
 
 func monitorsKdl(layout []wm.OutputLayout) []byte {
+	return monitorsKdlForConnected(layout, nil)
+}
+
+// monitorsKdlForConnected keeps remembered output configuration intact while
+// limiting Ryoku's fixed workspace slots to outputs which are live right now.
+// A nil connected set preserves the pure renderer's historical behaviour for
+// offline generation and tests where no compositor IPC is available.
+func monitorsKdlForConnected(layout []wm.OutputLayout, connected map[string]bool) []byte {
 	var b strings.Builder
 	b.WriteString(monitorsHeader)
 
@@ -104,6 +112,9 @@ func monitorsKdl(layout []wm.OutputLayout) []byte {
 		if o.Name == "" || !o.Enabled {
 			continue
 		}
+		if connected != nil && !connected[o.Name] {
+			continue
+		}
 
 		for slot := 1; slot <= ryokuWorkspaceSlots; slot++ {
 			b.WriteString("\nworkspace ")
@@ -116,6 +127,23 @@ func monitorsKdl(layout []wm.OutputLayout) []byte {
 	}
 
 	return []byte(b.String())
+}
+
+// liveOutputNames returns the outputs Niri currently exposes. advertisedModes
+// already obtains this information from the provider IPC and includes a map
+// entry even when an output has no useful mode list. nil means there is no live
+// Niri session, in which case callers retain the layout's enabled semantics.
+func liveOutputNames() map[string]bool {
+	advertised := advertisedModes()
+	if advertised == nil {
+		return nil
+	}
+
+	connected := make(map[string]bool, len(advertised))
+	for name := range advertised {
+		connected[name] = true
+	}
+	return connected
 }
 
 // waylandTransformToNiri maps the neutral wayland transform integer onto niri's

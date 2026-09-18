@@ -86,6 +86,36 @@ func TestMonitorsKdlAddsFiveRyokuWorkspacesPerEnabledOutput(t *testing.T) {
 	}
 }
 
+func TestMonitorsKdlSkipsWorkspacesForDisconnectedRememberedOutput(t *testing.T) {
+	layout := []wm.OutputLayout{
+		{Name: "DP-1", Enabled: true, Mode: "2560x1440@200"},
+		{Name: "DP-2", Enabled: true, Mode: "1920x1080@60"},
+		{Name: "HDMI-A-1", Enabled: true, Mode: "600x1920@60.003"},
+	}
+
+	got := string(monitorsKdlForConnected(layout, map[string]bool{
+		"DP-1": true,
+		"DP-2": true,
+	}))
+
+	// The remembered output block stays in the configuration so reconnecting
+	// the monitor can recover its saved layout.
+	if !strings.Contains(got, `output "HDMI-A-1" {`) {
+		t.Fatalf("remembered HDMI output block was lost:\n%s", got)
+	}
+
+	for _, output := range []string{"DP-1", "DP-2"} {
+		if count := strings.Count(got, `workspace "ryoku:`+output+`:`); count != ryokuWorkspaceSlots {
+			t.Errorf("%s: got %d workspace slots, want %d\n%s",
+				output, count, ryokuWorkspaceSlots, got)
+		}
+	}
+
+	if strings.Contains(got, `workspace "ryoku:HDMI-A-1:`) {
+		t.Errorf("disconnected remembered output must not receive live workspace slots\n%s", got)
+	}
+}
+
 // An untransformed, non-VRR output emits neither node, so the block stays minimal
 // and a 0 transform never reads back as a rotation.
 func TestMonitorsKdlOmitsDefaults(t *testing.T) {
