@@ -185,6 +185,36 @@ func TestPreviewWritesNothing(t *testing.T) {
 	}
 }
 
+func TestDefaultsKeepXkbLayoutIdentifier(t *testing.T) {
+	var buf bytes.Buffer
+	prev := stdout
+	stdout = bufio.NewWriter(&buf)
+	defer func() { stdout = prev }()
+
+	if err := runDefaults(); err != nil {
+		t.Fatalf("runDefaults: %v", err)
+	}
+	if err := stdout.Flush(); err != nil {
+		t.Fatalf("flush defaults: %v", err)
+	}
+
+	var tree struct {
+		Desktop struct {
+			Input struct {
+				KbLayout string `json:"kbLayout"`
+			} `json:"input"`
+		} `json:"desktop"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &tree); err != nil {
+		t.Fatalf("decode defaults: %v\n%s", err, buf.String())
+	}
+
+	if got := tree.Desktop.Input.KbLayout; got != "us" {
+		t.Fatalf("desktop.input.kbLayout = %q, want %q", got, "us")
+	}
+}
+
 // The unhonored list is the switch cost: a desktop.* leaf niri cannot express is
 // named on its own, and a foreign compositor's whole namespace collapses to one
 // aggregated line rather than a per-key dump.

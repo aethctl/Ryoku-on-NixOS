@@ -183,6 +183,7 @@ Item {
     function clone(mon) {
         return {
             "name": mon.name, "modes": (mon.modes || []),
+            "make": (mon.make || ""), "model": (mon.model || ""),
             "width": mon.width, "height": mon.height, "refresh": mon.refresh,
             "physicalWidth": (mon.physicalWidth || 0),
             "mode": (mon.mode || pg.pickCurrentMode(mon)),
@@ -236,6 +237,7 @@ Item {
             var m = pg.draft[i];
             out.push({
                 "name": m.name, "enabled": !m.disabled, "mode": m.mode,
+                "make": m.make, "model": m.model, "physicalWidth": m.physicalWidth,
                 "scale": m.scale, "x": m.x, "y": m.y,
                 "transform": m.transform, "vrr": !!m.vrr,
                 "mirror": m.mirror, "colorMode": m.colorMode, "sdrBrightness": m.sdrBrightness

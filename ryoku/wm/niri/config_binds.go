@@ -95,6 +95,7 @@ func defaultBinds() []defBind {
 		{chord: "SUPER + O", action: spawnArgs("ryoku-app", "notes")},
 		{chord: "SUPER + ALT + E", action: spawnArgs("kitty", "-e", "yazi")},
 
+		{chord: "ALT + Space", action: spawnArgs("ryoku-shell", "launcher")},
 		{chord: "SUPER + Space", action: spawnArgs("ryoku-shell", "launcher")},
 		{chord: "SUPER + K", action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
 		{chord: "SUPER + L", action: spawnArgs("ryoku-shell", "lock")},
