@@ -142,23 +142,6 @@ Item {
     function horizonModeLabel(k) { return k === "fixed" ? "Fixed" : k === "off" ? "Off" : "Palette"; }
     function horizonModeKey(l) { return l === "Fixed" ? "fixed" : l === "Off" ? "off" : "auto"; }
 
-    // a short page fills its window: measure the slack once the cards settle and
-    // spread half of it as row padding, so a sparse launcher reads composed at
-    // 99% width. Set by a timer, never bound -- a row's height depends on it.
-    property int roomPad: 0
-    function tuneRoom() {
-        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
-            return;
-        var n = Math.max(1, pg.keys.length);
-        var slack = flick.height - col.contentHeight;
-        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
-        var next = Math.max(0, Math.min(Tokens.s6, want));
-        if (next !== pg.roomPad)
-            pg.roomPad = next;
-    }
-    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
-    Component.onCompleted: roomTimer.restart()
-
     FileView {
         id: catalogFile
         path: pg.launcherRoot + "/catalog.json"
@@ -196,7 +179,6 @@ Item {
         }
     }
 
-
     Column {
         id: head
         anchors.top: parent.top
@@ -232,13 +214,6 @@ Item {
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
-    }
-
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "ランチャー"
-        index: "003"; label: I18n.tr("PALETTE")
     }
 
     Preview {
@@ -298,6 +273,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         CardColumns {
 
@@ -310,12 +286,9 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("LAUNCHER")
-                onExpandedChanged: roomTimer.restart()
-                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Style")
                     desc: String(pg.variantEntry(pg.draft.variant).description || "")
@@ -336,12 +309,9 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("PALETTE")
                 visible: pg.supports("shape") || pg.supports("background")
-                onExpandedChanged: roomTimer.restart()
-                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     visible: pg.supports("shape")
                     label: I18n.tr("Corner radius")
                     desc: I18n.tr("Rounds the palette corners; inner cards 4 px tighter.")
@@ -361,7 +331,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     visible: pg.supports("background")
                     divider: pg.supports("shape")
                     label: I18n.tr("Backdrop frost")
@@ -386,12 +355,9 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("RESULT MOTION")
                 visible: pg.supports("results")
-                onExpandedChanged: roomTimer.restart()
-                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     label: I18n.tr("Type settle")
                     desc: I18n.tr("Pause before the results fade in.")
                     unit: "ms"
@@ -414,12 +380,9 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("HERO")
                 visible: pg.supports("hero")
-                onExpandedChanged: roomTimer.restart()
-                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     label: I18n.tr("Show greeting")
                     desc: I18n.tr("Time-of-day greeting above the hero clock.")
                     def: pg.committed.showGreeting ? I18n.tr("ON") : I18n.tr("OFF")
@@ -435,7 +398,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Show weather")
                     desc: I18n.tr("Weather and temperature on the hero; off shows the date.")
@@ -452,7 +414,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Weather units")
@@ -470,7 +431,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Solar line")
@@ -488,7 +448,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     visible: pg.draft.horizonMode === "fixed"
                     divider: true
                     block: true
@@ -512,12 +471,9 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("HERO IMAGE")
                 visible: pg.supports("hero")
-                onExpandedChanged: roomTimer.restart()
-                onVisibleChanged: roomTimer.restart()
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     footH: 32
                     label: I18n.tr("Image")
                     desc: I18n.tr("Wide banner behind the palette; drag to reframe it.")
@@ -557,7 +513,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Strength")
                     desc: I18n.tr("How visible the hero image is.")
@@ -588,13 +543,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "起動"
-            index: "SUPER"; label: I18n.tr("SPACE")
         }
 
         Row {
@@ -756,6 +704,7 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 model: fm
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 delegate: Item {
                     id: tile

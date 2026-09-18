@@ -486,14 +486,6 @@ done
         }
     }
 
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "演算"
-        index: "02"; label: I18n.tr("DEVICES")
-        glyph: "asanoha"; glyph2: "meander"
-    }
-
     // ── content: one full-width scrolling column above the render hero ─────────
     Item {
         id: below
@@ -513,6 +505,7 @@ done
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             CardColumns {
                 id: gfxCol
@@ -937,6 +930,7 @@ done
                                 contentWidth: width; contentHeight: planView.height
                                 clip: true; boundsBehavior: Flickable.StopAtBounds
                                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                                WheelScroll { }
                                 Text {
                                     id: planView
                                     width: planFlick.width

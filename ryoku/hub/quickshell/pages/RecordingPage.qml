@@ -207,29 +207,10 @@ Item {
         }
     }
 
-    // A page with slack under its cards spreads it into the rows instead of
-    // ending two thirds up the window: measured once by a timer, never bound to
-    // a height, since a row's own height depends on it.
-    property int roomPad: 0
-    function tuneRoom() {
-        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
-            return;
-        var n = 10;                       // the setting rows the pad spreads across
-        // spare room is measured against what the cards need, not the fillTo-padded
-        // body height, or a padded page reads zero slack and never breathes.
-        var slack = flick.height - col.contentHeight;
-        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
-        var next = Math.max(0, Math.min(Tokens.s6, want));
-        if (next !== pg.roomPad)
-            pg.roomPad = next;
-    }
-    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
-
     Component.onCompleted: {
         pg.adopt();
         if (pg.keyCommitted === null)
             pg.adoptKey("");
-        roomTimer.restart();
     }
 
     // recording.json, this page's only writer. blockLoading makes the first read
@@ -455,7 +436,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
-        onHeightChanged: roomTimer.restart()
+        WheelScroll { }
 
         CardColumns {
             id: col
@@ -468,7 +449,6 @@ Item {
                 width: col.colWidth
                 title: I18n.tr("KEY PRESSES")
                 kana: "鍵"
-                onExpandedChanged: roomTimer.restart()
 
                 Text {
                     width: parent.width
@@ -515,7 +495,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Keycap style")
                     desc: I18n.tr("Dark keycaps, or light.")
                     source: "keypresses.json"
@@ -533,7 +512,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Visible keys")
                     desc: I18n.tr("Every key, or only shortcuts.")
                     source: "keypresses.json"
@@ -551,7 +529,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Desktop placement")
                     desc: pg.keySettingsError !== "" ? pg.keySettingsError
                         : (pg.keyBackendStatus === "error" ? pg.keyBackendError
@@ -581,7 +558,6 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("QUALITY")
-                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -593,7 +569,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Framerate")
                     desc: I18n.tr("Frames per second; higher is smoother but larger.")
                     unit: "fps"
@@ -612,7 +587,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Framerate mode")
                     desc: I18n.tr("Constant plays anywhere; variable is smaller.")
                     source: "recording.json"
@@ -629,7 +603,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Quality")
                     desc: I18n.tr("Higher settings look crisper but make larger files.")
@@ -647,7 +620,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     block: true
                     label: I18n.tr("Codec")
                     desc: I18n.tr("H.264 plays anywhere; AV1 is crisper but needs a newer GPU.")
@@ -667,7 +639,6 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("ENCODER")
-                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -679,7 +650,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Encoder")
                     desc: I18n.tr("GPU offloads the CPU; CPU if GPU fails.")
                     source: "recording.json"
@@ -696,7 +666,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     label: I18n.tr("Show the cursor")
                     desc: I18n.tr("Draws the mouse pointer into the video.")
                     source: "recording.json"
@@ -711,7 +680,6 @@ Item {
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
                     divider: true
-                    roomPad: pg.roomPad
                     footH: 32
                     label: I18n.tr("Save recordings to")
                     desc: I18n.tr("Leave empty to follow your Videos folder.")
@@ -733,7 +701,6 @@ Item {
                 title: I18n.tr("UNDER THE HOOD")
                 expanded: false
                 summary: I18n.tr("AUTO-DETECTED")
-                onExpandedChanged: roomTimer.restart()
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -756,7 +723,6 @@ Item {
         }
     }
 
-
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to persist.
     // RESET walks every key to stock (creating dirt), REVERT drops the unsaved
@@ -772,14 +738,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the bar's dead centre, between the status and the verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "録画"
-            glyph: "column"; glyph2: "wave"
         }
 
         Row {

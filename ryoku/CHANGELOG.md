@@ -17,11 +17,32 @@
 - **A folded card says what it hides.** `SettingCard.summary` puts a count
   ("4 SWITCHES") in the header of a collapsed group, because a folded card with no
   trace of its contents reads as an empty one.
-- **A page with room spreads it into its rows.** `SettingRow.roomPad` adds
-  measured vertical air (a timer, never a binding: a row's height depends on it),
-  and `CardColumns.contentHeight` is what a page measures its spare room against.
-  A block that reaches 45% of the body is centred in it; a genuinely thin page
-  stays at the top, because a small block floated into a void reads as lost.
+
+### Fixed
+- **A Hub page holds still.** Section switches used to flicker: the incoming page
+  was centred from its measured height and had its rows inflated by a timer that
+  fired for up to three seconds after it appeared, so cards hopped while the reader
+  was already looking at them. Content now anchors to the top, the fly-in is the
+  crossfade alone, and the page's first layout is synchronous.
+- **Every Hub scroller answers the wheel.** The rail, the page bodies and the
+  popover lists showed a scrollbar that ignored the wheel, so a page taller than the
+  window could only be dragged, and the rail's lower sections could not be reached
+  by hand. `WheelScroll` scrolls them, clamped to their bounds.
+- **Bar Studio uses the window.** BAR STYLE is a full-width band that fills its rows
+  with tiles instead of cramming eight into half the page, and the LAYOUT card no
+  longer promises controls that are not below it.
+- **Widget previews stay inside their card.** A preview could be scaled past its
+  natural size and clip flush against the footer, so the clock's digits ran into the
+  widget's name and toggle; previews are now capped at their natural size and the
+  clock reports its real height.
+- **Descriptions are readable again.** `inkMuted` and `inkFaint` sat below the
+  4.5:1 floor this document promises once the wallpaper dimmed the palette; both
+  tiers are raised.
+- **The Profile page says which compositor you are running.** The dossier read
+  "Hyprland" from a hardcoded name; it now reads the session's own compositor.
+- **The Hub's page corners are quiet.** The decorative marginalia strips beside the
+  FILES and UPDATES buttons are gone: they crowded those controls and carried
+  hand-written group indices that were often wrong.
 
 ### Changed
 - **Every description fits its row.** A settings description is one line and 60

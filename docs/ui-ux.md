@@ -258,16 +258,30 @@ bug this section exists to prevent.
 - **The head sits on the body's grid.** An eyebrow, title and blurb start at the
   body's left inset and span its width, so a page's title aligns with its first
   card column rather than floating in the middle of the window.
-- **A block that nearly fills the body is centred in it**, so a page reads
-  composed rather than hanging off the top of a half-empty window. The threshold
-  is `CardColumns.fillTo` plus its own rule: the cards must reach 45% of the body
-  before the block is lifted. A genuinely thin page stays at the top, because a
-  small block floated into the middle of a void reads as lost rather than
-  composed; the answer to thinness is a merge, not padding.
-- **Rows breathe before anything else fills.** A page with spare room passes
-  `CardColumns.contentHeight`'s slack down as `SettingRow.roomPad` (measured once
-  by a timer, never bound (a row's height depends on it, so a binding would chase
-  its own tail), capped at `Tokens.s6`).
+- **Content anchors to the top, always.** No block is centred by height, and no
+  page spreads spare room into its rows: a block whose place depends on its height
+  visibly hops as cards measure in ("flickers when I switch to it"), and the same
+  first card then sits at two different heights on two pages. One place, always
+  the top, is what lets a reader build a map of the page. A sparse page is honest
+  empty paper below the cards; the answer to thinness is a merge, not padding.
+- **A page that fits does not scroll, and a page that overflows does.** Every
+  scroller carries a `ScrollRail` and declares `WheelScroll { }` inside it, because
+  a plain `Flickable` does not answer the wheel on this stack (see Motion below).
+  A scroller with nothing to scroll clamps and stays put.
+
+## Motion and input
+
+- **Every scroller answers the wheel.** `WheelScroll` (declared inside the
+  `Flickable`/`ListView`, beside its `ScrollRail`) scrolls it one notch per 120
+  units of `angleDelta`, clamped to its bounds. A handler only receives events over
+  its own parent, so it cannot live in the rail: a handler inside a `Flickable` is
+  reparented to that flickable's `contentItem`, which is why the component walks up
+  to the item that owns `contentHeight`. A control that wants the wheel for itself
+  keeps it, since an inner handler accepts the event first.
+- **A page swap does not reflow.** The two loaders crossfade the incoming page, and
+  the page's own first layout is synchronous, so nothing moves after the fade
+  starts. Length-dependent placement and post-load measurement timers are what make
+  a page jump; there are none.
 
 ## Disclosure, not walls
 

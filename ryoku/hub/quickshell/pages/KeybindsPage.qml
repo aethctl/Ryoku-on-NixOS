@@ -538,15 +538,6 @@ Item {
         }
     }
 
-    // marginalia in the head's right margin, dressing the dead space beside the title. Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "操作"
-        index: "04"; label: I18n.tr("APPS & KEYS")
-        glyph: "meander"; glyph2: "torii"
-    }
-
     // ── tab switch: Shortcuts (legend) | Custom (editor) ──
     Tabs {
         id: tabs
@@ -594,6 +585,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: appsCol
@@ -909,6 +901,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             CardColumns {
 
@@ -1172,6 +1165,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: rowsCol
@@ -1369,7 +1363,6 @@ Item {
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
 
-
             // ── the action catalogue overlay (Picker), shared across rows ──
             MouseArea {
                 id: scrim
@@ -1481,12 +1474,6 @@ Item {
             }
         }
 
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "操作"
-            glyph: "meander"; glyph2: "torii"
-        }
     }
 
     // ── the app catalogue picker (shared: Apps roles + custom Run binds) ─────

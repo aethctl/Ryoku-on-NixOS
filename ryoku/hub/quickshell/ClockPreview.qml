@@ -46,7 +46,13 @@ Item {
     readonly property int dom: now.getDate()
     readonly property int monIdx: now.getMonth()
 
+    // report the content's real size: the host card scales against this, and a
+    // face plus a date line is taller than the registry's bare-face guess.
+    implicitWidth: contentCol.implicitWidth
+    implicitHeight: contentCol.implicitHeight
+
     Column {
+        id: contentCol
         anchors.centerIn: parent
         spacing: 14
 

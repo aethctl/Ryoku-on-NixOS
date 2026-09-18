@@ -252,14 +252,6 @@ Item {
         }
     }
 
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "拡張"
-        index: "07"; label: I18n.tr("ADD-ONS")
-        glyph: "asanoha"; glyph2: "meander"
-    }
     Tabs {
         id: tabs
         anchors.left: parent.left
@@ -367,6 +359,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 CardColumns {
 
@@ -523,6 +516,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: bundleList
@@ -718,6 +712,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 Column {
                     id: dcol

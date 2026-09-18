@@ -1035,15 +1035,6 @@ Item {
         }
     }
 
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "施錠"
-        index: "03"; label: I18n.tr("DESKTOP")
-        glyph: "column"; glyph2: "wave"
-    }
-
     // ── loading / none-installed / read-failure state ───────────────────────
     // Three outcomes share one centred column: a spinner while loading, a Store
     // nudge when the list came back empty, and a retry when it couldn't be read.
@@ -1166,6 +1157,7 @@ Item {
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
                     ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                    WheelScroll { }
 
                     Column {
                         id: settingsLeftCol
@@ -1610,7 +1602,6 @@ Item {
                             }
                         }
 
-
                         Text {
                             width: parent.width
                             visible: pg.skSupported
@@ -1680,7 +1671,6 @@ Item {
                         color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
                         wrapMode: Text.WordWrap
                     }
-
 
                     // enrolled fingers: one quiet row each, delete behind an
                     // armed second click so nothing vanishes on a stray tap.
@@ -1947,6 +1937,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         Row {
             id: masonry

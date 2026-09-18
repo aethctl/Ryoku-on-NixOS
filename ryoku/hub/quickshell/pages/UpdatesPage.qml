@@ -273,14 +273,6 @@ Item {
         }
     }
 
-    // marginalia dressing the head's empty right margin (eyebrow line). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: 150; anchors.topMargin: Tokens.s1  // clear the top-right chips
-        kana: "更新"
-        glyph: "wave"; glyph2: "column"
-    }
-
     // ── idle: live status + the commit list, in one scroll container ─────────
     Flickable {
         id: idle
@@ -296,6 +288,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         Column {
             id: idleCol
@@ -926,14 +919,6 @@ Item {
         Rectangle {
             anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the footer's dead centre, between status and verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "更新"
-            glyph: "wave"; glyph2: "column"
         }
 
         Text {

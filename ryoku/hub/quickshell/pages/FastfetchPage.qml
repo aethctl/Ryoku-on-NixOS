@@ -807,6 +807,7 @@ Item {
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                WheelScroll { }
 
                 // the whole readout scales to fit the card, so the emblem's size
                 // relative to the text is a true specimen: adjusting Width /
@@ -933,6 +934,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: ctrlCol
@@ -1326,14 +1328,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the bar's dead centre, between the status and the verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "情報"
-            glyph: "asanoha"; glyph2: "meander"
         }
 
         Row {

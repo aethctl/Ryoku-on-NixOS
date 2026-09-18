@@ -452,14 +452,6 @@ Item {
         }
     }
 
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "取込"
-        index: "05"; label: I18n.tr("IMPORT")
-        glyph: "meander"; glyph2: "torii"
-    }
-
     // ── the step rail: where you are in the five-step wizard ───────────────────
     Row {
         id: rail
@@ -520,6 +512,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: srcCol
@@ -705,6 +698,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: revCol
@@ -802,6 +796,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: resCol
@@ -970,6 +965,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: preCol
@@ -1053,6 +1049,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: doneCol

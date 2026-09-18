@@ -39,11 +39,7 @@ Item {
 
     default property alias control: slot.data
 
-    // A body with room to spare spreads that room into its rows instead of
-    // leaving a void under the last card. The page measures the slack and sets
-    // this; a page that never sets it gets the compact rhythm.
-    property int roomPad: 0
-    readonly property int padV: Tokens.s3 + row.roomPad
+    readonly property int padV: Tokens.s3
     readonly property int padH: Tokens.s4
     readonly property bool banded: block || footH > 0
     readonly property real bandH: block

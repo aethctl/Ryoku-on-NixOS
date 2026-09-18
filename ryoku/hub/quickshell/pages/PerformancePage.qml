@@ -311,37 +311,6 @@ Item {
         }
     }
 
-
-    // A page this short spreads its slack into the rows rather than ending two
-    // thirds up the window. Measured once the cards settle, never bound.
-    property int roomPad: 0
-    function tuneRoom() {
-        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
-            return;
-        var n = Math.max(1, pg.schema.length);
-        // the cards' own height, not the body the grid pads itself out to
-        var slack = flick.height - col.contentHeight;
-        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
-        var next = Math.max(0, Math.min(Tokens.s6, want));
-        if (next !== pg.roomPad)
-            pg.roomPad = next;
-    }
-    // The cards settle over a few passes (async page load, then wrapped text), so
-    // this measures until the value stops moving rather than once too early.
-    Timer {
-        id: roomTimer
-        interval: 200; running: true; repeat: true
-        property int tries: 0
-        onTriggered: {
-            tries++;
-            var before = pg.roomPad;
-            pg.tuneRoom();
-            if (tries >= 8 || (before > 0 && pg.roomPad === before))
-                running = false;
-        }
-    }
-    onHeightChanged: { roomTimer.tries = 0; roomTimer.restart() }
-
     // ── the switch grid: three meaning-groups, each a SettingCard drawer that
     // stacks its compact SettingRows; membership comes straight from the schema. ──
     Flickable {
@@ -357,6 +326,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         CardColumns {
             id: col
@@ -378,7 +348,6 @@ Item {
                     // left alone, so they open folded and stay out of the way
                     expanded: sect.modelData !== I18n.tr("MEMORY")
                     summary: pg.rowsIn(sect.modelData).length + " " + I18n.tr("SWITCHES")
-                    onExpandedChanged: roomTimer.restart()
 
                     Repeater {
                         model: pg.rowsIn(sect.modelData)
@@ -392,7 +361,6 @@ Item {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             divider: cell.index > 0
-                            roomPad: pg.roomPad
                             controlWidth: 54
                             label: I18n.tr(cell.r.label)
                             desc: I18n.tr(cell.r.desc)
@@ -414,7 +382,6 @@ Item {
         }
     }
 
-
     // ── action bar: dirty status left, Reset / Revert / Save right ──
     // full-bleed hides the shell's global bar, so this is the only way to
     // persist. RESET walks every key to stock (creating dirt), REVERT drops the
@@ -429,14 +396,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia dressing the bar's dead centre, between status and verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "性能"
-            glyph: "column"; glyph2: "wave"
         }
 
         Row {

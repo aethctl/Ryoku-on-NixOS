@@ -22,11 +22,10 @@ Item {
     // grid, so a hand-built page and a data page read at the same card width.
     property int maxColumns: 3
     property real minColumnWidth: 460
-    // The height of the body this grid sits in. A page whose cards nearly fill it
-    // centres them in the space rather than hanging them off the top of a
-    // half-empty window: a composed page, not a queue that ran out. A page whose
-    // cards are genuinely thin stays at the top -- a small block floated into the
-    // middle of a void reads as lost, not composed.
+    // The height of the body this grid sits in, so the container reports the
+    // full body height even when its cards are short. Content itself always
+    // anchors to the top: a page that floats in the middle of a void reads as
+    // lost, and a height-dependent centre visibly hops as cards measure in.
     property real fillTo: 0
     default property alias content: stage.data
 
@@ -197,17 +196,14 @@ Item {
                 lowest = Math.max(lowest, cursors[col] - root.spacing);
             }
         }
-        // A block that comes up short of the body is centred in it: a page reads
-        // composed rather than hanging from the top of an empty window.
+        // Content anchors to the top on every page. Centring a short page was
+        // tried and read as a jump: the block's place depended on its height, so
+        // a late-measured card visibly hopped, and two pages with the same first
+        // card put it at two different heights. One place, always the top, is
+        // what lets a reader build a map of the page.
         var content = kids.length === 0 ? 0 : lowest;
         root.contentHeight = content;
-        var body = Math.max(0, root.fillTo);
-        if (body > content && content >= body * 0.45) {
-            var lift = Math.round((body - content) / 2);
-            for (var l = 0; l < kids.length; l++)
-                kids[l].y += lift;
-        }
-        root.layoutHeight = Math.max(content, body);
+        root.layoutHeight = Math.max(content, Math.max(0, root.fillTo));
         root._laying = false;
     }
 
@@ -221,41 +217,20 @@ Item {
     onColumnsChanged: root.relayout()
     onFillToChanged: root.relayout()
     Component.onCompleted: {
+        // onChildrenChanged fired for these children before the Connections
+        // below existed, so the initial set is wired here or a card whose
+        // height settles late (a Flow re-wrap after its width lands) would
+        // never trigger a re-lay and the next card would overlap it.
+        root.wireChildren();
+        // The first lay is synchronous so the page's first painted frame is
+        // already composed; deferring it shows one frame of unlaid cards and
+        // reads as a flicker on every page switch.
+        root.lay();
+        // Widths are only final once the page's own bindings have settled (a
+        // card bound to `colWidth` after us), so one deferred pass catches what
+        // the synchronous one could not. After that, changes arrive through the
+        // event wiring below, never a poll.
         root.relayout();
-        ladder.restart();
-    }
-
-    // A card's height is only known once its own rows exist and its text has
-    // wrapped at the column width, and the page it belongs to loads
-    // asynchronously -- so a fixed number of passes stops too early (laying out
-    // against half-measured cards, which stacks them) while the cards can still
-    // be placeholders. This watches the cards' heights and re-lays while they are
-    // still changing, with a minimum run and a long stop: a page's rows arrive a
-    // few frames after its cards do.
-    function signature() {
-        var kids = childrenInOrder();
-        var out = [];
-        for (var i = 0; i < kids.length; i++)
-            out.push(Math.round(kids[i].height));
-        return out.join(",");
-    }
-    Timer {
-        id: ladder
-        interval: 120
-        repeat: true
-        running: false
-        property int passes: 0
-        property string last: ""
-        property bool settled: false
-        onTriggered: {
-            passes++;
-            root.lay();
-            var sig = root.signature();
-            settled = (sig === last && sig !== "");
-            last = sig;
-            if ((settled && passes >= 8) || passes >= 30)
-                running = false;
-        }
     }
 
     Timer {
@@ -265,22 +240,23 @@ Item {
         onTriggered: root.lay()
     }
 
-    // A card that grows (a group unfolds, a row appears) re-lays the page. A
-    // delegate declared under `pragma ComponentBehavior: Bound` refuses a dynamic
-    // property, so which children are already wired is tracked here.
+    // A card that grows (a group unfolds, a row appears, a Flow re-wraps after
+    // its width lands) re-lays the page. A delegate declared under `pragma
+    // ComponentBehavior: Bound` refuses a dynamic property, so which children
+    // are already wired is tracked here.
     property var _wired: []
+    function wireChildren() {
+        for (var i = 0; i < stage.children.length; i++) {
+            var c = stage.children[i];
+            if (!c || root._wired.indexOf(c) !== -1)
+                continue;
+            root._wired.push(c);
+            c.heightChanged.connect(settle.restart);
+            c.visibleChanged.connect(settle.restart);
+        }
+    }
     Connections {
         target: stage
-        function onChildrenChanged() {
-            for (var i = 0; i < stage.children.length; i++) {
-                var c = stage.children[i];
-                if (!c || root._wired.indexOf(c) !== -1)
-                    continue;
-                root._wired.push(c);
-                c.heightChanged.connect(settle.restart);
-                c.visibleChanged.connect(settle.restart);
-            }
-            settle.restart();
-        }
+        function onChildrenChanged() { root.wireChildren(); settle.restart(); }
     }
 }

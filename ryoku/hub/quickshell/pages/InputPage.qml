@@ -604,17 +604,6 @@ Item {
         }
     }
 
-    // marginalia in the head's right margin: the section register, ink only.
-    // Input draws its own head, so it carries its own strip (framed pages get
-    // the shared rail + bar registers automatically, but not a head one).
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "入力"
-        index: "02"; label: I18n.tr("DEVICES")
-        glyph: "wave"; glyph2: "column"
-    }
-
     // ── KEYBOARD MAP: pinned under the head so it stays in view while you edit,
     // never scrolled to. A compact live diagram of the layout and the remaps,
     // beside a decorative plate that fills the space the small keyboard leaves.
@@ -662,6 +651,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
 
         CardColumns {
             id: body

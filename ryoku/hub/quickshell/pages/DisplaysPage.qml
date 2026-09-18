@@ -939,6 +939,7 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Column {
                 id: ctlCol
@@ -1418,13 +1419,6 @@ Item {
             Btn { text: I18n.tr("APPLY"); primary: true; armed: pg.dirty; onAct: pg.apply() }
         }
 
-        // marginalia dressing the empty bar centre between status and actions -- a dead margin. Ink only.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "画面"
-            glyph: "column"; glyph2: "wave"
-        }
     }
 
     // ── the resolution / mirror catalogue overlay, shared across controls ───

@@ -135,6 +135,7 @@ Item {
         boundsBehavior: Flickable.StopAtBounds
         flickableDirection: Flickable.VerticalFlick
         ScrollBar.vertical: ScrollRail {}
+        WheelScroll { }
 
         Column {
             id: col

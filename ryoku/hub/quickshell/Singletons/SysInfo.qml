@@ -20,7 +20,12 @@ Singleton {
     property string sysDistro: "Linux"
     property string sysArch: "x86_64"
     property string sysKernel: "-"
-    property string sysWM: "Hyprland"
+    // the session's own word for its compositor ("niri", "Hyprland"), set by the
+    // session itself; a hardcoded name here lied on every non-Hyprland login.
+    readonly property string sysWM: {
+        const d = Quickshell.env("XDG_CURRENT_DESKTOP") || "";
+        return d === "" ? "-" : d.charAt(0).toUpperCase() + d.slice(1);
+    }
     property string sysShell: "sh"
     property string sysCpu: "-"
     property string sysCpuCores: "-"
@@ -42,7 +47,7 @@ Singleton {
     property string sysProcs: "-"
     property string sysSwap: "-"
     property string sysBattery: "-"
-    property string sysHyprVer: "-"
+    property string sysWmVer: "-"
     property string sysMonitors: "-"
     property string sysPkgExplicit: "-"
     property string sysPkgAur: "-"
@@ -97,7 +102,7 @@ Singleton {
                 root.sysProcs = (l[2] || "-").trim();
                 root.sysSwap = (l[3] || "-").trim();
                 root.sysBattery = (l[4] || "-").trim();
-                root.sysHyprVer = (l[5] || "-").trim();
+                root.sysWmVer = (l[5] || "-").trim();
                 root.sysMonitors = (l[6] || "-").trim();
                 root.sysPkgExplicit = (l[7] || "-").trim();
                 root.sysPkgAur = (l[8] || "-").trim();

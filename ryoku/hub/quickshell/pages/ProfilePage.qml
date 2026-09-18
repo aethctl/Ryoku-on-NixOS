@@ -725,7 +725,7 @@ Item {
                     }
                     SpecRow {
                         k: I18n.tr("Compositor")
-                        v: SysInfo.sysWM + (SysInfo.sysHyprVer && SysInfo.sysHyprVer !== "-" ? " v" + SysInfo.sysHyprVer : "")
+                        v: SysInfo.sysWM + (SysInfo.sysWmVer && SysInfo.sysWmVer !== "-" ? " v" + SysInfo.sysWmVer : "")
                     }
                     SpecRow {
                         k: I18n.tr("Uptime")

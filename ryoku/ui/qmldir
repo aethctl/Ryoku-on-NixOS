@@ -13,6 +13,7 @@ Field 1.0 Field.qml
 FingerprintScan 1.0 FingerprintScan.qml
 IconBtn 1.0 IconBtn.qml
 ScrollRail 1.0 ScrollRail.qml
+WheelScroll 1.0 WheelScroll.qml
 Sw 1.0 Sw.qml
 Step 1.0 Step.qml
 Slid 1.0 Slid.qml

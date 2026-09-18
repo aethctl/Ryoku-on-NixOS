@@ -68,8 +68,11 @@ Singleton {
     // light surface too (never the outline roles, which wash out on white).
     readonly property color ink: role("onSurface", defaultInk)
     readonly property color inkDim: role("onSurfaceVariant", defaultInkDim)
-    readonly property color inkMuted: Qt.rgba(inkDim.r, inkDim.g, inkDim.b, 0.78)
-    readonly property color inkFaint: Qt.rgba(inkDim.r, inkDim.g, inkDim.b, 0.55)
+    // 0.88/0.68 over pure-black paper keep both tiers above the 4.5:1 legibility
+    // floor the doc guarantees; the old 0.78/0.55 dipped under it once the
+    // wallpaper dimmed onSurfaceVariant, which read as "options hard to see".
+    readonly property color inkMuted: Qt.rgba(inkDim.r, inkDim.g, inkDim.b, 0.88)
+    readonly property color inkFaint: Qt.rgba(inkDim.r, inkDim.g, inkDim.b, 0.68)
 
     // ── bone stock (inverted): the Material inverse-surface pair, so the light
     // plate and its dark ink keep contrast on a light OR dark theme ───────────

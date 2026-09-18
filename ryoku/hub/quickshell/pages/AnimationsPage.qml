@@ -42,7 +42,7 @@ Item {
     // seed the selection off the first curve once the provider list arrives.
     function seedCurve() { if (pg.selectedCurve === "" && pg.liveCurves.length > 0) pg.selectedCurve = pg.liveCurves[0].name }
     onLiveCurvesChanged: pg.seedCurve()
-    Component.onCompleted: { pg.seedCurve(); roomTimer.restart(); }
+    Component.onCompleted: pg.seedCurve()
 
     // theme.motion in shell.json, written instantly through the settings seam
     // (not the staged hypr draft); the shell's ui tokens read the same keys.
@@ -50,23 +50,6 @@ Item {
     readonly property bool reduceMotion: { Settings.revision; return Settings.get("theme.motion.reduce") === true; }
     readonly property string motionScaleLabel: Math.round(pg.motionScale * 100) + "%"
     function setMotion(key, v) { Settings.patch("theme.motion." + key, v); }
-
-    // a short page fills its window: on a compositor with no window-animation
-    // tree the page is just the shell-motion and master rows, so measure the
-    // spare room once and spread half of it as row padding. Timer-only, never
-    // bound (a row's height depends on it); contentHeight is the pre-padding size.
-    property int roomPad: 0
-    function tuneRoom() {
-        if (!flick || flick.height <= 0 || col.contentHeight <= 0)
-            return;
-        var n = Math.max(1, 4 + (pg.liveAnims ? pg.liveAnims.length : 0));
-        var slack = flick.height - col.contentHeight;
-        var want = slack > Tokens.s5 * n ? Math.round(slack / n * 0.5) : 0;
-        var next = Math.max(0, Math.min(Tokens.s6, want));
-        if (next !== pg.roomPad)
-            pg.roomPad = next;
-    }
-    Timer { id: roomTimer; interval: 140; repeat: false; onTriggered: pg.tuneRoom() }
 
     // Hyprland animation personality: the preset the loader picks. Read from the
     // backend at load; setAnimPreset writes ~/.config/ryoku/anim-preset + reloads.
@@ -587,6 +570,7 @@ Item {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollBar.vertical: ScrollRail { }
+        WheelScroll { }
 
         CardColumns {
 
@@ -609,7 +593,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Speed")
                     value: pg.motionScaleLabel
@@ -623,7 +606,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     label: I18n.tr("Reduce motion")
                     desc: I18n.tr("Snap animations to their end instead of playing them.")
@@ -650,7 +632,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     label: I18n.tr("Preset")
@@ -673,7 +654,6 @@ Item {
                 // the one genuine setting: the master switch for desktop motion
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     visible: pg.hit("animations master switch desktop motion")
                     label: I18n.tr("Animations")
                     desc: I18n.tr("Master switch for desktop motion")
@@ -856,7 +836,6 @@ Item {
 
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: fsec.ffOn
                     visible: pg.hit("animate the focused window enabled")
                     label: I18n.tr("Animate the focused window")
@@ -873,7 +852,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     block: true
                     visible: fsec.ffOn && pg.hit("style flash bounce slide")
@@ -894,7 +872,6 @@ Item {
                 // so map to a 0..100 percent domain and store /100.
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "flash" && pg.hit("flash opacity")
                     label: I18n.tr("Flash opacity")
@@ -914,7 +891,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "bounce" && pg.hit("bounce strength")
                     label: I18n.tr("Bounce strength")
@@ -934,7 +910,6 @@ Item {
                 }
                 SettingRow {
                     anchors.left: parent.left; anchors.right: parent.right
-                    roomPad: pg.roomPad
                     divider: true
                     visible: fsec.ffOn && fsec.ffMode === "slide" && pg.hit("slide height")
                     label: I18n.tr("Slide height")
@@ -1126,6 +1101,7 @@ Item {
                     contentHeight: pkList.height
                     clip: true
                     ScrollBar.vertical: ScrollRail { }
+                    WheelScroll { }
                     Column {
                         id: pkList
                         width: parent.width

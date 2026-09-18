@@ -423,15 +423,6 @@ Item {
         }
     }
 
-    // marginalia dressing the head's empty right margin (running head). Ink only.
-    Marginalia {
-        anchors { right: parent.right; top: head.top }
-        anchors.rightMargin: Tokens.s6; anchors.topMargin: Tokens.s1
-        kana: "部品"
-        index: "03"; label: I18n.tr("DESKTOP")
-        glyph: "wave"; glyph2: "column"
-    }
-
     // ── the widget catalogue: a card per widget; a card opens its settings ────
     // Grid view lists every desktop widget as a live-preview card with an on/off
     // toggle; clicking a card slides in that widget's settings subpage. One draft,
@@ -485,6 +476,7 @@ Item {
             enabled: pg.selected === ""
             Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+            WheelScroll { }
 
             Flow {
                 id: grid
@@ -516,15 +508,25 @@ Item {
                             id: pbody
                             anchors { left: parent.left; right: parent.right; top: parent.top }
                             anchors.margins: Tokens.s3
-                            height: wcard.height - footer.height - Tokens.s3 * 2
+                            height: wcard.height - footer.height - Tokens.s3 * 3
                             clip: true
                             opacity: wcard.on ? 1 : 0.45
                             Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
                             Item {
-                                width: wcard.modelData.natW; height: wcard.modelData.natH
+                                id: pwrap
+                                width: wcard.modelData.natW
+                                // the preview's own natural height when it reports one,
+                                // so a face with a date line is scaled to fit whole
+                                // rather than clipped at the card's edge.
+                                readonly property real natH: (pv.item && pv.item.implicitHeight > 0)
+                                    ? pv.item.implicitHeight : wcard.modelData.natH
+                                height: natH
                                 anchors.centerIn: parent
-                                scale: Math.min(pbody.width / wcard.modelData.natW, pbody.height / wcard.modelData.natH, 1.25)
-                                Loader { anchors.fill: parent; sourceComponent: pg.previewFor(wcard.modelData.tab) }
+                                // never upscale past natural size: a preview blown
+                                // up to fill clips flush against the footer and its
+                                // glyphs read as overlapping the label row.
+                                scale: Math.min(pbody.width / pwrap.width, pbody.height / pwrap.natH, 1.0)
+                                Loader { id: pv; anchors.fill: parent; sourceComponent: pg.previewFor(wcard.modelData.tab) }
                             }
                         }
 
@@ -636,14 +638,6 @@ Item {
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line
-        }
-
-        // marginalia in the bar's dead centre, between the status and the verbs.
-        Marginalia {
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            kana: "部品"
-            glyph: "wave"; glyph2: "column"
         }
 
         Row {
