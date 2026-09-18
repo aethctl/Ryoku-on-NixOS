@@ -8,6 +8,10 @@ import Quickshell.Io
 Singleton {
     id: root
 
+    property string backend: Quickshell.env("RYOKU_UPDATE_BACKEND") || ""
+    property bool canUpdate: backend !== "nix"
+    property string source: ""
+
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
     property bool available: false
@@ -51,6 +55,10 @@ Singleton {
     function apply(t) {
         try {
             var o = JSON.parse(t);
+            root.backend = o.backend || root.backend;
+            root.canUpdate = root.backend !== "nix" || o.canUpdate === true;
+            root.source = o.source || "";
+
             // a packaged box on a named release: show the release names,
             // else the commit pair a checkout reports.
             var named = !!(o.release && o.channelRelease);

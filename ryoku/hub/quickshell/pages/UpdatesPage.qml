@@ -28,6 +28,7 @@ Item {
     property var hub
     // A full-bleed page owns the whole content region itself.
     readonly property bool fullBleed: true
+    readonly property bool nixBackend: Updates.backend === "nix"
 
     // ── automatic-check schedule (persisted in the hub's TOML) ──────────────
     property string interval: "daily"
@@ -225,13 +226,17 @@ Item {
     }
 
     function startUpdate() {
+        if (pg.nixBackend && !Updates.canUpdate)
+            return;
         Spawn.run(["kitty", "-e", "sh", "-c", "exec ryoku update"]);
     }
 
     // idle list: incoming commits when behind, else the recent history the
     // installed version contains, so the page is informative either way.
     readonly property var sectionModel: Updates.available ? Updates.updates : Updates.recent
-    readonly property string sectionLabel: Updates.available ? I18n.tr("INCOMING COMMITS") : I18n.tr("RECENT CHANGES")
+    readonly property string sectionLabel: pg.nixBackend
+        ? (Updates.available ? I18n.tr("AVAILABLE VERSION") : I18n.tr("CURRENT VERSION"))
+        : (Updates.available ? I18n.tr("INCOMING COMMITS") : I18n.tr("RECENT CHANGES"))
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──
     Column {
