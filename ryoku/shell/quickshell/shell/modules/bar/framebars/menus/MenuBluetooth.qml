@@ -252,7 +252,7 @@ Item {
 
             width: parent.width
             iconName: root.deviceIcon(devRow.dev)
-            label: (devRow.dev.name && devRow.dev.name.length) ? devRow.dev.name : devRow.dev.address
+            label: BtLink.label(devRow.dev)
             secondaryIconName: (devRow.dev.connected && devRow.dev.batteryAvailable)
                 ? root.batteryIcon(devRow.dev.battery) : ""
 

@@ -1677,12 +1677,7 @@ Item {
 
                                         Text {
                                             width: parent.width
-                                            text: dev.modelData
-                                                ? (dev.modelData.deviceName
-                                                    || dev.modelData.name
-                                                    || dev.addr
-                                                    || I18n.tr("Unknown"))
-                                                : I18n.tr("Unknown")
+                                            text: BtName.label(dev.modelData) || I18n.tr("Unknown")
                                             color: Tokens.ink
                                             font.family: Tokens.ui
                                             font.pixelSize: Tokens.fBody

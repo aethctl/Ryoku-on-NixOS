@@ -33,8 +33,12 @@ Column {
         if (!page.adapter) return I18n.tr("Not available");
         if (!page.adapter.enabled) return I18n.tr("Off");
         var devs = Bluetooth.devices ? Bluetooth.devices.values : [];
-        for (var i = 0; i < devs.length; i++)
-            if (devs[i] && devs[i].connected) return devs[i].name || I18n.tr("Connected");
+        for (var i = 0; i < devs.length; i++) {
+            var d = devs[i];
+            if (!d || !d.connected) continue;
+            var name = BtLink.label(d);
+            return (name && name !== String(d.address || "")) ? name : I18n.tr("Connected");
+        }
         return I18n.tr("Not connected");
     }
 

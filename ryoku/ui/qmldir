@@ -46,3 +46,4 @@ KeypressStack 1.0 KeypressStack.qml
 SpectrumMath 1.0 lib/spectrum.js
 PlaceMath 1.0 lib/place.js
 KeypressMath 1.0 lib/keypress.js
+BtName 1.0 lib/bluetooth.js

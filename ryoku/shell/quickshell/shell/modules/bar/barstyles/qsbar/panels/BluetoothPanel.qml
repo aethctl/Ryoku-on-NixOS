@@ -34,7 +34,8 @@ PanelWindow {
             var d = allDevices[i]
             if (!d) continue
             var known = d.connected || d.paired || d.bonded
-            var named = d.name && d.name.length > 0
+            var named = (d.name && d.name.length > 0)
+                || (d.deviceName && d.deviceName.length > 0)
             if (known || named)
                 out.push(d)
         }

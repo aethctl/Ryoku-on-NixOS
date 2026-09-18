@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell.Bluetooth
 import "../../shared/Singletons"
+import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
 // Live Bluetooth bubbles for the palette: one compact card per CONNECTED
@@ -140,7 +141,7 @@ Flow {
                 anchors.right: parent.right
                 anchors.rightMargin: 13 * root.s
                 text: card.modelData
-                    ? (card.modelData.deviceName || card.modelData.name || card.modelData.address || I18n.tr("Unknown"))
+                    ? (BtName.label(card.modelData) || I18n.tr("Unknown"))
                     : I18n.tr("Unknown")
                 color: Theme.bright
                 font.family: Theme.font

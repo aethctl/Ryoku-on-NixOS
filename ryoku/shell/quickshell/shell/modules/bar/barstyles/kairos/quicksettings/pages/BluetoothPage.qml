@@ -32,7 +32,9 @@ Column {
         for (var i = 0; i < vals.length; i++) {
             var d = vals[i];
             if (!d) continue;
-            if (d.connected || d.paired || d.bonded || (d.name && d.name.length > 0)) out.push(d);
+            if (d.connected || d.paired || d.bonded
+                    || (d.name && d.name.length > 0)
+                    || (d.deviceName && d.deviceName.length > 0)) out.push(d);
         }
         return out;
     }
@@ -63,11 +65,6 @@ Column {
     property string pairError: ""
     readonly property bool busy: pairProc.running
 
-    function nameOf(d) {
-        if (!d) return "";
-        if (d.name && d.name.length > 0) return d.name;
-        return String(d.address || "");
-    }
     function statusOf(d) {
         if (!d) return "";
         if (d.connected) return I18n.tr("Connected");
@@ -225,7 +222,7 @@ Column {
                         spacing: 1
                         Text {
                             width: parent.width
-                            text: page.nameOf(devRow.dev)
+                            text: BtLink.label(devRow.dev)
                             color: page.ink
                             font.family: Theme.fontPrimary
                             font.pixelSize: 13

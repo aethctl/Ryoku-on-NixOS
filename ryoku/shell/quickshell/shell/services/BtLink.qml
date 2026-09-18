@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Bluetooth
+import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
 // Bluetooth link state the popout reads but that must outlive it: a popout is a
@@ -117,12 +118,13 @@ Singleton {
         return Math.round(b);
     }
 
+    // The display name is the shared resolver (Ryoku.Ui's BtName), which knows a
+    // MAC-shaped BlueZ alias is not a name; this wrapper only adds the shell's
+    // untranslated-device fallback.
     function label(d) {
         if (!d)
             return I18n.tr("Unknown");
-        return (d.name && d.name.length) ? d.name
-            : (d.deviceName && d.deviceName.length) ? d.deviceName
-            : (d.address || I18n.tr("Unknown"));
+        return BtName.label(d) || I18n.tr("Unknown");
     }
 
 
