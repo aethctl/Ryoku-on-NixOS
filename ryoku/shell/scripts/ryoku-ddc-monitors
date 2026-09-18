@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+# Shared DDC/CI monitor discovery for Ryoku.
+#
+# ddcutil detect is expensive enough to visibly stall some systems. Every Ryoku
+# caller therefore shares one topology-keyed cache and one process lock.
+#
+# Output is the valid "Display N" portion of `ddcutil detect --brief`, preserving
+# the existing consumer format while dropping invalid-display preamble entries.
+set -euo pipefail
+
+umask 077
+
+drm_root=${RYOKU_DRM_ROOT:-/sys/class/drm}
+ddc_bin=${RYOKU_DDCUTIL:-ddcutil}
+detect_timeout=${RYOKU_DDC_TIMEOUT:-15}
+fail_ttl=${RYOKU_DDC_FAIL_TTL:-30}
+
+if [[ -n ${RYOKU_DDC_CACHE_DIR:-} ]]; then
+    cache_dir=$RYOKU_DDC_CACHE_DIR
+else
+    runtime_root=${XDG_RUNTIME_DIR:-/tmp/ryoku-$UID}
+    cache_dir="$runtime_root/ryoku/ddc"
+fi
+
+mkdir -p "$cache_dir"
+chmod 700 "$cache_dir"
+
+cache_file="$cache_dir/monitors.cache"
+sig_file="$cache_dir/topology.sig"
+status_file="$cache_dir/status"
+lock_file="$cache_dir/discovery.lock"
+
+topology_sig=""
+has_external=0
+
+cleanup() {
+    rm -f \
+        "$cache_dir/.topology.$$" \
+        "$cache_dir/.raw.$$" \
+        "$cache_dir/.cache.$$" \
+        "$cache_dir/.sig.$$" \
+        "$cache_dir/.status.$$"
+}
+trap cleanup EXIT
+
+compute_topology() {
+    local topology_tmp="$cache_dir/.topology.$$"
+    local connector name status edid_hash
+
+    : > "$topology_tmp"
+    has_external=0
+
+    shopt -s nullglob
+
+    for connector in "$drm_root"/*-*; do
+        [[ -d $connector ]] || continue
+
+        name=${connector##*/}
+
+        case "$name" in
+            *eDP*|*LVDS*|*Writeback*)
+                continue
+                ;;
+        esac
+
+        status=$(cat "$connector/status" 2>/dev/null || printf '%s' unknown)
+        edid_hash="-"
+
+        if [[ $status == connected ]]; then
+            has_external=1
+
+            if [[ -s "$connector/edid" ]]; then
+                edid_hash=$(
+                    sha256sum "$connector/edid" |
+                        cut -d' ' -f1
+                )
+            else
+                edid_hash="none"
+            fi
+        fi
+
+        printf '%s\t%s\t%s\n' \
+            "$name" \
+            "$status" \
+            "$edid_hash" \
+            >> "$topology_tmp"
+    done
+
+    topology_sig=$(
+        {
+            printf '%s\n' 'ryoku-ddc-topology-v1'
+            sort "$topology_tmp"
+        } |
+            sha256sum |
+            cut -d' ' -f1
+    )
+
+    rm -f "$topology_tmp"
+}
+
+write_text_atomic() {
+    local path=$1
+    local value=$2
+    local tmp="${path}.tmp.$$"
+
+    printf '%s\n' "$value" > "$tmp"
+    mv -f "$tmp" "$path"
+}
+
+write_empty_cache() {
+    local tmp="$cache_dir/.cache.$$"
+
+    : > "$tmp"
+    mv -f "$tmp" "$cache_file"
+}
+
+cache_usable() {
+    local saved_sig status now failed_at
+
+    [[ -f $cache_file && -r $sig_file && -r $status_file ]] || return 1
+
+    saved_sig=$(cat "$sig_file" 2>/dev/null || true)
+    [[ $saved_sig == "$topology_sig" ]] || return 1
+
+    status=$(cat "$status_file" 2>/dev/null || true)
+
+    case "$status" in
+        ok)
+            cat "$cache_file"
+            return 0
+            ;;
+
+        fail:*)
+            failed_at=${status#fail:}
+            now=$(date +%s)
+
+            if [[ $failed_at =~ ^[0-9]+$ ]] &&
+               (( now - failed_at < fail_ttl )); then
+                cat "$cache_file"
+                return 0
+            fi
+            ;;
+    esac
+
+    return 1
+}
+
+cache_failure() {
+    write_empty_cache
+    write_text_atomic "$sig_file" "$topology_sig"
+    write_text_atomic "$status_file" "fail:$(date +%s)"
+}
+
+compute_topology
+
+# Normal path: this is only file reads plus a hash. No lock and no i2c traffic.
+if cache_usable; then
+    exit 0
+fi
+
+# A real topology change gets one detector globally. A second Ryoku process waits
+# for it, then consumes the result produced by the first.
+exec 9>"$lock_file"
+flock 9
+
+# Topology or cache may have changed while waiting for the lock.
+compute_topology
+
+if cache_usable; then
+    exit 0
+fi
+
+# No external connector means there can be no useful DDC display. Cache the
+# negative result so panels and workspace events remain completely cheap.
+if (( has_external == 0 )); then
+    write_empty_cache
+    write_text_atomic "$sig_file" "$topology_sig"
+    write_text_atomic "$status_file" "ok"
+    exit 0
+fi
+
+if [[ $ddc_bin == */* ]]; then
+    if [[ ! -x $ddc_bin ]]; then
+        cache_failure
+        exit 0
+    fi
+elif ! command -v "$ddc_bin" >/dev/null 2>&1; then
+    cache_failure
+    exit 0
+fi
+
+raw="$cache_dir/.raw.$$"
+filtered="$cache_dir/.cache.$$"
+
+if timeout "$detect_timeout" "$ddc_bin" detect --brief > "$raw" 2>/dev/null; then
+    # Drop ddcutil's "Invalid display" preamble. Devices.qml already reasons in
+    # valid Display blocks, and brightness hotkeys must not receive dead buses.
+    awk '
+        /^[[:space:]]*Display[[:space:]]+[0-9]+/ {
+            valid = 1
+        }
+        valid {
+            print
+        }
+    ' "$raw" > "$filtered"
+
+    mv -f "$filtered" "$cache_file"
+    write_text_atomic "$sig_file" "$topology_sig"
+    write_text_atomic "$status_file" "ok"
+
+    cat "$cache_file"
+    exit 0
+fi
+
+# A transient DDC failure is negatively cached only briefly. This prevents an
+# event storm while still allowing recovery without requiring a physical replug.
+cache_failure
+exit 0

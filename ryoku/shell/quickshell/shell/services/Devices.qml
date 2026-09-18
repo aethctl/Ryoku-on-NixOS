@@ -73,23 +73,44 @@ Singleton {
         // the next open started it again, and every open after that.
     }
 
-    // Ask sysfs before ddcutil: connector status is a file read.
-    function probeDisplays() {
-        if (root.displaysProbed || connectorProbe.running || ddcDetect.running)
-            return;
-        connectorProbe.running = true;
+    // Wm.outputs can be republished for focus/workspace activity. Only physical
+    // identity belongs in this key, so those events cannot invalidate DDC state.
+    property string outputTopology: ""
+
+    function currentOutputTopology() {
+        var keys = [];
+        var outputs = Wm.outputs || [];
+
+        for (var i = 0; i < outputs.length; i++) {
+            var out = outputs[i];
+            keys.push([
+                out.name || "",
+                out.make || "",
+                out.model || "",
+                String(out.physicalWidth || 0)
+            ].join("\u001f"));
+        }
+
+        keys.sort();
+        return keys.join("\u001e");
     }
 
-    // A connector coming or going is the one event that changes the answer.
+    function probeDisplays() {
+        var topology = root.currentOutputTopology();
+        if (topology.length)
+            root.outputTopology = topology;
+
+        if (root.displaysProbed || ddcDetect.running)
+            return;
+
+        ddcDetect.running = true;
+    }
+
+    // A genuine physical topology change invalidates the local view. The helper
+    // adds a second, cross-process sysfs/EDID cache boundary underneath this.
     function invalidateDisplays() {
         root.displaysProbed = false;
         root.probeDisplays();
-    }
-
-    function detect() {
-        if (ddcDetect.running)
-            return;
-        ddcDetect.running = true;
     }
 
     function setBrightness(bus, pct) {
@@ -129,28 +150,8 @@ Singleton {
     // eDP/LVDS is the backlight's business and Writeback is not an output, so
     // neither is a reason to walk i2c.
     Process {
-        id: connectorProbe
-        command: ["sh", "-c",
-            "for c in /sys/class/drm/*-*; do "
-            + "case \"${c##*/}\" in *eDP*|*LVDS*|*Writeback*) continue ;; esac; "
-            + "[ \"$(cat \"$c/status\" 2>/dev/null)\" = connected ] && { echo external; exit 0; }; "
-            + "done; echo panel-only"]
-        running: false
-        stdout: StdioCollector {
-            onStreamFinished: {
-                if (this.text.indexOf("external") >= 0) {
-                    root.detect();
-                    return;
-                }
-                root.ddcMonitors = [];
-                root.displaysProbed = true;
-            }
-        }
-    }
-
-    Process {
         id: ddcDetect
-        command: ["ddcutil", "detect", "--brief"]
+        command: ["ryoku-ddc-monitors"]
         running: false
         // Answered on exit, not on the last byte: a missing ddcutil or a refused
         // bus must still count, or every open asks again.
@@ -191,6 +192,12 @@ Singleton {
     Connections {
         target: Wm
         function onOutputsChanged() {
+            var topology = root.currentOutputTopology();
+
+            if (topology === root.outputTopology)
+                return;
+
+            root.outputTopology = topology;
             Qt.callLater(root.invalidateDisplays);
         }
     }

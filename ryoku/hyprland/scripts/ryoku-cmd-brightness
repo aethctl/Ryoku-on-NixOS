@@ -31,14 +31,15 @@ if compgen -G "/sys/class/backlight/*" >/dev/null; then
 fi
 
 # External monitors over DDC/CI. Always attempted, never fatal.
-if command -v ddcutil >/dev/null 2>&1; then
+if command -v ddcutil >/dev/null 2>&1 &&
+   command -v ryoku-ddc-monitors >/dev/null 2>&1; then
   lock="${XDG_RUNTIME_DIR:-/tmp}/ryoku-brightness-ddc.lock"
   (
     flock -n 9 || exit 0
     while read -r bus; do
       [[ -n $bus ]] || continue
       ddcutil --bus "$bus" --noverify setvcp 10 "$sign" "$mag" >/dev/null 2>&1 &
-    done < <(ddcutil detect --brief 2>/dev/null | sed -n 's|.*/dev/i2c-\([0-9]\+\).*|\1|p')
+    done < <(ryoku-ddc-monitors 2>/dev/null | sed -n 's|.*/dev/i2c-\([0-9]\+\).*|\1|p')
     wait
   ) 9>"$lock" || true
 fi

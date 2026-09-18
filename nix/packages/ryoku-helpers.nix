@@ -19,6 +19,8 @@ pkgs.stdenvNoCC.mkDerivation {
 
   inherit src;
 
+  nativeBuildInputs = [ pkgs.makeWrapper ];
+
   dontBuild = true;
 
   installPhase = ''
@@ -204,6 +206,57 @@ SH
       ]}"
 
     chmod 755 "$out/bin/ryoku-eq"
+
+    # ------------------------------------------------------------------
+    # Shared shell helpers moved out of the compositor config tree
+    # ------------------------------------------------------------------
+
+    install -Dm755 \
+      ryoku/shell/scripts/ryoku-ddc-monitors \
+      "$out/bin/ryoku-ddc-monitors"
+
+    patchShebangs "$out/bin/ryoku-ddc-monitors"
+
+    wrapProgram "$out/bin/ryoku-ddc-monitors" \
+      --prefix PATH : "${pkgs.lib.makeBinPath [
+        pkgs.coreutils
+        pkgs.gawk
+        pkgs.util-linux
+        pkgs.ddcutil
+      ]}"
+
+    install -Dm755 \
+      ryoku/shell/scripts/ryoku-reload-cover \
+      "$out/bin/ryoku-reload-cover"
+
+    patchShebangs "$out/bin/ryoku-reload-cover"
+
+    mkdir -p "$out/share/ryoku/reload-cover"
+    cp -a \
+      ryoku/shell/quickshell/reload-cover/. \
+      "$out/share/ryoku/reload-cover/"
+
+    substituteInPlace "$out/bin/ryoku-reload-cover" \
+      --replace-fail \
+        '/usr/share/ryoku/reload-cover' \
+        "$out/share/ryoku/reload-cover"
+
+    wrapProgram "$out/bin/ryoku-reload-cover" \
+      --prefix PATH : "${pkgs.lib.makeBinPath [
+        pkgs.coreutils
+        pkgs.gawk
+        pkgs.jq
+        pkgs.quickshell
+        pkgs.util-linux
+      ]}"
+
+    for helper in ryoku/shell/scripts/stash-*.sh; do
+      install -Dm755 \
+        "$helper" \
+        "$out/bin/$(basename "$helper")"
+    done
+
+    patchShebangs "$out/bin"/stash-*.sh
 
     # Settings -> language integration.
     #
