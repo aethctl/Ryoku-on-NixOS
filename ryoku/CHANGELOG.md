@@ -70,6 +70,11 @@
 - **Input's keyboard band carries the facts.** The layout, variant, and the caps,
   compose and switch keys sit beside the diagram, and the pointer descriptions
   fit one line each.
+- **Every hand-built list is on the settings-row rhythm.** Import's "what it
+  brings over" plate, Updates' package and commit rows, and Displays' saved
+  profiles drew their own tighter spacing (8px between lines, text close to the
+  container edge); they are now cards and rows with `S4` insets and a hairline
+  between rows, the same as every schema page.
 - **Every description fits its row.** A settings description is one line and 60
   characters at a three-column card, a page blurb 70. Measured on the live Hub:
   no description elides any more (was 8), and the two-line rows fell from 52 to 7,

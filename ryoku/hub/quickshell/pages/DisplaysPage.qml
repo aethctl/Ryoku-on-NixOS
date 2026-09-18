@@ -1306,19 +1306,38 @@ Item {
                         Repeater {
                             model: pg.profiles
 
-                            delegate: Rectangle {
+                            delegate: Item {
                                 id: prof
                                 required property var modelData
+                                required property int index
                                 width: parent.width
+                                // the row law the settings cards use: one row
+                                // height, a hairline between rows, no per-row box
                                 height: Tokens.rowH
-                                radius: Tokens.radius
-                                color: phov.hovered ? Tokens.tint5 : "transparent"
-                                border.width: Tokens.border
-                                // an ink border marks the profile whose displays are
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    anchors.topMargin: 1; anchors.bottomMargin: 1
+                                    radius: Tokens.radius
+                                    color: phov.hovered ? Tokens.tint5 : "transparent"
+                                    Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                                }
+                                Rectangle {
+                                    anchors { left: parent.left; right: parent.right; top: parent.top }
+                                    anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                                    height: 1
+                                    color: Tokens.lineSoft
+                                    visible: prof.index > 0
+                                }
+                                // an ink edge marks the profile whose displays are
                                 // connected now; emphasis without colour.
-                                border.color: prof.modelData.matches ? Tokens.ink : Tokens.line
-                                Behavior on color { ColorAnimation { duration: Tokens.snap } }
-                                Behavior on border.color { ColorAnimation { duration: Tokens.snap } }
+                                Rectangle {
+                                    visible: prof.modelData.matches
+                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                    width: 2
+                                    height: parent.height - Tokens.s3
+                                    color: Tokens.ink
+                                }
 
                                 HoverHandler { id: phov }
 

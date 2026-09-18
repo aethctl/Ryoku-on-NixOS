@@ -494,11 +494,19 @@ Item {
                             color: rowHover.hovered ? Tokens.tint5 : "transparent"
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
+                        // parted from the row above the way every card's rows are
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                            anchors.leftMargin: 28; anchors.rightMargin: Tokens.s4
+                            height: 1
+                            color: Tokens.lineSoft
+                            visible: !row.isFirst
+                        }
 
                         Text {
                             id: subj
                             anchors.left: parent.left; anchors.leftMargin: 40
-                            anchors.right: ver.left; anchors.rightMargin: Tokens.s3
+                            anchors.right: ver.left; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
                             text: row.modelData.name
                             color: rowHover.hovered ? Tokens.ink : Tokens.inkDim
@@ -509,7 +517,7 @@ Item {
                         }
                         Row {
                             id: ver
-                            anchors.right: parent.right; anchors.rightMargin: Tokens.s3
+                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Tokens.s2
                             Text {
@@ -596,8 +604,11 @@ Item {
                     delegate: Item {
                         id: prow
                         required property var modelData
+                        required property int index
                         width: idleCol.width
-                        height: 34
+                        // the same row rhythm as the commit list above and the
+                        // settings cards: one height, one hairline between rows
+                        height: 44
 
                         Rectangle {
                             anchors.fill: parent
@@ -606,8 +617,17 @@ Item {
                             color: pkgHover.hovered ? Tokens.tint5 : "transparent"
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
+                        // the row law: a hairline between rows, the same rhythm the
+                        // settings cards use
+                        Rectangle {
+                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                            anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                            height: 1
+                            color: Tokens.lineSoft
+                            visible: prow.index > 0
+                        }
                         Text {
-                            anchors.left: parent.left; anchors.leftMargin: Tokens.s3
+                            anchors.left: parent.left; anchors.leftMargin: Tokens.s4
                             anchors.right: pver.left; anchors.rightMargin: Tokens.s3
                             anchors.verticalCenter: parent.verticalCenter
                             text: prow.modelData.name
@@ -618,7 +638,7 @@ Item {
                         }
                         Row {
                             id: pver
-                            anchors.right: parent.right; anchors.rightMargin: Tokens.s3
+                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Tokens.s2
                             // the pair reads as two columns rather than one run-on

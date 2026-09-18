@@ -442,6 +442,11 @@ not look broken; it looks fine and then eats the edit on the way out.
   column first from an estimate that counts each card's own header as well as its
   rows, so the columns end as level as the groups allow. Prose keeps its own
   reading cap.
+- **A list of values is rows, wherever it lives.** The same rhythm as the settings
+  cards: card insets (`S4`), one row height, a hairline between rows, label in
+  `ink` over its note in `inkMuted`. A hand-built page that draws its own plate
+  with tighter spacing is the drift this rule exists to stop (Import's
+  bring-over list, Updates' package and commit rows, Displays' saved profiles).
 - **Nothing floats.** There is no registration backdrop and no poster layer: the
   sheet is paper with a hairline grid of cards, and the ornament that survives
   (`Reg` behind a rail, `Ticks` on a framed specimen, `Marginalia`, `Barcode`,

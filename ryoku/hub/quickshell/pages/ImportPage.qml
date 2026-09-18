@@ -469,7 +469,9 @@ Item {
                 required property int index
                 readonly property bool active: pg.step === stepPip.modelData.key
                 readonly property bool done: pg.stepIndex(pg.step) > stepPip.index
-                spacing: Tokens.s2
+                // a little air around the hairline connectors, so the numbers and
+                // labels do not sit on the line that joins them
+                spacing: Tokens.s3
                 // a hairline between the steps, so the row reads as one path
                 // walked left to right rather than five loose labels
                 Rectangle {
@@ -527,47 +529,30 @@ Item {
                 width: parent.width - Tokens.s3
                 spacing: Tokens.s4
 
-                // what Ryoku can bring over: mirrors the engine's scanners
-                // (import_parse.go). Shown first so you know what to drop.
-                Plate {
+                // What Ryoku can bring over, on the same row rhythm as every other
+                // sheet in the Hub: a card with value rows parted by hairlines,
+                // rather than a bespoke plate with its own tighter spacing.
+                SettingCard {
                     width: srcCol.width
-                    height: supCol.implicitHeight + Tokens.s4 * 2
-                    Column {
-                        id: supCol
-                        anchors.fill: parent
-                        anchors.margins: Tokens.s4
-                        spacing: Tokens.s2
-                        Text {
-                            text: I18n.tr("WHAT IT BRINGS OVER")
-                            color: Tokens.inkMuted; font.family: Tokens.ui
-                            font.pixelSize: Tokens.fMicro; font.weight: Font.Medium
-                            font.letterSpacing: Tokens.trackMark
-                        }
-                        Repeater {
-                            model: [
-                                { app: "Hyprland", note: "keybinds and window rules become Ryoku settings; the rest layers into hypr/user.lua and wins" },
-                                { app: "Kitty", note: "kitty.conf, layered into kitty/user.conf" },
-                                { app: "Fish", note: "config.fish, functions and conf.d, layered into fish/user.fish" },
-                                { app: "Fastfetch", note: "config.jsonc, layered into fastfetch/user.jsonc" },
-                                { app: "Other apps", note: "any other config folder, dropped into its own override slot" }
-                            ]
-                            delegate: Row {
-                                required property var modelData
-                                width: supCol.width
-                                spacing: Tokens.s3
-                                Text {
-                                    width: 96
-                                    text: I18n.tr(modelData.app)
-                                    color: Tokens.ink; font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fSmall; font.weight: Font.Medium
-                                }
-                                Text {
-                                    width: supCol.width - 96 - Tokens.s3
-                                    text: I18n.tr(modelData.note)
-                                    color: Tokens.inkMuted; font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
-                                }
-                            }
+                    collapsible: false
+                    title: I18n.tr("WHAT IT BRINGS OVER")
+
+                    Repeater {
+                        model: [
+                            { app: "Hyprland", note: "keybinds and window rules become Ryoku settings; the rest layers into hypr/user.lua and wins" },
+                            { app: "Kitty", note: "kitty.conf, layered into kitty/user.conf" },
+                            { app: "Fish", note: "config.fish, functions and conf.d, layered into fish/user.fish" },
+                            { app: "Fastfetch", note: "config.jsonc, layered into fastfetch/user.jsonc" },
+                            { app: "Other apps", note: "any other config folder, dropped into its own override slot" }
+                        ]
+                        delegate: SettingRow {
+                            required property var modelData
+                            required property int index
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            divider: index > 0
+                            label: I18n.tr(modelData.app)
+                            desc: I18n.tr(modelData.note)
                         }
                     }
                 }
