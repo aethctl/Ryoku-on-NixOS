@@ -47,7 +47,7 @@ let
   };
 
   rashin = import ./ryoku-rashin.nix {
-    inherit pkgs src;
+    inherit pkgs src desktopData;
   };
 
   prowlAgent = import ./prowl-agent.nix {
@@ -197,6 +197,13 @@ let
     description = "Ryoku FrameBars Qt/QML module";
   };
 
+  wmHyprlandQml = mkPureQmlModule {
+    pname = "ryoku-wm-hyprland-qml";
+    moduleName = "Wm/Hyprland";
+    sourcePath = "/ryoku/wm/hyprland/qml";
+    description = "Ryoku Hyprland-specific Qt/QML bridge module";
+  };
+
   qml = pkgs.runCommand "ryoku-qml-modules" {
     meta = {
       description = "Combined Ryoku Qt/QML module tree";
@@ -218,6 +225,12 @@ let
     cp -a \
       ${frameBars}/${qmlRoot}/Ryoku/FrameBars \
       "$out/${qmlRoot}/Ryoku/FrameBars"
+
+    mkdir -p "$out/${qmlRoot}/Ryoku/Wm"
+
+    cp -a \
+      ${wmHyprlandQml}/${qmlRoot}/Ryoku/Wm/Hyprland \
+      "$out/${qmlRoot}/Ryoku/Wm/Hyprland"
 
     cp -a \
       ${blobs}/${qmlRoot}/Ryoku/Blobs \
@@ -289,6 +302,7 @@ in
     ui
     pluginKit
     frameBars
+    wmHyprlandQml
     blobs
     qml
 

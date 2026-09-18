@@ -89,9 +89,9 @@ pkgs.writeShellApplication {
   ];
 
   text = ''
-    if [ -z "''${HYPRLAND_INSTANCE_SIGNATURE:-}" ]; then
+    if [ -z "''${WAYLAND_DISPLAY:-}" ]; then
       printf '%s\n' \
-        "ryoku-dev must be started inside a running Hyprland session."
+        "ryoku-dev must be started inside a running Wayland session."
       exit 1
     fi
 

@@ -22,6 +22,10 @@ pkgs.stdenv.mkDerivation {
     pkgs.qt6.qtshadertools
   ];
 
+  preConfigure = ''
+    rm -rf build
+  '';
+
   installPhase = ''
     runHook preInstall
 
