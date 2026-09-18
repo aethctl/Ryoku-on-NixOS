@@ -413,18 +413,33 @@ not look broken; it looks fine and then eats the edit on the way out.
   the rail is navigation.
 - **The page head.** A `力 <GROUP>` eyebrow, the title in Fraunces at `fTitle`,
   and a one-sentence description.
-- **The corner chips.** `FILES` and `UPDATES` ride the empty strip above every
-  page head, and `UPDATES` wears a `Tokens.alert` dot when the channel sits
-  behind origin. They are opaque, so they never collide with the running head.
+- **The corner chips.** `FILES` and `UPDATES` ride the strip beside every page
+  head. They take the page's own right inset (`Tokens.s6`, so they line up with
+  the last card rather than floating inside it), a control-sized box (`30` tall,
+  `S4` of padding, `fSmall` label), and a page that draws its own top-right
+  control (`Profile`'s `EDIT`) sits below them rather than stacking under
+  `UPDATES`. `UPDATES` wears a `Tokens.alert` dot when the channel sits behind
+  origin. Both are opaque, so they never collide with a page's head.
+- **The tab bar is one fixed layout, on every page.** Every plate reserves the
+  `//` lead as a slot and only INKS it when active, and one padding applies to
+  every page, so selecting a tab never widens that plate or shoves its neighbours
+  sideways. A tab-switch is a fade of the card set, not a reflow: nothing
+  travels, and opacity cannot move a card.
+- **The grid's geometry comes from the page width, never from the open tab.**
+  `SettingsSheet.gridColumns` is the page's capacity while `columns` is only how
+  many columns the open tab's groups are bucketed into. Deriving geometry from
+  the tab made a one-group tab (Window Manager's `BORDERS`) shrink the sheet and
+  drag the head and tab row sideways with it, so the whole page read as shuffling
+  when the reader switched. `CardColumns` keeps its column split until the SET of
+  visible blocks changes, so a drawer that unfolds changes only its own column.
 - **The action bar.** Bottom, on framed pages: the dirty readout (`SAVED · LIVE
   ON YOUR DESKTOP`), its own marginalia, then `RESET TO DEFAULTS` / `REVERT` /
   `SAVE`.
-- **The page measure.** Every framed page reads on one centred column, capped at
-  `Tokens.pageMax`: a wider window buys calmer margins, never a longer row. The
-  schema sheet lays its groups into two columns of cards when the measure holds
-  them (`SettingsSheet.columns`, cards capped at `cardMax`), balanced by how tall
-  each group renders, so the page is filled from the top instead of running one
-  long column beside an empty half.
+- **The page measure.** A framed page takes the width beside the rail: a wider
+  window buys more columns, never a longer row and never a wider void. The sheet
+  lays its groups into as many card columns as the measure holds
+  (`SettingsSheet.gridColumns`), each card capped at `cardW`, bucketed so the
+  columns end as level as the groups allow. Prose keeps its own reading cap.
 - **Nothing floats.** There is no registration backdrop and no poster layer: the
   sheet is paper with a hairline grid of cards, and the ornament that survives
   (`Reg` behind a rail, `Ticks` on a framed specimen, `Marginalia`, `Barcode`,

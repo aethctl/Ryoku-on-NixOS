@@ -136,8 +136,10 @@ Item {
 
             Text {
                 Layout.fillWidth: true
-                text: control.media.path === "" ? I18n.tr("DEFAULT")
-                    : control.media.name + (ReloadCoverModel.formatBytes(control.media.bytes) === "" ? "" : " · " + ReloadCoverModel.formatBytes(control.media.bytes))
+                // the kind chip above already says DEFAULT when nothing custom is
+                // set, so the asset line only speaks when there is an asset
+                visible: control.media.path !== ""
+                text: control.media.name + (ReloadCoverModel.formatBytes(control.media.bytes) === "" ? "" : " · " + ReloadCoverModel.formatBytes(control.media.bytes))
                 color: Tokens.ink
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fRow

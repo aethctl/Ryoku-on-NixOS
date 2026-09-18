@@ -470,6 +470,14 @@ Item {
                 readonly property bool active: pg.step === stepPip.modelData.key
                 readonly property bool done: pg.stepIndex(pg.step) > stepPip.index
                 spacing: Tokens.s2
+                // a hairline between the steps, so the row reads as one path
+                // walked left to right rather than five loose labels
+                Rectangle {
+                    visible: stepPip.index > 0
+                    width: 20; height: 1
+                    color: stepPip.active || stepPip.done ? Tokens.line : Tokens.lineSoft
+                    anchors.verticalCenter: parent.verticalCenter
+                }
                 Text {
                     text: (stepPip.index + 1)
                     color: stepPip.active ? Tokens.sun : (stepPip.done ? Tokens.inkDim : Tokens.inkFaint)
@@ -478,7 +486,7 @@ Item {
                 }
                 Text {
                     text: I18n.tr(stepPip.modelData.label)
-                    color: stepPip.active ? Tokens.ink : (stepPip.done ? Tokens.inkDim : Tokens.inkFaint)
+                    color: stepPip.active ? Tokens.ink : (stepPip.done ? Tokens.inkDim : Tokens.inkMuted)
                     font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
                     font.weight: stepPip.active ? Font.Medium : Font.Normal
                     font.letterSpacing: Tokens.trackLabel

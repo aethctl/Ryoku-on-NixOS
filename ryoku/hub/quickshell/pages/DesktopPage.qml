@@ -70,9 +70,10 @@ Item {
             anchors.left: parent.left
             width: sp.cardWidth
             title: I18n.tr("PICKERS")
-            kana: "選"
+            // the shared extras slot is a Column, which sizes itself from its
+            // VISIBLE children: a height binding here would be the trap of
+            // measuring the card by its own implicitHeight, and is not needed
             visible: sp.tab === "General"
-            height: visible ? implicitHeight : 0
 
             SettingRow {
                 anchors.left: parent.left

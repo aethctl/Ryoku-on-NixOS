@@ -12,8 +12,6 @@
   slider's percentage into a field on click or Enter and reports the typed text,
   which `SettingsSheet` clamps into the row's own range and stores in the kind the
   row speaks.
-
-### Added
 - **A folded card says what it hides.** `SettingCard.summary` puts a count
   ("4 SWITCHES") in the header of a collapsed group, because a folded card with no
   trace of its contents reads as an empty one.
@@ -40,11 +38,38 @@
   tiers are raised.
 - **The Profile page says which compositor you are running.** The dossier read
   "Hyprland" from a hardcoded name; it now reads the session's own compositor.
+- **A tab never moves its neighbours.** Every tab plate reserves the `//` lead as
+  a slot and only inks it when active, so selecting a tab no longer widens that
+  plate and shoves the others sideways, on any page.
+- **A page's head and grid hold still across tabs.** The sheet's geometry comes
+  from the page's width, not from how many groups the open tab happens to have.
+  A one-group tab (Window Manager's `BORDERS`, `MOTION`) used to shrink the sheet
+  to a narrow column in the middle of the window and drag the title and tab row
+  with it, which read as the whole page shuffling.
+- **Unfolding a group no longer moves cards between columns.** The column split
+  is kept until the set of visible blocks changes, so a drawer that opens spreads
+  only its own column; measured: cards in other columns keep their exact x and y.
+- **The Updates version pairs are readable.** Each pair is two columns with the
+  incoming version carrying more ink than the one it replaces, instead of one
+  run-on string at the smallest type.
 - **The Hub's page corners are quiet.** The decorative marginalia strips beside the
   FILES and UPDATES buttons are gone: they crowded those controls and carried
   hand-written group indices that were often wrong.
 
 ### Changed
+- **The Hub's chrome is one fixed layout, not a per-page guess.** The `FILES` and
+  `UPDATES` chips are control-sized (`30` tall, `S4` padding) and take the page's
+  own right inset, so they line up with the last card instead of floating inside
+  it, and Profile's `EDIT` sits below them rather than stacking under `UPDATES`.
+- **A tab switch fades instead of snapping.** The card set crossfades on a tab
+  change the way a page swap does, and a disabled control stays legible at half
+  opacity rather than nearly invisible.
+- **Window Manager's cannot-do list folds.** The tab keeps the list, behind a
+  header that says how many settings it holds, instead of opening on a wall of
+  near-identical lines.
+- **Input's keyboard band carries the facts.** The layout, variant, and the caps,
+  compose and switch keys sit beside the diagram, and the pointer descriptions
+  fit one line each.
 - **Every description fits its row.** A settings description is one line and 60
   characters at a three-column card, a page blurb 70. Measured on the live Hub:
   no description elides any more (was 8), and the two-line rows fell from 52 to 7,

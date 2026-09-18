@@ -95,12 +95,18 @@ Item {
     readonly property int cardMax: 520
     function fitsColumns(n) { return (width - 28) >= (n * cardMax + (n - 1) * Tokens.s5) }
     readonly property int capacity: fitsColumns(3) ? 3 : (fitsColumns(2) ? 2 : 1)
-    // a page with two groups does not get three columns: the grid narrows to what
-    // it has and the cards take the space, filling the window instead of hugging
-    // its left edge with a lone card
+    // The grid's geometry follows the PAGE WIDTH alone, never how many groups the
+    // open tab happens to have. Deriving it from the tab's group count made a
+    // one-group tab (BORDERS, MOTION) shrink the sheet to a narrow column in the
+    // middle of the window and drag the page's head and tabs sideways with it, so
+    // switching tabs read as the whole page shuffling.
+    readonly property int gridColumns: capacity
+    // how many columns the groups are BUCKETED into: a page with two groups does
+    // not get three columns, so the cards take the space instead of hugging the
+    // left edge with one column empty beside them
     readonly property int columns: Math.max(1, Math.min(capacity, groups.length))
     readonly property int cardW: Math.min(Tokens.cardWide,
-        Math.max(360, Math.floor((width - 28 - (columns - 1) * Tokens.s5) / columns)))
+        Math.max(360, Math.floor((width - 28 - (gridColumns - 1) * Tokens.s5) / gridColumns)))
     // The column's own geometry, so a page's head can sit on the same grid.
     readonly property real sheetWidth: col.width
     readonly property real sheetX: flick.x + col.x
@@ -276,11 +282,11 @@ Item {
         // The sheet IS the column: the flick is sized to the cards it holds and
         // centred in the page, so the scroll rail hangs off the column's edge
         // instead of the window's, and the margins either side stay equal.
-        width: Math.min(parent.width - 14, sheet.columns * sheet.cardW + (sheet.columns - 1) * Tokens.s5 + 14)
+        width: Math.min(parent.width - 14, sheet.gridColumns * sheet.cardW + (sheet.gridColumns - 1) * Tokens.s5 + 14)
         x: Math.round((parent.width - width) / 2)
         // The card columns span the column they were given, so a two-column sheet
         // fills the measure and a one-column one is not left-aligned in it.
-        property int columnSpan: sheet.columns
+        property int columnSpan: sheet.gridColumns
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         contentHeight: Math.max(col.height + Tokens.s5, height)
@@ -317,6 +323,20 @@ Item {
                 width: col.width
                 spacing: Tokens.s5
                 readonly property var buckets: sheet.bucketGroups(sheet.groups, sheet.columns)
+
+                // A tab change swaps the whole card set, which otherwise snaps.
+                // A fade is the right motion for a content exchange: nothing
+                // travels, and opacity cannot move a card.
+                Connections {
+                    target: sheet
+                    function onTabChanged() { tabFade.restart() }
+                }
+                NumberAnimation {
+                    id: tabFade
+                    target: cardColumns; property: "opacity"
+                    from: 0; to: 1
+                    duration: Tokens.swap; easing.type: Tokens.ease
+                }
 
                 Repeater {
                     model: cardColumns.buckets

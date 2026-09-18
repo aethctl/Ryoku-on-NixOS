@@ -633,7 +633,9 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.rightMargin: Tokens.s6
-        anchors.topMargin: Tokens.s6
+        // below the corner chrome strip (the FILES and UPDATES chips end at 46):
+        // EDIT used to stack directly under UPDATES and read as a stray
+        anchors.topMargin: Tokens.s6 * 2
         onAct: pg.editing = !pg.editing
     }
 

@@ -606,8 +606,9 @@ Item {
 
     // ── KEYBOARD MAP: pinned under the head so it stays in view while you edit,
     // never scrolled to. A compact live diagram of the layout and the remaps,
-    // beside a decorative plate that fills the space the small keyboard leaves.
-    // The page's one red head -- a showcase surface, not a settings group.
+    // beside the facts behind it -- the held layout, its variant, and the keys
+    // the remaps below will write -- so the band says something at a glance
+    // instead of leaving half its width blank.
     Section {
         id: kbmSect
         anchors { top: head.bottom; topMargin: Tokens.s5 }
@@ -619,7 +620,7 @@ Item {
         titleColor: Tokens.sunDeep
 
         Row {
-            spacing: Tokens.s4
+            spacing: Tokens.s6
             KeyboardMap {
                 id: pinnedMap
                 compact: true
@@ -634,6 +635,40 @@ Item {
                 composeKey: pg.pickFrom(pg.composeIds, false)
                 switchChord: pg.pickFrom(pg.grpIds, false)
                 numlock: pg.hv("desktop.input.numlockByDefault") === true
+            }
+
+            // the facts the diagram draws, in words: a mono label over its value
+            Column {
+                width: Math.max(200, kbmSect.span(Spans.cols) - pinnedMap.width - Tokens.s6)
+                anchors.verticalCenter: pinnedMap.verticalCenter
+                spacing: Tokens.s3
+                Repeater {
+                    model: [
+                        { k: I18n.tr("LAYOUT"), v: pg.nameIn(pg.layoutOptions, pg.primaryLayout(false)) },
+                        { k: I18n.tr("VARIANT"), v: pg.nameIn(pg.variantOptions, pg.primaryVariant(false)) },
+                        { k: I18n.tr("CAPS"), v: pg.mapLabel(pg.capsMap, pg.pickFrom(pg.capsIds, false)) },
+                        { k: I18n.tr("COMPOSE"), v: pg.mapLabel(pg.composeMap, pg.pickFrom(pg.composeIds, false)) },
+                        { k: I18n.tr("SWITCH"), v: pg.mapLabel(pg.grpMap, pg.pickFrom(pg.grpIds, false)) }
+                    ]
+                    delegate: Column {
+                        required property var modelData
+                        width: parent.width
+                        spacing: 1
+                        Text {
+                            text: modelData.k
+                            color: Tokens.inkFaint
+                            font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+                            font.letterSpacing: Tokens.trackMark
+                        }
+                        Text {
+                            width: parent.width
+                            text: modelData.v || "—"
+                            color: Tokens.ink
+                            font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
             }
         }
     }
@@ -719,7 +754,7 @@ Item {
                     path: "desktop.input.sensitivity"
                     ctl: "slid"; lo: -1; hi: 1; sc: 100; dec: 2
                     label: I18n.tr("Sensitivity")
-                    desc: I18n.tr("Pointer speed offset; 0 is the default.")
+                    desc: I18n.tr("Pointer speed offset; 0 is default.")
                 }
                 Setting {
                     path: "desktop.input.mouseScrollFactor"

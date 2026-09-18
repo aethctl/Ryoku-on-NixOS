@@ -128,6 +128,11 @@ Item {
     }
 
     property bool _laying: false
+    // the visible-child list and the column split it produced: the split is kept
+    // until that list changes, so a card growing does not resend it elsewhere
+    property var _kids: []
+    property var _pick: null
+
     function lay() {
         if (root._laying || root.width <= 0)
             return;
@@ -155,25 +160,43 @@ Item {
             heights.push(kk.height);
         }
 
-        // runs of cards, split by the bands between them
-        var assign = [];
-        var i = 0;
-        while (i < kids.length) {
-            if (kids[i].fullWidth === true) {
-                assign[i] = -1;
-                i++;
-                continue;
-            }
-            var run = [];
-            var start = i;
-            while (i < kids.length && kids[i].fullWidth !== true) {
-                run.push(heights[i]);
-                i++;
-            }
-            var picks = root.splitRun(run);
-            for (var r = 0; r < run.length; r++)
-                assign[start + r] = picks[r];
+        // Runs of cards, split by the bands between them. The split is decided
+        // once per SET of visible blocks and then kept: a drawer that unfolds
+        // changes a card's height, and re-splitting on that would send cards
+        // hopping to another column while the reader is looking at them. Only a
+        // block appearing, disappearing or changing visibility re-splits.
+        var changed = kids.length !== root._kids.length;
+        if (!changed) {
+            for (var q = 0; q < kids.length; q++)
+                if (kids[q] !== root._kids[q]) { changed = true; break; }
         }
+        if (changed) {
+            root._kids = kids.slice();
+            root._pick = null;
+        }
+
+        if (!root._pick) {
+            var assign = [];
+            var i = 0;
+            while (i < kids.length) {
+                if (kids[i].fullWidth === true) {
+                    assign[i] = -1;
+                    i++;
+                    continue;
+                }
+                var run = [];
+                var start = i;
+                while (i < kids.length && kids[i].fullWidth !== true) {
+                    run.push(heights[i]);
+                    i++;
+                }
+                var picks = root.splitRun(run);
+                for (var r = 0; r < run.length; r++)
+                    assign[start + r] = picks[r];
+            }
+            root._pick = assign;
+        }
+        var assign2 = root._pick;
 
         // place: one cursor per column, bands flush both to the same line
         var cursors = [];
@@ -181,7 +204,7 @@ Item {
         var lowest = 0;
         for (var j = 0; j < kids.length; j++) {
             var kid = kids[j];
-            if (assign[j] === -1) {
+            if (assign2[j] === -1) {
                 var floorY = 0;
                 for (var f = 0; f < cursors.length; f++) floorY = Math.max(floorY, cursors[f]);
                 kid.x = 0;
@@ -189,7 +212,7 @@ Item {
                 for (var g = 0; g < cursors.length; g++) cursors[g] = floorY + kid.height + root.spacing;
                 lowest = Math.max(lowest, floorY + kid.height);
             } else {
-                var col = Math.min(assign[j], root.columns - 1);
+                var col = Math.min(assign2[j] === undefined ? 0 : assign2[j], root.columns - 1);
                 kid.x = col * (root.colWidth + root.columnSpacing);
                 kid.y = cursors[col];
                 cursors[col] += kid.height + root.spacing;

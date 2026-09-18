@@ -507,13 +507,29 @@ Item {
                             elide: Text.ElideRight
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
-                        Text {
+                        Row {
                             id: ver
                             anchors.right: parent.right; anchors.rightMargin: Tokens.s3
                             anchors.verticalCenter: parent.verticalCenter
-                            text: row.fromVersion !== "" ? (row.fromVersion + "  \u2192  " + row.toVersion) : row.toVersion
-                            color: Tokens.inkFaint; font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny
+                            spacing: Tokens.s2
+                            Text {
+                                visible: row.fromVersion !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.fromVersion
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                visible: row.fromVersion !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\u2192"
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: row.toVersion
+                                color: Tokens.inkMuted; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                                font.weight: Font.Medium
+                            }
                         }
 
                         HoverHandler { id: rowHover }
@@ -600,14 +616,32 @@ Item {
                             elide: Text.ElideRight
                             Behavior on color { ColorAnimation { duration: Tokens.snap } }
                         }
-                        Text {
+                        Row {
                             id: pver
                             anchors.right: parent.right; anchors.rightMargin: Tokens.s3
                             anchors.verticalCenter: parent.verticalCenter
-                            text: (prow.modelData.old || "") !== ""
-                                ? (prow.modelData.old + "  \u2192  " + prow.modelData.new)
-                                : (prow.modelData.new || "")
-                            color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+                            spacing: Tokens.s2
+                            // the pair reads as two columns rather than one run-on
+                            // string, and the incoming version carries more ink
+                            // than the one being replaced
+                            Text {
+                                visible: (prow.modelData.old || "") !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: prow.modelData.old || ""
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                visible: (prow.modelData.old || "") !== ""
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "\u2192"
+                                color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: prow.modelData.new || ""
+                                color: Tokens.inkMuted; font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                                font.weight: Font.Medium
+                            }
                         }
                         HoverHandler { id: pkgHover }
                     }

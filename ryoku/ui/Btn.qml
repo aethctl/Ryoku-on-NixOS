@@ -21,7 +21,10 @@ Rectangle {
     implicitWidth: lab.width + (compact ? 20 : 30)
     implicitHeight: compact ? 24 : 32
     radius: Tokens.radius
-    opacity: armed ? 1 : 0.3
+    // 0.5, not 0.3: a control that cannot act must still be legible as itself
+    // (the reader needs to see what is there and why it is inert), while the
+    // dimming keeps it from reading as available.
+    opacity: armed ? 1 : 0.5
     color: primary && armed ? Tokens.bone : (tap.pressed && armed ? Tokens.tint16 : (bh.hovered && armed ? Tokens.tint10 : "transparent"))
     border.width: Tokens.border
     border.color: activeFocus ? Tokens.bone : (primary && armed ? Tokens.bone : (bh.hovered && armed ? Tokens.lineStrong : Tokens.line))
