@@ -20,6 +20,13 @@ import (
 const barStyleTransactionKey = "ryoStoreBarStyleTransaction"
 const barStyleScene = "Scene.qml"
 
+var coreBarStyles = map[string]bool{
+	"sumi":   true,
+	"qsbar":  true,
+	"chroma": true,
+	"kairos": true,
+}
+
 type barStyleIndexRow struct {
 	ID      string `json:"id"`
 	Version string `json:"version"`
@@ -104,6 +111,9 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 	}
 	seen := make(map[string]bool, len(entries))
 	for _, entry := range entries {
+		if coreBarStyles[entry.ID] {
+			continue
+		}
 		item, err := productEntryItem(p.cache.base, "barstyles", entry)
 		if err != nil {
 			return nil, state, fmt.Errorf("barstyles/%s: installed state: %w", entry.ID, err)
@@ -150,7 +160,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" {
+	if coreBarStyles[id] {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -165,7 +175,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" {
+	if coreBarStyles[id] {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)
@@ -190,6 +200,9 @@ func installedBarStyleRows() ([]barStyleIndexRow, error) {
 			continue
 		}
 		id := strings.TrimSuffix(entry.Name(), ".json")
+		if coreBarStyles[id] {
+			continue
+		}
 		// A broken barstyle receipt (bad name, unreadable, missing Scene.qml, or
 		// drifted from disk) is quarantined: skipped so it can't error the
 		// provider and report the store offline. It reads as installable again
