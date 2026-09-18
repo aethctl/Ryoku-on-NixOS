@@ -101,14 +101,90 @@ func runCapped(ctx context.Context, cap int, name string, args ...string) string
 	return strings.TrimSpace(s)
 }
 
+func packageBackend() string {
+	backend := strings.ToLower(strings.TrimSpace(os.Getenv("RYOKU_PACKAGE_BACKEND")))
+	if backend != "" {
+		return backend
+	}
+	if _, err := exec.LookPath("pacman"); err == nil {
+		return "arch"
+	}
+	if _, err := exec.LookPath("nix-store"); err == nil {
+		return "nix"
+	}
+	return "unknown"
+}
+
+func nixClosurePaths(ctx context.Context) ([]string, error) {
+	c, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+
+	out, err := exec.CommandContext(
+		c,
+		"nix-store",
+		"--query",
+		"--requisites",
+		"/run/current-system",
+	).Output()
+	if err != nil {
+		return nil, err
+	}
+
+	return nonEmptyLines(string(out)), nil
+}
+
+func nixPackageQuery(ctx context.Context, arg string) string {
+	paths, err := nixClosurePaths(ctx)
+	if err != nil {
+		return "error: cannot read /run/current-system closure: " + err.Error()
+	}
+
+	arg = strings.TrimSpace(arg)
+
+	if arg == "" {
+		return fmt.Sprintf(
+			"NixOS system closure: %d store paths",
+			len(paths),
+		)
+	}
+
+	needle := strings.ToLower(arg)
+	var matches []string
+
+	for _, path := range paths {
+		if strings.Contains(strings.ToLower(filepath.Base(path)), needle) {
+			matches = append(matches, path)
+			if len(matches) >= 50 {
+				break
+			}
+		}
+	}
+
+	if len(matches) == 0 {
+		return fmt.Sprintf("no system closure path matched %q", arg)
+	}
+
+	return strings.Join(matches, "\n")
+}
+
+func nixUpdateQuery(ctx context.Context) string {
+	return runCapped(ctx, 8192, "ryoku", "status", "--json")
+}
+
 func toolSystemQuery(ctx context.Context, topic, arg string) string {
 	switch topic {
 	case "packages":
+		if packageBackend() == "nix" {
+			return nixPackageQuery(ctx, arg)
+		}
 		if arg != "" {
 			return runCapped(ctx, 4096, "pacman", "-Qi", arg)
 		}
 		return runCapped(ctx, 2048, "sh", "-c", "pacman -Qq | wc -l")
 	case "updates":
+		if packageBackend() == "nix" {
+			return nixUpdateQuery(ctx)
+		}
 		return runCapped(ctx, 4096, "sh", "-c", "checkupdates 2>/dev/null | head -50 || echo 'no updates or checkupdates unavailable'")
 	case "service":
 		if arg == "" {
@@ -135,24 +211,38 @@ func toolSystemQuery(ctx context.Context, topic, arg string) string {
 
 // safeReadRoots bounds read_file to config, system share, and /proc: enough to
 // answer real questions, nothing under the user's private data by accident.
-var safeReadRoots = []string{"/etc", "/usr/share", "/proc", "/sys/class"}
+func safeReadRoots() []string {
+	roots := []string{"/etc", "/usr/share", "/proc", "/sys/class"}
+
+	if base := strings.TrimSpace(os.Getenv("RYOKU_CONFIG_BASE")); base != "" {
+		roots = append(roots, filepath.Clean(base))
+	}
+
+	if shipped := strings.TrimSpace(os.Getenv("RYOKU_RASHIN_SHIPPED")); shipped != "" {
+		roots = append(roots, filepath.Dir(filepath.Clean(shipped)))
+	}
+
+	return roots
+}
 
 func withinSafeRoot(p string) bool {
 	if strings.HasPrefix(p, home()) {
 		return true
 	}
-	for _, r := range safeReadRoots {
+
+	for _, r := range safeReadRoots() {
 		if p == r || strings.HasPrefix(p, r+"/") {
 			return true
 		}
 	}
+
 	return false
 }
 
 func toolReadFile(path string) string {
 	p := filepath.Clean(expandHome(strings.TrimSpace(path)))
 	if !withinSafeRoot(p) {
-		return "error: reads are limited to $HOME, /etc, /usr/share, /proc"
+		return "error: path is outside Rashin's approved read roots"
 	}
 	fi, err := os.Stat(p)
 	if err != nil {
@@ -174,8 +264,8 @@ func toolReadFile(path string) string {
 
 func toolListDir(path string) string {
 	p := filepath.Clean(expandHome(strings.TrimSpace(path)))
-	if !strings.HasPrefix(p, home()) && !strings.HasPrefix(p, "/etc") {
-		return "error: listing is limited to $HOME and /etc"
+	if !withinSafeRoot(p) {
+		return "error: path is outside Rashin's approved read roots"
 	}
 	entries, err := os.ReadDir(p)
 	if err != nil {

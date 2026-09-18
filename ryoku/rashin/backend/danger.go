@@ -189,6 +189,34 @@ func classifyArgv(argv []string) (dangerTier, string) {
 		}
 	}
 	switch {
+	case name == "nix":
+		if len(argv) >= 2 {
+			switch argv[1] {
+			case "eval", "search", "path-info", "why-depends":
+				return tierRead, ""
+			case "flake":
+				if len(argv) >= 3 && (argv[2] == "show" || argv[2] == "metadata") {
+					return tierRead, ""
+				}
+			case "profile":
+				if len(argv) >= 3 && argv[2] == "list" {
+					return tierRead, ""
+				}
+			}
+		}
+		return tierSystem, "Nix operation may change system or profile state"
+
+	case name == "nix-store":
+		for _, arg := range argv[1:] {
+			if arg == "--query" || strings.HasPrefix(arg, "-q") {
+				return tierRead, ""
+			}
+		}
+		return tierSystem, "nix-store operation may change store state"
+
+	case name == "nixos-rebuild" || name == "home-manager" || name == "nh":
+		return tierSystem, name + " changes Nix system state"
+
 	case wipers[name] || strings.HasPrefix(name, "mkfs."):
 		return tierDanger, name + " destroys data"
 	case name == "rm":

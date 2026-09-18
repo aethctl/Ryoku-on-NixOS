@@ -77,27 +77,38 @@ func RunSetup() error {
 	// a Python toolchain (uv or python3), a reachable network, and ~2 GiB free in
 	// $HOME. Checking all four here turns a mid-install failure (the cryptic
 	// "uv lock missing" a broken or offline install throws) into one clear line.
-	reportPhase("preflight", "checking tools, connectivity, and disk space", true)
-	if !haveCmd("curl") {
-		return errors.New("curl is required for the Hermes installer (sudo pacman -S curl)")
-	}
-	if !haveCmd("uv") && !haveCmd("python3") {
-		return errors.New("Hermes needs uv or python3 to install (sudo pacman -S uv), then re-run setup")
-	}
-	if !setupOnline() {
-		return errors.New("Hermes setup needs an internet connection: it downloads the agent and its Python dependencies from GitHub and PyPI")
-	}
-	var st syscall.Statfs_t
-	if err := syscall.Statfs(home(), &st); err == nil {
-		free := st.Bavail * uint64(st.Bsize)
-		if free < 2<<30 {
-			return fmt.Errorf("less than 2 GiB free in %s", home())
+	nixManaged := os.Getenv("RYOKU_RASHIN_NIXOS") == "1" || packageBackend() == "nix"
+
+	if nixManaged {
+		reportPhase("preflight", "checking declaratively provisioned Hermes", true)
+		if _, ok := FindHermes(); !ok {
+			return errors.New("Hermes is not provisioned declaratively on this NixOS system")
+		}
+	} else {
+		reportPhase("preflight", "checking tools, connectivity, and disk space", true)
+		if !haveCmd("curl") {
+			return errors.New("curl is required for the Hermes installer (sudo pacman -S curl)")
+		}
+		if !haveCmd("uv") && !haveCmd("python3") {
+			return errors.New("Hermes needs uv or python3 to install (sudo pacman -S uv), then re-run setup")
+		}
+		if !setupOnline() {
+			return errors.New("Hermes setup needs an internet connection: it downloads the agent and its Python dependencies from GitHub and PyPI")
+		}
+		var st syscall.Statfs_t
+		if err := syscall.Statfs(home(), &st); err == nil {
+			free := st.Bavail * uint64(st.Bsize)
+			if free < 2<<30 {
+				return fmt.Errorf("less than 2 GiB free in %s", home())
+			}
 		}
 	}
 
 	// Install: skipped entirely when Hermes already exists (never clobber).
 	if _, ok := FindHermes(); ok {
 		reportPhase("install", "existing Hermes detected, leaving it untouched", true)
+	} else if nixManaged {
+		return errors.New("Hermes must be installed declaratively on NixOS")
 	} else {
 		reportPhase("install", "running the official Hermes installer", true)
 		// Not `curl | bash`: piping leaves the installer's stdin on the pipe, so

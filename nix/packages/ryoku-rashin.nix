@@ -1,7 +1,29 @@
-{ pkgs, src }:
+{
+  pkgs,
+  src,
+  desktopData,
+}:
 
 let
   repoSrc = src;
+
+  runtimePath = pkgs.lib.makeBinPath [
+    pkgs.bash
+    pkgs.coreutils
+    pkgs.curl
+    pkgs.findutils
+    pkgs.gawk
+    pkgs.gnugrep
+    pkgs.gnused
+    pkgs.iproute2
+    pkgs.jq
+    pkgs.nix
+    pkgs.pciutils
+    pkgs.procps
+    pkgs.systemd
+    pkgs.util-linux
+    pkgs.which
+  ];
 in
 pkgs.stdenv.mkDerivation {
   pname = "ryoku-rashin";
@@ -11,6 +33,7 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = [
     pkgs.go
+    pkgs.makeWrapper
   ];
 
   buildPhase = ''
@@ -40,16 +63,13 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p \
       "$out/bin" \
+      "$out/libexec" \
       "$out/share/ryoku/rashin" \
       "$out/share/ryoku/skills"
 
     install -Dm755 \
       ryoku-rashin \
-      "$out/bin/ryoku-rashin"
-
-    ln -s \
-      ryoku-rashin \
-      "$out/bin/rashin"
+      "$out/libexec/ryoku-rashin"
 
     install -Dm644 \
       "$TMPDIR/ryoku-repo.md" \
@@ -58,6 +78,17 @@ pkgs.stdenv.mkDerivation {
     cp -a \
       "${repoSrc}/ryoku/rashin/skills/." \
       "$out/share/ryoku/skills/"
+
+    makeWrapper \
+      "$out/libexec/ryoku-rashin" \
+      "$out/bin/ryoku-rashin" \
+      --set RYOKU_PACKAGE_BACKEND nix \
+      --set RYOKU_RASHIN_NIXOS 1 \
+      --set RYOKU_CONFIG_BASE "${desktopData}/share/ryoku/config" \
+      --set RYOKU_RASHIN_SHIPPED "$out/share/ryoku/rashin/ryoku-repo.md" \
+      --prefix PATH : "${runtimePath}"
+
+    ln -s ryoku-rashin "$out/bin/rashin"
 
     runHook postInstall
   '';

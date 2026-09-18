@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // manifest.go answers the question "how do I make MY coding agent Ryoku-aware?"
@@ -126,6 +128,26 @@ func BuildManifest(cfg Config) Manifest {
 	}
 }
 
+func platformSummary() string {
+	osName := "Linux"
+	switch packageBackend() {
+	case "nix":
+		osName = "NixOS"
+	case "arch":
+		osName = "Arch Linux"
+	}
+
+	wmName := "desktop"
+	if d := wm.Detect(); d.Name != "" {
+		name := strings.TrimSpace(d.Name)
+		if name != "" {
+			wmName = strings.ToUpper(name[:1]) + name[1:]
+		}
+	}
+
+	return osName + " + " + wmName + " + Quickshell"
+}
+
 // manifestSnippet is the plain-language block a user pastes into any coding
 // agent's instructions file so it works like the supported ones. Paths are
 // resolved and tilde-abbreviated.
@@ -136,7 +158,7 @@ func manifestSnippet(skillDir string) string {
 		skill = tildeAbbrev(filepath.Join(skillDir, "SKILL.md"))
 	}
 	var b strings.Builder
-	b.WriteString("You are working on a Ryoku machine (Arch Linux + Hyprland + Quickshell).\n\n")
+	fmt.Fprintf(&b, "You are working on a Ryoku machine (%s).\n\n", platformSummary())
 	fmt.Fprintf(&b, "- Read the Ryoku vault first, at %s/ -- start with AGENTS.md (where every\n", vault)
 	b.WriteString("  config lives, the binary that owns it, and how to reload it), then desktop.md,\n")
 	b.WriteString("  system.md, packages.md, repo.md, user.md.\n")

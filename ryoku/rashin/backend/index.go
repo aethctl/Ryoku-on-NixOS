@@ -180,8 +180,30 @@ func actingBody() string {
 	return b.String()
 }
 
-// ryokuPackages are queried for installed versions in desktop.md.
-var ryokuPackages = []string{"ryoku-shell", "ryoku-hub", "ryoku", "ryoku-blobs", "ryoku-desktop", "ryoku-rashin"}
+// ryokuPackageSpec maps the public/upstream component name to the package
+// which owns it on each backend. NixOS does not preserve Arch's package split
+// exactly: the CLI is ryoku-cli, desktop assets are ryoku-desktop-data, and
+// blobs are folded into the combined QML module rather than remaining a
+// standalone runtime package.
+type ryokuPackageSpec struct {
+	Label   string
+	Arch    string
+	Nix     string
+	NixNote string
+}
+
+var ryokuPackages = []ryokuPackageSpec{
+	{Label: "ryoku-shell", Arch: "ryoku-shell", Nix: "ryoku-shell"},
+	{Label: "ryoku-hub", Arch: "ryoku-hub", Nix: "ryoku-hub"},
+	{Label: "ryoku", Arch: "ryoku", Nix: "ryoku-cli"},
+	{
+		Label:   "ryoku-blobs",
+		Arch:    "ryoku-blobs",
+		NixNote: "bundled into ryoku-qml-modules",
+	},
+	{Label: "ryoku-desktop", Arch: "ryoku-desktop", Nix: "ryoku-desktop-data"},
+	{Label: "ryoku-rashin", Arch: "ryoku-rashin", Nix: "ryoku-rashin"},
+}
 
 func desktopBody() string {
 	var b strings.Builder
@@ -198,16 +220,57 @@ func desktopBody() string {
 		b.WriteString("| Window manager | (no provider installed) | - | - |\n")
 	}
 	for _, r := range desktopMap {
+		if r.subsystem == "Packages" && packageBackend() == "nix" {
+			r = desktopMapRow{
+				subsystem: "Packages",
+				path:      "/run/current-system + declarative NixOS configuration",
+				owner:     "NixOS / Nix",
+				reload:    "rebuild the declarative system configuration",
+			}
+		}
 		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", r.subsystem, mdCell(r.path), r.owner, mdCell(r.reload))
 	}
 	b.WriteString("\n## Ryoku package versions\n\n")
 	any := false
+	backend := packageBackend()
+
+	var nixPaths []string
+	if backend == "nix" {
+		if paths, err := nixClosurePaths(context.Background()); err == nil {
+			nixPaths = paths
+		}
+	}
+
 	for _, pkg := range ryokuPackages {
-		if v := pacmanVersion(pkg); v != "" {
-			fmt.Fprintf(&b, "- %s %s\n", pkg, v)
+		if backend == "nix" && pkg.NixNote != "" {
+			fmt.Fprintf(&b, "- %s (%s)\n", pkg.Label, pkg.NixNote)
+			any = true
+			continue
+		}
+
+		var packageName string
+		if backend == "nix" {
+			packageName = pkg.Nix
+		} else {
+			packageName = pkg.Arch
+		}
+
+		var version string
+		if backend == "nix" {
+			version = nixClosurePackageVersion(nixPaths, packageName)
+		} else {
+			version = pacmanVersion(packageName)
+		}
+
+		if version != "" {
+			if backend == "nix" && packageName != pkg.Label {
+				fmt.Fprintf(&b, "- %s %s (`%s`)\n", pkg.Label, version, packageName)
+			} else {
+				fmt.Fprintf(&b, "- %s %s\n", pkg.Label, version)
+			}
 			any = true
 		} else {
-			fmt.Fprintf(&b, "- %s (not installed)\n", pkg)
+			fmt.Fprintf(&b, "- %s (not found in active package set)\n", pkg.Label)
 		}
 	}
 	if !any {
@@ -380,6 +443,10 @@ func barSectionBody() string {
 }
 
 func packagesBody() string {
+	if packageBackend() == "nix" {
+		return nixPackagesBody()
+	}
+
 	var b strings.Builder
 	if out, ok := probe(5, "pacman", "-Qq"); ok {
 		fmt.Fprintf(&b, "## Total installed\n\n%d packages\n\n", len(nonEmptyLines(out)))
@@ -401,6 +468,85 @@ func packagesBody() string {
 		fmt.Fprintf(&b, "## Pending updates\n\n%d packages\n", len(nonEmptyLines(out)))
 	}
 	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+func nixPackagesBody() string {
+	var b strings.Builder
+
+	paths, err := nixClosurePaths(context.Background())
+	if err != nil {
+		b.WriteString("## NixOS system closure\n\n")
+		fmt.Fprintf(&b, "Unable to read `/run/current-system`: %v\n", err)
+		return b.String()
+	}
+
+	b.WriteString("## NixOS system closure\n\n")
+	fmt.Fprintf(&b, "%d store paths in the active system closure.\n\n", len(paths))
+
+	b.WriteString("NixOS is declarative and has no pacman-style explicit-package database. ")
+	b.WriteString("Package changes belong in the NixOS configuration and become live after a rebuild.\n\n")
+
+	b.WriteString("## Ryoku components in the active closure\n\n")
+	for _, pkg := range ryokuPackages {
+		if pkg.NixNote != "" {
+			fmt.Fprintf(&b, "- %s (%s)\n", pkg.Label, pkg.NixNote)
+			continue
+		}
+
+		if v := nixClosurePackageVersion(paths, pkg.Nix); v != "" {
+			if pkg.Nix != pkg.Label {
+				fmt.Fprintf(&b, "- %s %s (`%s`)\n", pkg.Label, v, pkg.Nix)
+			} else {
+				fmt.Fprintf(&b, "- %s %s\n", pkg.Label, v)
+			}
+		}
+	}
+
+	return strings.TrimRight(b.String(), "\n") + "\n"
+}
+
+func nixClosurePackageVersion(paths []string, pkg string) string {
+	if pkg == "" {
+		return ""
+	}
+
+	prefix := pkg + "-"
+	matched := false
+
+	for _, path := range paths {
+		base := filepath.Base(path)
+
+		// Store paths are <hash>-<name>[-<version>]. Strip only the hash.
+		cut := strings.IndexByte(base, '-')
+		if cut < 0 || cut+1 >= len(base) {
+			continue
+		}
+
+		nameVersion := base[cut+1:]
+		if nameVersion == pkg {
+			return "(present)"
+		}
+		if !strings.HasPrefix(nameVersion, prefix) {
+			continue
+		}
+
+		matched = true
+		version := strings.TrimPrefix(nameVersion, prefix)
+
+		// Accept the version forms Ryoku's Nix packages actually use. This
+		// deliberately rejects suffixes such as "session-launcher", which are
+		// separate helper derivations rather than ryoku-shell's version.
+		if version == "unstable" || version == "git" ||
+			(len(version) > 0 && version[0] >= '0' && version[0] <= '9') {
+			return version
+		}
+	}
+
+	if matched {
+		return "(present)"
+	}
+
+	return ""
 }
 
 func gpuDescribe() []string {
