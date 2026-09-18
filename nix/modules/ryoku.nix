@@ -387,6 +387,7 @@ EOF
     # ─────────────────────────────────────────────────────────
 
     ryokuBundle
+    ryokuHelpers
     materializer
     ryokuSddmThemeApply
     ryokuSddmTheme
@@ -441,14 +442,14 @@ EOF
     # Qt / QML
     # ─────────────────────────────────────────────────────────
 
-    qt6.qtdeclarative
-    qt6.qtmultimedia
-    qt6.qtwayland
-    qt6.qt5compat
-    qt6.qtsvg
-    qt6.qtimageformats
-    qt6Packages.qt6ct
-    kdePackages.syntax-highlighting
+    ryokuNixpkgs.qt6.qtdeclarative
+    ryokuNixpkgs.qt6.qtmultimedia
+    ryokuNixpkgs.qt6.qtwayland
+    ryokuNixpkgs.qt6.qt5compat
+    ryokuNixpkgs.qt6.qtsvg
+    ryokuNixpkgs.qt6.qtimageformats
+    ryokuNixpkgs.qt6Packages.qt6ct
+    ryokuNixpkgs.kdePackages.syntax-highlighting
 
     # ─────────────────────────────────────────────────────────
     # Session / portals / secrets
@@ -607,27 +608,39 @@ EOF
           runtime_dir="''${XDG_RUNTIME_DIR:-/run/user/$UID}"
         fi
 
-        if [ -n "$wayland_display" ] &&
-           [ -S "$runtime_dir/$wayland_display" ]; then
+        wayland_socket="$runtime_dir/$wayland_display"
 
+        # A compositor from the previous graphical session can leave its
+        # Wayland socket inode behind after the listener is gone. `test -S`
+        # alone therefore produces a false positive and starts Qt against a
+        # dead display. Require an actual listening Unix socket before the
+        # shell is allowed to start.
+        if [ -n "$wayland_display" ] &&
+           [ -S "$wayland_socket" ] &&
+           ${pkgs.iproute2}/bin/ss -xlH |
+             ${pkgs.gawk}/bin/awk -v socket="$wayland_socket" '
+               $1 == "u_str" && $2 == "LISTEN" {
+                 for (i = 1; i <= NF; i++) {
+                   if ($i == socket) {
+                     found = 1
+                   }
+                 }
+               }
+               END { exit found ? 0 : 1 }
+             '
+        then
           export XDG_RUNTIME_DIR="$runtime_dir"
           export WAYLAND_DISPLAY="$wayland_display"
 
-          for key in \
-            DISPLAY \
-            HYPRLAND_INSTANCE_SIGNATURE \
-            NIRI_SOCKET \
-            XDG_CURRENT_DESKTOP \
-            XDG_SESSION_DESKTOP \
-            XDG_SESSION_TYPE \
-            XDG_SESSION_ID
-          do
-            value="$(get_manager_env "$key")"
-
-            if [ -n "$value" ]; then
-              export "$key=$value"
-            fi
-          done
+          while IFS='=' read -r key value; do
+            case "$key" in
+              DISPLAY|WAYLAND_DISPLAY|XDG_*|*_SOCKET|*_INSTANCE_SIGNATURE)
+                if [ -n "$value" ]; then
+                  export "$key=$value"
+                fi
+                ;;
+            esac
+          done < <(systemctl --user show-environment)
 
           exec ${ryokuShell}/bin/ryoku-shell daemon
         fi
@@ -1038,6 +1051,10 @@ in
     # Ryoku's login greeter. Plasma enables SDDM on systems which ship it;
     # this overrides Plasma's default Breeze choice without overriding an
     # explicit user-selected SDDM theme.
+    services.displayManager.sessionPackages = [
+      ryokuNiri
+    ];
+
     services.displayManager.sddm =
       lib.mkIf config.services.displayManager.sddm.enable {
         theme = lib.mkOverride 900 "ryoku";
@@ -1307,16 +1324,18 @@ in
         ExecStart = pkgs.writeShellScript "ryoku-materialize-live" ''
           set -eu
 
-          reload_hyprland=0
+          reload_wm=0
 
-          if ${ryokuHyprland}/bin/hyprctl             keyword misc:disable_autoreload true             >/dev/null 2>&1
+          if command -v ryoku >/dev/null 2>&1 &&
+             ryoku wm act config.autoreload off >/dev/null 2>&1
           then
-            reload_hyprland=1
+            reload_wm=1
           fi
 
           cleanup() {
-            if [ "$reload_hyprland" -eq 1 ]; then
-              ${ryokuHyprland}/bin/hyprctl reload                 >/dev/null 2>&1 || true
+            if [ "$reload_wm" -eq 1 ]; then
+              ryoku wm act config.reload config-only >/dev/null 2>&1 || true
+              ryoku wm act config.autoreload on >/dev/null 2>&1 || true
             fi
           }
 
@@ -1412,11 +1431,8 @@ in
         "ryoku-materialize.service"
       ];
 
-      # The daemon shells out to the normal Ryoku desktop tools,
-      # while hyprctl must come from Ryoku's ABI-matched compositor.
-      path =
-        runtimePackages
-        ++ [ ryokuHyprland ];
+      # The daemon shells out to the normal Ryoku desktop tools.
+      path = runtimePackages;
 
       environment = {
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
