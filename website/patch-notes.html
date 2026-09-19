@@ -35,8 +35,8 @@
         <p>All patch notes are stored here</p>
       </div>
       <dl class="subpage-meta reveal visible">
-        <div><dt>Current</dt><dd>0.63.1-beta.19</dd></div>
-        <div><dt>Previous</dt><dd>0.60.1-beta.19</dd></div>
+        <div><dt>Current</dt><dd>0.66.3-beta.19</dd></div>
+        <div><dt>Previous</dt><dd>0.63.1-beta.19</dd></div>
         <div><dt>Order</dt><dd>Newest first</dd></div>
         <div><dt>Archive</dt><dd>Persistent</dd></div>
       </dl>
@@ -46,16 +46,68 @@
       <aside class="docs-sidebar">
         <div class="docs-sidebar-title">RELEASES // INDEX</div>
         <nav>
-          <a href="#v0-63-1-beta-19"><span>01</span>Musubi 0.63.1-beta.19</a>
-          <a href="#v0-60-1-beta-19"><span>02</span>0.60.1-beta.19</a>
-          <a href="#v0-58-6-beta-19"><span>03</span>Musubi 0.58.6-beta.19</a>
+          <a href="#v0-66-3-beta-19"><span>01</span>Onogoro 0.66.3-beta.19</a>
+          <a href="#v0-63-1-beta-19"><span>02</span>Musubi 0.63.1-beta.19</a>
+          <a href="#v0-60-1-beta-19"><span>03</span>0.60.1-beta.19</a>
+          <a href="#v0-58-6-beta-19"><span>04</span>Musubi 0.58.6-beta.19</a>
         </nav>
         <a class="button" href="index.html">← Back to site</a>
       </aside>
 
       <div class="docs-content patch-notes-content">
-        <article id="v0-63-1-beta-19" class="release-entry release-entry-full">
+        <article id="v0-66-3-beta-19" class="release-entry release-entry-full">
           <div class="eyebrow">LATEST // CURRENT NIXOS PORT</div>
+          <header class="release-head">
+            <h2 class="release-version">ONOGORO<br>0.66.3</h2>
+            <div class="release-date">NIXOS PATCH<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">This update focuses on polishing the NixOS experience, expanding display controls, improving desktop responsiveness, and making Ryoku's update system properly Nix-native.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>New</h3></div>
+            <ul class="notes-list">
+              <li><strong>Stable and unstable update channels.</strong> Ryoku on NixOS can now switch between release and development channels with <code>ryoku track stable</code> and <code>ryoku track unstable</code>. The selected channel is persisted directly in the system's Nix flake configuration.</li>
+              <li><strong>Commit-aware unstable updates.</strong> The unstable channel now follows new Ryoku commits even when the visible version number has not changed, so development updates no longer require a version bump before <code>ryoku update</code> can detect them.</li>
+              <li><strong>Per-display shell controls.</strong> Ryoku shell visibility can now be configured independently for each display, with bars and shell components enabled or disabled per monitor while retaining sensible global fallbacks.</li>
+              <li><strong>Expanded Chroma controls.</strong> Chroma gains additional display and appearance controls, including per-output configuration and more flexible bar presentation.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Fixed</h3></div>
+            <ul class="notes-list">
+              <li><strong>Hyprland focus-change stutter.</strong> Fixed severe desktop stuttering that could occur when moving the pointer between different Hyprland windows while focus-follows-mouse was enabled. Active-window events no longer force unnecessary full compositor state refreshes, and unchanged window-manager state is no longer repeatedly republished.</li>
+              <li><strong>Correct NixOS branding.</strong> Ryoku Settings now identifies the platform as <strong>RYOKU NIXOS</strong> instead of carrying over stale <strong>RYOKU ARCH</strong> branding. Additional active Arch-specific branding has also been cleaned up.</li>
+              <li><strong>Correct NixOS package statistics.</strong> The Profile page no longer presents Arch-specific package terminology and now uses the NixOS-appropriate <strong>SYSTEM · USER · TOTAL</strong> labels.</li>
+              <li><strong>NixOS Information integration.</strong> The dedicated NixOS Information section in Settings has been restored and correctly integrated into the current Hub interface.</li>
+              <li><strong>Stale DDC helper packaging.</strong> Removed an obsolete Nix package reference to the old <code>ryoku-ddc-monitors</code> helper. Monitor brightness and DDC/CI support continue through Ryoku's current display services and brightness controls.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⚙️</span><h3>Improved</h3></div>
+            <ul class="notes-list">
+              <li><strong>Safer NixOS updates.</strong> Ryoku's Nix update path now builds the complete NixOS configuration before switching generations. If a channel switch fails to build, Ryoku restores the previous flake configuration and lock file instead of leaving the system partially switched.</li>
+              <li><strong>Native Nix update workflow.</strong> Ryoku updates on NixOS now operate through the configured Ryoku flake input, with declarative channel selection, flake-input-only updates, pre-switch builds, generation-based rollback, automatic Ryoku service refresh and clear channel/source reporting through <code>ryoku status</code>.</li>
+              <li><strong>Display-state performance.</strong> Compositor state handling now refreshes only the window-manager state affected by an event instead of unnecessarily rebuilding unrelated state, substantially reducing shell overhead during frequent focus changes.</li>
+              <li><strong>Documentation and project presentation.</strong> The polished Ryoku on NixOS README and artwork have been restored, including the monochrome/editorial project presentation and updated NixOS-specific documentation.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⬆️</span><h3>Update</h3></div>
+            <ul class="notes-list">
+              <li>Users already tracking Ryoku can update normally with <code>ryoku update</code>.</li>
+              <li>To follow development builds, use <code>ryoku track unstable</code>.</li>
+              <li>To return to the stable release channel, use <code>ryoku track stable</code>.</li>
+              <li>NixOS updates continue to use normal NixOS generations for rollback.</li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-63-1-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // MUSUBI</div>
           <header class="release-head">
             <h2 class="release-version">MUSUBI<br>0.63.1</h2>
             <div class="release-date">結び<br>BETA.19</div>
