@@ -5,6 +5,7 @@
 #   ryoku-cmd-touchpad on       enable every touchpad
 #   ryoku-cmd-touchpad off      disable every touchpad
 #   ryoku-cmd-touchpad status   "on" | "off"
+#   ryoku-cmd-touchpad restore  re-assert a stored "off" at login/reload
 #
 # Ryoku's Hyprland runs the Lua config parser, so `hyprctl keyword` is rejected;
 # device state is flipped with `hyprctl eval` against the same `hl` API the
@@ -83,8 +84,17 @@ case "${1:-toggle}" in
   on | enable)    require_live_toggle; enable_pads ;;
   off | disable)  require_live_toggle; disable_pads ;;
   toggle)         require_live_toggle; if is_off; then enable_pads; else disable_pads; fi ;;
+  restore)
+    # Login and reload re-enable every touchpad (the state is a runtime
+    # override, not config), so push the stored intent back. Silent: an
+    # unattended restore must not toast, and a desktop with no touchpad or
+    # no stored "off" has nothing to say.
+    is_off || exit 0
+    wm_can liveConfigEval || exit 0
+    set_pads false || exit 0
+    ;;
   *)
-    echo "usage: ryoku-cmd-touchpad [toggle | on | off | status]" >&2
+    echo "usage: ryoku-cmd-touchpad [toggle | on | off | status | restore]" >&2
     exit 2
     ;;
 esac
