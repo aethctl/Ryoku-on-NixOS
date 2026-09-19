@@ -44,7 +44,7 @@ Item {
     Process {
         id: idp
         running: true
-        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else head -1 /var/log/pacman.log 2>/dev/null | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1 | tr -d -; fi"]
+        command: ["sh", "-c", "id=$(cat /etc/machine-id 2>/dev/null); echo $id; b=$(stat -c %W / 2>/dev/null); if [ ${b:-0} -gt 0 ]; then date -d @$b +%Y%m%d; else echo; fi"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const l = text.split("\n");
@@ -755,7 +755,10 @@ Item {
                         }
                     }
                     Text {
-                        text: I18n.tr("%1 EXPLICIT · %2 AUR · %3 TOTAL").arg(SysInfo.sysPkgExplicit).arg(SysInfo.sysPkgAur).arg(SysInfo.sysPackages)
+                        text: I18n.tr("%1 SYSTEM · %2 USER · %3 TOTAL")
+                            .arg(SysInfo.sysPkgExplicit)
+                            .arg(SysInfo.sysPkgAur)
+                            .arg(SysInfo.sysPackages)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
                         font.pixelSize: 10

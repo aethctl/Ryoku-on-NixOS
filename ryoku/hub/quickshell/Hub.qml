@@ -73,6 +73,7 @@ Rectangle {
         hub.section = target;
     }
     property bool navigated: false
+    readonly property bool nixManaged: (Quickshell.env("RYOKU_UPDATE_BACKEND") || "") === "nix"
     property string query: ""
 
     // progressive disclosure: one global Advanced switch (in the rail) reveals the
@@ -116,7 +117,9 @@ Rectangle {
             { key: "import", name: "Import config", adv: true, wired: true } ] },
         { name: "EXTEND", items: [
             { key: "addons", name: "Add-ons" }, { key: "rashin", name: "Rashin" } ] },
-        { name: "", items: [ { key: "credits", name: "Credits" } ] }
+        { name: "", items: hub.nixManaged
+            ? [ { key: "nixos-info", name: "NixOS information" }, { key: "credits", name: "Credits" } ]
+            : [ { key: "credits", name: "Credits" } ] }
     ]
 
     // Each section's terse kanji, paired with its Latin name in the rail. Latin
@@ -130,7 +133,7 @@ Rectangle {
         "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "autostart": "自動", "environment": "環境", "performance": "性能", "rashin": "羅針",
-        "updates": "更新", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
+        "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
     })
 
     // Extra search vocabulary per section: the words a user actually types that
@@ -167,6 +170,7 @@ Rectangle {
         "rashin": "rashin agent ai assistant hermes vault memory skills chat code llm needle",
         "updates": "update upgrade version channel commit behind check origin",
         "import": "import bring migrate dotfiles config existing hyprland kitty fish fastfetch drop folder git backup undo restore adopt",
+        "nixos-info": "nix nixos guide packages flake rebuild update generation rollback configuration declarative kernel driver",
         "credits": "credits thanks acknowledgement gratitude contributor"
     })
 
@@ -479,7 +483,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "environment": "EnvironmentPage", "autostart": "AutostartPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "cursor": "CursorPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -1067,7 +1071,7 @@ Rectangle {
                         spacing: 1
                         anchors.verticalCenter: parent.verticalCenter
                         Text {
-                            text: I18n.tr("RYOKU ARCH"); color: Tokens.ink; font.family: Tokens.ui
+                            text: I18n.tr("RYOKU NIXOS"); color: Tokens.ink; font.family: Tokens.ui
                             font.pixelSize: 14; font.weight: Font.Medium; font.letterSpacing: 2.4
                         }
                         Text {
@@ -1323,7 +1327,7 @@ Rectangle {
                                     spacing: Tokens.s2
                                     Text {
                                         id: navLead
-                                        visible: navItem.sel
+                                        visible: navItem.sel && navItem.modelData.key !== "nixos-info"
                                         text: "//"
                                         color: Tokens.inkOnBoneDim
                                         font.family: Tokens.mono; font.pixelSize: 11
