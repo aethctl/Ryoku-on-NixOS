@@ -40,14 +40,12 @@ Scope {
     readonly property real uiScale: Tokens.uiScaleFor(root.modelData ? root.modelData.name : "")
     readonly property bool barEnabled: Tokens.barEnabledFor(
         root.modelData ? root.modelData.name : "")
-    readonly property bool qsbarPrimaryHost: Config.barStyle === "qsbar"
-        && root.modelData
-        && ShellState.screens.length > 0
-        && ShellState.screens[0].name === root.modelData.name
+    readonly property string barStyle: Config.barStyleFor(
+        root.modelData ? root.modelData.name : "")
 
     // The built-in Sumi frame scene draws only while the active bar style is the
     // built-in one; a receipt-owned style would load its own scene without rails.
-    readonly property bool sumiActive: BarProducts.sceneUrl(Config.barStyle) === ""
+    readonly property bool sumiActive: BarProducts.sceneUrl(root.barStyle) === ""
 
     // A transient Loader.Error on a builtin style must not stick us on sumi; count
     // retries so a genuinely broken style still degrades gracefully after ~8s.
@@ -129,7 +127,8 @@ Scope {
         readonly property real frameLip: root.frameBorderPx
 
         // fold qsbar's shared menus to whichever edge its bar sits on
-        readonly property string qsBarEdge: (!root.sumiActive && Config.qsbar && Config.qsbar.barPosition === "bottom") ? "bottom" : "top"
+        readonly property string qsBarEdge: Config.barEdgeFor(
+            root.modelData ? root.modelData.name : "")
         readonly property var edgeReveal: ({
             top: root.edgeRevealed("top"),
             bottom: root.edgeRevealed("bottom"),
@@ -437,8 +436,10 @@ Scope {
     // host still map (topBar mode) so menus and surfaces stay style-agnostic.
     Loader {
         id: barStyleLoader
-        active: !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost)
-        source: BarProducts.sceneUrl(Config.barStyle)
+        // QS Bar owns one shared multi-output root, so its first matching Scene
+        // remains loaded even when every QS Bar output is temporarily hidden.
+        active: !root.sumiActive && (root.barEnabled || root.barStyle === "qsbar")
+        source: BarProducts.sceneUrl(root.barStyle)
         onLoaded: {
             root.barStyleRetries = 0
             if (item) item.modelData = root.modelData
@@ -450,11 +451,11 @@ Scope {
         onStatusChanged: {
             if (status !== Loader.Error)
                 return;
-            if (BarProducts.isBuiltin(Config.barStyle) && root.barStyleRetries < 10) {
+            if (BarProducts.isBuiltin(root.barStyle) && root.barStyleRetries < 10) {
                 root.barStyleRetries++;
                 barStyleReload.restart();
             } else {
-                BarProducts.fail(Config.barStyle);
+                BarProducts.fail(root.barStyle);
             }
         }
     }
@@ -464,7 +465,7 @@ Scope {
         onTriggered: {
             barStyleLoader.active = false;
             barStyleLoader.active = Qt.binding(
-                () => !root.sumiActive && (root.barEnabled || root.qsbarPrimaryHost));
+                () => !root.sumiActive && (root.barEnabled || root.barStyle === "qsbar"));
         }
     }
     Connections {

@@ -50,7 +50,7 @@ Item {
     // and re-anchored by normalize(); "Set as main" re-bases the layout onto it.
     property string mainName: ""
 
-    // which catalogue overlay is open: "" | "mode" | "mirror" | "custom".
+    // which catalogue overlay is open: "" | "mode" | "mirror" | "bar" | "custom".
     property string pickKind: ""
     // "Custom…" chip in the mode picker opens a W×H@Hz form; the typed mode
     // stages into the draft like any other, and on Apply the provider forces a
@@ -95,6 +95,8 @@ Item {
 
     property var barLive: ({})
     property var widgetLive: ({})
+    property var barStyleLive: ({})
+    property var barWidgetLive: ({})
 
     function displayFlag(name, kind) {
         void pg.tick;
@@ -124,6 +126,58 @@ Item {
             pg.widgetLive = next;
 
         Settings.patch("displays." + kind + "." + name, !!enabled);
+        pg.tick++;
+    }
+
+    function globalBarStyle() {
+        const value = Settings.get("barStyle");
+        return typeof value === "string" && value.length > 0 ? value : "qsbar";
+    }
+    function displayBarStyleOverride(name) {
+        void pg.tick;
+        if (typeof pg.barStyleLive[name] === "string")
+            return pg.barStyleLive[name];
+        const value = Settings.get("displays.bar_style." + name);
+        return typeof value === "string" ? value : "";
+    }
+    function displayBarStyle(name) {
+        return pg.displayBarStyleOverride(name) || pg.globalBarStyle();
+    }
+    function setDisplayBarStyle(name, style) {
+        if (!name)
+            return;
+        const next = Object.assign({}, pg.barStyleLive);
+        next[name] = style;
+        pg.barStyleLive = next;
+        Settings.patch("displays.bar_style." + name, style);
+        pg.tick++;
+    }
+    function barStyleOptions() {
+        const out = [{
+            "key": "",
+            "label": I18n.tr("Follow global") + " \u00b7 " + BarStyles.nameFor(pg.globalBarStyle())
+        }];
+        for (let i = 0; i < BarStyles.items.length; ++i)
+            out.push({ "key": BarStyles.items[i].id, "label": BarStyles.items[i].name });
+        return out;
+    }
+    function chromaWidgetFlag(name, id) {
+        void pg.tick;
+        const liveKey = name + "\u0000" + id;
+        if (typeof pg.barWidgetLive[liveKey] === "boolean")
+            return pg.barWidgetLive[liveKey];
+        const local = Settings.get("displays.bar_widgets." + name + ".chroma." + id);
+        if (typeof local === "boolean")
+            return local;
+        return Settings.get("chroma.widgets." + id) !== false;
+    }
+    function setChromaWidgetFlag(name, id, enabled) {
+        if (!name)
+            return;
+        const next = Object.assign({}, pg.barWidgetLive);
+        next[name + "\u0000" + id] = !!enabled;
+        pg.barWidgetLive = next;
+        Settings.patch("displays.bar_widgets." + name + ".chroma." + id, !!enabled);
         pg.tick++;
     }
 
@@ -944,6 +998,25 @@ Item {
                     SettingRow {
                         anchors.left: parent.left; anchors.right: parent.right
                         divider: true
+                        label: I18n.tr("BAR STYLE")
+                        desc: I18n.tr("Choose a style for this display, or follow the global Bar Studio choice.")
+                        source: "shell.json"
+                        footH: 32
+                        PickBar {
+                            anchors.left: parent.left; anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            value: {
+                                void pg.tick;
+                                if (!pg.sel) return "";
+                                return pg.labelForKey(pg.barStyleOptions(), pg.displayBarStyleOverride(pg.sel.name));
+                            }
+                            count: pg.barStyleOptions().length
+                            onOpened: pg.openPick("bar")
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
                         label: I18n.tr("RESOLUTION")
                         footH: 32
                         PickBar {
@@ -1099,6 +1172,33 @@ Item {
                             value: { void pg.tick; return pg.sel ? (pg.labelForKey(pg.mirrorOptions(), pg.sel.mirror) || I18n.tr("None")) : I18n.tr("None"); }
                             count: { void pg.tick; return pg.mirrorOptions().length; }
                             onOpened: pg.openPick("mirror")
+                        }
+                    }
+                }
+
+                SettingCard {
+                    width: ctlCol.width
+                    visible: !!pg.sel && pg.displayBarStyle(pg.sel.name) === "chroma"
+                    title: I18n.tr("CHROMA MODULES")
+
+                    Repeater {
+                        model: BarStyles.chromaWidgets
+                        delegate: SettingRow {
+                            required property var modelData
+                            required property int index
+                            anchors.left: parent.left; anchors.right: parent.right
+                            divider: index > 0
+                            label: I18n.tr(modelData.label)
+                            desc: I18n.tr(modelData.desc)
+                            source: "shell.json"
+                            controlWidth: 54
+                            Sw {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                on: pg.sel ? pg.chromaWidgetFlag(pg.sel.name, modelData.id) : true
+                                onToggled: value => pg.setChromaWidgetFlag(
+                                    pg.sel ? pg.sel.name : "", modelData.id, value)
+                            }
                         }
                     }
                 }
@@ -1331,7 +1431,7 @@ Item {
     MouseArea {
         id: scrim
         anchors.fill: parent
-        visible: pg.pickKind === "mode" || pg.pickKind === "mirror"
+        visible: pg.pickKind === "mode" || pg.pickKind === "mirror" || pg.pickKind === "bar"
         z: 100
         // a bare click-catcher: no fill, since translucency is banned on app
         // surfaces (DESIGN section 6).
@@ -1340,10 +1440,14 @@ Item {
         Picker {
             id: picker
             anchors.centerIn: parent
-            title: pg.pickKind === "mode" ? I18n.tr("Resolution") : I18n.tr("Mirror of")
+            title: pg.pickKind === "mode" ? I18n.tr("Resolution")
+                : pg.pickKind === "bar" ? I18n.tr("Bar style")
+                : I18n.tr("Mirror of")
             options: {
                 if (pg.pickKind === "mode")
                     return pg.sel ? pg.modeOptions(pg.sel).map(function (o) { return o.label; }).concat([pg.customLabel]) : [];
+                if (pg.pickKind === "bar")
+                    return pg.barStyleOptions().map(function (o) { return o.label; });
                 return pg.mirrorOptions().map(function (o) { return o.label; });
             }
             current: {
@@ -1351,6 +1455,8 @@ Item {
                     return "";
                 if (pg.pickKind === "mode")
                     return pg.labelForKey(pg.modeOptions(pg.sel), pg.sel.mode);
+                if (pg.pickKind === "bar")
+                    return pg.labelForKey(pg.barStyleOptions(), pg.displayBarStyleOverride(pg.sel.name));
                 return pg.labelForKey(pg.mirrorOptions(), pg.sel.mirror);
             }
             onChose: (label) => {
@@ -1359,6 +1465,8 @@ Item {
                     var mk = pg.keyForLabel(pg.modeOptions(pg.sel), label);
                     if (mk)
                         pg.setMode(pg.selected, mk);
+                } else if (pg.pickKind === "bar") {
+                    pg.setDisplayBarStyle(pg.sel.name, pg.keyForLabel(pg.barStyleOptions(), label));
                 } else {
                     pg.setField(pg.selected, "mirror", pg.keyForLabel(pg.mirrorOptions(), label));
                 }

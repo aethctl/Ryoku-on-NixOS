@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 import "../barstudio"
 import Ryoku.FrameBars
 import "../barstudio/BarStudioModel.js" as Model
@@ -51,33 +52,8 @@ Item {
     readonly property var railWas: page.committedBars && page.committedBars.rails ? page.committedBars.rails[page.edge] : null
     readonly property bool horizontal: page.edge === "top" || page.edge === "bottom"
 
-    property var barStyles: []
-
     function browseBarStyles() {
         Quickshell.execDetached(["ryostore", "open", "barstyles"]);
-    }
-
-    Process {
-        id: styleProc
-        command: ["ryostore", "catalog", "--category", "barstyles"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const catalog = JSON.parse(this.text || "{}");
-                    page.barStyles = (catalog.items || [])
-                        .filter(item => item.category === "barstyles" && item.installed === true)
-                        .map(item => ({
-                            id: item.id,
-                            name: item.name || item.id,
-                            desc: item.summary || item.description || "",
-                            active: item.active === true
-                        }));
-                } catch (e) {
-                    page.barStyles = [];
-                }
-            }
-        }
     }
 
     // The Obi bar's widgets, for the per-widget show/hide toggles below. Mirrors
@@ -94,26 +70,13 @@ Item {
         { id: "weather", label: I18n.tr("Weather"), desc: I18n.tr("Current conditions.") }
     ]
 
-    readonly property var chromaWidgets: [
-        { id: "identity", label: I18n.tr("Launcher"), desc: I18n.tr("The Chroma identity button and app launcher.") },
-        { id: "workspaces", label: I18n.tr("Workspaces"), desc: I18n.tr("The numbered workspace rail.") },
-        { id: "media", label: I18n.tr("Media"), desc: I18n.tr("Now playing, progress and playback spectrum.") },
-        { id: "notifications", label: I18n.tr("Notifications"), desc: I18n.tr("Notification state and unread count.") },
-        { id: "wallpaper", label: I18n.tr("Wallpaper"), desc: I18n.tr("Shortcut to wallpaper and theme controls.") },
-        { id: "network", label: I18n.tr("Network"), desc: I18n.tr("Current wired or wireless network state.") },
-        { id: "audio", label: I18n.tr("Audio"), desc: I18n.tr("Output volume and scroll volume control.") },
-        { id: "battery", label: I18n.tr("Battery"), desc: I18n.tr("Battery state when a battery is present.") },
-        { id: "settings", label: I18n.tr("Quick settings"), desc: I18n.tr("Shortcut to the Ryoku quick-settings surface.") },
-        { id: "clock", label: I18n.tr("Clock"), desc: I18n.tr("Time and date block.") }
-    ]
+    readonly property var chromaWidgets: BarStyles.chromaWidgets
     // The running bar style, default the built-in frame style. The frame, rails
     // and zone editors below are Sumi's; a folder style owns its own layout.
     readonly property string activeStyle: page.fval("barStyle", "sumi")
     readonly property bool sumiActive: page.activeStyle === "sumi"
     readonly property string activeName: {
-        for (let i = 0; i < page.barStyles.length; i++)
-            if (page.barStyles[i].id === page.activeStyle) return page.barStyles[i].name;
-        return page.activeStyle;
+        return BarStyles.nameFor(page.activeStyle);
     }
 
     // Stage AND apply: edits ride the shared draft like every page, and the
@@ -162,6 +125,15 @@ Item {
 
     function chromaConfig() {
         return Object.assign({}, page.fval("chroma", ({})));
+    }
+    function chromaValue(key, fallback) {
+        const value = page.chromaConfig()[key];
+        return value === undefined || value === null ? fallback : value;
+    }
+    function chromaSet(key, value) {
+        const cfg = page.chromaConfig();
+        cfg[key] = value;
+        page.fedit("chroma", cfg);
     }
     function chromaScale() {
         const n = Number(page.chromaConfig().scale);
@@ -309,14 +281,14 @@ Item {
                             width: parent.width
                             spacing: Tokens.s2
                             Repeater {
-                                model: page.barStyles
+                                model: BarStyles.items
                                 delegate: Rectangle {
                                     id: styleCard
                                     required property var modelData
                                     readonly property bool on: page.activeStyle === styleCard.modelData.id
 
                                     objectName: "bar-style-" + styleCard.modelData.id
-                                    width: (styleRow.width - (page.barStyles.length - 1) * Tokens.s2) / page.barStyles.length
+                                    width: (styleRow.width - (BarStyles.items.length - 1) * Tokens.s2) / BarStyles.items.length
                                     height: 64
                                     radius: Tokens.radius
                                     color: styleCard.on ? Tokens.bone : (sma.containsMouse ? Tokens.tint5 : "transparent")
@@ -406,9 +378,24 @@ Item {
 
             SettingCard {
                 id: chromaSect
-                width: col.colWidth
+                width: col.width
                 visible: page.activeStyle === "chroma"
                 title: I18n.tr("CHROMA")
+
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    label: I18n.tr("Position")
+                    desc: I18n.tr("Place Chroma on the top or bottom edge.")
+                    source: "shell.json"
+                    block: true
+                    Seg {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        options: [I18n.tr("Top"), I18n.tr("Bottom")]
+                        current: page.chromaValue("position", "top") === "bottom" ? I18n.tr("Bottom") : I18n.tr("Top")
+                        onChose: label => page.chromaSet("position", label === I18n.tr("Bottom") ? "bottom" : "top")
+                    }
+                }
 
                 SettingRow {
                     anchors.left: parent.left
@@ -425,6 +412,72 @@ Item {
                         to: 1.4
                         value: page.chromaScale()
                         onModified: value => page.chromaSetScale(value)
+                    }
+                }
+
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; controlWidth: 58
+                    label: I18n.tr("Gap"); desc: I18n.tr("Space between Chroma modules.")
+                    source: "shell.json"; unit: "px"; value: String(Number(page.chromaValue("gap", 8)))
+                    Step {
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        from: 0; to: 24; value: Number(page.chromaValue("gap", 8))
+                        onModified: value => page.chromaSet("gap", value)
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; controlWidth: 58
+                    label: I18n.tr("Corner radius"); desc: I18n.tr("Round Chroma's module surfaces.")
+                    source: "shell.json"; unit: "px"; value: String(Number(page.chromaValue("radius", 14)))
+                    Step {
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        from: 0; to: 24; value: Number(page.chromaValue("radius", 14))
+                        onModified: value => page.chromaSet("radius", value)
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; controlWidth: Math.min(240, Math.max(160, Math.round(chromaSect.width * 0.34)))
+                    label: I18n.tr("Surface opacity"); desc: I18n.tr("Fade Chroma's background surfaces.")
+                    source: "shell.json"; unit: "%"; value: String(Math.round(Number(page.chromaValue("opacity", 1)) * 100))
+                    Slid {
+                        anchors.fill: parent; from: 0.35; to: 1; value: Number(page.chromaValue("opacity", 1))
+                        onModified: value => page.chromaSet("opacity", value)
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; block: true
+                    label: I18n.tr("Workspace labels"); desc: I18n.tr("Show workspace numbers, names or compact dots.")
+                    source: "shell.json"
+                    Seg {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        options: [I18n.tr("Numbers"), I18n.tr("Names"), I18n.tr("Dots")]
+                        current: page.chromaValue("workspaceMode", "numbers") === "names" ? I18n.tr("Names") : page.chromaValue("workspaceMode", "numbers") === "dots" ? I18n.tr("Dots") : I18n.tr("Numbers")
+                        onChose: label => page.chromaSet("workspaceMode", label === I18n.tr("Names") ? "names" : label === I18n.tr("Dots") ? "dots" : "numbers")
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; controlWidth: 54
+                    label: I18n.tr("24-hour clock"); source: "shell.json"
+                    Sw {
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        on: page.chromaValue("clock24h", true) !== false
+                        onToggled: value => page.chromaSet("clock24h", value)
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left; anchors.right: parent.right
+                    divider: true; controlWidth: 54
+                    label: I18n.tr("Show seconds"); source: "shell.json"
+                    Sw {
+                        anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                        on: page.chromaValue("clockSeconds", false) === true
+                        onToggled: value => page.chromaSet("clockSeconds", value)
                     }
                 }
 

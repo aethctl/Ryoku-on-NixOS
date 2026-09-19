@@ -7,11 +7,13 @@ import shell.services
 QtObject {
     id: root
 
-    readonly property color background: Theme.surface
-    readonly property color backgroundAlt: Theme.surfaceContainerLow
-    readonly property color surface: Theme.surfaceContainer
-    readonly property color surfaceAlt: Theme.surfaceContainerHigh
-    readonly property color surfaceHover: Theme.surfaceContainerHighest
+    property real surfaceOpacity: 1
+
+    readonly property color background: alpha(Theme.surface, surfaceOpacity)
+    readonly property color backgroundAlt: alpha(Theme.surfaceContainerLow, surfaceOpacity)
+    readonly property color surface: alpha(Theme.surfaceContainer, surfaceOpacity)
+    readonly property color surfaceAlt: alpha(Theme.surfaceContainerHigh, surfaceOpacity)
+    readonly property color surfaceHover: alpha(Theme.surfaceContainerHighest, surfaceOpacity)
     readonly property color border: Theme.outlineVariant
     readonly property color borderStrong: Theme.outline
     readonly property color text: Theme.onSurface

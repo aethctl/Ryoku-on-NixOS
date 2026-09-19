@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.FrameBars
 import Ryoku.Ui.Singletons
+import "lib/displaybar.js" as DisplayBar
 
 // live shell appearance config. one source of truth for the look knobs Ryoku
 // Settings' Shell section edits, plus the shipped defaults the shell falls back
@@ -48,6 +49,7 @@ Singleton {
     property alias qsbar: adapter.qsbar
     property alias chroma: adapter.chroma
     property alias kairos: adapter.kairos
+    property alias displays: adapter.displays
 
     // dock: the first-class app dock surface (modules/dock). A top-level store,
     // not a bar-style key, because the dock is now style-agnostic -- neither qsbar
@@ -65,10 +67,56 @@ Singleton {
         return Math.round(Math.max(0.6, Math.min(1.4, value)) * 20) / 20;
     }
 
-    function chromaWidgetEnabled(id) {
+    function chromaPosition() {
+        return root.chroma && root.chroma.position === "bottom" ? "bottom" : "top";
+    }
+
+    function chromaGap(fallback) {
+        const value = Number(root.chroma && root.chroma.gap);
+        return isFinite(value) ? Math.max(0, Math.min(24, Math.round(value))) : Number(fallback || 0);
+    }
+
+    function chromaRadius(fallback) {
+        const value = Number(root.chroma && root.chroma.radius);
+        return isFinite(value) ? Math.max(0, Math.min(24, Math.round(value))) : Number(fallback || 0);
+    }
+
+    function chromaOpacity() {
+        const value = Number(root.chroma && root.chroma.opacity);
+        return isFinite(value) ? Math.max(0.35, Math.min(1, value)) : 1;
+    }
+
+    function chromaWorkspaceMode() {
+        const value = String(root.chroma && root.chroma.workspaceMode || "numbers");
+        return ["numbers", "names", "dots"].indexOf(value) >= 0 ? value : "numbers";
+    }
+
+    function chromaClock24H() {
+        return !root.chroma || root.chroma.clock24h !== false;
+    }
+
+    function chromaClockSeconds() {
+        return !!(root.chroma && root.chroma.clockSeconds === true);
+    }
+
+    function barStyleFor(outputName) {
+        return DisplayBar.styleFor(root.displays || ({}), outputName, root.barStyle);
+    }
+
+    function barEdgeFor(outputName) {
+        const style = root.barStyleFor(outputName);
+        if (style === "qsbar")
+            return root.qsbar && root.qsbar.barPosition === "bottom" ? "bottom" : "top";
+        if (style === "chroma")
+            return root.chromaPosition();
+        return "top";
+    }
+
+    function chromaWidgetEnabled(id, outputName) {
         const cfg = root.chroma || ({});
         const widgets = cfg.widgets || ({});
-        return widgets[id] !== false;
+        const fallback = widgets[id] !== false;
+        return DisplayBar.widgetEnabled(root.displays || ({}), outputName, "chroma", id, fallback);
     }
 
     // typography: a scale that grows or shrinks the whole shell (the bar text
@@ -207,6 +255,7 @@ Singleton {
             property var qsbar: ({})
             property var chroma: ({})
             property var kairos: ({})
+            property var displays: ({})
             property var dock: ({
                 "enabled": false,
                 "edge": "auto",

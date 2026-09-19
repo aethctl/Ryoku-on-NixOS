@@ -6,3 +6,4 @@ singleton Scheme Scheme.qml
 singleton Settings Settings.qml
 singleton UserSchemes UserSchemes.qml
 singleton ProviderSchema ProviderSchema.qml
+singleton BarStyles BarStyles.qml

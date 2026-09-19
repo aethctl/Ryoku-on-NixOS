@@ -127,7 +127,7 @@ Item {
     Rectangle {
         id: canvas
         anchors.fill: parent
-        radius: Theme.radiusWidget * root.s
+        radius: Config.chromaRadius(Theme.radiusWidget) * root.s
         color: hover.containsMouse ? root.colors.surface : root.colors.backgroundAlt
         border.width: 0
         clip: true

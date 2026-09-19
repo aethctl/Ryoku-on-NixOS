@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **Displays can choose their own bar style and Chroma modules.** The connector
+  card follows the global Bar Studio choice by default, can select any installed
+  style, and exposes Chroma's module switches when that style is active. Bar
+  Studio now also tunes Chroma's edge, gap, radius, opacity, workspace labels
+  and clock (`quickshell/pages/{Displays,BarStudio}Page.qml`).
 - **"Bar drifts when silent" on the Performance page.** Opts the bar's gap
   stream into drifting on Balanced and Saver when nothing plays, not only on the
   Performance profile. Off by default (`quickshell/pages/PerformancePage.qml`).

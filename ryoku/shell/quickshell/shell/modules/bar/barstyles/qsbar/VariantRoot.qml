@@ -10,6 +10,7 @@ import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
 import Ryoku.Ui.Singletons
+import shell.services
 import "panels"
 import "controlcenter"
 import "../../../../services/lib/screens.js" as Screens
@@ -42,7 +43,8 @@ Item {
     // stack a second BarSlot on the same output. A genuinely new ShellScreen still
     // makes Variants destroy the old BarSlot and instantiate a fresh one.
     readonly property var barScreens: Screens.uniqueByName(Quickshell.screens)
-        .filter(screen => Tokens.barEnabledFor(screen.name))
+        .filter(screen => Tokens.barEnabledFor(screen.name)
+            && Config.barStyleFor(screen.name) === "qsbar")
 
     function lifecycleReady() {
         if (!theme._widgetsLoaded || barScreens.length === 0) return false

@@ -14,11 +14,15 @@ PanelWindow {
     property var modelData
     screen: modelData
 
+    readonly property string outputName: modelData && modelData.name
+        ? String(modelData.name)
+        : ""
     readonly property real s: Config.chromaScale()
-        * Tokens.uiScaleFor(modelData && modelData.name ? String(modelData.name) : "")
+        * Tokens.uiScaleFor(outputName)
     readonly property int barHeight: Math.round((Theme.iconLg + Theme.paddingLg) * s)
     readonly property int outerMargin: Math.round(Theme.paddingMd * s)
-    readonly property int gap: Math.round(Theme.paddingMd * s)
+    readonly property int gap: Math.round(Config.chromaGap(Theme.paddingMd) * s)
+    readonly property string edge: Config.chromaPosition()
 
     color: "transparent"
     exclusionMode: ExclusionMode.Normal
@@ -29,7 +33,8 @@ PanelWindow {
     WlrLayershell.namespace: "ryoku-chroma-bar"
 
     anchors {
-        top: true
+        top: win.edge === "top"
+        bottom: win.edge === "bottom"
         left: true
         right: true
     }
@@ -37,13 +42,15 @@ PanelWindow {
     margins {
         left: outerMargin
         right: outerMargin
-        top: outerMargin
+        top: win.edge === "top" ? outerMargin : 0
+        bottom: win.edge === "bottom" ? outerMargin : 0
     }
 
     implicitHeight: barHeight
 
     C.Palette {
         id: chroma
+        surfaceOpacity: Config.chromaOpacity()
     }
 
     Item {
@@ -59,10 +66,10 @@ PanelWindow {
 
             Rectangle {
                 id: identityBlock
-                visible: Config.chromaWidgetEnabled("identity")
+                visible: Config.chromaWidgetEnabled("identity", win.outputName)
                 width: win.barHeight
                 height: parent.height
-                radius: Theme.radiusWidget * win.s
+                radius: Config.chromaRadius(Theme.radiusWidget) * win.s
                 color: identityMouse.containsMouse ? chroma.accent(4) : chroma.accent(0)
                 border.width: 0
 
@@ -97,18 +104,16 @@ PanelWindow {
             }
 
             C.WorkspaceRail {
-                visible: Config.chromaWidgetEnabled("workspaces")
+                visible: Config.chromaWidgetEnabled("workspaces", win.outputName)
                 height: parent.height
                 colors: chroma
                 s: win.s
-                screenName: win.modelData && win.modelData.name
-                    ? String(win.modelData.name)
-                    : ""
+                screenName: win.outputName
             }
         }
 
         C.MediaModule {
-            visible: Config.chromaWidgetEnabled("media")
+            visible: Config.chromaWidgetEnabled("media", win.outputName)
             anchors {
                 horizontalCenter: parent.horizontalCenter
                 top: parent.top
@@ -129,19 +134,20 @@ PanelWindow {
 
             C.StatusCluster {
                 visible:
-                    Config.chromaWidgetEnabled("notifications")
-                    || Config.chromaWidgetEnabled("wallpaper")
-                    || Config.chromaWidgetEnabled("network")
-                    || Config.chromaWidgetEnabled("audio")
-                    || Config.chromaWidgetEnabled("settings")
-                    || (Config.chromaWidgetEnabled("battery") && Battery.present)
+                    Config.chromaWidgetEnabled("notifications", win.outputName)
+                    || Config.chromaWidgetEnabled("wallpaper", win.outputName)
+                    || Config.chromaWidgetEnabled("network", win.outputName)
+                    || Config.chromaWidgetEnabled("audio", win.outputName)
+                    || Config.chromaWidgetEnabled("settings", win.outputName)
+                    || (Config.chromaWidgetEnabled("battery", win.outputName) && Battery.present)
                 height: parent.height
                 colors: chroma
                 s: win.s
+                screenName: win.outputName
             }
 
             C.ClockModule {
-                visible: Config.chromaWidgetEnabled("clock")
+                visible: Config.chromaWidgetEnabled("clock", win.outputName)
                 height: parent.height
                 colors: chroma
                 s: win.s

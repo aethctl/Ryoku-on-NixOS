@@ -20,6 +20,8 @@ That keeps Chroma a bar style rather than a second shell embedded inside Ryoku.
 ## Settings
 
 Chroma stores its live settings under `chroma` in `~/.config/ryoku/shell.json`.
-`scale` is a 0.60–1.40 style multiplier and `widgets` is a map of module ids to
-visibility booleans. Missing values preserve the shipped 1.0/full-bar defaults.
-Ryoku Settings > Bar Studio edits both live.
+Bar Studio edits its edge, scale, module gap, radius, surface opacity, workspace
+labels, clock format and global module visibility live. A display can select
+Chroma with `displays.bar_style.<connector>` and override its modules through
+`displays.bar_widgets.<connector>.chroma`; missing values inherit the global
+choice, preserving the shipped 1.0/full-bar defaults.

@@ -24,7 +24,7 @@ Rectangle {
         : Theme.iconLg * root.s
     implicitHeight: (Theme.iconLg + Theme.paddingLg) * root.s
 
-    radius: Theme.radiusWidget * root.s
+    radius: Config.chromaRadius(Theme.radiusWidget) * root.s
     color: active
         ? colors.alpha(colors.accent(accentIndex), 0.18)
         : mouse.containsMouse

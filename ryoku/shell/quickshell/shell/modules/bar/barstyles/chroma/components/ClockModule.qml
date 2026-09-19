@@ -11,10 +11,12 @@ Rectangle {
 
     property date now: new Date()
 
-    implicitWidth: (Theme.iconLg * 4 + Theme.paddingLg) * root.s
+    implicitWidth: (Theme.iconLg * (Config.chromaClockSeconds()
+        ? 6
+        : Config.chromaClock24H() ? 4 : 5) + Theme.paddingLg) * root.s
     implicitHeight: (Theme.iconLg + Theme.paddingLg) * root.s
 
-    radius: Theme.radiusWidget * root.s
+    radius: Config.chromaRadius(Theme.radiusWidget) * root.s
     color: colors.accent(0)
 
     readonly property color contentColor: colors.inkOn(color)
@@ -25,7 +27,7 @@ Rectangle {
     }
 
     Timer {
-        interval: 1000
+        interval: Config.chromaClockSeconds() ? 1000 : 30000
         running: true
         repeat: true
         onTriggered: root.now = new Date()
@@ -39,7 +41,10 @@ Rectangle {
         }
 
         Text {
-            text: Qt.formatDateTime(root.now, "HH:mm")
+            text: Qt.formatDateTime(root.now,
+                Config.chromaClock24H()
+                    ? (Config.chromaClockSeconds() ? "HH:mm:ss" : "HH:mm")
+                    : (Config.chromaClockSeconds() ? "h:mm:ss AP" : "h:mm AP"))
             color: root.contentColor
             font.family: Theme.mono
             font.pixelSize: 21 * root.s

@@ -198,6 +198,10 @@ func TestPatchPersistsPerDisplayShellVisibility(t *testing.T) {
 		{"displays.bar.DP-2", `false`},
 		{"displays.widgets.DP-1", `true`},
 		{"displays.widgets.DP-2", `false`},
+		{"displays.bar_style.DP-1", `"chroma"`},
+		{"displays.bar_style.DP-2", `""`},
+		{"displays.bar_widgets.DP-1.chroma.media", `false`},
+		{"displays.bar_widgets.DP-1.chroma.clock", `true`},
 	}
 
 	for _, step := range steps {
@@ -213,6 +217,23 @@ func TestPatchPersistsPerDisplayShellVisibility(t *testing.T) {
 		"displays.bar.DP-2":     false,
 		"displays.widgets.DP-1": true,
 		"displays.widgets.DP-2": false,
+	} {
+		got, ok := frameGet(t, frame, path).(bool)
+		if !ok || got != want {
+			t.Fatalf("%s = %v, want %v", path, got, want)
+		}
+	}
+	for path, want := range map[string]string{
+		"displays.bar_style.DP-1": "chroma",
+		"displays.bar_style.DP-2": "",
+	} {
+		if got := frameGet(t, frame, path); got != want {
+			t.Fatalf("%s = %v, want %q", path, got, want)
+		}
+	}
+	for path, want := range map[string]bool{
+		"displays.bar_widgets.DP-1.chroma.media": false,
+		"displays.bar_widgets.DP-1.chroma.clock": true,
 	} {
 		got, ok := frameGet(t, frame, path).(bool)
 		if !ok || got != want {

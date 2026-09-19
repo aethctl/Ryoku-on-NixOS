@@ -10,6 +10,7 @@ Rectangle {
 
     required property var colors
     required property real s
+    property string screenName: ""
 
     readonly property real outputVolume: Audio.sink && Audio.sink.audio
         ? Math.max(0, Math.min(1, Audio.sink.audio.volume))
@@ -20,7 +21,7 @@ Rectangle {
     implicitWidth: row.implicitWidth + Theme.paddingMd * 2 * root.s
     implicitHeight: (Theme.iconLg + Theme.paddingLg) * root.s
 
-    radius: Theme.radiusWidget * root.s
+    radius: Config.chromaRadius(Theme.radiusWidget) * root.s
     color: root.colors.backgroundAlt
     border.width: 0
 
@@ -37,7 +38,7 @@ Rectangle {
         spacing: Theme.paddingSm * root.s
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("notifications")
+            visible: Config.chromaWidgetEnabled("notifications", root.screenName)
             height: parent.height
             colors: root.colors
             s: root.s
@@ -49,7 +50,7 @@ Rectangle {
         }
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("wallpaper")
+            visible: Config.chromaWidgetEnabled("wallpaper", root.screenName)
             height: parent.height
             colors: root.colors
             s: root.s
@@ -59,7 +60,7 @@ Rectangle {
         }
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("network")
+            visible: Config.chromaWidgetEnabled("network", root.screenName)
             height: parent.height
             colors: root.colors
             s: root.s
@@ -70,7 +71,7 @@ Rectangle {
         }
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("audio")
+            visible: Config.chromaWidgetEnabled("audio", root.screenName)
             height: parent.height
             colors: root.colors
             s: root.s
@@ -87,7 +88,7 @@ Rectangle {
         }
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("battery") && Battery.present
+            visible: Config.chromaWidgetEnabled("battery", root.screenName) && Battery.present
             height: parent.height
             colors: root.colors
             s: root.s
@@ -99,7 +100,7 @@ Rectangle {
         }
 
         C.UtilityButton {
-            visible: Config.chromaWidgetEnabled("settings")
+            visible: Config.chromaWidgetEnabled("settings", root.screenName)
             height: parent.height
             colors: root.colors
             s: root.s

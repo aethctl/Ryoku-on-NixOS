@@ -4,6 +4,12 @@
 
 ### Added
 
+- **Bars and Chroma modules can be assigned per display.** Each connector can
+  follow the global Bar Studio style or select its own, while Chroma inherits
+  global module switches unless a display overrides one. Chroma also gains live
+  position, gap, radius, opacity, workspace-label and clock-format controls
+  (`services/Config.qml`, `modules/bar/`, `barstyles/chroma/`).
+
 - **Upscaling runs in its own worker process and reports its progress.** The
   waifu2x/ffmpeg enhance ran inside the daemon: a panicking job took the whole
   daemon (and the picker with it) down, a crash mid-run wedged the job lock so

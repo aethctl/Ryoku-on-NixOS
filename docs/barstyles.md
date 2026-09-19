@@ -95,6 +95,10 @@ Ryoku Settings > Displays can suppress the active bar on any output. Sumi releas
 its rail reserve there, normal folder styles are not instantiated there, and QS
 Bar filters that output from its shared multi-monitor bar model. A missing
 per-display setting means enabled, so upgrades preserve the existing layout.
+The same display card can override the global style with `displays.bar_style`
+and can override Chroma's modules with `displays.bar_widgets.<output>.chroma`.
+An empty style value follows the global Bar Studio selection, and missing module
+values inherit Chroma's global switches.
 
 **To add a built-in style, drop its folder under `barstyles/` and add one row to
 `BarProducts.builtins`.** A store style needs no shell edit: it installs into
@@ -562,11 +566,12 @@ A style with no settings omits all of this.
 ## Chroma Settings
 
 Chroma keeps its configuration under the `chroma` object in `shell.json`.
-Bar Studio exposes a 60–140% size control and independent visibility switches
-for the launcher, workspaces, media, notifications, wallpaper, network, audio,
-battery, quick settings and clock modules. Geometry derives from one shared
-scale value, so reducing Chroma on a 1080p output preserves the composition
-instead of shrinking only selected widgets.
+Bar Studio exposes its top/bottom edge, 60–140% size, module gap, corner radius,
+surface opacity, workspace label mode, clock format and seconds, plus independent
+visibility switches for every module. Geometry derives from one shared scale
+value, so reducing Chroma on a 1080p output preserves the composition instead of
+shrinking only selected widgets. Displays can select Chroma for one connector
+and tune that connector's module switches without changing another display.
 
 ## QS Bar Settings
 

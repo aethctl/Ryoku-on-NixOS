@@ -11,6 +11,7 @@ Rectangle {
     property string screenName: ""
 
     readonly property bool dynamicModel: Wm.workspaceModel === "dynamic"
+    readonly property string labelMode: Config.chromaWorkspaceMode()
     readonly property var localWorkspaces: Wm.workspaces.filter(ws =>
         !ws.special && (!root.screenName || ws.output === root.screenName))
     readonly property int workspaceCount: {
@@ -44,7 +45,7 @@ Rectangle {
         root.focus((current + delta + list.length) % list.length + 1)
     }
 
-    readonly property int cellWidth: Math.round(30 * root.s)
+    readonly property int cellWidth: Math.round((root.labelMode === "names" ? 58 : 30) * root.s)
     readonly property int cellGap: Math.round(4 * root.s)
     readonly property int horizontalPadding: Math.round(8 * root.s)
 
@@ -56,7 +57,7 @@ Rectangle {
     implicitWidth: width
     implicitHeight: Math.round(44 * root.s)
 
-    radius: 14 * root.s
+    radius: Config.chromaRadius(14) * root.s
     color: root.colors.surface
     border.width: 0
     clip: true
@@ -80,6 +81,14 @@ Rectangle {
                 readonly property int number: index + 1
                 readonly property bool active: root.isActive(number)
                 readonly property bool occupied: root.isOccupied(number)
+                readonly property var workspace: root.workspace(number)
+                readonly property string workspaceLabel: {
+                    if (root.labelMode === "dots")
+                        return "";
+                    if (root.labelMode === "names" && cell.workspace && cell.workspace.name)
+                        return String(cell.workspace.name).toUpperCase();
+                    return cell.number < 10 ? "0" + cell.number : String(cell.number);
+                }
 
                 width: root.cellWidth
                 height: parent.height
@@ -104,7 +113,8 @@ Rectangle {
 
                     Text {
                         anchors.centerIn: parent
-                        text: cell.number < 10 ? "0" + cell.number : String(cell.number)
+                        visible: root.labelMode !== "dots"
+                        text: cell.workspaceLabel
                         color: cell.active
                             ? root.colors.inkOn(root.colors.accent(cell.index))
                             : root.colors.inkOn(root.colors.surface)
@@ -118,11 +128,13 @@ Rectangle {
                         anchors {
                             horizontalCenter: parent.horizontalCenter
                             bottom: parent.bottom
-                            bottomMargin: 3 * root.s
+                            bottomMargin: root.labelMode === "dots"
+                                ? (parent.height - height) / 2
+                                : 3 * root.s
                         }
 
-                        width: (cell.occupied ? 10 : 3) * root.s
-                        height: Math.max(1, 2 * root.s)
+                        width: (root.labelMode === "dots" ? (cell.active ? 12 : 5) : (cell.occupied ? 10 : 3)) * root.s
+                        height: Math.max(1, (root.labelMode === "dots" ? 5 : 2) * root.s)
                         radius: height / 2
 
                         color: root.colors.accent(cell.index)
