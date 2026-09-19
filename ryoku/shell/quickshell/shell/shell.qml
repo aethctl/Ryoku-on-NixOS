@@ -373,6 +373,29 @@ ShellRoot {
         }
     }
 
+    // Super tapped alone opens the native overview. The daemon's composer
+    // emits a tap only when the modifier was held by itself (any chord marks
+    // it used), so a Super+letter bind never trips it. The claim starts once
+    // the compositor reports a native overview, so Hyprland keeps its own
+    // binding and no reader runs there for taps. The bound flag re-evaluates
+    // whenever either half lands, in any order, and wantTaps is idempotent.
+    Item {
+        readonly property bool nativeOverview: Wm.ready && Wm.caps.nativeOverview === true
+        onNativeOverviewChanged: if (nativeOverview)
+            Keypresses.wantTaps();
+        Component.onCompleted: if (nativeOverview)
+            Keypresses.wantTaps();
+    }
+    Connections {
+        target: Keypresses
+        function onChord(keys, repeat, state, timestamp) {
+            if (repeat || state !== "tap" || keys.length !== 1 || keys[0] !== "Super")
+                return;
+            if (Wm.ready && Wm.caps.nativeOverview)
+                root.toggleSurface("overview");
+        }
+    }
+
     // In-process global shortcuts. Each dispatches to the one toggleSurface
     // mapping above, so the compositor's global-shortcut bind and a `ryoku-shell`
     // spawn drive the identical transition. Names match the compositor binds.

@@ -584,6 +584,7 @@ type keypressManager struct {
 	mu          sync.Mutex
 	cancel      context.CancelFunc
 	enabled     bool
+	tapClaims   int
 	mode        string
 	settings    keypressSettings
 	generation  uint64
@@ -602,35 +603,67 @@ func newKeypressManager(topic *stateTopic, sysRoot, devRoot, settingsPath string
 	}
 }
 
+// configure turns the visualiser overlay on or off. The device reader is
+// shared with the Super-tap consumer (the shell's overview binding), so the
+// reader runs while either claim holds; with the visualiser off the frames
+// narrow to standalone modifier taps only.
 func (m *keypressManager) configure(enabled bool, mode string) {
 	mode = normalizeKeypressMode(mode)
 	m.mu.Lock()
 	m.mode = mode
-	if enabled == m.enabled {
-		m.mu.Unlock()
-		if !enabled {
-			m.publishDisabled()
+	m.enabled = enabled
+	quiet := !enabled && m.tapClaims == 0
+	generation, started := m.restartLocked()
+	m.mu.Unlock()
+	if started {
+		m.publish(generation, keypressFrame{Status: "starting", Keys: []string{}})
+	} else if quiet {
+		m.publishDisabled()
+	}
+}
+
+// setTapClaims registers or unregisters a consumer of standalone modifier
+// taps. Claims are counted because the shell's overview binding lives with
+// the session while the visualiser comes and goes.
+func (m *keypressManager) setTapClaims(on bool) {
+	m.mu.Lock()
+	if on {
+		m.tapClaims++
+	} else if m.tapClaims > 0 {
+		m.tapClaims--
+	}
+	running := m.enabled || m.tapClaims > 0
+	generation, started := m.restartLocked()
+	m.mu.Unlock()
+	if started {
+		m.publish(generation, keypressFrame{Status: "starting", Keys: []string{}})
+	} else if !running {
+		m.publishDisabled()
+	}
+}
+
+// restartLocked brings the reader in line with the current claims: it starts
+// when a claim arrives while stopped, and stops when the last claim leaves.
+// A mode change while running never bounces the reader. It returns the new
+// generation when the reader started, so the caller can publish the starting
+// frame once the lock is released. Call with mu held.
+func (m *keypressManager) restartLocked() (uint64, bool) {
+	want := m.enabled || m.tapClaims > 0
+	if want == (m.cancel != nil) {
+		return 0, false
+	}
+	if !want {
+		if m.cancel != nil {
+			m.cancel()
+			m.cancel = nil
 		}
-		return
+		return 0, false
 	}
 	m.generation++
-	generation := m.generation
-	if m.cancel != nil {
-		m.cancel()
-		m.cancel = nil
-	}
-	m.enabled = enabled
-	if !enabled {
-		m.mu.Unlock()
-		m.publishDisabled()
-		return
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	m.mu.Unlock()
-
-	m.publish(generation, keypressFrame{Status: "starting", Keys: []string{}})
-	go m.run(ctx, generation)
+	go m.run(ctx, m.generation)
+	return m.generation, true
 }
 
 func (m *keypressManager) currentMode() string {
@@ -689,7 +722,7 @@ func (m *keypressManager) patchSettings(raw json.RawMessage) (keypressSettings, 
 
 func (m *keypressManager) publish(generation uint64, frame keypressFrame) {
 	m.mu.Lock()
-	current := m.enabled && m.generation == generation
+	current := (m.enabled || m.tapClaims > 0) && m.generation == generation
 	m.mu.Unlock()
 	if !current {
 		return
@@ -703,6 +736,22 @@ func (m *keypressManager) publish(generation uint64, frame keypressFrame) {
 func (m *keypressManager) publishDisabled() {
 	body, _ := json.Marshal(keypressFrame{Status: "disabled", Keys: []string{}})
 	m.topic.publish(body)
+}
+
+// standaloneModifierTap reports whether the event is one modifier pressed and
+// released with nothing else in between: the composer emits exactly one key,
+// the modifier's own label, with state "tap". A chord never reaches this
+// shape because pressing any key while a modifier is held marks it used.
+func standaloneModifierTap(event *keypressEvent) bool {
+	if event == nil || event.state != "tap" || len(event.keys) != 1 {
+		return false
+	}
+	for _, which := range modifierDisplayOrder {
+		if event.keys[0] == modifierLabel(which) {
+			return true
+		}
+	}
+	return false
 }
 
 type keyDeviceMessage struct {
@@ -862,13 +911,20 @@ func (m *keypressManager) run(ctx context.Context, generation uint64) {
 			return
 		}
 		m.mu.Lock()
-		current := m.enabled && m.generation == generation
+		visualising := m.enabled
+		current := (m.enabled || m.tapClaims > 0) && m.generation == generation
 		if current {
 			m.eventSerial++
 		}
 		serial := m.eventSerial
 		m.mu.Unlock()
 		if !current {
+			return
+		}
+		// With the visualiser off the reader exists only for the standalone
+		// modifier taps the shell's overview binding consumes; every other
+		// chord stays filtered out.
+		if !visualising && !standaloneModifierTap(event) {
 			return
 		}
 		body, err := marshalKeypressEvent(event, time.Now().UnixMilli(), serial)
@@ -1026,5 +1082,15 @@ func (d *daemon) startKeypress() {
 	})
 	d.registerCall("keypress.settings", func(raw json.RawMessage) (any, error) {
 		return d.keypress.patchSettings(raw)
+	})
+	d.registerCall("keypress.taps", func(raw json.RawMessage) (any, error) {
+		var a struct {
+			On *bool `json:"on"`
+		}
+		if err := json.Unmarshal(raw, &a); err != nil || a.On == nil {
+			return nil, fmt.Errorf("expected {on: bool}")
+		}
+		d.keypress.setTapClaims(*a.On)
+		return map[string]any{"on": *a.On}, nil
 	})
 }

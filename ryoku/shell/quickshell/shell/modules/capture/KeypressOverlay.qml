@@ -163,7 +163,10 @@ PanelWindow {
     Connections {
         target: Keypresses
         function onChord(keys, repeat, state, timestamp) {
-            display.push(keys, repeat, state, timestamp);
+            // Taps still flow while the overlay is off (the overview binding
+            // claims them); only the visualiser's own chords belong here.
+            if (Keypresses.active)
+                display.push(keys, repeat, state, timestamp);
         }
         function onActiveChanged() {
             if (!Keypresses.active)
