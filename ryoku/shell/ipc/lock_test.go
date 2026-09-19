@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -96,4 +97,64 @@ func waitFor(t *testing.T, path string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("%s never appeared: lock.sh was not spawned", path)
+}
+
+// A locker that dies by signal took the compositor's session lock down with it
+// (Hyprland fails closed: "lockscreen app died :("), so the daemon must
+// re-spawn it; a crash loop is bounded and then gives up rather than spinning
+// (#218). lock.sh carries qylock's status, so the supervisor can tell the two
+// apart: exit 0 is an authentication, anything else is a death to recover.
+func TestSuperviseLockerRelocksOnCrash(t *testing.T) {
+	home := t.TempDir()
+	run := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", run)
+
+	count := filepath.Join(run, "count")
+	// each start appends a line, then dies with a signal like the abort did.
+	fakeLocker(t, home, "echo x >> \""+count+"\"\nkill -11 $$\n")
+
+	if got := lockSession(); got != "ok" {
+		t.Fatalf("lockSession = %q", got)
+	}
+	// initial + lockRetries re-spawns, no more.
+	deadline := time.Now().Add(3 * time.Second)
+	var n int
+	for time.Now().Before(deadline) {
+		if b, err := os.ReadFile(count); err == nil {
+			n = strings.Count(string(b), "x")
+		}
+		if n == 1+lockRetries {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if n != 1+lockRetries {
+		t.Fatalf("locker respawned %d times, want %d (bounded re-lock)", n, 1+lockRetries)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if b, _ := os.ReadFile(count); strings.Count(string(b), "x") != 1+lockRetries {
+		t.Fatal("re-lock did not give up after the budget: crash loop spins")
+	}
+}
+
+// The same supervision must never fight an unlock: a locker that exits 0 is a
+// user who authenticated, and re-locking them out is worse than the bug.
+func TestSuperviseLockerStaysDownOnUnlock(t *testing.T) {
+	home := t.TempDir()
+	run := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", run)
+
+	count := filepath.Join(run, "count")
+	fakeLocker(t, home, "echo x >> \""+count+"\"\nexit 0\n")
+
+	if got := lockSession(); got != "ok" {
+		t.Fatalf("lockSession = %q", got)
+	}
+	waitFor(t, count)
+	time.Sleep(400 * time.Millisecond)
+	if b, _ := os.ReadFile(count); strings.Count(string(b), "x") != 1 {
+		t.Fatalf("a clean unlock was re-locked: %s", b)
+	}
 }

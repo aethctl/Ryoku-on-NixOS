@@ -171,22 +171,36 @@ func lockMarker() string {
 // predating the marker, a wedged Quickshell) delays suspend, never blocks it.
 var lockWait = 3 * time.Second
 
+// lockClientPattern matches the qylock locker process, so the daemon can tell
+// a live lock from a stale marker.
+const lockClientPattern = "quickshell.*quickshell-lockscreen.*/lock_shell.qml"
+
+// A locker that dies with a signal took the compositor's session lock down with
+// it: Hyprland fails closed and shows "lockscreen app died :(", and with no
+// client left there is nothing to authenticate against, so the session is
+// stranded until a reboot (#218, a Quickshell abort on an input hotplug). The
+// daemon re-spawns a crashed locker, bounded so a locker that crashes on start
+// cannot spin: lockRetries attempts inside lockRetryWindow, after which the
+// session is left as-is (the user's own compositor, recoverable) rather than
+// hammered. A locker that lived past the window died for a fresh reason and gets
+// a new budget.
+var (
+	lockRetries     = 3
+	lockRetryWindow = 2 * time.Second
+)
+
 // lockSession locks the screen with qylock, the in-session lock Ryoku ships.
 // the shell has no lock of its own. It returns once the compositor has
 // confirmed the lock (the marker), or after lockWait.
 func lockSession() string {
 	marker := lockMarker()
-	if !pgrepRunning("quickshell.*quickshell-lockscreen.*/lock_shell.qml") {
+	if !pgrepRunning(lockClientPattern) {
 		// no live locker: a marker on disk is a leftover of a killed one and
 		// must not fake "locked" below.
 		_ = os.Remove(marker)
-		lock := filepath.Join(os.Getenv("HOME"), ".local", "share", "quickshell-lockscreen", "lock.sh")
-		cmd := exec.Command(lock)
-		if err := cmd.Start(); err != nil {
+		if err := spawnLocker(0); err != nil {
 			return "err lock: " + err.Error()
 		}
-		// reap at unlock; Release() would leave one zombie per lock cycle.
-		go func() { _ = cmd.Wait() }()
 	}
 	deadline := time.Now().Add(lockWait)
 	for time.Now().Before(deadline) {
@@ -196,6 +210,44 @@ func lockSession() string {
 		time.Sleep(50 * time.Millisecond)
 	}
 	return "ok"
+}
+
+// spawnLocker starts qylock and hands the child to superviseLocker, which
+// re-locks if it dies while the session is still meant to be locked. attempt is
+// the caller's crash budget so far.
+func spawnLocker(attempt int) error {
+	lock := filepath.Join(os.Getenv("HOME"), ".local", "share", "quickshell-lockscreen", "lock.sh")
+	cmd := exec.Command(lock)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	// reap at unlock; Release() would leave one zombie per lock cycle. The
+	// reaper is also the supervisor: it sees the exit status lock.sh carries.
+	go superviseLocker(cmd, attempt)
+	return nil
+}
+
+// superviseLocker waits for the locker and re-spawns it on an abnormal exit.
+// lock.sh exits with qylock's own status, so a clean unlock is 0 (never
+// re-locked) and a crash is a signal death (re-locked). The window resets the
+// budget for a locker that survived a while before dying, so only a tight crash
+// loop is bounded to a give-up.
+func superviseLocker(cmd *exec.Cmd, attempt int) {
+	started := time.Now()
+	err := cmd.Wait()
+	if err == nil {
+		return // the user authenticated: a clean unlock, stay open
+	}
+	if time.Since(started) > lockRetryWindow {
+		attempt = 0
+	}
+	if attempt >= lockRetries {
+		return
+	}
+	if pgrepRunning(lockClientPattern) {
+		return // something else already re-locked
+	}
+	_ = spawnLocker(attempt + 1)
 }
 
 // voxtypeRecord starts or stops dictation on the running Voxtype daemon (the
