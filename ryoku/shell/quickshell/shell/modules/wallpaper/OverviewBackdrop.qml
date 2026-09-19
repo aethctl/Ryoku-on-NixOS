@@ -26,12 +26,14 @@ Item {
     required property var screen
     // The active compositor can host a surface inside its overview backdrop.
     property bool available: false
+    property bool overviewOpen: false
     // The live wallpaper source the desktop paints (file url + revision), reused
     // so a wallpaper change carries straight into the backdrop with no second
     // pipeline to keep in sync.
     property string wallpaperUrl: ""
 
     readonly property bool shown: root.available && OverviewBackdropConfig.enabled
+    readonly property bool blurWanted: root.overviewOpen && OverviewBackdropConfig.blurEnabled
 
     // Follow the live wallpaper, or paint a per-card backdrop image the user
     // pinned when they turned following off and set one.
@@ -89,10 +91,20 @@ Item {
                 id: blurFx
                 anchors.fill: img
                 source: img
-                visible: img.status === Image.Ready && OverviewBackdropConfig.blurEnabled
                 blurEnabled: true
-                blur: Math.min(1, OverviewBackdropConfig.blur / 100)
+                blur: root.blurWanted ? Math.min(1, OverviewBackdropConfig.blur / 100) : 0.0
                 blurMax: 64
+                visible: img.status === Image.Ready
+                    && OverviewBackdropConfig.blurEnabled
+                    && (root.blurWanted || blur > 0.001)
+
+                Behavior on blur {
+                    enabled: !Motion.reduce
+                    NumberAnimation {
+                        duration: Motion.wallpaperFade
+                        easing.type: Easing.OutCubic
+                    }
+                }
             }
 
             // Dimming rides above the blur so the picker's percentage means the

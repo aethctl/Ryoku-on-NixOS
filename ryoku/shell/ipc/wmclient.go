@@ -57,6 +57,9 @@ func (d *daemon) onWMFrame(f wm.Frame) {
 	case wm.FrameWindows:
 		changed = !reflect.DeepEqual(d.wmWindows, f.Windows)
 		d.wmWindows = f.Windows
+	case wm.FrameOverview:
+		changed = d.wmOverview != f.OverviewOpen
+		d.wmOverview = f.OverviewOpen
 	case wm.FrameKeyboard:
 		changed = d.wmKeyboardLayout != f.KeyboardLayout || !reflect.DeepEqual(d.wmKeyboardLayouts, f.KeyboardLayouts)
 		d.wmKeyboardLayout, d.wmKeyboardLayouts = f.KeyboardLayout, f.KeyboardLayouts
@@ -95,6 +98,7 @@ type wmTopicFrame struct {
 	Workspaces      []wm.Workspace         `json:"workspaces"`
 	Windows         []wm.Window            `json:"windows"`
 	ConfigFiles     []string               `json:"configFiles"`
+	OverviewOpen    bool                   `json:"overviewOpen"`
 }
 
 func (d *daemon) publishWM() {
@@ -121,6 +125,7 @@ func (d *daemon) publishWM() {
 	}
 	d.wmMu.Lock()
 	frame.Ready = d.wmReady
+	frame.OverviewOpen = d.wmOverview
 	frame.KeyboardLayout = d.wmKeyboardLayout
 	if d.wmKeyboardLayouts != nil {
 		frame.KeyboardLayouts = d.wmKeyboardLayouts

@@ -102,52 +102,53 @@ func componentDisabled(name string) bool {
 }
 
 type daemon struct {
-	mu          sync.Mutex
-	sup         map[string]bool      // components that already have a supervisor goroutine
-	proc        map[string]*exec.Cmd // current live process per component
-	paintSig    chan struct{}        // coalescing wake for the palette/border worker
-	stageSig    chan struct{}        // coalescing wake for the unified stage worker
-	stageForce  atomic.Bool          // a pending forced regenerate (effect/quality change, refresh, re-cut)
-	stageGen    atomic.Bool          // a pending enable: reuse an existing cut, else generate
-	stageBusy   atomic.Bool          // a cut/inpaint is in flight (for the status/topic)
-	ledsSig     chan struct{}        // coalescing wake for the OpenRGB worker
-	widgetSig   chan struct{}        // coalescing wake for the widget-occupancy gate
-	quit        chan struct{}
-	closed      bool
-	ln          net.Listener
-	lock        *os.File // exclusive single-daemon guard, held until exit
-	failMu      sync.Mutex
-	lastFail    map[string]string        // component -> last line it died with
-	voiceMu     sync.Mutex               // serializes voice (Super+`) toggles
-	voiceOn     bool                     // dictation active; guarded by voiceMu
-	prompter    *prompter                // GNOME keyring system prompter (nil when unavailable)
-	wmc          *wm.Client // sole path to the compositor
-	wmMu         sync.Mutex // guards the compositor state the wm watcher keeps warm
-	activeMon    string     // focused output, kept warm by watchWindowManager
-	wmOutputs    []wm.Output
-	wmWorkspaces []wm.Workspace
-	wmWindows    []wm.Window
-	wmKeyboardLayout string
+	mu                sync.Mutex
+	sup               map[string]bool      // components that already have a supervisor goroutine
+	proc              map[string]*exec.Cmd // current live process per component
+	paintSig          chan struct{}        // coalescing wake for the palette/border worker
+	stageSig          chan struct{}        // coalescing wake for the unified stage worker
+	stageForce        atomic.Bool          // a pending forced regenerate (effect/quality change, refresh, re-cut)
+	stageGen          atomic.Bool          // a pending enable: reuse an existing cut, else generate
+	stageBusy         atomic.Bool          // a cut/inpaint is in flight (for the status/topic)
+	ledsSig           chan struct{}        // coalescing wake for the OpenRGB worker
+	widgetSig         chan struct{}        // coalescing wake for the widget-occupancy gate
+	quit              chan struct{}
+	closed            bool
+	ln                net.Listener
+	lock              *os.File // exclusive single-daemon guard, held until exit
+	failMu            sync.Mutex
+	lastFail          map[string]string // component -> last line it died with
+	voiceMu           sync.Mutex        // serializes voice (Super+`) toggles
+	voiceOn           bool              // dictation active; guarded by voiceMu
+	prompter          *prompter         // GNOME keyring system prompter (nil when unavailable)
+	wmc               *wm.Client        // sole path to the compositor
+	wmMu              sync.Mutex        // guards the compositor state the wm watcher keeps warm
+	activeMon         string            // focused output, kept warm by watchWindowManager
+	wmOutputs         []wm.Output
+	wmWorkspaces      []wm.Workspace
+	wmWindows         []wm.Window
+	wmOverview        bool
+	wmKeyboardLayout  string
 	wmKeyboardLayouts []string
-	wmReady      bool
-	wmTopic      *stateTopic
-	gateMu      sync.Mutex               // guards gateWant / gateWake
-	gateWant    map[string]bool          // component -> may run now (absent = yes)
-	gateWake    map[string]chan struct{} // wakes a parked supervisor when its gate opens
-	parkMu      sync.Mutex               // guards hiddenSince
-	hiddenSince map[string]time.Time     // parkable palette -> when it last went hidden (absent = shown)
-	topicsMu    sync.Mutex               // guards topics
-	topics      map[string]*stateTopic   // subsystem name -> pub/sub state topic
-	callsMu     sync.Mutex               // guards calls
-	calls       map[string]callFunc      // "topic.method" -> control handler
-	clip        *clipState               // clipboard history state (nil until started)
-	tray        *trayState               // system tray watcher/host state (nil until started)
-	ryoWallMu   sync.Mutex               // guards ryoWall
-	ryoWall     ryogamiFrame             // last wallpaper frame seen from ryogami; feeds the stage worker
-	polkit      *polkitAgent             // PolicyKit1 authentication agent (nil until started)
-	settings    *settingsStore           // shell.json store (nil until startSettings); theme apply patches through it
-	pp          *powerProfilesState      // power-profiles-daemon bus state; nil until startPowerProfiles
-	keypress    *keypressManager         // evdev key stream; opens devices only while the overlay is enabled
+	wmReady           bool
+	wmTopic           *stateTopic
+	gateMu            sync.Mutex               // guards gateWant / gateWake
+	gateWant          map[string]bool          // component -> may run now (absent = yes)
+	gateWake          map[string]chan struct{} // wakes a parked supervisor when its gate opens
+	parkMu            sync.Mutex               // guards hiddenSince
+	hiddenSince       map[string]time.Time     // parkable palette -> when it last went hidden (absent = shown)
+	topicsMu          sync.Mutex               // guards topics
+	topics            map[string]*stateTopic   // subsystem name -> pub/sub state topic
+	callsMu           sync.Mutex               // guards calls
+	calls             map[string]callFunc      // "topic.method" -> control handler
+	clip              *clipState               // clipboard history state (nil until started)
+	tray              *trayState               // system tray watcher/host state (nil until started)
+	ryoWallMu         sync.Mutex               // guards ryoWall
+	ryoWall           ryogamiFrame             // last wallpaper frame seen from ryogami; feeds the stage worker
+	polkit            *polkitAgent             // PolicyKit1 authentication agent (nil until started)
+	settings          *settingsStore           // shell.json store (nil until startSettings); theme apply patches through it
+	pp                *powerProfilesState      // power-profiles-daemon bus state; nil until startPowerProfiles
+	keypress          *keypressManager         // evdev key stream; opens devices only while the overlay is enabled
 }
 
 func runDaemon() error {

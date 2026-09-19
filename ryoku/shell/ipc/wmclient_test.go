@@ -46,6 +46,25 @@ func TestMonitorConcurrent(t *testing.T) {
 	<-done
 }
 
+func TestOverviewFrameUpdatesCache(t *testing.T) {
+	d := &daemon{}
+	d.onWMFrame(wm.Frame{Kind: wm.FrameOverview, OverviewOpen: true})
+	d.wmMu.Lock()
+	got := d.wmOverview
+	d.wmMu.Unlock()
+	if !got {
+		t.Fatal("overview frame did not set cached state")
+	}
+
+	d.onWMFrame(wm.Frame{Kind: wm.FrameOverview})
+	d.wmMu.Lock()
+	got = d.wmOverview
+	d.wmMu.Unlock()
+	if got {
+		t.Fatal("closed overview frame did not clear cached state")
+	}
+}
+
 func BenchmarkActiveMonitorCached(b *testing.B) {
 	d := &daemon{}
 	d.onWMFrame(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: "DP-1"})

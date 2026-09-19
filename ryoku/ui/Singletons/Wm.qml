@@ -24,6 +24,7 @@ Singleton {
         property var caps: ({})
         property string workspaceModel: "fixed"
         property string focusedOutput: ""
+        property bool overviewOpen: false
         property var outputs: []
         property var configFiles: []
         property string keyboardLayout: ""
@@ -39,6 +40,7 @@ Singleton {
     readonly property string workspaceModel: state.workspaceModel || "fixed"
 
     readonly property string focusedOutput: state.focusedOutput || ""
+    readonly property bool overviewOpen: state.overviewOpen === true
     readonly property var outputs: state.outputs || []
     readonly property var configFiles: state.configFiles || []
 

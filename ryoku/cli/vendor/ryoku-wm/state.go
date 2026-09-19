@@ -16,6 +16,7 @@ const (
 	FrameOutputs    FrameKind = "outputs"
 	FrameWorkspaces FrameKind = "workspaces"
 	FrameWindows    FrameKind = "windows"
+	FrameOverview   FrameKind = "overview"
 	// FrameReady marks the first full sync, so a consumer can tell "nothing
 	// yet" from "genuinely empty".
 	FrameReady FrameKind = "ready"
@@ -99,6 +100,7 @@ type Frame struct {
 	// Keyboard layout in effect, and the loaded set, for the bar indicator.
 	KeyboardLayout  string   `json:"keyboardLayout,omitempty"`
 	KeyboardLayouts []string `json:"keyboardLayouts,omitempty"`
+	OverviewOpen    bool     `json:"overviewOpen,omitempty"`
 }
 
 // Snapshot is one full read, for the one-shot callers (doctor, the CLI) that
