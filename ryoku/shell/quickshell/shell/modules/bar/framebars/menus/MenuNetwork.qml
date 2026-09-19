@@ -30,6 +30,12 @@ Item {
 
     property bool scanning: false
 
+    // a hidden network has no scanned AP, so it joins through the daemon intent
+    // with 802-11-wireless.hidden set; the form lives under the network list.
+    property bool hiddenConnecting: false
+    property int hiddenPendingId: -1
+    property bool hiddenError: false
+
     implicitHeight: row.implicitHeight
 
     // Detail-page mode: hosted as a sidebar page, the list arrives already
@@ -50,8 +56,26 @@ Item {
         else if (root.pageMode)
             root.forceReveal();
     }
-    Component.onCompleted: Network.setVpnPolling(root, root.open)
     Component.onDestruction: Network.setVpnPolling(root, false)
+
+    function submitHidden(ssid, password) {
+        if (ssid === "" || root.hiddenConnecting)
+            return;
+        root.hiddenError = false;
+        root.hiddenConnecting = true;
+        root.hiddenPendingId = Network.connectWifi(ssid, password, "", true);
+    }
+    Connections {
+        target: Network
+        function onReplied(id, ok, error) {
+            if (id !== root.hiddenPendingId)
+                return;
+            root.hiddenConnecting = false;
+            root.hiddenPendingId = -1;
+            if (!ok)
+                root.hiddenError = true;
+        }
+    }
 
     // Available networks: one row per SSID+band, the strongest AP kept per key
     // and the list sorted by signal descending. Keying by SSID alone (the
@@ -357,6 +381,124 @@ Item {
                 EmptyLabel {
                     text: I18n.tr("Scanning…")
                     visible: root.scanning
+                }
+
+                // Hidden network: no scanned object exists, so the join rides
+                // the daemon intent with the hidden flag (see root.submitHidden).
+                Item {
+                    width: parent.width
+                    height: Math.max(hiddenTitle.implicitHeight, hiddenAdd.implicitHeight)
+                    SectionLabel {
+                        id: hiddenTitle
+                        anchors.centerIn: parent
+                        width: parent.width
+                        text: I18n.tr("Hidden Network")
+                    }
+                    MenuButton {
+                        id: hiddenAdd
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        minW: Theme.iconSm + hiddenAdd.pad * 2
+                        minH: Theme.iconSm + hiddenAdd.pad * 2
+                        onClicked: hiddenForm.expanded = !hiddenForm.expanded
+                        MaterialIcon {
+                            anchors.centerIn: parent
+                            font.pixelSize: Theme.iconSm
+                            text: "add"
+                            color: hiddenAdd.contentColor
+                        }
+                    }
+                }
+
+                Column {
+                    id: hiddenForm
+                    property bool expanded: false
+                    width: parent.width
+                    spacing: 8
+                    visible: hiddenForm.expanded
+                    height: visible ? implicitHeight : 0
+
+                    Rectangle {
+                        width: parent.width
+                        height: hiddenSsid.implicitHeight + Theme.paddingSm * 2
+                        radius: Theme.radiusWidget
+                        color: "transparent"
+                        border.width: Theme.borderWidth
+                        border.color: Theme.outline
+                        TextInput {
+                            id: hiddenSsid
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Theme.paddingMd
+                            anchors.rightMargin: Theme.paddingMd
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: Theme.fontSm
+                            clip: true
+                            onAccepted: hiddenPw.forceActiveFocus()
+                            Text {
+                                anchors.fill: parent
+                                verticalAlignment: Text.AlignVCenter
+                                text: I18n.tr("Network name (SSID)")
+                                color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                font: hiddenSsid.font
+                                visible: hiddenSsid.text.length === 0 && !hiddenSsid.activeFocus
+                            }
+                        }
+                    }
+                    Rectangle {
+                        width: parent.width
+                        height: hiddenPw.implicitHeight + Theme.paddingSm * 2
+                        radius: Theme.radiusWidget
+                        color: "transparent"
+                        border.width: Theme.borderWidth
+                        border.color: Theme.outline
+                        TextInput {
+                            id: hiddenPw
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.leftMargin: Theme.paddingMd
+                            anchors.rightMargin: Theme.paddingMd
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurface)
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: Theme.fontSm
+                            echoMode: TextInput.Password
+                            clip: true
+                            onAccepted: root.submitHidden(hiddenSsid.text, hiddenPw.text)
+                            Text {
+                                anchors.fill: parent
+                                verticalAlignment: Text.AlignVCenter
+                                text: I18n.tr("Password (leave empty if open)")
+                                color: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
+                                font: hiddenPw.font
+                                visible: hiddenPw.text.length === 0 && !hiddenPw.activeFocus
+                            }
+                        }
+                    }
+                    Rectangle {
+                        width: parent.width
+                        visible: root.hiddenError
+                        height: hiddenErrText.implicitHeight + Theme.paddingSm * 2
+                        radius: Theme.radiusWidget
+                        color: Theme.error
+                        Text {
+                            id: hiddenErrText
+                            anchors.centerIn: parent
+                            text: I18n.tr("Error Connecting")
+                            color: Theme.inkOn(Theme.error, Theme.onError)
+                            font.family: Theme.fontPrimary
+                            font.pixelSize: Theme.fontMd
+                            font.weight: Font.Bold
+                        }
+                    }
+                    PrimaryButton {
+                        width: parent.width
+                        text: root.hiddenConnecting ? I18n.tr("Connecting…") : I18n.tr("Connect")
+                        enabled: hiddenSsid.text.length > 0 && !root.hiddenConnecting
+                        onClicked: root.submitHidden(hiddenSsid.text, hiddenPw.text)
+                    }
                 }
             }
         }

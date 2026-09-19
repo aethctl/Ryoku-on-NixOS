@@ -21,6 +21,12 @@ Column {
     property string pendingSsid: ""
     property string pendingBssid: ""
     property string password: ""
+    property bool hiddenOpen: false
+    property string hiddenSsid: ""
+    property string hiddenPassword: ""
+    property bool hiddenConnecting: false
+    property int hiddenPendingId: -1
+    property bool hiddenError: false
 
     readonly property bool connected: Network.wifiConnectivity === "Connected"
     readonly property var aps: {
@@ -63,6 +69,39 @@ Column {
         page.pendingBssid = "";
         page.password = "";
         if (pwField) pwField.focus = false;
+    }
+    function openHidden() {
+        page.hiddenOpen = true;
+        page.hiddenError = false;
+        Qt.callLater(function () { if (hiddenSsidField) hiddenSsidField.forceActiveFocus(); });
+    }
+    function cancelHidden() {
+        page.hiddenOpen = false;
+        page.hiddenConnecting = false;
+        page.hiddenPendingId = -1;
+        page.hiddenSsid = "";
+        page.hiddenPassword = "";
+        page.hiddenError = false;
+    }
+    function submitHidden() {
+        if (page.hiddenSsid === "" || page.hiddenConnecting) return;
+        page.hiddenError = false;
+        page.hiddenConnecting = true;
+        page.hiddenPendingId = Network.connectWifi(page.hiddenSsid, page.hiddenPassword, "", true);
+    }
+    Connections {
+        target: Network
+        function onReplied(id, ok, error) {
+            if (id !== page.hiddenPendingId) return;
+            page.hiddenConnecting = false;
+            page.hiddenPendingId = -1;
+            if (ok)
+                page.cancelHidden();
+            else {
+                page.hiddenError = true;
+                page.hiddenPassword = "";
+            }
+        }
     }
 
     Item {
@@ -260,6 +299,13 @@ Column {
             font.family: Theme.fontPrimary
             font.pixelSize: 12
         }
+
+        K.QsAction {
+            visible: Network.wifiRadio
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: I18n.tr("Connect to a hidden network")
+            onClicked: page.openHidden()
+        }
     }
 
     Rectangle {
@@ -314,6 +360,112 @@ Column {
                 K.QsAction {
                     text: I18n.tr("Cancel")
                     onClicked: page.cancelPassword()
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: hiddenCard
+        visible: page.hiddenOpen
+        width: parent.width
+        height: hiddenColumn.implicitHeight + 28
+        radius: 18
+        color: page.dim(0.08)
+
+        Column {
+            id: hiddenColumn
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: 14 }
+            spacing: 10
+
+            Text {
+                width: parent.width
+                text: I18n.tr("Hidden network")
+                color: page.ink
+                font.family: Theme.fontPrimary
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            Rectangle {
+                width: parent.width
+                height: 40
+                radius: 12
+                color: page.dim(0.12)
+                TextInput {
+                    id: hiddenSsidField
+                    anchors {
+                        left: parent.left; right: parent.right
+                        leftMargin: 12; rightMargin: 12
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: page.hiddenSsid
+                    onTextChanged: { page.hiddenSsid = text; page.hiddenError = false; }
+                    color: page.ink
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 13
+                    selectionColor: page.accent
+                    selectedTextColor: page.fill
+                    clip: true
+                    Keys.onPressed: function(event) { if (event.key === Qt.Key_Escape) { page.cancelHidden(); event.accepted = true; } }
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: I18n.tr("Network name (SSID)")
+                        color: page.dim(0.4)
+                        font: hiddenSsidField.font
+                        visible: hiddenSsidField.text.length === 0 && !hiddenSsidField.activeFocus
+                    }
+                }
+            }
+            Rectangle {
+                width: parent.width
+                height: 40
+                radius: 12
+                color: page.dim(0.12)
+                TextInput {
+                    id: hiddenPwField
+                    anchors {
+                        left: parent.left; right: parent.right
+                        leftMargin: 12; rightMargin: 12
+                        verticalCenter: parent.verticalCenter
+                    }
+                    text: page.hiddenPassword
+                    onTextChanged: { page.hiddenPassword = text; page.hiddenError = false; }
+                    echoMode: TextInput.Password
+                    color: page.ink
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 13
+                    selectionColor: page.accent
+                    selectedTextColor: page.fill
+                    onAccepted: page.submitHidden()
+                    Keys.onPressed: function(event) { if (event.key === Qt.Key_Escape) { page.cancelHidden(); event.accepted = true; } }
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: I18n.tr("Password (leave empty if open)")
+                        color: page.dim(0.4)
+                        font: hiddenPwField.font
+                        visible: hiddenPwField.text.length === 0 && !hiddenPwField.activeFocus
+                    }
+                }
+            }
+            Text {
+                width: parent.width
+                visible: page.hiddenError
+                text: I18n.tr("Could not connect")
+                color: Theme.error
+                font.family: Theme.fontPrimary
+                font.pixelSize: 11
+            }
+            Row {
+                spacing: 10
+                K.QsAction {
+                    text: page.hiddenConnecting ? I18n.tr("Connecting…") : I18n.tr("Connect")
+                    onClicked: page.submitHidden()
+                }
+                K.QsAction {
+                    text: I18n.tr("Cancel")
+                    onClicked: page.cancelHidden()
                 }
             }
         }

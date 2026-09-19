@@ -113,11 +113,12 @@ func (d *daemon) startNetwork() {
 			Ssid     string `json:"ssid"`
 			Password string `json:"password"`
 			Bssid    string `json:"bssid"`
+			Hidden   bool   `json:"hidden"`
 		}
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, err
 		}
-		return nil, n.wifiConnect(a.Ssid, a.Password, a.Bssid)
+		return nil, n.wifiConnect(a.Ssid, a.Password, a.Bssid, a.Hidden)
 	})
 	d.registerCall("network.wifiDisconnect", func(json.RawMessage) (any, error) {
 		return nil, n.wifiDisconnect()
@@ -414,8 +415,10 @@ func (n *networkState) wifiScan() error {
 // keyed to the access point bestApForSsid resolves so NetworkManager binds the
 // right BSSID. An empty bssid picks the strongest matching AP (the historical
 // behaviour); a non-empty bssid pins that exact AP and locks the profile to its
-// band. Mirrors the reference lookup-then-add path.
-func (n *networkState) wifiConnect(ssid, password, bssid string) error {
+// band. hidden marks the network as not broadcasting its SSID: no AP resolves,
+// so the profile carries 802-11-wireless.hidden and NetworkManager probes for
+// it by name. Mirrors the reference lookup-then-add path.
+func (n *networkState) wifiConnect(ssid, password, bssid string, hidden bool) error {
 	if ssid == "" {
 		return fmt.Errorf("empty ssid")
 	}
@@ -454,7 +457,7 @@ func (n *networkState) wifiConnect(ssid, password, bssid string) error {
 			return n.waitForActivation(active)
 		}
 	}
-	settings := wifiConnectSettings(ssid, password, bssid, ap)
+	settings := wifiConnectSettings(ssid, password, bssid, ap, hidden)
 	var newConn, newActive dbus.ObjectPath
 	if err := n.obj(nmPath).Call(nmIface+".AddAndActivateConnection", 0, settings, dbus.ObjectPath(wifiDev), specific).Store(&newConn, &newActive); err != nil {
 		return err
@@ -967,11 +970,16 @@ func keyMgmtForSecurity(security string) string {
 // security block whose key-mgmt follows the AP's advertised security so
 // WPA3-SAE joins as sae instead of being forced to wpa-psk. A caller-supplied
 // bssid pins the profile to the resolved AP's band so autoconnect keeps the
-// chosen radio. Pure so the shape is unit-tested without a bus.
-func wifiConnectSettings(ssid, password, bssid string, ap *apInfo) map[string]map[string]dbus.Variant {
+// chosen radio. hidden marks a network that does not broadcast its SSID, which
+// is the only way NetworkManager will ever probe for it. Pure so the shape is
+// unit-tested without a bus.
+func wifiConnectSettings(ssid, password, bssid string, ap *apInfo, hidden bool) map[string]map[string]dbus.Variant {
 	wireless := map[string]dbus.Variant{
 		"ssid": dbus.MakeVariant([]byte(ssid)),
 		"mode": dbus.MakeVariant("infrastructure"),
+	}
+	if hidden {
+		wireless["hidden"] = dbus.MakeVariant(true)
 	}
 	if bssid != "" && ap != nil {
 		if band := nmBandForFrequency(ap.Frequency); band != "" {

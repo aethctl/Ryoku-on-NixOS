@@ -19,6 +19,51 @@ Item {
     property real s: 1
     property bool open: false
 
+    // a hidden network has no scanned AP, so it joins through the daemon intent
+    // with 802-11-wireless.hidden set; these drive the inline join card.
+    property bool hiddenOpen: false
+    property string hiddenSsid: ""
+    property string hiddenPassword: ""
+    property int hiddenPendingId: -1
+    property bool hiddenConnecting: false
+    property bool hiddenError: false
+
+    function openHidden() {
+        root.hiddenOpen = true;
+        root.hiddenError = false;
+        Qt.callLater(function() { if (hiddenSsidField.visible) hiddenSsidField.forceActiveFocus(); });
+    }
+    function cancelHidden() {
+        root.hiddenOpen = false;
+        root.hiddenConnecting = false;
+        root.hiddenPendingId = -1;
+        root.hiddenSsid = "";
+        root.hiddenPassword = "";
+        root.hiddenError = false;
+    }
+    function submitHidden() {
+        if (root.hiddenSsid === "" || root.hiddenConnecting)
+            return;
+        root.hiddenError = false;
+        root.hiddenConnecting = true;
+        root.hiddenPendingId = Network.connectWifi(root.hiddenSsid, root.hiddenPassword, "", true);
+    }
+    Connections {
+        target: Network
+        function onReplied(id, ok, error) {
+            if (id !== root.hiddenPendingId)
+                return;
+            root.hiddenConnecting = false;
+            root.hiddenPendingId = -1;
+            if (ok)
+                root.cancelHidden();
+            else {
+                root.hiddenError = true;
+                root.hiddenPassword = "";
+            }
+        }
+    }
+
     readonly property real pad: 11 * root.s
     readonly property color ink: Theme.ink(Theme.effectiveSurface)
     readonly property color inkDim: Theme.inkOn(Theme.effectiveSurface, Theme.onSurfaceVariant, 3.0)
@@ -484,6 +529,108 @@ Item {
             font.family: Theme.fontPrimary
             font.pixelSize: 10 * root.s
             topPadding: 2 * root.s
+        }
+        Text {
+            width: parent.width
+            visible: root.wifiOn && !root.hiddenOpen
+            horizontalAlignment: Text.AlignHCenter
+            topPadding: 4 * root.s
+            text: I18n.tr("Connect to a hidden network")
+            color: hiddenLinkHover.hovered ? root.ink : root.inkDim
+            font.family: Theme.fontPrimary
+            font.pixelSize: 10 * root.s
+            Behavior on color { ColorAnimation { duration: 120 } }
+            HoverHandler { id: hiddenLinkHover }
+            TapHandler { onTapped: root.openHidden() }
+        }
+        Column {
+            width: parent.width
+            spacing: 4 * root.s
+            visible: root.wifiOn && root.hiddenOpen
+
+            Rectangle {
+                width: parent.width
+                height: 26 * root.s
+                radius: 3 * root.s
+                color: "transparent"
+                border.width: Theme.borderWidth
+                border.color: root.line
+                TextInput {
+                    id: hiddenSsidField
+                    anchors.fill: parent
+                    anchors.leftMargin: 8 * root.s
+                    anchors.rightMargin: 8 * root.s
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: root.ink
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 11 * root.s
+                    clip: true
+                    text: root.hiddenSsid
+                    onTextChanged: { root.hiddenSsid = text; root.hiddenError = false; }
+                    Keys.onPressed: function(event) { if (event.key === Qt.Key_Escape) { root.cancelHidden(); event.accepted = true; } }
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: I18n.tr("Network name (SSID)")
+                        color: root.inkDim
+                        font: hiddenSsidField.font
+                        visible: hiddenSsidField.text.length === 0 && !hiddenSsidField.activeFocus
+                    }
+                }
+            }
+            Rectangle {
+                width: parent.width
+                height: 26 * root.s
+                radius: 3 * root.s
+                color: "transparent"
+                border.width: Theme.borderWidth
+                border.color: root.line
+                TextInput {
+                    anchors.fill: parent
+                    anchors.leftMargin: 8 * root.s
+                    anchors.rightMargin: 8 * root.s
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: root.ink
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 11 * root.s
+                    echoMode: TextInput.Password
+                    clip: true
+                    text: root.hiddenPassword
+                    onTextChanged: { root.hiddenPassword = text; root.hiddenError = false; }
+                    onAccepted: root.submitHidden()
+                    Keys.onPressed: function(event) { if (event.key === Qt.Key_Escape) { root.cancelHidden(); event.accepted = true; } }
+                    Text {
+                        anchors.fill: parent
+                        verticalAlignment: Text.AlignVCenter
+                        text: I18n.tr("Password (leave empty if open)")
+                        color: root.inkDim
+                        font: parent.font
+                        visible: parent.text.length === 0 && !parent.activeFocus
+                    }
+                }
+            }
+            Text {
+                width: parent.width
+                visible: root.hiddenError
+                text: I18n.tr("Wrong password or connection failed")
+                color: Theme.error
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontPrimary
+                font.pixelSize: 9.5 * root.s
+            }
+            PopoutAction {
+                width: parent.width
+                s: root.s
+                enabled: root.hiddenSsid !== "" && !root.hiddenConnecting
+                label: root.hiddenConnecting ? I18n.tr("Connecting…") : I18n.tr("Connect")
+                onClicked: root.submitHidden()
+            }
+            PopoutAction {
+                width: parent.width
+                s: root.s
+                label: I18n.tr("Cancel")
+                onClicked: root.cancelHidden()
+            }
         }
     }
 }

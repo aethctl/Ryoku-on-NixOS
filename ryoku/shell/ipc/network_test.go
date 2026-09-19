@@ -65,7 +65,8 @@ func TestConnectivityFromState(t *testing.T) {
 
 // wifiConnectSettings omits the security block for an open network, derives
 // key-mgmt from the resolved AP's security (sae for WPA3, wpa-psk otherwise),
-// and pins the band only when the caller supplied a BSSID and the AP is known.
+// pins the band only when the caller supplied a BSSID and the AP is known, and
+// marks 802-11-wireless.hidden only for a hidden network.
 func TestWifiConnectSettings(t *testing.T) {
 	wpa2 := &apInfo{Security: "Wpa2", Frequency: 5240}
 	wpa3 := &apInfo{Security: "Wpa3", Frequency: 5240}
@@ -75,6 +76,7 @@ func TestWifiConnectSettings(t *testing.T) {
 		password     string
 		bssid        string
 		ap           *apInfo
+		hidden       bool
 		wantSecurity bool
 		wantKeyMgmt  string
 		wantBandKey  bool
@@ -85,10 +87,12 @@ func TestWifiConnectSettings(t *testing.T) {
 		{name: "wpa3 uses sae", ssid: "secure", password: "hunter2", bssid: "AA:BB:CC:DD:EE:FF", ap: wpa3, wantSecurity: true, wantKeyMgmt: "sae", wantBandKey: true, wantBand: "a"},
 		{name: "nil ap omits band", ssid: "roam", password: "hunter2", bssid: "AA:BB:CC:DD:EE:FF", wantSecurity: true, wantKeyMgmt: "wpa-psk"},
 		{name: "empty bssid omits band", ssid: "roam", password: "hunter2", ap: wpa2, wantSecurity: true, wantKeyMgmt: "wpa-psk"},
+		{name: "hidden open network", ssid: "secret", hidden: true},
+		{name: "hidden wpa2 keeps security", ssid: "secret", password: "hunter2", hidden: true, wantSecurity: true, wantKeyMgmt: "wpa-psk"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			s := wifiConnectSettings(c.ssid, c.password, c.bssid, c.ap)
+			s := wifiConnectSettings(c.ssid, c.password, c.bssid, c.ap, c.hidden)
 			if ssid, _ := s["802-11-wireless"]["ssid"].Value().([]byte); string(ssid) != c.ssid {
 				t.Errorf("ssid = %q, want %q", ssid, c.ssid)
 			}
@@ -114,6 +118,13 @@ func TestWifiConnectSettings(t *testing.T) {
 				}
 				if psk, _ := sec["psk"].Value().(string); psk != c.password {
 					t.Errorf("psk = %q, want %q", psk, c.password)
+				}
+			}
+			if hid, hasHid := s["802-11-wireless"]["hidden"]; hasHid != c.hidden {
+				t.Fatalf("hidden key present = %v, want %v", hasHid, c.hidden)
+			} else if c.hidden {
+				if got, _ := hid.Value().(bool); !got {
+					t.Errorf("hidden = %v, want true", got)
 				}
 			}
 		})
