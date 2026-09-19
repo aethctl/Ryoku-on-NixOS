@@ -234,6 +234,22 @@ Item {
         }
 
         Text {
+            objectName: "ryostore-stage-foreign-wm"
+            width: parent.width
+            visible: StoreLogic.isUnavailable(stage.displayItem)
+            text: StoreLogic.unavailableReason(stage.displayItem).length > 0
+                ? StoreLogic.unavailableReason(stage.displayItem)
+                : StoreLogic.unavailableLabel(stage.displayItem)
+            color: Tokens.inkDim
+            font.family: Tokens.ui
+            font.pixelSize: Tokens.fSmall
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            maximumLineCount: 3
+            elide: Text.ElideRight
+        }
+
+        Text {
             objectName: "ryostore-stage-pause"
             width: parent.width
             visible: StoreLogic.isDownloadPaused(stage.displayItem)

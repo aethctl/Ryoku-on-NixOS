@@ -36,15 +36,15 @@ Item {
             const w = list[i];
             if (!w || w.special)
                 continue;
-            const name = w.name || "";
+            const name = Wm.workspaceKey(w);
             if (name === "" || seen[name])
                 continue;
             seen[name] = true;
-            out.push({ name: name, output: w.output || "" });
+            out.push({ name: name, label: w.name, output: w.output || "" });
         }
         if (out.length === 0 && Wm.focusedWorkspace)
-            out.push({ name: Wm.focusedWorkspace.name, output: Wm.focusedWorkspace.output || "" });
-        out.sort((a, b) => a.output < b.output ? -1 :
+            out.push({ name: Wm.workspaceKey(Wm.focusedWorkspace), label: Wm.focusedWorkspace.name, output: Wm.focusedWorkspace.output || "" });
+        if (Wm.workspaceModel !== "dynamic") out.sort((a, b) => a.output < b.output ? -1 :
             (a.output > b.output ? 1 : Number(a.name) - Number(b.name)));
         return out;
     }
@@ -52,14 +52,11 @@ Item {
     // Active set is per-output (the active workspace shown on each output).
     readonly property var activeIds: {
         const s = {};
-        const outs = Wm.outputs;
-        for (let i = 0; i < outs.length; ++i) {
-            const o = outs[i];
-            if (o && o.activeWorkspace)
-                s[o.activeWorkspace] = true;
+        for (const ws of Wm.workspaces) {
+            if (ws.active) s[Wm.workspaceKey(ws)] = true;
         }
         if (Wm.focusedWorkspace)
-            s[Wm.focusedWorkspace.name] = true;
+            s[Wm.workspaceKey(Wm.focusedWorkspace)] = true;
         return s;
     }
 

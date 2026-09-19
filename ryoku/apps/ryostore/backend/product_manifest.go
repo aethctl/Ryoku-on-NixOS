@@ -48,6 +48,10 @@ type ProductEntry struct {
 	LastUpdated         string   `json:"lastUpdated,omitempty"`
 	DownloadPaused      bool     `json:"downloadPaused,omitempty"`
 	DownloadPauseReason string   `json:"downloadPauseReason,omitempty"`
+	// WindowManager names the window manager the product is written for, using
+	// the provider name `ryoku wm use <name>` takes. Empty means any.
+	WindowManager       string `json:"windowManager,omitempty"`
+	WindowManagerReason string `json:"windowManagerReason,omitempty"`
 }
 
 // ProductFile is one manifest-owned source and its installed destination.

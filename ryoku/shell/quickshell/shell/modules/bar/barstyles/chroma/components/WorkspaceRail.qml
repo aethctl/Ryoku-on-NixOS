@@ -10,75 +10,38 @@ Rectangle {
     required property real s
     property string screenName: ""
 
-    readonly property string workspaceOutput:
-        Wm.workspaceModel === "dynamic" ? root.screenName : ""
-
+    readonly property bool dynamicModel: Wm.workspaceModel === "dynamic"
+    readonly property var localWorkspaces: Wm.workspaces.filter(ws =>
+        !ws.special && (!root.screenName || ws.output === root.screenName))
     readonly property int workspaceCount: {
-        if (Wm.workspaceModel === "dynamic")
-            return 5
-
+        if (root.dynamicModel)
+            return root.localWorkspaces.length
         let highest = 5
-        const list = Array.isArray(Wm.workspaces) ? Wm.workspaces : []
-
-        for (let i = 0; i < list.length; ++i) {
-            const ws = list[i]
-            if (!ws || ws.special)
-                continue
-
-            const id = Number(ws.name)
-            if (!isNaN(id) && id >= 1 && id <= 10)
-                highest = Math.max(highest, id)
+        for (const ws of Wm.workspaces) {
+            const number = Number(ws.name)
+            if (!ws.special && number >= 1 && number <= 10)
+                highest = Math.max(highest, number)
         }
-
         return Math.min(10, highest)
     }
 
-    function workspaceName(id) {
-        if (Wm.workspaceModel === "dynamic" && root.workspaceOutput.length > 0)
-            return "ryoku:" + root.workspaceOutput + ":" + id
-        return String(id)
+    function workspace(slot) {
+        return root.dynamicModel ? root.localWorkspaces[slot - 1]
+                                 : Wm.workspaceByName(String(slot))
     }
-
-    function workspace(id) {
-        return Wm.workspaceByName(root.workspaceName(id), root.workspaceOutput)
+    function isActive(slot) { const ws = workspace(slot); return !!ws && ws.active }
+    function isOccupied(slot) { const ws = workspace(slot); return !!ws && ws.occupied }
+    function focus(slot) {
+        const ws = workspace(slot)
+        if (ws || !root.dynamicModel)
+            Wm.focusWorkspace(ws ? Wm.workspaceKey(ws) : String(slot))
     }
-
-    function isActive(id) {
-        const ws = root.workspace(id)
-        return !!ws && ws.active
-    }
-
-    function isOccupied(id) {
-        const ws = root.workspace(id)
-        return !!ws && ws.occupied
-    }
-
-    function focus(id) {
-        Wm.focusWorkspace(root.workspaceName(id))
-    }
-
     function cycle(delta) {
-        if (Wm.workspaceModel === "dynamic" && root.workspaceOutput.length > 0) {
-            let current = 1
-
-            for (let id = 1; id <= root.workspaceCount; ++id) {
-                if (root.isActive(id)) {
-                    current = id
-                    break
-                }
-            }
-
-            let next = current + delta
-            if (next < 1)
-                next = root.workspaceCount
-            else if (next > root.workspaceCount)
-                next = 1
-
-            root.focus(next)
-            return
-        }
-
-        Wm.cycleWorkspace(delta)
+        if (!root.dynamicModel) { Wm.cycleWorkspace(delta); return }
+        const list = root.localWorkspaces
+        if (!list.length) return
+        const current = Math.max(0, list.findIndex(ws => ws.active))
+        root.focus((current + delta + list.length) % list.length + 1)
     }
 
     readonly property int cellWidth: Math.round(30 * root.s)

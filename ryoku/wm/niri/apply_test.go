@@ -556,3 +556,31 @@ func TestOverviewBackdropAndSingleColumnCentring(t *testing.T) {
 	}
 	validateGen(t, on, "settings.kdl", "rebinds.kdl")
 }
+
+func TestLiveDefaultsNeverUseHumanKeyboardNames(t *testing.T) {
+	restore := stubRequest(t, func(any) (json.RawMessage, error) {
+		return json.RawMessage(`{"KeyboardLayouts":{"names":["English (UK)"],"current_idx":0}}`), nil
+	})
+	defer restore()
+	var buf bytes.Buffer
+	prev := stdout
+	stdout = bufio.NewWriter(&buf)
+	defer func() { stdout = prev }()
+	if err := runDefaults(); err != nil {
+		t.Fatal(err)
+	}
+	stdout.Flush()
+	var tree struct {
+		Desktop struct {
+			Input struct {
+				KbLayout string `json:"kbLayout"`
+			} `json:"input"`
+		} `json:"desktop"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &tree); err != nil {
+		t.Fatal(err)
+	}
+	if tree.Desktop.Input.KbLayout != defaultStore().Input.KbLayout {
+		t.Fatalf("invalid XKB default: %q", tree.Desktop.Input.KbLayout)
+	}
+}

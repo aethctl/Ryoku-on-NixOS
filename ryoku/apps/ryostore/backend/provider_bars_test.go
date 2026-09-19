@@ -455,3 +455,30 @@ func TestBarStyleViewRebuildsCorruptSnapshot(t *testing.T) {
 		t.Fatalf("corrupt view was not rebuilt: %q, err=%v", raw, err)
 	}
 }
+
+func TestBarCatalogBuiltinWinsRegistryCollision(t *testing.T) {
+	fixture := newBarProviderFixture(t)
+	fixture.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entry := fixture.entry
+		entry.ID = "chroma"
+		entry.Path = "barstyles/chroma"
+		json.NewEncoder(w).Encode(map[string]any{"schema": 1, "barstyles": []ProductEntry{entry}})
+	})
+	provider := barProvider{cache: fixture.cache, shellConfig: filepath.Join(configHome(), "ryoku", "shell.json")}
+	items, _, err := provider.Load(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, item := range items {
+		if item.ID == "chroma" {
+			count++
+			if item.Metadata["core"] != true {
+				t.Fatal("external copy replaced builtin")
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("Chroma rows: %d", count)
+	}
+}

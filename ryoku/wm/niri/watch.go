@@ -503,7 +503,16 @@ func (s *session) workspaceFrame() []wm.Workspace {
 			Windows: counts[ws.ID],
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	indices := make(map[string]int, len(s.workspaces))
+	for _, ws := range s.workspaces {
+		indices[formatUint(ws.ID)] = ws.Idx
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Output != out[j].Output {
+			return out[i].Output < out[j].Output
+		}
+		return indices[out[i].ID] < indices[out[j].ID]
+	})
 	return out
 }
 

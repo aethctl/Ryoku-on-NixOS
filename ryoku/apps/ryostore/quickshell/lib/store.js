@@ -1,5 +1,7 @@
 function statusLabels(item) {
     var labels = [];
+    if (isUnavailable(item))
+        labels.push(unavailableLabel(item));
     if (isDownloadPaused(item))
         labels.push("UNDER CONSTRUCTION");
     if (item && item.updateAvailable)
@@ -12,7 +14,7 @@ function statusLabels(item) {
         labels.push(String(item.installedCount) + " / " + String(item.totalCount) + " INSTALLED");
     else if (item && item.installed)
         labels.push("INSTALLED");
-    else if (!isDownloadPaused(item))
+    else if (!isDownloadPaused(item) && !isUnavailable(item))
         labels.push("AVAILABLE");
     return labels;
 }
@@ -30,6 +32,27 @@ function isDownloadPaused(item) {
 
 function downloadPauseReason(item) {
     return isDownloadPaused(item) ? String((item && item.downloadPauseReason) || "") : "";
+}
+
+// unavailable: a product the catalogue wrote for another window manager. It is
+// refused for install and update by the backend (a client cannot bypass that),
+// stays listed, and keeps any installed copy removable; every surface here must
+// show it greyed with the reason instead of an action that cannot work.
+function isUnavailable(item) {
+    return Boolean(item && item.unavailable);
+}
+
+// The chip and the disabled action both name the window manager the product
+// wants, taken from the product itself rather than from a list of names here.
+function unavailableLabel(item) {
+    if (!isUnavailable(item))
+        return "";
+    var want = String((item && item.requiredWindowManager) || "").toUpperCase();
+    return want.length > 0 ? want + " ONLY" : "UNAVAILABLE";
+}
+
+function unavailableReason(item) {
+    return isUnavailable(item) ? String((item && item.unavailableReason) || "") : "";
 }
 
 // pluginKind classifies a plugin by its host surface: a plugin is a BAR plugin
@@ -181,6 +204,8 @@ function categoryPlates(categories) {
 }
 
 function primaryAction(item) {
+    if (isUnavailable(item))
+        return unavailableLabel(item);
     if (isDownloadPaused(item))
         return "UNDER CONSTRUCTION";
     if (item && item.busy)
@@ -206,4 +231,4 @@ function sortCategories(categories) {
 }
 
 if (typeof module !== "undefined" && module.exports)
-    module.exports = { statusLabels, isInstalled, isDownloadPaused, downloadPauseReason, pluginKind, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded };
+    module.exports = { statusLabels, isInstalled, isDownloadPaused, downloadPauseReason, isUnavailable, unavailableLabel, unavailableReason, pluginKind, searchText, matchesQuery, filter, groupSearch, featured, installed, itemKey, collection, selectionKey, categoryPlates, primaryAction, secondaryAction, sortCategories, shuffleSeeded };

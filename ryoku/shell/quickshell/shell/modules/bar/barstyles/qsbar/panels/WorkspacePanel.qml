@@ -37,8 +37,8 @@ PanelWindow {
         readonly property var wsIds: {
             var a = []
             var vs = Wm.workspaces
-            for (var i = 0; i < vs.length; i++) if (!vs[i].special) a.push(vs[i].name)
-            a.sort(function(x, y) { return Number(x) - Number(y) })
+            for (var i = 0; i < vs.length; i++) if (!vs[i].special) a.push(Wm.workspaceKey(vs[i]))
+
             return a
         }
         width: 240
@@ -107,8 +107,8 @@ PanelWindow {
                     delegate: Rectangle {
                         required property var modelData
                         visible: !modelData.special
-                        readonly property bool isActive: Wm.focusedWorkspace && Wm.focusedWorkspace.name === modelData.name
-                        readonly property bool navOn: card.navIndex >= 0 && card.navIndex < card.wsIds.length && card.wsIds[card.navIndex] === modelData.name
+                        readonly property bool isActive: Wm.focusedWorkspace && Wm.workspaceKey(Wm.focusedWorkspace) === Wm.workspaceKey(modelData)
+                        readonly property bool navOn: card.navIndex >= 0 && card.navIndex < card.wsIds.length && card.wsIds[card.navIndex] === Wm.workspaceKey(modelData)
                         width: col.width
                         height: 30; radius: root.panelButtonRadius
                         color: isActive ? root.fillActive
@@ -138,7 +138,7 @@ PanelWindow {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.gotoWorkspace(modelData.name)
+                                root.gotoWorkspace(Wm.workspaceKey(modelData))
                                 root.workspaceVisible = false
                             }
                         }

@@ -35,6 +35,10 @@ pkgs.stdenvNoCC.mkDerivation {
 
     mkdir -p "$cfg/niri"
     cp -a ryoku/niri/. "$cfg/niri/"
+    substituteInPlace "$cfg/niri/autostart.kdl" \
+      --replace-fail '$HOME/.local/lib/qt6/qml' \
+        '$HOME/.local/lib/qt6/qml:/run/current-system/sw/lib/qt-6/qml'
+
 
     # ── Shared translation catalog ─────────────────────────────
     #

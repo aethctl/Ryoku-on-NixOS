@@ -60,6 +60,14 @@ func productEntryItem(base, category string, entry ProductEntry) (Item, error) {
 		Screenshots: resolveAssets(base, entry.Path, entry.Screenshots),
 		Tags:        entry.Tags, Accent: entry.Accent, Surface: entry.Surface,
 		DownloadPaused: entry.DownloadPaused, DownloadPauseReason: entry.DownloadPauseReason,
+		RequiredWindowManager: entry.WindowManager,
+	}
+	if ok, running := productWindowManagerGate(entry.WindowManager); !ok {
+		item.Unavailable = true
+		item.UnavailableReason = entry.WindowManagerReason
+		if item.UnavailableReason == "" {
+			item.UnavailableReason = "Written for " + running + "."
+		}
 	}
 	// A missing receipt means not installed. A corrupt or unreadable one is a
 	// local problem, not a source outage: leave the product installable
@@ -82,12 +90,13 @@ func findProductEntry(entries []ProductEntry, id string) (ProductEntry, error) {
 	return ProductEntry{}, fmt.Errorf("unknown product %q", id)
 }
 
-// assertProductDownloadable refuses a registry-backed install or update when the
-// source has paused the product's downloads. It reads a fresh, authoritative
-// registry so a stale provider cache cannot hide a pause, checks the entry by id
-// alone so a client request carries no bypass, and leaves the product listed and
-// removable: only fetching new payload is blocked.
-func assertProductDownloadable(ctx context.Context, cache *Cache, category, id string) error {
+// assertProductInstallable refuses a registry-backed install or update for one of
+// two causes: the source has paused the product's downloads, or the product names
+// a window manager other than the running one. Either way it reads a fresh,
+// authoritative registry so a stale provider cache cannot hide the refusal,
+// checks the entry by id alone so a client request carries no bypass, and leaves
+// the product listed and removable: only fetching new payload is blocked.
+func assertProductInstallable(ctx context.Context, cache *Cache, category, id string) error {
 	entries, _, err := loadProductRegistry(ctx, cache, category, true)
 	if err != nil {
 		return err
@@ -95,6 +104,14 @@ func assertProductDownloadable(ctx context.Context, cache *Cache, category, id s
 	entry, err := findProductEntry(entries, id)
 	if err != nil {
 		return err
+	}
+	if ok, running := productWindowManagerGate(entry.WindowManager); !ok {
+		if entry.WindowManagerReason != "" {
+			return fmt.Errorf("%s/%s: written for %s, not %s: %s",
+				category, id, entry.WindowManager, running, entry.WindowManagerReason)
+		}
+		return fmt.Errorf("%s/%s: written for %s, not %s",
+			category, id, entry.WindowManager, running)
 	}
 	if !entry.DownloadPaused {
 		return nil

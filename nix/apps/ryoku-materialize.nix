@@ -258,7 +258,7 @@ EOF
 
     mkdir -p "$user_qml"
 
-    for module in Ui PluginKit FrameBars Blobs; do
+    for module in Ui PluginKit FrameBars Blobs Wm; do
       rm -rf -- "''${user_qml:?}/$module"
 
       ln -s \

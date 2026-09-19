@@ -102,8 +102,14 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 	if registryErr != nil && !barStyleRegistryUnavailable(registryErr) {
 		return nil, state, registryErr
 	}
-	seen := make(map[string]bool, len(entries))
+	seen := make(map[string]bool, len(entries)+len(items))
+	for _, item := range items {
+		seen[item.ID] = true
+	}
 	for _, entry := range entries {
+		if seen[entry.ID] {
+			continue
+		}
 		item, err := productEntryItem(p.cache.base, "barstyles", entry)
 		if err != nil {
 			return nil, state, fmt.Errorf("barstyles/%s: installed state: %w", entry.ID, err)

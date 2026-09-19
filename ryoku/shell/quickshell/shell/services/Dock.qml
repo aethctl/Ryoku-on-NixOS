@@ -70,16 +70,18 @@ Singleton {
     }
 
     // Running windows as { className, address }, id-sorted for a stable order.
-    readonly property var clients: {
-        const result = [];
-        const wins = Wm.windows;
-        for (let i = 0; i < wins.length; ++i) {
-            const className = root.classOf(wins[i]);
-            if (typeof className === "string" && className)
-                result.push({ className: className, address: wins[i].id });
-        }
-        result.sort((a, b) => a.address < b.address ? -1 : (a.address > b.address ? 1 : 0));
-        return result;
+    property var clients: []
+    function refreshClients() {
+        const next = Wm.windows.map(w => ({className: root.classOf(w), address: w.id}))
+            .filter(w => typeof w.className === "string" && w.className)
+            .sort((a, b) => a.address < b.address ? -1 : a.address > b.address ? 1 : 0);
+        if (JSON.stringify(next) !== JSON.stringify(root.clients))
+            root.clients = next;
+    }
+    Component.onCompleted: root.refreshClients()
+    Connections {
+        target: Wm
+        function onWindowsChanged() { root.refreshClients(); }
     }
 
     // The focused window, or null on a bare desktop.
@@ -206,7 +208,7 @@ Singleton {
         if (idx >= 0)
             target = matches[(idx + 1) % matches.length];
         else {
-            const wsName = Wm.focusedWorkspace ? Wm.focusedWorkspace.name : "";
+            const wsName = Wm.workspaceKey(Wm.focusedWorkspace);
             target = matches.find(m => m.workspace === wsName) || matches[0];
         }
         Wm.focusWindow(target.id);

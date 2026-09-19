@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.WindowManager
 import Quickshell.Wayland
+import "../lib/wmstate.js" as WmState
 
 // Capability-shaped view of the window manager. Presentation lists come from the
 // Wayland protocols (ext-workspace-v1 windowsets, foreign-toplevel toplevels);
@@ -16,25 +17,37 @@ Singleton {
 
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
 
-    // Last frame the daemon `wm` topic pushed.
-    property var _frame: ({})
-    readonly property bool ready: root._frame.ready === true
+    // Separate properties keep a window-only update from invalidating every model.
+    QtObject {
+        id: state
+        property bool ready: false
+        property var caps: ({})
+        property string workspaceModel: "fixed"
+        property string focusedOutput: ""
+        property var outputs: []
+        property var configFiles: []
+        property string keyboardLayout: ""
+        property var keyboardLayouts: []
+        property var windows: []
+        property var workspaces: []
+    }
+    readonly property bool ready: state.ready === true
 
     // Every capability key is always present as a boolean, so read Wm.caps.<name>
     // directly with no undefined guard.
-    readonly property var caps: root._frame.caps || ({})
-    readonly property string workspaceModel: root._frame.workspaceModel || "fixed"
+    readonly property var caps: state.caps || ({})
+    readonly property string workspaceModel: state.workspaceModel || "fixed"
 
-    readonly property string focusedOutput: root._frame.focusedOutput || ""
-    readonly property var outputs: root._frame.outputs || []
-    readonly property var configFiles: root._frame.configFiles || []
+    readonly property string focusedOutput: state.focusedOutput || ""
+    readonly property var outputs: state.outputs || []
+    readonly property var configFiles: state.configFiles || []
 
     // Active xkb layout name (human string) and the configured layout list.
-    readonly property string keyboardLayout: root._frame.keyboardLayout || ""
-    readonly property var keyboardLayouts: root._frame.keyboardLayouts || []
+    readonly property string keyboardLayout: state.keyboardLayout || ""
+    readonly property var keyboardLayouts: state.keyboardLayouts || []
 
-    readonly property var _winResidue: root._frame.windows || []
-    readonly property var _wsResidue: root._frame.workspaces || []
+    readonly property var _winResidue: state.windows || []
+    readonly property var _wsResidue: state.workspaces || []
 
     // Bound at declaration so the Wayland registry binds early; the lists fill in
     // asynchronously after connect.
@@ -52,39 +65,18 @@ Singleton {
 
     // ext-workspace-v1 windowsets joined with the daemon's occupancy residue by
     // name (windowset.id is empty on Hyprland; name is the stable key).
-    readonly property var workspaces: {
-        const res = {};
-        for (let i = 0; i < root._wsResidue.length; i++) {
-            const w = root._wsResidue[i];
-            res[w.name] = w;
-        }
-        const sets = root._windowsets || [];
-        const out = [];
-        for (let i = 0; i < sets.length; i++) {
-            const s = sets[i];
-            const r = res[s.name] || ({});
-            out.push({
-                name: s.name,
-                active: s.active === true,
-                urgent: s.urgent === true,
-                canActivate: s.canActivate === true,
-                windows: r.windows || 0,
-                occupied: (r.windows || 0) > 0,
-                fullscreen: r.fullscreen === true,
-                special: r.special === true,
-                output: r.output || "",
-                layout: r.layout || ""
-            });
-        }
-        return out;
-    }
+    readonly property var workspaces: WmState.workspaceRows(
+        root._wsResidue, root._windowsets || [], root.workspaceModel === "dynamic")
 
-    function workspaceByName(name) {
-        const list = root.workspaces;
-        for (let i = 0; i < list.length; i++)
-            if (list[i].name === name)
-                return list[i];
-        return null;
+    function workspaceKey(ws) { return ws ? String(ws.id || ws.name || "") : ""; }
+    function workspaceById(id) {
+        return root.workspaces.find(ws => root.workspaceKey(ws) === String(id)) || null;
+    }
+    function workspaceByName(name, output) {
+        return root.workspaces.find(ws => ws.name === name && (!output || ws.output === output)) || null;
+    }
+    function workspaceByKey(key) {
+        return root.workspaceById(key) || root.workspaceByName(key);
     }
 
     // The workspace shown on the focused output.
@@ -104,7 +96,7 @@ Singleton {
         const o = root.outputByName(name);
         if (!o || !o.activeWorkspace)
             return false;
-        const ws = root.workspaceByName(o.activeWorkspace);
+        const ws = root.workspaceByKey(o.activeWorkspace);
         return !!ws && ws.fullscreen === true;
     }
 
@@ -208,7 +200,7 @@ Singleton {
     function cycleKeyboardLayout() { root._act("keyboard.cycleLayout", "keyboardLayoutSwitch", []); }
     function setCursor(theme, size) { root._act("cursor.set", "cursorSet", [String(theme), String(size)]); }
     function reloadConfig(scope) { root._act("config.reload", "configReload", [String(scope || "")]); }
-    function setOutputPower(output, on) { root._act("output.power", "outputPower", [String(output), on ? "on" : "off"]); }
+    function setOutputPower(output, on) { root._act("output.power", "outputPower", [on ? "on" : "off", String(output)]); }
     function toggleOverview() { root._act("overview.toggle", "nativeOverview", []); }
     function enterSubmap(name) { root._act("submap.enter", "submap", [String(name)]); }
     function resetSubmap() { root._act("submap.reset", "submap", []); }
@@ -225,7 +217,7 @@ Singleton {
         try {
             const frame = JSON.parse(line);
             if (frame && typeof frame === "object" && !Array.isArray(frame))
-                root._frame = frame;
+                WmState.applyFrame(state, frame);
         } catch (e) {
         }
     }

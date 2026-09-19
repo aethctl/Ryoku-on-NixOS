@@ -102,6 +102,22 @@ eq(Store.primaryAction({ installed: true, busy: true, downloadPaused: true }), "
 eq(Store.statusLabels(paused), ["UNDER CONSTRUCTION"], "paused uninstalled item drops the contradictory AVAILABLE label");
 eq(Store.statusLabels(pausedInstalled), ["UNDER CONSTRUCTION", "ACTIVE"], "paused installed item keeps its state so remove stays reachable");
 
+// A product written for another window manager is greyed out, never offered: its
+// chip and its disabled action both name the window manager it wants, taken from
+// the product rather than from a list in the UI. The backend refuses the install
+// as well, so this is presentation only; an installed copy stays removable.
+const foreign = { installed: false, unavailable: true, requiredWindowManager: "wm-a", unavailableReason: "Built for wm-a." };
+const foreignInstalled = { installed: true, active: true, unavailable: true, requiredWindowManager: "wm-a", unavailableReason: "Built for wm-a." };
+eq(Store.isUnavailable(foreign), true, "a product for another window manager is detected");
+eq(Store.isUnavailable({ installed: false }), false, "an ordinary product is not unavailable");
+eq(Store.unavailableLabel(foreign), "WM-A ONLY", "the chip names the window manager the product wants");
+eq(Store.unavailableLabel({ unavailable: true }), "UNAVAILABLE", "a product that names none still reads as unavailable");
+eq(Store.unavailableReason(foreign), "Built for wm-a.", "the catalogue's reason is surfaced");
+eq(Store.unavailableReason({ unavailableReason: "stale" }), "", "reason is empty unless the product is unavailable");
+eq(Store.primaryAction(foreign), "WM-A ONLY", "the disabled action names the window manager too");
+eq(Store.statusLabels(foreign), ["WM-A ONLY"], "unavailable uninstalled item drops the contradictory AVAILABLE label");
+eq(Store.statusLabels(foreignInstalled), ["WM-A ONLY", "ACTIVE"], "unavailable installed item keeps its state so remove stays reachable");
+
 // Discover rotates on a daily seed: stable within a day, varies across days, and
 // never drops or invents an item. No seed keeps the legacy deterministic order.
 const disc = [

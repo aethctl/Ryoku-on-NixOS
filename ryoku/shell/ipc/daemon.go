@@ -127,6 +127,8 @@ type daemon struct {
 	wmOutputs    []wm.Output
 	wmWorkspaces []wm.Workspace
 	wmWindows    []wm.Window
+	wmKeyboardLayout string
+	wmKeyboardLayouts []string
 	wmReady      bool
 	wmTopic      *stateTopic
 	gateMu      sync.Mutex               // guards gateWant / gateWake

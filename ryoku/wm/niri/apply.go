@@ -68,16 +68,15 @@ func encodeReport(rep wm.ApplyReport) error {
 	return enc.Encode(rep)
 }
 
-// runDefaults prints the provider's default subtree of the neutral store. The
-// keyboard layout is read from the live session when one answers, so the unsaved
-// baseline matches the real session; the hardcoded niri defaults stand otherwise.
+// runDefaults prints the provider's default subtree of the neutral store.
+//
+// Niri's KeyboardLayouts IPC exposes human-readable names such as
+// "English (US)", not XKB identifiers such as "us". Those names are suitable
+// for status displays, but must never seed desktop.input.kbLayout: the Hub
+// reads this subtree as the unsaved baseline and writes it back into the
+// config's xkb rule, where only an identifier is valid.
 func runDefaults() error {
 	s := defaultStore()
-	if live() {
-		if cur, _ := keyboardLayouts(); cur != "" {
-			s.Input.KbLayout = cur
-		}
-	}
 	tree, err := splitStore(s)
 	if err != nil {
 		return err

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os/exec"
 	"testing"
 
@@ -65,5 +66,36 @@ func BenchmarkMonitorSpawnProxy(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = exec.Command("true").Run()
+	}
+}
+
+func TestKeyboardFramesReachPublishedState(t *testing.T) {
+	d := &daemon{wmc: wm.OpenNamed("missing-test-provider"), wmTopic: newStateTopic()}
+	d.onWMFrame(wm.Frame{Kind: wm.FrameKeyboard, KeyboardLayout: "English (UK)", KeyboardLayouts: []string{"English (UK)", "English (US)"}})
+	var frame wmTopicFrame
+	if err := json.Unmarshal(d.wmTopic.last, &frame); err != nil {
+		t.Fatal(err)
+	}
+	if frame.KeyboardLayout != "English (UK)" || len(frame.KeyboardLayouts) != 2 {
+		t.Fatal(frame)
+	}
+}
+
+func TestUnchangedWorkspaceFrameDoesNotWakeWidgets(t *testing.T) {
+	d := &daemon{widgetSig: make(chan struct{}, 1)}
+	f := wm.Frame{Kind: wm.FrameWorkspaces, Workspaces: []wm.Workspace{{ID: "1", Windows: 2}}}
+	d.onWMFrame(f)
+	<-d.widgetSig
+	d.onWMFrame(f)
+	select {
+	case <-d.widgetSig:
+		t.Fatal("unchanged frame woke widget gate")
+	default:
+	}
+	d.onWMFrame(wm.Frame{Kind: wm.FrameWorkspaces, Workspaces: []wm.Workspace{}})
+	select {
+	case <-d.widgetSig:
+	default:
+		t.Fatal("empty workspace transition lost")
 	}
 }

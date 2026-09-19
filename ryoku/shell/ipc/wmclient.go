@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"time"
 
 	wm "ryoku-wm"
@@ -23,10 +24,11 @@ func (d *daemon) startWM() {
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, err
 		}
-		if err := d.wmc.Act(wm.Action(a.Action), a.Args...); err != nil {
+		result, err := d.wmc.ActOutput(wm.Action(a.Action), a.Args...)
+		if err != nil {
 			return nil, err
 		}
-		return map[string]any{"ok": true}, nil
+		return result, nil
 	})
 	go d.watchWindowManager()
 }
@@ -41,19 +43,31 @@ func (d *daemon) activeMonitor() string {
 // A FrameFocus with an empty output clears the cached focus.
 func (d *daemon) onWMFrame(f wm.Frame) {
 	d.wmMu.Lock()
+	changed := false
 	switch f.Kind {
 	case wm.FrameFocus:
+		changed = !reflect.DeepEqual(d.activeMon, f.FocusedOutput)
 		d.activeMon = f.FocusedOutput
 	case wm.FrameOutputs:
+		changed = !reflect.DeepEqual(d.wmOutputs, f.Outputs)
 		d.wmOutputs = f.Outputs
 	case wm.FrameWorkspaces:
+		changed = !reflect.DeepEqual(d.wmWorkspaces, f.Workspaces)
 		d.wmWorkspaces = f.Workspaces
 	case wm.FrameWindows:
+		changed = !reflect.DeepEqual(d.wmWindows, f.Windows)
 		d.wmWindows = f.Windows
+	case wm.FrameKeyboard:
+		changed = d.wmKeyboardLayout != f.KeyboardLayout || !reflect.DeepEqual(d.wmKeyboardLayouts, f.KeyboardLayouts)
+		d.wmKeyboardLayout, d.wmKeyboardLayouts = f.KeyboardLayout, f.KeyboardLayouts
 	case wm.FrameReady:
+		changed = !reflect.DeepEqual(d.wmReady, true)
 		d.wmReady = true
 	}
 	d.wmMu.Unlock()
+	if !changed {
+		return
+	}
 
 	switch f.Kind {
 	case wm.FrameFocus, wm.FrameOutputs, wm.FrameWorkspaces:
@@ -70,15 +84,17 @@ func (d *daemon) onWMFrame(f wm.Frame) {
 // boolean and the lists are never null, so a consumer never tells absent from
 // false.
 type wmTopicFrame struct {
-	Provider       string                 `json:"provider"`
-	WorkspaceModel string                 `json:"workspaceModel"`
-	Ready          bool                   `json:"ready"`
-	Caps           map[wm.Capability]bool `json:"caps"`
-	FocusedOutput  string                 `json:"focusedOutput"`
-	Outputs        []wm.Output            `json:"outputs"`
-	Workspaces     []wm.Workspace         `json:"workspaces"`
-	Windows        []wm.Window            `json:"windows"`
-	ConfigFiles    []string               `json:"configFiles"`
+	KeyboardLayout  string                 `json:"keyboardLayout"`
+	KeyboardLayouts []string               `json:"keyboardLayouts"`
+	Provider        string                 `json:"provider"`
+	WorkspaceModel  string                 `json:"workspaceModel"`
+	Ready           bool                   `json:"ready"`
+	Caps            map[wm.Capability]bool `json:"caps"`
+	FocusedOutput   string                 `json:"focusedOutput"`
+	Outputs         []wm.Output            `json:"outputs"`
+	Workspaces      []wm.Workspace         `json:"workspaces"`
+	Windows         []wm.Window            `json:"windows"`
+	ConfigFiles     []string               `json:"configFiles"`
 }
 
 func (d *daemon) publishWM() {
@@ -88,13 +104,14 @@ func (d *daemon) publishWM() {
 	caps, _ := d.wmc.Caps()
 	all := wm.All()
 	frame := wmTopicFrame{
-		Provider:       caps.Name,
-		WorkspaceModel: string(caps.WorkspaceModel),
-		Caps:           make(map[wm.Capability]bool, len(all)),
-		Outputs:        []wm.Output{},
-		Workspaces:     []wm.Workspace{},
-		Windows:        []wm.Window{},
-		ConfigFiles:    []string{},
+		Provider:        caps.Name,
+		WorkspaceModel:  string(caps.WorkspaceModel),
+		Caps:            make(map[wm.Capability]bool, len(all)),
+		Outputs:         []wm.Output{},
+		Workspaces:      []wm.Workspace{},
+		Windows:         []wm.Window{},
+		ConfigFiles:     []string{},
+		KeyboardLayouts: []string{},
 	}
 	for _, c := range all {
 		frame.Caps[c] = caps.Has(c)
@@ -104,6 +121,10 @@ func (d *daemon) publishWM() {
 	}
 	d.wmMu.Lock()
 	frame.Ready = d.wmReady
+	frame.KeyboardLayout = d.wmKeyboardLayout
+	if d.wmKeyboardLayouts != nil {
+		frame.KeyboardLayouts = d.wmKeyboardLayouts
+	}
 	frame.FocusedOutput = d.activeMon
 	if d.wmOutputs != nil {
 		frame.Outputs = d.wmOutputs
