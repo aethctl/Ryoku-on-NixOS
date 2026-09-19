@@ -3,6 +3,7 @@ package updater
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,47 @@ func TestNixStatusFallbackDoesNotUseArchPackages(t *testing.T) {
 	}
 	if len(got.Packages) != 0 {
 		t.Fatalf("fallback exposed Arch packages: %+v", got.Packages)
+	}
+}
+
+func TestNixTrackAliases(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "args")
+
+	bin := writeNixUpdateHelper(
+		t,
+		`printf '%s\n' "$*" > "$RYOKU_TEST_LOG"`,
+	)
+
+	t.Setenv("PATH", bin)
+	t.Setenv("RYOKU_TEST_LOG", logPath)
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"stable", "track stable"},
+		{"main", "track stable"},
+		{"unstable", "track unstable"},
+		{"unstable-dev", "track unstable"},
+	}
+
+	for _, test := range tests {
+		if err := NixTrack([]string{test.input}); err != nil {
+			t.Fatalf("NixTrack(%q): %v", test.input, err)
+		}
+
+		body, err := os.ReadFile(logPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if got := strings.TrimSpace(string(body)); got != test.want {
+			t.Fatalf(
+				"NixTrack(%q) = %q, want %q",
+				test.input,
+				got,
+				test.want,
+			)
+		}
 	}
 }

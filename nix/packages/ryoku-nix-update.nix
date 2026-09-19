@@ -12,9 +12,13 @@ pkgs.writeShellApplication {
     jq
     nix
     nixos-rebuild
+    procps
+    python3
+    systemd
   ];
 
-  text =
-    builtins.readFile
-      (src + "/nix/scripts/ryoku-nix-update");
+  text = ''
+    export RYOKU_NIX_FLAKE_EDITOR="${src}/nix/scripts/ryoku-nix-track-edit.py"
+    ${builtins.readFile (src + "/nix/scripts/ryoku-nix-update")}
+  '';
 }
