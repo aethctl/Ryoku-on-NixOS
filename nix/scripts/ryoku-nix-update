@@ -4,6 +4,7 @@ flake_root="${RYOKU_NIX_FLAKE:-/etc/nixos}"
 input="${RYOKU_NIX_INPUT:-ryoku}"
 installed="${RYOKU_NIX_VERSION:-}"
 sudo_bin="${RYOKU_NIX_SUDO:-/run/wrappers/bin/sudo}"
+flake_editor="${RYOKU_NIX_FLAKE_EDITOR:-}"
 
 # The packaged CLI normally supplies RYOKU_NIX_VERSION, but the update helper is
 # also a public command and is called directly by other Ryoku surfaces. Fall
@@ -118,6 +119,8 @@ source_branch=""
 channel="nix"
 latest="$installed"
 can_update=false
+locked_rev=""
+remote_rev=""
 
 load_source() {
     [ -f "$lock" ] ||
@@ -139,6 +142,10 @@ load_source() {
         jq -r '.type // empty' <<< "$original"
     )"
 
+    locked_rev="$(
+        jq -r             --arg node "$node"             '.nodes[$node].locked.rev // empty'             "$lock"
+    )"
+
     case "$source_type" in
         github)
             owner="$(jq -r '.owner // empty' <<< "$original")"
@@ -151,6 +158,19 @@ load_source() {
             slug="$owner/$repo"
             channel="$ref"
             source_ref="github:$slug"
+
+            refspec="refs/heads/$ref"
+
+            if [ "$ref" = "HEAD" ]; then
+                refspec="HEAD"
+            fi
+
+            remote_rev="$(
+                git ls-remote                     "https://github.com/$slug.git"                     "$refspec"                     2>/dev/null |
+                    head -n 1 |
+                    cut -f 1 ||
+                    true
+            )"
 
             if [ "$ref" != "HEAD" ]; then
                 source_ref="$source_ref/$ref"
@@ -241,6 +261,14 @@ load_source() {
     esac
 }
 
+
+github_source_changed() {
+    [ "$source_type" = "github" ] &&
+        [ -n "$locked_rev" ] &&
+        [ -n "$remote_rev" ] &&
+        [ "$locked_rev" != "$remote_rev" ]
+}
+
 status_json() {
     load_source
 
@@ -249,14 +277,20 @@ status_json() {
     updates='[]'
     recent='[]'
 
-    if version_is_newer "$installed" "$latest"; then
+    if github_source_changed || version_is_newer "$installed" "$latest"; then
         available=true
         pending=1
+
+        latest_display="$latest"
+
+        if github_source_changed && [ "$installed" = "$latest" ]; then
+            latest_display="$latest (${remote_rev:0:8})"
+        fi
 
         updates="$(
             jq -cn \
                 --arg old "$installed" \
-                --arg new "$latest" \
+                --arg new "$latest_display" \
                 '[
                     {
                         name: "Ryoku for NixOS",
@@ -407,13 +441,15 @@ update_nix() {
         [ -n "$latest" ] ||
             die "could not resolve the latest Ryoku Nix version"
 
-        if [ "$installed" = "$latest" ]; then
-            printf 'Ryoku for NixOS is already %s.\n' "$installed"
-            return 0
-        fi
+        if ! github_source_changed; then
+            if [ "$installed" = "$latest" ]; then
+                printf 'Ryoku for NixOS is already %s.\n' "$installed"
+                return 0
+            fi
 
-        if ! version_is_newer "$installed" "$latest"; then
-            die "refusing to move from $installed to non-newer version $latest"
+            if ! version_is_newer "$installed" "$latest"; then
+                die "refusing to move from $installed to non-newer version $latest"
+            fi
         fi
     fi
 
@@ -479,7 +515,134 @@ update_nix() {
     rm -f "$backup"
     trap - EXIT INT TERM
 
+    refresh_runtime
+
     printf 'Ryoku for NixOS update complete.\n'
+}
+
+
+refresh_runtime() {
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+    systemctl --user try-restart ryoku-shell.service >/dev/null 2>&1 || true
+    pkill -f 'hub/quickshell' >/dev/null 2>&1 || true
+    pkill -f 'qs -c hub($| )' >/dev/null 2>&1 || true
+}
+
+track_nix() {
+    [ "$#" -eq 1 ] ||
+        die "usage: ryoku track <stable|unstable>"
+
+    case "$1" in
+        stable|main)
+            branch="main"
+            label="stable"
+            ;;
+        unstable|unstable-dev)
+            branch="unstable-dev"
+            label="unstable"
+            ;;
+        *)
+            die "unknown NixOS channel '$1' (use: stable or unstable)"
+            ;;
+    esac
+
+    [ -n "$flake_editor" ] && [ -f "$flake_editor" ] ||
+        die "NixOS channel editor is unavailable"
+
+    flake_file="$flake_root/flake.nix"
+
+    [ -f "$flake_file" ] ||
+        die "no flake.nix found at $flake_root"
+
+    host="$(resolve_host)"
+    source="github:aethctl/Ryoku-on-NixOS/$branch"
+
+    nix_bin="$(command -v nix)"
+    nixos_rebuild_bin="$(command -v nixos-rebuild)"
+    cp_bin="$(command -v cp)"
+    rm_bin="$(command -v rm)"
+
+    [ -x "$nix_bin" ] || die "nix executable is unavailable"
+    [ -x "$nixos_rebuild_bin" ] || die "nixos-rebuild executable is unavailable"
+    [ -x "$cp_bin" ] || die "cp executable is unavailable"
+    [ -x "$rm_bin" ] || die "rm executable is unavailable"
+    [ -x "$sudo_bin" ] || die "NixOS sudo wrapper is unavailable at $sudo_bin"
+
+    work="$(mktemp -d)"
+    old_flake="$work/flake.nix"
+    old_lock="$work/flake.lock"
+    new_flake="$work/flake.new"
+
+    cp "$flake_file" "$old_flake"
+    cp "$flake_file" "$new_flake"
+
+    had_lock=false
+
+    if [ -f "$lock" ]; then
+        cp "$lock" "$old_lock"
+        had_lock=true
+    fi
+
+    if ! python3 "$flake_editor" "$new_flake" "$source"; then
+        rm -rf "$work"
+        return 1
+    fi
+
+    restore_track_files() {
+        "$sudo_bin" "$cp_bin" "$old_flake" "$flake_file" || true
+
+        if [ "$had_lock" = true ]; then
+            "$sudo_bin" "$cp_bin" "$old_lock" "$lock" || true
+        else
+            "$sudo_bin" "$rm_bin" -f "$lock" || true
+        fi
+    }
+
+    printf 'Ryoku for NixOS: switching to %s (%s).\n' \
+        "$label" \
+        "$branch"
+
+    if ! "$sudo_bin" "$cp_bin" "$new_flake" "$flake_file"; then
+        rm -rf "$work"
+        return 1
+    fi
+
+    if ! "$sudo_bin" "$nix_bin" flake update \
+        "$input" \
+        --flake "$flake_root"; then
+        restore_track_files
+        rm -rf "$work"
+        die "channel switch failed while updating the Ryoku flake input"
+    fi
+
+    printf 'Building NixOS configuration: %s\n' "$host"
+
+    if ! "$sudo_bin" "$nix_bin" build \
+        "${flake_root}#nixosConfigurations.${host}.config.system.build.toplevel" \
+        --no-link; then
+        restore_track_files
+        rm -rf "$work"
+        die "channel switch build failed; previous flake files restored"
+    fi
+
+    printf 'Switching to the new NixOS generation.\n'
+
+    if ! "$sudo_bin" "$nixos_rebuild_bin" switch \
+        --flake "${flake_root}#${host}"; then
+        restore_track_files
+        rm -rf "$work"
+        die "channel switch activation failed; previous flake files restored"
+    fi
+
+    rm -rf "$work"
+
+    refresh_runtime
+
+    printf 'Now tracking Ryoku %s (%s).\n' \
+        "$label" \
+        "$branch"
+
+    printf "%s\\n" "Future ryoku update runs follow this channel."
 }
 
 case "${1:-status}" in
@@ -489,7 +652,11 @@ case "${1:-status}" in
     update)
         update_nix
         ;;
+    track)
+        shift
+        track_nix "$@"
+        ;;
     *)
-        die "usage: ryoku-nix-update {status|update}"
+        die "usage: ryoku-nix-update {status|update|track CHANNEL}"
         ;;
 esac

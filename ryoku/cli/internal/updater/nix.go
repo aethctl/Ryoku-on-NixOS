@@ -96,3 +96,29 @@ func nixUpdate() error {
 
 	return finishRun()
 }
+
+func NixTrack(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: ryoku track <stable|unstable>")
+	}
+
+	channel := strings.TrimSpace(args[0])
+
+	switch channel {
+	case "stable", "main":
+		channel = "stable"
+	case "unstable", "unstable-dev":
+		channel = "unstable"
+	default:
+		return fmt.Errorf(
+			"unknown NixOS channel %q (use: stable or unstable)",
+			channel,
+		)
+	}
+
+	return sys.Run(
+		"ryoku-nix-update",
+		"track",
+		channel,
+	)
+}
