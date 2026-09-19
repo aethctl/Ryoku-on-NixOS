@@ -212,20 +212,6 @@ SH
     # ------------------------------------------------------------------
 
     install -Dm755 \
-      ryoku/shell/scripts/ryoku-ddc-monitors \
-      "$out/bin/ryoku-ddc-monitors"
-
-    patchShebangs "$out/bin/ryoku-ddc-monitors"
-
-    wrapProgram "$out/bin/ryoku-ddc-monitors" \
-      --prefix PATH : "${pkgs.lib.makeBinPath [
-        pkgs.coreutils
-        pkgs.gawk
-        pkgs.util-linux
-        pkgs.ddcutil
-      ]}"
-
-    install -Dm755 \
       ryoku/shell/scripts/ryoku-reload-cover \
       "$out/bin/ryoku-reload-cover"
 
