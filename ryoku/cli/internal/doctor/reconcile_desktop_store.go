@@ -161,3 +161,55 @@ func writeStore(path string, data []byte) error {
 	}
 	return nil
 }
+
+// reconcileRetiredCursorLeaf drops desktop.cursor.material from the store.
+// The Material Bibata toggle was retired: "Follow the wallpaper" in the theme
+// pick is the same feature, and the toggle's key had no reader left. The leaf
+// rides along in stores that saved a draft while the toggle existed, so it is
+// stripped once rather than shadowing the pick forever.
+func reconcileRetiredCursorLeaf(checkOnly bool) recResult {
+	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
+	if !sys.Exists(store) {
+		return okRes(i18n.T("no desktop settings store"))
+	}
+	raw, err := os.ReadFile(store)
+	if err != nil {
+		return failRes(i18n.T("could not read desktop.json: %v"), err)
+	}
+	out, changed, err := stripCursorMaterial(raw)
+	if err != nil {
+		return failRes(i18n.T("desktop.json does not parse, so the retired cursor key cannot be dropped: %v"), err).
+			withFix(i18n.T("fix or delete %s, then re-run ryoku doctor"), store)
+	}
+	if !changed {
+		return okRes(i18n.T("no retired cursor keys in the store"))
+	}
+	if checkOnly {
+		return wouldRes(i18n.T("desktop.cursor.material is retired; would drop it from the store")).
+			withFix(i18n.T("ryoku doctor drops it"))
+	}
+	if err := writeStore(store, out); err != nil {
+		return failRes(i18n.T("could not write desktop.json: %v"), err)
+	}
+	return fixedRes(i18n.T("dropped the retired desktop.cursor.material key"))
+}
+
+// stripCursorMaterial removes desktop.cursor.material from a store document.
+// Pure, so the decision is unit-testable without a live desktop.
+func stripCursorMaterial(raw []byte) ([]byte, bool, error) {
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return nil, false, err
+	}
+	desktop, _ := cfg["desktop"].(map[string]any)
+	cur, _ := desktop["cursor"].(map[string]any)
+	if _, ok := cur["material"]; !ok {
+		return raw, false, nil
+	}
+	delete(cur, "material")
+	out, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return nil, false, err
+	}
+	return append(out, '\n'), true, nil
+}

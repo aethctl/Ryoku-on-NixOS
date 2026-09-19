@@ -11,6 +11,8 @@ import (
 	"ryoku-cli/internal/sys"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 func TestParseProcSwaps(t *testing.T) {
@@ -548,6 +550,33 @@ func TestConfiguredCursor(t *testing.T) {
 	}
 	if th, sz := configuredCursor([]byte(`not json`)); th != defaultCursorTheme || sz != 24 {
 		t.Fatalf("garbage store must fall back to the default: got %q/%d", th, sz)
+	}
+	// "Follow the wallpaper" is a role, not a theme name; the check must see the
+	// concrete theme it resolves to, or it resets a working pick.
+	if th, _ := configuredCursor([]byte(`{"desktop":{"cursor":{"theme":"DYNAMIC"}}}`)); th != wm.CursorThemeMaterial {
+		t.Fatalf("DYNAMIC resolved to %q, want %q", th, wm.CursorThemeMaterial)
+	}
+}
+
+func TestStripCursorMaterial(t *testing.T) {
+	raw := []byte(`{"desktop":{"cursor":{"material":true,"size":18}}}`)
+	out, changed, err := stripCursorMaterial(raw)
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v, want the key dropped", changed, err)
+	}
+	if _, sz := configuredCursor(out); sz != 18 {
+		t.Fatalf("strip lost the size: got %d", sz)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(out, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cur := cfg["desktop"].(map[string]any)["cursor"].(map[string]any)
+	if _, ok := cur["material"]; ok {
+		t.Fatal("material survived")
+	}
+	if _, changed, err := stripCursorMaterial([]byte(`{"desktop":{"cursor":{"size":18}}}`)); changed || err != nil {
+		t.Fatalf("a clean store must not rewrite: changed=%v err=%v", changed, err)
 	}
 }
 

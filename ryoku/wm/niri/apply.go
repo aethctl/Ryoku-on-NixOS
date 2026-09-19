@@ -202,9 +202,6 @@ var cursorEmitted = map[string]bool{
 }
 
 func cursorReason(leaf string) string {
-	if leaf == "material" {
-		return "Hub-only cursor toggle; not a niri setting."
-	}
 	return "niri has no matching cursor control."
 }
 

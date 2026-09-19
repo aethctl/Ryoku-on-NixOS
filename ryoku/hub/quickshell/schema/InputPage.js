@@ -365,14 +365,6 @@ var rows = [
     },{
         "tab": "",
         "group": "CURSOR",
-        "key": "desktop.cursor.material",
-        "label": "Material Bibata",
-        "desc": "The Bibata pointer, recoloured in the wallpaper accent.",
-        "ctl": "sw",
-        "src": "desktop.json"
-    },{
-        "tab": "",
-        "group": "CURSOR",
         "key": "desktop.cursor.size",
         "label": "Size",
         "desc": "How large the pointer is drawn.",

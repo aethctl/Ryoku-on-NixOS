@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 // A custom keybind with release mode on must emit the Hyprland release flag, and
@@ -63,5 +65,24 @@ func TestGenTameMaximizeOnOpen(t *testing.T) {
 	}
 	if strings.Contains(genLua(off, false), "suppress_event") {
 		t.Fatalf("the full config must carry no suppress rule when the setting is off:\n%s", genLua(off, false))
+	}
+}
+
+// "DYNAMIC" is a store role, not a theme on disk: the loaded overrides must
+// carry the concrete wallpaper-following theme, or settings.lua exports an
+// XCURSOR_THEME no loader can open and the pointer falls back to a bitmap.
+func TestLoadStoreResolvesDynamicCursor(t *testing.T) {
+	dir := t.TempDir()
+	store := filepath.Join(dir, "desktop.json")
+	body := `{"desktop":{"cursor":{"theme":"DYNAMIC","size":18}}}`
+	if err := os.WriteFile(store, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	o := loadStore(store)
+	if o.Cursor.Theme != wm.CursorThemeMaterial {
+		t.Fatalf("loaded theme = %q, want %q", o.Cursor.Theme, wm.CursorThemeMaterial)
+	}
+	if cfg := genLua(o, false); !strings.Contains(cfg, `hl.env("XCURSOR_THEME", "`+wm.CursorThemeMaterial+`")`) {
+		t.Fatalf("settings.lua does not export the resolved theme:\n%s", cfg)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // The neutral settings store as Hyprland reads it: the typed override model the
@@ -411,6 +413,7 @@ func loadStore(path string) Overrides {
 	if merged, err := json.Marshal(flat); err == nil {
 		_ = json.Unmarshal(merged, &o)
 	}
+	o.Cursor.Theme = wm.ResolveCursorTheme(o.Cursor.Theme)
 	return normalizeOverrides(o)
 }
 

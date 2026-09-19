@@ -2,8 +2,8 @@
 """Recolour the Material Bibata pointer to the live wallpaper accent.
 
 Ryoku's matugen post-hook calls this on every palette change. It only acts
-when the Material Bibata cursor is the selected theme (cursor.theme in
-~/.config/ryoku/hypr.json); otherwise it exits immediately so an unrelated
+when the Material Bibata cursor is the selected theme (desktop.cursor.theme in
+~/.config/ryoku/desktop.json); otherwise it exits immediately so an unrelated
 wallpaper change costs nothing.
 
 Speed matters: the on-screen Hyprland pointer is the hyprcursor, which is
@@ -33,7 +33,7 @@ THEME = "Bibata-Material-Ryoku"
 HOME = Path(os.path.expanduser("~"))
 SRC = Path(os.environ.get("RYOKU_BIBATA_SRC", "/usr/share/ryoku-cursor-material/bibata"))
 INSTALL = HOME / ".local/share/icons"
-CFG = HOME / ".config/ryoku/hypr.json"
+CFG = HOME / ".config/ryoku/desktop.json"
 COLORS = HOME / ".cache/ryoku/colors.json"
 LOCK = Path(os.environ.get("XDG_CACHE_HOME", str(HOME / ".cache"))) / "ryoku" / "cursor-material.lock"
 INDEX = ("[Icon Theme]\nName=Material Bibata Cursor Ryoku\n"
@@ -47,13 +47,19 @@ def read_json(p):
         return {}
 
 
+def cursor_section():
+    return read_json(CFG).get("desktop", {}).get("cursor", {})
+
+
 def active_theme():
-    return str(read_json(CFG).get("cursor", {}).get("theme", ""))
+    # "DYNAMIC" is the Hub's "Follow the wallpaper" pick; it means this theme.
+    t = str(cursor_section().get("theme", ""))
+    return THEME if t == "DYNAMIC" else t
 
 
 def cursor_size():
     try:
-        return int(read_json(CFG).get("cursor", {}).get("size", 24))
+        return int(cursor_section().get("size", 24))
     except Exception:
         return 24
 
@@ -79,6 +85,8 @@ def relit(rgb, lightness, sat_cap):
 
 def accent():
     for a in sys.argv[1:]:
+        if a.startswith("-"):
+            continue
         if hexval(a):
             return tohex(hexval(a))
     p = read_json(COLORS).get("primary")

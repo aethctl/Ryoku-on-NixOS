@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	wm "ryoku-wm"
 )
 
 // The neutral settings store as niri reads it: the desktop.* fields niri can
@@ -302,6 +304,7 @@ func loadStore(path string) niriStore {
 	if b, err := json.Marshal(ns.Desktop); err == nil {
 		_ = json.Unmarshal(b, &s)
 	}
+	s.Cursor.Theme = wm.ResolveCursorTheme(s.Cursor.Theme)
 	if raw, ok := ns.WM["niri"]; ok {
 		_ = json.Unmarshal(raw, &s.Niri)
 	}

@@ -817,12 +817,6 @@ Item {
                     applyFn: function (code) { pg.he("desktop.cursor.theme", code); }
                 }
                 Setting {
-                    path: "desktop.cursor.material"
-                    ctl: "sw"
-                    label: I18n.tr("Material Bibata")
-                    desc: I18n.tr("The Bibata pointer, recoloured in the wallpaper accent.")
-                }
-                Setting {
                     path: "desktop.cursor.size"
                     ctl: "step"; lo: 12; hi: 64; stepBy: 2; asInt: true
                     label: I18n.tr("Size")

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -231,10 +232,23 @@ func saveDesktop(raw string) error {
 		return fmt.Errorf("parse desktop JSON: %w", err)
 	}
 	return withDesktopLock(func() error {
+		before, _ := effectiveCursor()
 		if err := atomicWrite(desktopStorePath(), mustJSON(m), 0o644); err != nil {
 			return err
 		}
-		return applyLive()
+		if err := applyLive(); err != nil {
+			return err
+		}
+		after, _ := effectiveCursor()
+		// Enabling the wallpaper-following pointer is the one save that needs
+		// more than a reload: recolour to the live accent right away, so the
+		// pointer follows matugen from the moment it is turned on rather than
+		// showing the packaged fallback until the next palette change. The
+		// full build rasterises eleven sizes, so it runs off the save path.
+		if after == wm.CursorThemeMaterial && before != after {
+			go func() { _ = exec.Command("ryoku-cursor-material-recolor", "--force", "--full").Run() }()
+		}
+		return nil
 	})
 }
 
@@ -387,7 +401,7 @@ func effectiveCursor() (string, int) {
 	if s, ok := c["size"].(float64); ok {
 		size = int(s)
 	}
-	return theme, size
+	return wm.ResolveCursorTheme(theme), size
 }
 
 // staticThemeActive reports whether shell.json names a fixed catalog palette

@@ -130,6 +130,7 @@ func reconcilers() []reconciler {
 		{i18n.T("stale dev residue"), reconcileDevResidue},
 		{i18n.T("ryostore cache location"), reconcileRyostoreCache},
 		{i18n.T("desktop settings store"), reconcileDesktopStore},
+		{i18n.T("retired cursor keys"), reconcileRetiredCursorLeaf},
 		{i18n.T("session target units"), reconcileSessionTarget},
 		{i18n.T("desktop session components"), reconcileSessionComponents},
 		{i18n.T("desktop portal routing"), reconcilePortalRouting},
@@ -2171,7 +2172,7 @@ func configuredCursor(raw []byte) (string, int) {
 	}
 	if json.Unmarshal(raw, &cfg) == nil {
 		if cfg.Desktop.Cursor.Theme != "" {
-			theme = cfg.Desktop.Cursor.Theme
+			theme = wm.ResolveCursorTheme(cfg.Desktop.Cursor.Theme)
 		}
 		if cfg.Desktop.Cursor.Size > 0 {
 			size = cfg.Desktop.Cursor.Size
