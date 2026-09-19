@@ -1,4 +1,3 @@
-hello neur0, the account is me :)
 
 <div align="center">
 
