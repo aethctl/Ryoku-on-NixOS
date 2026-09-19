@@ -242,6 +242,13 @@
             ];
           }
           ''
+            # nix-instantiate --parse still initialises Nix's state directory.
+            # Builds cannot write /nix/var/nix, so keep the parser check's
+            # otherwise-unused state inside the writable build directory.
+            export NIX_STATE_DIR="$TMPDIR/nix-state"
+            export NIX_LOG_DIR="$TMPDIR/nix-log"
+            mkdir -p "$NIX_STATE_DIR" "$NIX_LOG_DIR"
+
             RYOKU_INSTALL_PARSER=${./nix/apps/ryoku-install-edit.py} \
               python3 ${./nix/tests/test-ryoku-install-edit.py}
 
