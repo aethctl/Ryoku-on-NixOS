@@ -770,12 +770,24 @@ in
 
       extraPortals = [
         pkgs.xdg-desktop-portal-gtk
+        pkgs.xdg-desktop-portal-gnome
       ];
 
       config.hyprland.default = [
         "hyprland"
         "gtk"
       ];
+
+      config.niri = {
+        default = [
+          "gnome"
+          "gtk"
+        ];
+
+        "org.freedesktop.impl.portal.FileChooser" = [
+          "gtk"
+        ];
+      };
     };
 
     security.polkit.enable = true;
