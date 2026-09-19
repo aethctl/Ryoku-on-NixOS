@@ -19,7 +19,7 @@ var ROUTES = [
       keywords: "position top bottom form full fit dock notch islands surface border corners frost shadow depth tooltip gap gaps accent colour scale size motion animation auto hide" },
     { id: "identity", label: "Identity", gloss: "\u5370", file: "IdentityRoute", section: "bar",
       desc: "The launcher mark and the workspaces.",
-      keywords: "identity logo mark wordmark word glyph icon kanji launcher brand ryoku arch hyprland workspaces spaces count marker style numbers kanji rings preview" },
+      keywords: "identity logo mark wordmark word glyph icon kanji launcher brand ryoku nixos hyprland workspaces spaces count marker style numbers kanji rings preview" },
     { id: "layout",  label: "Layout",  gloss: "\u914d\u7f6e", file: "LayoutRoute", section: "bar",
       desc: "Where each widget sits on the bar.",
       keywords: "arrange order move reorder left center centre right lane add widget plugin unlock drag reset layout hide show" },

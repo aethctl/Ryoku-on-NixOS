@@ -1,6 +1,6 @@
 [config]
 
-# Ryoku Arch Matugen App Templates
+# Ryoku Matugen App Templates
 # Configured and toggled via Ryoku Settings (Hub) -> Appearance -> Matugen
 
 [templates.gtk3]
