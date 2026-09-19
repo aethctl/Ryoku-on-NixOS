@@ -6,22 +6,24 @@ import Quickshell.Io
 import "../utils/menupoll.js" as MenuPoll
 
 // Live GPU / network / disk / fan stats for the desktop system-stats panel.
-// GPU utilisation, power and temperature come from nvidia-smi (absent on a
-// machine with no NVIDIA card, then gpuAvailable stays false and the readouts
-// read zero); network throughput is the RX/TX byte delta of every non-loopback
-// interface across the poll interval; disk usage is df on /; the fan speed is
-// the first readable hwmon fan tacho. Like Sysinfo it polls on a 1.5s tick only
-// while a visible owner claims it (setActive, owner-refcounted like AudioBars),
-// so an unseen panel costs nothing. Short down/up histories feed the chart.
+// GPU utilisation, power and temperature come from the NVIDIA driver when one
+// is present (absent on a machine with no NVIDIA card, then gpuAvailable stays
+// false and the readouts read zero); network throughput is the RX/TX byte delta
+// of every non-loopback interface across the poll interval; disk usage is df on
+// /; the fan speed is the first readable hwmon fan tacho. Like Sysinfo it
+// refreshes on a 1.5s tick only while a visible owner claims it (setActive,
+// owner-refcounted like AudioBars), so an unseen panel costs nothing. Short
+// down/up histories feed the chart.
 //
-// A runtime-suspended discrete GPU is treated as absent: probing it with
-// nvidia-smi would pull the card back out of D3 (about 10 W on a hybrid laptop),
-// and on a 1.5s tick this panel alone would pin it awake the whole time it is
-// open. So the poll checks the driver's runtime_status first and reports nothing
-// while the card sleeps, landing on the same "no GPU" path as a machine without
-// nvidia-smi. Same guard the bar's GPU telemetry and the Hub's plate use.
+// Nothing here forks per tick: the sysfs sources are FileViews and the one
+// shell run resolves this machine's sensor paths at load. A runtime-suspended
+// discrete GPU is treated as absent: probing it with nvidia-smi would pull the
+// card back out of D3 (about 10 W on a hybrid laptop), so the guard reads the
+// driver's runtime_status attribute (free, no power impact) and nvidia-smi
+// only runs on its own slower tick while the card is already awake. Same guard
+// the bar's GPU telemetry and the Hub's plate use.
 //
-// The properties below are written from the poll handlers (as in Sysinfo), so
+// The properties below are written from the read handlers (as in Sysinfo), so
 // they are plain properties; consumers treat them as read-only.
 Singleton {
     id: root
@@ -30,12 +32,12 @@ Singleton {
     readonly property bool active: root.owners.length > 0
     function setActive(owner, on) { root.owners = MenuPoll.setOwnership(root.owners, owner, on); }
 
-    // poll cadence; also the time base for the network byte-rate delta, so the
+    // tick cadence; also the time base for the network byte-rate delta, so the
     // rate needs no wall clock (Date.now throws in the QML engine).
     readonly property int pollMs: 1500
 
     // GPU: utilisation 0..100, draw in W, package temp in C. gpuAvailable is
-    // false when nvidia-smi is missing or errors, and the values stay zero.
+    // false when no source answers, and the values stay zero.
     property real gpuPct: 0
     property real gpuPowerW: 0
     property real gpuTempC: 0
@@ -58,6 +60,43 @@ Singleton {
     property real _prevRx: 0
     property real _prevTx: 0
     property bool _haveNet: false
+
+    // this machine's sensor paths, resolved once at load; "" means the source
+    // is absent. nv is the NVIDIA driver slot dir, amd the drm device node
+    // carrying gpu_busy_percent, hwmon its temperature/power sibling, fan the
+    // directory holding the first readable tacho.
+    property string nv: ""
+    property string amd: ""
+    property string hwmon: ""
+    property string fan: ""
+    // the NVIDIA card's runtime-PM state; unknown until the first read, and
+    // "unknown" must not probe (that is the whole point of the guard).
+    property bool _nvAwake: false
+
+    Process {
+        id: discoverProc
+        running: true
+        command: ["sh", "-c",
+            "nv=; for d in /sys/bus/pci/drivers/nvidia/*/; do [ -r \"$d/power/runtime_status\" ] && { nv=${d%/}; break; }; done; "
+            + "amd=; hm=; for d in /sys/class/drm/card*/device; do [ -r \"$d/gpu_busy_percent\" ] || continue; "
+            + "amd=${d%/}; for h in \"$amd\"/hwmon/hwmon*; do [ -r \"$h/temp1_input\" ] && { hm=${h%/}; break; }; done; break; done; "
+            + "fan=; for f in /sys/class/hwmon/hwmon*/fan1_input; do [ -r \"$f\" ] && { fan=$(dirname \"$f\"); break; }; done; "
+            + "printf '{\"nv\":\"%s\",\"amd\":\"%s\",\"hwmon\":\"%s\",\"fan\":\"%s\"}\\n' \"$nv\" \"$amd\" \"$hm\" \"$fan\""]
+        stdout: StdioCollector { onStreamFinished: root._readPaths(this.text) }
+    }
+
+    function _readPaths(text) {
+        try {
+            const p = JSON.parse(text.trim());
+            root.nv = p.nv || "";
+            root.amd = p.amd || "";
+            root.hwmon = p.hwmon || "";
+            root.fan = p.fan || "";
+        } catch (e) {
+            // No paths resolved: the GPU and fan readouts stay absent, which is
+            // the same outcome as a machine with no sensors.
+        }
+    }
 
     // nvidia-smi CSV first line: "<util>, <power>, <temp>" (nounits). A missing
     // binary yields empty stdout (2>/dev/null, sh exits nonzero) -> unavailable.
@@ -133,43 +172,61 @@ Singleton {
             root.diskTotalGiB = size / giB;
     }
 
+    // hwmon reports temp in millidegrees and power in microwatts; the AMD
+    // busy_percent node is the utilisation. A machine with an NVIDIA card but
+    // no readable AMD node never binds these paths, so nothing parses.
+    function _readBusy(text) {
+        var v = parseInt((text || "").trim(), 10);
+        if (isNaN(v)) {
+            root.gpuAvailable = false;
+            return;
+        }
+        root.gpuPct = Math.max(0, Math.min(100, v));
+        root.gpuAvailable = true;
+    }
+    function _readGpuTemp(text) {
+        var v = parseInt((text || "").trim(), 10);
+        root.gpuTempC = (!isNaN(v) && v > 0) ? (v > 1000 ? v / 1000 : v) : 0;
+    }
+    function _readGpuPower(text) {
+        var v = parseInt((text || "").trim(), 10);
+        root.gpuPowerW = (!isNaN(v) && v > 0) ? v / 1000000 : 0;
+    }
     function _readFan(text) {
         var v = parseInt((text || "").trim(), 10);
         root.fanRpm = (!isNaN(v) && v >= 0) ? v : 0;
     }
 
     FileView { id: netFile; path: "/proc/net/dev"; blockLoading: true; printErrors: false; onLoaded: root._readNet(netFile.text()) }
+    FileView { id: runtimeFile; path: root.nv !== "" ? root.nv + "/power/runtime_status" : ""; blockLoading: true; printErrors: false
+        onLoaded: {
+            var s = text().trim();
+            root._nvAwake = s !== "" && s !== "suspended";
+            if (!root._nvAwake) {
+                root.gpuAvailable = false;
+                root.gpuPct = 0; root.gpuPowerW = 0; root.gpuTempC = 0;
+            }
+        }
+    }
+    FileView { id: busyFile; path: root.nv === "" && root.amd !== "" ? root.amd + "/gpu_busy_percent" : ""; blockLoading: true; printErrors: false; onLoaded: root._readBusy(busyFile.text()) }
+    FileView { id: gpuTempFile; path: root.nv === "" && root.hwmon !== "" ? root.hwmon + "/temp1_input" : ""; blockLoading: true; printErrors: false; onLoaded: root._readGpuTemp(gpuTempFile.text()) }
+    FileView { id: gpuPowerFile; path: root.nv === "" && root.hwmon !== "" ? root.hwmon + "/power1_average" : ""; blockLoading: true; printErrors: false; onLoaded: root._readGpuPower(gpuPowerFile.text()) }
+    FileView { id: fanFile; path: root.fan !== "" ? root.fan + "/fan1_input" : ""; blockLoading: true; printErrors: false; onLoaded: root._readFan(fanFile.text()) }
 
+    // nvidia-smi is the only GPU source that costs a fork, so it runs at a
+    // quarter of the tick rate and only while the card is already awake.
     Process {
         id: gpuProc
         running: false
-        command: ["sh", "-c",
-            "for st in /sys/bus/pci/drivers/nvidia/*/power/runtime_status; do "
-            + "[ -r \"$st\" ] || continue; IFS= read -r s < \"$st\"; "
-            + "[ \"$s\" = suspended ] && exit 0; break; done; "
-            + "g=$(nvidia-smi --query-gpu=utilization.gpu,power.draw,temperature.gpu --format=csv,noheader,nounits 2>/dev/null); "
-            + "[ -n \"$g\" ] && { echo \"$g\"; exit 0; }; "
-            + "for d in /sys/class/drm/card*/device; do [ -r \"$d/gpu_busy_percent\" ] || continue; "
-            + "u=$(cat \"$d/gpu_busy_percent\" 2>/dev/null); t=; "
-            + "for h in \"$d\"/hwmon/hwmon*/temp1_input; do [ -r \"$h\" ] && { t=$(awk '{print int($1/1000)}' \"$h\"); break; }; done; "
-            + "w=0; for p in \"$d\"/hwmon/hwmon*/power1_average; do [ -r \"$p\" ] && { w=$(awk '{print int($1/1000000)}' \"$p\"); break; }; done; "
-            + "[ -n \"$u\" ] && [ -n \"$t\" ] && { echo \"$u, $w, $t\"; exit 0; }; done"]
+        command: ["nvidia-smi", "--query-gpu=utilization.gpu,power.draw,temperature.gpu", "--format=csv,noheader,nounits"]
         stdout: StdioCollector { onStreamFinished: root._readGpu(this.text) }
     }
 
     Process {
         id: diskProc
         running: false
-        command: ["sh", "-c", "df -B1 --output=used,size / 2>/dev/null"]
+        command: ["df", "-B1", "--output=used,size", "/"]
         stdout: StdioCollector { onStreamFinished: root._readDisk(this.text) }
-    }
-
-    // first hwmon exposing a readable fan1_input tacho; none -> empty -> 0 RPM.
-    Process {
-        id: fanProc
-        running: false
-        command: ["sh", "-c", "for f in /sys/class/hwmon/hwmon*/fan1_input; do [ -r \"$f\" ] && cat \"$f\" 2>/dev/null && exit 0; done"]
-        stdout: StdioCollector { onStreamFinished: root._readFan(this.text) }
     }
 
     Timer {
@@ -179,12 +236,36 @@ Singleton {
         triggeredOnStart: true
         onTriggered: {
             netFile.reload();
+            if (root.nv !== "")
+                runtimeFile.reload();
+            else if (root.amd !== "") {
+                busyFile.reload();
+                gpuTempFile.reload();
+                gpuPowerFile.reload();
+            }
+            if (root.fan !== "")
+                fanFile.reload();
+        }
+    }
+    Timer {
+        interval: 5000
+        running: root.active && root.nv !== "" && root._nvAwake
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
             gpuProc.running = false;
             gpuProc.running = true;
+        }
+    }
+    // disk usage moves on a human scale, not a frame scale.
+    Timer {
+        interval: 30000
+        running: root.active
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
             diskProc.running = false;
             diskProc.running = true;
-            fanProc.running = false;
-            fanProc.running = true;
         }
     }
     // drop the stale byte baseline on close so the next open measures a fresh

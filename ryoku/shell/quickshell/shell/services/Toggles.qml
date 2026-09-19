@@ -1,64 +1,40 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Bluetooth
 
 // one source for the quick-toggles the System deck's control tiles and the bar's
-// placeable toggle modules both read. the probes (wifi / mic / night light) poll
-// only while something watches them (watchers > 0), so a bar with no toggle and a
-// closed deck cost nothing; bluetooth, dnd, keep-awake and game mode are reactive
-// off their live sources (the BT service and Flags). the actions mirror the
-// deck's originals exactly, kept here so there is one copy, not two.
+// placeable toggle modules both read. every tile is reactive off a live source:
+// wifi and night light ride the daemon topics, microphone rides the Pipewire
+// graph (Audio), bluetooth the BT service, and dnd / keep-awake / game mode
+// Flags. nothing here polls, forks, or shells out for state; the actions mirror
+// the deck's originals exactly, kept here so there is one copy, not two.
 Singleton {
     id: root
 
-    // refcount bumped by every on-screen toggle (a BarToggle, or the open deck),
-    // so the pollers sleep when nothing shows a toggle.
-    property int watchers: 0
-    readonly property bool awake: watchers > 0
+    // ---- wifi (reactive off the daemon network topic) ------------------------
+    // The daemon owns NetworkManager and pushes radio state on every change, so
+    // the tile reads that instead of forking nmcli on a timer. The toggle sends
+    // the intent through the same daemon call the network panel uses, so there
+    // is one writer and the tile reflects the real radio, not an optimistic flip.
+    readonly property bool wifiOn: Network.wifiRadio
+    function toggleWifi() { Network.setWifiEnabled(!root.wifiOn); }
 
-    // ---- wifi (nmcli) --------------------------------------------------------
-    property bool wifiOn: false
-    Process {
-        id: wifiProc
-        command: ["sh", "-c", "nmcli radio wifi 2>/dev/null"]
-        stdout: StdioCollector { onStreamFinished: root.wifiOn = this.text.trim() === "enabled" }
-    }
-    function toggleWifi() {
-        Quickshell.execDetached(["nmcli", "radio", "wifi", root.wifiOn ? "off" : "on"]);
-        root.wifiOn = !root.wifiOn;
-        wifiPoll.restart();
-    }
-    Timer { id: wifiPoll; interval: 1200; onTriggered: wifiProc.running = true }
-
-    // ---- microphone (wpctl) --------------------------------------------------
-    property bool micMuted: true
-    Process {
-        id: micProc
-        command: ["sh", "-c", "wpctl get-volume @DEFAULT_AUDIO_SOURCE@ 2>/dev/null"]
-        stdout: StdioCollector { onStreamFinished: root.micMuted = this.text.indexOf("MUTED") >= 0 }
-    }
+    // ---- microphone (reactive off the Pipewire graph) ------------------------
+    // Audio tracks the default source, so its mute flag is live; the tile reads
+    // the same object the volume panel and the record HUD drive.
+    readonly property bool micMuted: !!(Audio.source && Audio.source.audio && Audio.source.audio.muted)
     function toggleMic() {
-        Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]);
-        root.micMuted = !root.micMuted;
-        micPoll.restart();
+        if (Audio.source && Audio.source.audio)
+            Audio.source.audio.muted = !Audio.source.audio.muted;
     }
-    Timer { id: micPoll; interval: 600; onTriggered: micProc.running = true }
 
-    // ---- night light (hyprsunset via the shipped script) ---------------------
-    property bool nightOn: false
-    Process {
-        id: nightProc
-        command: ["sh", "-c", "pgrep -x hyprsunset >/dev/null 2>&1 && echo on || echo off"]
-        stdout: StdioCollector { onStreamFinished: root.nightOn = this.text.trim() === "on" }
-    }
-    function toggleNight() {
-        Quickshell.execDetached(["ryoku-cmd-nightlight"]);
-        root.nightOn = !root.nightOn;
-        nightPoll.restart();
-    }
-    Timer { id: nightPoll; interval: 2000; onTriggered: nightProc.running = true }
+    // ---- night light (reactive off the daemon nightlight topic) --------------
+    // The daemon watches hyprsunset and the state files, so the tile reflects a
+    // toggle from the keybind, the Hub, or the script itself. The intent rides
+    // the same daemon call, which runs the shipped script once.
+    readonly property bool nightOn: Nightlight.on
+    function toggleNight() { Nightlight.toggle(); }
 
     // ---- bluetooth (reactive off the BT service) -----------------------------
     readonly property var btAdapter: Bluetooth.defaultAdapter
@@ -75,20 +51,4 @@ Singleton {
     function toggleDnd() { Flags.dnd = !Flags.dnd; }
     function toggleCaffeine() { Flags.keepAwake = !Flags.keepAwake; }
     function toggleGame() { Flags.gameMode = !Flags.gameMode; }
-
-    function repoll() {
-        if (!root.awake)
-            return;
-        wifiProc.running = true;
-        micProc.running = true;
-        nightProc.running = true;
-    }
-    onAwakeChanged: if (awake) repoll()
-    Timer {
-        interval: 4000
-        running: root.awake
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.repoll()
-    }
 }

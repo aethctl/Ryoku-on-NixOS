@@ -82,12 +82,30 @@ Singleton {
     FileView { id: statFile; path: "/proc/stat"; blockLoading: true; printErrors: false; onLoaded: root._readStat(statFile.text()) }
     FileView { id: memFile; path: "/proc/meminfo"; blockLoading: true; printErrors: false; onLoaded: root._readMem(memFile.text()) }
 
-    // CPU package temperature: the first hwmon whose name is a known CPU sensor.
-    Process {
-        id: tempProc
-        command: ["sh", "-c", "for d in /sys/class/hwmon/hwmon*; do n=$(cat \"$d/name\" 2>/dev/null); case \"$n\" in k10temp|zenpower|coretemp) cat \"$d/temp1_input\" 2>/dev/null && exit 0;; esac; done"]
-        stdout: StdioCollector { onStreamFinished: root._readTemp(this.text) }
+    // CPU package temperature without a shell: the hwmon index carrying the
+    // CPU sensor differs per machine, so every candidate name file is read
+    // once at load and the first known CPU sensor pins the temp path. The tick
+    // then reloads that one file; no fork ever.
+    property string tempPath: ""
+    readonly property var cpuSensorNames: ["k10temp", "zenpower", "coretemp"]
+
+    Instantiator {
+        model: 10
+        delegate: FileView {
+            required property int modelData
+            readonly property string index: "" + modelData
+            path: "/sys/class/hwmon/hwmon" + index + "/name"
+            blockLoading: true
+            printErrors: false
+            onLoaded: {
+                var name = text().trim();
+                if (root.tempPath === "" && root.cpuSensorNames.indexOf(name) >= 0)
+                    root.tempPath = "/sys/class/hwmon/hwmon" + index + "/temp1_input";
+            }
+        }
     }
+
+    FileView { id: tempFile; path: root.tempPath; blockLoading: true; printErrors: false; onLoaded: root._readTemp(tempFile.text()) }
 
     Timer {
         interval: 1500
@@ -97,8 +115,7 @@ Singleton {
         onTriggered: {
             statFile.reload();
             memFile.reload();
-            tempProc.running = false;
-            tempProc.running = true;
+            tempFile.reload();
         }
     }
     // drop the stale delta baseline on close so the next open measures a fresh

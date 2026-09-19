@@ -203,14 +203,10 @@ Column {
 
     Component.onCompleted: {
         Devices.startProbes(page);
-        Toggles.watchers += 1;
         listProc.command = page.monitorCmd(["list"]);
         listProc.running = true;
     }
-    Component.onDestruction: {
-        Devices.stopProbes(page);
-        Toggles.watchers = Math.max(0, Toggles.watchers - 1);
-    }
+    Component.onDestruction: Devices.stopProbes(page)
 
     Item {
         width: parent.width

@@ -165,23 +165,12 @@ Item {
         return "";
     }
 
-    // The system pull (toggle probes, module services) holds until the reveal
-    // settles, so opening stays smooth on low-resource machines.
+    // The system pull (module services) holds until the reveal settles, so
+    // opening stays smooth on low-resource machines.
     property bool settled: false
     // A brief hidden warm after login primes that pull once, so the first real
     // open already has its data and closing stays fluid.
     property bool warm: false
-    property bool watching: false
-    function syncWatch() {
-        var want = root.settled || root.warm;
-        if (want && !root.watching) {
-            Toggles.watchers += 1;
-            root.watching = true;
-        } else if (!want && root.watching) {
-            Toggles.watchers -= 1;
-            root.watching = false;
-        }
-    }
 
     function applyInitialPage() {
         if (!root.open || root.initialPage === "")
@@ -215,18 +204,18 @@ Item {
     Timer {
         id: settleTimer
         interval: 800
-        onTriggered: { root.settled = true; root.syncWatch(); }
+        onTriggered: root.settled = true
     }
 
     Timer {
         id: warmDelay
         interval: 4000
-        onTriggered: { root.warm = true; root.syncWatch(); warmHold.restart(); }
+        onTriggered: { root.warm = true; warmHold.restart(); }
     }
     Timer {
         id: warmHold
         interval: 700
-        onTriggered: { root.warm = false; root.syncWatch(); }
+        onTriggered: root.warm = false
     }
 
     function scheduleInitialPage() {
@@ -251,7 +240,6 @@ Item {
             root.page = "";
             root.navReady = false;
         }
-        root.syncWatch();
     }
     onInitialPageChanged: if (root.open && root.initialPage !== "") root.scheduleInitialPage()
     onPageChanged: {
@@ -262,12 +250,6 @@ Item {
         }
     }
     Component.onCompleted: { root.syncConfiguredModules(); warmDelay.start(); }
-    Component.onDestruction: {
-        if (root.watching) {
-            Toggles.watchers -= 1;
-            root.watching = false;
-        }
-    }
 
     Item {
         id: mainBand

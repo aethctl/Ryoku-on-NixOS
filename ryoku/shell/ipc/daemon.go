@@ -339,6 +339,7 @@ func (d *daemon) bootstrap() {
 	d.startCalendar()
 	d.startPowerProfiles()
 	d.startNetwork()
+	d.startNightlight()
 	d.startOsd()
 	d.prompter = startKeyringPrompter()
 	if d.prompter != nil {

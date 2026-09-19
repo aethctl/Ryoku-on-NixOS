@@ -25,16 +25,6 @@ Item {
 
     implicitHeight: 48
 
-    // Keep the toggle probes awake while this row is shown (contract 06 sec 3).
-    property bool watching: false
-    function syncWatch() {
-        if (root.open && !root.watching) { Toggles.watchers += 1; root.watching = true; }
-        else if (!root.open && root.watching) { Toggles.watchers -= 1; root.watching = false; }
-    }
-    onOpenChanged: root.syncWatch()
-    Component.onCompleted: root.syncWatch()
-    Component.onDestruction: if (root.watching) Toggles.watchers -= 1
-
     function isToggle(id) { return id === "airplane" || id === "night-light"; }
     function isOn(id) {
         switch (id) {
