@@ -1,0 +1,50 @@
+# Maintainer: Ryoku <releases@ryoku.dev>
+#
+# xwayland-satellite: the X11 bridge niri spawns for Xwayland apps. Ryoku ships
+# it a few commits past v0.8.2 because 0.8.2 regressed override-redirect popup
+# focus (upstream #468): under niri, Steam's menus, Wine/WPF dropdowns and the
+# like open and then vanish within a frame, so they cannot be clicked. Upstream
+# #494 fixes it -- an override-redirect popup is never focused, and WM_TAKE_FOCUS
+# is honoured when advertised -- but no tagged release carries it yet, so Arch
+# still serves the broken 0.8.2-1. This build reaches niri users through [ryoku]
+# until a fixed release lands; a later 0.8.3 from the official repos sorts above
+# this version and supersedes it with no action here.
+#
+# Fixed version, not RYOKU_PKGVER: build-repo.sh builds it once and then adopts
+# the published bytes on later runs, so bumping the pinned commit means bumping
+# pkgrel. Same drop-in name as the official package; pacman picks this one only
+# because the version is higher.
+pkgname=xwayland-satellite
+pkgver=0.8.2.r13.gadd2795
+pkgrel=1
+_commit=add2795134593faafce60e404a0a75df68e9ee0c
+pkgdesc="Xwayland outside your Wayland (Ryoku build with the override-redirect popup-focus fix)"
+arch=('x86_64')
+url="https://github.com/Supreeeme/xwayland-satellite"
+license=('MPL-2.0')
+depends=('glibc' 'libgcc' 'libxcb' 'xcb-util-cursor' 'xorg-xwayland')
+makedepends=('cargo' 'clang' 'git')
+source=("$pkgname::git+$url.git#commit=$_commit")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname"
+  # Upstream's unit hardcodes /usr/local; the packaged binary lives in /usr/bin.
+  sed 's|/usr/local|/usr|' -i resources/$pkgname.service
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release --features systemd
+}
+
+package() {
+  cd "$pkgname"
+  install -Dm755 target/release/$pkgname "$pkgdir/usr/bin/$pkgname"
+  install -Dm644 resources/$pkgname.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

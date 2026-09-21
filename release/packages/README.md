@@ -23,6 +23,10 @@ repo. Packages publish only from `main` release tags, never from `unstable-dev`.
   `hyprpm.toml` and checks out the commit paired with the running Hyprland), so
   they track the shipped compositor with no manual pin bumps. Off until enabled
   in Ryoku Settings.
+- `xwayland-satellite` -- the X11 bridge niri spawns for Xwayland apps, built a
+  few commits past `v0.8.2` because that release regressed override-redirect
+  popup focus (Steam and Wine menus close on sight under niri). A pinned commit,
+  not a monorepo build; a later official `0.8.3` sorts above it and takes over.
 - `ryoku-desktop` -- the umbrella. Depends on the packages above plus the user-facing
   desktop runtime, lays the base configuration under `/usr/share/ryoku/config`,
   and installs the helper scripts (`ryoku-cmd-*`, the hardware `ryoku-*`,
