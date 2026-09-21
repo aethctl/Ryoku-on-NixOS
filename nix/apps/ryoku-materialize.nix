@@ -153,9 +153,19 @@ EOF
     install -Dm0644 "$base/niri/autostart.kdl" \
       "$config_home/niri/autostart.kdl"
 
-    # settings.kdl and rebinds.kdl are provider-generated effective config.
-    # Always regenerate them from desktop.json so changes to the provider
-    # itself (new/fixed bindings, defaults, syntax) reach existing installs.
+    # Provider-generated effective config must be re-authored from desktop.json
+    # on every generation switch. A provider update can change how the same
+    # persisted settings are rendered; merely replacing the provider binary
+    # would otherwise leave its old generated output in force until the user
+    # happened to save a setting again.
+    #
+    # Generate both provider trees, not only the compositor running right now.
+    # Ryoku preserves each provider's settings while switched away, so this also
+    # guarantees that a later compositor switch starts from the current
+    # generation rather than stale settings.lua/rebinds.lua or settings.kdl.
+    ${ryoku.wmHyprland}/bin/ryoku-wm-hyprland apply \
+      "$config_home/ryoku/desktop.json" >/dev/null
+
     ${ryoku.wmNiri}/bin/ryoku-wm-niri apply \
       "$config_home/ryoku/desktop.json" >/dev/null
 
