@@ -152,29 +152,12 @@ var appearanceEmitted = map[string]bool{
 	"activeOpacity": true, "inactiveOpacity": true,
 	"shadowEnabled": true, "shadowRange": true, "shadowColor": true,
 	"shadowSpread": true, "shadowOffsetX": true, "shadowOffsetY": true,
-	"blurEnabled": true, "blurPasses": true, "blurNoise": true,
-	"blurXray": true, "blurPopups": true,
-}
-
-// blurUnhonored names the blur tuning niri's blur block has no field for. niri
-// tunes passes, offset, noise and saturation and forces blur per window, so the
-// enable/passes/noise/xray/popups keys are honoured (appearanceEmitted); the
-// rest are Hyprland-only knobs with no niri twin.
-var blurUnhonored = map[string]string{
-	"blurSize":             "niri's blur tunes passes, offset, noise and saturation; it has no size.",
-	"blurContrast":         "niri's blur tunes passes, offset, noise and saturation; it has no contrast.",
-	"blurBrightness":       "niri's blur tunes passes, offset, noise and saturation; it has no brightness.",
-	"blurVibrancy":         "niri's blur tunes passes, offset, noise and saturation; it has no vibrancy.",
-	"blurVibrancyDarkness": "niri's blur tunes passes, offset, noise and saturation; it has no vibrancy darkness.",
-	"blurSpecial":          "niri has no special workspace, so nothing to blur behind one.",
-	"blurIgnoreOpacity":    "niri's blur has no ignore-opacity switch.",
-	"blurNewOptimizations": "niri's blur has no new-optimizations switch.",
 }
 
 func appearanceReason(leaf string) string {
 	switch {
-	case blurUnhonored[leaf] != "":
-		return blurUnhonored[leaf]
+	case strings.HasPrefix(leaf, "blur"):
+		return "niri 26.04's window blur renders translucent windows opaque, so Ryoku leaves it off."
 	case leaf == "shadowPower":
 		return "niri's shadow block has no sharpness or falloff field."
 	case leaf == "shadowSharp":

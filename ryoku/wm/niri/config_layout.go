@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// The layout, blur and animation blocks: the window frame, gaps, preset sizes,
-// shadow, tab indicator and background niri reads from the layout node, the
-// global blur tuning, and the per-animation curves the animations node carries.
+// The layout and animation blocks: the window frame, gaps, preset sizes, shadow,
+// tab indicator and background niri reads from the layout node, and the
+// per-animation curves the animations node carries.
 
 // writeLayout maps the neutral frame onto niri's border and focus-ring blocks and
 // adds the drop shadow, gaps, preset sizes and background niri owns. The user's
@@ -157,23 +157,6 @@ func gradientRelativeTo(s string) string {
 		return "workspace-view"
 	}
 	return "window"
-}
-
-// writeBlur emits niri's top-level blur tuning. The block only sets passes and
-// noise; the per-window rule in writeBlurRules is what forces blur onto windows,
-// so this is silent unless the neutral blur toggle is on.
-func writeBlur(b *strings.Builder, a Appearance) {
-	if !a.BlurEnabled {
-		return
-	}
-	b.WriteString("blur {\n")
-	if a.BlurPasses > 0 {
-		fmt.Fprintf(b, "    passes %d\n", a.BlurPasses)
-	}
-	if a.BlurNoise > 0 {
-		fmt.Fprintf(b, "    noise %s\n", kdlNum(a.BlurNoise))
-	}
-	b.WriteString("}\n\n")
 }
 
 // writeAnimations turns every animation off, or renders the per-kind tree the

@@ -60,7 +60,6 @@ func genSettings(s niriStore) []byte {
 	writeInput(&b, s.Input, s.Niri)
 	writeClipboard(&b, s.Input)
 	writeLayout(&b, s.Appearance, s.Niri)
-	writeBlur(&b, s.Appearance)
 	writeAnimations(&b, s.Appearance, s.Niri)
 	writeCursor(&b, s.Cursor)
 	writeMisc(&b, s.Niri)

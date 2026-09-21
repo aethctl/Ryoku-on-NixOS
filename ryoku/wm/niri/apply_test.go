@@ -648,11 +648,11 @@ func TestNewSurfaceValidatesThroughNiri(t *testing.T) {
 	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
 }
 
-// niri 26.04 has blur, so the enable, passes, noise, xray and popups keys reach
-// the config and drop off the switch-cost list, while the Hyprland-only blur
-// knobs stay unhonored, each naming the field niri lacks. Per-app blur is
-// honoured too, so an appOverride blur is no longer a reported loss.
-func TestBlurNowHonoured(t *testing.T) {
+// niri 26.04's window blur renders translucent windows opaque, so Ryoku no
+// longer models global blur: every desktop.appearance.blur* key is reported
+// unhonored, each naming the opaque-blur reason. Per-app blur stays honoured (a
+// deliberately targeted surface), so an appOverride blur is not a reported loss.
+func TestGlobalBlurUnhonored(t *testing.T) {
 	niriHome(t)
 	store := writeStore(t, `{"desktop":{
 		"appearance":{"blurEnabled":true,"blurPasses":4,"blurNoise":0.03,"blurXray":true,"blurPopups":true,"blurContrast":0.5,"blurSize":8,"blurSpecial":true},
@@ -664,23 +664,19 @@ func TestBlurNowHonoured(t *testing.T) {
 	for _, u := range rep.Unhonored {
 		reason[u.Key] = u.Reason
 	}
-	for _, k := range []string{"blurEnabled", "blurPasses", "blurNoise", "blurXray", "blurPopups"} {
-		if reason["desktop.appearance."+k] != "" {
-			t.Errorf("desktop.appearance.%s is honoured now; must not be reported unhonored (%q)", k, reason["desktop.appearance."+k])
+	for _, k := range []string{"blurEnabled", "blurPasses", "blurNoise", "blurXray", "blurPopups", "blurContrast", "blurSize", "blurSpecial"} {
+		r := reason["desktop.appearance."+k]
+		if r == "" {
+			t.Errorf("desktop.appearance.%s must be reported unhonored now that niri has no window blur", k)
+			continue
 		}
-	}
-	if r := reason["desktop.appearance.blurContrast"]; !strings.Contains(r, "contrast") {
-		t.Errorf("blurContrast reason must name the missing field: %q", r)
-	}
-	if r := reason["desktop.appearance.blurSize"]; !strings.Contains(r, "size") {
-		t.Errorf("blurSize reason must name the missing field: %q", r)
-	}
-	if r := reason["desktop.appearance.blurSpecial"]; !strings.Contains(r, "special") {
-		t.Errorf("blurSpecial reason must name the missing special workspace: %q", r)
+		if !strings.Contains(strings.ToLower(r), "opaque") {
+			t.Errorf("desktop.appearance.%s reason must explain the opaque blur: %q", k, r)
+		}
 	}
 	for _, u := range rep.Unhonored {
 		if strings.HasPrefix(u.Key, "desktop.appOverrides") && strings.Contains(strings.ToLower(u.Reason), "blur") {
-			t.Errorf("per-app blur is honoured now; must not be reported as a loss: %q", u.Reason)
+			t.Errorf("per-app blur is honoured; must not be reported as a loss: %q", u.Reason)
 		}
 	}
 }

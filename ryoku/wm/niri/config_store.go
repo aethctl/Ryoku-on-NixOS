@@ -22,37 +22,33 @@ import (
 // settings.kdl and rebinds.kdl are the only writers of real config. A leaf left
 // out here would boot as stock niri, not Ryoku.
 
-// Appearance: the window-frame, gap, shadow, opacity and blur leaves niri can
-// express. niri's blur has passes, offset, noise and saturation plus a per-window
-// forced-blur rule, so the neutral blur toggles it can honour are modelled here;
-// the rest of the neutral appearance model (glow, per-window dim) has no niri
-// setting and is reported unhonored.
+// Appearance: the window-frame, gap, shadow and opacity leaves niri can express.
+// Window blur is deliberately absent: niri 26.04's forced background-effect
+// renders translucent windows opaque instead of frosted on real hardware, so
+// Ryoku does not model it and the neutral blur keys are reported unhonored. The
+// rest of the neutral appearance model (glow, per-window dim) has no niri setting
+// and is reported unhonored too.
 type Appearance struct {
-	GapsIn          int     `json:"gapsIn"`
-	GapsOut         int     `json:"gapsOut"`
-	BorderSize      int     `json:"borderSize"`
-	Rounding        int     `json:"rounding"`
-	ActiveBorder    string  `json:"activeBorder"`
-	InactiveBorder  string  `json:"inactiveBorder"`
+	GapsIn         int    `json:"gapsIn"`
+	GapsOut        int    `json:"gapsOut"`
+	BorderSize     int    `json:"borderSize"`
+	Rounding       int    `json:"rounding"`
+	ActiveBorder   string `json:"activeBorder"`
+	InactiveBorder string `json:"inactiveBorder"`
 	// BorderFollowsPalette: true takes the border's active and inactive colours
 	// from the live palette (the file the border act records), false uses the
 	// ActiveBorder/InactiveBorder above verbatim. The niri twin of Hyprland's
 	// same neutral key, so the Hub toggle reaches both compositors.
-	BorderFollowsPalette bool `json:"borderFollowsPalette"`
-	Animations      bool    `json:"animations"`
-	ActiveOpacity   float64 `json:"activeOpacity"`
-	InactiveOpacity float64 `json:"inactiveOpacity"`
-	ShadowEnabled   bool    `json:"shadowEnabled"`
-	ShadowRange     int     `json:"shadowRange"`
-	ShadowColor     string  `json:"shadowColor"`
-	ShadowSpread    int     `json:"shadowSpread"`
-	ShadowOffsetX   int     `json:"shadowOffsetX"`
-	ShadowOffsetY   int     `json:"shadowOffsetY"`
-	BlurEnabled     bool    `json:"blurEnabled"`
-	BlurPasses      int     `json:"blurPasses"`
-	BlurNoise       float64 `json:"blurNoise"`
-	BlurXray        bool    `json:"blurXray"`
-	BlurPopups      bool    `json:"blurPopups"`
+	BorderFollowsPalette bool    `json:"borderFollowsPalette"`
+	Animations           bool    `json:"animations"`
+	ActiveOpacity        float64 `json:"activeOpacity"`
+	InactiveOpacity      float64 `json:"inactiveOpacity"`
+	ShadowEnabled        bool    `json:"shadowEnabled"`
+	ShadowRange          int     `json:"shadowRange"`
+	ShadowColor          string  `json:"shadowColor"`
+	ShadowSpread         int     `json:"shadowSpread"`
+	ShadowOffsetX        int     `json:"shadowOffsetX"`
+	ShadowOffsetY        int     `json:"shadowOffsetY"`
 }
 
 // Input: the keyboard, pointer and touchpad leaves niri's input block covers.
@@ -342,8 +338,6 @@ func defaultStore() niriStore {
 			ActiveOpacity: 1, InactiveOpacity: 1,
 			ShadowEnabled: true, ShadowRange: 45, ShadowColor: "#000000",
 			ShadowSpread: 0, ShadowOffsetX: 0, ShadowOffsetY: 5,
-			BlurEnabled: true, BlurPasses: 3, BlurNoise: 0.02,
-			BlurXray: false, BlurPopups: false,
 		},
 		Windows: Windows{TameMaximizeOnOpen: true},
 		Input: Input{

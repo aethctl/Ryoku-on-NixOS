@@ -165,31 +165,20 @@ func TestBorderFollowsPalette(t *testing.T) {
 	}
 }
 
-// niri has blur: the global block tunes passes and noise, a matchless rule forces
-// it behind windows, and xray and popups ride the same rule. Turning it off must
-// leave no blur block and no forced-blur rule.
-func TestBlurEmittedAndDisabled(t *testing.T) {
+// niri 26.04's forced window blur renders translucent windows opaque, so Ryoku
+// no longer models or emits global blur: the shipped config carries no top-level
+// blur block and no matchless background-effect rule, even once windows are made
+// translucent (the case that used to reveal the opaque-blur bug).
+func TestNoGlobalBlur(t *testing.T) {
 	s := defaultStore()
-	s.Appearance.BlurEnabled = true
-	s.Appearance.BlurPasses = 4
-	s.Appearance.BlurNoise = 0.03
-	s.Appearance.BlurXray = true
-	s.Appearance.BlurPopups = true
+	s.Appearance.ActiveOpacity = 0.9
+	s.Appearance.InactiveOpacity = 0.8
 	out := string(genSettings(s))
-	for _, want := range []string{
-		"blur {\n    passes 4\n    noise 0.03\n}",
-		"    background-effect {\n        blur true\n        xray true\n    }",
-		"    popups {\n        background-effect {\n            blur true\n        }\n    }",
-	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("blur missing %q\n%s", want, out)
-		}
+	if strings.Contains(out, "blur {") {
+		t.Errorf("niri must emit no top-level blur block\n%s", out)
 	}
-
-	s.Appearance.BlurEnabled = false
-	off := string(genSettings(s))
-	if strings.Contains(off, "blur {") || strings.Contains(off, "background-effect") {
-		t.Errorf("blur off must emit no blur block and no forced-blur rule\n%s", off)
+	if strings.Contains(out, "background-effect") {
+		t.Errorf("niri must emit no forced blur rule\n%s", out)
 	}
 }
 

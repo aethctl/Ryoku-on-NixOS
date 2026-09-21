@@ -66,9 +66,9 @@ func writeUserLayerRule(b *strings.Builder, r LayerRule) {
 	b.WriteString("}\n\n")
 }
 
-// writeWindowRules emits the global corner radius and opacity, the forced-blur
-// rule, then each user window rule and per-app override niri can express. Rules
-// niri cannot express are reported unhonored by apply, not silently dropped here.
+// writeWindowRules emits the global corner radius and opacity, then each user
+// window rule and per-app override niri can express. Rules niri cannot express
+// are reported unhonored by apply, not silently dropped here.
 func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps []AppOverride) {
 	if a.Rounding > 0 {
 		b.WriteString("window-rule {\n")
@@ -77,7 +77,6 @@ func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps
 		b.WriteString("}\n\n")
 	}
 	writeOpacityRules(b, a)
-	writeBlurRules(b, a)
 	for _, r := range rules {
 		if props := windowRuleProps(r); len(props) > 0 {
 			writeRuleBlock(b, r.Class, r.Title, props)
@@ -106,27 +105,6 @@ func writeOpacityRules(b *strings.Builder, a Appearance) {
 		fmt.Fprintf(b, "    opacity %s\n", kdlNum(a.InactiveOpacity))
 		b.WriteString("}\n\n")
 	}
-}
-
-// writeBlurRules forces blur behind every window when the neutral blur toggle is
-// on, so translucent windows show the blurred backdrop niri's blur block tunes.
-// xray and popups ride the same matchless rule. Opaque windows are unaffected
-// since there is nothing translucent to blur through.
-func writeBlurRules(b *strings.Builder, a Appearance) {
-	if !a.BlurEnabled {
-		return
-	}
-	b.WriteString("window-rule {\n")
-	b.WriteString("    background-effect {\n")
-	b.WriteString("        blur true\n")
-	if a.BlurXray {
-		b.WriteString("        xray true\n")
-	}
-	b.WriteString("    }\n")
-	if a.BlurPopups {
-		b.WriteString("    popups {\n        background-effect {\n            blur true\n        }\n    }\n")
-	}
-	b.WriteString("}\n\n")
 }
 
 func writeRuleBlock(b *strings.Builder, class, title string, props []string) {
