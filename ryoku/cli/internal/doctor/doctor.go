@@ -194,7 +194,7 @@ func reconcilers() []reconciler {
 		{i18n.T("duplicate desktop instances"), reconcileShellInstances},
 		{i18n.T("rashin agent daemon"), reconcileRashinDaemon},
 		{i18n.T("AI usage collector timer"), reconcileAiUsageTimer},
-		{i18n.T("prowl-agent for rashin"), reconcileProwlAgent},
+		{i18n.T("prowl for rashin"), reconcileProwlAgent},
 		{i18n.T("recordings directory"), reconcileRecordingsDir},
 		{i18n.T("failed services"), reconcileFailedUnits},
 		{i18n.T("btrfs device health"), reconcileBtrfsHealth},

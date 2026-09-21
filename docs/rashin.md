@@ -169,7 +169,7 @@ A launcher ask does not always need the full agent. `/api/ask` routes it:
    connection: a terse pattern prompt plus the vault's generated maps, and a
    small set of READ-ONLY Go-native tools that run in milliseconds:
    `system_query` (packages, updates, service, processes, disk, kernel, gpu,
-   network), `read_file`, `list_dir`, `search_code` (prowl-agent), and
+   network), `read_file`, `list_dir`, `search_code` (prowl), and
    `fetch_url`. Up to four tool rounds, then the answer, usually a second or
    two. The model replies `TOOLS_REQUIRED` only when the ask needs something
    these tools cannot do (generating or editing files or images, an
@@ -253,13 +253,13 @@ black paper with cream ink and a vermillion sun disc.
 
 | Panel | Content |
 |---|---|
-| Overview | Hero poster header, vitals as poster stat blocks, daemon and hermes state, code intelligence card (prowl-agent doctor counts, files and symbols, hotspots) |
+| Overview | Hero poster header, vitals as poster stat blocks, daemon and hermes state, code intelligence card (prowl doctor counts, files and symbols, hotspots) |
 | Vault | File tree, rendered markdown, reindex button, generated-fence badges |
 | Memory | Provider tiles (builtin or external, with Obsidian vault detection), a force-directed graph of the vault's notes and their references, a 26-week activity heatmap, and the Hermes session history read from `~/.hermes/state.db` |
 | Skills | Every Hermes skill grouped by category with origin counts (bundled, hub, agent-grown), live search, and the enabled toolbelt grouped into families |
 | Agents | Detected CLIs, wiring state per agent, wire and unwire actions |
 | Chat | The full Hermes conversation surface (below) |
-| About | What Rashin is, the pieces with live facts, quick start, a command crib (`hermes -h`, `hermes gateway`, `hermes model`, `hermes tools`, `prowl-agent overview`), and the privacy note |
+| About | What Rashin is, the pieces with live facts, quick start, a command crib (`hermes -h`, `hermes gateway`, `hermes model`, `hermes tools`, `prowl overview`), and the privacy note |
 
 ### Chat
 
@@ -293,34 +293,36 @@ vault workspace.
 
 ## Prowl ships with Rashin
 
-`prowl-agent` is Prowl, the code-intelligence indexer and MCP server Rashin's
+`prowl` is Prowl, the code-intelligence indexer and MCP server Rashin's
 agent brain uses to read this system's source: it builds a `.prowl` index over a
 tree and answers structural questions (where a symbol is defined, who calls it, a
-change's blast radius) in one call instead of grepping. It is no longer an
-optional hand-install: `ryoku-rashin` depends on the `prowl-agent` package, so
-the desktop set ships it and every rashin box has it.
+change's blast radius) in one call instead of grepping. The CLI was renamed from
+`prowl-agent` to `prowl`; the pacman package is still `prowl-agent` and upstream
+still ships the old binary name, so both may be on PATH during the transition. It
+is no longer an optional hand-install: `ryoku-rashin` depends on the `prowl-agent`
+package, so the desktop set ships it and every rashin box has it.
 
 - **`ryoku update` keeps it current.** A packaged box gets new Prowl builds with
   the rest of the system through `pacman -Syu`; the packaged binary carries a
-  managed-build guard, so a hand-run `prowl-agent update` defers to the package
+  managed-build guard, so a hand-run `prowl update` defers to the package
   manager instead of overwriting the pacman-owned file. On a dev box (Prowl
-  installed by hand, not owned by pacman) `ryoku update` runs `prowl-agent
-  update` for you. Either way the update logs one line saying which path it took.
+  installed by hand, not owned by pacman) `ryoku update` runs `prowl update`
+  for you. Either way the update logs one line saying which path it took.
   If a box enabled rashin before the dependency shipped and lacks the binary,
   `ryoku doctor` reports it with the fix `sudo pacman -S prowl-agent`.
 - **The mirror index lives with the vault.** `ryoku-rashin index` builds a
   read-only mirror of the live config at `~/.local/share/ryoku/rashin/source/`
   and indexes it with Prowl (see "The source mirror" below), so `search_code`
   and the prowl MCP server answer on a packaged box with no checkout.
-- **Agents get Prowl's skill.** `ryoku-rashin wire` also runs `prowl-agent
-  skills --yes --clients <detected>` for the clients Rashin detects (claude, omp,
+- **Agents get Prowl's skill.** `ryoku-rashin wire` also runs `prowl skills
+  --yes --clients <detected>` for the clients Rashin detects (claude, omp,
   and hermes), installing Prowl's own agent skill alongside the `ryoku` skill, so
   an agent gains its code-intelligence guide in the same pass. It is skipped on a
   Prowl too old to apply non-interactively (no `--yes` in `skills --help`).
 
-## Prowl-agent integration
+## Prowl integration
 
-When `prowl-agent` (the code-intelligence indexer) is on PATH and a repo with a
+When `prowl` (the code-intelligence indexer) is on PATH and a repo with a
 `.prowl/` index is found, the daemon surfaces it read-only: doctor finding
 counts, files and symbols, top hotspots on the Overview card, and
 `GET /api/prowl/search?q=` for content search. The repo is a dev checkout when
@@ -330,13 +332,13 @@ everything degrades to a hidden card without it.
 
 ## The source mirror
 
-On a packaged box there is no source checkout for prowl-agent to index, so the
+On a packaged box there is no source checkout for prowl to index, so the
 prowl MCP server and `search_code` would otherwise answer only on a
-maintainer's machine. Every reindex closes that gap: when prowl-agent is on
+maintainer's machine. Every reindex closes that gap: when prowl is on
 PATH, Rashin mirrors the live config (`~/.config/quickshell`, `~/.config/hypr`,
 and `~/.config/ryoku/*.json`) into `~/.local/share/ryoku/rashin/source/` (with
 rsync when available, else a Go copy that skips symlinks and files over 2 MB),
-writes a short `README.md` marking it read-only, and runs `prowl-agent init
+writes a short `README.md` marking it read-only, and runs `prowl init
 --integrations agents,agent-skills,claude,omp` and `overview` there under a
 120 s budget, so the mirror carries Prowl's index plus its AGENTS.md block, MCP
 config, and skills. It is a read-only copy for the index alone; edits there are
@@ -347,7 +349,7 @@ deploy-recorded checkout, honouring `RYOKU_RASHIN_REPO` and
 `~/.local/state/ryoku/repo`), and falls back to the mirror when it carries one,
 so the code index answers everywhere while a dev checkout still wins on a
 maintainer's machine. The whole step is best effort and bounded: a missing
-prowl-agent or a copy error degrades it and never fails the reindex.
+prowl or a copy error degrades it and never fails the reindex.
 
 ## One-click setup
 

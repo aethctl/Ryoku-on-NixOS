@@ -90,8 +90,8 @@ exists in `extra`, and moves it down as readily as up.
 
 After the desktop is back, the update refreshes the agent OS when it is present:
 `ryoku-rashin index` regenerates the vault and re-indexes the config mirror with
-Prowl, then `prowl-agent` is brought current. On a dev box (Prowl on PATH but
-not owned by a pacman package) it runs `prowl-agent update`; a packaged box
+Prowl, then `prowl` is brought current. On a dev box (Prowl on PATH but
+not owned by a pacman package) it runs `prowl update`; a packaged box
 already got the new build from the `[ryoku]` set, so the step just logs that the
 binary is managed by pacman. Both are best effort and never fail an update.
 

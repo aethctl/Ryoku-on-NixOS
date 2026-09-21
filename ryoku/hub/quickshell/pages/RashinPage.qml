@@ -209,7 +209,7 @@ Item {
     }
     Process { id: wireProc; onExited: pg.refresh() }
     Process { id: chatProc; onExited: pg.refresh() }
-    // Wiring drops the pointer + the ryoku skill + prowl-agent's skills into an
+    // Wiring drops the pointer + the ryoku skill + prowl's skills into an
     // agent (or every present one); useChatAgent picks who drives the chat.
     function wireAgent(id) { wireProc.command = ["ryoku-rashin", "wire", id]; wireProc.running = true; }
     function wireAll() { wireProc.command = ["ryoku-rashin", "wire"]; wireProc.running = true; }
@@ -682,7 +682,7 @@ Item {
                 Head { kanji: "\u4e94\u4eba\u8846"; title: I18n.tr("YOUR AGENTS") }
                 Text {
                     width: parent.width
-                    text: I18n.tr("Wire any coding agent to the same living map of this machine. One click drops a pointer into its instructions, links the ryoku skill, and installs prowl-agent's code-intelligence skill.")
+                    text: I18n.tr("Wire any coding agent to the same living map of this machine. One click drops a pointer into its instructions, links the ryoku skill, and installs prowl's code-intelligence skill.")
                     color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
                 Column {
@@ -715,7 +715,7 @@ Item {
                     width: parent.width
                     spacing: Tokens.s2
                     PathRow { label: I18n.tr("skill"); path: pg.skillPath; owner: I18n.tr("read-only"); ok: pg.skillPath !== "" }
-                    PathRow { label: I18n.tr("prowl-agent"); path: pg.prowlPath; owner: I18n.tr("tool"); ok: pg.prowlPath !== "" }
+                    PathRow { label: I18n.tr("prowl"); path: pg.prowlPath; owner: I18n.tr("tool"); ok: pg.prowlPath !== "" }
                     Repeater {
                         model: pg.vaultItems
                         delegate: PathRow {
@@ -783,7 +783,7 @@ Item {
                 TryRow { cmd: "hermes gateway"; note: I18n.tr("connect Telegram / Discord / WhatsApp / Slack") }
                 TryRow { cmd: "hermes model"; note: I18n.tr("switch the default model") }
                 TryRow { cmd: "hermes tools"; note: I18n.tr("enable toolsets") }
-                TryRow { cmd: "prowl-agent overview"; note: I18n.tr("code intelligence on any repo") }
+                TryRow { cmd: "prowl overview"; note: I18n.tr("code intelligence on any repo") }
             }
 
             // ── SET UP + DASHBOARD: the controls ─────────────────────────────

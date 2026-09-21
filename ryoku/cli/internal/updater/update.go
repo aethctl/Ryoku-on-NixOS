@@ -600,22 +600,25 @@ func rashinReindex() {
 	}
 }
 
-// prowlRefresh keeps a dev box's prowl-agent current after an update. A packaged
-// box already got it through `pacman -Syu`, so this runs `prowl-agent update`
-// only when the binary is on PATH but not owned by a pacman package (a dev or
-// manual install). Best effort, and it logs one line either way.
+// prowlRefresh keeps a dev box's prowl current after an update. A packaged box
+// already got it through `pacman -Syu`, so this runs `<bin> update` only when
+// the binary is on PATH but not owned by a pacman package (a dev or manual
+// install). The CLI was renamed prowl-agent -> prowl; prefer the new name and
+// fall back to the old one upstream still ships. Best effort, one line either way.
 func prowlRefresh() {
-	path, err := exec.LookPath("prowl-agent")
+	path, err := exec.LookPath("prowl")
 	if err != nil {
-		return
+		if path, err = exec.LookPath("prowl-agent"); err != nil {
+			return
+		}
 	}
 	switch prowlDecide(true, prowlPacmanOwned(path)) {
 	case prowlManaged:
-		fmt.Println(i18n.T("==> prowl-agent is managed by pacman; refreshed with the system packages"))
+		fmt.Println(i18n.T("==> prowl is managed by pacman; refreshed with the system packages"))
 	case prowlSelfUpdate:
-		fmt.Println(i18n.T("==> Updating prowl-agent"))
+		fmt.Println(i18n.T("==> Updating prowl"))
 		if err := sys.Run(path, "update"); err != nil {
-			fmt.Fprintf(os.Stderr, i18n.T("warning: prowl-agent update failed: %v\n"), err)
+			fmt.Fprintf(os.Stderr, i18n.T("warning: prowl update failed: %v\n"), err)
 		}
 	}
 }
@@ -626,13 +629,13 @@ func prowlPacmanOwned(path string) bool {
 	return exec.Command("pacman", "-Qo", path).Run() == nil
 }
 
-// prowlAction is what an update should do about prowl-agent.
+// prowlAction is what an update should do about prowl.
 type prowlAction int
 
 const (
 	prowlNoop       prowlAction = iota // not installed; nothing to do
 	prowlManaged                       // pacman-owned; the system upgrade covered it
-	prowlSelfUpdate                    // dev install; run `prowl-agent update`
+	prowlSelfUpdate                    // dev install; run `<bin> update`
 )
 
 // prowlDecide is the pure update decision, split out so it is unit-testable
