@@ -45,7 +45,7 @@ export function initAgents(root) {
     snippet = m.snippet || "";
     const rows = [
       pathRow("skill", m.skill && m.skill.path, "read-only", m.skill && m.skill.exists),
-      pathRow("prowl-agent", m.prowl && m.prowl.path, "tool", m.prowl && m.prowl.exists),
+      pathRow("prowl", m.prowl && m.prowl.path, "tool", m.prowl && m.prowl.exists),
     ].concat((m.vault || []).map((v) => pathRow(v.label, v.path, v.owner, v.exists)));
     connectEl.innerHTML =
       '<h3 class="sub-title">POINT ANY AGENT</h3>' +

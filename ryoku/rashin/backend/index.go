@@ -167,10 +167,14 @@ var desktopMap = []desktopMapRow{
 func actingBody() string {
 	var b strings.Builder
 	b.WriteString("## Acting on this desktop\n\n")
-	b.WriteString("Change the desktop through commands (`ryoku`, `ryoku-shell`, `ryoku-hub`,\n")
-	b.WriteString("`ryogami`, `ryoku wm act`), never by editing shipped files. The `ryoku` skill is\n")
-	b.WriteString("the contract for that: `SKILL.md` (rules and the command catalogue), `bar.md`\n")
-	b.WriteString("(the QS Bar model), `plugins.md` (how a new widget is written and installed).\n")
+	b.WriteString("Answer a \"how do I\" question GUI-first: when the change has a GUI path (a\n")
+	b.WriteString("Ryoku Hub page, the wallpaper/theme picker, or QS Bar Settings; see the GUI\n")
+	b.WriteString("map below), name that path first with its keybind, then give the command as\n")
+	b.WriteString("the headless fallback. You still act through commands (`ryoku`, `ryoku-shell`,\n")
+	b.WriteString("`ryoku-hub`, `ryogami`, `ryoku wm act`), never by editing shipped files. The\n")
+	b.WriteString("`ryoku` skill is the contract for that: `SKILL.md` (rules and the command\n")
+	b.WriteString("catalogue), `gui.md` (the GUI map), `bar.md` (the QS Bar model), `plugins.md`\n")
+	b.WriteString("(how a new widget is written and installed).\n")
 	if d := skillSourceDir(); d != "" {
 		fmt.Fprintf(&b, "Read them at `%s/` (also linked into each agent's skills dir as `ryoku`).\n", d)
 	} else {
@@ -180,12 +184,62 @@ func actingBody() string {
 	return b.String()
 }
 
+// guiSections is the Ryoku Hub page list the GUI map advertises, in rail order.
+// Only pages a user routinely reaches for are listed; each is deep-linked with
+// `ryoku-shell hub open <key>`. Compositor-gated pages are hidden at runtime
+// when the active window manager cannot back them, so a listed row may not
+// appear on a given box.
+var guiSections = []struct{ name, key string }{
+	{"General", "global"},
+	{"Updates", "updates"},
+	{"Displays", "displays"},
+	{"Connections", "connections"},
+	{"Input", "input"},
+	{"Graphics & Power", "gpu"},
+	{"Animations", "animations"},
+	{"Lockscreen", "lockscreen"},
+	{"Window Manager", "windowmanager"},
+	{"Plugins", "plugins"},
+	{"Bar Studio", "bar-studio"},
+	{"Desktop", "desktop"},
+	{"Widgets", "widgets"},
+	{"App Launcher", "launcher"},
+	{"Keybinds", "keybinds"},
+	{"Performance", "performance"},
+	{"Session", "session"},
+	{"Recording", "recording"},
+	{"Dictation", "dictation"},
+	{"Add-ons", "addons"},
+	{"Rashin", "rashin"},
+}
+
+// guiMapBody renders the GUI-first map: the wallpaper/theme picker, QS Bar
+// Settings, the app launcher, and every routinely-used Ryoku Hub page with its
+// deep link, so an agent names the GUI path before the command behind it.
+func guiMapBody() string {
+	var b strings.Builder
+	b.WriteString("## GUI map\n\n")
+	b.WriteString("Most desktop changes have a GUI surface; name it first, then the command as\n")
+	b.WriteString("the headless fallback. Compositor-gated pages are hidden when the running\n")
+	b.WriteString("window manager cannot back them, so a row here may not appear on every box.\n\n")
+	b.WriteString("| Want to change | Open | Deep link | Command behind it |\n|---|---|---|---|\n")
+	b.WriteString("| Wallpaper or theme | Wallpaper picker (Super+W), or the bar Wallpaper widget | - | `ryogami wallpaper ui` |\n")
+	b.WriteString("| Bar or dock layout | QS Bar Settings | - | `ryoku-shell bar settings` |\n")
+	b.WriteString("| Launch an app | App launcher (Super+Space) | - | - |\n")
+	for _, s := range guiSections {
+		fmt.Fprintf(&b, "| Ryoku Hub: %s | Super+comma | `ryoku-shell hub open %s` | - |\n", s.name, s.key)
+	}
+	b.WriteString("\nIdle and power timeouts live under Graphics & Power (`gpu`).\n\n")
+	return b.String()
+}
+
 // ryokuPackages are queried for installed versions in desktop.md.
 var ryokuPackages = []string{"ryoku-shell", "ryoku-hub", "ryoku", "ryoku-blobs", "ryoku-desktop", "ryoku-rashin"}
 
 func desktopBody() string {
 	var b strings.Builder
 	b.WriteString(actingBody())
+	b.WriteString(guiMapBody())
 	b.WriteString("## Subsystem map\n\n")
 	b.WriteString("| Subsystem | Config path | Owner | Reload |\n|---|---|---|---|\n")
 	if d := wm.Detect(); d.Name != "" {

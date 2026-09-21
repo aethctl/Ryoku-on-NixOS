@@ -45,7 +45,7 @@ guessing where anything lives:
   tool stack.
 
 Ownership inside the vault: the generated maps (`AGENTS.md`, `desktop.md`,
-`system.md`, `packages.md`, `repo.md`, `user.md`, `habits.md`) are rewritten on
+`system.md`, `packages.md`, `ryoku-repo.md`, `user.md`, `habits.md`) are rewritten on
 every reindex, so read them and never edit them. `memory/` and `journal/` are
 yours: write durable notes and dated notes (`journal/YYYY-MM-DD.md`) there and
 they survive. `user.md` lists the user's own choices; never revert one to a
@@ -53,10 +53,28 @@ shipped default without being asked.
 
 Topic guides sit beside this file. Read the matching one first:
 
+- [`gui.md`](gui.md): the GUI map. Every intent to its Ryoku Hub page, shell
+  picker, or QS Bar Settings route, how to open it, and the command it wraps.
 - [`bar.md`](bar.md): the QS Bar and the dock, their layout model, and the
   `ryoku-shell bar` / `ryoku-shell dock` commands.
 - [`plugins.md`](plugins.md): installing, listing, and removing shell plugins
   with `ryoku plugin`, and Ryostore.
+
+## Answer policy: GUI first
+
+When a user asks HOW to change something, lead with the GUI path: the exact
+keybind or the Ryoku Hub page. The Hub opens with Super+comma; deep-link one
+page with `ryoku-shell hub open <section>` (the section key names the page, e.g.
+`keybinds`, `gpu`, `lockscreen`). Give the command after, as the fallback or the
+way to script the same change. When the user asks YOU to change it, act through
+the command (the GUI is for the human), then say what you changed and where to
+see or undo it in the GUI. Never hand back a bare shell command for a change that
+has a page or a picker.
+
+Two surfaces have no Hub page. Wallpaper and theme are the shell picker
+(Super+W, `ryogami wallpaper ui`) and the bar Wallpaper widget; the bar layout
+and the dock are QS Bar Settings (`ryoku-shell bar settings`), not the Hub. See
+[`gui.md`](gui.md) for the full intent-to-surface map.
 
 ## Safety rules
 
@@ -101,13 +119,13 @@ ryoku-shell bar list         # the live bar, per section, with shown state
 ryogami wallpaper --help
 ```
 
-To find WHERE a setting is read (which QML file, which key), use `prowl-agent`
+To find WHERE a setting is read (which QML file, which key), use `prowl`
 inside the vault's read-only source mirror at
 `~/.local/share/ryoku/rashin/source/`, which indexes the live `~/.config`:
 
 ```bash
-cd ~/.local/share/ryoku/rashin/source && prowl-agent search "barPosition"
-cd ~/.local/share/ryoku/rashin/source && prowl-agent find barShellStyle
+cd ~/.local/share/ryoku/rashin/source && prowl search "barPosition"
+cd ~/.local/share/ryoku/rashin/source && prowl find barShellStyle
 ```
 
 The mirror is read-only and rebuilt on every reindex; never edit files in it,
@@ -117,44 +135,50 @@ edit the real path `desktop.md` names.
 
 When a request would change the system, in order:
 
-1. **Is there a command for it?** Use it. The bar and dock have a full CLI
+1. **Is there a GUI for it?** A Ryoku Hub page (`ryoku-shell hub open <section>`,
+   Super+comma), the wallpaper picker (Super+W), or QS Bar Settings
+   (`ryoku-shell bar settings`). If a user asks how to do it, name the surface
+   first; whether you or they drive it, the change still lands through the
+   command that page wraps, so read on.
+2. **Is there a command for it?** Use it. The bar and dock have a full CLI
    (`ryoku-shell bar ...`, `ryoku-shell dock ...`, see `bar.md`); wallpaper has
    `ryogami wallpaper set`; updates have `ryoku update`.
-2. **Is it a plugin?** A shell widget installs from git with
-   `ryoku plugin add <url> --bar`, or from Ryostore; see `plugins.md`. Never
-   run a plugin's code to install it. A Hyprland compositor plugin (title
-   bars, cursor motion, key sounds, a `.so` the compositor loads) is managed
-   by `ryoku-hub desktop plugins list|rebuild|add|remove` and Settings >
-   Plugins; a "version mismatch" after an update means
-   `ryoku-hub desktop plugins rebuild --stale`.
 3. **Is it a config edit with no command?** Edit the override, never the shipped
    file: the tool's own `user.*` file, or a fork at the mirrored path under
    `~/.config/ryoku/user_edits/`. Then reload (`ryoku reload`, or `hyprctl
    reload` for Hyprland).
-4. **Is it a theme or wallpaper?** Drive it through `ryogami` and `ryoku-hub`,
+4. **Is it a plugin?** A shell widget installs from git with
+   `ryoku plugin add <url> --bar`, or from Ryostore; see `plugins.md`. Never
+   run a plugin's code to install it. A Hyprland compositor plugin (title
+   bars, cursor motion, key sounds, a `.so` the compositor loads) is managed
+   by `ryoku-hub desktop plugins list|rebuild|add|remove` and Hub > Plugins;
+   a "version mismatch" after an update means
+   `ryoku-hub desktop plugins rebuild --stale`.
+5. **Is it a theme or wallpaper?** Drive it through `ryogami` and `ryoku-hub`,
    which own the colour master; never write the palette or theme shadow by hand.
-5. **Is it a package?** `ryoku update` for the whole system; pacman/yay for one
+6. **Is it a package?** `ryoku update` for the whole system; pacman/yay for one
    package.
-6. **Unsure a command exists?** Read the tool's `--help`, or `desktop.md`.
+7. **Unsure a command exists?** Read the tool's `--help`, or `desktop.md`.
 
 ## Example requests
 
-- "Move the clock to the right" -> `ryoku-shell bar move clock --section right`
-- "Hide the GPU widget" -> `ryoku-shell bar hide gpu`
-- "Show the battery widget again" -> `ryoku-shell bar show battery`
-- "Put the bar at the bottom" -> `ryoku-shell bar position bottom`
-- "Make the bar islands" -> `ryoku-shell bar form islands`
-- "Reset the bar to defaults" -> `ryoku-shell bar defaults`
-- "Open the bar settings" -> `ryoku-shell bar settings`
-- "Turn the dock off" -> `ryoku-shell dock hide`
-- "Pin Firefox to the dock" -> `ryoku-shell dock pin firefox`
+- "Put the bar at the bottom" -> QS Bar Settings > Layout
+  (`ryoku-shell bar settings layout`), or `ryoku-shell bar position bottom`
+- "Move the clock to the right" -> QS Bar Settings > Layout, or
+  `ryoku-shell bar move clock --section right`
+- "Hide the GPU widget" -> QS Bar Settings > Widgets, or `ryoku-shell bar hide gpu`
+- "Make the bar islands" -> QS Bar Settings > Bars, or `ryoku-shell bar form islands`
+- "Open the bar settings" -> `ryoku-shell bar settings` (the launcher mark opens it too)
+- "Turn the dock off" -> QS Bar Settings > Dock, or `ryoku-shell dock hide`
+- "Pin Firefox to the dock" -> QS Bar Settings > Dock, or `ryoku-shell dock pin firefox`
+- "Change my wallpaper" -> press Super+W and pick one (the wallpaper picker);
+  scripted: `ryogami wallpaper set <path>`
+- "Remap a key" -> Ryoku Hub > Keybinds (Super+comma, `ryoku-shell hub open keybinds`)
+- "Lock after ten minutes" -> Ryoku Hub > Graphics & Power > Idle
+  (`ryoku-shell hub open gpu`); scripted, `ryoku-power idle set ac.lockSec 600`
+  (and `battery.lockSec`), then `ryoku-idle apply` re-renders and restarts the
+  idle daemon
 - "Add a weather plugin from GitHub" -> `ryoku plugin add <git-url> --bar`
-- "List my installed plugins" -> `ryoku plugin list`
-- "Lock after ten minutes" -> `ryoku-power idle set ac.lockSec 600` (and
-  `battery.lockSec` for the battery stage), then `ryoku-idle apply` re-renders
-  the idle daemon's config and restarts it; the same knobs sit in Ryoku Hub
-  under Machine, Idle
-- "Change my wallpaper" -> `ryogami wallpaper set <path>`
-- "Next wallpaper" -> `ryogami wallpaper next`
-- "Update the system" -> `ryoku update`
+- "List my installed plugins" -> Ryoku Hub > Add-ons, or `ryoku plugin list`
+- "Update the system" -> Ryoku Hub > Updates, or `ryoku update`
 - "Roll back a bad update" -> `ryoku rollback`

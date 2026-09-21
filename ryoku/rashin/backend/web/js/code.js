@@ -73,7 +73,7 @@ export function initCode(root) {
     repoEl.textContent = base(d.repo);
     if (!d.indexed) {
       bodyEl.innerHTML =
-        '<p class="dim">index missing: run <code>prowl-agent init</code> in your repo</p>';
+        '<p class="dim">index missing: run <code>prowl init</code> in your repo</p>';
       card.hidden = false;
       return;
     }

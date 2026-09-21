@@ -25,12 +25,13 @@ const PointerBlock = pointerBegin + "\n" +
 	"system lives at `~/.local/share/ryoku/rashin/`. Before exploring the machine or\n" +
 	"guessing paths, read `AGENTS.md` there: it says where every config lives, which\n" +
 	"binary owns it, and how to reload it. Write durable notes to `memory/` and\n" +
-	"dated notes to `journal/YYYY-MM-DD.md`. For code questions prefer `prowl-agent`\n" +
-	"(cited code intelligence, reindexed each run): `prowl-agent search \"<question>\"`,\n" +
+	"dated notes to `journal/YYYY-MM-DD.md`. For code questions prefer `prowl`\n" +
+	"(cited code intelligence, reindexed each run): `prowl search \"<question>\"`,\n" +
 	"`find`, `def`, `references`, `outline`, `impact` -- one call instead of grepping.\n" +
 	"The `ryoku` agent skill (safety rules, a bar and dock guide, and the command\n" +
 	"catalogue) is wired into this agent's skills directory; read it before\n" +
-	"customising the desktop.\n" +
+	"customising the desktop. Answer a desktop \"how do I\" question GUI-first: name\n" +
+	"the Ryoku Hub page, shell picker, or QS Bar Settings before naming any command.\n" +
 	pointerEnd
 
 // Agent is a detected coding CLI and its vault-pointer wiring state.
@@ -464,15 +465,15 @@ func removeSkillLinkIfOurs(link string) {
 	}
 }
 
-// ---- prowl-agent skills -----------------------------------------------------
+// ---- prowl skills -----------------------------------------------------------
 //
-// `ryoku-rashin wire` also installs prowl-agent's own agent skills for the
+// `ryoku-rashin wire` also installs prowl's own agent skills for the
 // clients rashin detects, so an agent gets Prowl's code-intelligence skill in
 // the same pass it gets the ryoku skill. Non-interactive and best effort: a
-// no-op when prowl-agent is absent, when no known client is present, or when the
-// installed prowl-agent predates the `--yes` apply.
+// no-op when prowl is absent, when no known client is present, or when the
+// installed prowl predates the `--yes` apply.
 
-// prowlSkillClients are the prowl-agent client ids rashin detects present, among
+// prowlSkillClients are the prowl client ids rashin detects present, among
 // the ones prowl knows: the claude and omp coding agents, plus hermes.
 func prowlSkillClients() []string {
 	var cs []string
@@ -487,9 +488,9 @@ func prowlSkillClients() []string {
 	return cs
 }
 
-// wireProwlSkills runs `prowl-agent skills --yes --clients <detected>` for the
-// detected clients. Best effort; skipped when prowl-agent is absent, no client
-// is present, or the installed prowl-agent has no non-interactive apply.
+// wireProwlSkills runs `prowl skills --yes --clients <detected>` for the
+// detected clients. Best effort; skipped when prowl is absent, no client
+// is present, or the installed prowl has no non-interactive apply.
 func wireProwlSkills() {
 	bin, ok := findProwl()
 	if !ok {
@@ -508,8 +509,8 @@ func wireProwlSkills() {
 	_ = cmd.Run()
 }
 
-// prowlSkillsSupportsYes reports whether the installed prowl-agent supports the
-// non-interactive `--yes` apply, detected from `prowl-agent skills --help`
+// prowlSkillsSupportsYes reports whether the installed prowl supports the
+// non-interactive `--yes` apply, detected from `prowl skills --help`
 // mentioning it (older builds preview only).
 func prowlSkillsSupportsYes(bin string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

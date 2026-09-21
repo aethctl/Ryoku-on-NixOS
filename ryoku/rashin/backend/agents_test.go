@@ -191,7 +191,7 @@ func TestDetectAgentsPresentWired(t *testing.T) {
 	}
 }
 
-// prowlSkillClients maps rashin's own agent detection onto the prowl-agent
+// prowlSkillClients maps rashin's own agent detection onto the prowl
 // client ids: the claude and omp coding agents (plus hermes, host-dependent).
 // codex and opencode are detected agents but not prowl client ids, so they must
 // never leak into the --clients list.

@@ -12,9 +12,9 @@ import (
 )
 
 // sourcemirror.go keeps a read-only copy of the live desktop config under the
-// vault, indexed with prowl-agent, so the prowl MCP server and search_code
+// vault, indexed with prowl, so the prowl MCP server and search_code
 // answer on a packaged box with no source checkout, not only on a maintainer's
-// machine. Everything here is best effort: a missing prowl-agent or a copy
+// machine. Everything here is best effort: a missing prowl or a copy
 // error degrades the feature and never fails the reindex.
 
 // sourceMirrorMaxFileSize caps a mirrored file; anything larger (a wallpaper, a
@@ -24,7 +24,7 @@ const sourceMirrorMaxFileSize = 2 << 20 // 2 MiB
 const sourceMirrorReadme = "# Rashin config mirror\n" +
 	"\n" +
 	"This is a READ-ONLY copy of the live desktop config (`~/.config/quickshell`, the\n" +
-	"active window manager's config, and `~/.config/ryoku/*.json`), kept only so `prowl-agent`\n" +
+	"active window manager's config, and `~/.config/ryoku/*.json`), kept only so `prowl`\n" +
 	"can index the config on a box with no source checkout. It is rebuilt on every\n" +
 	"Rashin reindex; edits here are overwritten and never reach the desktop. Edit\n" +
 	"the real files (see `desktop.md`), never this mirror.\n"
@@ -56,7 +56,7 @@ func sourceMirrorInputs() []mirrorInput {
 }
 
 // RefreshSourceMirror rebuilds the config mirror and refreshes its prowl index.
-// It is a no-op when prowl-agent is not installed, and it never returns an error
+// It is a no-op when prowl is not installed, and it never returns an error
 // that would fail the reindex.
 func RefreshSourceMirror() error {
 	if _, ok := findProwl(); !ok {
@@ -159,18 +159,18 @@ func copyMirrorFile(src, dst string) {
 	_, _ = io.Copy(out, in)
 }
 
-// indexSourceMirror sets up and refreshes prowl-agent inside the mirror, under a
+// indexSourceMirror sets up and refreshes prowl inside the mirror, under a
 // single 120s budget across both calls. init installs Prowl's AGENTS.md block,
 // MCP config, and skills into the mirror (integrations agents,agent-skills,
 // claude,omp) and builds the .prowl code index; overview refreshes it cheaply.
-// Best effort and logged: a missing prowl-agent or a slow init never fails the
+// Best effort and logged: a missing prowl or a slow init never fails the
 // reindex.
 func indexSourceMirror(root string) {
 	bin, ok := findProwl()
 	if !ok {
 		return
 	}
-	fmt.Fprintln(os.Stderr, "ryoku-rashin: indexing the config mirror with prowl-agent")
+	fmt.Fprintln(os.Stderr, "ryoku-rashin: indexing the config mirror with prowl")
 	deadline := time.Now().Add(120 * time.Second)
 	runProwlAt(root, bin, deadline, "init", "--yes", "--no-input", "--integrations", "agents,agent-skills,claude,omp")
 	runProwlAt(root, bin, deadline, "overview", "--json")

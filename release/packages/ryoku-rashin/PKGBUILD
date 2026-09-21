@@ -47,10 +47,10 @@ package() {
   # name (busybox pattern); argv0 routes a bare argument to the terminal ask.
   ln -s ryoku-rashin "$pkgdir/usr/bin/rashin"
   install -Dm644 "$srcdir/ryoku-repo.md" "$pkgdir/usr/share/ryoku/rashin/ryoku-repo.md"
-  # The `ryoku` agent skill: the source map, safety rules, and the bar and
-  # plugin guides. `ryoku-rashin wire` symlinks this dir into every agent's
-  # skills directory; the doctor's rashin reconciler re-wires it on update.
-  for f in SKILL.md bar.md plugins.md; do
+  # The `ryoku` agent skill: the source map, safety rules, the GUI map, and the
+  # bar and plugin guides. `ryoku-rashin wire` symlinks this dir into every
+  # agent's skills directory; the doctor's rashin reconciler re-wires it on update.
+  for f in SKILL.md gui.md bar.md plugins.md; do
     install -Dm644 "$_repo/ryoku/rashin/skills/ryoku/$f" \
       "$pkgdir/usr/share/ryoku/skills/ryoku/$f"
   done

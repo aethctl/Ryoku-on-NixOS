@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// prowl.go surfaces prowl-agent (the code-intelligence indexer) on the
+// prowl.go surfaces prowl (the code-intelligence indexer) on the
 // dashboard: index state, doctor counts, hotspots, and search over the Ryoku
 // checkout. prowl is an optional, user-installed tool (no license for
 // redistribution yet), so every path degrades gracefully when it or the
@@ -43,9 +43,17 @@ type ProwlHit struct {
 	Text string `json:"text"`
 }
 
+// findProwl resolves the prowl code-intelligence binary. It prefers the current
+// name and falls back to the legacy prowl-agent, so a box that still carries
+// only the old binary keeps working; every caller runs the resolved path.
 func findProwl() (string, bool) {
-	p, err := exec.LookPath("prowl-agent")
-	return p, err == nil
+	if p, err := exec.LookPath("prowl"); err == nil {
+		return p, true
+	}
+	if p, err := exec.LookPath("prowl-agent"); err == nil {
+		return p, true
+	}
+	return "", false
 }
 
 // prowlRepo picks the repo the code index answers on: a dev checkout that
@@ -73,7 +81,7 @@ func prowlRepo() string {
 	return ""
 }
 
-// prowlMCPServers exposes prowl-agent's code intelligence to the hermes session
+// prowlMCPServers exposes prowl's code intelligence to the hermes session
 // as an MCP server, but only when prowl and an indexed Ryoku checkout are both
 // present (otherwise the session opens with no extra servers, as before). The
 // server runs in the repo so it finds the .prowl index; the agent then gets

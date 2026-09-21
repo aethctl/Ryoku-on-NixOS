@@ -23,7 +23,7 @@ const GO_DEEPER = [
   ["hermes model", "switch the default model"],
   ["hermes tools", "enable toolsets"],
   ["ryoku-rashin -h", "daemon verbs"],
-  ["prowl-agent overview", "code intelligence on any repo"],
+  ["prowl overview", "code intelligence on any repo"],
 ];
 
 const PRIVACY =

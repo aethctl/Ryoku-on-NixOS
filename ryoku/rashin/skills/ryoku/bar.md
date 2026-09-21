@@ -135,6 +135,9 @@ ryoku-shell dock autohide on
 
 ## Opening the settings panel
 
+The bar and the dock have their own GUI, **QS Bar Settings**, not a Ryoku Hub
+page; name it when a user asks how to change the bar from the desktop.
+
 `ryoku-shell bar settings [route]` raises **QS Bar Settings** on the active
 monitor (routes: `bars`, `layout`, `widgets`, `dock`, `community`). It is the
 same panel the bar's launcher mark opens; Escape closes it. Layout lists the

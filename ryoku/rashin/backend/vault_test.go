@@ -83,8 +83,11 @@ func TestEnsureVault(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AGENTS.md missing: %v", err)
 	}
-	if string(ag) != AgentsTemplate {
-		t.Fatal("AGENTS.md not written verbatim from AgentsTemplate")
+	// AGENTS.md now carries the template inside the generated fence, so a later
+	// template change reaches an existing vault; the raw template is no longer
+	// the whole file.
+	if !strings.Contains(string(ag), vaultFenceBegin) || !strings.Contains(string(ag), "## The one rule") {
+		t.Fatalf("AGENTS.md missing the fenced template body:\n%s", ag)
 	}
 	target, err := os.Readlink(filepath.Join(vault, "CLAUDE.md"))
 	if err != nil {
@@ -93,12 +96,86 @@ func TestEnsureVault(t *testing.T) {
 	if filepath.Base(target) != "AGENTS.md" {
 		t.Fatalf("CLAUDE.md -> %q; want AGENTS.md", target)
 	}
-	// A second run must not error or rewrite the user-owned AGENTS.md.
+	// A second run rewrites the fence but is byte-stable, so the file is unchanged.
 	if err := EnsureVault(); err != nil {
 		t.Fatalf("second EnsureVault: %v", err)
 	}
 	if ag2, _ := os.ReadFile(filepath.Join(vault, "AGENTS.md")); string(ag2) != string(ag) {
-		t.Fatal("EnsureVault rewrote AGENTS.md on the second run")
+		t.Fatal("EnsureVault was not byte-stable across runs")
+	}
+}
+
+// EnsureVault must refresh the fenced template on an already-provisioned vault
+// while keeping any prose the user or an agent added outside the markers, so
+// the delivery-critical rewrite never clobbers hand-authored notes.
+func TestEnsureVaultRefreshesFenceKeepingProse(t *testing.T) {
+	vault := vaultEnv(t)
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userProse := "## My own notes\n\nkeep this line\n"
+	seeded := ReplaceFenced("", "STALE GENERATED BODY") + "\n" + userProse
+	if err := os.WriteFile(filepath.Join(vault, "AGENTS.md"), []byte(seeded), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureVault(); err != nil {
+		t.Fatalf("EnsureVault: %v", err)
+	}
+	got := readFileOrEmpty(filepath.Join(vault, "AGENTS.md"))
+	if strings.Contains(got, "STALE GENERATED BODY") {
+		t.Fatalf("stale fenced body survived the rewrite:\n%s", got)
+	}
+	if !strings.Contains(got, "## The one rule") {
+		t.Fatalf("template body not refreshed into the fence:\n%s", got)
+	}
+	if !strings.Contains(got, "keep this line") {
+		t.Fatalf("user prose outside the fence was lost:\n%s", got)
+	}
+}
+
+func TestEnsureVaultStripsLegacyContract(t *testing.T) {
+	vault := vaultEnv(t)
+	if err := os.MkdirAll(vault, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The pre-fence AGENTS.md: the write-once contract (title through its
+	// final line, the variant that shipped without the habits row) plus one
+	// note an agent added underneath.
+	seeded := "# Ryoku system vault\n" +
+		"\n" +
+		"This is the shared knowledge base for every coding agent on this machine\n" +
+		"(Arch Linux, Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
+		"the filesystem or guessing where things live.\n" +
+		"\n" +
+		"## Rules\n" +
+		"\n" +
+		"- Changes listed in `user.md` are the user's own; never revert them to\n" +
+		"  shipped defaults without being asked.\n" +
+		"- This file (AGENTS.md) is yours to extend. `CLAUDE.md` is a symlink to it.\n" +
+		"\n" +
+		"## My own note\n\nthe agent's addition\n"
+	if err := os.WriteFile(filepath.Join(vault, "AGENTS.md"), []byte(seeded), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureVault(); err != nil {
+		t.Fatalf("EnsureVault: %v", err)
+	}
+	got := readFileOrEmpty(filepath.Join(vault, "AGENTS.md"))
+	if strings.Contains(got, "yours to extend") {
+		t.Fatalf("legacy contract survived below the fence:\n%s", got)
+	}
+	if n := strings.Count(got, "# Ryoku system vault"); n != 1 {
+		t.Fatalf("expected one contract copy, got %d:\n%s", n, got)
+	}
+	if !strings.Contains(got, "the agent's addition") {
+		t.Fatalf("user prose was lost:\n%s", got)
+	}
+	// Idempotent: a second run must not churn the file.
+	if err := EnsureVault(); err != nil {
+		t.Fatal(err)
+	}
+	if again := readFileOrEmpty(filepath.Join(vault, "AGENTS.md")); again != got {
+		t.Fatalf("second EnsureVault rewrote the file differently:\n%s", again)
 	}
 }
 

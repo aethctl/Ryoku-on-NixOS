@@ -53,7 +53,7 @@ func quickToolSchemas() []map[string]any {
 			map[string]any{"path": strProp("absolute or ~ path")}, []string{"path"}),
 		fn("list_dir", "List a directory under $HOME or /etc.",
 			map[string]any{"path": strProp("absolute or ~ path")}, []string{"path"}),
-		fn("search_code", "Search the Ryoku source with prowl-agent (when indexed).",
+		fn("search_code", "Search the Ryoku source with prowl (when indexed).",
 			map[string]any{"query": strProp("free text or a symbol name")}, []string{"query"}),
 		fn("fetch_url", "Fetch a public http(s) URL as text (readable content).",
 			map[string]any{"url": strProp("an http or https URL")}, []string{"url"}),
@@ -200,7 +200,7 @@ func toolSearchCode(query string) string {
 	hits := ProwlSearch(query)
 	if len(hits) == 0 {
 		if _, ok := findProwl(); !ok {
-			return "prowl-agent is not installed; code search is unavailable"
+			return "prowl is not installed; code search is unavailable"
 		}
 		return "no matches"
 	}

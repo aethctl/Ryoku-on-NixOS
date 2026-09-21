@@ -70,14 +70,14 @@ func TestSetChatAgent(t *testing.T) {
 }
 
 // The paste snippet is the whole point of "point any agent at Ryoku": it must
-// name the vault, prowl-agent, and the skill so an unsupported agent gets the
+// name the vault, prowl, and the skill so an unsupported agent gets the
 // same power. A regression that drops one silently weakens every such agent.
 func TestManifestSnippet(t *testing.T) {
 	h := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", filepath.Join(h, "data"))
 	skill := filepath.Join(h, "skills", "ryoku")
 	snip := manifestSnippet(skill)
-	for _, want := range []string{"prowl-agent", "AGENTS.md", filepath.Join(skill, "SKILL.md"), "ryoku-rashin"} {
+	for _, want := range []string{"prowl", "AGENTS.md", filepath.Join(skill, "SKILL.md"), "ryoku-rashin"} {
 		if !strings.Contains(snip, want) {
 			t.Fatalf("snippet missing %q:\n%s", want, snip)
 		}

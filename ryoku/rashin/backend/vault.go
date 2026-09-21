@@ -35,13 +35,14 @@ var generatedFiles = map[string]bool{
 	"habits.md":     true,
 }
 
-// AgentsTemplate is the vault entry contract, written to AGENTS.md once. It is
-// user and agent owned afterwards, so it carries no machine-specific paths: the
-// live map lives in the regenerated system.md and desktop.md.
+// AgentsTemplate is the vault entry contract. Its fenced body is refreshed on
+// every EnsureVault so a template change reaches existing vaults; prose added
+// outside the markers survives. It carries no machine-specific paths: the live
+// map lives in the regenerated system.md and desktop.md.
 const AgentsTemplate = "# Ryoku system vault\n" +
 	"\n" +
 	"This is the shared knowledge base for every coding agent on this machine\n" +
-	"(Arch Linux, Hyprland desktop, managed by Ryoku). Read it before exploring\n" +
+	"(Arch Linux, the Ryoku desktop, managed by Ryoku). Read it before exploring\n" +
 	"the filesystem or guessing where things live.\n" +
 	"\n" +
 	"## The one rule\n" +
@@ -51,8 +52,9 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"wastes tokens the map already spent.\n" +
 	"\n" +
 	"To change the desktop, use the `ryoku` skill (linked into your skills dir;\n" +
-	"`desktop.md` names its path): commands, never edits to shipped files. A new\n" +
-	"bar widget is a plugin, per the skill's `plugins.md`.\n" +
+	"`desktop.md` names its path and carries the GUI map): answer \"how do I\" GUI-\n" +
+	"first, act through commands, never edit shipped files. A new bar widget is a\n" +
+	"plugin, per the skill's `plugins.md`.\n" +
 	"\n" +
 	"## What is here\n" +
 	"\n" +
@@ -62,7 +64,7 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"- `ryoku-repo.md` generated: the Ryoku source tree map (pre-indexed, ships with the system).\n" +
 	"- `user.md` generated: where this user's config diverges from the shipped baseline.\n" +
 	"- `habits.md` generated: this user's directories, tool stack, and shell rhythms.\n" +
-	"- `memory/` durable notes agents keep across sessions (Hermes MEMORY.md lives here).\n" +
+	"- `memory/` durable notes agents author and keep across sessions.\n" +
 	"- `journal/` dated notes, one file per day named `YYYY-MM-DD.md`.\n" +
 	"\n" +
 	"## Rules\n" +
@@ -70,10 +72,13 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"- The generated files are read only. Their content between the\n" +
 	"  `rashin:generated` markers is overwritten on every reindex; edits there are\n" +
 	"  lost. Write anything durable to `memory/` or `journal/` instead.\n" +
+	"- Answer a \"how do I\" desktop question GUI-first: name the Ryoku Hub page,\n" +
+	"  shell picker, or QS Bar Settings from desktop.md's GUI map (and the `ryoku`\n" +
+	"  skill's `gui.md`) before the command behind it. You still act through commands.\n" +
 	"- Changes listed in `user.md` are the user's own; never revert them to\n" +
 	"  shipped defaults without being asked.\n" +
-	"- You may add prose outside the generated markers in those files; it is kept.\n" +
-	"- This file (AGENTS.md) is yours to extend. `CLAUDE.md` is a symlink to it.\n"
+	"- This file's generated body is refreshed on every reindex; add your own prose\n" +
+	"  outside the `rashin:generated` markers and it is kept. `CLAUDE.md` symlinks here.\n"
 
 // buildFence wraps a generated body in the vault markers, normalising trailing
 // whitespace so repeated runs are byte stable.
@@ -189,9 +194,45 @@ func VaultStats() (files int, lastIndexed time.Time, exists bool) {
 	return files, lastIndexed, exists
 }
 
+// The AGENTS.md contract shipped before the fence was written once and never
+// refreshed, and it grew variants (the habits.md row arrived later). Fencing an
+// existing vault would otherwise preserve a stale copy below the markers, so
+// every agent on that box reads two contradictory contracts. EnsureVault
+// strips the legacy block: from its title to its final line, which is stable
+// across the variants. Prose a user or agent added survives.
+const (
+	legacyAgentsTitle = "# Ryoku system vault"
+	legacyAgentsTail  = "- This file (AGENTS.md) is yours to extend. `CLAUDE.md` is a symlink to it."
+)
+
+// stripLegacyAgents removes the old write-once contract from a document's
+// out-of-fence prose and collapses the blank lines it leaves behind. Only the
+// region after the generated fence is scanned: the live template carries the
+// same title, so a blind first-match strip would eat the fence itself.
+func stripLegacyAgents(doc string) string {
+	ei := strings.Index(doc, vaultFenceEnd)
+	head, tail := "", doc
+	if ei >= 0 {
+		head, tail = doc[:ei+len(vaultFenceEnd)], doc[ei+len(vaultFenceEnd):]
+	}
+	bi := strings.Index(tail, legacyAgentsTitle)
+	if bi < 0 {
+		return doc
+	}
+	li := strings.Index(tail[bi:], legacyAgentsTail)
+	if li < 0 {
+		return doc
+	}
+	tail = tail[:bi] + tail[bi+li+len(legacyAgentsTail):]
+	tail = strings.ReplaceAll(strings.TrimRight(tail, "\n"), "\n\n\n", "\n\n")
+	if strings.TrimSpace(tail) == "" {
+		return head + "\n"
+	}
+	return head + "\n" + tail
+}
+
 // EnsureVault creates the vault skeleton: the root, memory/ and journal/, the
-// AGENTS.md contract (only when absent, so user edits survive), and the
-// CLAUDE.md symlink Claude Code reads.
+// AGENTS.md contract, and the CLAUDE.md symlink Claude Code reads.
 func EnsureVault() error {
 	root := VaultDir()
 	for _, d := range []string{root, filepath.Join(root, "memory"), filepath.Join(root, "journal")} {
@@ -199,11 +240,14 @@ func EnsureVault() error {
 			return err
 		}
 	}
+	// AGENTS.md must track AgentsTemplate: a box provisioned before a template
+	// change would otherwise keep the stale contract forever, since the file was
+	// once written only when absent. Fence the template so its body refreshes on
+	// every run while prose a user or agent added outside the markers survives.
 	agents := filepath.Join(root, "AGENTS.md")
-	if _, err := os.Stat(agents); os.IsNotExist(err) {
-		if err := atomicWrite(agents, []byte(AgentsTemplate), 0o644); err != nil {
-			return err
-		}
+	fenced := ReplaceFenced(stripLegacyAgents(readFileOrEmpty(agents)), AgentsTemplate)
+	if err := atomicWrite(agents, []byte(fenced), 0o644); err != nil {
+		return err
 	}
 	claude := filepath.Join(root, "CLAUDE.md")
 	if _, err := os.Lstat(claude); os.IsNotExist(err) {

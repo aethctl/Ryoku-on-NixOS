@@ -40,7 +40,7 @@ func cmdWire(agent string) error {
 		}
 	}
 	// A single-agent or hermes wire still refreshes the always-created skill
-	// links (~/.agents, ~/.hermes, every hermes profile) and prowl-agent's
+	// links (~/.agents, ~/.hermes, every hermes profile) and prowl's
 	// skills for the detected clients, so one wire is a complete inject.
 	_, _ = WireSkill()
 	wireProwlSkills()
@@ -49,7 +49,7 @@ func cmdWire(agent string) error {
 
 // cmdPaths prints the agent manifest: every path Rashin exposes plus a
 // paste-ready snippet, so any coding agent (supported or not) can be pointed at
-// the vault, the skill, and prowl-agent.
+// the vault, the skill, and prowl.
 func cmdPaths(format string) error {
 	m := BuildManifest(LoadConfig())
 	switch format {
