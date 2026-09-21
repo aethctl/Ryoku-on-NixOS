@@ -52,7 +52,17 @@ start() {
   mkdir -p "$(dirname "$state")" 2>/dev/null || true
   printf '%s\n' "$temp" >"$state" 2>/dev/null || true
   : >"$enabled" 2>/dev/null || true
-  ryoku wm act nightlight.on "$temp" >/dev/null 2>&1
+  # If the backend refuses to start, the marker would leave the frame reading on
+  # while nothing warms the screen. Capture the provider's message, log it for
+  # the daemon, tell the user, drop the marker so the frame reads off honestly,
+  # and fail.
+  local err
+  if ! err="$(ryoku wm act nightlight.on "$temp" 2>&1 >/dev/null)"; then
+    printf '%s\n' "$err" >&2
+    notify-send -u normal "Night light" "$err"
+    rm -f "$enabled" 2>/dev/null || true
+    exit 1
+  fi
 }
 
 stop() {

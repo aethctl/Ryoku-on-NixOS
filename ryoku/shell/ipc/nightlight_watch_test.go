@@ -161,3 +161,195 @@ func waitForFrame(t *testing.T, sub *topicSubscriber, want func(nlFrame) bool, d
 		}
 	}
 }
+
+// nlFake is the fake night-light environment: a backend binary, a provider that
+// names it in caps, and a PATH-shimmed ryoku-cmd-nightlight, all laid ahead of
+// the packaged binaries on PATH.
+type nlFake struct {
+	state   string
+	marker  string
+	temp    string
+	backend string
+	fake    string
+	shim    string
+}
+
+// buildNlFake lays that environment into two temp dirs. The shim writes the
+// enabled marker before it spawns the backend and then blocks until the backend
+// is up, mirroring the real race window and the provider's act. capsFailFirst
+// makes the provider's caps probe fail once, to exercise the lazy backend name.
+func buildNlFake(t *testing.T, backend string, capsFailFirst bool) nlFake {
+	t.Helper()
+	state := t.TempDir()
+	bin := t.TempDir()
+
+	// A renamed copy of sleep is the fake backend: its comm is <backend>, the
+	// name the watcher greps for and the provider reports.
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("no sleep binary")
+	}
+	raw, err := os.ReadFile(sleep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fake := filepath.Join(bin, backend)
+	if err := os.WriteFile(fake, raw, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	fail := "0"
+	if capsFailFirst {
+		fail = "1"
+	}
+	provider := filepath.Join(bin, "ryoku-wm-testwm")
+	provScript := strings.NewReplacer(
+		"@BACKEND@", backend, "@COUNT@", filepath.Join(state, "caps-count"), "@FAIL@", fail,
+	).Replace(`#!/usr/bin/env bash
+set -u
+[[ "${1:-}" == caps ]] || exit 0
+if [[ "@FAIL@" == 1 ]]; then
+  n=$(cat "@COUNT@" 2>/dev/null || echo 0)
+  printf '%s\n' "$((n + 1))" >"@COUNT@"
+  if (( n == 0 )); then echo "provider still coming up" >&2; exit 1; fi
+fi
+printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"@BACKEND@"}'
+`)
+	if err := os.WriteFile(provider, []byte(provScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	pid := filepath.Join(state, "fake.pid")
+	marker := filepath.Join(state, "ryoku-nightlight-enabled")
+	temp := filepath.Join(state, "ryoku-nightlight")
+	shim := filepath.Join(bin, "ryoku-cmd-nightlight")
+	shimScript := strings.NewReplacer(
+		"@PID@", pid, "@MARKER@", marker, "@TEMP@", temp, "@FAKE@", fake, "@NAME@", backend,
+	).Replace(`#!/usr/bin/env bash
+set -u
+pid="@PID@"; marker="@MARKER@"; temp="@TEMP@"; fake="@FAKE@"; name="@NAME@"
+up() { pgrep -x "$name" >/dev/null 2>&1; }
+case "${1:-toggle}" in
+  on|toggle)
+    printf '%s\n' "${2:-4000}" >"$temp"
+    : >"$marker"
+    up && exit 0
+    # Marker before backend: the real race. Then block until the backend is up,
+    # like the provider's act, so run returns only once the light truly is on.
+    sleep 0.3
+    setsid "$fake" 600 >/dev/null 2>&1 </dev/null & echo $! >"$pid"
+    for _ in $(seq 1 200); do up && break; sleep 0.01; done
+    ;;
+  off)
+    [[ -f $pid ]] && kill "$(cat "$pid")" 2>/dev/null
+    rm -f "$pid" "$marker"
+    ;;
+esac
+exit 0
+`)
+	if err := os.WriteFile(shim, []byte(shimScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The fakes must win over the packaged binaries on PATH.
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Cleanup(func() { _ = exec.Command(shim, "off").Run() })
+
+	return nlFake{state: state, marker: marker, temp: temp, backend: backend, fake: fake, shim: shim}
+}
+
+// TestNightlightIntentPublishesTruthAfterSpawn pins the intent path: the script
+// writes the enabled marker before the backend spawns, so a scan in that window
+// would read off. Because run waits for the whole script (and the script for the
+// backend), the intent publishes on:true the moment run returns, with no watcher
+// involved: the only publisher here is the intent itself.
+func TestNightlightIntentPublishesTruthAfterSpawn(t *testing.T) {
+	f := buildNlFake(t, "nlfakeintent", false)
+
+	topic := newStateTopic()
+	sub := topic.subscribe()
+	defer topic.unsubscribe(sub)
+	n := &nightlightState{topic: topic, wmc: wm.OpenNamed("testwm"), stateDir: f.state, tempFile: f.temp}
+
+	if err := n.intent("on", "4200"); err != nil {
+		t.Fatalf("intent on: %v", err)
+	}
+	got := waitForFrame(t, sub, func(fr nlFrame) bool { return fr.On }, "on:true")
+	if got.Temperature != 4200 {
+		t.Fatalf("intent frame: got %s want on:true temperature:4200", got.Raw)
+	}
+}
+
+// TestNightlightWatcherSettlesMarkerBeforeBackend pins the watcher path: a marker
+// write lands before the backend exists, so the first /proc scan sees nothing.
+// The watcher must not publish off on that first scan; it settles, rescanning
+// until the late backend appears, and reports on:true well within its 2 s
+// window. The old first-scan-wins watcher would leave the frame off until the
+// 5 s poll re-check.
+func TestNightlightWatcherSettlesMarkerBeforeBackend(t *testing.T) {
+	f := buildNlFake(t, "nlfakewatch", false)
+
+	topic := newStateTopic()
+	sub := topic.subscribe()
+	defer topic.unsubscribe(sub)
+	n := &nightlightState{topic: topic, wmc: wm.OpenNamed("testwm"), stateDir: f.state, tempFile: f.temp}
+
+	go n.watch()
+
+	// The startup frame is off: no marker, no backend. Consume it so the marker
+	// write below is a fresh inotify wake.
+	if first := waitForFrame(t, sub, func(nlFrame) bool { return true }, "startup"); first.On {
+		t.Fatalf("startup frame should be off: %s", first.Raw)
+	}
+
+	// Write the temp and the marker (the script's declared intent) with no
+	// backend yet, then let it arrive late.
+	if err := os.WriteFile(f.temp, []byte("4600\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	markerAt := time.Now()
+	if err := os.WriteFile(f.marker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	back := exec.Command(f.fake, "600")
+	if err := back.Start(); err != nil {
+		t.Fatalf("start late backend: %v", err)
+	}
+	t.Cleanup(func() { _ = back.Process.Kill(); _, _ = back.Process.Wait() })
+
+	got := waitForFrame(t, sub, func(fr nlFrame) bool { return fr.On }, "on:true")
+	if got.Temperature != 4600 {
+		t.Fatalf("settled frame: got %s want on:true temperature:4600", got.Raw)
+	}
+	if elapsed := time.Since(markerAt); elapsed > 2500*time.Millisecond {
+		t.Fatalf("watcher took %v to settle to on, want the 2s settle not the 5s poll", elapsed)
+	}
+}
+
+// TestNightlightLazyBackendName pins the lazy backend resolution: a daemon whose
+// caps probe failed first (the provider was not up yet) must still get a working
+// intent once caps answers. The first intent refuses by name and leaves the
+// frame off; the second, after the reprobe picks up the name, drives the script
+// and publishes on:true.
+func TestNightlightLazyBackendName(t *testing.T) {
+	f := buildNlFake(t, "nlfakelazy", true) // caps fails on its first probe
+
+	topic := newStateTopic()
+	sub := topic.subscribe()
+	defer topic.unsubscribe(sub)
+	n := &nightlightState{topic: topic, wmc: wm.OpenNamed("testwm"), stateDir: f.state, tempFile: f.temp}
+
+	if err := n.intent("on"); err != errNightlightUnavailable {
+		t.Fatalf("first intent before caps answers: got %v want errNightlightUnavailable", err)
+	}
+	if got := waitForFrame(t, sub, func(nlFrame) bool { return true }, "off"); got.On {
+		t.Fatalf("frame after a refused intent should be off: %s", got.Raw)
+	}
+
+	if err := n.intent("on", "4000"); err != nil {
+		t.Fatalf("second intent after caps answers: %v", err)
+	}
+	if got := waitForFrame(t, sub, func(fr nlFrame) bool { return fr.On }, "on:true"); !got.On {
+		t.Fatalf("frame after a working intent should be on: %s", got.Raw)
+	}
+}

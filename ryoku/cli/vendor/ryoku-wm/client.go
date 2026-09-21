@@ -26,16 +26,18 @@ var ErrNoProvider = errors.New("no window manager provider available")
 // provider is there, the compositor just cannot do that.
 var ErrUnsupported = errors.New("window manager does not support this action")
 
-// Safe for concurrent use. Caps is cached for the process lifetime: a
-// compositor does not gain features while running, and the keybind path cannot
-// afford a fork to re-ask.
+// Safe for concurrent use. A successful Caps probe is cached for the process
+// lifetime: a compositor does not gain features while running, and the keybind
+// path cannot afford a fork to re-ask. A failed probe is NOT cached, so a daemon
+// that asked before the provider was answering re-probes on the next call rather
+// than running its whole life believing the compositor has no features.
 type Client struct {
 	detection Detection
 	bin       string
 
-	once sync.Once
-	caps Caps
-	err  error
+	capsMu sync.Mutex
+	capsOK bool
+	caps   Caps
 }
 
 // Open resolves the active provider without running it, so constructing one in
@@ -68,22 +70,29 @@ func (c *Client) Available() bool {
 	return err == nil
 }
 
-// Caps probes at most once. A failed probe yields a zero Caps, so every Has
-// reads false rather than assuming Hyprland's feature set.
+// Caps probes until it succeeds once, then serves the cached answer. A failed
+// probe returns the error and leaves the cache cold, so the next call probes
+// again: the provider may still be coming up. A zero Caps means every Has reads
+// false rather than assuming Hyprland's feature set.
 func (c *Client) Caps() (Caps, error) {
-	c.once.Do(func() {
-		if c.bin == "" {
-			c.err = ErrNoProvider
-			return
-		}
-		out, err := c.run("caps")
-		if err != nil {
-			c.err = err
-			return
-		}
-		c.err = json.Unmarshal(out, &c.caps)
-	})
-	return c.caps, c.err
+	c.capsMu.Lock()
+	defer c.capsMu.Unlock()
+	if c.capsOK {
+		return c.caps, nil
+	}
+	if c.bin == "" {
+		return c.caps, ErrNoProvider
+	}
+	out, err := c.run("caps")
+	if err != nil {
+		return c.caps, err
+	}
+	var caps Caps
+	if err := json.Unmarshal(out, &caps); err != nil {
+		return c.caps, err
+	}
+	c.caps, c.capsOK = caps, true
+	return c.caps, nil
 }
 
 // Can is the gate before offering an affordance. False on a missing provider
