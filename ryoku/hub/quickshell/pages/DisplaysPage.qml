@@ -161,23 +161,44 @@ Item {
             out.push({ "key": BarStyles.items[i].id, "label": BarStyles.items[i].name });
         return out;
     }
-    function chromaWidgetFlag(name, id) {
+    // Per-display Chroma modules are overrides, not a second set of global
+    // switches. null means "follow chroma.widgets.<id>"; booleans pin the module
+    // on/off only for this output.
+    function chromaWidgetOverride(name, id) {
         void pg.tick;
         const liveKey = name + "\u0000" + id;
-        if (typeof pg.barWidgetLive[liveKey] === "boolean")
-            return pg.barWidgetLive[liveKey];
-        const local = Settings.get("displays.bar_widgets." + name + ".chroma." + id);
-        if (typeof local === "boolean")
-            return local;
-        return Settings.get("chroma.widgets." + id) !== false;
+        const live = pg.barWidgetLive[liveKey];
+
+        if (live === null || typeof live === "boolean")
+            return live;
+
+        const stored = Settings.get(
+            "displays.bar_widgets." + name + ".chroma." + id);
+
+        return typeof stored === "boolean" ? stored : null;
     }
-    function setChromaWidgetFlag(name, id, enabled) {
+
+    function chromaWidgetMode(name, id) {
+        const value = pg.chromaWidgetOverride(name, id);
+        return value === true ? "on" : value === false ? "off" : "follow";
+    }
+
+    function setChromaWidgetMode(name, id, mode) {
         if (!name)
             return;
+
+        const value = mode === "on"
+            ? true
+            : mode === "off" ? false : null;
+
         const next = Object.assign({}, pg.barWidgetLive);
-        next[name + "\u0000" + id] = !!enabled;
+        next[name + "\u0000" + id] = value;
         pg.barWidgetLive = next;
-        Settings.patch("displays.bar_widgets." + name + ".chroma." + id, !!enabled);
+
+        Settings.patch(
+            "displays.bar_widgets." + name + ".chroma." + id,
+            value);
+
         pg.tick++;
     }
 
@@ -1192,18 +1213,46 @@ Item {
                         delegate: SettingRow {
                             required property var modelData
                             required property int index
-                            anchors.left: parent.left; anchors.right: parent.right
+                            anchors.left: parent.left
+                            anchors.right: parent.right
                             divider: index > 0
+                            block: true
                             label: I18n.tr(modelData.label)
                             desc: I18n.tr(modelData.desc)
                             source: "shell.json"
-                            controlWidth: 54
-                            Sw {
+
+                            Seg {
+                                anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                on: pg.sel ? pg.chromaWidgetFlag(pg.sel.name, modelData.id) : true
-                                onToggled: value => pg.setChromaWidgetFlag(
-                                    pg.sel ? pg.sel.name : "", modelData.id, value)
+
+                                options: [
+                                    I18n.tr("Follow global"),
+                                    I18n.tr("On"),
+                                    I18n.tr("Off")
+                                ]
+
+                                current: {
+                                    const mode = pg.sel
+                                        ? pg.chromaWidgetMode(
+                                            pg.sel.name, modelData.id)
+                                        : "follow";
+
+                                    return mode === "on"
+                                        ? I18n.tr("On")
+                                        : mode === "off"
+                                            ? I18n.tr("Off")
+                                            : I18n.tr("Follow global");
+                                }
+
+                                onChose: label => pg.setChromaWidgetMode(
+                                    pg.sel ? pg.sel.name : "",
+                                    modelData.id,
+                                    label === I18n.tr("On")
+                                        ? "on"
+                                        : label === I18n.tr("Off")
+                                            ? "off"
+                                            : "follow")
                             }
                         }
                     }
