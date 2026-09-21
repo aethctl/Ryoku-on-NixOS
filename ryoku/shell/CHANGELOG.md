@@ -4,6 +4,16 @@
 
 ### Added
 
+- **The wallpaper crossfade transition, and a picker grouped by family.** skwd-wall
+  v2 ships a plain crossfade its earlier catalogue lacked: a clean dissolve
+  between the two frames on a smoothed progress. It rides the shell as a real
+  shader (`modules/wallpaper/skwd/crossfade.frag`, the daemon catalogue in
+  `ryogami/daemon/transitions.go`), so "random" rotates it and the picker pins
+  it like any other. The transition picker no longer reads as a flat list of 39
+  names: it draws them under the Fade, Wipe, Warp and Break up families v2
+  carries, each shader placed by what its math does
+  (`ryogami/wall-ui/qml/wallpaper/ShaderPicker.qml`, `settings/PaperSettings.qml`).
+
 - **Bars and Chroma modules can be assigned per display.** Each connector can
   follow the global Bar Studio style or select its own, while Chroma inherits
   global module switches unless a display overrides one. Chroma also gains live
