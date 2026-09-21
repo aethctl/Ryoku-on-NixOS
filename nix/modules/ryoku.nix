@@ -654,7 +654,56 @@ EOF
             esac
           done < <(systemctl --user show-environment)
 
-          exec ${ryokuShell}/bin/ryoku-shell daemon
+          # Keep the service tied to the compositor socket it was started
+          # against. The systemd user manager survives logout, so without this
+          # the daemon survives the compositor too and repeatedly launches Qt
+          # against a dead WAYLAND_DISPLAY until the next session imports its
+          # environment.
+          #
+          # Run the daemon as our child and watch the actual listening socket.
+          # Losing it means this graphical session is over: tear down the Ryoku
+          # session target so every session-owned daemon stops cleanly. The next
+          # compositor's bootstrap starts the target again after importing its
+          # fresh environment.
+          ${ryokuShell}/bin/ryoku-shell daemon &
+          daemon_pid=$!
+
+          cleanup_daemon() {
+            if kill -0 "$daemon_pid" 2>/dev/null; then
+              kill "$daemon_pid" 2>/dev/null || true
+            fi
+            wait "$daemon_pid" 2>/dev/null || true
+          }
+
+          trap 'cleanup_daemon; exit 0' TERM INT HUP
+          trap cleanup_daemon EXIT
+
+          while kill -0 "$daemon_pid" 2>/dev/null; do
+            if ! ${pkgs.iproute2}/bin/ss -xlH |
+              ${pkgs.gawk}/bin/awk -v socket="$wayland_socket" '
+                $1 == "u_str" && $2 == "LISTEN" {
+                  for (i = 1; i <= NF; i++) {
+                    if ($i == socket) {
+                      found = 1
+                    }
+                  }
+                }
+                END { exit found ? 0 : 1 }
+              '
+            then
+              ${pkgs.systemd}/bin/systemctl                 --user --no-block stop ryoku-session.target >/dev/null 2>&1 || true
+
+              exit 0
+            fi
+
+            ${pkgs.coreutils}/bin/sleep 0.1
+          done
+
+          status=0
+          wait "$daemon_pid" || status=$?
+
+          trap - EXIT
+          exit "$status"
         fi
 
         attempts=$((attempts + 1))
