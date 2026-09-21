@@ -8,6 +8,10 @@ hl.bind(K(mod .. " + F"),         hl.dsp.window.fullscreen())                   
 hl.bind(K(mod .. " + SHIFT + P"), hl.dsp.window.pin())                             -- pin a floating window
 hl.bind(K(mod .. " + A"),         function() hl.dispatch(hl.dsp.window.float({ action = "toggle" })); hl.dispatch(hl.dsp.window.resize({ x = 1000, y = 660, exact = true })); hl.dispatch(hl.dsp.window.center()) end) -- float at 1000x660, centred (press again to tile back)
 hl.bind(K(mod .. " + R"),         function() hl.dispatch(hl.dsp.submap("resize")); hl.dispatch(hl.dsp.exec_cmd("hyprctl notify -1 2200 0 'Resize mode: arrows or hjkl resize, Esc exits'")) end) -- resize mode (arrows/hjkl resize, Esc exits)
+hl.bind(K(mod .. " + T"),         hl.dsp.group.toggle())                            -- Tabbed column
+hl.bind(K(mod .. " + D"),         hl.dsp.window.fullscreen({ mode = "maximized" })) -- Maximise
+hl.bind(K(mod .. " + C"),         hl.dsp.window.center())                           -- Centre
+hl.bind(K("ALT + Tab"),           hl.dsp.focus({ last = true }))                    -- Last window
 hl.bind(K(mod .. " + P"),         hl.dsp.exec_cmd("ryoku-monitor toggle"))         -- mirror or extend displays (monitor layout)
 
 -- Focus and move windows
@@ -23,6 +27,23 @@ hl.bind(K(mod .. " + CTRL + Left"),   hl.dsp.window.resize({ x = -40, y = 0,   r
 hl.bind(K(mod .. " + CTRL + Right"),  hl.dsp.window.resize({ x = 40,  y = 0,   relative = true }), { repeating = true }) -- resize window wider
 hl.bind(K(mod .. " + CTRL + Up"),     hl.dsp.window.resize({ x = 0,   y = -40, relative = true }), { repeating = true }) -- resize window shorter
 hl.bind(K(mod .. " + CTRL + Down"),   hl.dsp.window.resize({ x = 0,   y = 40,  relative = true }), { repeating = true }) -- resize window taller
+hl.bind(K(mod .. " + bracketleft"),  hl.dsp.window.move({ direction = "left",  group_aware = true }))  -- Merge left
+hl.bind(K(mod .. " + bracketright"), hl.dsp.window.move({ direction = "right", group_aware = true }))  -- Merge right
+
+-- Displays (multi-monitor). The l/r/u/d selector picks the monitor in that
+-- direction from the focused one.
+hl.bind(K(mod .. " + ALT + Left"),          hl.dsp.focus({ monitor = "l" }))          -- Focus screen left
+hl.bind(K(mod .. " + ALT + Right"),         hl.dsp.focus({ monitor = "r" }))          -- Focus screen right
+hl.bind(K(mod .. " + ALT + Up"),            hl.dsp.focus({ monitor = "u" }))          -- Focus screen up
+hl.bind(K(mod .. " + ALT + Down"),          hl.dsp.focus({ monitor = "d" }))          -- Focus screen down
+hl.bind(K(mod .. " + ALT + SHIFT + Left"),  hl.dsp.window.move({ monitor = "l" }))    -- Send window to screen left
+hl.bind(K(mod .. " + ALT + SHIFT + Right"), hl.dsp.window.move({ monitor = "r" }))    -- Send window to screen right
+hl.bind(K(mod .. " + ALT + SHIFT + Up"),    hl.dsp.window.move({ monitor = "u" }))    -- Send window to screen up
+hl.bind(K(mod .. " + ALT + SHIFT + Down"),  hl.dsp.window.move({ monitor = "d" }))    -- Send window to screen down
+hl.bind(K(mod .. " + CTRL + ALT + Left"),   hl.dsp.workspace.move({ monitor = "l" })) -- Send workspace to screen left
+hl.bind(K(mod .. " + CTRL + ALT + Right"),  hl.dsp.workspace.move({ monitor = "r" })) -- Send workspace to screen right
+hl.bind(K(mod .. " + CTRL + ALT + Up"),     hl.dsp.workspace.move({ monitor = "u" })) -- Send workspace to screen up
+hl.bind(K(mod .. " + CTRL + ALT + Down"),   hl.dsp.workspace.move({ monitor = "d" })) -- Send workspace to screen down
 
 -- Apps
 hl.bind(K(mod .. " + Return"),    hl.dsp.exec_cmd("ryoku-app terminal"))           -- terminal
@@ -72,11 +93,25 @@ hl.bind(K(mod .. " + H"),          hl.dsp.exec_cmd(ws_helper .. " hide"))       
 hl.bind(K(mod .. " + ALT + H"),    hl.dsp.exec_cmd(ws_helper .. " scratch"))       -- show or hide the scratchpad (special workspace)
 hl.bind(K(mod .. " + mouse_up"),   hl.dsp.focus({ workspace = "r-1" }))            -- previous workspace
 hl.bind(K(mod .. " + mouse_down"), hl.dsp.focus({ workspace = "r+1" }))            -- next workspace
+hl.bind(K(mod .. " + Prior"),         hl.dsp.focus({ workspace = "r-1" }))            -- Previous workspace
+hl.bind(K(mod .. " + Next"),          hl.dsp.focus({ workspace = "r+1" }))            -- Next workspace
+hl.bind(K(mod .. " + SHIFT + Prior"), hl.dsp.window.move({ workspace = "r-1" }))      -- Send window to previous
+hl.bind(K(mod .. " + SHIFT + Next"),  hl.dsp.window.move({ workspace = "r+1" }))      -- Send window to next
+-- The number pad drives the same per-desktop workspaces. Each digit is bound
+-- twice: on KP_<n> (the keysym with NumLock on) and on the navigation keysym
+-- the same key sends with NumLock off, so the shortcut fires either way.
+local kp_off = { "KP_End", "KP_Down", "KP_Next", "KP_Left", "KP_Begin", "KP_Right", "KP_Home", "KP_Up", "KP_Prior", "KP_Insert" }
 for i = 1, 10 do
     local key = i % 10 -- 10 maps to the 0 key
-    hl.bind(K(mod .. " + " .. key),          hl.dsp.exec_cmd(ws_helper .. " focus " .. i)) -- focus workspace 1-10 on this desktop
-    hl.bind(K(mod .. " + ALT + " .. key),    hl.dsp.exec_cmd(ws_helper .. " move " .. i))  -- move window to workspace 1-10 on this desktop
-    hl.bind(K(mod .. " + SHIFT + " .. key),  hl.dsp.exec_cmd(ws_helper .. " movesilent " .. i))  -- move window silently to workspace 1-10 on this desktop
+    hl.bind(K(mod .. " + " .. key),             hl.dsp.exec_cmd(ws_helper .. " focus " .. i))       -- focus workspace 1-10 on this desktop
+    hl.bind(K(mod .. " + ALT + " .. key),       hl.dsp.exec_cmd(ws_helper .. " move " .. i))        -- move window to workspace 1-10 on this desktop
+    hl.bind(K(mod .. " + SHIFT + " .. key),     hl.dsp.exec_cmd(ws_helper .. " movesilent " .. i))  -- move window silently to workspace 1-10 on this desktop
+    hl.bind(K(mod .. " + KP_" .. key),          hl.dsp.exec_cmd(ws_helper .. " focus " .. i))       -- focus workspace 1-10, number pad
+    hl.bind(K(mod .. " + ALT + KP_" .. key),    hl.dsp.exec_cmd(ws_helper .. " move " .. i))        -- move window to workspace 1-10, number pad
+    hl.bind(K(mod .. " + SHIFT + KP_" .. key),  hl.dsp.exec_cmd(ws_helper .. " movesilent " .. i))  -- move window quietly to workspace 1-10, number pad
+    hl.bind(K(mod .. " + " .. kp_off[i]),         hl.dsp.exec_cmd(ws_helper .. " focus " .. i))       -- focus workspace 1-10, number pad NumLock off
+    hl.bind(K(mod .. " + ALT + " .. kp_off[i]),   hl.dsp.exec_cmd(ws_helper .. " move " .. i))        -- move window to workspace 1-10, number pad NumLock off
+    hl.bind(K(mod .. " + SHIFT + " .. kp_off[i]), hl.dsp.exec_cmd(ws_helper .. " movesilent " .. i))  -- move window quietly to workspace 1-10, number pad NumLock off
 end
 
 -- Media and volume keys. ryoku-volume honours the volume panel's BOOST toggle

@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 import "../Combos.js" as Combos
 
 // Import config (TOOLS, ADVANCED). The drop-and-go migration wizard: bring an
@@ -47,11 +48,44 @@ Item {
     property bool undone: false
     property string pendingDecisions: ""
 
-    // a previous non-Ryoku setup sitting in ~/.config (Ryoku loads hyprland.lua,
-    // never a monolithic hyprland.conf), offered as a one-tap source.
+    // a previous non-Ryoku setup sitting in the running provider's config tree
+    // (Ryoku writes a generated config, never a hand-rolled monolith), offered as
+    // a one-tap source. Only meaningful on a desktop whose format import reads.
     property bool autoDetected: false
     property string urlText: ""
     readonly property string home: Quickshell.env("HOME") || ""
+
+    // The desktop the user runs and the root of its config tree, both read off the
+    // provider's declared config files rather than named here. The importer turns a
+    // hand-rolled monolith's keybinds and rules into Ryoku settings, so it only
+    // lands on a desktop whose own config is that same format.
+    readonly property var configFiles: Settings.configFiles || []
+    readonly property string providerName: Settings.provider
+    function providerCased() {
+        var p = pg.providerName;
+        return p.length ? p.charAt(0).toUpperCase() + p.slice(1) : "";
+    }
+    readonly property bool importSupported: {
+        for (var i = 0; i < pg.configFiles.length; i++) {
+            var f = ("" + pg.configFiles[i]).toLowerCase();
+            if (f.indexOf(".conf") >= 0 || f.indexOf(".lua") >= 0)
+                return true;
+        }
+        return false;
+    }
+    readonly property string providerCfgDir: {
+        if (pg.configFiles.length === 0) return "";
+        var first = "" + pg.configFiles[0];
+        var slash = first.indexOf("/");
+        return slash > 0 ? first.slice(0, slash) : first;
+    }
+    // detection only makes sense once we know import can read this desktop; run it
+    // on load and again when that answer arrives from the provider frame.
+    function runDetect() {
+        if (pg.importSupported && pg.providerCfgDir.length)
+            detectProc.running = true;
+    }
+    onImportSupportedChanged: pg.runDetect()
 
     readonly property var stepDefs: [
         { key: "source", label: I18n.tr("Source") }, { key: "review", label: I18n.tr("Review") },
@@ -293,12 +327,14 @@ Item {
     }
     readonly property bool footerVisible: pg.step === "review" || pg.step === "resolve" || pg.step === "preview"
 
-    Component.onCompleted: detectProc.running = true
+    Component.onCompleted: pg.runDetect()
 
     Process {
         id: detectProc
         running: false
-        command: ["sh", "-c", "[ -e \"$HOME/.config/hypr/hyprland.conf\" ] && echo yes || true"]
+        command: ["sh", "-c", pg.providerCfgDir.length
+            ? "[ -e \"$HOME/.config/" + pg.providerCfgDir + "/hyprland.conf\" ] && echo yes || true"
+            : "true"]
         stdout: StdioCollector {
             onStreamFinished: pg.autoDetected = this.text.indexOf("yes") >= 0
         }
@@ -460,6 +496,7 @@ Item {
     // ── the step rail: where you are in the five-step wizard ───────────────────
     Row {
         id: rail
+        visible: pg.importSupported
         anchors.left: parent.left
         anchors.leftMargin: Tokens.s6
         anchors.top: head.bottom
@@ -512,10 +549,45 @@ Item {
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
             topMargin: Tokens.s4; bottomMargin: Tokens.s5
         }
-        sourceComponent: pg.step === "source" ? sourceComp
+        sourceComponent: !pg.importSupported ? notSupportedComp
+            : (pg.step === "source" ? sourceComp
             : (pg.step === "review" ? reviewComp
             : (pg.step === "resolve" ? resolveComp
-            : (pg.step === "preview" ? previewComp : doneComp)))
+            : (pg.step === "preview" ? previewComp : doneComp))))
+    }
+
+    // Import reads one desktop's config format today; on a desktop it cannot read
+    // the wizard would dead-end, so the body carries a plain note there instead.
+    Component {
+        id: notSupportedComp
+        Item {
+            Column {
+                anchors.centerIn: parent
+                width: Math.min(parent.width - Tokens.s6 * 2, 520)
+                spacing: Tokens.s3
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "\uf0ee"
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 30
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: I18n.tr("Import comes to this desktop soon")
+                    color: Tokens.ink; font.family: Tokens.ui
+                    font.pixelSize: Tokens.fRow; font.weight: Font.Medium; wrapMode: Text.WordWrap
+                }
+                Text {
+                    width: parent.width
+                    horizontalAlignment: Text.AlignHCenter
+                    text: pg.providerName.length
+                        ? I18n.tr("Bringing an existing setup across, its keybinds, window rules and app configs, is available on another Ryoku desktop today. It lands on the %1 desktop in a future release.").arg(pg.providerName)
+                        : I18n.tr("Bringing an existing setup across, its keybinds, window rules and app configs, is available on another Ryoku desktop today. It lands on this desktop in a future release.")
+                    color: Tokens.inkMuted; font.family: Tokens.ui
+                    font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
+                }
+            }
+        }
     }
 
     // ── Source: four affordances, no dead ends ─────────────────────────────────
@@ -584,7 +656,7 @@ Item {
                             }
                             Text {
                                 width: parent.width
-                                text: I18n.tr("It looks like you came from another Hyprland setup. Scan it to bring your keybinds, rules and app configs onto Ryoku.")
+                                text: I18n.tr("It looks like you came from another %1 setup. Scan it to bring your keybinds, rules and app configs onto Ryoku.").arg(pg.providerCased())
                                 color: Tokens.inkMuted; font.family: Tokens.ui
                                 font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                             }
@@ -1181,7 +1253,7 @@ Item {
         anchors.leftMargin: Tokens.s6; anchors.rightMargin: Tokens.s6; anchors.bottomMargin: Tokens.s5
         height: 60
         color: "transparent"
-        visible: pg.footerVisible
+        visible: pg.importSupported && pg.footerVisible
         Rectangle {
             anchors { left: parent.left; right: parent.right; top: parent.top }
             height: 1; color: Tokens.line

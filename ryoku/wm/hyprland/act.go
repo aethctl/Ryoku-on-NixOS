@@ -246,6 +246,12 @@ func runAct(args []string) error {
 		if err != nil {
 			return err
 		}
+		// A fixed border colour is the user's own choice; a wallpaper change must
+		// not override it, so the live push is skipped when the store pins the
+		// colours. genConfig already keeps col.active_border in settings.lua then.
+		if !loadStore(desktopStorePath()).Appearance.BorderFollowsPalette {
+			return nil
+		}
 		return setBorderColors(active, inactive)
 
 	case wm.ActionGameMode:

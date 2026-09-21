@@ -52,7 +52,7 @@ func runApply(args []string) error {
 		return enc.Encode(rep)
 	}
 
-	follow := paletteDriven()
+	follow := borderFollowsPalette(o)
 	if err := writeOverlayLua("settings.lua", []byte(genLua(o, follow))); err != nil {
 		return err
 	}

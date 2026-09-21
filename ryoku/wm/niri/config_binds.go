@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	wm "ryoku-wm"
@@ -11,21 +12,23 @@ import (
 // The niri binds block. niri has no unbind directive and rejects a duplicate
 // chord inside one block, so rebinds.kdl cannot subtract from a seeded block the
 // way the Hyprland split does: it must be the sole, total source of binds. This
-// file owns the shipped default table in niri's own action vocabulary and folds
-// the store's rebinds, unbinds and custom binds into it, resolving every chord
-// collision to exactly one winner (custom over rebound default over static
-// default) so the emitted config never carries a chord twice.
+// file translates the shipped Ryoku bind catalogue (ryoku/wm/binds.go) into
+// niri's own action vocabulary and folds the store's rebinds, unbinds and custom
+// binds into it, resolving every chord collision to exactly one winner (custom
+// over rebound default over static default) so the emitted config never carries
+// a chord twice. binds reports the full effective legend the cheatsheet and Hub
+// draw; apply writes the resolved KDL.
 
-// defBind is one shipped default. chord is the Hub's display form, so it lines up
-// with keybindRebinds keys and the unbinds list, which key on that form. action
-// is empty when niri has no expression for the behaviour, which makes the bind an
-// unhonored entry naming the chord rather than a dropped line.
-type defBind struct {
-	chord      string
+// niriBind is how niri expresses one catalogue entry: the niri action string, or
+// a reason when niri has no action for the behaviour (which lists the bind as an
+// unhonored legend row rather than dropping it). label and hint replace the
+// catalogue copy when niri's mechanic differs from the neutral description. In a
+// family action, {n} is the workspace number, substituted per expanded chord.
+type niriBind struct {
 	action     string
-	reason     string // set when action == ""
-	desc       string // set for a niri-only behaviour the shared legend omits; its cheatsheet copy
-	locked     bool   // allow-when-locked=true
+	reason     string // set when action == ""; the Unhonored copy
+	label      string // replaces the catalogue Label when niri's mechanic differs
+	hint       string // replaces the catalogue Hint when niri's mechanic differs
 	noRepeat   bool   // repeat=false
 	cooldownMs int    // cooldown-ms=N, for wheel binds
 }
@@ -45,140 +48,163 @@ func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 // what injects the shared QML module path into the configs it supervises.
 const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
 
-// defaultBinds is the shipped Ryoku bind set, lifted from
-// ryoku/hyprland/modules/binds.lua and translated to niri actions. Compositor
-// behaviours map to niri actions; app and shell launches spawn the same commands
+// defaultBinds maps each catalogue id to niri's expression of it. Compositor
+// behaviours become niri actions; app and shell launches spawn the same commands
 // (shell surfaces go through ryoku-shell, whose openSurface bus is compositor
 // agnostic); niri's own overview takes the workspace overview. Behaviours niri
-// cannot perform (pin, resize submap, the scratchpad, mouse-button drag) carry an
-// action-free row so apply reports them instead of hiding them.
-func defaultBinds() []defBind {
-	binds := []defBind{
-		{chord: "SUPER + Q", action: "close-window", noRepeat: true},
-		{chord: "SUPER + F", action: "fullscreen-window"},
-		{chord: "SUPER + SHIFT + P", reason: "niri has no pin-window action."},
-		// A description here replaces whatever the shared legend says for the
-		// chord, because that text is written for another compositor's mechanic:
-		// the resize submap and the fixed float size do not exist here.
-		{chord: "SUPER + A", action: "toggle-window-floating", desc: "float the window, or tile it back"},
-		// Hyprland spends this chord on a resize submap, which niri has no
-		// equivalent for. niri's own answer to resizing is stepping the column
-		// through preset widths, so the freed chord goes to the thing that
-		// makes the preset-widths setting reachable at all.
-		{chord: "SUPER + R", action: "switch-preset-column-width", desc: "step the column through its preset widths"},
-		// Without a bind, tabbed columns cannot be entered, and the tab-indicator
-		// settings would size a strip a user can never see. T for tabs.
-		{chord: "SUPER + T", action: "toggle-column-tabbed-display", desc: "stack the column into a tabbed strip"},
-		{chord: "SUPER + P", action: spawnArgs("ryoku-wm-niri", "act", "output.cycle")},
+// cannot perform (pin, the scratchpad, mouse-button drag, desktop blocks) carry
+// a reason so the legend reports them instead of hiding them. An id absent here
+// is left off entirely, which would be a bug, so the tests assert full coverage.
+func defaultBinds() map[string]niriBind {
+	return map[string]niriBind{
+		// Windows
+		"window.close":      {action: "close-window", noRepeat: true},
+		"window.fullscreen": {action: "fullscreen-window"},
+		// The catalogue names this "Float or tile", which is niri's mechanic too.
+		"window.float": {action: "toggle-window-floating"},
+		"window.pin":   {reason: "niri has no pin-window action."},
+		// The catalogue's resize row is Hyprland's keyboard submap; niri has no
+		// such mode. niri's answer to resizing is stepping the column through its
+		// preset widths, so the chord drives that and the copy is rewritten to
+		// match, which is also what makes the preset-widths setting reachable.
+		"window.resize":        {action: "switch-preset-column-width", label: "Step column width", hint: "Cycle the column through its preset widths"},
+		"window.presetHeight":  {action: "switch-preset-window-height"},
+		"column.tabbed":        {action: "toggle-column-tabbed-display"},
+		"column.maximize":      {action: "maximize-column"},
+		"column.center":        {action: "center-column"},
+		"window.focusPrevious": {action: "focus-window-previous"},
 
-		{chord: "SUPER + Left", action: "focus-column-left"},
-		{chord: "SUPER + Right", action: "focus-column-right"},
-		{chord: "SUPER + Up", action: "focus-window-up"},
-		{chord: "SUPER + Down", action: "focus-window-down"},
-		{chord: "SUPER + SHIFT + Left", action: "move-column-left"},
-		{chord: "SUPER + SHIFT + Right", action: "move-column-right"},
-		{chord: "SUPER + SHIFT + Up", action: "move-window-up"},
-		{chord: "SUPER + SHIFT + Down", action: "move-window-down"},
-		{chord: "SUPER + CTRL + Left", action: `set-column-width "-10%"`},
-		{chord: "SUPER + CTRL + Right", action: `set-column-width "+10%"`},
-		{chord: "SUPER + CTRL + Up", action: `set-window-height "-10%"`},
-		{chord: "SUPER + CTRL + Down", action: `set-window-height "+10%"`},
+		// Focus
+		"focus.left":   {action: "focus-column-left"},
+		"focus.right":  {action: "focus-column-right"},
+		"focus.up":     {action: "focus-window-up"},
+		"focus.down":   {action: "focus-window-down"},
+		"column.first": {action: "focus-column-first"},
+		"column.last":  {action: "focus-column-last"},
 
-		// niri's scrolling tiler sizes the focused column, a model Hyprland has
-		// no equivalent for, so these carry a desc: the Hub lists them in niri's
-		// own cheatsheet section. Their chords are free on both compositors, so a
-		// user who switches never meets a chord that means two different things.
-		{chord: "SUPER + D", action: "maximize-column", desc: "maximise the column to full width (keeps the gaps and bar)"},
-		{chord: "SUPER + C", action: "center-column", desc: "centre the focused column on screen"},
-		{chord: "SUPER + CTRL + R", action: "reset-window-height", desc: "reset the window height to automatic"},
+		// Move
+		"move.left":         {action: "move-column-left"},
+		"move.right":        {action: "move-column-right"},
+		"move.up":           {action: "move-window-up"},
+		"move.down":         {action: "move-window-down"},
+		"column.mergeLeft":  {action: "consume-or-expel-window-left"},
+		"column.mergeRight": {action: "consume-or-expel-window-right"},
 
-		{chord: "SUPER + Return", action: spawnArgs("ryoku-app", "terminal")},
-		{chord: "SUPER + E", action: spawnArgs("ryoku-app", "files")},
-		{chord: "SUPER + B", action: spawnArgs("ryoku-app", "browser")},
-		{chord: "SUPER + N", action: spawnArgs("ryoku-app", "editor")},
-		{chord: "SUPER + O", action: spawnArgs("ryoku-app", "notes")},
-		{chord: "SUPER + ALT + E", action: spawnArgs("kitty", "-e", "yazi")},
+		// Resize
+		"resize.narrower":    {action: `set-column-width "-10%"`},
+		"resize.wider":       {action: `set-column-width "+10%"`},
+		"resize.shorter":     {action: `set-window-height "-10%"`},
+		"resize.taller":      {action: `set-window-height "+10%"`},
+		"resize.resetHeight": {action: "reset-window-height"},
 
-		{chord: "SUPER + Space", action: spawnArgs("ryoku-shell", "launcher")},
-		{chord: "SUPER + K", action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || " + qmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
-		{chord: "SUPER + L", action: spawnArgs("ryoku-shell", "lock")},
-		{chord: "SUPER + Escape", action: spawnArgs("ryoku-shell", "quicksettings")},
-		{chord: "SUPER + W", action: spawnArgs("ryogami", "wallpaper", "ui")},
-		{chord: "SUPER + SHIFT + W", action: spawnArgs("ryogami", "wallpaper", "random")},
-		{chord: "SUPER + SHIFT + V", action: spawnSh("ryoku-summon ryovm " + qmlEnv + " flock -n -o /tmp/ryovm.lock qs -c ryovm")},
-		{chord: "SUPER + V", action: spawnArgs("ryoku-shell", "clipboard")},
-		{chord: "SUPER + Tab", action: "toggle-overview"},
-		{chord: "SUPER + ALT + Tab", reason: "niri has no desktop blocks to step through, so this would only open the same overview as SUPER + Tab."},
-		{chord: "SUPER + M", action: spawnArgs("ryoku-shell", "visualizer")},
-		{chord: "SUPER + SHIFT + M", action: spawnArgs("ryoku-shell", "visualizer-overlay")},
-		{chord: "SUPER + ALT + M", action: spawnArgs("ryoku-shell", "visualizer-place")},
-		{chord: "SUPER + grave", action: spawnArgs("ryoku-shell", "voice")},
-		{chord: "SUPER + comma", action: spawnArgs("ryoku-shell", "hub", "open")},
-		{chord: "SUPER + S", action: spawnArgs("ryoku-shell", "stash")},
-		{chord: "SUPER + SHIFT + S", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		// Hyprland gives ryoshot three entry points, so niri gets the same
-		// three: without Print the key a user reaches for does nothing, and
-		// monitor mode would otherwise only be reachable by cycling inside
-		// the tool.
-		{chord: "Print", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		{chord: "SHIFT + Print", action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
-		{chord: "SUPER + SHIFT + C", action: spawnArgs("hyprpicker", "-a")},
+		// Workspaces. The families carry {n}, the workspace number, substituted
+		// per expanded chord. niri references workspaces by flat index, so
+		// Super+Alt+N follows the window there and Super+Shift+N sends it quietly.
+		"workspace.focus":                   {action: "focus-workspace {n}"},
+		"workspace.moveWindow":              {action: "move-window-to-workspace {n}"},
+		"workspace.moveWindowSilent":        {action: "move-window-to-workspace {n} focus=false"},
+		"workspace.focus.numpad":            {action: "focus-workspace {n}"},
+		"workspace.moveWindow.numpad":       {action: "move-window-to-workspace {n}"},
+		"workspace.moveWindowSilent.numpad": {action: "move-window-to-workspace {n} focus=false"},
+		"workspace.prev":                    {action: "focus-workspace-up"},
+		"workspace.next":                    {action: "focus-workspace-down"},
+		"workspace.prevWheel":               {action: "focus-workspace-up", cooldownMs: 150},
+		"workspace.nextWheel":               {action: "focus-workspace-down", cooldownMs: 150},
+		"workspace.moveWindowPrev":          {action: "move-column-to-workspace-up"},
+		"workspace.moveWindowNext":          {action: "move-column-to-workspace-down"},
+		"workspace.reorderUp":               {action: "move-workspace-up"},
+		"workspace.reorderDown":             {action: "move-workspace-down"},
+		"workspace.hideWindow":              {reason: "niri has no scratchpad workspace."},
+		"workspace.scratchpad":              {reason: "niri has no scratchpad workspace."},
+		"workspace.overview":                {action: "toggle-overview"},
+		"workspace.overviewDesktops":        {reason: "niri has no desktop blocks to step through, so this would only open the same overview as SUPER + Tab."},
 
-		{chord: "SUPER + mouse:272", reason: "niri moves windows with Mod and drag natively."},
-		{chord: "SUPER + mouse:273", reason: "niri resizes windows with Mod and drag natively."},
+		// Displays
+		"display.focus.left":          {action: "focus-monitor-left"},
+		"display.focus.right":         {action: "focus-monitor-right"},
+		"display.focus.up":            {action: "focus-monitor-up"},
+		"display.focus.down":          {action: "focus-monitor-down"},
+		"display.moveWindow.left":     {action: "move-column-to-monitor-left"},
+		"display.moveWindow.right":    {action: "move-column-to-monitor-right"},
+		"display.moveWindow.up":       {action: "move-column-to-monitor-up"},
+		"display.moveWindow.down":     {action: "move-column-to-monitor-down"},
+		"display.moveWorkspace.left":  {action: "move-workspace-to-monitor-left"},
+		"display.moveWorkspace.right": {action: "move-workspace-to-monitor-right"},
+		"display.moveWorkspace.up":    {action: "move-workspace-to-monitor-up"},
+		"display.moveWorkspace.down":  {action: "move-workspace-to-monitor-down"},
+		"display.cycle":               {action: spawnArgs("ryoku-wm-niri", "act", "output.cycle")},
 
-		{chord: "SUPER + H", reason: "niri has no scratchpad workspace."},
-		{chord: "SUPER + ALT + H", reason: "niri has no scratchpad workspace."},
-		{chord: "SUPER + J", action: spawnArgs("ryotunes")},
-		{chord: "SUPER + mouse_up", action: "focus-workspace-up", cooldownMs: 150},
-		{chord: "SUPER + mouse_down", action: "focus-workspace-down", cooldownMs: 150},
+		// Apps
+		"app.terminal": {action: spawnArgs("ryoku-app", "terminal")},
+		"app.files":    {action: spawnArgs("ryoku-app", "files")},
+		"app.browser":  {action: spawnArgs("ryoku-app", "browser")},
+		"app.editor":   {action: spawnArgs("ryoku-app", "editor")},
+		"app.notes":    {action: spawnArgs("ryoku-app", "notes")},
+		"app.yazi":     {action: spawnArgs("kitty", "-e", "yazi")},
+		"app.ryotunes": {action: spawnArgs("ryotunes")},
 
-		{chord: "XF86AudioRaiseVolume", action: spawnArgs("ryoku-volume", "up"), locked: true},
-		{chord: "XF86AudioLowerVolume", action: spawnArgs("ryoku-volume", "down"), locked: true},
-		{chord: "XF86AudioMute", action: spawnArgs("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"), locked: true},
-		{chord: "XF86AudioPlay", action: spawnArgs("playerctl", "play-pause"), locked: true},
-		{chord: "XF86AudioNext", action: spawnArgs("playerctl", "next"), locked: true},
-		{chord: "XF86AudioPrev", action: spawnArgs("playerctl", "previous"), locked: true},
-		{chord: "SUPER + SHIFT + A", action: spawnArgs("ryoku-restart-audio")},
+		// Shell
+		"shell.launcher":          {action: spawnArgs("ryoku-shell", "launcher")},
+		"shell.cheatsheet":        {action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || " + qmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
+		"shell.lock":              {action: spawnArgs("ryoku-shell", "lock")},
+		"shell.quicksettings":     {action: spawnArgs("ryoku-shell", "quicksettings")},
+		"shell.wallpaper":         {action: spawnArgs("ryogami", "wallpaper", "ui")},
+		"shell.wallpaperRandom":   {action: spawnArgs("ryogami", "wallpaper", "random")},
+		"shell.ryovm":             {action: spawnSh("ryoku-summon ryovm " + qmlEnv + " flock -n -o /tmp/ryovm.lock qs -c ryovm")},
+		"shell.clipboard":         {action: spawnArgs("ryoku-shell", "clipboard")},
+		"shell.visualizer":        {action: spawnArgs("ryoku-shell", "visualizer")},
+		"shell.visualizerOverlay": {action: spawnArgs("ryoku-shell", "visualizer-overlay")},
+		"shell.visualizerPlace":   {action: spawnArgs("ryoku-shell", "visualizer-place")},
+		"shell.voice":             {action: spawnArgs("ryoku-shell", "voice")},
+		"shell.settings":          {action: spawnArgs("ryoku-shell", "hub", "open")},
+		"shell.stash":             {action: spawnArgs("ryoku-shell", "stash")},
+		"shell.screenshot":        {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
+		// Hyprland gives ryoshot three entry points, so niri gets the same three:
+		// without Print the key a user reaches for does nothing, and monitor mode
+		// would otherwise only be reachable by cycling inside the tool.
+		"shell.screenshotPrint":   {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
+		"shell.screenshotMonitor": {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
+		"shell.colorPicker":       {action: spawnArgs("hyprpicker", "-a")},
+		"shell.restartAudio":      {action: spawnArgs("ryoku-restart-audio")},
+		"shell.inhibitShortcuts":  {action: "toggle-keyboard-shortcuts-inhibit"},
 
-		{chord: "XF86MonBrightnessUp", action: spawnArgs("ryoku-cmd-brightness", "+5"), locked: true},
-		{chord: "XF86MonBrightnessDown", action: spawnArgs("ryoku-cmd-brightness", "-5"), locked: true},
+		// Media. Locked in the catalogue, so genBinds emits allow-when-locked.
+		"media.volumeUp":   {action: spawnArgs("ryoku-volume", "up")},
+		"media.volumeDown": {action: spawnArgs("ryoku-volume", "down")},
+		"media.mute":       {action: spawnArgs("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle")},
+		"media.play":       {action: spawnArgs("playerctl", "play-pause")},
+		"media.next":       {action: spawnArgs("playerctl", "next")},
+		"media.prev":       {action: spawnArgs("playerctl", "previous")},
 
-		{chord: "XF86TouchpadToggle", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "toggle"), locked: true},
-		{chord: "XF86TouchpadOn", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "on"), locked: true},
-		{chord: "XF86TouchpadOff", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "off"), locked: true},
+		// Hardware
+		"hardware.brightnessUp":   {action: spawnArgs("ryoku-cmd-brightness", "+5")},
+		"hardware.brightnessDown": {action: spawnArgs("ryoku-cmd-brightness", "-5")},
+		"hardware.touchpadToggle": {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "toggle")},
+		"hardware.touchpadOn":     {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "on")},
+		"hardware.touchpadOff":    {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "off")},
+
+		// Mouse
+		"mouse.move":   {reason: "niri moves windows with Mod and drag natively."},
+		"mouse.resize": {reason: "niri resizes windows with Mod and drag natively."},
 	}
-	// Super+N focuses the Nth workspace by index, Super+Alt+N sends the window
-	// there, Super+Shift+N sends it without following. The Hyprland desktop model
-	// (blocks of ten) has no niri analogue, so these are flat index references.
-	for i := 1; i <= 10; i++ {
-		key := i % 10 // 10 maps to the 0 key
-		binds = append(binds,
-			defBind{chord: fmt.Sprintf("SUPER + %d", key), action: fmt.Sprintf("focus-workspace %d", i)},
-			defBind{chord: fmt.Sprintf("SUPER + ALT + %d", key), action: fmt.Sprintf("move-window-to-workspace %d", i)},
-			defBind{chord: fmt.Sprintf("SUPER + SHIFT + %d", key), action: fmt.Sprintf("move-window-to-workspace %d focus=false", i)},
-		)
-	}
-	return binds
 }
 
-// outBind is one resolved bind, ready for the config writer. chord and action
-// are the niri form apply writes; dispChord is the Hub display chord it landed
-// on (a rebind moves it) and desc is set only for a compositor-exclusive bind,
-// so the binds verb can list what actually emitted, never a static default a
-// user has displaced.
+// outBind is one resolved bind, ready for the config writer: the niri chord and
+// action apply writes plus the KDL properties niri's parser reads off the node.
 type outBind struct {
 	chord, action    string
-	dispChord, desc  string
 	locked, noRepeat bool
 	cooldownMs       int
 }
 
-// resolveBinds folds the store's custom binds, rebinds and unbinds into the
-// shipped defaults, resolving every chord to one winner: a custom bind beats a
-// rebound default beats a static default. It is the single source the config
-// writer and the binds verb both read, so the cheatsheet can never advertise a
-// chord the emitted config does not carry. report names what could not be honoured.
+// resolveBinds expands the catalogue into the emitted bind set and folds the
+// store's custom binds, rebinds and unbinds into it, resolving every niri chord
+// to one winner: a custom bind beats a rebound default beats a static default.
+// A family expands to its ten chords; every resolved chord on a number-pad digit
+// (a family, a rebind onto the keypad, or a custom bind) also emits its
+// NumLock-off twin, so the keypad works either way. It is the single source
+// genBinds writes, so the emitted config never carries a chord twice. report
+// names each behaviour niri could not honour.
 func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 	unbind := map[string]bool{}
 	for _, c := range s.Unbinds {
@@ -187,18 +213,35 @@ func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 		}
 	}
 
+	defs := defaultBinds()
 	var report []wm.Unhonored
 	claimed := map[string]bool{}
 	var out []outBind
-	emit := func(niriChord, dispChord, action, desc string, locked, noRepeat bool, cooldownMs int) {
+	// The number pad works whichever way NumLock sits: a resolved bind on a
+	// KP_<digit> chord also wants its NumLock-off twin. Twins are held back so
+	// every explicit chord claims first, then a twin never displaces a bind a
+	// user set on that keysym; among twins the earlier (higher priority)
+	// resolution wins, matching the one-winner rule.
+	type pendingTwin struct {
+		hubChord   string
+		action     string
+		locked     bool
+		noRepeat   bool
+		cooldownMs int
+	}
+	var twins []pendingTwin
+	emit := func(hubChord, niriChord, action string, locked, noRepeat bool, cooldownMs int) {
 		if niriChord == "" || claimed[niriChord] {
 			return
 		}
 		claimed[niriChord] = true
 		out = append(out, outBind{
-			chord: niriChord, action: action, dispChord: dispChord, desc: desc,
+			chord: niriChord, action: action,
 			locked: locked, noRepeat: noRepeat, cooldownMs: cooldownMs,
 		})
+		if len(wm.NumpadAliases(hubChord)) > 0 {
+			twins = append(twins, pendingTwin{hubChord, action, locked, noRepeat, cooldownMs})
+		}
 	}
 
 	// Priority 1: user custom binds win every chord they take.
@@ -215,38 +258,58 @@ func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 			report = append(report, wm.Unhonored{Key: fmt.Sprintf("desktop.keybinds[%d]", i), Reason: fmt.Sprintf("niri cannot bind the chord %q.", k.Keys)})
 			continue
 		}
-		emit(niriChord, k.Keys, action, "", false, false, 0)
+		emit(k.Keys, niriChord, action, false, false, 0)
 	}
 
-	defs := defaultBinds()
+	cat := wm.ShippedBinds()
 
 	// Behaviours niri cannot perform: report each once, unless the user removed it.
-	for _, d := range defs {
-		if d.action == "" && !unbind[d.chord] {
-			report = append(report, wm.Unhonored{Key: fmt.Sprintf("desktop.keybinds (default %s)", d.chord), Reason: d.reason})
+	for _, cb := range cat {
+		nb := defs[cb.ID]
+		if nb.action == "" && nb.reason != "" && !unbind[cb.Chord] {
+			report = append(report, wm.Unhonored{Key: fmt.Sprintf("desktop.keybinds (default %s)", cb.Chord), Reason: nb.reason})
 		}
 	}
 
 	// Priority 2 then 3: rebound defaults claim before static ones, so a rebind
 	// onto another default's chord wins and the static default is dropped.
 	claimDefaults := func(rebound bool) {
-		for _, d := range defs {
-			if d.action == "" || unbind[d.chord] {
+		for _, cb := range cat {
+			nb := defs[cb.ID]
+			if nb.action == "" {
 				continue
 			}
-			to, isRebound := effectiveChord(d.chord, s.KeybindRebinds)
-			if isRebound != rebound {
-				continue
+			for idx, chord := range cb.Expand() {
+				action := nb.action
+				if cb.Family {
+					action = strings.Replace(action, "{n}", strconv.Itoa(idx+1), 1)
+				}
+				if unbind[chord] {
+					continue
+				}
+				to, isRebound := effectiveChord(chord, s.KeybindRebinds)
+				if isRebound != rebound {
+					continue
+				}
+				if niriChord, ok := toNiriChord(to); ok {
+					emit(to, niriChord, action, cb.Locked, nb.noRepeat, nb.cooldownMs)
+				}
 			}
-			niriChord, ok := toNiriChord(to)
-			if !ok {
-				continue
-			}
-			emit(niriChord, to, d.action, d.desc, d.locked, d.noRepeat, d.cooldownMs)
 		}
 	}
 	claimDefaults(true)
 	claimDefaults(false)
+
+	// Every explicit chord is claimed now, so lay down the NumLock-off twin of
+	// each resolved number-pad digit. A twin has no twin of its own, so this pass
+	// records nothing further and cannot displace a bind already emitted.
+	for _, t := range twins {
+		for _, alias := range wm.NumpadAliases(t.hubChord) {
+			if aliasChord, ok := toNiriChord(alias); ok {
+				emit(alias, aliasChord, t.action, t.locked, t.noRepeat, t.cooldownMs)
+			}
+		}
+	}
 
 	return out, report
 }
@@ -280,34 +343,112 @@ func genBinds(s niriStore) (string, []wm.Unhonored) {
 	return b.String(), report
 }
 
-// runBinds prints niri's compositor-exclusive binds as JSON, the mirror of
-// schema: the provider declares what only it offers. Each row is the chord that
-// actually emitted and its cheatsheet copy, resolved through the store so a bind
-// a user displaced is absent and a rebound one shows its new chord. The Hub
-// folds these into a section titled with the compositor's name; a chord the
-// shared legend already documents is dropped there, so this need not know it.
+// bindRows is the full effective legend the binds verb prints: every catalogue
+// row in catalogue order (its chord resolved against the user's rebinds, its
+// copy overridden where niri's mechanic differs, and marked unhonored where niri
+// cannot perform it), then niri's own binds outside the catalogue, then the
+// user's custom binds. One list, so the cheatsheet and the Hub read the legend
+// from the seam rather than parsing niri's config.
+func bindRows(s niriStore) []wm.BindRow {
+	defs := defaultBinds()
+	rows := make([]wm.BindRow, 0, 128)
+
+	for _, cb := range wm.ShippedBinds() {
+		nb := defs[cb.ID]
+		label, hint := cb.Label, cb.Hint
+		if nb.label != "" {
+			label = nb.label
+		}
+		if nb.hint != "" {
+			hint = nb.hint
+		}
+		// A family keeps its {n} and cannot be rebound, so its effective chord is
+		// the shipped one. A plain bind takes the user's rebind when set.
+		eff := cb.Chord
+		if !cb.Family {
+			eff, _ = effectiveChord(cb.Chord, s.KeybindRebinds)
+		}
+		row := wm.BindRow{
+			ID:         cb.ID,
+			Category:   cb.Category,
+			Label:      label,
+			Hint:       hint,
+			Keys:       wm.DisplayKeys(eff),
+			Default:    cb.Chord,
+			Chord:      eff,
+			Kind:       cb.Kind,
+			Rebindable: rebindable(cb),
+			Locked:     cb.Locked,
+		}
+		if nb.action == "" {
+			row.Unhonored = nb.reason
+		}
+		rows = append(rows, row)
+	}
+
+	// niri exclusives would follow here, titled with the compositor's name. Every
+	// niri behaviour Ryoku binds now carries a catalogue id, so there are none;
+	// the section stays a home for a future niri-only bind.
+
+	// Custom binds from desktop.keybinds, in store order. A degenerate bind with
+	// no command is dropped, mirroring resolveBinds; the rest list, marked
+	// unhonored when niri cannot express the action or the chord.
+	for i, k := range s.Keybinds {
+		action, reason := customAction(k)
+		if action == "" && reason == "" {
+			continue
+		}
+		chord := strings.TrimSpace(k.Keys)
+		row := wm.BindRow{
+			ID:         fmt.Sprintf("custom.%d", i),
+			Category:   "Custom",
+			Label:      customLabel(k),
+			Keys:       wm.DisplayKeys(chord),
+			Default:    chord,
+			Chord:      chord,
+			Kind:       wm.BindCustom,
+			Rebindable: false,
+		}
+		switch {
+		case action == "":
+			row.Unhonored = reason
+		default:
+			if _, ok := toNiriChord(chord); !ok {
+				row.Unhonored = fmt.Sprintf("niri cannot bind the chord %q.", k.Keys)
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	return rows
+}
+
+// rebindable reports whether the Hub may let a user record a new chord over this
+// bind. A family stands for ten chords and a media or hardware chord rides a
+// dedicated key, so neither is a rebind target.
+func rebindable(cb wm.CatalogBind) bool {
+	if cb.Family {
+		return false
+	}
+	for _, tok := range strings.Split(cb.Chord, " + ") {
+		if strings.HasPrefix(tok, "mouse") || strings.HasPrefix(tok, "XF86") {
+			return false
+		}
+	}
+	return true
+}
+
+// runBinds prints the effective bind legend as a JSON array of wm.BindRow, read
+// through the store so the chords reflect what the session actually emits.
 func runBinds(args []string) error {
 	storePath := ""
 	if len(args) > 0 {
 		storePath = args[0]
 	}
-	out, _ := resolveBinds(loadStore(storePath))
-
-	type exclusiveBind struct {
-		Chord string `json:"chord"`
-		Desc  string `json:"desc"`
-	}
-	list := []exclusiveBind{}
-	for _, o := range out {
-		if o.desc == "" {
-			continue
-		}
-		list = append(list, exclusiveBind{Chord: o.dispChord, Desc: o.desc})
-	}
-
+	rows := bindRows(loadStore(storePath))
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
-	return enc.Encode(list)
+	return enc.Encode(rows)
 }
 
 // effectiveChord resolves a default's emitted chord: the user's rebind when set,
@@ -322,10 +463,10 @@ func effectiveChord(def string, rebinds map[string]string) (string, bool) {
 }
 
 // customAction maps a store keybind action onto its niri action. exec runs the
-// value through the shell; the window actions take none. An unknown action (a
-// submap, a special-workspace or plugin toggle from another compositor) yields a
-// reason so the bind is reported, not dropped. An empty exec is degenerate and
-// dropped silently.
+// value through the shell; the window actions take none; the workspace actions
+// take a flat index, which niri references directly. An unknown action (a submap
+// or a plugin toggle from another compositor) yields a reason so the bind is
+// reported, not dropped. An empty exec is degenerate and dropped silently.
 func customAction(k Keybind) (action, reason string) {
 	switch k.Action {
 	case "exec", "":
@@ -339,8 +480,60 @@ func customAction(k Keybind) (action, reason string) {
 		return "fullscreen-window", ""
 	case "togglefloating":
 		return "toggle-window-floating", ""
+	case "workspace":
+		if n, ok := workspaceIndex(k.Value); ok {
+			return fmt.Sprintf("focus-workspace %d", n), ""
+		}
+		return "", fmt.Sprintf("niri needs a workspace number, not %q.", k.Value)
+	case "movetoworkspace":
+		if n, ok := workspaceIndex(k.Value); ok {
+			return fmt.Sprintf("move-window-to-workspace %d", n), ""
+		}
+		return "", fmt.Sprintf("niri needs a workspace number, not %q.", k.Value)
+	case "movetoworkspacesilent":
+		if n, ok := workspaceIndex(k.Value); ok {
+			return fmt.Sprintf("move-window-to-workspace %d focus=false", n), ""
+		}
+		return "", fmt.Sprintf("niri needs a workspace number, not %q.", k.Value)
 	}
 	return "", fmt.Sprintf("niri has no bind action for %q.", k.Action)
+}
+
+// customLabel is the human text the legend shows for a store keybind, derived
+// from its action so the row reads like the shipped legend rather than a raw
+// dispatcher name. It stands independent of customAction: a bind niri cannot
+// honour still reads its intent, with the reason carried in Unhonored.
+func customLabel(k Keybind) string {
+	switch k.Action {
+	case "exec", "":
+		if v := strings.TrimSpace(k.Value); v != "" {
+			return "Run: " + v
+		}
+		return "Run command"
+	case "close":
+		return "Close window"
+	case "fullscreen":
+		return "Fullscreen"
+	case "togglefloating":
+		return "Float or tile"
+	case "workspace":
+		return "Focus workspace " + strings.TrimSpace(k.Value)
+	case "movetoworkspace":
+		return "Send to workspace " + strings.TrimSpace(k.Value)
+	case "movetoworkspacesilent":
+		return "Send to workspace " + strings.TrimSpace(k.Value) + " quietly"
+	}
+	return k.Action
+}
+
+// workspaceIndex parses a custom bind's workspace value as a positive flat index,
+// the only shape niri's focus-workspace and move-window-to-workspace accept here.
+func workspaceIndex(v string) (int, bool) {
+	n, err := strconv.Atoi(strings.TrimSpace(v))
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	return n, true
 }
 
 // toNiriChord rewrites a Hub display chord ("SUPER + SHIFT + Left") as a niri
@@ -389,14 +582,21 @@ func niriMod(tok string) (string, bool) {
 }
 
 // niriKey normalises a key token to its XKB name. A lone letter is upper-cased;
-// the scroll pseudo-keys become niri's wheel names; a pointer button has no key
-// name, so it fails.
+// the scroll pseudo-keys become niri's wheel names; the page-up/down catalogue
+// names take their XKB spelling. A number-pad keysym, whether the NumLock-on
+// digit (KP_1..KP_0) or its NumLock-off twin (KP_End..KP_Insert and the arrows),
+// and the punctuation names niri's xkb parser accepts pass through unchanged. A
+// pointer button has no key name, so it fails.
 func niriKey(tok string) (string, bool) {
 	switch tok {
 	case "mouse_up":
 		return "WheelScrollUp", true
 	case "mouse_down":
 		return "WheelScrollDown", true
+	case "Prior":
+		return "Page_Up", true
+	case "Next":
+		return "Page_Down", true
 	}
 	if strings.HasPrefix(tok, "mouse:") || strings.HasPrefix(tok, "mouse") {
 		return "", false

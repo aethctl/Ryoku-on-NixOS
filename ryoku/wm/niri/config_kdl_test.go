@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -118,6 +121,47 @@ func TestBorderGradientActive(t *testing.T) {
 	}
 	if strings.Contains(out, "\n        active-color ") {
 		t.Errorf("the active frame must use the gradient, not a solid colour\n%s", out)
+	}
+}
+
+// The border follows the live palette when borderFollowsPalette is on and the
+// palette file holds usable colours: those drive the solid active and inactive
+// colours, the niri twin of Hyprland's decoration.lua border. A fixed border or
+// a missing palette file falls back to the store colours.
+func TestBorderFollowsPalette(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	writePalette := func(t *testing.T, active, inactive string) {
+		if err := os.MkdirAll(filepath.Dir(borderPalettePath()), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := fmt.Sprintf(`{"active":%q,"inactive":%q}`, active, inactive)
+		if err := os.WriteFile(borderPalettePath(), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	writePalette(t, "#112233", "#445566")
+	following := layoutBorderBlock(t, string(genSettings(defaultStore())))
+	if !strings.Contains(following, `active-color "#112233"`) || !strings.Contains(following, `inactive-color "#445566"`) {
+		t.Errorf("a following border must take the palette colours\n%s", following)
+	}
+	if strings.Contains(following, "#e0563b") {
+		t.Errorf("a following border must not keep the store colour\n%s", following)
+	}
+
+	s := defaultStore()
+	s.Appearance.BorderFollowsPalette = false
+	fixed := layoutBorderBlock(t, string(genSettings(s)))
+	if !strings.Contains(fixed, `active-color "#e0563b"`) || !strings.Contains(fixed, `inactive-color "#313a4d"`) {
+		t.Errorf("a fixed border must use the store colours even with a palette file present\n%s", fixed)
+	}
+
+	if err := os.Remove(borderPalettePath()); err != nil {
+		t.Fatal(err)
+	}
+	missing := layoutBorderBlock(t, string(genSettings(defaultStore())))
+	if !strings.Contains(missing, `active-color "#e0563b"`) || !strings.Contains(missing, `inactive-color "#313a4d"`) {
+		t.Errorf("a missing palette file must fall back to the store colours\n%s", missing)
 	}
 }
 

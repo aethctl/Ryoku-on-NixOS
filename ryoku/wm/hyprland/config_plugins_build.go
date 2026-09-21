@@ -537,7 +537,7 @@ func runPluginRebuild(args []string) error {
 		// re-emit settings.lua so it names the fresh copies, and swap a running
 		// plugin for its fresh build: the old image stays mapped until unloaded.
 		o := loadStore(desktopStorePath())
-		_ = writeOverlayLua("settings.lua", []byte(genLua(o, paletteDriven())))
+		_ = writeOverlayLua("settings.lua", []byte(genLua(o, borderFollowsPalette(o))))
 		loaded := loadedPlugins()
 		swapped := false
 		for _, id := range res.Built {

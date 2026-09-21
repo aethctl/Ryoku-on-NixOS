@@ -852,7 +852,7 @@ func genAnimatedBorder(o Overrides, follow, full bool) string {
 // flash-free via eval. Rules, keybinds, env and autostart are not previewed;
 // they apply on Save via reload.
 func liveLua(o Overrides) string {
-	follow := paletteDriven()
+	follow := borderFollowsPalette(o)
 	return fullConfigLua(o, follow) + genMotion(o, true) + genAnimatedBorder(o, follow, true) +
 		genAnimBlock(o) + genGesture(o) + genPluginConfig(o) +
 		fmt.Sprintf("hl.exec_cmd(%s)\n", luaStr(fmt.Sprintf("hyprctl setcursor %s %d", o.Cursor.Theme, o.Cursor.Size)))

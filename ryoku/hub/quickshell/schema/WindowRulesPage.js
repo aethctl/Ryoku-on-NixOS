@@ -17,10 +17,12 @@ var rows = [
         "caps": "windowRules",
         "opts": [
             "float", "tile", "pin", "fullscreen", "maximize", "center",
-            "size", "move", "workspace", "opacity", "noblur", "noborder",
+            "size", "move", "workspace", "opacity", "noblur", "blur", "noborder",
             "noshadow", "norounding", "nodim", "noanim", "opaque", "xray",
             "nofocus", "stayfocused", "keepaspectratio", "pseudo",
-            "immediate", "idleinhibit", "suppressevent"
+            "immediate", "idleinhibit", "suppressevent",
+            "columnwidth", "minsize", "maxsize", "scrollfactor",
+            "tiledstate", "babaisfloat", "blockout"
         ]
     }
 ];

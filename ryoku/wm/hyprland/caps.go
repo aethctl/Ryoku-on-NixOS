@@ -42,6 +42,7 @@ var capsManifest = []wm.Capability{
 	wm.CapSessionExit,
 	wm.CapNightLight,
 	wm.CapTouchpadToggle,
+	wm.CapPaletteBorder,
 }
 
 // windowRuleActions are the neutral window-rule action ids this

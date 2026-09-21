@@ -36,16 +36,6 @@ Singleton {
 
     signal chord(var keys, bool repeat, string state, real timestamp)
 
-    // The shell's overview binding claims standalone modifier taps; the
-    // daemon then keeps the reader alive with the visualiser off and narrows
-    // the frames to taps only. Claimed once per session, never released.
-    property bool tapsWanted: false
-    function wantTaps() {
-        if (root.tapsWanted)
-            return;
-        root.tapsWanted = true;
-        root.send("keypress.taps", { on: true });
-    }
     function applySettings(text) {
         const settings = KeypressMath.parseSettings(text);
         root.persistedTheme = settings.theme;
@@ -69,9 +59,6 @@ Singleton {
                 return;
             const state = frame.state === "pressed" || frame.state === "released"
                 ? frame.state : "tap";
-            // With the visualiser off only the claimed taps are of interest.
-            if (!root.active && !(state === "tap" && root.tapsWanted))
-                return;
             const signature = frame.serial ? String(frame.serial)
                 : JSON.stringify([frame.time || 0, frame.repeat === true, state, frame.keys]);
             if (signature === root.lastEventSignature)
@@ -105,10 +92,6 @@ Singleton {
     }
     function sendConfigure() {
         root.send("keypress.configure", { enabled: root.active, mode: root.mode });
-        // The daemon may have restarted under the shell; the tap claim lives
-        // there, so it rides the same reconnect as the visualiser config.
-        if (root.tapsWanted)
-            root.send("keypress.taps", { on: true });
     }
 
 

@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 
 // Window Rules (DESIGN.md section 11, ADVANCED). Custom Hyprland window rules
 // layered over the ones Ryoku ships: each entry matches a window by class
@@ -24,40 +25,49 @@ Item {
     // gated so the empty state does not flash before `hypr get` returns.
     readonly property bool ready: pg.hub ? pg.hub.wmLoaded === true : false
 
-    // the 25 rule keywords, key -> visible label. carried verbatim from the old
-    // page: the keys are the exact strings the Go backend's genWindowRule
-    // switches on, so a rename here silently breaks settings.lua.
-    readonly property var actionOptions: [
-        { "key": "float", "label": I18n.tr("Float") },
-        { "key": "tile", "label": I18n.tr("Tile") },
-        { "key": "pin", "label": I18n.tr("Pin") },
-        { "key": "fullscreen", "label": I18n.tr("Fullscreen") },
-        { "key": "maximize", "label": I18n.tr("Maximize") },
-        { "key": "center", "label": I18n.tr("Centre") },
-        { "key": "size", "label": I18n.tr("Size (WxH)") },
-        { "key": "move", "label": I18n.tr("Move (X,Y)") },
-        { "key": "workspace", "label": I18n.tr("Workspace") },
-        { "key": "opacity", "label": I18n.tr("Opacity") },
-        { "key": "noblur", "label": I18n.tr("No blur") },
-        { "key": "noborder", "label": I18n.tr("No border") },
-        { "key": "noshadow", "label": I18n.tr("No shadow") },
-        { "key": "norounding", "label": I18n.tr("Square corners") },
-        { "key": "nodim", "label": I18n.tr("Never dim") },
-        { "key": "noanim", "label": I18n.tr("No animations") },
-        { "key": "opaque", "label": I18n.tr("Force opaque") },
-        { "key": "xray", "label": I18n.tr("Blur X-ray") },
-        { "key": "nofocus", "label": I18n.tr("Never take focus") },
-        { "key": "stayfocused", "label": I18n.tr("Hold focus (dialogs)") },
-        { "key": "keepaspectratio", "label": I18n.tr("Keep aspect ratio") },
-        { "key": "pseudo", "label": I18n.tr("Pseudo-tile") },
-        { "key": "immediate", "label": I18n.tr("Immediate (tearing)") },
-        { "key": "idleinhibit", "label": I18n.tr("Block idle/sleep") },
-        { "key": "suppressevent", "label": I18n.tr("Ignore app request") }
+    // id -> label across EVERY provider's window-rule vocabulary. The active
+    // provider's own list (Settings.windowRuleActions) decides which ids appear
+    // and in what order; a Hyprland-only or niri-only id never shows unless its
+    // provider is the one running. Keys are the exact strings the provider's
+    // config writer switches on, so a rename here silently breaks the rule.
+    readonly property var actionLabels: ({
+        "float": I18n.tr("Float"), "tile": I18n.tr("Tile"), "pin": I18n.tr("Pin"),
+        "fullscreen": I18n.tr("Fullscreen"), "maximize": I18n.tr("Maximize"),
+        "center": I18n.tr("Centre"), "size": I18n.tr("Size (WxH)"),
+        "move": I18n.tr("Move (X,Y)"), "workspace": I18n.tr("Workspace"),
+        "opacity": I18n.tr("Opacity"), "noblur": I18n.tr("No blur"),
+        "blur": I18n.tr("Blur"), "noborder": I18n.tr("No border"),
+        "noshadow": I18n.tr("No shadow"), "norounding": I18n.tr("Square corners"),
+        "nodim": I18n.tr("Never dim"), "noanim": I18n.tr("No animations"),
+        "opaque": I18n.tr("Force opaque"), "xray": I18n.tr("X-ray"),
+        "nofocus": I18n.tr("Never take focus"), "stayfocused": I18n.tr("Hold focus (dialogs)"),
+        "keepaspectratio": I18n.tr("Keep aspect ratio"), "pseudo": I18n.tr("Pseudo-tile"),
+        "immediate": I18n.tr("Immediate (tearing)"), "idleinhibit": I18n.tr("Block idle/sleep"),
+        "suppressevent": I18n.tr("Ignore app request"),
+        "columnwidth": I18n.tr("Default column width"), "minsize": I18n.tr("Minimum size"),
+        "maxsize": I18n.tr("Maximum size"), "scrollfactor": I18n.tr("Scroll factor"),
+        "tiledstate": I18n.tr("Tiled state"), "babaisfloat": I18n.tr("Float animation"),
+        "blockout": I18n.tr("Hide from screencasts")
+    })
+    // The ids the picker offers, in order: the active provider's own list, or the
+    // full Hyprland set while the daemon frame has not landed yet.
+    readonly property var fallbackActionKeys: [
+        "float", "tile", "pin", "fullscreen", "maximize", "center",
+        "size", "move", "workspace", "opacity", "noblur", "noborder",
+        "noshadow", "norounding", "nodim", "noanim", "opaque", "xray",
+        "nofocus", "stayfocused", "keepaspectratio", "pseudo",
+        "immediate", "idleinhibit", "suppressevent"
     ]
+    readonly property var actionKeys: (Settings.windowRuleActions && Settings.windowRuleActions.length)
+        ? Settings.windowRuleActions : pg.fallbackActionKeys
+    readonly property var actionOptions: pg.actionKeys.map(function (k) {
+        return { "key": k, "label": pg.actionLabels[k] || k };
+    })
+    function actionLabel(k) { return pg.actionLabels[k] || k; }
     // actions carrying a value: the text ones are free-form, idleinhibit and
     // suppressevent pick from a fixed enumerated set (rendered as a Seg below).
-    readonly property var valueActions: ["opacity", "size", "move", "workspace", "idleinhibit", "suppressevent"]
-    readonly property var textValueActions: ["opacity", "size", "move", "workspace"]
+    readonly property var valueActions: ["opacity", "size", "move", "workspace", "idleinhibit", "suppressevent", "columnwidth", "minsize", "maxsize", "scrollfactor"]
+    readonly property var textValueActions: ["opacity", "size", "move", "workspace", "columnwidth", "minsize", "maxsize", "scrollfactor"]
     readonly property var idleInhibitOptions: [
         { "key": "always", "label": I18n.tr("Always") },
         { "key": "focus", "label": I18n.tr("Focus") },
@@ -284,7 +294,11 @@ Item {
                     readonly property string valueHint: act === "opacity" ? "0.0 - 1.0"
                         : act === "size" ? "1200x800"
                         : act === "move" ? "100,60"
-                        : act === "workspace" ? "2" : ""
+                        : act === "workspace" ? "2"
+                        : act === "columnwidth" ? "0.5"
+                        : act === "minsize" ? "800x600"
+                        : act === "maxsize" ? "1600x1200"
+                        : act === "scrollfactor" ? "1.5" : ""
 
                     width: col.colWidth
                     // s3 pad + match row + s2 gap + action row + s3 pad
@@ -423,7 +437,7 @@ Item {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.right: rowRect.hasValue ? valueBox.left : parent.right
                             anchors.rightMargin: rowRect.hasValue ? rowRect.gap : 0
-                            value: pg.labelIn(pg.actionOptions, rowRect.act)
+                            value: pg.actionLabel(rowRect.act)
                             count: pg.actionOptions.length
                             onOpened: pg.openPicker(rowRect.index)
                         }

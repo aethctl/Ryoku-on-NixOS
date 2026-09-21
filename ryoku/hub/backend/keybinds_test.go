@@ -2,334 +2,144 @@ package main
 
 import (
 	"encoding/json"
-	"reflect"
-	"strings"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
-// slice of binds.lua hitting every parser branch: a header, a modified combo,
-// comment vs derived description, a string-literal media key, a mouse bind,
-// and the 1..0 workspace loop.
-const sampleBinds = `local mod = "SUPER"
-local function K(k) return k end
+// stubProvider installs a fake ryoku-wm-<name> on PATH that prints out on every
+// verb, and forces detection to it, so keybinds() drives a known binds answer
+// with no live compositor. wm.Open() reads RYOKU_WM first, so the name here is
+// the provider keybinds() will run.
+func stubProvider(t *testing.T, name, out string) {
+	t.Helper()
+	bin := t.TempDir()
+	// printf is a shell builtin, so the script needs no tool from PATH; that lets
+	// the test hold PATH to just this dir and still emit the stubbed answer.
+	script := "#!/bin/sh\nprintf '%s' '" + out + "'\n"
+	if err := os.WriteFile(filepath.Join(bin, "ryoku-wm-"+name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("RYOKU_WM", name)
+}
 
--- Windows
-hl.bind(K(mod .. " + Q"),         hl.dsp.window.close())                           -- close active window
-hl.bind(K(mod .. " + SHIFT + A"), hl.dsp.window.float({ action = "disable" }))     -- restore: tile it back to normal
-
--- Apps
-hl.bind(K(mod .. " + Return"),    hl.dsp.exec_cmd("kitty"))
-hl.bind(K(mod .. " + N"),         hl.dsp.exec_cmd("kitty -e nvim"))                -- neovim
-
--- Switch workspaces
-hl.bind(K(mod .. " + Left"),       hl.dsp.focus({ workspace = "r-1" }))
-for i = 1, 10 do
-    local key = i % 10 -- 10 maps to the 0 key
-    hl.bind(K(mod .. " + " .. key),          hl.dsp.focus({ workspace = i }))
-    hl.bind(K(mod .. " + SHIFT + " .. key),  hl.dsp.window.move({ workspace = i }))
-end
-
--- Media and volume keys
-hl.bind(K("XF86AudioRaiseVolume"), hl.dsp.exec_cmd("wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"), { locked = true, repeating = true })
-`
-
-func find(l legend, cat string) *category {
+func catByName(l legend, name string) *category {
 	for i := range l.Categories {
-		if l.Categories[i].Name == cat {
+		if l.Categories[i].Name == name {
 			return &l.Categories[i]
 		}
 	}
 	return nil
 }
 
-func TestParseCategories(t *testing.T) {
-	l := parseBinds(sampleBinds)
-	want := []string{"Windows", "Apps", "Switch workspaces", "Media and volume keys"}
-	if len(l.Categories) != len(want) {
-		t.Fatalf("got %d categories, want %d: %+v", len(l.Categories), len(want), l.Categories)
+// The provider's rows are grouped into sections in arrival order: a category
+// opens the first time one of its rows appears and later rows join it, so two
+// non-adjacent Windows rows are one section that keeps its place ahead of Apps
+// and the exclusive niri group. combo mirrors the row's Default (the shipped
+// chord a rebind records over), not the effective Chord, and desc mirrors Label.
+func TestKeybindsGroupsRowsInArrivalOrder(t *testing.T) {
+	stubProvider(t, "stub", `[
+  {"id":"window.close","category":"Windows","label":"Close window","keys":["Super","Q"],"default":"SUPER + Q","chord":"SUPER + Q","kind":"wm","rebindable":true},
+  {"id":"app.terminal","category":"Apps","label":"Terminal","hint":"Open a terminal","keys":["Super","Enter"],"default":"SUPER + Return","chord":"SUPER + X","kind":"app","rebindable":true},
+  {"id":"window.fullscreen","category":"Windows","label":"Fullscreen","keys":["Super","F"],"default":"SUPER + F","chord":"SUPER + F","kind":"wm","rebindable":true,"unhonored":"niri has no fullscreen toggle"},
+  {"id":"niri.center","category":"niri","label":"Center column","keys":["Super","C"],"default":"SUPER + C","chord":"SUPER + C","kind":"wm"}
+]`)
+
+	l := keybinds()
+
+	wantOrder := []string{"Windows", "Apps", "niri"}
+	if len(l.Categories) != len(wantOrder) {
+		t.Fatalf("got %d categories, want %d: %+v", len(l.Categories), len(wantOrder), l.Categories)
 	}
-	for i, n := range want {
+	for i, n := range wantOrder {
 		if l.Categories[i].Name != n {
 			t.Errorf("category %d = %q, want %q", i, l.Categories[i].Name, n)
 		}
 	}
-}
 
-// A section whose comment runs over several lines is one category, titled from
-// its first sentence. Taking every comment line made an empty category per line
-// and filed the real binds under the paragraph's closing sentence, which is what
-// Ryoku Settings showed for Workspaces and the media keys.
-func TestMultiLineSectionHeader(t *testing.T) {
-	l := parseBinds(`
--- Workspaces. Super+N focuses the Nth workspace OF THE CURRENT DESKTOP (a
--- desktop is a block of 10 ids; see scripts/ryoku-workspace and the overview).
--- Super+Alt+N sends the active window to that slot, staying on this desktop.
-local ws_helper = "/x"
+	win := catByName(l, "Windows")
+	if win == nil || len(win.Binds) != 2 {
+		t.Fatalf("Windows category malformed: %+v", win)
+	}
+	if win.Binds[0].ID != "window.close" || win.Binds[1].ID != "window.fullscreen" {
+		t.Errorf("Windows binds out of order: %q, %q", win.Binds[0].ID, win.Binds[1].ID)
+	}
+	// desc mirrors Label, combo mirrors Default.
+	if win.Binds[0].Desc != "Close window" {
+		t.Errorf("desc = %q, want the row label", win.Binds[0].Desc)
+	}
+	if win.Binds[0].Combo != "SUPER + Q" {
+		t.Errorf("combo = %q, want the row default", win.Binds[0].Combo)
+	}
+	// The struck row is still listed, carrying the provider's reason.
+	if win.Binds[1].Unhonored != "niri has no fullscreen toggle" {
+		t.Errorf("unhonored = %q, want the provider reason", win.Binds[1].Unhonored)
+	}
 
-hl.bind(K(mod .. " + H"), hl.dsp.exec_cmd(ws_helper .. " hide")) -- hide the focused window
-`)
-	if len(l.Categories) != 1 {
-		t.Fatalf("got %d categories, want 1: %+v", len(l.Categories), l.Categories)
+	apps := catByName(l, "Apps")
+	if apps == nil || len(apps.Binds) != 1 {
+		t.Fatalf("Apps category malformed: %+v", apps)
 	}
-	if got := l.Categories[0].Name; got != "Workspaces" {
-		t.Errorf("category = %q, want %q", got, "Workspaces")
+	// combo is the default chord, not the rebound effective chord.
+	if apps.Binds[0].Combo != "SUPER + Return" {
+		t.Errorf("combo = %q, want the default, not the rebound chord", apps.Binds[0].Combo)
 	}
-	if n := len(l.Categories[0].Binds); n != 1 {
-		t.Fatalf("got %d binds, want 1", n)
+	if apps.Binds[0].Chord != "SUPER + X" {
+		t.Errorf("chord = %q, want the effective rebound chord passed through", apps.Binds[0].Chord)
 	}
-	if got := l.Categories[0].Binds[0].Desc; got != "Hide the focused window" {
-		t.Errorf("desc = %q", got)
+	if apps.Binds[0].Hint != "Open a terminal" {
+		t.Errorf("hint = %q, want the row hint passed through", apps.Binds[0].Hint)
 	}
-}
 
-func TestModifiedComboKeys(t *testing.T) {
-	w := find(parseBinds(sampleBinds), "Windows")
-	if w == nil || len(w.Binds) != 2 {
-		t.Fatalf("Windows category malformed: %+v", w)
-	}
-	got := strings.Join(w.Binds[1].Keys, "|")
-	if got != "Super|Shift|A" {
-		t.Errorf("keys = %q, want Super|Shift|A", got)
-	}
-	if w.Binds[0].Desc != "Close active window" {
-		t.Errorf("desc = %q, want capitalized comment", w.Binds[0].Desc)
+	if n := len(catByName(l, "niri").Binds); n != 1 {
+		t.Fatalf("niri exclusive group has %d binds, want 1", n)
 	}
 }
 
-func TestDerivedDescriptionFromDispatcher(t *testing.T) {
-	a := find(parseBinds(sampleBinds), "Apps")
-	if a == nil || len(a.Binds) == 0 {
-		t.Fatal("Apps category missing")
+// The wire shape the cheatsheet and Hub page read: every BindRow field plus desc
+// and combo, so a rename of one drops a field one of those surfaces expects.
+func TestKeybindsJSONShape(t *testing.T) {
+	stubProvider(t, "stub", `[
+  {"id":"window.close","category":"Windows","label":"Close window","keys":["Super","Q"],"default":"SUPER + Q","chord":"SUPER + Q","kind":"wm","rebindable":true,"locked":false}
+]`)
+
+	raw, err := json.Marshal(keybinds())
+	if err != nil {
+		t.Fatal(err)
 	}
-	// kitty has no trailing comment; description comes from the dispatcher.
-	if a.Binds[0].Desc != "Terminal" {
-		t.Errorf("derived desc = %q, want Terminal", a.Binds[0].Desc)
+	var got struct {
+		Categories []struct {
+			Name  string                       `json:"name"`
+			Binds []map[string]json.RawMessage `json:"binds"`
+		} `json:"categories"`
+	}
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Categories) != 1 || len(got.Categories[0].Binds) != 1 {
+		t.Fatalf("unexpected shape: %s", raw)
+	}
+	b := got.Categories[0].Binds[0]
+	for _, field := range []string{"keys", "combo", "desc", "rebindable", "id", "kind", "locked", "default", "chord", "label", "category"} {
+		if _, ok := b[field]; !ok {
+			t.Errorf("emitted bind is missing the %q field: %s", field, raw)
+		}
 	}
 }
 
-func TestWorkspaceLoopCollapses(t *testing.T) {
-	ws := find(parseBinds(sampleBinds), "Switch workspaces")
-	if ws == nil {
-		t.Fatal("Switch workspaces category missing")
-	}
-	// 1 explicit Left bind + 2 loop binds = 3 entries.
-	if len(ws.Binds) != 3 {
-		t.Fatalf("got %d binds, want 3: %+v", len(ws.Binds), ws.Binds)
-	}
-	focus := ws.Binds[1]
-	if strings.Join(focus.Keys, "|") != "Super|1\u20260" {
-		t.Errorf("loop keys = %q, want Super|1…0", strings.Join(focus.Keys, "|"))
-	}
-	if focus.Desc != "Focus workspace" {
-		t.Errorf("loop desc = %q, want Focus workspace", focus.Desc)
-	}
-	if ws.Binds[2].Desc != "Move window to workspace" {
-		t.Errorf("loop move desc = %q", ws.Binds[2].Desc)
-	}
-}
+// No honest legend to draw when the provider errors (its binary is absent), so
+// the Hub gets an empty, non-nil set and shows its empty state rather than a
+// partial or stale sheet.
+func TestKeybindsEmptyOnProviderError(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // ryoku-wm-missing is not here, so binds fails
+	t.Setenv("RYOKU_WM", "missing")
 
-func TestMediaKeyLiteral(t *testing.T) {
-	m := find(parseBinds(sampleBinds), "Media and volume keys")
-	if m == nil || len(m.Binds) != 1 {
-		t.Fatalf("media category malformed: %+v", m)
+	l := keybinds()
+	if l.Categories == nil {
+		t.Fatal("categories must be an empty slice, not nil, so the JSON is [] not null")
 	}
-	if strings.Join(m.Binds[0].Keys, "|") != "Vol +" {
-		t.Errorf("media key = %q, want 'Vol +'", strings.Join(m.Binds[0].Keys, "|"))
-	}
-	if m.Binds[0].Desc != "Volume up" {
-		t.Errorf("media desc = %q, want Volume up", m.Binds[0].Desc)
-	}
-}
-
-func TestPrettyKeyGrave(t *testing.T) {
-	if got := prettyKey("grave"); got != "`" {
-		t.Errorf("grave key = %q, want backtick", got)
-	}
-}
-
-// lambda action (multi-dispatch, e.g. SUPER+A float + centre) isn't an
-// hl.dsp expression but it still belongs in the legend. description comes
-// from the trailing comment.
-func TestLambdaBind(t *testing.T) {
-	const src = `-- Windows
-hl.bind(mod .. " + A", function() hl.dispatch(hl.dsp.window.float({ action = "toggle" })); hl.dispatch(hl.dsp.window.center()) end) -- float + centre the window
-`
-	w := find(parseBinds(src), "Windows")
-	if w == nil || len(w.Binds) != 1 {
-		t.Fatalf("Windows category malformed: %+v", w)
-	}
-	if got := strings.Join(w.Binds[0].Keys, "|"); got != "Super|A" {
-		t.Errorf("keys = %q, want Super|A", got)
-	}
-	if w.Binds[0].Desc != "Float + centre the window" {
-		t.Errorf("desc = %q, want comment-derived description", w.Binds[0].Desc)
-	}
-}
-
-// K() (the rebind helper) is unwrapped so the raw combo -- the rebind id K() keys
-// on at runtime -- is captured, and a single literal chord is rebindable while the
-// workspace-loop range and pointer binds are not.
-func TestComboAndRebindable(t *testing.T) {
-	l := parseBinds(sampleBinds)
-	w := find(l, "Windows")
-	if w == nil || len(w.Binds) < 1 {
-		t.Fatal("Windows category missing")
-	}
-	if w.Binds[0].Combo != "SUPER + Q" {
-		t.Errorf("combo = %q, want SUPER + Q", w.Binds[0].Combo)
-	}
-	if !w.Binds[0].Rebindable {
-		t.Error("SUPER + Q should be rebindable")
-	}
-	ws := find(l, "Switch workspaces")
-	loop := ws.Binds[len(ws.Binds)-1]
-	if loop.Rebindable {
-		t.Errorf("loop bind %q should not be rebindable", loop.Combo)
-	}
-	m := find(l, "Media and volume keys")
-	if m.Binds[0].Combo != "XF86AudioRaiseVolume" || !m.Binds[0].Rebindable {
-		t.Errorf("media combo=%q rebindable=%v", m.Binds[0].Combo, m.Binds[0].Rebindable)
-	}
-	mouse := parseBinds("-- M\nhl.bind(K(mod .. \" + mouse:272\"), hl.dsp.window.drag(), { mouse = true })\n")
-	if mouse.Categories[0].Binds[0].Rebindable {
-		t.Error("mouse bind should not be rebindable")
-	}
-}
-
-func TestDescribeRyokuApp(t *testing.T) {
-	if got := describeExec("ryoku-app browser"); got != "browser" {
-		t.Errorf("describeExec ryoku-app = %q, want browser", got)
-	}
-}
-
-// The provider's own binds become one named section, its keycaps prettified and
-// its copy capitalised like the shared legend. A chord the shared legend already
-// carries stays in its own group and takes the provider's wording, since the
-// shared text describes another compositor's mechanic.
-func TestCompositorSection(t *testing.T) {
-	base := legend{Categories: []category{
-		{Name: "Windows", Binds: []bind{{Combo: "SUPER + Q"}, {Combo: "SUPER + F", Desc: "Fullscreen the Hyprland way"}}},
-	}}
-	rows := []json.RawMessage{
-		json.RawMessage(`{"chord":"SUPER + D","desc":"maximise the column"}`),
-		json.RawMessage(`{"chord":"SUPER + F","desc":"fullscreen the window"}`),
-		json.RawMessage(`{"chord":"SUPER + CTRL + R","desc":"reset the window height"}`),
-	}
-	cat, ok := compositorSection(rows, "Niri", &base)
-	if !ok {
-		t.Fatal("expected a section")
-	}
-	if cat.Name != "Niri" {
-		t.Errorf("section name = %q, want Niri", cat.Name)
-	}
-	if len(cat.Binds) != 2 {
-		t.Fatalf("got %d binds, want 2 (the shared SUPER + F chord stays in Windows)", len(cat.Binds))
-	}
-	if got := base.Categories[0].Binds[1].Desc; got != "Fullscreen the window" {
-		t.Errorf("shared row desc = %q, want the provider's wording", got)
-	}
-	if !reflect.DeepEqual(cat.Binds[0].Keys, []string{"Super", "D"}) {
-		t.Errorf("keycaps = %v, want [Super D]", cat.Binds[0].Keys)
-	}
-	if cat.Binds[0].Desc != "Maximise the column" {
-		t.Errorf("desc = %q, want capitalised", cat.Binds[0].Desc)
-	}
-	if !cat.Binds[0].Rebindable {
-		t.Error("a single-literal chord should be rebindable")
-	}
-}
-
-// When every exclusive chord is one the shared legend already carries, the
-// section is absent, not an empty group.
-func TestCompositorSectionAbsentWhenAllShared(t *testing.T) {
-	base := legend{Categories: []category{{Name: "Windows", Binds: []bind{{Combo: "SUPER + D"}}}}}
-	rows := []json.RawMessage{json.RawMessage(`{"chord":"SUPER + D","desc":"x"}`)}
-	if _, ok := compositorSection(rows, "Niri", &base); ok {
-		t.Error("section must be absent when no exclusive bind survives dedup")
-	}
-}
-
-// The honesty pass strikes the shared legend against the chords the running
-// compositor cannot honour. A keyboard chord it has no concept of (pin,
-// scratchpad) leaves the sheet; a pointer gesture stays but reads the provider's
-// reason instead of an action it never fires; a chord the provider says nothing
-// about is untouched; and a category emptied by the strike is dropped.
-func TestFilterLegendStrikesUnhonored(t *testing.T) {
-	l := legend{Categories: []category{
-		{Name: "Windows", Binds: []bind{
-			{Keys: []string{"Super", "Q"}, Combo: "SUPER + Q", Desc: "Close active window"},
-			{Keys: []string{"Super", "Shift", "P"}, Combo: "SUPER + SHIFT + P", Desc: "Pin a floating window", Rebindable: true},
-		}},
-		{Name: "Move/resize with the mouse", Binds: []bind{
-			{Keys: []string{"Super", "LMB"}, Combo: "SUPER + mouse:272", Desc: "Move window"},
-		}},
-		{Name: "Scratch", Binds: []bind{
-			{Keys: []string{"Super", "H"}, Combo: "SUPER + H", Desc: "Hide in the scratchpad", Rebindable: true},
-		}},
-	}}
-	filterLegend(&l, map[string]string{
-		"SUPER + SHIFT + P": "niri has no pin-window action.",
-		"SUPER + mouse:272": "niri moves windows with Mod and drag natively.",
-		"SUPER + H":         "niri has no scratchpad workspace.",
-	})
-
-	w := find(l, "Windows")
-	if w == nil || len(w.Binds) != 1 || w.Binds[0].Combo != "SUPER + Q" {
-		t.Fatalf("Windows should keep only SUPER + Q, dropping the pin chord: %+v", w)
-	}
-	m := find(l, "Move/resize with the mouse")
-	if m == nil || len(m.Binds) != 1 {
-		t.Fatalf("the pointer gesture must survive the strike: %+v", m)
-	}
-	if m.Binds[0].Desc != "Niri moves windows with Mod and drag natively." {
-		t.Errorf("mouse desc = %q, want the provider's reason", m.Binds[0].Desc)
-	}
-	if m.Binds[0].Rebindable {
-		t.Error("a native gesture is not rebindable")
-	}
-	if find(l, "Scratch") != nil {
-		t.Error("a category emptied by the strike must be dropped, not left as a bare header")
-	}
-}
-
-// A provider that honours every shared bind reports no keybind losses, so the
-// chord map is empty and the whole legend passes through. This is Hyprland over
-// its own config: nothing vanishes from its sheet.
-func TestFilterLegendKeepsEverythingWhenNothingUnhonored(t *testing.T) {
-	l := parseBinds(sampleBinds)
-	before := 0
-	for _, c := range l.Categories {
-		before += len(c.Binds)
-	}
-	filterLegend(&l, map[string]string{})
-	after := 0
-	for _, c := range l.Categories {
-		after += len(c.Binds)
-	}
-	if before == 0 || before != after {
-		t.Errorf("an empty loss list must not drop a single bind: before=%d after=%d", before, after)
-	}
-}
-
-// An explanatory note dropped between two binds is prose, not a section header:
-// it follows a bind with no blank line above it, so it neither opens a category
-// nor siphons the binds below it. Regression for the scratchpad comment that
-// became a category titled with its own first line.
-func TestInlineCommentIsNotACategory(t *testing.T) {
-	l := parseBinds(`-- Workspaces
-hl.bind(K(mod .. " + H"), hl.dsp.exec_cmd("x hide")) -- hide the focused window
--- Through the helper, not toggle_special directly: hiding the scratchpad has to
--- hand keyboard focus back to a visible window, or the next bar panel to close
--- refocuses the hidden one and pops the scratchpad open with it.
-hl.bind(K(mod .. " + ALT + H"), hl.dsp.exec_cmd("x scratch")) -- show or hide the scratchpad
-`)
-	if len(l.Categories) != 1 {
-		t.Fatalf("the inline note must not open a category: got %d: %+v", len(l.Categories), l.Categories)
-	}
-	if l.Categories[0].Name != "Workspaces" {
-		t.Errorf("category = %q, want Workspaces", l.Categories[0].Name)
-	}
-	if n := len(l.Categories[0].Binds); n != 2 {
-		t.Fatalf("both H binds belong to Workspaces, none siphoned into a prose category: got %d", n)
+	if len(l.Categories) != 0 {
+		t.Errorf("got %d categories on provider error, want 0", len(l.Categories))
 	}
 }

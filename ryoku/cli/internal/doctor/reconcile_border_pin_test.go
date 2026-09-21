@@ -2,6 +2,8 @@ package doctor
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,6 +64,53 @@ func TestPlanBorderPin(t *testing.T) {
 		r := planBorderPin(borderPinState{paletteDriven: true, settingsLua: pinnedSettings, providerReady: false}, false, noRepair)
 		if r.status != recWarn {
 			t.Fatalf("status = %v, want warn", r.status)
+		}
+	})
+}
+
+// The reconciler folds desktop.appearance.borderFollowsPalette into whether the
+// border follows the palette: a pinned border (false) is the chosen look even
+// while the theme follows the wallpaper, so a col.active_border in settings.lua
+// is then right and must not be reported. Absent file or key defaults to
+// following, the shipped look.
+func TestStoreBorderFollowsPalette(t *testing.T) {
+	writeStore := func(t *testing.T, body string) {
+		cfg := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", cfg)
+		if body == "" {
+			return
+		}
+		ryoku := filepath.Join(cfg, "ryoku")
+		if err := os.MkdirAll(ryoku, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(ryoku, "desktop.json"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("absent file defaults to following", func(t *testing.T) {
+		writeStore(t, "")
+		if !storeBorderFollowsPalette() {
+			t.Fatal("an absent store must default to following the palette")
+		}
+	})
+	t.Run("absent key defaults to following", func(t *testing.T) {
+		writeStore(t, `{"desktop":{"appearance":{"borderSize":2}}}`)
+		if !storeBorderFollowsPalette() {
+			t.Fatal("an absent key must default to following the palette")
+		}
+	})
+	t.Run("explicit false pins the border", func(t *testing.T) {
+		writeStore(t, `{"desktop":{"appearance":{"borderFollowsPalette":false}}}`)
+		if storeBorderFollowsPalette() {
+			t.Fatal("a pinned border must not follow the palette")
+		}
+	})
+	t.Run("explicit true follows", func(t *testing.T) {
+		writeStore(t, `{"desktop":{"appearance":{"borderFollowsPalette":true}}}`)
+		if !storeBorderFollowsPalette() {
+			t.Fatal("an explicit true must follow the palette")
 		}
 	})
 }

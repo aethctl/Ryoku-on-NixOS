@@ -58,6 +58,12 @@ const (
 	// flips the device live, another records the intent in its config file; the
 	// capability says it can be done, never how.
 	CapTouchpadToggle Capability = "touchpadToggle"
+	// CapPaletteBorder is set when the provider can recolour the window border
+	// from the live palette on request, through the decoration.borderColors
+	// action. One compositor pushes the colours into a running config, another
+	// records them and regenerates the file it watches; the capability says the
+	// border can follow the wallpaper, never how.
+	CapPaletteBorder Capability = "paletteBorder"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -74,6 +80,7 @@ func All() []Capability {
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
 		CapTiledLayout, CapSessionExit, CapNightLight, CapTouchpadToggle,
+		CapPaletteBorder,
 	}
 }
 

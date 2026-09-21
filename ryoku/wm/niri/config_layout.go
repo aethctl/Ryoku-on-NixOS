@@ -119,7 +119,11 @@ func writeFrameBlock(b *strings.Builder, node string, show bool, a Appearance, n
 
 // writeFrameColors emits the active and inactive frame colours, or the active
 // gradient plus a solid inactive colour when the user turned the gradient on. The
-// urgent colour is always a solid.
+// urgent colour is always a solid. When the border follows the palette and the
+// palette file holds usable colours, those drive the solid active and inactive
+// colours so the frame tracks the wallpaper the way Hyprland's border does. The
+// gradient rows stay as they are: an explicit user gradient wins over the solid
+// palette colour for the active frame whenever the gradient toggle is on.
 func writeFrameColors(b *strings.Builder, a Appearance, n Niri) {
 	if n.BorderGradient && kdlColor(n.GradientFrom) != "" && kdlColor(n.GradientTo) != "" {
 		fmt.Fprintf(b, "        active-gradient from=%s to=%s angle=%d relative-to=%s\n",
@@ -128,10 +132,16 @@ func writeFrameColors(b *strings.Builder, a Appearance, n Niri) {
 			fmt.Fprintf(b, "        inactive-color %s\n", c)
 		}
 	} else {
-		if c := kdlColor(a.ActiveBorder); c != "" {
+		active, inactive := a.ActiveBorder, a.InactiveBorder
+		if a.BorderFollowsPalette {
+			if pa, pi, ok := borderPaletteColors(); ok {
+				active, inactive = pa, pi
+			}
+		}
+		if c := kdlColor(active); c != "" {
 			fmt.Fprintf(b, "        active-color %s\n", c)
 		}
-		if c := kdlColor(a.InactiveBorder); c != "" {
+		if c := kdlColor(inactive); c != "" {
 			fmt.Fprintf(b, "        inactive-color %s\n", c)
 		}
 	}

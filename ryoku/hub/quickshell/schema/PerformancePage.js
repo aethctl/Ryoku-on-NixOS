@@ -15,7 +15,7 @@ var rows = [
         "desc": "Switches to Power Saver when you unplug"
     },
     {
-        "tab": "", "group": "EFFECTS", "key": "lowPowerMode", "ctl": "sw", "src": "performance.json",
+        "tab": "", "group": "EFFECTS", "key": "lowPowerMode", "ctl": "sw", "src": "performance.json", "caps": "liveConfigEval",
         "label": "Low power mode",
         "desc": "Turns every effect switch here on at once"
     },
@@ -25,12 +25,12 @@ var rows = [
         "desc": "Shell transitions land instantly"
     },
     {
-        "tab": "", "group": "EFFECTS", "key": "disableBlur", "ctl": "sw", "src": "performance.json",
+        "tab": "", "group": "EFFECTS", "key": "disableBlur", "ctl": "sw", "src": "performance.json", "caps": "liveConfigEval",
         "label": "Disable blur",
         "desc": "Drops the frosted-glass look everywhere"
     },
     {
-        "tab": "", "group": "EFFECTS", "key": "disableShadows", "ctl": "sw", "src": "performance.json",
+        "tab": "", "group": "EFFECTS", "key": "disableShadows", "ctl": "sw", "src": "performance.json", "caps": "liveConfigEval",
         "label": "Disable shadows",
         "desc": "Surfaces draw without a shadow pass"
     },

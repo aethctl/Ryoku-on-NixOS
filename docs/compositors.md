@@ -67,8 +67,8 @@ with nothing behind it.
 Shared by both providers:
 
     animations  focusHistory  keyboardLayoutSwitch  layerRules  monitorConfig
-    nightLight  outputPower  sessionExit  touchpadToggle  windowFloat
-    windowRules  windowWorkspaceMap  workspaceMoveToOutput  workspaces
+    nightLight  outputPower  paletteBorder  sessionExit  touchpadToggle
+    windowFloat  windowRules  windowWorkspaceMap  workspaceMoveToOutput  workspaces
 
 Hyprland only:
 
@@ -113,6 +113,16 @@ named action, plus a Hub switch that reads it live:
   off after a config reload. Hyprland flips the device live through `hyprctl
   eval`; niri, which has no runtime input IPC, records the intent in a state
   file and re-emits `off` into the config it watches.
+
+`paletteBorder` is the shared capability that keeps the window border tracking
+the wallpaper, driven by a named action both providers honour:
+
+- `decoration.borderColors <active> <inactive>` recolours the border from the
+  live palette. Hyprland pushes the colours into the running config through
+  `hyprctl eval`; niri, which has no runtime config IPC, records them in a state
+  file and regenerates the config it watches. Both are a no-op when the store
+  pins a fixed colour (`desktop.appearance.borderFollowsPalette` off), so a
+  wallpaper change never overrides a border colour the user chose.
 
 `monitorConfig` adds two output actions beside the display settings it gates:
 

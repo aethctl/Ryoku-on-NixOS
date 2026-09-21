@@ -11,6 +11,9 @@ Column {
     property string name: ""
     property var binds: []
     property bool showHead: true
+    // Forwarded to each row: while the sheet searches, every shown row reveals its
+    // hint, not only the hovered one.
+    property bool searching: false
 
     spacing: Tokens.s1
 
@@ -58,6 +61,9 @@ Column {
             width: block.width
             keys: modelData.keys
             desc: modelData.desc
+            hint: modelData.hint || ""
+            unhonored: modelData.unhonored || ""
+            searching: block.searching
         }
     }
 }

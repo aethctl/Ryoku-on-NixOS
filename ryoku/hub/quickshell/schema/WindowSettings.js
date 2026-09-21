@@ -499,6 +499,32 @@ var rows = [{
         "src": "desktop.json"
     },{
         "tab": "Borders",
+        "group": "COLOUR",
+        "key": "desktop.appearance.borderFollowsPalette",
+        "label": "Follow the wallpaper",
+        "desc": "Colour the border from the wallpaper palette; off keeps the colours below",
+        "ctl": "sw",
+        "src": "desktop.json"
+    },{
+        "tab": "Borders",
+        "group": "COLOUR",
+        "key": "desktop.appearance.activeBorder",
+        "label": "Active border",
+        "desc": "Colour of the frame around the window you are using",
+        "ctl": "color",
+        "src": "desktop.json",
+        "when": {"desktop.appearance.borderFollowsPalette": [false]}
+    },{
+        "tab": "Borders",
+        "group": "COLOUR",
+        "key": "desktop.appearance.inactiveBorder",
+        "label": "Inactive border",
+        "desc": "Colour of the frame around windows you are not using",
+        "ctl": "color",
+        "src": "desktop.json",
+        "when": {"desktop.appearance.borderFollowsPalette": [false]}
+    },{
+        "tab": "Borders",
         "group": "ANIMATED",
         "key": "desktop.appearance.animatedBorder",
         "label": "Rotating gradient border",

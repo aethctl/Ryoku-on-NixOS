@@ -5,6 +5,7 @@ import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "../Singletons"
+import ".."
 
 // Animations, ported to the monochrome instrument. The Hyprland animation tree
 // (its inventory comes from the provider defaults, `ryoku-hub desktop defaults`)
@@ -33,11 +34,117 @@ Item {
     // rebinds when hyprDefaults lands). The provider probes leaves + curves live.
     readonly property var liveAnims: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.items : []
     readonly property var liveCurves: pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim ? pg.hub.hyprDefaults.wm.hyprland.anim.curves : []
-    // The window-animation editor is the active provider's own tree; a provider
-    // that carries no anim subtree (its defaults never mention one) has nothing
-    // for the preset picker, curve workshop or per-leaf table to write, so those
-    // stand down and only the shell's own motion and the master switch remain.
-    readonly property bool hasWindowAnims: !!(pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim)
+    // The Hyprland window-animation editor (preset picker, curve workshop, per-
+    // leaf table) is bound to the wm.hyprland.anim subtree, so it stands up only
+    // when the running provider is the one that models that subtree. modelsKey is
+    // the guard: the moment another provider owns the session, wm.hyprland.anim is
+    // a dead key and the whole bespoke editor stands down.
+    readonly property bool hasHyprAnims: !!(pg.hub && pg.hub.hyprDefaults && pg.hub.hyprDefaults.wm && pg.hub.hyprDefaults.wm.hyprland && pg.hub.hyprDefaults.wm.hyprland.anim) && Settings.modelsKey("wm.hyprland.anim")
+    // A provider without that subtree drives its animations through its own
+    // page:"animations" schema rows, drawn below by the shared primitives. The
+    // Hyprland provider's own page:"animations" rows are the bespoke editor's
+    // territory, so they are never double-drawn: when its editor is up, this list
+    // is empty.
+    readonly property var providerAnimRows: {
+        ProviderSchema.revision;
+        if (pg.hasHyprAnims) return [];
+        var out = [], rs = ProviderSchema.rowsFor("animations");
+        for (var i = 0; i < rs.length; i++) {
+            var r = rs[i];
+            if (!r || !r.key) continue;
+            if (String(r.key).indexOf("[") >= 0) continue;
+            if (r.ctl === "action" || r.ctl === "list") continue;
+            if (r.caps && !Settings.supports(r.caps)) continue;
+            if (!Settings.modelsKey(r.key)) continue;
+            out.push(r);
+        }
+        return out;
+    }
+    // true when either editor has something to show, so the page offers more than
+    // the shell motion and the master switch.
+    readonly property bool hasWindowAnims: pg.hasHyprAnims || pg.providerAnimRows.length > 0
+    readonly property var providerAnimGroups: {
+        var seen = ({}), out = [];
+        for (var i = 0; i < pg.providerAnimRows.length; i++) {
+            var g = pg.providerAnimRows[i].group || "";
+            if (!seen[g]) { seen[g] = true; out.push(g); }
+        }
+        return out;
+    }
+    function providerRowsInGroup(g) {
+        var out = [];
+        for (var i = 0; i < pg.providerAnimRows.length; i++)
+            if ((pg.providerAnimRows[i].group || "") === g) out.push(pg.providerAnimRows[i]);
+        return out;
+    }
+    // the provider rows as a flat dotted-key draft, so a `when` gate that names a
+    // sibling key (niri gates duration/curve on mode) resolves against live values.
+    readonly property var providerAnimDraft: {
+        var d = ({});
+        for (var i = 0; i < pg.providerAnimRows.length; i++) { var k = pg.providerAnimRows[i].key; if (k) d[k] = pg.hv(k); }
+        return d;
+    }
+    function passesWhen(r) {
+        if (!r.when) return true;
+        var d = pg.providerAnimDraft;
+        if (!d || Object.keys(d).length === 0) return true;
+        for (var k in r.when) if (r.when[k].indexOf(d[k]) < 0) return false;
+        return true;
+    }
+    function providerRowVisible(r) {
+        if (!pg.passesWhen(r)) return false;
+        if (r.adv && !(pg.hub && pg.hub.advanced) && pg.query === "") return false;
+        if (pg.query === "") return true;
+        return pg.hit(String(r.label) + " " + String(r.desc || "") + " " + String(r.key));
+    }
+    function providerGroupVisible(g) {
+        var rows = pg.providerRowsInGroup(g);
+        for (var i = 0; i < rows.length; i++) if (pg.providerRowVisible(rows[i])) return true;
+        return false;
+    }
+    readonly property bool pVisible: {
+        if (pg.query === "") return pg.providerAnimRows.length > 0;
+        for (var i = 0; i < pg.providerAnimRows.length; i++)
+            if (pg.providerRowVisible(pg.providerAnimRows[i])) return true;
+        return false;
+    }
+    // provider-row control glue, mirroring the shared sheet's readouts so a
+    // provider row reads the same as every other settings row.
+    function provShown(r) {
+        var v = pg.hv(r.key);
+        if (r.ctl === "slid" && r.pct) return String(Math.round((Number(v) || 0) * 100));
+        return v === undefined ? "" : String(v);
+    }
+    function provShownDef(r) {
+        var d = pg.cv(r.key);
+        if (d === undefined) return "";
+        if (r.ctl === "slid" && r.pct) return String(Math.round((Number(d) || 0) * 100));
+        return String(d);
+    }
+    function provChanged(r) { return JSON.stringify(pg.hv(r.key)) !== JSON.stringify(pg.cv(r.key)); }
+    function provBlock(r) { return r.ctl === "chips" || (r.ctl === "seg" && (r.opts ? r.opts.length : 0) >= 3); }
+    function provCtlWidth(r, w) {
+        if (r.ctl === "sw") return 54;
+        if (r.ctl === "step") return 58;
+        if (r.ctl === "slid") return Math.min(240, Math.max(160, Math.round(w * 0.34)));
+        if (r.ctl === "seg") return Math.max(140, 74 * Math.max(2, (r.opts ? r.opts.length : 2)));
+        return 54;
+    }
+    function provCommitNumber(r, text) {
+        var n = Number(String(text).replace(",", "."));
+        if (isNaN(n)) return;
+        if (r.ctl === "step") {
+            var lo = r.lo !== undefined ? Number(r.lo) : 0, hi = r.hi !== undefined ? Number(r.hi) : 100;
+            pg.he(r.key, Math.max(lo, Math.min(hi, Math.round(n))));
+            return;
+        }
+        if (r.ctl === "slid") {
+            var v = r.pct ? n / 100 : n;
+            var l = r.lo !== undefined ? Number(r.lo) : 0, h = r.hi !== undefined ? Number(r.hi) : (r.pct ? 1 : 100);
+            pg.he(r.key, Math.max(l, Math.min(h, v)));
+        }
+    }
+    function provReset(r) { var d = pg.cv(r.key); if (d !== undefined) pg.he(r.key, d); }
     property string selectedCurve: ""
     // seed the selection off the first curve once the provider list arrives.
     function seedCurve() { if (pg.selectedCurve === "" && pg.liveCurves.length > 0) pg.selectedCurve = pg.liveCurves[0].name }
@@ -215,7 +322,7 @@ Item {
                 return true;
         return false;
     }
-    readonly property bool anyVisible: pg.gVisible || pg.fVisible || pg.cVisible || pg.aVisible
+    readonly property bool anyVisible: pg.gVisible || pg.fVisible || pg.cVisible || pg.aVisible || pg.pVisible
 
     // ── the page-local catalogue overlay (curve + style + bezier pickers) ────
     // The shell's picker is wired to its JSON store, not the hypr store, so the
@@ -592,7 +699,7 @@ Item {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
                     topPadding: Tokens.s3; bottomPadding: Tokens.s1
-                    text: I18n.tr("How fast the shell's own panels, menus and transitions move. Speed scales every Ryoku animation live; Reduce motion snaps them into place for comfort. Separate from the window animations below.")
+                    text: I18n.tr("How fast the shell's own panels, menus and transitions move. Speed scales every Ryoku animation live; Reduce motion snaps them into place for comfort.") + (pg.hasWindowAnims ? " " + I18n.tr("Separate from the window animations below.") : "")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
                 }
@@ -626,7 +733,7 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("ANIMATION PRESET")
-                visible: Settings.supports("animations") && pg.hasWindowAnims
+                visible: Settings.supports("animations") && pg.hasHyprAnims
                 Text {
                     width: parent.width
                     leftPadding: Tokens.s4; rightPadding: Tokens.s4
@@ -679,7 +786,7 @@ Item {
                 Item {
                     width: parent.width
                     height: workshop.height + 2 * Tokens.s4
-                    visible: Settings.supports("animations") && pg.hasWindowAnims
+                    visible: Settings.supports("animations") && pg.hasHyprAnims
 
                     // hairline off the switch row above (only while it is shown)
                     Rectangle {
@@ -938,7 +1045,7 @@ Item {
             SettingCard {
                 width: col.colWidth
                 title: I18n.tr("ADVANCED")
-                visible: pg.aVisible && Settings.supports("animations") && pg.hasWindowAnims
+                visible: pg.aVisible && Settings.supports("animations") && pg.hasHyprAnims
 
                 Text {
                     width: parent.width
@@ -1029,6 +1136,93 @@ Item {
                                 onActivated: pg.openPicker(I18n.tr("Curve"), bezP.opts, bezP.current, function (k) { bezP.picked(k); })
                                 onPicked: (k) => pg.upsertItem(ar.leaf, "bezier", k)
                             }
+                        }
+                    }
+                }
+            }
+
+            // Provider animation rows: a compositor that models its own
+            // page:"animations" schema (niri's per-kind spring/ease curves) drives
+            // them here through the same primitives every settings row uses, one
+            // card per declared group, below the Hyprland editor. Empty on Hyprland.
+            Repeater {
+                model: pg.providerAnimGroups
+                delegate: SettingCard {
+                    id: pcard
+                    required property string modelData
+                    width: col.colWidth
+                    title: I18n.tr(pcard.modelData === "" ? "ANIMATION" : pcard.modelData)
+                    visible: pg.providerGroupVisible(pcard.modelData)
+
+                    Repeater {
+                        model: pg.providerRowsInGroup(pcard.modelData)
+                        delegate: SettingRow {
+                            id: prow
+                            required property var modelData
+                            required property int index
+                            readonly property var r: prow.modelData
+                            anchors.left: parent.left; anchors.right: parent.right
+                            divider: index > 0
+                            visible: pg.providerRowVisible(prow.r)
+                            label: I18n.tr(prow.r.label || "")
+                            desc: I18n.tr(prow.r.desc || "")
+                            eg: I18n.tr(prow.r.eg || "")
+                            editableValue: prow.r.ctl === "step" || prow.r.ctl === "slid"
+                            onValueCommitted: (text) => pg.provCommitNumber(prow.r, text)
+                            value: (prow.r.ctl === "step" || prow.r.ctl === "slid") ? pg.provShown(prow.r) : ""
+                            unit: (prow.r.ctl === "step" || prow.r.ctl === "slid") ? (prow.r.pct ? "%" : (prow.r.unit || "")) : ""
+                            def: pg.provShownDef(prow.r)
+                            changed: pg.provChanged(prow.r)
+                            source: "desktop.json"
+                            block: pg.provBlock(prow.r)
+                            footH: pg.provBlock(prow.r) ? 0 : ((prow.r.ctl === "text" || prow.r.ctl === "color") ? 32 : 0)
+                            controlWidth: pg.provCtlWidth(prow.r, pcard.width)
+                            onResetRequested: pg.provReset(prow.r)
+
+                            Loader {
+                                anchors.fill: parent
+                                sourceComponent: {
+                                    switch (prow.r.ctl) {
+                                    case "sw": return pSwC;
+                                    case "step": return pStepC;
+                                    case "slid": return pSlidC;
+                                    case "seg": return pSegC;
+                                    case "chips": return pChipsC;
+                                    case "color": return pColorC;
+                                    default: return pTextC;
+                                    }
+                                }
+                            }
+                            Component { id: pSwC
+                                Sw { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                    on: !!pg.hv(prow.r.key); onToggled: (v) => pg.he(prow.r.key, v) } }
+                            Component { id: pStepC
+                                Step { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                    value: Number(pg.hv(prow.r.key)) || 0
+                                    from: prow.r.lo !== undefined ? Number(prow.r.lo) : 0
+                                    to: prow.r.hi !== undefined ? Number(prow.r.hi) : 100
+                                    onModified: (v) => pg.he(prow.r.key, v) } }
+                            Component { id: pSlidC
+                                Slid { anchors.fill: parent
+                                    value: Number(pg.hv(prow.r.key)) || 0
+                                    from: prow.r.lo !== undefined ? Number(prow.r.lo) : 0
+                                    to: prow.r.hi !== undefined ? Number(prow.r.hi) : 1
+                                    onModified: (v) => pg.he(prow.r.key, v) } }
+                            Component { id: pSegC
+                                Seg { anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                                    options: prow.r.opts || []; current: String(pg.hv(prow.r.key))
+                                    onChose: (k) => pg.he(prow.r.key, k) } }
+                            Component { id: pChipsC
+                                Chips { anchors.fill: parent
+                                    options: prow.r.opts || []; labels: prow.r.optLabels || ({})
+                                    current: String(pg.hv(prow.r.key)); onChose: (k) => pg.he(prow.r.key, k) } }
+                            Component { id: pColorC
+                                ColorField { anchors.fill: parent
+                                    value: String(pg.hv(prow.r.key)); onChosen: (v) => pg.he(prow.r.key, v) } }
+                            Component { id: pTextC
+                                Field { anchors.fill: parent; tabular: true; placeholder: prow.r.eg || ""
+                                    text: { var v = pg.hv(prow.r.key); return v === undefined ? "" : String(v); }
+                                    onCommitted: (v) => pg.he(prow.r.key, v) } }
                         }
                     }
                 }

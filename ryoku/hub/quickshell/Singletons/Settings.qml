@@ -30,6 +30,10 @@ Singleton {
     // its config files still ride the `wm` topic below.
     property var caps: ({})
     property var deadKeys: []
+    // The active provider's window-rule action ids, in display order, carried on
+    // the same frame beside caps/deadKeys. Empty until the frame lands or when a
+    // probe fails, so a consumer falls back to its own static list.
+    property var windowRuleActions: []
     property var configFiles: []
     property string provider: ""
     property var windows: []
@@ -74,6 +78,7 @@ Singleton {
             if (frame && typeof frame === "object" && !Array.isArray(frame)) {
                 root.caps = frame.caps || ({});
                 root.deadKeys = frame.deadKeys || [];
+                root.windowRuleActions = frame.windowRuleActions || [];
                 root.data = frame;
                 root.ready = true;
                 root.revision++;

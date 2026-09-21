@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "../Singletons"
 
 // Performance (DESIGN.md section 11, ADVANCED). The tweaks that trade a little
 // eye-candy, idle animation or resident memory for lower CPU, GPU and RAM use.
@@ -29,11 +30,12 @@ import Ryoku.Ui.Singletons
 // sub-toggle stays visibly OFF while lowPowerMode overrides its behaviour, and
 // un-toggling lowPowerMode restores the user's own choices intact.
 //
-// Blur, shadows and low-power are the only keys the compositor reads
-// (decoration.lua parses performance.json at Hyprland parse time), so a Save
-// that changes one of those three -- and only those -- reloads the compositor
-// once the write has landed, to re-read it live. Shell singletons watch the file
-// themselves and need no reload.
+// Blur, shadows and low-power are the only keys the compositor itself reads, at
+// config parse time, so they are offered only where the compositor evaluates its
+// config live (the liveConfigEval capability) and dropped elsewhere rather than
+// shown as switches nothing reads. A Save that changes one of those three, and
+// only those, reloads the active compositor once the write has landed, to re-read
+// it live. Shell singletons watch the file themselves and need no reload.
 Item {
     id: pg
 
@@ -58,7 +60,7 @@ Item {
         "unloadOverviewWhenIdle": true
     })
 
-    // the keys the compositor reads; a Save touching one of these reloads Hyprland.
+    // the keys the compositor itself reads; a Save touching one reloads it.
     readonly property var compositorKeys: ["lowPowerMode", "disableBlur", "disableShadows"]
 
     // set by save(), consumed by the FileView's onSaved once the file is written.
@@ -161,7 +163,7 @@ Item {
         cfg.writeAdapter();
         pg.committed = pg.clone(pg.draft);
         // reload once the write is on disk, not here: writeAdapter() completes
-        // asynchronously, so reloading straight away made Hyprland re-parse the
+        // asynchronously, so reloading straight away made the compositor re-parse the
         // PREVIOUS performance.json. A compositor toggle then landed one save
         // late, which reads exactly like the switch being inverted.
         pg.reloadPending = needsReload;
@@ -222,16 +224,16 @@ Item {
           "label": I18n.tr("Auto power saver on battery"),
           "desc": I18n.tr("Switches to Power Saver when you unplug.") },
 
-        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "lowPowerMode", "ctl": "sw", "src": "performance",
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "lowPowerMode", "ctl": "sw", "src": "performance", "caps": "liveConfigEval",
           "label": I18n.tr("Low power mode"),
           "desc": I18n.tr("Turns every effect switch here on at once.") },
         { "tab": "", "group": I18n.tr("EFFECTS"), "key": "reduceMotion", "ctl": "sw", "src": "performance",
           "label": I18n.tr("Reduce motion"),
           "desc": I18n.tr("Shell transitions land instantly.") },
-        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableBlur", "ctl": "sw", "src": "performance",
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableBlur", "ctl": "sw", "src": "performance", "caps": "liveConfigEval",
           "label": I18n.tr("Disable blur"),
           "desc": I18n.tr("Drops the frosted-glass look everywhere.") },
-        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableShadows", "ctl": "sw", "src": "performance",
+        { "tab": "", "group": I18n.tr("EFFECTS"), "key": "disableShadows", "ctl": "sw", "src": "performance", "caps": "liveConfigEval",
           "label": I18n.tr("Disable shadows"),
           "desc": I18n.tr("Surfaces draw without a shadow pass.") },
 
@@ -259,17 +261,25 @@ Item {
           "desc": I18n.tr("Frees ~250 MB a minute after Super+Tab closes.") }
     ]
 
+    // Some effect switches are read by the compositor at config parse time, so
+    // they only exist where the compositor evaluates its config live. Their caps
+    // gate drops them on a compositor without it, the way SchemaPage filters a
+    // row, instead of drawing a switch nothing on this desktop reads.
+    readonly property var visibleSchema: pg.schema.filter(function (r) {
+        return Settings.supports(r.caps);
+    })
+
     // group order and membership come straight from the schema, so a regroup is
     // a data edit. groups keeps first-seen order (EYE CANDY, IDLE, MEMORY).
     readonly property var groups: {
         var g = [];
-        for (var i = 0; i < pg.schema.length; i++)
-            if (g.indexOf(pg.schema[i].group) < 0)
-                g.push(pg.schema[i].group);
+        for (var i = 0; i < pg.visibleSchema.length; i++)
+            if (g.indexOf(pg.visibleSchema[i].group) < 0)
+                g.push(pg.visibleSchema[i].group);
         return g;
     }
     function rowsIn(group) {
-        return pg.schema.filter(function (r) { return r.group === group; });
+        return pg.visibleSchema.filter(function (r) { return r.group === group; });
     }
 
     // ── head: eyebrow, Fraunces title, blurb (matches every settings page) ──

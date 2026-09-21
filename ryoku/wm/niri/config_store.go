@@ -34,6 +34,11 @@ type Appearance struct {
 	Rounding        int     `json:"rounding"`
 	ActiveBorder    string  `json:"activeBorder"`
 	InactiveBorder  string  `json:"inactiveBorder"`
+	// BorderFollowsPalette: true takes the border's active and inactive colours
+	// from the live palette (the file the border act records), false uses the
+	// ActiveBorder/InactiveBorder above verbatim. The niri twin of Hyprland's
+	// same neutral key, so the Hub toggle reaches both compositors.
+	BorderFollowsPalette bool `json:"borderFollowsPalette"`
 	Animations      bool    `json:"animations"`
 	ActiveOpacity   float64 `json:"activeOpacity"`
 	InactiveOpacity float64 `json:"inactiveOpacity"`
@@ -333,7 +338,7 @@ func defaultStore() niriStore {
 	return niriStore{
 		Appearance: Appearance{
 			GapsIn: 16, GapsOut: 16, BorderSize: 4, Rounding: 0,
-			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d", Animations: true,
+			ActiveBorder: "#e0563b", InactiveBorder: "#313a4d", BorderFollowsPalette: true, Animations: true,
 			ActiveOpacity: 1, InactiveOpacity: 1,
 			ShadowEnabled: true, ShadowRange: 45, ShadowColor: "#000000",
 			ShadowSpread: 0, ShadowOffsetX: 0, ShadowOffsetY: 5,
@@ -496,6 +501,39 @@ func configHome() string {
 // behaviours that never reach the config file, like taming a maximised open.
 func storePath() string {
 	return filepath.Join(configHome(), "ryoku", "desktop.json")
+}
+
+// borderPalettePath is where the border act records the live palette's active
+// and inactive colours. writeFrame reads it so the border tracks the wallpaper
+// the way Hyprland's decoration.lua does; the last session's file is still there
+// at login, so the first render is already themed rather than the store colour.
+func borderPalettePath() string {
+	dir := os.Getenv("XDG_STATE_HOME")
+	if dir == "" {
+		dir = filepath.Join(os.Getenv("HOME"), ".local", "state")
+	}
+	return filepath.Join(dir, "ryoku", "niri-border-palette.json")
+}
+
+// borderPaletteColors reads the active and inactive colours the border act last
+// wrote from the live palette. ok is false when the file is absent or holds no
+// usable colour, so writeFrame falls back to the store colours.
+func borderPaletteColors() (active, inactive string, ok bool) {
+	b, err := os.ReadFile(borderPalettePath())
+	if err != nil {
+		return "", "", false
+	}
+	var p struct {
+		Active   string `json:"active"`
+		Inactive string `json:"inactive"`
+	}
+	if json.Unmarshal(b, &p) != nil {
+		return "", "", false
+	}
+	if kdlColor(p.Active) == "" && kdlColor(p.Inactive) == "" {
+		return "", "", false
+	}
+	return p.Active, p.Inactive, true
 }
 
 // userEditsNiriDir is the niri slice of the user overlay tree. The generated KDL

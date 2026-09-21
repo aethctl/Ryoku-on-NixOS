@@ -122,7 +122,9 @@ func (a Action) Capability() Capability {
 		return CapConfigReload
 	case ActionCursorSet:
 		return CapCursorSet
-	case ActionBorderColors, ActionFocusFollowsMouse, ActionGameMode:
+	case ActionBorderColors:
+		return CapPaletteBorder
+	case ActionFocusFollowsMouse, ActionGameMode:
 		return CapLiveConfigEval
 	case ActionScreenShader:
 		return CapScreenShader

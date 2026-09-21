@@ -394,3 +394,55 @@ func TestNightlightTempClamps(t *testing.T) {
 		}
 	}
 }
+
+// The border act records the live palette and regenerates settings.kdl so niri
+// re-reads it, the niri twin of Hyprland's eval push. The colours are normalised
+// and land in the config's border block.
+func TestActBorderPaletteRewritesConfig(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	restore := stubRequest(t, func(any) (json.RawMessage, error) { return nil, nil })
+	defer restore()
+
+	if err := runAct([]string{"decoration.borderColors", "#112233", "#445566"}); err != nil {
+		t.Fatal(err)
+	}
+	pb, err := os.ReadFile(borderPalettePath())
+	if err != nil {
+		t.Fatalf("palette file not written: %v", err)
+	}
+	if !strings.Contains(string(pb), `"active":"#112233"`) || !strings.Contains(string(pb), `"inactive":"#445566"`) {
+		t.Errorf("palette file missing the colours: %s", pb)
+	}
+	kb, err := os.ReadFile(filepath.Join(niriConfigDir(), "settings.kdl"))
+	if err != nil {
+		t.Fatalf("settings.kdl not written: %v", err)
+	}
+	if !strings.Contains(string(kb), `active-color "#112233"`) || !strings.Contains(string(kb), `inactive-color "#445566"`) {
+		t.Errorf("settings.kdl border not recoloured:\n%s", kb)
+	}
+}
+
+// A pinned border makes the act a no-op: the palette file is never written, so a
+// wallpaper change leaves the chosen colour alone.
+func TestActBorderPaletteNoOpWhenFixed(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	ryoku := filepath.Join(cfg, "ryoku")
+	if err := os.MkdirAll(ryoku, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := `{"desktop":{"appearance":{"borderFollowsPalette":false}}}`
+	if err := os.WriteFile(filepath.Join(ryoku, "desktop.json"), []byte(store), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	restore := stubRequest(t, func(any) (json.RawMessage, error) { return nil, nil })
+	defer restore()
+	if err := runAct([]string{"decoration.borderColors", "#112233", "#445566"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(borderPalettePath()); !os.IsNotExist(err) {
+		t.Error("a fixed border must not write the palette file")
+	}
+}

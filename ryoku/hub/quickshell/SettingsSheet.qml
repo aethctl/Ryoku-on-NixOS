@@ -149,6 +149,7 @@ Item {
     }
     function shown(r) {
         var v = val(r);
+        if (r.ctl === "list") return "";
         if (r.ctl === "sw") return v ? "ON" : "OFF";
         if (r.ctl === "slid" && r.pct) return String(Math.round(v * 100));
         if (r.ctl === "multi") return String((v || []).length);
@@ -157,6 +158,7 @@ Item {
     }
     function shownDef(r) {
         if (r.ctl === "reload-cover") return I18n.tr("DEFAULT");
+        if (r.ctl === "list") return "";
         var d = defaults[r.key];
         if (d === undefined) return "";
         if (r.ctl === "sw") return d ? "ON" : "OFF";
@@ -169,7 +171,7 @@ Item {
         if (r.ctl === "reload-cover")
             return JSON.stringify(ReloadCoverModel.normalize(v)) !== JSON.stringify(ReloadCoverModel.normalize(d));
         if (d === undefined) return false;
-        if (r.ctl === "multi") return JSON.stringify(v || []) !== JSON.stringify(d || []);
+        if (r.ctl === "multi" || r.ctl === "list") return JSON.stringify(v || []) !== JSON.stringify(d || []);
         return v !== d;
     }
     // A typed number is clamped into the row's own range and stored in the kind
@@ -216,13 +218,60 @@ Item {
         return ({});
     }
 
+    // ── list control: a record-array editor ─────────────────────────────────
+    // The record shape comes from the row's `fields` spec; a row without one
+    // falls back to the window-rule shape (class, title, action, value). Records
+    // are JSON objects keyed by field name, and every edit hands back a fresh
+    // array so the Repeater rebuilds the card owning a focused field cleanly.
+    function listFields(r) {
+        if (r.fields && r.fields.length) return r.fields;
+        return [
+            { "name": "class", "label": I18n.tr("Class"), "ctl": "text", "eg": "firefox" },
+            { "name": "title", "label": I18n.tr("Title"), "ctl": "text" },
+            { "name": "action", "label": I18n.tr("Action"), "ctl": "chips", "opts": r.opts || [] },
+            { "name": "value", "label": I18n.tr("Value"), "ctl": "text" }
+        ];
+    }
+    function listArr(r) { var a = sheet.val(r); return Array.isArray(a) ? a : []; }
+    // a fresh record: an explicit field `def` wins, else a kind-appropriate
+    // empty (a switch off, the first option, the low end of a range, blank text).
+    function listNewRecord(fields) {
+        var rec = {};
+        for (var i = 0; i < fields.length; i++) {
+            var f = fields[i];
+            if (f.def !== undefined) rec[f.name] = f.def;
+            else if (f.ctl === "sw") rec[f.name] = false;
+            else if (f.ctl === "seg" || f.ctl === "chips") rec[f.name] = (f.opts && f.opts.length) ? f.opts[0] : "";
+            else if (f.ctl === "step" || f.ctl === "slid") rec[f.name] = (f.lo !== undefined) ? Number(f.lo) : 0;
+            else rec[f.name] = "";
+        }
+        return rec;
+    }
+    function listPatch(r, i, name, v) {
+        var a = sheet.listArr(r).slice();
+        a[i] = Object.assign({}, a[i]);
+        a[i][name] = v;
+        sheet.edited(r.key, a);
+    }
+    function listAdd(r) {
+        var a = sheet.listArr(r).slice();
+        a.push(sheet.listNewRecord(sheet.listFields(r)));
+        sheet.edited(r.key, a);
+    }
+    function listRemove(r, i) {
+        var a = sheet.listArr(r).slice();
+        a.splice(i, 1);
+        sheet.edited(r.key, a);
+    }
+    function listClear(r) { sheet.edited(r.key, []); }
+
     // inline vs band, and how wide, decided once from the control kind. A
     // control that needs room (chips, a gallery, a segmented bar of 3+, a demo)
     // gets a band whose height is its own; a picker or field gets a fixed foot
     // band; everything else sits inline at the row's right.
     function ctlBlock(r) {
         var c = r.ctl, n = sheet.optsFor(r).length;
-        if (c === "chips" || c === "multi" || c === "gallery" || c === "layoutdemo" || c === "reload-cover") return true;
+        if (c === "chips" || c === "multi" || c === "gallery" || c === "layoutdemo" || c === "reload-cover" || c === "list") return true;
         if (c === "seg" && n >= 3) return true;
         return false;
     }
@@ -405,6 +454,7 @@ Item {
                                             case "seg": return segC;
                                             case "chips": return chipsC;
                                             case "multi": return multiC;
+                                            case "list": return listC;
                                             case "pick": return pickC;
                                             case "gallery": return galleryC;
                                             case "reload-cover": return reloadCoverC;
@@ -575,6 +625,168 @@ Item {
                                                 var i = l.indexOf(k);
                                                 if (i >= 0) l.splice(i, 1); else l.push(k);
                                                 sheet.edited(srow.r.key, l);
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: listC
+                                        // one card per record; each field draws itself from the
+                                        // row's `fields` spec through the sheet's own primitives.
+                                        Column {
+                                            id: lst
+                                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                                            spacing: Tokens.s2
+                                            readonly property var r: srow.r
+                                            readonly property var fields: sheet.listFields(lst.r)
+                                            readonly property var records: sheet.listArr(lst.r)
+
+                                            // header: entry count, clear all, add.
+                                            Item {
+                                                width: parent.width
+                                                height: Tokens.ctlH
+                                                Text {
+                                                    anchors { left: parent.left; verticalCenter: parent.verticalCenter }
+                                                    text: lst.records.length === 1 ? I18n.tr("%1 ENTRY").arg(1) : I18n.tr("%1 ENTRIES").arg(lst.records.length)
+                                                    color: Tokens.inkFaint; font.family: Tokens.mono; font.pixelSize: Tokens.fTiny
+                                                }
+                                                Row {
+                                                    anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                                    spacing: Tokens.s3
+                                                    Btn {
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        text: I18n.tr("CLEAR ALL")
+                                                        armed: lst.records.length > 0
+                                                        onAct: sheet.listClear(lst.r)
+                                                    }
+                                                    IconBtn {
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        glyph: "+"
+                                                        onAct: sheet.listAdd(lst.r)
+                                                    }
+                                                }
+                                            }
+
+                                            Repeater {
+                                                model: lst.records
+                                                delegate: Rectangle {
+                                                    id: card
+                                                    required property int index
+                                                    required property var modelData
+                                                    width: lst.width
+                                                    height: fieldsCol.implicitHeight + Tokens.s3 * 2
+                                                    radius: Tokens.radius
+                                                    color: "transparent"
+                                                    border.width: Tokens.border
+                                                    border.color: Tokens.line
+
+                                                    IconBtn {
+                                                        anchors { right: parent.right; top: parent.top; topMargin: Tokens.s3; rightMargin: Tokens.s3 }
+                                                        z: 2
+                                                        glyph: "\u2212"
+                                                        onAct: sheet.listRemove(lst.r, card.index)
+                                                    }
+
+                                                    Column {
+                                                        id: fieldsCol
+                                                        anchors { left: parent.left; right: parent.right; top: parent.top; margins: Tokens.s3 }
+                                                        anchors.rightMargin: Tokens.s3 + 26
+                                                        spacing: Tokens.s2
+
+                                                        Repeater {
+                                                            model: lst.fields
+                                                            delegate: Item {
+                                                                id: fld
+                                                                required property var modelData
+                                                                readonly property var f: fld.modelData
+                                                                readonly property string fname: fld.f.name
+                                                                readonly property var fval: card.modelData[fld.fname]
+                                                                readonly property bool inlineCtl: fld.f.ctl === "sw" || fld.f.ctl === "step" || fld.f.ctl === "slid"
+                                                                readonly property real fbandH: (fld.f.ctl === "seg" || fld.f.ctl === "chips") ? Tokens.ctlH : 30
+                                                                width: fieldsCol.width
+                                                                height: fld.inlineCtl ? Tokens.ctlH : (flabel.height + Tokens.s1 + fld.fbandH)
+
+                                                                Text {
+                                                                    id: flabel
+                                                                    anchors { left: parent.left; top: parent.top }
+                                                                    anchors.right: fld.inlineCtl ? inlineSlot.left : parent.right
+                                                                    anchors.rightMargin: fld.inlineCtl ? Tokens.s3 : 0
+                                                                    anchors.verticalCenter: fld.inlineCtl ? parent.verticalCenter : undefined
+                                                                    text: I18n.tr(fld.f.label || fld.fname)
+                                                                    color: Tokens.inkMuted
+                                                                    font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                                                                    elide: Text.ElideRight
+                                                                }
+
+                                                                // inline control: switch, stepper, slider.
+                                                                Item {
+                                                                    id: inlineSlot
+                                                                    visible: fld.inlineCtl
+                                                                    anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                                                    width: fld.f.ctl === "slid" ? Math.min(200, Math.max(140, Math.round(fieldsCol.width * 0.4))) : (fld.f.ctl === "step" ? 58 : 54)
+                                                                    height: Tokens.ctlH
+                                                                    Sw {
+                                                                        visible: fld.f.ctl === "sw"
+                                                                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                                                        on: !!fld.fval
+                                                                        onToggled: (v) => sheet.listPatch(lst.r, card.index, fld.fname, v)
+                                                                    }
+                                                                    Step {
+                                                                        visible: fld.f.ctl === "step"
+                                                                        anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                                                        value: Number(fld.fval) || 0
+                                                                        from: fld.f.lo !== undefined ? Number(fld.f.lo) : 0
+                                                                        to: fld.f.hi !== undefined ? Number(fld.f.hi) : 100
+                                                                        onModified: (v) => sheet.listPatch(lst.r, card.index, fld.fname, v)
+                                                                    }
+                                                                    Slid {
+                                                                        visible: fld.f.ctl === "slid"
+                                                                        anchors.fill: parent
+                                                                        value: Number(fld.fval) || 0
+                                                                        from: fld.f.lo !== undefined ? Number(fld.f.lo) : 0
+                                                                        to: fld.f.hi !== undefined ? Number(fld.f.hi) : 1
+                                                                        onModified: (v) => sheet.listPatch(lst.r, card.index, fld.fname, v)
+                                                                    }
+                                                                }
+
+                                                                // banded control: segmented, chips, colour, text.
+                                                                Item {
+                                                                    visible: !fld.inlineCtl
+                                                                    anchors { left: parent.left; right: parent.right; top: flabel.bottom; topMargin: Tokens.s1 }
+                                                                    height: fld.fbandH
+                                                                    Seg {
+                                                                        visible: fld.f.ctl === "seg"
+                                                                        anchors.fill: parent
+                                                                        options: fld.f.opts || []
+                                                                        current: String(fld.fval === undefined ? "" : fld.fval)
+                                                                        onChose: (k) => sheet.listPatch(lst.r, card.index, fld.fname, k)
+                                                                    }
+                                                                    Chips {
+                                                                        visible: fld.f.ctl === "chips"
+                                                                        anchors.fill: parent
+                                                                        options: fld.f.opts || []
+                                                                        labels: fld.f.optLabels || ({})
+                                                                        current: String(fld.fval === undefined ? "" : fld.fval)
+                                                                        onChose: (k) => sheet.listPatch(lst.r, card.index, fld.fname, k)
+                                                                    }
+                                                                    ColorField {
+                                                                        visible: fld.f.ctl === "color"
+                                                                        anchors.fill: parent
+                                                                        value: String(fld.fval === undefined ? "" : fld.fval)
+                                                                        onChosen: (v) => sheet.listPatch(lst.r, card.index, fld.fname, v)
+                                                                    }
+                                                                    Field {
+                                                                        visible: fld.f.ctl !== "seg" && fld.f.ctl !== "chips" && fld.f.ctl !== "color"
+                                                                        anchors.fill: parent
+                                                                        tabular: true
+                                                                        placeholder: fld.f.eg || ""
+                                                                        text: fld.fval === undefined ? "" : String(fld.fval)
+                                                                        onCommitted: (v) => { if (v !== (fld.fval === undefined ? "" : String(fld.fval))) sheet.listPatch(lst.r, card.index, fld.fname, v); }
+                                                                    }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }

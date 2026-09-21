@@ -163,8 +163,9 @@ PanelWindow {
     Connections {
         target: Keypresses
         function onChord(keys, repeat, state, timestamp) {
-            // Taps still flow while the overlay is off (the overview binding
-            // claims them); only the visualiser's own chords belong here.
+            // The daemon only reads the keyboard while the visualiser is on,
+            // but a frame can still land as it turns off, so drop anything that
+            // arrives after the overlay is hidden.
             if (Keypresses.active)
                 display.push(keys, repeat, state, timestamp);
         }

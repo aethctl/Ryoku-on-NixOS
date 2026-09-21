@@ -35,7 +35,7 @@ type borderPinState struct {
 
 var gatherBorderPin = func() borderPinState {
 	var s borderPinState
-	s.paletteDriven = themeFollowsPalette()
+	s.paletteDriven = themeFollowsPalette() && storeBorderFollowsPalette()
 	b, err := os.ReadFile(filepath.Join(sys.ConfigHome(), "hypr", "settings.lua"))
 	if err == nil {
 		s.settingsLua = string(b)
@@ -75,6 +75,28 @@ func themeFollowsPalette() bool {
 		}
 	}
 	return false
+}
+
+// storeBorderFollowsPalette reads desktop.appearance.borderFollowsPalette from
+// the neutral store, defaulting on when the file or key is absent (the shipped
+// look, where the border follows the wallpaper). A pinned border (false) is the
+// chosen look even while the theme follows the wallpaper, so a col.active_border
+// in settings.lua is then exactly right and the reconciler must stay silent.
+func storeBorderFollowsPalette() bool {
+	follow := true
+	if b, err := os.ReadFile(filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")); err == nil {
+		var s struct {
+			Desktop struct {
+				Appearance struct {
+					BorderFollowsPalette *bool `json:"borderFollowsPalette"`
+				} `json:"appearance"`
+			} `json:"desktop"`
+		}
+		if json.Unmarshal(b, &s) == nil && s.Desktop.Appearance.BorderFollowsPalette != nil {
+			follow = *s.Desktop.Appearance.BorderFollowsPalette
+		}
+	}
+	return follow
 }
 
 var repairBorderPin = func() error {

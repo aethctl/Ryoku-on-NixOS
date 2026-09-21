@@ -155,7 +155,7 @@ Rectangle {
         "gpu": "graphics nvidia amd vram passthrough vfio rendering hybrid performance cpu governor epp frequency thermal battery charge ceiling aspm profile",
         "recording": "screen record capture video screencast screenshot fps codec framerate",
         "dictation": "voice typing speech transcribe whisper microphone stt",
-        "windowmanager": "compositor window manager wm wayland switch change swap session provider hyprland niri window windows rounding corners softness gaps border borders thickness colour tiling dwindle master scrolling layout opacity transparency transparent dim blur shadow glow glass wobble wobbly title bar titlebar float snap resize animation spread offset",
+        "windowmanager": "compositor window manager wm wayland switch change swap session provider window windows rounding corners softness gaps border borders thickness colour tiling layout opacity transparency transparent dim blur shadow float snap resize animation spread offset",
         "plugins": "plugin plugins hyprland compositor hyprpm title bar titlebar hyprbars glass hyprglass image border imgborders cursor motion dynamic cursors focus flash hyprfocus key sound sounds keyboard keysounds typing click clicky thock creamy cherry mx topre mechvibes switch version abi mismatch rebuild build update add git repository install",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
         "desktop": "desktop visualizer visualiser spectrum brand logo mark name widget board wallpaper",
@@ -172,7 +172,7 @@ Rectangle {
         "performance": "performance battery power saving save lowpower potato lag cpu gpu ram memory idle freeze reduce motion fps",
         "rashin": "rashin agent ai assistant hermes vault memory skills chat code llm needle",
         "updates": "update upgrade version channel commit behind check origin",
-        "import": "import bring migrate dotfiles config existing hyprland kitty fish fastfetch drop folder git backup undo restore adopt",
+        "import": "import bring migrate dotfiles config existing kitty fish fastfetch drop folder git backup undo restore adopt",
         "nixos-info": "nix nixos guide packages flake rebuild update generation rollback configuration declarative kernel driver",
         "credits": "credits thanks acknowledgement gratitude contributor"
     })
@@ -221,7 +221,12 @@ Rectangle {
                 // a page the active provider cannot back is hidden in the rail, so
                 // the deep-link path through a search hit must be closed here too.
                 if (!hub.needsMet(it)) continue;
-                out.push({ section: it.key, sectionName: it.name, group: "", tab: "", label: it.name, desc: "", kw: sectionKeywords[it.key] || "", key: "", isPage: true });
+                var pkw = sectionKeywords[it.key] || "";
+                // The window-manager page answers to the running compositor's own
+                // name rather than a hard-coded provider list.
+                if (it.key === "windowmanager" && Settings.provider)
+                    pkw += " " + Settings.provider;
+                out.push({ section: it.key, sectionName: it.name, group: "", tab: "", label: it.name, desc: "", kw: pkw, key: "", isPage: true });
             }
         // Updates left the rail for the top-right corner button, so it has no
         // page row here; its one setting still surfaces in search, named right.
@@ -274,8 +279,8 @@ Rectangle {
         "volume": "audio sound", "sound": "audio", "font": "typeface appearance", "typeface": "font appearance",
         "screenshot": "recording capture", "screencast": "recording capture", "screensaver": "lockscreen lock", "lock": "lockscreen",
         "startup": "session", "boot": "session", "battery": "performance power", "powersaving": "performance power", "potato": "performance", "lag": "performance",
-        "gap": "gaps spacing", "spacing": "gaps", "glass": "hyprglass blur liquid", "liquid": "hyprglass glass",
-        "titlebar": "hyprbars title bar", "titlebars": "hyprbars title bar", "plugin": "plugins hyprland", "plugins": "hyprland",
+        "gap": "gaps spacing", "spacing": "gaps", "glass": "blur liquid", "liquid": "glass blur",
+        "titlebar": "title bar", "titlebars": "title bar", "plugin": "plugins addon", "plugins": "plugin addon",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
         "mouse": "input pointer", "pointer": "input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
         "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "clock": "widgets desktop", "notifications": "layerrules",

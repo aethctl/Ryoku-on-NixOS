@@ -1283,10 +1283,11 @@ func nudgePalette() {
 }
 
 // applyBorderColors lands the palette's border colours on the live compositor
-// when the provider can push config at runtime. It reads the roles the caller
-// just wrote to colors.json; the provider owns the colour literal format.
+// when the provider can recolour the border from the palette. It reads the roles
+// the caller just wrote to colors.json; the provider owns the colour literal
+// format and whether the store has pinned a fixed colour (then the act no-ops).
 func (d *daemon) applyBorderColors() {
-	if !d.wmc.Can(wm.CapLiveConfigEval) {
+	if !d.wmc.Can(wm.CapPaletteBorder) {
 		return
 	}
 	active, inactive, ok := paletteBorderColors()

@@ -20,16 +20,27 @@ Item {
     property string query: ""
     property int selected: 0
 
+    // A bind the running compositor cannot honour still renders (dimmed, tagged)
+    // but does not count as a usable shortcut, so the tallies read the truth.
+    function usableCount(binds) {
+        var n = 0;
+        for (var i = 0; i < binds.length; i++)
+            if (!binds[i].unhonored)
+                n++;
+        return n;
+    }
     function countBinds(cats) {
         var n = 0;
         for (var i = 0; i < cats.length; i++)
-            n += cats[i].binds.length;
+            n += sheet.usableCount(cats[i].binds);
         return n;
     }
     readonly property int total: sheet.countBinds(sheet.categories)
 
     function matchBind(b, q) {
         if (b.desc && b.desc.toLowerCase().indexOf(q) >= 0)
+            return true;
+        if (b.hint && b.hint.toLowerCase().indexOf(q) >= 0)
             return true;
         var ks = b.keys ? b.keys.join(" ").toLowerCase() : "";
         return ks.indexOf(q) >= 0;
@@ -284,7 +295,7 @@ Item {
                             anchors.right: parent.right
                             anchors.rightMargin: Tokens.s3
                             anchors.verticalCenter: parent.verticalCenter
-                            text: sheet.searching ? ("" + railItem.mc) : ("" + railItem.modelData.binds.length)
+                            text: sheet.searching ? ("" + railItem.mc) : ("" + sheet.usableCount(railItem.modelData.binds))
                             color: Tokens.inkFaint
                             font.family: Tokens.mono
                             font.pixelSize: Tokens.fMicro
@@ -335,6 +346,7 @@ Item {
                             width: paneCol.width
                             name: modelData.name
                             binds: modelData.binds
+                            searching: sheet.searching
                         }
                     }
                 }

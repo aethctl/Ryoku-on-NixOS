@@ -195,6 +195,9 @@ func runAct(args []string) error {
 	case wm.ActionInputTouchpad:
 		return touchpadAct(rest)
 
+	case wm.ActionBorderColors:
+		return setBorderPalette(rest)
+
 	case wm.ActionOutputCycle:
 		return cycleOutputs()
 
@@ -306,6 +309,64 @@ func touchpadStatePath() string {
 func touchpadDisabled() bool {
 	_, err := os.Stat(touchpadStatePath())
 	return err == nil
+}
+
+// setBorderPalette records the live palette's border colours and regenerates
+// settings.kdl so niri re-reads it and recolours the frame, the niri twin of
+// Hyprland's eval push. niri has no runtime config IPC, so this writes the
+// palette file writeFrame reads and re-runs the apply path, exactly as the
+// touchpad lock does. A no-op when the store fixes the border, so a wallpaper
+// change never overrides a chosen colour.
+func setBorderPalette(args []string) error {
+	active, err := arg(args, 0, "active colour")
+	if err != nil {
+		return err
+	}
+	inactive, err := arg(args, 1, "inactive colour")
+	if err != nil {
+		return err
+	}
+	na, aok := normBorderHex(active)
+	ni, iok := normBorderHex(inactive)
+	if !aok && !iok {
+		return fmt.Errorf("act %s: no usable colour in %q/%q", wm.ActionBorderColors, active, inactive)
+	}
+	s := loadStore(storePath())
+	if !s.Appearance.BorderFollowsPalette {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(borderPalettePath()), 0o755); err != nil {
+		return err
+	}
+	pal := struct {
+		Active   string `json:"active"`
+		Inactive string `json:"inactive"`
+	}{Active: na, Inactive: ni}
+	body, err := json.Marshal(pal)
+	if err != nil {
+		return err
+	}
+	if err := atomicWrite(borderPalettePath(), body, 0o644); err != nil {
+		return err
+	}
+	return writeOverlayKdl("settings.kdl", genSettings(s))
+}
+
+// normBorderHex normalises a colour to "#rrggbb", accepting the same literal
+// forms the Hyprland act does ("#rrggbb" or "rrggbb"). ok is false for anything
+// that is not six hex digits, so a malformed colour is skipped rather than
+// written into the config.
+func normBorderHex(s string) (string, bool) {
+	h := strings.TrimPrefix(strings.TrimSpace(s), "#")
+	if len(h) != 6 {
+		return "", false
+	}
+	for _, c := range h {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return "", false
+		}
+	}
+	return "#" + strings.ToLower(h), true
 }
 
 // touchpadNotify shows the toast the FN key gives, matching the Hyprland side. A
