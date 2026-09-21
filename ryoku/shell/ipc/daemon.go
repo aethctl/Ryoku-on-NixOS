@@ -620,6 +620,21 @@ func tailLine(path string) string {
 	return ""
 }
 
+// tailLines returns the last n lines of the file joined by newlines, or "" if it
+// cannot be read. Used to attach a dying surface's output to a crash log without
+// copying the whole file.
+func tailLines(path string, n int) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(string(b), "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // supervise runs `qs -c <name>` and restarts it whenever it exits, backing off if
 // it dies immediately so a broken config does not spin the CPU.
 func (d *daemon) supervise(name string) {
@@ -682,6 +697,20 @@ func (d *daemon) supervise(name string) {
 		}
 		if logFile != nil {
 			logFile.Close()
+		}
+		if name == "shell" {
+			// On the shell going down, attach the reason so the next crash
+			// report from a user carries it: the exit status, the signal that
+			// killed it, and the tail of what the surface printed before it went.
+			signal := "none"
+			if ws, ok := cmd.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+				signal = ws.Signal().String()
+			}
+			fmt.Fprintf(os.Stderr, "shell exited: %s (signal: %s)\n",
+				cmd.ProcessState.String(), signal)
+			if tail := tailLines(logPath, 20); tail != "" {
+				fmt.Fprintf(os.Stderr, "shell stderr tail:\n%s\n", tail)
+			}
 		}
 
 		d.mu.Lock()

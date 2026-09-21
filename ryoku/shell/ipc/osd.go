@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -25,12 +26,64 @@ type osdState struct {
 	seq   int
 }
 
-// backlightDevice picks the primary backlight: the first entry under
-// /sys/class/backlight. Absent (a desktop with no panel) means no watcher, so
-// the brightness OSD simply never fires, matching the reference where a missing
-// brightness device produces no update. Mirrors brightness_service().primary.
+// backlightLevelPath is where the last user-set panel level lives across
+// reboots. The kernel drives every backlight to its hardware default at boot
+// and nothing else persists the level, so a plain reboot erased it (#199).
+// The watcher below is the one place every writer (media keys, the slider,
+// the brightness verb) converges, so it owns both halves: save on change,
+// restore before the session's first read.
+func backlightLevelPath() string {
+	return filepath.Join(stateDir(), "ryoku", "backlight")
+}
+
+// saveBacklight records the raw sysfs level. Best-effort: a read-only state
+// dir costs persistence, not the session.
+func saveBacklight(level int) {
+	dir := filepath.Join(stateDir(), "ryoku")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return
+	}
+	_ = os.WriteFile(backlightLevelPath(), []byte(strconv.Itoa(level)), 0o644)
+}
+
+// restoreBacklight pushes the saved level onto the device before the watcher
+// opens it, so the first published value is the restored one and the OSD and
+// sliders agree with the screen. A level outside [1,max] (the panel changed
+// shape, the file is stale) is dropped rather than trusted; a device that
+// rejects the write (no seat ACL on an unusual box) is left at the kernel's
+// value instead of fought.
+func restoreBacklight(dev string, max int) {
+	if max <= 0 {
+		return
+	}
+	b, err := os.ReadFile(backlightLevelPath())
+	if err != nil {
+		return
+	}
+	want, err := strconv.Atoi(strings.TrimSpace(string(b)))
+	if err != nil || want < 1 || want > max {
+		return
+	}
+	if cur, ok := readSysInt(filepath.Join(dev, "brightness")); ok && cur == want {
+		return
+	}
+	_ = os.WriteFile(filepath.Join(dev, "brightness"), []byte(strconv.Itoa(want)), 0o644)
+}
+
+// backlightDevice picks the primary backlight through ryoku-hw-backlight, the
+// one selector that names the device driving the connected panel: a first-entry
+// pick can land on a phantom nvidia_0 beside the real EC or amdgpu device, and
+// then the OSD watches a device the key handler never writes (#176). Falls
+// back to the first entry when the helper is missing or names nothing.
 func backlightDevice() string {
 	const base = "/sys/class/backlight"
+	if out, err := exec.Command("ryoku-hw-backlight").Output(); err == nil {
+		if name := strings.TrimSpace(string(out)); name != "" {
+			if _, err := os.Stat(filepath.Join(base, name)); err == nil {
+				return filepath.Join(base, name)
+			}
+		}
+	}
 	ents, err := os.ReadDir(base)
 	if err != nil || len(ents) == 0 {
 		return ""
@@ -81,6 +134,7 @@ func (o *osdState) watchBacklight(dev string) {
 	if !ok || maxb <= 0 {
 		return
 	}
+	restoreBacklight(dev, maxb)
 	fd, err := unix.Open(filepath.Join(dev, "actual_brightness"), unix.O_RDONLY, 0)
 	if err != nil {
 		return
@@ -88,8 +142,18 @@ func (o *osdState) watchBacklight(dev string) {
 	defer unix.Close(fd)
 
 	buf := make([]byte, 32)
-	if cur, ok := readActual(fd, buf); ok {
-		o.publish(float64(cur) / float64(maxb))
+	// Polling wakes on actual_brightness, but the value published (and saved)
+	// is the linear `brightness` attribute: on a driver with a custom
+	// brightness curve (amdgpu) actual_brightness is nonlinear, so publishing
+	// it made the OSD read 7-88% for a 1-100% request (#176).
+	publish := func() {
+		if frac, raw, ok := readBrightnessFraction(dev, maxb); ok {
+			o.publish(frac)
+			saveBacklight(raw)
+		}
+	}
+	if _, ok := readActual(fd, buf); ok {
+		publish()
 	}
 	for {
 		fds := []unix.PollFd{{Fd: int32(fd), Events: unix.POLLPRI | unix.POLLERR}}
@@ -103,13 +167,28 @@ func (o *osdState) watchBacklight(dev string) {
 		if n == 0 {
 			continue
 		}
-		cur, ok := readActual(fd, buf)
-		if !ok {
+		// Reading actual_brightness re-arms the POLLPRI notify.
+		if _, ok := readActual(fd, buf); !ok {
 			continue
 		}
 		o.seq++
-		o.publish(float64(cur) / float64(maxb))
+		publish()
 	}
+}
+
+// readBrightnessFraction returns the panel's linear level as a 0..1 fraction
+// plus its raw attribute value. It reads `brightness`, not `actual_brightness`:
+// on a driver with a custom brightness curve the two differ, and only the
+// requested value is a linear percentage the OSD and restore path can use.
+func readBrightnessFraction(dev string, maxb int) (float64, int, bool) {
+	if maxb <= 0 {
+		return 0, 0, false
+	}
+	raw, ok := readSysInt(filepath.Join(dev, "brightness"))
+	if !ok {
+		return 0, 0, false
+	}
+	return float64(raw) / float64(maxb), raw, true
 }
 
 // readActual reads the backlight level via pread at offset 0, which both fetches

@@ -562,12 +562,15 @@ func accelProfile(s string) string {
 	return ""
 }
 
-// writeLayout maps the neutral border onto niri's always-visible border and turns
-// the focus ring off, so the frame the user sized is the one they see, and adds
-// the drop shadow when the store asks for one, spread and offset included, since
-// those are neutral appearance keys like softness and colour. The default and
-// preset widths, the centring rules, the urgent colour, the tab indicator, the
-// insert hint and the struts are niri exclusives with no neutral key.
+// writeLayout maps the neutral border onto niri's border block and turns the
+// focus ring off, so the frame the user sized is the one they see, and adds the
+// drop shadow when the store asks for one, spread and offset included, since
+// those are neutral appearance keys like softness and colour. niri's border
+// defaults to off and only merges on when the block carries an explicit on flag,
+// so a bare width would leave the border invisible; on goes in whenever the user
+// sized one. The default and preset widths, the centring rules, the urgent
+// colour, the tab indicator, the insert hint and the struts are niri exclusives
+// with no neutral key.
 func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	b.WriteString("layout {\n")
 	fmt.Fprintf(b, "    gaps %d\n", a.GapsOut)
@@ -599,6 +602,7 @@ func writeLayout(b *strings.Builder, a Appearance, n Niri) {
 	if a.BorderSize <= 0 {
 		b.WriteString("        off\n")
 	} else {
+		b.WriteString("        on\n")
 		fmt.Fprintf(b, "        width %d\n", a.BorderSize)
 	}
 	if c := kdlColor(a.ActiveBorder); c != "" {
@@ -841,7 +845,10 @@ func windowRuleProps(r WindowRule) []string {
 }
 
 // appOverrideProps renders the per-app fields niri can express; -1 and "inherit"
-// mean leave alone.
+// mean leave alone. A per-app border rule merges over the base border, so a width
+// alone would not turn one on where the base is off, and a stored 0 would draw a
+// zero-width line rather than none: the on flag draws the sized border, off drops
+// it, matching how the layout border block resolves.
 func appOverrideProps(a AppOverride) []string {
 	var props []string
 	if a.Opacity >= 0 && a.Opacity <= 1 {
@@ -850,8 +857,11 @@ func appOverrideProps(a AppOverride) []string {
 	if a.Rounding >= 0 {
 		props = append(props, fmt.Sprintf("geometry-corner-radius %d", a.Rounding))
 	}
-	if a.BorderSize >= 0 {
-		props = append(props, "border {", fmt.Sprintf("    width %d", a.BorderSize), "}")
+	switch {
+	case a.BorderSize > 0:
+		props = append(props, "border {", "    on", fmt.Sprintf("    width %d", a.BorderSize), "}")
+	case a.BorderSize == 0:
+		props = append(props, "border {", "    off", "}")
 	}
 	return props
 }

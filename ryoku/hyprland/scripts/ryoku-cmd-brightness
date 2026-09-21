@@ -30,15 +30,42 @@ if compgen -G "/sys/class/backlight/*" >/dev/null; then
   fi
 fi
 
-# External monitors over DDC/CI. Always attempted, never fatal.
+# External monitors over DDC/CI. Only when a non-panel connector is actually
+# connected: `ddcutil detect` walks every i2c bus (28 on a hybrid laptop, over
+# 11s cold), and i2c traffic on the display controller is what froze the whole
+# session on a brightness keypress (#176) -- the same stall 755ed028 gated out
+# of the sidebar but not out of this key handler. The connector check is a
+# sysfs file read, so it never touches i2c.
 if command -v ddcutil >/dev/null 2>&1; then
-  lock="${XDG_RUNTIME_DIR:-/tmp}/ryoku-brightness-ddc.lock"
-  (
-    flock -n 9 || exit 0
-    while read -r bus; do
-      [[ -n $bus ]] || continue
-      ddcutil --bus "$bus" --noverify setvcp 10 "$sign" "$mag" >/dev/null 2>&1 &
-    done < <(ddcutil detect --brief 2>/dev/null | sed -n 's|.*/dev/i2c-\([0-9]\+\).*|\1|p')
-    wait
-  ) 9>"$lock" || true
+  externals=()
+  for c in "${RYOKU_DRM_PATH:-/sys/class/drm}"/*-*; do
+    case "${c##*/}" in *eDP*|*LVDS*|*DSI*|*Writeback*) continue ;; esac
+    [[ "$(cat "$c/status" 2>/dev/null)" == connected ]] && externals+=("${c##*/}")
+  done
+  if (( ${#externals[@]} )); then
+    # Cache the detected buses under a key of the connected-external set, so a
+    # docked user's repeated presses reuse the bus list instead of re-walking
+    # every bus each time. Plugging in or out changes the key, so the cache
+    # refreshes exactly on hotplug; it lives in the runtime dir, so a logout
+    # clears it too.
+    cache_dir="${XDG_RUNTIME_DIR:-/tmp}/ryoku-brightness-ddc"
+    key="$(printf '%s\n' "${externals[@]}" | LC_ALL=C sort | tr -d '\n')"
+    cache="$cache_dir/$(printf '%s' "$key" | cksum | cut -d' ' -f1)"
+    mkdir -p "$cache_dir" 2>/dev/null || true
+    if [[ -f $cache ]]; then
+      mapfile -t buses <"$cache"
+    else
+      mapfile -t buses < <(ddcutil detect --brief 2>/dev/null | sed -n 's|.*/dev/i2c-\([0-9]\+\).*|\1|p')
+      printf '%s\n' "${buses[@]}" >"$cache" 2>/dev/null || true
+    fi
+    lock="$cache_dir/lock"
+    (
+      flock -n 9 || exit 0
+      for bus in "${buses[@]}"; do
+        [[ -n $bus ]] || continue
+        ddcutil --bus "$bus" --noverify setvcp 10 "$sign" "$mag" >/dev/null 2>&1 &
+      done
+      wait
+    ) 9>"$lock" || true
+  fi
 fi

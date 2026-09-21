@@ -39,6 +39,12 @@ float fbm(vec2 p) {
     return v;
 }
 void main() {
+    // Rest state must be the committed image: the reveal's feathered edge and
+    // the ink fingers both leak newTex/ink into noise troughs at progress 0.
+    if (progress <= 0.0) {
+        fragColor = texture(oldTex, qt_TexCoord0) * qt_Opacity;
+        return;
+    }
     vec2 v_uv = qt_TexCoord0;
     float p = progress;
     float blob = fbm(v_uv * 3.5);
@@ -50,16 +56,16 @@ void main() {
     float splash_d = d + distortion;
     float boundary = p * 1.7 - 0.15;
     float diff = splash_d - boundary;
-    float reveal = smoothstep(0.04, -0.04, diff);
-    float edge_outer = smoothstep(0.16, 0.02, diff);
-    float edge_inner = smoothstep(0.02, -0.04, diff);
+    float reveal = 1.0 - smoothstep(-0.04, 0.04, diff);
+    float edge_outer = 1.0 - smoothstep(0.02, 0.16, diff);
+    float edge_inner = 1.0 - smoothstep(-0.04, 0.02, diff);
     float edge = edge_outer * (1.0 - edge_inner);
     vec4 a = texture(oldTex, v_uv);
     vec4 b = texture(newTex, v_uv);
     vec4 mixed = mix(a, b, reveal);
     vec3 ink = vec3(0.03, 0.01, 0.06);
     mixed.rgb = mix(mixed.rgb, ink, edge * 0.95);
-    float fingers_pre = smoothstep(0.25, 0.05, diff) * (1.0 - reveal);
+    float fingers_pre = (1.0 - smoothstep(0.05, 0.25, diff)) * (1.0 - reveal);
     mixed.rgb = mix(mixed.rgb, ink, fingers_pre * fingers * 0.4);
     fragColor = (mixed) * qt_Opacity;
 }

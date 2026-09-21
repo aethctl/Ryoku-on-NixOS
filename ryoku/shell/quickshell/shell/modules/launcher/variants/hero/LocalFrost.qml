@@ -16,6 +16,7 @@ Item {
     required property real cropHeight
     required property int blurRadius
     property bool captureEnabled: false
+    property bool captureWanted: false
 
     readonly property bool frozenReady: frameArrived
     readonly property alias textureItem: capture
@@ -70,22 +71,39 @@ Item {
         width: root.screenWidth
         height: root.screenHeight
         visible: false
-        captureSource: root.captureStarted ? root.captureScreen : null
+        captureSource: (root.captureStarted && root.captureWanted)
+            ? root.captureScreen : null
         paintCursor: false
         live: false
 
         onHasContentChanged: if (hasContent) root.freezeArrivedFrame()
         onStopped: {
-            if (!hasContent) {
-                var stoppedGeneration = root.generation;
-                Qt.callLater(function () {
-                    root.reportFailure(stoppedGeneration);
-                });
-            }
+            // A stop with no content is a real failure only while a capture is
+            // still wanted (captureSource is the screen). A stop we caused by
+            // clearing captureSource on close or on a generation reset is not.
+            if (hasContent || !root.captureStarted || !root.captureWanted)
+                return;
+            var stoppedGeneration = root.generation;
+            Qt.callLater(function () {
+                root.reportFailure(stoppedGeneration);
+            });
         }
     }
 
     onCaptureEnabledChanged: startCapture()
+    // A persistent capture object is reused across invocations, so a fresh
+    // generation re-arms it here: drop the previous frozen frame and start a
+    // new single-frame capture instead of relying on object recreation, which
+    // tore the ScreencopyView down while the compositor still delivered output
+    // enter/leave and segfaulted the client.
+    onGenerationChanged: {
+        captureStarted = false;
+        frameArrived = false;
+        failureReported = false;
+        // Let captureSource settle to null first so a live:false view resamples
+        // the desktop for the new invocation rather than keeping the old frame.
+        Qt.callLater(startCapture);
+    }
     Component.onCompleted: {
         startCapture();
         if (capture.hasContent)

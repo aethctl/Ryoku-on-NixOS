@@ -66,18 +66,16 @@ PanelWindow {
     readonly property real maxDrawerHeight: surfaceBudget.maxDrawerHeight
     readonly property real actualCardCapacity: Math.max(
         0, height - shadowPadTop - shadowPadBottom)
-    readonly property bool frostActive: frostLoader.status === Loader.Ready
-        && frostLoader.item
-        && frostLoader.item.frozenReady
+    readonly property bool frostActive: localFrost.frozenReady
         && lifecycleState.capture === Lifecycle.CAPTURE.READY
     readonly property var frostPlan: Lifecycle.frostPresentation({
         frostActive: frostActive,
         drawerHeight: launcher.drawerPresentedHeight,
         drawerOpacity: launcher.drawerPresentedOpacity,
         maxDrawerHeight: maxDrawerHeight,
-        sourceHeight: frostLoader.item ? frostLoader.item.sampledHeight : 0,
-        bleedTop: frostLoader.item ? frostLoader.item.bleedTop : 0,
-        bleedBottom: frostLoader.item ? frostLoader.item.bleedBottom : 0
+        sourceHeight: localFrost.sampledHeight,
+        bleedTop: localFrost.bleedTop,
+        bleedBottom: localFrost.bleedBottom
     })
 
     property real visualOpacity: 0
@@ -418,47 +416,34 @@ PanelWindow {
     // Capture lives outside the zero-opacity visual subtree so the scheduled
     // texture update can finish during Prelude. It produces no scene pixels;
     // only FrostLayer presents the accepted texture inside the card clip.
-    Loader {
-        id: frostLoader
-        property int loadGeneration: -1
-        active: win.frostTreeNeeded
-        asynchronous: false
-
-        sourceComponent: Component {
-            HeroVariant.LocalFrost {
-                captureScreen: win.modelData
-                generation: win.lifecycleState.generation
-                screenWidth: win.modelData.width
-                screenHeight: win.modelData.height
-                cropX: (win.modelData.width - win.cardWidth) / 2
-                cropY: win.stableTopMargin + win.shadowPadTop
-                    + 126 * win.s
-                cropWidth: win.cardWidth
-                cropHeight: win.maxDrawerHeight
-                blurRadius: Math.max(
-                    1, Math.min(64, LauncherConfig.bgBlur | 0))
-                captureEnabled: win.capturePending
-                    && win.backingWindowVisible
-                onReady: generation => win.lifecycleEvent({
-                    type: "captureReady",
-                    generation: generation
-                })
-                onFailed: generation => win.lifecycleEvent({
-                    type: "captureFailed",
-                    generation: generation
-                })
-            }
-        }
-
-        onStatusChanged: {
-            if (status === Loader.Error && win.capturePending)
-                win.emitLifecycle(
-                    "captureUnavailable", {}, loadGeneration);
-        }
-        onActiveChanged: {
-            if (active)
-                loadGeneration = win.lifecycleState.generation;
-        }
+    // The object is persistent for the surface's life. Recreating it per open
+    // tears a ScreencopyView down while the compositor still delivers output
+    // enter/leave, which segfaults the client where there is no focus-grab
+    // protocol; open and close ride captureSource and a per-generation reset.
+    HeroVariant.LocalFrost {
+        id: localFrost
+        captureScreen: win.modelData
+        generation: win.lifecycleState.generation
+        screenWidth: win.modelData.width
+        screenHeight: win.modelData.height
+        cropX: (win.modelData.width - win.cardWidth) / 2
+        cropY: win.stableTopMargin + win.shadowPadTop
+            + 126 * win.s
+        cropWidth: win.cardWidth
+        cropHeight: win.maxDrawerHeight
+        blurRadius: Math.max(
+            1, Math.min(64, LauncherConfig.bgBlur | 0))
+        captureWanted: win.frostTreeNeeded
+        captureEnabled: win.capturePending
+            && win.backingWindowVisible
+        onReady: generation => win.lifecycleEvent({
+            type: "captureReady",
+            generation: generation
+        })
+        onFailed: generation => win.lifecycleEvent({
+            type: "captureFailed",
+            generation: generation
+        })
     }
 
     Item {
@@ -510,20 +495,13 @@ PanelWindow {
 
                 sourceComponent: Component {
                     HeroVariant.FrostLayer {
-                        sourceItem: frostLoader.item
-                            ? frostLoader.item.textureItem : null
-                        sourceRect: frostLoader.item
-                            ? frostLoader.item.sampleRect
-                            : Qt.rect(0, 0, 0, 0)
+                        sourceItem: localFrost.textureItem
+                        sourceRect: localFrost.sampleRect
                         active: true
-                        bleedLeft: frostLoader.item
-                            ? frostLoader.item.bleedLeft : 0
-                        bleedTop: frostLoader.item
-                            ? frostLoader.item.bleedTop : 0
-                        bleedRight: frostLoader.item
-                            ? frostLoader.item.bleedRight : 0
-                        bleedBottom: frostLoader.item
-                            ? frostLoader.item.bleedBottom : 0
+                        bleedLeft: localFrost.bleedLeft
+                        bleedTop: localFrost.bleedTop
+                        bleedRight: localFrost.bleedRight
+                        bleedBottom: localFrost.bleedBottom
                         textureHeight: win.frostPlan.textureHeight
                         blurRadius: Math.max(
                             1, Math.min(64, LauncherConfig.bgBlur | 0))
@@ -587,22 +565,35 @@ PanelWindow {
     }
 
     // Where the compositor has no focus-grab protocol, a full-screen scrim below
-    // the launcher closes it on an outside press.
+    // the launcher closes it on an outside press. Its mapped state flips one
+    // turn after the driving condition changes, and the close is deferred, so
+    // the window is never unmapped from inside its own pointer handler, which
+    // segfaults the Wayland client on such compositors.
     PanelWindow {
         id: dismissScrim
-        visible: !focusGrab.available && focusGrab.active
+        property bool scrimWanted: !focusGrab.available && focusGrab.active
+        property bool scrimMapped: false
+        visible: scrimMapped
         screen: win.screen
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.namespace: "launcher-dismiss"
         WlrLayershell.layer: WlrLayer.Top
         anchors { top: true; bottom: true; left: true; right: true }
+        onScrimWantedChanged: Qt.callLater(function () {
+            dismissScrim.scrimMapped = dismissScrim.scrimWanted;
+        })
         MouseArea {
             anchors.fill: parent
             onPressed: {
-                if (win.invocationSurface
-                        && win.lifecycleState.phase !== Lifecycle.PHASES.CLOSING)
-                    win.requestClose(focusGrab.generation, win.surfaceMonitor);
+                if (!win.invocationSurface
+                        || win.lifecycleState.phase === Lifecycle.PHASES.CLOSING)
+                    return;
+                var closeGeneration = focusGrab.generation;
+                var closeMonitor = win.surfaceMonitor;
+                Qt.callLater(function () {
+                    win.requestClose(closeGeneration, closeMonitor);
+                });
             }
         }
     }

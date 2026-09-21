@@ -19,6 +19,16 @@ layout(binding = 1) uniform sampler2D oldTex;
 layout(binding = 2) uniform sampler2D newTex;
 
 void main() {
+    // Same persistent-painter rest state as iris.frag: at progress 0 the
+    // ripple must vanish and the committed image must paint clean. Here the
+    // reveal front starts at the impact point, so a disc around it blends
+    // toward newTex -- the stale buffer holding the previous wallpaper -- and
+    // the ripple runs at full strength, freezing a distorted patch after every
+    // switch (#201). The reversed smoothstep below is also undefined in GLSL.
+    if (progress <= 0.0) {
+        fragColor = texture(oldTex, qt_TexCoord0) * qt_Opacity;
+        return;
+    }
     vec2 v_uv = qt_TexCoord0;
     float p = progress;
     vec2 impact = vec2(0.35, 0.4);
@@ -34,7 +44,7 @@ void main() {
     vec2 distorted = v_uv + dir * ripple;
     vec4 a = texture(oldTex, distorted);
     vec4 b = texture(newTex, distorted);
-    float reveal = smoothstep(0.05, -0.02, d - front);
+    float reveal = 1.0 - smoothstep(front - 0.02, front + 0.05, d);
     vec4 mixed = mix(a, b, reveal);
     float crest = exp(-abs(d - front) * 25.0) * (1.0 - p);
     mixed.rgb += vec3(0.6, 0.75, 0.95) * crest * 0.5;
