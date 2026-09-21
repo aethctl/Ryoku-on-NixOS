@@ -30,16 +30,21 @@ function effectiveCombo(rebinds, defCombo) {
 }
 
 // the set of normalised combos the shipped legend holds (rebinds applied), keyed
-// for O(1) shadow lookups. `categories` is the `ryoku-hub keybinds` legend.
+// for O(1) shadow lookups. `categories` is the `ryoku-hub keybinds` legend. A
+// family stands for ten chords, so it is expanded before it lands in the set:
+// that is how a custom "SUPER + 3" is caught shadowing the workspace family.
 function shippedKeys(categories, rebinds) {
     var set = {};
     categories = categories || [];
     for (var c = 0; c < categories.length; c++) {
         var binds = categories[c].binds || [];
         for (var b = 0; b < binds.length; b++) {
-            var k = normKeys(effectiveCombo(rebinds, binds[b].combo || ""));
-            if (k.length)
-                set[k] = true;
+            var chords = expandFamily(effectiveCombo(rebinds, binds[b].combo || ""));
+            for (var e = 0; e < chords.length; e++) {
+                var k = normKeys(chords[e]);
+                if (k.length)
+                    set[k] = true;
+            }
         }
     }
     return set;
@@ -170,4 +175,52 @@ function chordFrom(event) {
     var mods = modTokens(event);
     mods.push(name);
     return mods.join(" + ");
+}
+
+// A family chord stands for its whole digit range: the {n} placeholder sits in
+// the key position and expands to ten binds the provider lays down. The Keybinds
+// page reasons about a family differently from a plain chord, so it needs to spot
+// one, turn a recorded number key into the family form, and expand it for clash
+// checks. These mirror wm/binds.go (CatalogBind.Family and Expand) on the UI side.
+function isFamilyChord(chord) {
+    return ("" + (chord || "")).indexOf("{n}") >= 0;
+}
+
+// familyFrom turns a chord the recorder captured into the family form the store
+// keeps: the same modifiers with the digit swapped for {n}, or KP_{n} for a
+// number-pad digit. A chord whose key is not a digit is not a family, so it
+// returns "" and the recorder keeps waiting for a number key.
+function familyFrom(chord) {
+    var parts = ("" + (chord || "")).split("+");
+    var toks = [];
+    for (var i = 0; i < parts.length; i++) {
+        var t = parts[i].trim();
+        if (t.length)
+            toks.push(t);
+    }
+    if (toks.length === 0)
+        return "";
+    var key = toks[toks.length - 1];
+    var placeholder = "";
+    if (key.length === 1 && key >= "0" && key <= "9")
+        placeholder = "{n}";
+    else if (key.length === 4 && key.substring(0, 3) === "KP_" && key.charAt(3) >= "0" && key.charAt(3) <= "9")
+        placeholder = "KP_{n}";
+    else
+        return "";
+    toks[toks.length - 1] = placeholder;
+    return toks.join(" + ");
+}
+
+// the ten chords a family binds: {n} runs onto 1..9 then 0, and KP_{n} onto
+// KP_1..KP_9 then KP_0, mirroring wm.CatalogBind.Expand. A plain chord yields
+// itself, so a caller can expand any effective chord uniformly for clash checks.
+function expandFamily(chord) {
+    chord = "" + (chord || "");
+    if (chord.indexOf("{n}") < 0)
+        return chord.length ? [chord] : [];
+    var out = [];
+    for (var n = 1; n <= 10; n++)
+        out.push(chord.replace("{n}", "" + (n % 10)));
+    return out;
 }

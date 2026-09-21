@@ -39,7 +39,7 @@ const source = fs
 const context = { Qt };
 vm.createContext(context);
 vm.runInContext(source, context);
-const { qtKeyName, chordFrom } = context;
+const { qtKeyName, chordFrom, isFamilyChord, familyFrom, expandFamily, shippedKeys, normKeys } = context;
 
 // A KeyEvent as Quickshell delivers it: key code + a modifier bitmask.
 const ev = (key, ...mods) => ({ key, modifiers: mods.reduce((a, m) => a | m, 0) });
@@ -104,4 +104,61 @@ test("chordFrom orders modifiers SUPER, CTRL, ALT, SHIFT before the key", () => 
 test("a lone modifier press yields no chord yet", () => {
     // Meta alone: no main key, so nothing to commit (the overlay keeps waiting)
     assert.equal(chordFrom({ key: 0, modifiers: Qt.MetaModifier }), "");
+});
+
+test("isFamilyChord spots the {n} placeholder, digit or numpad", () => {
+    assert.equal(isFamilyChord("SUPER + {n}"), true);
+    assert.equal(isFamilyChord("SUPER + KP_{n}"), true);
+    assert.equal(isFamilyChord("SUPER + CTRL + {n}"), true);
+    assert.equal(isFamilyChord("SUPER + Q"), false);
+    assert.equal(isFamilyChord("SUPER + 3"), false);
+    assert.equal(isFamilyChord(""), false);
+});
+
+test("familyFrom keeps the modifiers and swaps a digit key for {n}", () => {
+    // a recorded chord whose key is a plain digit becomes the digit family
+    assert.equal(familyFrom("SUPER + 3"), "SUPER + {n}");
+    assert.equal(familyFrom("SUPER + CTRL + 0"), "SUPER + CTRL + {n}");
+    // a number-pad digit becomes the numpad family, so the twin still binds
+    assert.equal(familyFrom("SUPER + KP_3"), "SUPER + KP_{n}");
+    assert.equal(familyFrom("SUPER + ALT + KP_0"), "SUPER + ALT + KP_{n}");
+});
+
+test("familyFrom rejects a non-number key so the recorder waits", () => {
+    assert.equal(familyFrom("SUPER + Q"), "");
+    assert.equal(familyFrom("SUPER + Return"), "");
+    assert.equal(familyFrom("SUPER + KP_Enter"), "");
+    assert.equal(familyFrom(""), "");
+});
+
+test("chordFrom then familyFrom is the record-to-store path", () => {
+    // Super + numpad 3, NumLock on: the recorder yields SUPER + KP_3, which the
+    // page folds to the numpad family it stores under the row's default
+    assert.equal(familyFrom(chordFrom(ev(Qt.Key_3, Qt.MetaModifier, Qt.KeypadModifier))), "SUPER + KP_{n}");
+    // Super + a plain 3 on the number row folds to the digit family
+    assert.equal(familyFrom(chordFrom(ev(Qt.Key_3, Qt.MetaModifier))), "SUPER + {n}");
+});
+
+test("expandFamily runs {n} onto 1..9,0 and KP_{n} onto the number pad", () => {
+    // expandFamily runs inside the vm realm, so its array joins to a string here
+    // rather than deep-comparing across realms (a different Array prototype).
+    assert.equal(expandFamily("SUPER + {n}").join(","),
+        "SUPER + 1,SUPER + 2,SUPER + 3,SUPER + 4,SUPER + 5,SUPER + 6,SUPER + 7,SUPER + 8,SUPER + 9,SUPER + 0");
+    const kp = expandFamily("SUPER + KP_{n}");
+    assert.equal(kp.length, 10);
+    assert.equal(kp[0], "SUPER + KP_1");
+    assert.equal(kp[2], "SUPER + KP_3");
+    assert.equal(kp[9], "SUPER + KP_0");
+    // a plain chord expands to itself, so a caller can expand any chord
+    assert.equal(expandFamily("SUPER + Q").join(","), "SUPER + Q");
+    assert.equal(expandFamily("").length, 0);
+});
+
+test("shippedKeys expands a family so a digit custom bind is caught shadowing it", () => {
+    const cats = [{ name: "Workspaces", binds: [{ combo: "SUPER + {n}" }] }];
+    const keys = shippedKeys(cats, {});
+    // every one of the ten workspace chords is in the shadow set
+    assert.ok(keys[normKeys("SUPER + 3")], "SUPER + 3 shadows the family");
+    assert.ok(keys[normKeys("SUPER + 0")], "the tenth (0) shadows the family");
+    assert.ok(!keys["{n}+super"], "the raw {n} placeholder is never a shadow key");
 });

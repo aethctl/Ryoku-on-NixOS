@@ -135,12 +135,15 @@ func matchCatalog(c wm.CatalogBind, bound map[string]parsedBind, consumed map[st
 // the display tokens of that chord. An unmatched entry keeps its place but takes
 // the reason Hyprland cannot honour it.
 func catalogRow(c wm.CatalogBind, matched bool, rebinds map[string]string) wm.BindRow {
+	// A family resolves through its family-level rebind, keeping the {n} so the
+	// row carries the effective placeholder chord and DisplayKeys renders the
+	// range. A plain bind takes the user's rebind when set.
 	chord := c.Chord
-	if !c.Family {
-		if to, ok := rebinds[c.Chord]; ok {
-			if t := strings.TrimSpace(to); t != "" {
-				chord = t
-			}
+	if c.Family {
+		chord, _ = wm.FamilyRebind(c.Chord, rebinds)
+	} else if to, ok := rebinds[c.Chord]; ok {
+		if t := strings.TrimSpace(to); t != "" {
+			chord = t
 		}
 	}
 	row := wm.BindRow{
@@ -152,7 +155,7 @@ func catalogRow(c wm.CatalogBind, matched bool, rebinds map[string]string) wm.Bi
 		Default:    c.Chord,
 		Chord:      chord,
 		Kind:       c.Kind,
-		Rebindable: !c.Family && rebindableCombo(c.Chord),
+		Rebindable: rebindableCombo(c.Chord),
 		Locked:     c.Locked,
 	}
 	// A rebind that moved this bind onto the number pad works in one NumLock state

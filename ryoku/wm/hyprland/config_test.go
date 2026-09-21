@@ -64,6 +64,38 @@ func TestRebindNumpadHint(t *testing.T) {
 	}
 }
 
+// A family rebind is stored as one {n} entry, but binds.lua looks up each member
+// and both number-pad faces through its own K() lookup, so renderRebinds expands
+// the placeholder: a digit family into its ten [SUPER + d] entries, a keypad
+// family into twenty, the ten KP_ digits and their NumLock-off twins. A
+// non-family rebind is left as the single entry it always was.
+func TestRenderRebindsExpandsFamily(t *testing.T) {
+	digit := string(renderRebinds(Overrides{KeybindRebinds: map[string]string{"SUPER + {n}": "SUPER + CTRL + {n}"}}))
+	if n := strings.Count(digit, "] = "); n != 10 {
+		t.Errorf("digit family expanded to %d entries, want 10:\n%s", n, digit)
+	}
+	for _, want := range []string{`["SUPER + 1"] = "SUPER + CTRL + 1"`, `["SUPER + 0"] = "SUPER + CTRL + 0"`} {
+		if !strings.Contains(digit, want) {
+			t.Errorf("digit family missing entry %s", want)
+		}
+	}
+
+	kp := string(renderRebinds(Overrides{KeybindRebinds: map[string]string{"SUPER + KP_{n}": "SUPER + ALT + KP_{n}"}}))
+	if n := strings.Count(kp, "] = "); n != 20 {
+		t.Errorf("keypad family expanded to %d entries, want 20:\n%s", n, kp)
+	}
+	for _, want := range []string{`["SUPER + KP_1"] = "SUPER + ALT + KP_1"`, `["SUPER + KP_End"] = "SUPER + ALT + KP_End"`} {
+		if !strings.Contains(kp, want) {
+			t.Errorf("keypad family missing entry %s", want)
+		}
+	}
+
+	plain := string(renderRebinds(Overrides{KeybindRebinds: map[string]string{"SUPER + Q": "SUPER + X"}}))
+	if n := strings.Count(plain, "] = "); n != 1 {
+		t.Errorf("plain rebind expanded to %d entries, want 1:\n%s", n, plain)
+	}
+}
+
 // The shipped input.lua detaches keyboard focus from the pointer, and the
 // diff-based config must not re-emit that default, or settings.lua would override
 // the shipped module with the same value for no reason.

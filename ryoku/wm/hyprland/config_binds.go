@@ -78,6 +78,24 @@ func renderRebinds(o Overrides) []byte {
 		if from == "" || to == "" || from == to {
 			continue
 		}
+		// A family rebind is stored as one {n} entry, but binds.lua binds each
+		// member and both number-pad faces through its own K() lookup, so expand
+		// the placeholder into the concrete per-member entries those lookups ask
+		// for. FamilyRebind guards the value shape so a stray entry cannot map ten
+		// workspace keys onto one chord.
+		if eff, ok := wm.FamilyRebind(from, o.KeybindRebinds); ok {
+			for n := 1; n <= 10; n++ {
+				fromN, toN := wm.ExpandChord(from, n), wm.ExpandChord(eff, n)
+				fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(fromN), luaStr(toN))
+				// The keypad sends a second keysym with NumLock off; binds.lua
+				// looks that face up too, so a keypad family also maps the twin.
+				fa, ta := wm.NumpadAliases(fromN), wm.NumpadAliases(toN)
+				if len(fa) > 0 && len(ta) > 0 {
+					fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(fa[0]), luaStr(ta[0]))
+				}
+			}
+			continue
+		}
 		fmt.Fprintf(&b, "\t[%s] = %s,\n", luaStr(from), luaStr(to))
 	}
 	b.WriteString("}\n")

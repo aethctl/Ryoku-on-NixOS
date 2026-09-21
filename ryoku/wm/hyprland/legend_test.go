@@ -137,7 +137,8 @@ func TestCatalogueParity(t *testing.T) {
 }
 
 // A numpad family is matched by its KP_ chords and consumes its twins, so it
-// reports honored, not unhonored.
+// reports honored, not unhonored. It is rebindable as a unit: the Hub records one
+// chord and the store keeps the {n}, moving all ten members together.
 func TestNumpadFamilyMatched(t *testing.T) {
 	rows := buildBindRows(repoModules(), defaultOverrides())
 	for _, id := range []string{"workspace.focus.numpad", "workspace.moveWindow.numpad", "workspace.moveWindowSilent.numpad"} {
@@ -148,14 +149,48 @@ func TestNumpadFamilyMatched(t *testing.T) {
 				if r.Unhonored != "" {
 					t.Errorf("%q reported unhonored %q, want matched", id, r.Unhonored)
 				}
-				if r.Rebindable {
-					t.Errorf("%q is a family; Rebindable should be false", id)
+				if !r.Rebindable {
+					t.Errorf("%q is a family; Rebindable should be true so the Hub can offer to change it", id)
 				}
 			}
 		}
 		if !found {
 			t.Errorf("row %q missing", id)
 		}
+	}
+}
+
+// A family resolves through its family-level rebind: the row shows the effective
+// {n} chord and stays rebindable and matched, while the default keeps the shipped
+// {n} so the Hub can offer to reset it. matchCatalog reads the catalogue default,
+// unchanged by the rebind, so the row is never wrongly reported unhonored.
+func TestCatalogFamilyRebind(t *testing.T) {
+	o := defaultOverrides()
+	o.KeybindRebinds = map[string]string{"SUPER + {n}": "SUPER + CTRL + {n}"}
+	var row wm.BindRow
+	for _, r := range buildBindRows(repoModules(), o) {
+		if r.ID == "workspace.focus" {
+			row = r
+			break
+		}
+	}
+	if row.ID == "" {
+		t.Fatal("workspace.focus row missing")
+	}
+	if row.Default != "SUPER + {n}" {
+		t.Errorf("Default = %q, want SUPER + {n}", row.Default)
+	}
+	if row.Chord != "SUPER + CTRL + {n}" {
+		t.Errorf("Chord = %q, want SUPER + CTRL + {n}", row.Chord)
+	}
+	if !row.Rebindable {
+		t.Error("family row should be Rebindable")
+	}
+	if row.Unhonored != "" {
+		t.Errorf("family should stay matched after a rebind, got unhonored %q", row.Unhonored)
+	}
+	if last := row.Keys[len(row.Keys)-1]; last != "1 \u2026 0" {
+		t.Errorf("last key token = %q, want the family range", last)
 	}
 }
 

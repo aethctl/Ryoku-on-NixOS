@@ -2,6 +2,7 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Shapes
 import Quickshell.Io
 import Quickshell
 import Quickshell.Wayland
@@ -315,6 +316,11 @@ Item {
     // the chord as it forms in the overlay: the held modifiers, before the main
     // key lands and commits.
     property string recordForming: ""
+    // recordFamily marks a family rebind in progress: the overlay asks for a
+    // number key and stores the {n} form rather than a single chord.
+    // recordNeedNumber flashes a nudge when a non-digit key lands mid-record.
+    property bool recordFamily: false
+    property bool recordNeedNumber: false
     readonly property bool recording: pg.recordRow >= 0 || pg.recordCombo.length > 0
 
     // Belt and braces on Hyprland: it honours a do-nothing submap so a live chord
@@ -329,16 +335,21 @@ Item {
             return;
         pg.recordCombo = "";
         pg.recordForming = "";
+        pg.recordFamily = false;
+        pg.recordNeedNumber = false;
         pg.recordRow = i;
         pg.enterRecordSubmap();
         recordTimeout.restart();
     }
-    // record a new chord for a shipped bind, keyed by its default combo.
+    // record a new chord for a shipped bind, keyed by its default combo. A family
+    // default ("SUPER + {n}") records a number key and stores the {n} form.
     function startRecordShipped(combo) {
         if (!pg.hubReady || !combo)
             return;
         pg.recordRow = -1;
         pg.recordForming = "";
+        pg.recordNeedNumber = false;
+        pg.recordFamily = Combos.isFamilyChord(combo);
         pg.recordCombo = combo;
         pg.enterRecordSubmap();
         recordTimeout.restart();
@@ -352,6 +363,8 @@ Item {
         pg.recordRow = -1;
         pg.recordCombo = "";
         pg.recordForming = "";
+        pg.recordFamily = false;
+        pg.recordNeedNumber = false;
         if (!commit || !chord)
             return;
         if (combo.length > 0)
@@ -428,9 +441,14 @@ Item {
         for (var c = 0; c < pg.categories.length; c++) {
             var binds = pg.categories[c].binds || [];
             for (var b = 0; b < binds.length; b++) {
-                var n = pg.normKeys(pg.effectiveCombo(binds[b].combo || ""));
-                if (n.length)
-                    m[n] = (m[n] || 0) + 1;
+                // a family stands for ten chords, so expand it before counting:
+                // that is how a rebound family clashes with another effective chord.
+                var chords = Combos.expandFamily(pg.effectiveCombo(binds[b].combo || ""));
+                for (var e = 0; e < chords.length; e++) {
+                    var n = pg.normKeys(chords[e]);
+                    if (n.length)
+                        m[n] = (m[n] || 0) + 1;
+                }
             }
         }
         for (var i = 0; i < pg.customRows.length; i++) {
@@ -440,9 +458,16 @@ Item {
         }
         return m;
     }
+    // a family compares its ten expanded chords against the other effective
+    // chords; a plain chord expands to itself, so both go through one path.
     function comboConflict(defCombo) {
-        var n = pg.normKeys(pg.effectiveCombo(defCombo));
-        return n.length > 0 && pg.effectiveCounts[n] > 1;
+        var chords = Combos.expandFamily(pg.effectiveCombo(defCombo));
+        for (var i = 0; i < chords.length; i++) {
+            var n = pg.normKeys(chords[i]);
+            if (n.length > 0 && pg.effectiveCounts[n] > 1)
+                return true;
+        }
+        return false;
     }
 
     // ── display tokens for a raw combo, matching the legend keycaps ──────────
@@ -467,6 +492,12 @@ Item {
     function capToken(tok) {
         if (pg.capNames[tok] !== undefined)
             return pg.capNames[tok];
+        // a family placeholder reads as its digit range, mirroring wm.DisplayKeys,
+        // so a rebound family's caps read like a shipped one ("1 … 0" / "Num 1 … 0").
+        if (tok === "{n}")
+            return "1 \u2026 0";
+        if (tok === "KP_{n}")
+            return "Num 1 \u2026 0";
         // a number-pad digit reads "Num 3", mirroring wm.DisplayKeys.
         if (tok.length === 4 && tok.substring(0, 3) === "KP_") {
             var d = tok.charAt(3);
@@ -485,6 +516,23 @@ Item {
         }
         return out;
     }
+    // the custom-row index a legend row maps to, matched by its chord, so a
+    // custom row's edit can drop into the Custom tab and record that same row.
+    // -1 when it is not in the draft yet (only in the saved legend).
+    function customIndexFor(combo) {
+        var norm = pg.normKeys(combo);
+        if (!norm)
+            return -1;
+        for (var i = 0; i < pg.customRows.length; i++)
+            if (pg.normKeys(pg.customRows[i].keys) === norm)
+                return i;
+        return -1;
+    }
+    // a chord as one readable line ("Super + Q", "Super + 1 … 0"), for the reset
+    // button's "Back to ..." tooltip. Uses the same caps faces the row shows.
+    function comboLabel(raw) {
+        return pg.comboToCaps(raw).join(" + ");
+    }
 
     // ── legend search + rail ─────────────────────────────────────────────────
     // The search field (in the head) is the source of truth for the query; the
@@ -493,8 +541,6 @@ Item {
     readonly property bool searching: pg.query.trim().length > 0
     // "" = All; else a category name. Ignored while searching (search spans all).
     property string selectedCat: ""
-    // the hovered legend row's hint, shown in the content column's foot strip.
-    property string hoverHint: ""
     function clearSearch() { searchInput.text = ""; }
 
     // a family row (its combo carries {n}) matches its whole digit range, so
@@ -589,7 +635,7 @@ Item {
         property bool clash: false
         property bool hot: false
         spacing: Tokens.s1
-        opacity: kc.muted ? 0.5 : 1
+        opacity: kc.muted ? 0.45 : 1
 
         Repeater {
             model: kc.tokens
@@ -607,7 +653,7 @@ Item {
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     implicitHeight: 22
-                    implicitWidth: Math.max(22, capT.implicitWidth + 14)
+                    implicitWidth: Math.max(22, capT.implicitWidth + 18)
                     radius: Tokens.radius
                     color: "transparent"
                     border.width: Tokens.border
@@ -618,10 +664,40 @@ Item {
                         anchors.centerIn: parent
                         text: kcCap.modelData
                         color: kc.rebound ? Tokens.inkDim : Tokens.inkFaint
-                        font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
+                        font.family: Tokens.mono; font.pixelSize: Tokens.fSmall
                     }
                 }
             }
+        }
+    }
+
+    // a small drawn padlock for a row bound to a dedicated key it cannot rebind
+    // (mouse, media, hardware). Drawn, not a font glyph, so it stays flat ink
+    // like the rest of the sheet rather than risking a colour emoji fallback.
+    component LockMark: Item {
+        id: lk
+        property color tint: Tokens.inkFaint
+        implicitWidth: 12
+        implicitHeight: 14
+        Shape {
+            x: 0; y: 0
+            width: 12; height: 8
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: true
+            ShapePath {
+                strokeColor: lk.tint
+                strokeWidth: 1.4
+                fillColor: "transparent"
+                capStyle: ShapePath.RoundCap
+                joinStyle: ShapePath.RoundJoin
+                PathSvg { path: "M2.4 8 V4.2 A3.6 3.6 0 0 1 9.6 4.2 V8" }
+            }
+        }
+        Rectangle {
+            x: 0.5; y: 6
+            width: 11; height: 8
+            radius: 1
+            color: lk.tint
         }
     }
 
@@ -786,10 +862,29 @@ Item {
                 width: appsFlick.width - Tokens.s3
                 spacing: Tokens.s5
 
+                // These are launcher shortcuts, not the system's file and link
+                // handlers: say so up top so nobody hunts for xdg defaults here.
+                SettingCard {
+                    id: appsNotice
+                    width: appsCol.width
+                    collapsible: false
+                    title: I18n.tr("Shortcuts, not default apps")
+
+                    Text {
+                        width: parent.width
+                        leftPadding: Tokens.s4; rightPadding: Tokens.s4
+                        topPadding: Tokens.s3; bottomPadding: Tokens.s3
+                        wrapMode: Text.WordWrap
+                        text: I18n.tr("These are the apps the launcher keys open (Super + Return, Super + B and the rest). They are not the system's default applications for opening files and links.")
+                        color: Tokens.inkMuted; font.family: Tokens.ui
+                        font.pixelSize: Tokens.fSmall; lineHeight: 1.3
+                    }
+                }
+
                 Text {
                     width: appsCol.width
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Pick what each launcher key opens, and rebind the key itself. The key runs the app through ryoku-app, so a swap takes effect on the next press -- no reload.")
+                    text: I18n.tr("Pick what each launcher key opens, and rebind the key itself. The key runs the app through ryoku-app, so a swap takes effect on the next press, with no reload.")
                     color: Tokens.inkMuted; font.family: Tokens.ui
                     font.pixelSize: Tokens.fSmall; lineHeight: 1.3
                 }
@@ -1095,7 +1190,7 @@ Item {
             // ── category rail: All + every category, with counts ──
             Flickable {
                 id: railFlick
-                anchors { left: parent.left; top: parent.top; bottom: hintStrip.top }
+                anchors { left: parent.left; top: parent.top; bottom: parent.bottom }
                 width: shroot.railW
                 contentWidth: width
                 contentHeight: railCol.height
@@ -1168,185 +1263,232 @@ Item {
                 anchors.left: railFlick.right
                 anchors.leftMargin: Tokens.s4
                 anchors.top: parent.top
-                anchors.bottom: hintStrip.top
+                anchors.bottom: parent.bottom
                 width: 1; color: Tokens.lineSoft
             }
 
-            // ── content column: titled blocks of 36px rows ──
+            // ── content: category cards, laid into balanced columns (All and
+            // search) or one full-width card (a picked category), read in the
+            // Hub's card vocabulary rather than a bare list. ──
             Flickable {
                 id: contentFlick
                 anchors {
                     left: railDiv.right; leftMargin: Tokens.s5
                     right: parent.right
-                    top: parent.top; bottom: hintStrip.top; bottomMargin: Tokens.s3
+                    top: parent.top; bottom: parent.bottom; bottomMargin: Tokens.s3
                 }
                 contentWidth: width
-                contentHeight: contentCol.height
+                contentHeight: Math.max(grid.height, height)
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
                 WheelScroll { }
 
-                Column {
-                    id: contentCol
+                CardColumns {
+                    id: grid
                     width: contentFlick.width - Tokens.s3
-                    spacing: Tokens.s5
+                    // two balanced columns when the measure holds them, one otherwise
+                    maxColumns: 2
+                    fillTo: contentFlick.height
 
                     Repeater {
                         model: pg.shownCats
 
-                        delegate: Column {
-                            id: grp
+                        delegate: Item {
+                            id: catBlock
                             required property var modelData
-                            width: contentCol.width
-                            spacing: 0
+                            required property int index
+                            // a picked category takes the whole measure; All and
+                            // search spread through the balanced columns.
+                            property bool fullWidth: pg.selectedCat !== "" && !pg.searching
+                            readonly property var binds: catBlock.modelData.binds || []
+                            width: catBlock.fullWidth ? grid.width : grid.colWidth
+                            height: card.height
 
-                            // section head: dot + category caps + hairline leader.
-                            Item {
+                            SettingCard {
+                                id: card
                                 width: parent.width
-                                height: 30
-                                Row {
-                                    id: grpLabel
-                                    anchors.left: parent.left
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: Tokens.s2
-                                    Rectangle {
-                                        width: 4; height: 4; color: Tokens.ink
-                                        anchors.verticalCenter: parent.verticalCenter
+                                collapsible: false
+                                title: ("" + catBlock.modelData.name).toUpperCase()
+
+                                Repeater {
+                                    model: catBlock.binds
+
+                                    delegate: Item {
+                                        id: rowItem
+                                        required property var modelData
+                                        required property int index
+                                        readonly property string combo: rowItem.modelData.combo || ""
+                                        readonly property bool reboundRow: pg.isRebound(rowItem.combo)
+                                        readonly property bool rebindableRow: rowItem.modelData.rebindable === true
+                                        readonly property string unhon: rowItem.modelData.unhonored || ""
+                                        readonly property bool customRow: (rowItem.modelData.kind || "") === "custom"
+                                        readonly property bool clashRow: rowItem.reboundRow && pg.comboConflict(rowItem.combo)
+                                        readonly property var effKeys: rowItem.reboundRow ? pg.comboToCaps(pg.effectiveCombo(rowItem.combo)) : (rowItem.modelData.keys || [])
+                                        // a rebindable, honoured row records a new chord; a custom
+                                        // row records into its Custom-tab row instead.
+                                        readonly property bool editable: rowItem.unhon.length === 0 && pg.hubReady && (rowItem.rebindableRow || rowItem.customRow)
+                                        // a fixed dedicated key (mouse, media, hardware): not
+                                        // rebindable, still honoured, so it shows a lock not an edit.
+                                        readonly property bool dedicated: !rowItem.rebindableRow && !rowItem.customRow && rowItem.unhon.length === 0
+                                        // 45% ink on an unhonoured row's own text; the caps mute too.
+                                        readonly property color rowInk: rowItem.unhon.length ? Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.45) : Tokens.ink
+
+                                        width: card.width
+                                        height: 44
+
+                                        function beginEdit() {
+                                            if (!rowItem.editable)
+                                                return;
+                                            if (rowItem.customRow) {
+                                                // land on the Custom tab and record that same row
+                                                pg.tab = "custom";
+                                                var i = pg.customIndexFor(rowItem.combo);
+                                                if (i >= 0)
+                                                    Qt.callLater(function () { pg.startRecord(i); });
+                                            } else {
+                                                pg.startRecordShipped(rowItem.combo);
+                                            }
+                                        }
+
+                                        // hairline between rows, inset like SettingRow.
+                                        Rectangle {
+                                            visible: rowItem.index > 0
+                                            anchors { left: parent.left; right: parent.right; top: parent.top }
+                                            anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4
+                                            height: 1; color: Tokens.lineSoft
+                                        }
+                                        // hover wash, quiet like SettingRow's.
+                                        Rectangle {
+                                            anchors.fill: parent; anchors.margins: 1
+                                            radius: Tokens.radius
+                                            color: rowHov.hovered ? Tokens.tint5 : "transparent"
+                                            Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                                        }
+                                        HoverHandler { id: rowHov }
+
+                                        // label over its hint, both one line, centred in the row.
+                                        Column {
+                                            anchors {
+                                                left: parent.left; leftMargin: Tokens.s4
+                                                right: cluster.left; rightMargin: Tokens.s3
+                                                verticalCenter: parent.verticalCenter
+                                            }
+                                            spacing: 1
+                                            Text {
+                                                width: parent.width
+                                                text: rowItem.modelData.desc || ""
+                                                color: rowItem.rowInk
+                                                font.family: Tokens.ui; font.pixelSize: Tokens.fRow
+                                                elide: Text.ElideRight
+                                            }
+                                            Text {
+                                                visible: ("" + (rowItem.modelData.hint || "")).length > 0
+                                                width: parent.width
+                                                text: rowItem.modelData.hint || ""
+                                                color: Tokens.inkMuted
+                                                font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        Row {
+                                            id: cluster
+                                            anchors.right: parent.right; anchors.rightMargin: Tokens.s4
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            spacing: Tokens.s2
+
+                                            // caps; click to record on an editable row.
+                                            Item {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                implicitWidth: capsRow.implicitWidth
+                                                implicitHeight: 22
+                                                KeyCaps {
+                                                    id: capsRow
+                                                    anchors.centerIn: parent
+                                                    tokens: rowItem.effKeys
+                                                    muted: rowItem.unhon.length > 0
+                                                    rebound: rowItem.reboundRow
+                                                    clash: rowItem.clashRow
+                                                    hot: capHov.hovered && rowItem.editable
+                                                }
+                                                HoverHandler {
+                                                    id: capHov
+                                                    enabled: rowItem.editable
+                                                    cursorShape: Qt.PointingHandCursor
+                                                }
+                                                TapHandler {
+                                                    enabled: rowItem.editable
+                                                    onTapped: rowItem.beginEdit()
+                                                }
+                                            }
+
+                                            // "not on <provider>" (unhonoured, reason on hover) or "custom".
+                                            Rectangle {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.unhon.length > 0 || rowItem.customRow
+                                                implicitHeight: 18
+                                                implicitWidth: tagText.implicitWidth + Tokens.s3
+                                                radius: Tokens.radius
+                                                color: "transparent"
+                                                border.width: Tokens.border
+                                                border.color: Tokens.line
+                                                Text {
+                                                    id: tagText
+                                                    anchors.centerIn: parent
+                                                    text: rowItem.unhon.length ? I18n.tr("not on %1").arg(pg.providerName) : I18n.tr("custom")
+                                                    color: Tokens.inkFaint
+                                                    font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
+                                                    font.letterSpacing: Tokens.trackMark
+                                                }
+                                                HoverHandler { id: tagHov; enabled: rowItem.unhon.length > 0 }
+                                                ToolTip.visible: tagHov.hovered && rowItem.unhon.length > 0
+                                                ToolTip.text: rowItem.unhon
+                                            }
+
+                                            // reset a rebound row to its shipped chord; always shown.
+                                            IconBtn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.reboundRow
+                                                glyph: "\u21ba"
+                                                onAct: pg.clearRebind(rowItem.combo)
+                                                HoverHandler { id: resetHov }
+                                                ToolTip.visible: resetHov.hovered
+                                                ToolTip.text: I18n.tr("Back to %1").arg(pg.comboLabel(rowItem.combo))
+                                            }
+                                            // change the shortcut; always shown on an editable row.
+                                            IconBtn {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.editable
+                                                glyph: "\u270e"
+                                                onAct: rowItem.beginEdit()
+                                                HoverHandler { id: editHov }
+                                                ToolTip.visible: editHov.hovered
+                                                ToolTip.text: I18n.tr("Change shortcut")
+                                            }
+                                            // a dedicated key cannot be rebound; a lock says so.
+                                            Item {
+                                                anchors.verticalCenter: parent.verticalCenter
+                                                visible: rowItem.dedicated
+                                                implicitWidth: 26; implicitHeight: 26
+                                                LockMark { anchors.centerIn: parent; tint: Tokens.inkFaint }
+                                                HoverHandler { id: lockHov }
+                                                ToolTip.visible: lockHov.hovered
+                                                ToolTip.text: I18n.tr("Bound to a dedicated key")
+                                            }
+                                        }
                                     }
-                                    Text {
-                                        text: grp.modelData.name; color: Tokens.ink
-                                        font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                                        font.weight: Font.Medium; font.letterSpacing: Tokens.trackMark
-                                        font.capitalization: Font.AllUppercase
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-                                Rectangle {
-                                    anchors.left: grpLabel.right; anchors.leftMargin: Tokens.s3
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    height: 1; color: Tokens.lineSoft
                                 }
                             }
 
-                            Repeater {
-                                model: grp.modelData.binds
-
-                                delegate: Item {
-                                    id: rowItem
-                                    required property var modelData
-                                    required property int index
-                                    readonly property string combo: rowItem.modelData.combo || ""
-                                    readonly property bool reboundRow: pg.isRebound(rowItem.combo)
-                                    readonly property bool rebindableRow: rowItem.modelData.rebindable === true
-                                    readonly property string unhon: rowItem.modelData.unhonored || ""
-                                    readonly property bool customRow: (rowItem.modelData.kind || "") === "custom"
-                                    readonly property bool clashRow: rowItem.reboundRow && pg.comboConflict(rowItem.combo)
-                                    readonly property var effKeys: rowItem.reboundRow ? pg.comboToCaps(pg.effectiveCombo(rowItem.combo)) : (rowItem.modelData.keys || [])
-                                    width: grp.width
-                                    height: 36
-
-                                    HoverHandler {
-                                        id: rowHov
-                                        onHoveredChanged: {
-                                            if (rowHov.hovered)
-                                                pg.hoverHint = rowItem.modelData.hint || "";
-                                            else if (pg.hoverHint === (rowItem.modelData.hint || ""))
-                                                pg.hoverHint = "";
-                                        }
-                                    }
-
-                                    // hairline row separators inside the group.
-                                    Rectangle {
-                                        visible: rowItem.index > 0
-                                        anchors.top: parent.top
-                                        anchors.left: parent.left
-                                        anchors.right: parent.right
-                                        height: 1; color: Tokens.lineSoft
-                                    }
-
-                                    // label left; an unhonoured row's label is muted ink.
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.right: cluster.left; anchors.rightMargin: Tokens.s4
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: rowItem.modelData.desc || ""
-                                        color: rowItem.unhon.length ? Tokens.inkFaint : Tokens.ink
-                                        font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-                                        elide: Text.ElideRight
-                                    }
-
-                                    Row {
-                                        id: cluster
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        spacing: Tokens.s2
-
-                                        // reset a rebound shortcut, on hover.
-                                        IconBtn {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: rowItem.reboundRow && rowHov.hovered
-                                            glyph: "\u21ba"
-                                            onAct: pg.clearRebind(rowItem.combo)
-                                        }
-                                        // the "rebound" dot.
-                                        Rectangle {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: rowItem.reboundRow
-                                            width: 5; height: 5; radius: 2.5
-                                            antialiasing: true
-                                            color: Tokens.ink
-                                        }
-                                        // keycaps; click to record when rebindable.
-                                        Item {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            implicitWidth: capsRow.implicitWidth
-                                            implicitHeight: 22
-                                            KeyCaps {
-                                                id: capsRow
-                                                anchors.centerIn: parent
-                                                tokens: rowItem.effKeys
-                                                muted: rowItem.unhon.length > 0
-                                                rebound: rowItem.reboundRow
-                                                clash: rowItem.clashRow
-                                                hot: capHov.hovered && rowItem.rebindableRow && pg.hubReady
-                                            }
-                                            HoverHandler {
-                                                id: capHov
-                                                enabled: rowItem.rebindableRow && pg.hubReady
-                                                cursorShape: Qt.PointingHandCursor
-                                            }
-                                            TapHandler {
-                                                enabled: rowItem.rebindableRow && pg.hubReady
-                                                onTapped: pg.startRecordShipped(rowItem.combo)
-                                            }
-                                        }
-                                        // right-aligned tag: "not on <provider>" (with the
-                                        // reason on hover) for an unhonoured row, else "custom".
-                                        Rectangle {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: rowItem.unhon.length > 0 || rowItem.customRow
-                                            implicitHeight: 18
-                                            implicitWidth: tagText.implicitWidth + Tokens.s3
-                                            radius: Tokens.radius
-                                            color: "transparent"
-                                            border.width: Tokens.border
-                                            border.color: Tokens.line
-                                            Text {
-                                                id: tagText
-                                                anchors.centerIn: parent
-                                                text: rowItem.unhon.length ? I18n.tr("not on %1").arg(pg.providerName) : I18n.tr("custom")
-                                                color: Tokens.inkFaint
-                                                font.family: Tokens.ui; font.pixelSize: Tokens.fMicro
-                                                font.letterSpacing: Tokens.trackMark
-                                            }
-                                            HoverHandler { id: tagHov; enabled: rowItem.unhon.length > 0 }
-                                            ToolTip.visible: tagHov.hovered && rowItem.unhon.length > 0
-                                            ToolTip.text: rowItem.unhon
-                                        }
-                                    }
-                                }
+                            // the category's row count, muted, where the caret would sit.
+                            Text {
+                                anchors.right: parent.right; anchors.rightMargin: Tokens.s4
+                                anchors.top: parent.top
+                                anchors.topMargin: (card.headerH - implicitHeight) / 2
+                                text: "" + catBlock.binds.length
+                                color: Tokens.inkFaint
+                                font.family: Tokens.mono; font.pixelSize: Tokens.fMicro
                             }
                         }
                     }
@@ -1359,27 +1501,6 @@ Item {
                 visible: pg.shownCats.length === 0 && (pg.searching || pg.categories.length > 0)
                 text: pg.searching ? I18n.tr("No shortcuts match \u201c%1\u201d").arg(pg.query.trim()) : I18n.tr("No shortcuts here.")
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
-            }
-
-            // ── foot strip: the hovered row's hint, calm and fixed ──
-            Rectangle {
-                id: hintStrip
-                anchors { left: railDiv.right; leftMargin: Tokens.s5; right: parent.right; bottom: parent.bottom }
-                height: 26
-                color: "transparent"
-                Rectangle {
-                    anchors { left: parent.left; right: parent.right; top: parent.top }
-                    height: 1; color: Tokens.lineSoft
-                }
-                Text {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: pg.hoverHint.length ? pg.hoverHint : I18n.tr("Read live from Ryoku's binds and your custom shortcuts.")
-                    color: pg.hoverHint.length ? Tokens.inkDim : Tokens.inkFaint
-                    font.family: Tokens.ui; font.pixelSize: Tokens.fTiny
-                    elide: Text.ElideRight
-                }
             }
         }
     }
@@ -1836,14 +1957,26 @@ Item {
                 // show the modifiers as they are held, then commit on the key.
                 pg.recordForming = Combos.formingChord(event);
                 var chord = pg.chordFrom(event);
-                if (chord !== "")
-                    pg.stopRecord(true, chord);
+                if (chord === "")
+                    return;
+                if (pg.recordFamily) {
+                    // a family accepts only a number key; anything else nudges
+                    // and keeps the overlay open until a digit lands.
+                    var fam = Combos.familyFrom(chord);
+                    if (fam === "") {
+                        pg.recordNeedNumber = true;
+                        return;
+                    }
+                    pg.stopRecord(true, fam);
+                    return;
+                }
+                pg.stopRecord(true, chord);
             }
         }
 
         Rectangle {
             anchors.centerIn: parent
-            width: 360; height: 176
+            width: 360; height: pg.recordFamily ? 208 : 176
             radius: Tokens.radius
             color: Tokens.paper
             border.width: Tokens.border
@@ -1888,8 +2021,18 @@ Item {
                     width: parent.width
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Hold your modifiers and tap the key. Esc cancels.")
+                    text: pg.recordFamily
+                        ? I18n.tr("Hold the new modifiers and press any number key. Esc cancels.")
+                        : I18n.tr("Hold your modifiers and tap the key. Esc cancels.")
                     color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                }
+                // a family record takes only a number key; nudge on anything else.
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: pg.recordFamily && pg.recordNeedNumber
+                    text: I18n.tr("Press a number key")
+                    color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
+                    font.weight: Font.Medium
                 }
                 Btn {
                     anchors.horizontalCenter: parent.horizontalCenter

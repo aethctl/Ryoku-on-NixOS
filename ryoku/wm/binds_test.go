@@ -77,6 +77,61 @@ func TestEveryFamilyExpandsToTen(t *testing.T) {
 	}
 }
 
+// ExpandChord is the per-member substitution both the digit families and the
+// number-pad families ride: {n} onto the digit n%10 so the tenth lands on 0, and
+// a KP_{n} family carrying that same digit onto the pad. A chord with no
+// placeholder passes through, so a rebind target that never carried one is safe.
+func TestExpandChord(t *testing.T) {
+	cases := []struct {
+		chord string
+		n     int
+		want  string
+	}{
+		{"SUPER + {n}", 1, "SUPER + 1"},
+		{"SUPER + {n}", 9, "SUPER + 9"},
+		{"SUPER + {n}", 10, "SUPER + 0"},
+		{"SUPER + CTRL + {n}", 2, "SUPER + CTRL + 2"},
+		{"SUPER + KP_{n}", 3, "SUPER + KP_3"},
+		{"SUPER + KP_{n}", 10, "SUPER + KP_0"},
+		{"SUPER + ALT + KP_{n}", 10, "SUPER + ALT + KP_0"},
+		{"SUPER + Q", 5, "SUPER + Q"},
+	}
+	for _, c := range cases {
+		if got := ExpandChord(c.chord, c.n); got != c.want {
+			t.Errorf("ExpandChord(%q, %d) = %q, want %q", c.chord, c.n, got, c.want)
+		}
+	}
+}
+
+// A family is rebound as a unit: the store keeps the {n} and changes only the
+// modifier set, so one entry moves all ten members. FamilyRebind reads that entry
+// and guards its shape, so a value that drops the placeholder, moves the digit,
+// or carries a non-modifier token is refused rather than collapsing ten workspace
+// keys onto one chord.
+func TestFamilyRebind(t *testing.T) {
+	cases := []struct {
+		name    string
+		def     string
+		rebinds map[string]string
+		want    string
+		ok      bool
+	}{
+		{"digit moved", "SUPER + {n}", map[string]string{"SUPER + {n}": "SUPER + CTRL + {n}"}, "SUPER + CTRL + {n}", true},
+		{"numpad moved", "SUPER + KP_{n}", map[string]string{"SUPER + KP_{n}": "SUPER + ALT + KP_{n}"}, "SUPER + ALT + KP_{n}", true},
+		{"no entry", "SUPER + {n}", nil, "SUPER + {n}", false},
+		{"identity", "SUPER + {n}", map[string]string{"SUPER + {n}": "SUPER + {n}"}, "SUPER + {n}", false},
+		{"placeholder dropped", "SUPER + {n}", map[string]string{"SUPER + {n}": "SUPER + CTRL"}, "SUPER + {n}", false},
+		{"digit turned numpad", "SUPER + {n}", map[string]string{"SUPER + {n}": "SUPER + CTRL + KP_{n}"}, "SUPER + {n}", false},
+		{"non-modifier token", "SUPER + {n}", map[string]string{"SUPER + {n}": "SUPER + X + {n}"}, "SUPER + {n}", false},
+	}
+	for _, c := range cases {
+		got, ok := FamilyRebind(c.def, c.rebinds)
+		if got != c.want || ok != c.ok {
+			t.Errorf("%s: FamilyRebind(%q) = %q,%v; want %q,%v", c.name, c.def, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 // The number pad sends a different keysym with NumLock off, so a provider binds
 // both faces of each digit. NumpadAliases must map every digit to a distinct
 // NumLock-off keysym, and leave a chord with no number-pad digit alone.

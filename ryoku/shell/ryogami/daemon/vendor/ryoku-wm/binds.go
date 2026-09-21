@@ -218,6 +218,14 @@ func Categories() []string {
 	return out
 }
 
+// ExpandChord substitutes a family placeholder for the nth member's key: {n}
+// becomes the digit n%10, so the tenth member lands on the 0 key, and a KP_{n}
+// family carries that same digit onto the number pad (KP_1..KP_0). A chord with
+// no placeholder is returned unchanged, so a plain chord passes straight through.
+func ExpandChord(chord string, n int) string {
+	return strings.Replace(chord, "{n}", strconv.Itoa(n%10), 1)
+}
+
 // Expand is the ten chords of a family, or the single chord of a plain bind. n
 // runs 1..10 onto the digit key n%10, so the tenth workspace lands on the 0 key;
 // a numpad family carries KP_{n}, so the same substitution yields KP_1..KP_0.
@@ -227,9 +235,37 @@ func (c CatalogBind) Expand() []string {
 	}
 	out := make([]string, 0, 10)
 	for n := 1; n <= 10; n++ {
-		out = append(out, strings.Replace(c.Chord, "{n}", strconv.Itoa(n%10), 1))
+		out = append(out, ExpandChord(c.Chord, n))
 	}
 	return out
+}
+
+// FamilyRebind resolves a family's stored rebind. A family binds ten chords that
+// share one key position (the {n} placeholder) and differ only by modifier, so a
+// user rebinds the whole family with a single entry that keeps the placeholder
+// and changes only the modifiers: ["SUPER + {n}"] = "SUPER + CTRL + {n}". It
+// returns the stored chord and true when the value is that shape, the {n} key
+// kept in place and every other token a modifier, otherwise def and false.
+// Guarding the shape keeps a stray value from collapsing ten workspace keys onto
+// one chord.
+func FamilyRebind(def string, rebinds map[string]string) (string, bool) {
+	to := strings.TrimSpace(rebinds[def])
+	if to == "" || to == def {
+		return def, false
+	}
+	parts := strings.Split(to, " + ")
+	defParts := strings.Split(def, " + ")
+	// The default's own key position is the placeholder the value must keep, so
+	// only the modifier set moves and every member stays on its shipped digit.
+	if parts[len(parts)-1] != defParts[len(defParts)-1] {
+		return def, false
+	}
+	for _, tok := range parts[:len(parts)-1] {
+		if _, isMod := modifierOrder[strings.ToUpper(tok)]; !isMod {
+			return def, false
+		}
+	}
+	return to, true
 }
 
 // numpadNumLockOff maps each number-pad digit keysym to the keysym the same key

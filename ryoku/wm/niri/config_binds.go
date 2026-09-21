@@ -279,6 +279,14 @@ func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 			if nb.action == "" {
 				continue
 			}
+			// A family resolves through its family-level rebind first, so one
+			// stored entry moves all ten members; the digit stays and only the
+			// modifier set changes. A per-member legacy rebind (keyed on the
+			// shipped concrete chord) still wins over the family one below.
+			famChord, famRebound := cb.Chord, false
+			if cb.Family {
+				famChord, famRebound = wm.FamilyRebind(cb.Chord, s.KeybindRebinds)
+			}
 			for idx, chord := range cb.Expand() {
 				action := nb.action
 				if cb.Family {
@@ -288,6 +296,10 @@ func resolveBinds(s niriStore) ([]outBind, []wm.Unhonored) {
 					continue
 				}
 				to, isRebound := effectiveChord(chord, s.KeybindRebinds)
+				if !isRebound && famRebound {
+					to = wm.ExpandChord(famChord, idx+1)
+					isRebound = true
+				}
 				if isRebound != rebound {
 					continue
 				}
@@ -362,11 +374,12 @@ func bindRows(s niriStore) []wm.BindRow {
 		if nb.hint != "" {
 			hint = nb.hint
 		}
-		// A family keeps its {n} and cannot be rebound, so its effective chord is
-		// the shipped one. A plain bind takes the user's rebind when set.
-		eff := cb.Chord
-		if !cb.Family {
-			eff, _ = effectiveChord(cb.Chord, s.KeybindRebinds)
+		// A family keeps its {n} and resolves through its family-level rebind, so
+		// the row carries the effective {n} chord and DisplayKeys renders the range.
+		// A plain bind takes the user's rebind when set.
+		eff, _ := effectiveChord(cb.Chord, s.KeybindRebinds)
+		if cb.Family {
+			eff, _ = wm.FamilyRebind(cb.Chord, s.KeybindRebinds)
 		}
 		row := wm.BindRow{
 			ID:         cb.ID,
@@ -424,12 +437,10 @@ func bindRows(s niriStore) []wm.BindRow {
 }
 
 // rebindable reports whether the Hub may let a user record a new chord over this
-// bind. A family stands for ten chords and a media or hardware chord rides a
-// dedicated key, so neither is a rebind target.
+// bind. A workspace family is rebindable as a unit: the Hub records one chord and
+// the store keeps the {n} placeholder, so all ten members move together. A media
+// or hardware chord rides a dedicated key, so it stays fixed.
 func rebindable(cb wm.CatalogBind) bool {
-	if cb.Family {
-		return false
-	}
 	for _, tok := range strings.Split(cb.Chord, " + ") {
 		if strings.HasPrefix(tok, "mouse") || strings.HasPrefix(tok, "XF86") {
 			return false

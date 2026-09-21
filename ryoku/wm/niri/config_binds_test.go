@@ -146,6 +146,89 @@ func TestNumpadTwinForCustomAndRebind(t *testing.T) {
 	}
 }
 
+// A family rebind is stored as one {n} entry and moves all ten members at once:
+// the digit stays and only the modifier set changes. The provider resolves the
+// family before expanding, so every workspace chord shifts to the new modifiers
+// and the shipped bare-digit chord is never emitted. A keypad family carries both
+// NumLock faces. The legend keeps its one {n} row, marked rebindable, with the
+// default it was recorded over.
+func TestFamilyRebindMovesWholeFamily(t *testing.T) {
+	s := loadStore("")
+	s.KeybindRebinds = map[string]string{
+		"SUPER + {n}":    "SUPER + CTRL + {n}",
+		"SUPER + KP_{n}": "SUPER + ALT + KP_{n}",
+	}
+	set := map[string]bool{}
+	for _, c := range emittedChords(s) {
+		set[c] = true
+	}
+
+	for _, d := range []string{"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"} {
+		if !set["Super+Ctrl+"+d] {
+			t.Errorf("focus family rebind: missing Super+Ctrl+%s", d)
+		}
+		if set["Super+"+d] {
+			t.Errorf("focus family rebind: shipped Super+%s still emitted", d)
+		}
+	}
+
+	// The keypad family moved onto Super+Alt+KP_ and kept both NumLock faces.
+	if !set["Super+Alt+KP_1"] || !set["Super+Alt+KP_End"] {
+		t.Error("keypad family rebind: want both Super+Alt+KP_1 and Super+Alt+KP_End")
+	}
+	if set["Super+KP_1"] {
+		t.Error("keypad family rebind: shipped Super+KP_1 still emitted")
+	}
+
+	var row wm.BindRow
+	for _, r := range bindRows(s) {
+		if r.ID == "workspace.focus" {
+			row = r
+			break
+		}
+	}
+	if row.ID == "" {
+		t.Fatal("workspace.focus row missing")
+	}
+	if row.Default != "SUPER + {n}" {
+		t.Errorf("default = %q, want SUPER + {n}", row.Default)
+	}
+	if row.Chord != "SUPER + CTRL + {n}" {
+		t.Errorf("chord = %q, want SUPER + CTRL + {n}", row.Chord)
+	}
+	if !row.Rebindable {
+		t.Error("family row should be Rebindable")
+	}
+	if want := wm.DisplayKeys("SUPER + CTRL + {n}"); !reflect.DeepEqual(row.Keys, want) {
+		t.Errorf("keys = %v, want %v", row.Keys, want)
+	}
+}
+
+// A per-member rebind keyed on a shipped concrete chord still wins over a family
+// rebind, so a legacy per-key entry set before the family feature keeps working.
+// Member three moves to its own target while the rest of the family follows the
+// family rebind.
+func TestFamilyRebindKeepsLegacyMember(t *testing.T) {
+	s := loadStore("")
+	s.KeybindRebinds = map[string]string{
+		"SUPER + {n}": "SUPER + CTRL + {n}",
+		"SUPER + 3":   "SUPER + F5",
+	}
+	set := map[string]bool{}
+	for _, c := range emittedChords(s) {
+		set[c] = true
+	}
+	if !set["Super+F5"] {
+		t.Error("legacy per-member rebind of SUPER + 3 should win, want Super+F5")
+	}
+	if set["Super+Ctrl+3"] {
+		t.Error("member three took the family chord instead of its per-member rebind")
+	}
+	if !set["Super+Ctrl+1"] || !set["Super+Ctrl+2"] || !set["Super+Ctrl+4"] {
+		t.Error("the rest of the family should follow the family rebind")
+	}
+}
+
 // The legend leads with every catalogue row in catalogue order and, with no
 // custom binds, is nothing but those rows. The shape is the wm.BindRow contract,
 // so it must round-trip through JSON into []wm.BindRow unchanged.

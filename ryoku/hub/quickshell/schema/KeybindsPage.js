@@ -60,8 +60,8 @@ var rows = [
     },
     {
         "tab": "Apps", "group": "APPS",
-        "label": "Default apps",
-        "desc": "Pick what each launcher key opens and rebind the key",
+        "label": "App shortcuts",
+        "desc": "Which app each launcher key opens, and the key itself",
         "opts": ["terminal", "browser", "files", "editor", "notes", "shell", "launch"]
     },
     {
