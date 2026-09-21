@@ -473,8 +473,14 @@ ShellRoot {
 
     // Game mode's compositor and WiFi tuning lives outside the shell, same shape
     // as Keep-Awake: ryoku-cmd-game-mode (on PATH) drives it so the tuning
-    // survives a reload. The deck toggle just flips Flags.gameMode.
+    // survives a reload. The deck toggle just flips Flags.gameMode. It is
+    // compositor tuning though (Hyprland live config eval), so it only fires
+    // where the window manager can run it -- the deck tile and the launcher
+    // action hide it there, and this stands down to match instead of running a
+    // script that would no-op.
     function syncGameMode(action) {
+        if (Wm.caps.liveConfigEval !== true)
+            return;
         Quickshell.execDetached(["ryoku-cmd-game-mode", action]);
     }
     Connections {

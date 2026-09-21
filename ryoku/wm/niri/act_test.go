@@ -1,8 +1,12 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -43,6 +47,12 @@ func TestActEmitsNiriRequests(t *testing.T) {
 			`{"Action":{"PowerOffMonitors":{}}}`},
 		{"output power on", []string{"output.power", "on"},
 			`{"Action":{"PowerOnMonitors":{}}}`},
+		// output.enable is niri's top-level Output request, not an Action, and
+		// the action value is a unit variant so it serialises as a bare string.
+		{"output enable on", []string{"output.enable", "DP-1", "on"},
+			`{"Output":{"action":"On","output":"DP-1"}}`},
+		{"output enable off", []string{"output.enable", "DP-1", "off"},
+			`{"Output":{"action":"Off","output":"DP-1"}}`},
 		{"keyboard layout", []string{"keyboard.cycleLayout"},
 			`{"Action":{"SwitchLayout":{"layout":"Next"}}}`},
 		{"overview toggle", []string{"overview.toggle"},
@@ -68,6 +78,60 @@ func TestActEmitsNiriRequests(t *testing.T) {
 				t.Errorf("request mismatch\n got: %q\nwant: %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// window.summon raises an already-open window to the current workspace and
+// focuses it, matched by exact title. niri focuses by id, so the title resolves
+// to the newest matching window, which is pulled onto the focused workspace in
+// one MoveWindowToWorkspace request.
+func TestActSummonMovesNewestTitleMatch(t *testing.T) {
+	const windows = `{"Windows":[
+		{"id":11,"title":"Ryoku Hub","app_id":"org.quickshell","focus_timestamp":{"secs":100,"nanos":0}},
+		{"id":22,"title":"Ryoku Hub","app_id":"org.quickshell","focus_timestamp":{"secs":200,"nanos":0}},
+		{"id":33,"title":"Other","app_id":"org.quickshell","focus_timestamp":{"secs":300,"nanos":0}}
+	]}`
+	const workspaces = `{"Workspaces":[
+		{"id":3,"idx":1,"output":"eDP-1","is_active":true,"is_focused":true},
+		{"id":4,"idx":2,"output":"eDP-1","is_active":false,"is_focused":false}
+	]}`
+
+	var got string
+	restore := stubRequest(t, func(req any) (json.RawMessage, error) {
+		if s, ok := req.(string); ok {
+			switch s {
+			case "Windows":
+				return json.RawMessage(windows), nil
+			case "Workspaces":
+				return json.RawMessage(workspaces), nil
+			}
+			return nil, fmt.Errorf("unexpected query %q", s)
+		}
+		body, err := json.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+		got = string(body)
+		return nil, nil
+	})
+	defer restore()
+
+	if err := runAct([]string{"window.summon", "Ryoku Hub"}); err != nil {
+		t.Fatalf("summon: %v", err)
+	}
+	want := `{"Action":{"MoveWindowToWorkspace":{"focus":true,"reference":{"Id":3},"window_id":22}}}`
+	if got != want {
+		t.Errorf("request mismatch\n got: %q\nwant: %q", got, want)
+	}
+
+	// A title with no window is an error and emits no action, so the keybind
+	// falls through to launching the app.
+	got = ""
+	if err := runAct([]string{"window.summon", "Nonexistent"}); err == nil {
+		t.Error("summon of an absent title: expected an error")
+	}
+	if got != "" {
+		t.Errorf("summon of an absent title emitted %q", got)
 	}
 }
 
@@ -117,6 +181,7 @@ func TestActRejectsMissingArgs(t *testing.T) {
 		{"workspace.moveToOutput", "3"},
 		{"output.power"},
 		{"app.focus"},
+		{"window.summon"},
 	} {
 		called := false
 		restore := stubRequest(t, func(any) (json.RawMessage, error) {
@@ -180,6 +245,7 @@ func TestActNamesTheMissingCapability(t *testing.T) {
 		{"cursor.set", "Bibata", "24"},
 		{"decoration.screenShader", "halftone"},
 		{"config.reload"},
+		{"decoration.gameMode", "on"},
 	} {
 		err := runAct(args)
 		if err == nil {
@@ -201,6 +267,94 @@ func TestActRejectsUnknownAction(t *testing.T) {
 	if err := runAct([]string{"window.teleport"}); err == nil {
 		t.Fatal("expected an error for an unknown action")
 	}
+}
+
+// output.cycle steps the arrangement over IPC: from the reset position it turns
+// the panel on and the external off (internal only), turning the target set on
+// before the other off so no step flashes every screen dark. The request shapes
+// and the persisted position are the contract with niri and the next step.
+func TestActCyclesOutputsOverIPC(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	var got []string
+	restore := stubRequest(t, func(req any) (json.RawMessage, error) {
+		body, err := json.Marshal(req)
+		if err != nil {
+			return nil, err
+		}
+		got = append(got, string(body))
+		if string(body) == `"Outputs"` {
+			return json.RawMessage(`{"Outputs":{"eDP-1":{"name":"eDP-1"},"DP-1":{"name":"DP-1"}}}`), nil
+		}
+		return nil, nil
+	})
+	defer restore()
+
+	if err := runAct([]string{"output.cycle"}); err != nil {
+		t.Fatalf("output.cycle: %v", err)
+	}
+	want := []string{
+		`"Outputs"`,
+		`{"Output":{"action":"On","output":"eDP-1"}}`,
+		`{"Output":{"action":"Off","output":"DP-1"}}`,
+	}
+	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+		t.Errorf("cycle requests\n got: %q\nwant: %q", got, want)
+	}
+	if pos, _ := os.ReadFile(outputCyclePath()); strings.TrimSpace(string(pos)) != "1" {
+		t.Errorf("stored cycle position = %q, want 1", pos)
+	}
+}
+
+// The touchpad lock has no runtime input IPC on niri, so it flips a state file
+// and re-runs the apply path (writeInput emits `off` while the file exists).
+// status reads the file, never the compositor, and toggle flips it.
+func TestActTouchpadTracksStateFile(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	prevNotify := touchpadNotify
+	touchpadNotify = func(string, string) {}
+	defer func() { touchpadNotify = prevNotify }()
+
+	restore := stubRequest(t, func(any) (json.RawMessage, error) { return nil, nil })
+	defer restore()
+
+	if err := runAct([]string{"input.touchpad", "off"}); err != nil {
+		t.Fatalf("off: %v", err)
+	}
+	if !touchpadDisabled() {
+		t.Error("off did not record the intent")
+	}
+	if _, err := os.Stat(filepath.Join(niriConfigDir(), "settings.kdl")); err != nil {
+		t.Errorf("off did not re-render settings.kdl: %v", err)
+	}
+
+	if status := touchpadStatus(t); status != "off" {
+		t.Errorf("status = %q, want off", status)
+	}
+
+	if err := runAct([]string{"input.touchpad", "toggle"}); err != nil {
+		t.Fatalf("toggle: %v", err)
+	}
+	if touchpadDisabled() {
+		t.Error("toggle did not clear the intent")
+	}
+	if status := touchpadStatus(t); status != "on" {
+		t.Errorf("status after toggle = %q, want on", status)
+	}
+}
+
+// touchpadStatus runs input.touchpad status and returns what it printed.
+func touchpadStatus(t *testing.T) string {
+	t.Helper()
+	var buf bytes.Buffer
+	prevOut := stdout
+	stdout = bufio.NewWriter(&buf)
+	defer func() { stdout = prevOut }()
+	if err := runAct([]string{"input.touchpad", "status"}); err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	stdout.Flush()
+	return strings.TrimSpace(buf.String())
 }
 
 // stubRequest swaps the compositor call and satisfies live(), which every action

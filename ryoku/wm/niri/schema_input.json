@@ -1,0 +1,176 @@
+[
+  {
+    "tab": "Behaviour",
+    "group": "POINTER",
+    "key": "wm.niri.warpMouseToFocus",
+    "label": "Warp pointer to focus",
+    "desc": "Move the pointer onto a window when you focus it by keyboard",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "off",
+      "separate",
+      "center-xy",
+      "center-xy-always"
+    ],
+    "optLabels": {
+      "off": "Off",
+      "separate": "Nudge onto the window",
+      "center-xy": "Centre on the window",
+      "center-xy-always": "Always centre"
+    }
+  },
+  {
+    "tab": "Behaviour",
+    "group": "POINTER",
+    "key": "wm.niri.focusFollowsMouseScroll",
+    "label": "Focus-follows-mouse scroll cap",
+    "desc": "Cap how far a focus-follows-mouse move scrolls the view; -1 leaves it uncapped",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": -1,
+    "hi": 100,
+    "unit": "%",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "WORKSPACES",
+    "key": "wm.niri.workspaceAutoBackAndForth",
+    "label": "Toggle back to the last workspace",
+    "desc": "Focusing the current workspace again returns to the previous one",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "MODIFIER KEY",
+    "key": "wm.niri.modKey",
+    "label": "Main modifier",
+    "desc": "The key niri treats as Mod in its own shortcuts",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "adv": true,
+    "page": "windowmanager",
+    "opts": [
+      "Super",
+      "Alt",
+      "Ctrl",
+      "Shift"
+    ]
+  },
+  {
+    "tab": "Behaviour",
+    "group": "MODIFIER KEY",
+    "key": "wm.niri.modKeyNested",
+    "label": "Modifier in a nested session",
+    "desc": "The Mod key when niri runs inside another compositor",
+    "ctl": "seg",
+    "src": "desktop.json",
+    "adv": true,
+    "page": "windowmanager",
+    "opts": [
+      "Super",
+      "Alt",
+      "Ctrl",
+      "Shift"
+    ]
+  },
+  {
+    "tab": "Behaviour",
+    "group": "SESSION",
+    "key": "wm.niri.disablePowerKey",
+    "label": "Ignore the power key",
+    "desc": "Stop niri handling the hardware power key so the session manager can",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeViewScrollTriggerWidth",
+    "label": "Edge-scroll trigger width",
+    "desc": "How close a drag must reach the screen edge to scroll the view",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 512,
+    "unit": "px",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeViewScrollDelayMs",
+    "label": "Edge-scroll delay",
+    "desc": "Pause before a drag at the edge starts scrolling the view",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 2000,
+    "unit": "ms",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeViewScrollMaxSpeed",
+    "label": "Edge-scroll speed",
+    "desc": "Fastest the view scrolls while dragging at the edge",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 10000,
+    "unit": "px/s",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeWorkspaceTriggerHeight",
+    "label": "Workspace-switch trigger height",
+    "desc": "How close a drag must reach the top or bottom edge to switch workspace",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 512,
+    "unit": "px",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeWorkspaceDelayMs",
+    "label": "Workspace-switch delay",
+    "desc": "Pause before a drag at the edge switches workspace",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 2000,
+    "unit": "ms",
+    "adv": true,
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "DRAG GESTURES",
+    "key": "wm.niri.dndEdgeWorkspaceMaxSpeed",
+    "label": "Workspace-switch speed",
+    "desc": "Fastest workspaces switch while dragging at the edge",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 10000,
+    "unit": "px/s",
+    "adv": true,
+    "page": "windowmanager"
+  }
+]

@@ -1,0 +1,65 @@
+[
+  {
+    "tab": "",
+    "group": "RULES",
+    "key": "wm.niri.layerRules",
+    "label": "Custom layer rules",
+    "desc": "Blur, shadow, opacity and geometry per layer namespace",
+    "ctl": "list",
+    "src": "desktop.json",
+    "page": "layerrules",
+    "fields": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "ctl": "text"
+      },
+      {
+        "name": "opacity",
+        "label": "Opacity",
+        "ctl": "slid",
+        "lo": 0,
+        "hi": 1,
+        "eg": "-1 leaves it",
+        "def": -1
+      },
+      {
+        "name": "cornerRadius",
+        "label": "Corner radius",
+        "ctl": "step",
+        "lo": -1,
+        "hi": 64
+      },
+      {
+        "name": "blur",
+        "label": "Blur",
+        "ctl": "seg",
+        "opts": [
+          "inherit",
+          "on",
+          "off"
+        ]
+      },
+      {
+        "name": "shadow",
+        "label": "Shadow",
+        "ctl": "seg",
+        "opts": [
+          "inherit",
+          "on",
+          "off"
+        ]
+      },
+      {
+        "name": "blockOut",
+        "label": "Hide from screencasts",
+        "ctl": "sw"
+      },
+      {
+        "name": "babaIsFloat",
+        "label": "Float animation",
+        "ctl": "sw"
+      }
+    ]
+  }
+]

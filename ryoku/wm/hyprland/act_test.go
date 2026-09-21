@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -42,6 +45,10 @@ func TestActEmitsLuaDialect(t *testing.T) {
 			[]string{"dispatch", `hl.dsp.exit()`}},
 		{"output power", []string{"output.power", "off", "eDP-2"},
 			[]string{"dispatch", `hl.dsp.dpms({ state = "off", monitor = "eDP-2" })`}},
+		{"output enable on", []string{"output.enable", "DP-1", "on"},
+			[]string{"eval", `hl.monitor({ output = "DP-1", mode = "preferred", position = "auto", scale = 1 })`}},
+		{"output enable off", []string{"output.enable", "DP-1", "off"},
+			[]string{"eval", `hl.monitor({ output = "DP-1", disabled = true })`}},
 		{"submap enter", []string{"submap.enter", "resize"},
 			[]string{"dispatch", `hl.dsp.submap("resize")`}},
 		{"submap reset", []string{"submap.reset"},
@@ -62,6 +69,12 @@ func TestActEmitsLuaDialect(t *testing.T) {
 			[]string{"switchxkblayout", "all", "next"}},
 		{"reload config only", []string{"config.reload", "config-only"},
 			[]string{"reload", "config-only"}},
+		// game mode strips decorations through eval and restores them with a
+		// reload, exactly what the ported ryoku-cmd-game-mode ran.
+		{"game mode on", []string{"decoration.gameMode", "on"},
+			[]string{"eval", gameModeLua}},
+		{"game mode off", []string{"decoration.gameMode", "off"},
+			[]string{"reload"}},
 	}
 
 	for _, tc := range cases {
@@ -93,6 +106,7 @@ func TestActRejectsMissingArgs(t *testing.T) {
 		{"workspace.moveToOutput", "9"},
 		{"cursor.set", "Bibata"},
 		{"output.power"},
+		{"window.summon"},
 	} {
 		called := false
 		restore := stubCtl(t, func(...string) ([]byte, error) {
@@ -110,11 +124,164 @@ func TestActRejectsMissingArgs(t *testing.T) {
 	}
 }
 
+// window.summon raises an already-open window to the current workspace and
+// focuses it, matched by exact title. The live title wins over the initial
+// title, and a title with no window is an error so the keybind launches the app
+// instead of raising nothing.
+func TestActSummonRaisesByTitle(t *testing.T) {
+	const clients = `[
+		{"address":"0xaaa","title":"Other","initialTitle":"Other"},
+		{"address":"0xbbb","title":"Ryoku Hub","initialTitle":"org.quickshell"},
+		{"address":"0xccc","title":"stale","initialTitle":"Ryoku Hub"}
+	]`
+	const active = `{"id":5}`
+
+	var dispatched [][]string
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		switch {
+		case len(args) == 2 && args[0] == "clients" && args[1] == "-j":
+			return []byte(clients), nil
+		case len(args) == 2 && args[0] == "activeworkspace" && args[1] == "-j":
+			return []byte(active), nil
+		case len(args) > 0 && args[0] == "dispatch":
+			dispatched = append(dispatched, args)
+		}
+		return nil, nil
+	})
+	defer restore()
+
+	if err := runAct([]string{"window.summon", "Ryoku Hub"}); err != nil {
+		t.Fatalf("summon: %v", err)
+	}
+	want := [][]string{
+		{"dispatch", `hl.dsp.window.move({ workspace = 5, window = "address:0xbbb" })`},
+		{"dispatch", `hl.dsp.focus({ window = "address:0xbbb" })`},
+	}
+	if len(dispatched) != len(want) {
+		t.Fatalf("dispatch count = %d, want %d: %q", len(dispatched), len(want), dispatched)
+	}
+	for i := range want {
+		if strings.Join(dispatched[i], "\x00") != strings.Join(want[i], "\x00") {
+			t.Errorf("dispatch %d\n got: %q\nwant: %q", i, dispatched[i], want[i])
+		}
+	}
+
+	// A title with no window is an error and never dispatches, so the keybind
+	// falls through to launching the app.
+	dispatched = nil
+	if err := runAct([]string{"window.summon", "Nonexistent"}); err == nil {
+		t.Error("summon of an absent title: expected an error")
+	}
+	if len(dispatched) != 0 {
+		t.Errorf("summon of an absent title dispatched %q", dispatched)
+	}
+}
+
 func TestActRejectsUnknownAction(t *testing.T) {
 	restore := stubCtl(t, func(...string) ([]byte, error) { return nil, nil })
 	defer restore()
 	if err := runAct([]string{"window.teleport"}); err == nil {
 		t.Fatal("expected an error for an unknown action")
+	}
+}
+
+// The touchpad lock flips every pad through hl.device eval and keeps the intent
+// in a flag file, because Hyprland re-enables every pad on a reload and exposes
+// no per-device readback. Ported from ryoku-cmd-touchpad; the eval string and
+// the flag file are the contract, so both are pinned.
+func TestActTouchpadFlipsPadsAndTracksState(t *testing.T) {
+	state := t.TempDir()
+	t.Setenv("XDG_STATE_HOME", state)
+	flag := filepath.Join(state, "ryoku", "touchpad.disabled")
+
+	prevNotify := touchpadNotify
+	touchpadNotify = func(string, string) {}
+	defer func() { touchpadNotify = prevNotify }()
+
+	const devices = `{"mice":[{"name":"synps/2-touchpad"},{"name":"logitech-mouse"}]}`
+	var evals []string
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		if len(args) == 2 && args[0] == "devices" && args[1] == "-j" {
+			return []byte(devices), nil
+		}
+		if len(args) == 2 && args[0] == "eval" {
+			evals = append(evals, args[1])
+		}
+		return nil, nil
+	})
+	defer restore()
+
+	// off locks only the touchpad, not the mouse, and records the intent.
+	evals = nil
+	if err := runAct([]string{"input.touchpad", "off"}); err != nil {
+		t.Fatalf("off: %v", err)
+	}
+	wantOff := []string{`hl.device({ name = "synps/2-touchpad", enabled = false })`}
+	if strings.Join(evals, "\x00") != strings.Join(wantOff, "\x00") {
+		t.Errorf("off evals\n got: %q\nwant: %q", evals, wantOff)
+	}
+	if _, err := os.Stat(flag); err != nil {
+		t.Errorf("off did not write the flag file: %v", err)
+	}
+
+	// status reads the flag file, not the compositor.
+	var buf bytes.Buffer
+	prevOut := stdout
+	stdout = bufio.NewWriter(&buf)
+	err := runAct([]string{"input.touchpad", "status"})
+	stdout.Flush()
+	stdout = prevOut
+	if err != nil {
+		t.Fatalf("status: %v", err)
+	}
+	if strings.TrimSpace(buf.String()) != "off" {
+		t.Errorf("status = %q, want off", buf.String())
+	}
+
+	// toggle from a stored off re-enables and clears the intent.
+	evals = nil
+	if err := runAct([]string{"input.touchpad", "toggle"}); err != nil {
+		t.Fatalf("toggle: %v", err)
+	}
+	wantOn := []string{`hl.device({ name = "synps/2-touchpad", enabled = true })`}
+	if strings.Join(evals, "\x00") != strings.Join(wantOn, "\x00") {
+		t.Errorf("toggle evals\n got: %q\nwant: %q", evals, wantOn)
+	}
+	if _, err := os.Stat(flag); !os.IsNotExist(err) {
+		t.Errorf("toggle did not remove the flag file: %v", err)
+	}
+
+	// restore with no stored off is silent and touches nothing.
+	evals = nil
+	if err := runAct([]string{"input.touchpad", "restore"}); err != nil {
+		t.Fatalf("restore: %v", err)
+	}
+	if len(evals) != 0 {
+		t.Errorf("restore with no stored off dispatched %q", evals)
+	}
+}
+
+// output.cycle steps the arrangement through ryoku-monitor, so the pin is that
+// it execs `ryoku-monitor toggle`.
+func TestActOutputCycleRunsMonitorToggle(t *testing.T) {
+	dir := t.TempDir()
+	argfile := filepath.Join(dir, "args")
+	script := "#!/bin/sh\nprintf '%s' \"$*\" > " + argfile + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "ryoku-monitor"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	restore := stubCtl(t, func(...string) ([]byte, error) { return nil, nil })
+	defer restore()
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := runAct([]string{"output.cycle"}); err != nil {
+		t.Fatalf("output.cycle: %v", err)
+	}
+	got, err := os.ReadFile(argfile)
+	if err != nil {
+		t.Fatalf("ryoku-monitor was not run: %v", err)
+	}
+	if strings.TrimSpace(string(got)) != "toggle" {
+		t.Errorf("ryoku-monitor args = %q, want toggle", got)
 	}
 }
 

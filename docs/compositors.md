@@ -67,8 +67,8 @@ with nothing behind it.
 Shared by both providers:
 
     animations  focusHistory  keyboardLayoutSwitch  layerRules  monitorConfig
-    nightLight  outputPower  sessionExit  windowFloat  windowRules
-    windowWorkspaceMap  workspaceMoveToOutput  workspaces
+    nightLight  outputPower  sessionExit  touchpadToggle  windowFloat
+    windowRules  windowWorkspaceMap  workspaceMoveToOutput  workspaces
 
 Hyprland only:
 
@@ -104,6 +104,39 @@ actions rather than a settings row:
   its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
 - `nightlight.off` stops that backend, and the compositor restores the gamma when
   it goes away.
+
+`touchpadToggle` is the other shared capability the desktop drives through a
+named action, plus a Hub switch that reads it live:
+
+- `input.touchpad on|off|toggle` locks or unlocks the touchpad the FN touchpad
+  key drives; `status` prints `on` or `off`, and `restore` re-asserts a stored
+  off after a config reload. Hyprland flips the device live through `hyprctl
+  eval`; niri, which has no runtime input IPC, records the intent in a state
+  file and re-emits `off` into the config it watches.
+
+`monitorConfig` adds two output actions beside the display settings it gates:
+
+- `output.cycle` steps the output arrangement one position. Hyprland runs its
+  display engine (`ryoku-monitor toggle`); niri walks the outputs over IPC,
+  keeping the cycle position in a state file.
+- `output.enable <connector> on|off` turns one named output on or off.
+
+`workspaces` also backs `window.summon`, which the desktop's summon keybind
+drives on every compositor:
+
+- `window.summon <title>` raises an already-open window to the current
+  workspace and focuses it, matched by exact title. A single-instance app
+  strands its window on the workspace it first opened on, and a title is the
+  only handle when every window of an app shares one app id; no match exits
+  non-zero, so the keybind falls through to launching the app.
+
+`liveConfigEval` drives one named action of its own, gated so a file-only
+compositor is left alone:
+
+- `decoration.gameMode on|off` strips the compositor's decorations for a
+  latency-first gaming pass and reloads the config to restore them. A compositor
+  that cannot evaluate its config live has no equivalent, so game mode still
+  boosts power there and leaves the look untouched.
 
 ## Where the config lives
 

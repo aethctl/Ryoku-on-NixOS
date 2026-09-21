@@ -17,6 +17,13 @@ const (
 	ActionWindowFloat           Action = "window.float"
 	ActionWindowMoveToWorkspace Action = "window.moveToWorkspace"
 
+	// ActionWindowSummon raises an already-open window to the current
+	// workspace and focuses it, matched by exact title. The desktop's summon
+	// keybind brings a single-instance window forward from wherever it first
+	// opened; a title is the only handle when every window of an app shares one
+	// app id, so the app-focus key cannot tell them apart.
+	ActionWindowSummon Action = "window.summon"
+
 	// ActionAppFocus is for callers that only know what they launched.
 	ActionAppFocus Action = "app.focus"
 
@@ -61,12 +68,31 @@ const (
 	// and visible.
 	ActionBorderColors Action = "decoration.borderColors"
 
+	// ActionGameMode strips the compositor's decorations for a latency-first
+	// gaming pass (on) and reloads the config to put them back (off). It rides
+	// the live config eval a file-only compositor has no equivalent for, so it
+	// needs CapLiveConfigEval and a compositor without it leaves the look alone.
+	ActionGameMode Action = "decoration.gameMode"
+
 	// ActionNightLightOn takes one arg, the colour temperature in Kelvin, and
 	// replaces any running backend with one warmed to it. ActionNightLightOff
 	// stops the backend; the compositor restores the gamma once the client is
 	// gone. Both need CapNightLight.
 	ActionNightLightOn  Action = "nightlight.on"
 	ActionNightLightOff Action = "nightlight.off"
+
+	// ActionInputTouchpad locks the touchpad the FN touchpad key drives: on,
+	// off, toggle, status (prints on|off) or restore (re-assert a stored off
+	// after a reload). A compositor with a live input override flips the device;
+	// one whose input is config-only records the intent and re-emits it, so the
+	// key behaves the same either way. Needs CapTouchpadToggle.
+	ActionInputTouchpad Action = "input.touchpad"
+
+	// ActionOutputCycle steps the output arrangement one position, the display
+	// toggle key's job. ActionOutputEnable turns one named connector on or off.
+	// Both need CapMonitorConfig.
+	ActionOutputCycle  Action = "output.cycle"
+	ActionOutputEnable Action = "output.enable"
 )
 
 // Capability returns what an action needs, so callers gate on one lookup
@@ -76,7 +102,7 @@ func (a Action) Capability() Capability {
 	switch a {
 	case ActionWindowFloat:
 		return CapWindowFloat
-	case ActionWindowMoveToWorkspace, ActionWorkspaceFocus, ActionWorkspaceCycle:
+	case ActionWindowMoveToWorkspace, ActionWindowSummon, ActionWorkspaceFocus, ActionWorkspaceCycle:
 		return CapWorkspaces
 	case ActionWorkspaceMoveToOutput:
 		return CapWorkspaceMoveToOutput
@@ -96,7 +122,7 @@ func (a Action) Capability() Capability {
 		return CapConfigReload
 	case ActionCursorSet:
 		return CapCursorSet
-	case ActionBorderColors, ActionFocusFollowsMouse:
+	case ActionBorderColors, ActionFocusFollowsMouse, ActionGameMode:
 		return CapLiveConfigEval
 	case ActionScreenShader:
 		return CapScreenShader
@@ -104,6 +130,10 @@ func (a Action) Capability() Capability {
 		return CapTiledLayout
 	case ActionNightLightOn, ActionNightLightOff:
 		return CapNightLight
+	case ActionInputTouchpad:
+		return CapTouchpadToggle
+	case ActionOutputCycle, ActionOutputEnable:
+		return CapMonitorConfig
 	}
 	return ""
 }

@@ -15,6 +15,12 @@ Column {
 
     spacing: 12
 
+    // This page drives the displays through ryoku-monitor, the Hyprland
+    // provider's engine; outputMirror is the capability only that provider
+    // reports, so the surface hides itself where it would be dead rather than
+    // offering controls that cannot apply.
+    visible: Wm.caps.outputMirror === true
+
     readonly property color fill: Theme.shadow
     readonly property color ink: Theme.ink(fill, 7)
     readonly property color accent: Theme.primary

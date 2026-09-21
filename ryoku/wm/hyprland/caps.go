@@ -41,6 +41,17 @@ var capsManifest = []wm.Capability{
 	wm.CapTiledLayout,
 	wm.CapSessionExit,
 	wm.CapNightLight,
+	wm.CapTouchpadToggle,
+}
+
+// windowRuleActions are the neutral window-rule action ids this
+// provider's config writer actually honours. The Hub reads this
+// list so it never offers controls the active compositor drops.
+var windowRuleActions = []string{
+	"float", "tile", "pin", "fullscreen", "maximize", "center", "immediate",
+	"pseudo", "norounding", "noborder", "opacity", "size", "move", "workspace",
+	"idleinhibit", "suppressevent", "blur", "noanim", "blurpopups", "xray",
+	"abovelock", "noshadow", "ignorealpha", "dimaround",
 }
 
 // The packages ryoku-desktop-hyprland installs for the compositor: Hyprland
@@ -80,6 +91,7 @@ func runCaps() error {
 		PortalBackend:  "hyprland",
 		NightLightProcess: "hyprsunset",
 		Packages:       compositorPackages,
+		WindowRuleActions: windowRuleActions,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")

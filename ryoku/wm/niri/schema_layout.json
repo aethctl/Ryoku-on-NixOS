@@ -1,0 +1,274 @@
+[
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.frame",
+    "label": "Window frame",
+    "desc": "Draw a solid border, a focus ring, or both around windows",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "border",
+      "focusRing",
+      "both"
+    ],
+    "optLabels": {
+      "border": "Border",
+      "focusRing": "Focus ring",
+      "both": "Both"
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.borderGradient",
+    "label": "Gradient on the active frame",
+    "desc": "Fade the focused window's frame between two colours",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.gradientFrom",
+    "label": "Gradient start",
+    "desc": "First colour of the active-frame gradient",
+    "ctl": "color",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.borderGradient": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.gradientTo",
+    "label": "Gradient end",
+    "desc": "Second colour of the active-frame gradient",
+    "ctl": "color",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.borderGradient": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.gradientAngle",
+    "label": "Gradient angle",
+    "desc": "Direction the gradient runs, in degrees",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 360,
+    "unit": "deg",
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.borderGradient": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "FRAME",
+    "key": "wm.niri.gradientRelativeTo",
+    "label": "Gradient spans",
+    "desc": "Map the gradient per window or across the whole workspace",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "window",
+      "workspace-view"
+    ],
+    "optLabels": {
+      "window": "Each window",
+      "workspace-view": "Across the workspace"
+    },
+    "when": {
+      "wm.niri.borderGradient": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "WORKSPACE BACKGROUND",
+    "key": "wm.niri.backgroundColor",
+    "label": "Workspace background",
+    "desc": "Colour shown behind windows on an empty part of a workspace",
+    "ctl": "color",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Layout",
+    "group": "WINDOW HEIGHT",
+    "key": "wm.niri.presetWindowHeights",
+    "label": "Heights the height cycle steps through",
+    "desc": "Heights a window cycles through when you step its height",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "0.33333, 0.66667",
+      "0.33333, 0.5, 0.66667",
+      "0.25, 0.5, 0.75"
+    ],
+    "optLabels": {
+      "0.33333, 0.66667": "Thirds",
+      "0.33333, 0.5, 0.66667": "Thirds and half",
+      "0.25, 0.5, 0.75": "Quarters"
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "TABBED COLUMNS",
+    "key": "wm.niri.defaultColumnDisplay",
+    "label": "New column layout",
+    "desc": "Open columns with windows side by side or stacked as tabs",
+    "ctl": "chips",
+    "src": "desktop.json",
+    "page": "windowmanager",
+    "opts": [
+      "normal",
+      "tabbed"
+    ],
+    "optLabels": {
+      "normal": "Side by side",
+      "tabbed": "Stacked as tabs"
+    }
+  },
+  {
+    "tab": "Layout",
+    "group": "WORKSPACES",
+    "key": "wm.niri.emptyWorkspaceAboveFirst",
+    "label": "Empty workspace above the first",
+    "desc": "Keep a spare workspace above the top one, like the one below the last",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.backdropColor",
+    "label": "Overview backdrop",
+    "desc": "Colour shown behind the workspaces in the overview",
+    "ctl": "color",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.workspaceShadow",
+    "label": "Workspace shadow",
+    "desc": "Drop a shadow under each workspace in the overview",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.workspaceShadowSoftness",
+    "label": "Shadow softness",
+    "desc": "How far the workspace shadow blurs out",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 128,
+    "unit": "px",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.workspaceShadow": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.workspaceShadowSpread",
+    "label": "Shadow spread",
+    "desc": "How far the workspace shadow reaches",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": 0,
+    "hi": 128,
+    "unit": "px",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.workspaceShadow": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.workspaceShadowOffsetY",
+    "label": "Shadow drop",
+    "desc": "Vertical offset of the workspace shadow",
+    "ctl": "step",
+    "src": "desktop.json",
+    "lo": -128,
+    "hi": 128,
+    "unit": "px",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.workspaceShadow": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Behaviour",
+    "group": "OVERVIEW",
+    "key": "wm.niri.workspaceShadowColor",
+    "label": "Shadow colour",
+    "desc": "Colour of the workspace shadow",
+    "ctl": "color",
+    "src": "desktop.json",
+    "adv": true,
+    "page": "windowmanager",
+    "when": {
+      "wm.niri.workspaceShadow": [
+        true
+      ]
+    }
+  },
+  {
+    "tab": "Behaviour",
+    "group": "STARTUP",
+    "key": "wm.niri.hotkeyOverlayHideNotBound",
+    "label": "Hide unbound keys in the cheat sheet",
+    "desc": "Leave keys with no action out of the hotkey overlay",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  },
+  {
+    "tab": "Behaviour",
+    "group": "WINDOW SWITCHER",
+    "key": "wm.niri.recentWindows",
+    "label": "Recent-windows switcher",
+    "desc": "Hold the switcher to step through recently used windows",
+    "ctl": "sw",
+    "src": "desktop.json",
+    "page": "windowmanager"
+  }
+]

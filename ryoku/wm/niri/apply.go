@@ -152,12 +152,29 @@ var appearanceEmitted = map[string]bool{
 	"activeOpacity": true, "inactiveOpacity": true,
 	"shadowEnabled": true, "shadowRange": true, "shadowColor": true,
 	"shadowSpread": true, "shadowOffsetX": true, "shadowOffsetY": true,
+	"blurEnabled": true, "blurPasses": true, "blurNoise": true,
+	"blurXray": true, "blurPopups": true,
+}
+
+// blurUnhonored names the blur tuning niri's blur block has no field for. niri
+// tunes passes, offset, noise and saturation and forces blur per window, so the
+// enable/passes/noise/xray/popups keys are honoured (appearanceEmitted); the
+// rest are Hyprland-only knobs with no niri twin.
+var blurUnhonored = map[string]string{
+	"blurSize":             "niri's blur tunes passes, offset, noise and saturation; it has no size.",
+	"blurContrast":         "niri's blur tunes passes, offset, noise and saturation; it has no contrast.",
+	"blurBrightness":       "niri's blur tunes passes, offset, noise and saturation; it has no brightness.",
+	"blurVibrancy":         "niri's blur tunes passes, offset, noise and saturation; it has no vibrancy.",
+	"blurVibrancyDarkness": "niri's blur tunes passes, offset, noise and saturation; it has no vibrancy darkness.",
+	"blurSpecial":          "niri has no special workspace, so nothing to blur behind one.",
+	"blurIgnoreOpacity":    "niri's blur has no ignore-opacity switch.",
+	"blurNewOptimizations": "niri's blur has no new-optimizations switch.",
 }
 
 func appearanceReason(leaf string) string {
 	switch {
-	case strings.HasPrefix(leaf, "blur"):
-		return "niri has no blur."
+	case blurUnhonored[leaf] != "":
+		return blurUnhonored[leaf]
 	case leaf == "shadowPower":
 		return "niri's shadow block has no sharpness or falloff field."
 	case leaf == "shadowSharp":
@@ -174,8 +191,12 @@ func appearanceReason(leaf string) string {
 		return "niri corner rounding has no power curve."
 	case leaf == "layout":
 		return "niri uses its own scrollable-tiling layout."
-	case leaf == "wobblyWindows" || leaf == "animatedBorder" || leaf == "borderAngleSpeed" || leaf == "windowStyle":
-		return "niri has no matching window animation."
+	case leaf == "windowStyle":
+		return "niri has no window-open style presets; set the window-open animation on the Animations page instead."
+	case leaf == "wobblyWindows":
+		return "niri has no wobbly-windows effect."
+	case leaf == "animatedBorder" || leaf == "borderAngleSpeed":
+		return "niri's border gradient is static; there is no rotating-gradient animation."
 	}
 	return "niri has no matching appearance control."
 }
@@ -261,9 +282,6 @@ func unhonoredAppOverrides(raw json.RawMessage) []wm.Unhonored {
 	var out []wm.Unhonored
 	for i, a := range apps {
 		var lost []string
-		if a.Blur == "off" {
-			lost = append(lost, "blur")
-		}
 		if a.Shadow == "off" {
 			lost = append(lost, "shadow")
 		}

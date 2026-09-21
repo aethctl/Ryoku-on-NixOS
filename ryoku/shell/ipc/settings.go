@@ -737,6 +737,10 @@ type settingsStore struct {
 	onChange func([]byte)
 	caps     map[string]bool
 	deadKeys []string
+	// windowRuleActions is the active provider's window-rule action list, ridden
+	// in the frame beside caps/deadKeys so the Hub's window-rules editor offers
+	// only ids this compositor can apply. Empty when no provider answers.
+	windowRuleActions []string
 }
 
 func newSettingsStore(path string) *settingsStore {
@@ -827,7 +831,7 @@ func (s *settingsStore) frameLocked() []byte {
 		b, _ := json.Marshal(s.raw)
 		return b
 	}
-	out := make(map[string]any, len(s.raw)+2)
+	out := make(map[string]any, len(s.raw)+3)
 	for k, v := range s.raw {
 		out[k] = v
 	}
@@ -837,6 +841,11 @@ func (s *settingsStore) frameLocked() []byte {
 		dead = []string{}
 	}
 	out["deadKeys"] = dead
+	wra := s.windowRuleActions
+	if wra == nil {
+		wra = []string{}
+	}
+	out["windowRuleActions"] = wra
 	b, _ := json.Marshal(out)
 	return b
 }
@@ -1059,10 +1068,12 @@ func (d *daemon) startSettings() {
 	// probed once here, not on every emission.
 	caps := d.capsMap()
 	dead := d.deadSettingKeys()
+	wra := d.windowRuleActions()
 
 	store.mu.Lock()
 	store.caps = caps
 	store.deadKeys = dead
+	store.windowRuleActions = wra
 	frame := store.frameLocked()
 	// Nudge the paint worker whenever the theme keys the matugen pipeline reads
 	// (the active theme and the scheme knobs) change, so a knob patch retunes the
@@ -1125,6 +1136,19 @@ func (d *daemon) capsMap() map[string]bool {
 	return m
 }
 
+// windowRuleActions is the active provider's window-rule action list, ridden in
+// the settings frame beside caps/deadKeys so the Hub's window-rules editor
+// offers only ids this compositor's config writer can apply. It reuses the
+// cached probe; a failed or absent probe yields an empty list, the safe default
+// that offers no action.
+func (d *daemon) windowRuleActions() []string {
+	caps, err := d.wmc.Caps()
+	if err != nil || caps.WindowRuleActions == nil {
+		return []string{}
+	}
+	return caps.WindowRuleActions
+}
+
 // deadSettingKeys are the provider store leaves that some installed provider
 // models but the active one does not: nothing would write them, so the Hub
 // drops a row keyed on one rather than show a control with no writer. A leaf no
@@ -1162,11 +1186,13 @@ func (d *daemon) deadSettingKeys() []string {
 }
 
 // providerLeafKeys flattens a provider's default subtree to the dotted paths of
-// the scalar leaves it models (desktop.appearance.rounding, wm.niri.overviewZoom).
-// A list is a whole-collection affordance a list editor owns, not a gated leaf,
-// so arrays are not descended into. A failed or unparseable probe yields the
-// empty set, so the active provider then models nothing and every provider-owned
-// row is treated as dead, the safe default.
+// the leaves it models (desktop.appearance.rounding, wm.niri.overviewZoom). A
+// list is a whole-collection affordance a list editor owns, so it counts as one
+// key at its own path and is not descended into: a provider that models
+// wm.<name>.layerRules owns that collection, and the other provider's page for
+// it must read as dead. A failed or unparseable probe yields the empty set, so
+// the active provider then models nothing and every provider-owned row is
+// treated as dead, the safe default.
 func providerLeafKeys(c *wm.Client) map[string]bool {
 	out := map[string]bool{}
 	b, err := c.Defaults()
@@ -1181,7 +1207,8 @@ func providerLeafKeys(c *wm.Client) map[string]bool {
 	return out
 }
 
-// flattenLeaves records every scalar leaf under v as a dotted path in out.
+// flattenLeaves records every scalar leaf and every list under v as a dotted
+// path in out.
 func flattenLeaves(prefix string, v map[string]any, out map[string]bool) {
 	for k, child := range v {
 		path := k
@@ -1190,9 +1217,6 @@ func flattenLeaves(prefix string, v map[string]any, out map[string]bool) {
 		}
 		if obj, ok := child.(map[string]any); ok {
 			flattenLeaves(path, obj, out)
-			continue
-		}
-		if _, ok := child.([]any); ok {
 			continue
 		}
 		out[path] = true

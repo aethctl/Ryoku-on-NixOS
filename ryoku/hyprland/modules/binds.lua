@@ -93,7 +93,7 @@ hl.bind(K(mod .. " + SHIFT + A"), hl.dsp.exec_cmd("ryoku-restart-audio")) -- rec
 hl.bind(K("XF86MonBrightnessUp"),   hl.dsp.exec_cmd("ryoku-cmd-brightness +5"), { locked = true, repeating = true }) -- raise screen brightness
 hl.bind(K("XF86MonBrightnessDown"), hl.dsp.exec_cmd("ryoku-cmd-brightness -5"), { locked = true, repeating = true }) -- lower screen brightness
 
--- Touchpad lock (the FN touchpad key)
-hl.bind(K("XF86TouchpadToggle"), hl.dsp.exec_cmd("ryoku-cmd-touchpad toggle"), { locked = true }) -- toggle the touchpad
-hl.bind(K("XF86TouchpadOn"),     hl.dsp.exec_cmd("ryoku-cmd-touchpad on"),     { locked = true }) -- enable the touchpad
-hl.bind(K("XF86TouchpadOff"),    hl.dsp.exec_cmd("ryoku-cmd-touchpad off"),    { locked = true }) -- disable the touchpad
+-- Touchpad lock (the FN touchpad key), through the window-manager seam
+hl.bind(K("XF86TouchpadToggle"), hl.dsp.exec_cmd("ryoku wm act input.touchpad toggle"), { locked = true }) -- toggle the touchpad
+hl.bind(K("XF86TouchpadOn"),     hl.dsp.exec_cmd("ryoku wm act input.touchpad on"),     { locked = true }) -- enable the touchpad
+hl.bind(K("XF86TouchpadOff"),    hl.dsp.exec_cmd("ryoku wm act input.touchpad off"),    { locked = true }) -- disable the touchpad

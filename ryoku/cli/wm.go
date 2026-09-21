@@ -100,8 +100,14 @@ func cmdWmAct(args []string) {
 	if len(args) == 0 {
 		die("usage: ryoku wm act <action> [args...]")
 	}
-	err := wm.Open().Act(wm.Action(args[0]), args[1:]...)
+	// ActOutput, not Act: an action that answers with a value (input.touchpad
+	// status prints on|off) must reach the caller's stdout, while the silent
+	// actions still print nothing because their output is empty.
+	out, err := wm.Open().ActOutput(wm.Action(args[0]), args[1:]...)
 	if err == nil {
+		if out != "" {
+			fmt.Fprintln(os.Stdout, out)
+		}
 		return
 	}
 	fmt.Fprintf(os.Stderr, "ryoku: %v\n", err)

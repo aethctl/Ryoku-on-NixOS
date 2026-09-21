@@ -59,7 +59,37 @@ Item {
             }
         }
     }
-    Component.onCompleted: { pg.refreshVariants(); cursorEnum.running = true; }
+
+    // The touchpad lock is a live device state the seam owns, not a saved
+    // setting, so it is read once through the seam (on|off) rather than off the
+    // settings draft, and re-read after a flip so the switch shows what the
+    // compositor actually did. Only wired where the compositor can toggle a pad.
+    property bool touchpadOn: true
+    Process {
+        id: touchpadStatus
+        running: false
+        command: ["ryoku", "wm", "act", "input.touchpad", "status"]
+        stdout: StdioCollector {
+            onStreamFinished: pg.touchpadOn = String(this.text).trim() !== "off"
+        }
+    }
+    Process {
+        id: touchpadSet
+        running: false
+        onExited: touchpadStatus.running = true
+    }
+    function setTouchpad(on) {
+        touchpadSet.command = ["ryoku", "wm", "act", "input.touchpad", on ? "on" : "off"];
+        touchpadSet.running = false;
+        touchpadSet.running = true;
+    }
+
+    Component.onCompleted: {
+        pg.refreshVariants();
+        cursorEnum.running = true;
+        if (Settings.supports("touchpadToggle"))
+            touchpadStatus.running = true;
+    }
 
     // ── hub access ──────────────────────────────────────────────────────────
     function hv(path) { return pg.hub ? pg.hub.hyprVal(path) : undefined }
@@ -962,8 +992,30 @@ Item {
                 expanded: false
                 summary: I18n.tr("TAP, SCROLL, SWIPE")
 
-                Setting {
+                // The touchpad lock, the FN touchpad key's job, as a switch. A
+                // live seam action rather than a saved setting, so it applies at
+                // once and shows the pad's real state; hidden where the
+                // compositor cannot toggle a pad.
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    visible: Settings.supports("touchpadToggle")
                     divider: false
+                    controlWidth: 54
+                    source: "hypr"
+                    label: I18n.tr("Touchpad")
+                    desc: I18n.tr("Turn the touchpad off, the way the FN touchpad key does.")
+                    changed: false
+
+                    Sw {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        on: pg.touchpadOn
+                        onToggled: (v) => pg.setTouchpad(v)
+                    }
+                }
+                Setting {
+                    divider: true
                     path: "desktop.input.naturalScroll"
                     ctl: "sw"
                     label: I18n.tr("Natural scroll")

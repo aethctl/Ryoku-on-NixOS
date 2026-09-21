@@ -46,6 +46,17 @@ var capsManifest = []wm.Capability{
 	wm.CapWindowFloat,
 	wm.CapSessionExit,
 	wm.CapNightLight,
+	wm.CapTouchpadToggle,
+}
+
+// windowRuleActions are the neutral window-rule action ids this
+// provider's config writer actually honours. The Hub reads this
+// list so it never offers controls the active compositor drops.
+var windowRuleActions = []string{
+	"float", "tile", "fullscreen", "maximize", "norounding", "opacity",
+	"workspace", "noborder", "noshadow", "blur", "noblur", "xray",
+	"columnwidth", "minsize", "maxsize", "scrollfactor", "tiledstate",
+	"babaisfloat", "blockout",
 }
 
 // The packages ryoku-desktop-niri installs for the compositor: niri, the
@@ -80,6 +91,7 @@ func runCaps() error {
 		PortalBackend:  "gnome",
 		NightLightProcess: "gammastep",
 		Packages:       compositorPackages,
+		WindowRuleActions: windowRuleActions,
 	}
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")

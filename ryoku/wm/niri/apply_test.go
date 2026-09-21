@@ -31,6 +31,9 @@ func niriBin(t *testing.T) string {
 func niriHome(t *testing.T) string {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	// touchpadDisabled() reads XDG_STATE_HOME; pin it to a clean dir so the
+	// generated touchpad block does not depend on the dev box's live toggle.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	return niriConfigDir()
 }
 
@@ -191,7 +194,7 @@ func TestPreviewWritesNothing(t *testing.T) {
 func TestUnhonoredNamesForeignAndSubmap(t *testing.T) {
 	niriHome(t)
 	store := writeStore(t, `{"desktop":{
-		"appearance":{"blurEnabled":true,"gapsOut":8},
+		"appearance":{"blurContrast":0.5,"gapsOut":8},
 		"keybinds":[{"keys":"SUPER + ALT + 5","action":"submap","value":"resize"}]
 	},"wm":{"hyprland":{"plugins":{"hyprbars":{"enabled":true}},"dwindle":{"preserveSplit":true},"anim":{"items":[]}}}}`)
 
@@ -200,7 +203,7 @@ func TestUnhonoredNamesForeignAndSubmap(t *testing.T) {
 	var blur, submap bool
 	foreign := 0
 	for _, u := range rep.Unhonored {
-		if u.Key == "desktop.appearance.blurEnabled" && strings.Contains(u.Reason, "blur") {
+		if u.Key == "desktop.appearance.blurContrast" && strings.Contains(u.Reason, "blur") {
 			blur = true
 		}
 		if strings.HasPrefix(u.Key, "wm.hyprland") {
@@ -214,7 +217,7 @@ func TestUnhonoredNamesForeignAndSubmap(t *testing.T) {
 		}
 	}
 	if !blur {
-		t.Error("desktop.appearance.blurEnabled must be reported unhonored")
+		t.Error("desktop.appearance.blurContrast must be reported unhonored, naming blur")
 	}
 	if !submap {
 		t.Error("a submap keybind must be reported unhonored, naming submap")
@@ -597,5 +600,110 @@ func TestLoadStoreResolvesDynamicCursor(t *testing.T) {
 	writeCursor(&b, s.Cursor)
 	if !strings.Contains(b.String(), `xcursor-theme "`+wm.CursorThemeMaterial+`"`) {
 		t.Fatalf("KDL does not carry the resolved theme:\n%s", b.String())
+	}
+}
+
+// The whole new surface, every niri exclusive and neutral blur key exercised at
+// once, must round-trip through the real niri validator. Skipped where niri is
+// absent, so it proves the generated blocks are grammatical wherever the binary
+// is on PATH.
+func TestNewSurfaceValidatesThroughNiri(t *testing.T) {
+	dir := niriHome(t)
+	store := writeStore(t, `{
+		"desktop":{
+			"appearance":{"blurEnabled":true,"blurPasses":4,"blurNoise":0.03,"blurXray":true,"blurPopups":true,"activeOpacity":0.95,"inactiveOpacity":0.8,"rounding":8},
+			"input":{"followMouse":1,"middleClickPaste":false},
+			"appOverrides":[{"class":"kitty","opacity":0.9,"rounding":6,"borderSize":-1,"blur":"on"}],
+			"windowRules":[
+				{"class":"foo","action":"columnwidth","value":"0.65"},
+				{"class":"bar","action":"minsize","value":"800x600"},
+				{"class":"baz","action":"maxsize","value":"1200x900"},
+				{"class":"qux","action":"scrollfactor","value":"1.5"},
+				{"class":"a","action":"tiledstate"},
+				{"class":"b","action":"babaisfloat"},
+				{"class":"c","action":"noshadow"},
+				{"class":"d","action":"xray"},
+				{"class":"e","action":"blockout"}
+			]
+		},
+		"wm":{"niri":{
+			"frame":"both","borderGradient":true,"gradientFrom":"#e0563b","gradientTo":"#9b3226","gradientAngle":135,"gradientRelativeTo":"workspace-view",
+			"backgroundColor":"#0b0e14","presetWindowHeights":"0.4, 0.6","defaultColumnDisplay":"tabbed","emptyWorkspaceAboveFirst":true,
+			"backdropColor":"#101010","workspaceShadow":true,"workspaceShadowSoftness":50,"workspaceShadowSpread":12,"workspaceShadowOffsetY":14,"workspaceShadowColor":"#00000050",
+			"hotkeyOverlayHideNotBound":true,"recentWindows":false,
+			"warpMouseToFocus":"center-xy","focusFollowsMouseScroll":10,"workspaceAutoBackAndForth":true,"modKey":"Alt","modKeyNested":"Ctrl","disablePowerKey":true,
+			"dndEdgeViewScrollTriggerWidth":40,"dndEdgeWorkspaceMaxSpeed":1600,
+			"anim":{
+				"workspaceSwitch":{"mode":"spring","dampingRatio":1.0,"stiffness":900,"epsilon":0.0001},
+				"windowOpen":{"mode":"ease","durationMs":200,"curve":"ease-out-expo"},
+				"windowClose":{"mode":"off"}
+			},
+			"layerRules":[
+				{"namespace":"waybar","opacity":0.9,"cornerRadius":12,"blur":"on","shadow":"on","blockOut":true,"babaIsFloat":true},
+				{"namespace":"notifications","opacity":-1,"cornerRadius":-1,"blur":"off","shadow":"off"}
+			]
+		}}
+	}`)
+	capApply(t, store)
+	validateGen(t, dir, "settings.kdl", "rebinds.kdl")
+}
+
+// niri 26.04 has blur, so the enable, passes, noise, xray and popups keys reach
+// the config and drop off the switch-cost list, while the Hyprland-only blur
+// knobs stay unhonored, each naming the field niri lacks. Per-app blur is
+// honoured too, so an appOverride blur is no longer a reported loss.
+func TestBlurNowHonoured(t *testing.T) {
+	niriHome(t)
+	store := writeStore(t, `{"desktop":{
+		"appearance":{"blurEnabled":true,"blurPasses":4,"blurNoise":0.03,"blurXray":true,"blurPopups":true,"blurContrast":0.5,"blurSize":8,"blurSpecial":true},
+		"appOverrides":[{"class":"kitty","opacity":-1,"rounding":-1,"borderSize":-1,"blur":"off"}]
+	}}`)
+	rep := capApply(t, store, "--preview")
+
+	reason := map[string]string{}
+	for _, u := range rep.Unhonored {
+		reason[u.Key] = u.Reason
+	}
+	for _, k := range []string{"blurEnabled", "blurPasses", "blurNoise", "blurXray", "blurPopups"} {
+		if reason["desktop.appearance."+k] != "" {
+			t.Errorf("desktop.appearance.%s is honoured now; must not be reported unhonored (%q)", k, reason["desktop.appearance."+k])
+		}
+	}
+	if r := reason["desktop.appearance.blurContrast"]; !strings.Contains(r, "contrast") {
+		t.Errorf("blurContrast reason must name the missing field: %q", r)
+	}
+	if r := reason["desktop.appearance.blurSize"]; !strings.Contains(r, "size") {
+		t.Errorf("blurSize reason must name the missing field: %q", r)
+	}
+	if r := reason["desktop.appearance.blurSpecial"]; !strings.Contains(r, "special") {
+		t.Errorf("blurSpecial reason must name the missing special workspace: %q", r)
+	}
+	for _, u := range rep.Unhonored {
+		if strings.HasPrefix(u.Key, "desktop.appOverrides") && strings.Contains(strings.ToLower(u.Reason), "blur") {
+			t.Errorf("per-app blur is honoured now; must not be reported as a loss: %q", u.Reason)
+		}
+	}
+}
+
+// The imprecise windowStyle reason now points a niri user at the Animations page,
+// where the window-open animation lives, while the rotating-gradient keys stay
+// correctly unhonored, naming niri's static border gradient.
+func TestWindowStyleReasonPointsAtAnimations(t *testing.T) {
+	niriHome(t)
+	store := writeStore(t, `{"desktop":{"appearance":{"windowStyle":"dwindle","animatedBorder":true,"borderAngleSpeed":2}}}`)
+	rep := capApply(t, store, "--preview")
+
+	reason := map[string]string{}
+	for _, u := range rep.Unhonored {
+		reason[u.Key] = u.Reason
+	}
+	if r := reason["desktop.appearance.windowStyle"]; !strings.Contains(r, "Animations") {
+		t.Errorf("windowStyle should point at the Animations page: %q", r)
+	}
+	if r := reason["desktop.appearance.animatedBorder"]; !strings.Contains(r, "gradient") {
+		t.Errorf("animatedBorder should name niri's static gradient: %q", r)
+	}
+	if r := reason["desktop.appearance.borderAngleSpeed"]; !strings.Contains(r, "gradient") {
+		t.Errorf("borderAngleSpeed should name niri's static gradient: %q", r)
 	}
 }

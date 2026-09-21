@@ -53,6 +53,11 @@ const (
 	// (hyprsunset on Hyprland, gammastep on niri); NightLightProcess below names
 	// it so a consumer can tell the light is on without knowing the compositor.
 	CapNightLight Capability = "nightLight"
+	// CapTouchpadToggle is set when the provider can lock the touchpad the FN
+	// touchpad key asks for, through the input.touchpad action. One compositor
+	// flips the device live, another records the intent in its config file; the
+	// capability says it can be done, never how.
+	CapTouchpadToggle Capability = "touchpadToggle"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -68,7 +73,7 @@ func All() []Capability {
 		CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
-		CapTiledLayout, CapSessionExit, CapNightLight,
+		CapTiledLayout, CapSessionExit, CapNightLight, CapTouchpadToggle,
 	}
 }
 
@@ -123,6 +128,11 @@ type Caps struct {
 	// private dependencies these orphan with are pacman's to cascade, so they
 	// are not listed here.
 	Packages []string `json:"packages,omitempty"`
+	// WindowRuleActions are the neutral window-rule action ids this provider's
+	// config writer honours, in the order the Hub should offer them. Each
+	// compositor accepts a different set, so the window-rules editor lists only
+	// what the active one can actually apply, never a control that writes nothing.
+	WindowRuleActions []string `json:"windowRuleActions,omitempty"`
 }
 
 // Has reports whether the provider can honour want. A zero Caps supports

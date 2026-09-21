@@ -4,8 +4,8 @@
 # sysfs scan at a tmp dir, so the real compositor, the real wifi radio and the
 # real power profile are never touched. verifies:
 #   - toggle lifecycle
-#   - compositor goes through `hyprctl eval` (not the keyword path the Lua
-#     parser rejects), with tearing + the immediate rule, reverts via reload
+#   - compositor tuning goes through the window-manager seam
+#     (`decoration.gameMode on|off`), never directly through hyprctl
 #   - the power profile flips to performance and the PRIOR one comes back, not a
 #     guessed default
 #   - the privileged system tune is applied on start and restored on stop
@@ -21,7 +21,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-gm="$here/../ryoku/hyprland/scripts/ryoku-cmd-game-mode"
+gm="$here/../ryoku/shell/scripts/ryoku-cmd-game-mode"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
@@ -64,13 +64,13 @@ echo "ryoku-idle \$*" >>"$calls"
 exit 0
 EOF
 
-# a stubbed ryoku CLI: game mode asks `wm status` for the live compositor's
-# capabilities. the default reports a Hyprland-shaped set (live config eval and
-# reload present), so the compositor strip is exercised; a caps line without them
-# stands in for a compositor that cannot evaluate its config live.
-mk_ryoku() {  # path caps -> a ryoku stub whose `wm status` prints caps
+# A stubbed ryoku CLI: game mode asks `wm status` for capabilities and sends
+# compositor tuning through `wm act decoration.gameMode`. Log every invocation
+# so this fixture tests the seam boundary rather than reaching into hyprctl.
+mk_ryoku() {  # path caps -> ryoku stub
   cat >"$1" <<EOF
 #!/usr/bin/env bash
+echo "ryoku \$*" >>"$calls"
 [ "\$1 \$2" = "wm status" ] && echo "Capabilities: $2"
 exit 0
 EOF
@@ -99,23 +99,14 @@ on() { [[ -f $state ]]; }
 
 "$gm" status && fail "status reported on before any start"
 
-# --- start: compositor via eval + profile + tune + wifi off ----------------
+# --- start: compositor through seam + profile + tune + wifi off -------------
 : >"$calls"
 "$gm" start
 on || fail "start did not persist the request"
-grep -qF 'hyprctl eval' "$calls" || fail "compositor did not go through hyprctl eval"
-grep -qF 'keyword' "$calls" && fail "used the keyword path the Lua parser rejects"
-grep -qF 'allow_tearing = true' "$calls" || fail "eval lua did not enable tearing"
-grep -qF 'immediate = true' "$calls" || fail "eval lua did not add the immediate rule"
-# A fullscreen window must keep rendering off-screen. Without this a workspace
-# switch stops the game's render loop dead (no frame callbacks reach an invisible
-# surface), which reads as a freeze and times multiplayer out. Scoped to
-# fullscreen on purpose: matching every class would render the whole desktop
-# off-screen and starve the game of the GPU this protects.
-grep -qF 'render_unfocused = true' "$calls" ||
-  fail "eval lua did not keep a fullscreen window rendering while off-screen"
-grep -qF 'match = { fullscreen = true }, render_unfocused' "$calls" ||
-  fail "render_unfocused is not scoped to fullscreen windows"
+grep -qF 'ryoku wm act decoration.gameMode on' "$calls" ||
+  fail "compositor did not go through decoration.gameMode on"
+grep -qF 'hyprctl ' "$calls" &&
+  fail "game-mode helper bypassed the window-manager seam"
 grep -qF 'powerprofilesctl set performance' "$calls" || fail "did not ask for the performance profile"
 grep -qF 'ryoku-game-tune apply' "$calls" || fail "system tune not applied"
 grep -qE 'pkexec .*ryoku-wifi-powersave off' "$calls" || fail "WiFi helper not asked to disable power-save"
@@ -126,7 +117,10 @@ grep -qE 'pkexec .*ryoku-wifi-powersave off' "$calls" || fail "WiFi helper not a
 : >"$calls"
 "$gm" stop
 on && fail "stop did not clear the request"
-grep -qF 'hyprctl reload' "$calls" || fail "stop did not reload to revert the compositor"
+grep -qF 'ryoku wm act decoration.gameMode off' "$calls" ||
+  fail "stop did not go through decoration.gameMode off"
+grep -qF 'hyprctl ' "$calls" &&
+  fail "game-mode helper bypassed the window-manager seam on stop"
 grep -qF 'ryoku-game-tune restore' "$calls" || fail "system tune not restored"
 grep -qE 'pkexec .*ryoku-wifi-powersave on' "$calls" || fail "WiFi helper not asked to restore power-save"
 [[ "$(cat "$profile")" == balanced ]] ||
@@ -151,7 +145,8 @@ echo balanced >"$profile"
 : >"$calls"
 "$gm" start && fail "start succeeded on battery"
 on && fail "a refused start still persisted the request"
-grep -qF 'hyprctl eval' "$calls" && fail "stripped the compositor on battery"
+grep -qF 'ryoku wm act decoration.gameMode on' "$calls" &&
+  fail "stripped the compositor on battery"
 grep -qF 'ryoku-game-tune' "$calls" && fail "applied the privileged tune on battery"
 [[ "$(cat "$profile")" == balanced ]] || fail "changed the power profile on battery"
 : >"$ac"                         # back on AC
@@ -166,14 +161,16 @@ RYOKU_IDLE_BIN="$tmp/nope" "$gm" stop
 : >"$calls"
 RYOKU_NET_SYSFS="$nonet" "$gm" start
 on || fail "start failed on a no-WiFi host"
-grep -qF 'hyprctl eval' "$calls" || fail "compositor did not apply on a no-WiFi host"
+grep -qF 'ryoku wm act decoration.gameMode on' "$calls" ||
+  fail "compositor seam did not apply on a no-WiFi host"
 grep -qF 'ryoku-wifi-powersave' "$calls" && fail "touched WiFi on a host with no WiFi device"
 RYOKU_NET_SYSFS="$nonet" "$gm" stop
 
 # --- helpers absent: the rest still applies --------------------------------
 : >"$calls"
 RYOKU_WIFI_POWERSAVE_BIN="$tmp/nope" RYOKU_GAME_TUNE_BIN="$tmp/nope" "$gm" start
-grep -qF 'hyprctl eval' "$calls" || fail "compositor did not apply when helpers absent"
+grep -qF 'ryoku wm act decoration.gameMode on' "$calls" ||
+  fail "compositor seam did not apply when helpers absent"
 grep -qF 'ryoku-wifi-powersave' "$calls" && fail "tried to call an absent WiFi helper"
 grep -qF 'ryoku-game-tune' "$calls" && fail "tried to call an absent tune helper"
 RYOKU_WIFI_POWERSAVE_BIN="$tmp/nope" RYOKU_GAME_TUNE_BIN="$tmp/nope" "$gm" stop
@@ -184,12 +181,14 @@ mk_ryoku "$tmp/ryoku-nolive" "animations, windowRules, workspaces"
 : >"$calls"
 RYOKU_BIN="$tmp/ryoku-nolive" "$gm" start
 on || fail "start did not persist where the compositor has no live config eval"
-grep -qF 'hyprctl eval' "$calls" && fail "stripped a compositor that cannot evaluate its config live"
+grep -qF 'ryoku wm act decoration.gameMode on' "$calls" &&
+  fail "stripped a compositor that cannot evaluate its config live"
 grep -qF 'powerprofilesctl set performance' "$calls" || fail "power did not boost without a compositor strip"
 grep -qF 'ryoku-game-tune apply' "$calls" || fail "system tune skipped without a compositor strip"
 : >"$calls"
 RYOKU_BIN="$tmp/ryoku-nolive" "$gm" stop
-grep -qF 'hyprctl reload' "$calls" && fail "reloaded a compositor that never took the eval override"
+grep -qF 'ryoku wm act decoration.gameMode off' "$calls" &&
+  fail "restored a compositor that never took the live override"
 on && fail "stop did not clear the request without a compositor strip"
 
 echo "game-mode: all checks passed"

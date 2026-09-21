@@ -69,7 +69,7 @@ func defaultBinds() []defBind {
 		// Without a bind, tabbed columns cannot be entered, and the tab-indicator
 		// settings would size a strip a user can never see. T for tabs.
 		{chord: "SUPER + T", action: "toggle-column-tabbed-display", desc: "stack the column into a tabbed strip"},
-		{chord: "SUPER + P", action: spawnArgs("ryoku-monitor", "toggle")},
+		{chord: "SUPER + P", action: spawnArgs("ryoku-wm-niri", "act", "output.cycle")},
 
 		{chord: "SUPER + Left", action: "focus-column-left"},
 		{chord: "SUPER + Right", action: "focus-column-right"},
@@ -144,9 +144,9 @@ func defaultBinds() []defBind {
 		{chord: "XF86MonBrightnessUp", action: spawnArgs("ryoku-cmd-brightness", "+5"), locked: true},
 		{chord: "XF86MonBrightnessDown", action: spawnArgs("ryoku-cmd-brightness", "-5"), locked: true},
 
-		{chord: "XF86TouchpadToggle", action: spawnArgs("ryoku-cmd-touchpad", "toggle"), locked: true},
-		{chord: "XF86TouchpadOn", action: spawnArgs("ryoku-cmd-touchpad", "on"), locked: true},
-		{chord: "XF86TouchpadOff", action: spawnArgs("ryoku-cmd-touchpad", "off"), locked: true},
+		{chord: "XF86TouchpadToggle", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "toggle"), locked: true},
+		{chord: "XF86TouchpadOn", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "on"), locked: true},
+		{chord: "XF86TouchpadOff", action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "off"), locked: true},
 	}
 	// Super+N focuses the Nth workspace by index, Super+Alt+N sends the window
 	// there, Super+Shift+N sends it without following. The Hyprland desktop model

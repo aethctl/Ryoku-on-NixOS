@@ -31,7 +31,7 @@ spawn-sh-at-startup "command -v ryoku-cmd-folders >/dev/null 2>&1 && ryoku-cmd-f
 // requests; the backend niri's caps report is the GNOME one.
 spawn-sh-at-startup "dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start ryoku-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"
 
-spawn-sh-at-startup "command -v ryoku-monitor >/dev/null 2>&1 && ryoku-monitor autoscale"
+// No autoscale line: niri picks each output's scale itself, and ryoku-monitor is the Hyprland provider's display tool.
 
 // Per-device Bluetooth codec memory: WirePlumber restores a device's profile
 // across reconnects but not its A2DP codec, so reconcile on every card event.
