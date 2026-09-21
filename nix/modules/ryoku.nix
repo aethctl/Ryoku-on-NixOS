@@ -1461,6 +1461,9 @@ in
       environment = {
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
 
+        QT_MEDIA_BACKEND = "ffmpeg";
+        QT_FFMPEG_DECODING_HW_DEVICE_TYPES = ",";
+
         QML_IMPORT_PATH =
           "${qmlRoot}:${qtQmlPath}";
 
@@ -1536,7 +1539,7 @@ in
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
 
         QT_MEDIA_BACKEND = "ffmpeg";
-        QT_FFMPEG_DECODING_HW_DEVICE_TYPES = "";
+        QT_FFMPEG_DECODING_HW_DEVICE_TYPES = ",";
 
         QML_IMPORT_PATH =
           "${qmlRoot}:${qtQmlPath}";
