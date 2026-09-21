@@ -80,6 +80,16 @@ Item {
     readonly property var advTune: (pg.tune || []).filter(t => t.risk === "advanced")
     readonly property var cpuTune: (pg.cpu || []).filter(t => t.gpu === "cpu")
     readonly property var batteryTune: (pg.cpu || []).filter(t => t.gpu === "battery")
+    // idle policy, also fronted by `ryoku-hub cpu`: two toggles plus per-stage
+    // minute steppers split into battery and AC. Neutral across compositors.
+    readonly property var idleTune: (pg.cpu || []).filter(t => t.gpu === "idle")
+    readonly property var idleGeneral: pg.idleTune.filter(t => t.id === "enabled" || t.id === "onDesktops")
+    readonly property var idleBattery: pg.idleTune.filter(t => t.id.indexOf("battery.") === 0)
+    readonly property var idleAc: pg.idleTune.filter(t => t.id.indexOf("ac.") === 0)
+    readonly property bool idleOn: {
+        var e = (pg.idleTune || []).find(t => t.id === "enabled");
+        return e ? e.value === "on" : false;
+    }
     readonly property string thermalNow: {
         var t = (pg.tune || []).find(x => x.id === "thermal");
         return t ? t.value : "";
@@ -108,6 +118,8 @@ Item {
 
     // short role tag for a gpu slot, so a tuning row reads "dGPU · Power limit".
     function tag(gpu) {
+        if (gpu === "idle")
+            return "";
         if (gpu === "cpu")
             return "CPU";
         if (gpu === "battery")
@@ -402,11 +414,12 @@ done
         readonly property bool wideOpts: (tc.tunable.options || []).some(o => String(o).length > 8)
         block: tc.knd === "segment" && (tc.optCount >= 3 || tc.wideOpts)
         controlWidth: tc.knd === "toggle" ? 54
+            : tc.knd === "stepper" ? 58
             : (tc.knd === "slider" ? Math.min(240, Math.max(160, Math.round(tc.width * 0.34)))
             : Math.max(120, 62 * Math.max(2, tc.optCount)))
-        label: pg.tag(tc.tunable.gpu) + " · " + I18n.tr(tc.tunable.label || "")
+        label: (pg.tag(tc.tunable.gpu) !== "" ? pg.tag(tc.tunable.gpu) + " · " : "") + I18n.tr(tc.tunable.label || "")
         unit: tc.tunable.unit || ""
-        value: tc.knd === "slider" ? String(Math.round(tc.tunable.current || 0)) : ""
+        value: (tc.knd === "slider" || tc.knd === "stepper") ? String(Math.round(tc.tunable.current || 0)) : ""
         desc: (tc.tunable.desc && tc.tunable.desc !== "") ? I18n.tr(tc.tunable.desc)
             : (tc.tunable.risk === "advanced" ? I18n.tr("Advanced · per session, can misbehave") : I18n.tr("Applies now, resets on reboot"))
         source: tc.tunable.src || ""
@@ -414,7 +427,7 @@ done
 
         Loader {
             anchors.fill: parent
-            sourceComponent: tc.knd === "toggle" ? swC : (tc.knd === "slider" ? slidC : segC)
+            sourceComponent: tc.knd === "toggle" ? swC : tc.knd === "stepper" ? stepC : (tc.knd === "slider" ? slidC : segC)
         }
         Component {
             id: swC
@@ -442,6 +455,17 @@ done
                 options: tc.tunable.options || []
                 current: tc.tunable.value
                 onChose: (k) => tc.apply(k)
+            }
+        }
+        Component {
+            id: stepC
+            Step {
+                anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                from: tc.tunable.min || 0
+                to: tc.tunable.max || 60
+                stepBy: tc.tunable.stepBy || 1
+                value: tc.tunable.current || 0
+                onModified: (v) => tc.apply(String(Math.round(v)))
             }
         }
     }
@@ -867,6 +891,57 @@ done
                             required property var modelData
                             tunable: modelData
                             scope: "battery"
+                            divider: true
+                        }
+                    }
+                }
+
+                // ── IDLE ──
+                SettingCard {
+                    width: gfxCol.colWidth
+                    visible: pg.idleGeneral.length > 0
+                    title: I18n.tr("IDLE")
+
+                    Repeater {
+                        model: pg.idleGeneral
+                        delegate: TuneCell {
+                            required property var modelData
+                            tunable: modelData
+                            scope: "idle"
+                            divider: true
+                        }
+                    }
+                }
+
+                // ── ON BATTERY ── (folds away when idle is off)
+                SettingCard {
+                    width: gfxCol.colWidth
+                    visible: pg.idleOn && pg.idleBattery.length > 0
+                    title: I18n.tr("ON BATTERY")
+
+                    Repeater {
+                        model: pg.idleBattery
+                        delegate: TuneCell {
+                            required property var modelData
+                            tunable: modelData
+                            scope: "idle"
+                            divider: true
+                        }
+                    }
+                }
+
+                // ── PLUGGED IN ──
+                SettingCard {
+                    width: gfxCol.colWidth
+                    visible: pg.idleOn && pg.idleAc.length > 0
+                    title: I18n.tr("PLUGGED IN")
+
+                    Repeater {
+                        model: pg.idleAc
+                        delegate: TuneCell {
+                            required property var modelData
+                            tunable: modelData
+                            scope: "idle"
                             divider: true
                         }
                     }

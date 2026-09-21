@@ -3,7 +3,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-IDLE_CONF="${RYOKU_HYPRIDLE_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hypridle.conf}"
+
+# The idle daemon config Ryoku renders from power.json. It lives beside power.json
+# under ~/.config/ryoku so it is compositor-neutral: hypridle is an
+# ext-idle-notify client every supported compositor serves, and the screen-off
+# stage reaches the display through `ryoku wm act output.power`, never a named
+# compositor binary. Overridable for tests.
+IDLE_CONF="${RYOKU_HYPRIDLE_CONF:-${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/hypridle.conf}"
 
 hw_laptop() {
   if command -v ryoku-hw-laptop >/dev/null 2>&1; then
@@ -12,6 +18,18 @@ hw_laptop() {
     "$SCRIPT_DIR/ryoku-hw-laptop" is-laptop
   else
     printf 'ryoku-idle: ryoku-hw-laptop not found\n' >&2
+    return 1
+  fi
+}
+
+# ryoku-power owns power.json, including the idle policy and its defaults. Prefer
+# the copy on PATH, fall back to the one shipped beside us (same base package).
+ryoku_power() {
+  if command -v ryoku-power >/dev/null 2>&1; then
+    ryoku-power "$@"
+  elif [[ -x $SCRIPT_DIR/ryoku-power ]]; then
+    "$SCRIPT_DIR/ryoku-power" "$@"
+  else
     return 1
   fi
 }
@@ -58,15 +76,124 @@ hypridle_running() {
   [[ -n $(hypridle_pids) ]]
 }
 
+# The merged idle policy (defaults overlaid with power.json) as JSON, or empty
+# when ryoku-power is unreachable.
+idle_policy() { ryoku_power idle get 2>/dev/null || true; }
+
+# idle is active when it is enabled AND this host should run it: a laptop always,
+# a desktop only when the user opted in with onDesktops.
+idle_active() {
+  local policy enabled ondesk
+  policy="$(idle_policy)"
+  [[ -n $policy ]] || return 1
+  enabled="$(jq -r '(.enabled == true)' <<<"$policy" 2>/dev/null || printf 'false')"
+  [[ $enabled == true ]] || return 1
+  ondesk="$(jq -r '(.onDesktops == true)' <<<"$policy" 2>/dev/null || printf 'false')"
+  [[ $ondesk == true ]] && return 0
+  hw_laptop
+}
+
+# emit one hypridle listener, but only when its timeout is a positive number of
+# seconds; a 0 (or blank) stage is dropped so the user can disable it outright.
+emit_listener() {
+  local secs="$1" guard="$2" on_timeout="$3" on_resume="${4:-}"
+  [[ $secs =~ ^[0-9]+$ ]] && (( secs > 0 )) || return 0
+  printf '\nlistener {\n'
+  printf '    timeout = %s\n' "$secs"
+  printf '    on-timeout = ryoku-idle %s && %s\n' "$guard" "$on_timeout"
+  [[ -n $on_resume ]] && printf '    on-resume = %s\n' "$on_resume"
+  printf '}\n'
+}
+
+# render IDLE_CONF from the idle policy. The general block is always written so a
+# running hypridle still locks before sleep and restores the screen after wake;
+# the battery/AC listener pairs are written only when idle is active. `enabled:
+# false` (or an unreadable policy) yields a listener-less config that idles
+# nothing. Each stage has a battery-aggressive listener and an AC-relaxed one,
+# gated by `ryoku-idle on-battery`/`on-ac` so only the matching one acts.
+render() {
+  local policy tmp active
+  local enabled ondesk b_dim b_lock b_off b_susp a_dim a_lock a_off a_susp
+  policy="$(idle_policy)"
+  if [[ -z $policy ]] || ! jq -e . >/dev/null 2>&1 <<<"$policy"; then
+    policy='{"enabled":false,"onDesktops":false}'
+  fi
+  read -r enabled ondesk b_dim b_lock b_off b_susp a_dim a_lock a_off a_susp < <(
+    jq -r '[(.enabled == true), (.onDesktops == true),
+            (.battery.dimSec // 0), (.battery.lockSec // 0), (.battery.screenOffSec // 0), (.battery.suspendSec // 0),
+            (.ac.dimSec // 0), (.ac.lockSec // 0), (.ac.screenOffSec // 0), (.ac.suspendSec // 0)] | @tsv' \
+      <<<"$policy"
+  ) || true
+
+  active=false
+  if [[ $enabled == true ]]; then
+    if [[ $ondesk == true ]] || hw_laptop; then active=true; fi
+  fi
+
+  mkdir -p "$(dirname "$IDLE_CONF")"
+  tmp="$(mktemp "${IDLE_CONF}.XXXXXX")"
+  {
+    printf 'general {\n'
+    printf '    lock_cmd = ryoku-shell lock\n'
+    printf '    before_sleep_cmd = ryoku-shell lock\n'
+    printf '    after_sleep_cmd = ryoku wm act output.power on; command -v ryoku-hub >/dev/null 2>&1 && ryoku-hub lighting apply &\n'
+    printf '    ignore_dbus_inhibit = false\n'
+    printf '    ignore_systemd_inhibit = false\n'
+    printf '}\n'
+    if [[ $active == true ]]; then
+      # Dim the backlight.
+      emit_listener "$b_dim"  on-battery 'brightnessctl -s set 20%' 'brightnessctl -r'
+      emit_listener "$a_dim"  on-ac      'brightnessctl -s set 20%' 'brightnessctl -r'
+      # Lock the session.
+      emit_listener "$b_lock" on-battery 'ryoku-shell lock'
+      emit_listener "$a_lock" on-ac      'ryoku-shell lock'
+      # Turn the screen off (DPMS) through the window-manager seam.
+      emit_listener "$b_off"  on-battery 'ryoku wm act output.power off' 'ryoku wm act output.power on'
+      emit_listener "$a_off"  on-ac      'ryoku wm act output.power off' 'ryoku wm act output.power on'
+      # Suspend.
+      emit_listener "$b_susp" on-battery 'systemctl suspend'
+      emit_listener "$a_susp" on-ac      'systemctl suspend'
+    fi
+  } >"$tmp"
+  mv -f "$tmp" "$IDLE_CONF"
+}
+
+# restart a running hypridle so it re-reads the freshly rendered config (it reads
+# its config only at startup; there is no live reload). When idle went inactive
+# the daemon is stopped and not relaunched. A daemon that was not running is left
+# alone; `start` launches it at the next login.
+refresh_daemon() {
+  local pids
+  pids="$(hypridle_pids)"
+  [[ -n $pids ]] || return 0
+  # shellcheck disable=SC2086  # the pid list is space-separated on purpose
+  kill $pids 2>/dev/null || true
+  for _ in 1 2 3 4 5; do
+    hypridle_running || break
+    sleep 0.2
+  done
+  idle_active || return 0
+  command -v hypridle >/dev/null 2>&1 || return 0
+  [[ -r $IDLE_CONF ]] || return 0
+  setsid hypridle -c "$IDLE_CONF" >/dev/null 2>&1 &
+}
+
 usage() {
   cat <<'USAGE'
-Usage: ryoku-idle [start|status|is-laptop]
+Usage: ryoku-idle [start|apply|render|status|is-laptop|on-battery|on-ac]
 
-start      launch hypridle only when this host is detected as a laptop
-status     print device class, hypridle availability/running state, and config
+start      render the config, then launch hypridle when idle is active
+apply      render the config and restart hypridle if it is running
+render     render the config from power.json without touching the daemon
+status     print device class, hypridle availability/running state, idle state, config
 is-laptop  return ryoku-hw-laptop's laptop detection status
 on-battery return 0 on battery, 1 on AC (gates the battery idle timeouts)
 on-ac      return 0 on AC, 1 on battery (gates the AC idle timeouts)
+
+The idle policy (enabled, onDesktops, and the per-stage dim/lock/screen-off/
+suspend timeouts for battery and AC) lives in ~/.config/ryoku/power.json under
+"idle"; edit it with `ryoku-power idle set` or the Hub's Machine page. A change
+runs `ryoku-idle apply`.
 
 Env:
   RYOKU_HYPRIDLE_CONF=/path/to/hypridle.conf
@@ -78,8 +205,9 @@ USAGE
 cmd="${1:-start}"
 case "$cmd" in
   start)
-    if ! hw_laptop; then
-      [[ ${RYOKU_IDLE_VERBOSE:-0} == 1 ]] && printf 'ryoku-idle: desktop detected; laptop idle policy disabled\n'
+    render
+    if ! idle_active; then
+      [[ ${RYOKU_IDLE_VERBOSE:-0} == 1 ]] && printf 'ryoku-idle: idle policy inactive (disabled, or a desktop without onDesktops)\n'
       exit 0
     fi
     if ! command -v hypridle >/dev/null 2>&1; then
@@ -92,6 +220,13 @@ case "$cmd" in
     fi
     hypridle_running && exit 0
     exec hypridle -c "$IDLE_CONF"
+    ;;
+  apply)
+    render
+    refresh_daemon
+    ;;
+  render)
+    render
     ;;
   status)
     if hw_laptop; then
@@ -108,6 +243,11 @@ case "$cmd" in
       printf 'running=yes\n'
     else
       printf 'running=no\n'
+    fi
+    if idle_active; then
+      printf 'idle=active\n'
+    else
+      printf 'idle=inactive\n'
     fi
     printf 'config=%s\n' "$IDLE_CONF"
     ;;

@@ -48,6 +48,43 @@ pkgs.stdenvNoCC.mkDerivation {
       system/hardware/*/ryoku-* \
       system/containers/ryoku-*
 
+    # Upstream's ryoku-idle owns policy/rendering while NixOS owns the daemon
+    # lifecycle. Keep the upstream implementation intact in libexec and expose
+    # a tiny systemd-aware front door for session/autostart and Hub calls.
+    install -Dm755 \
+      system/hardware/power/ryoku-idle \
+      "$out/libexec/ryoku-idle"
+
+    patchShebangs "$out/libexec/ryoku-idle"
+
+    cat > "$out/bin/ryoku-idle" <<'SH'
+#!@BASH@
+set -euo pipefail
+
+real="@REAL@"
+systemctl_bin="@SYSTEMCTL@"
+
+case "''${1:-start}" in
+  start)
+    exec "$systemctl_bin" --user start hypridle.service
+    ;;
+  apply)
+    "$real" render
+    exec "$systemctl_bin" --user restart hypridle.service
+    ;;
+  *)
+    exec "$real" "$@"
+    ;;
+esac
+SH
+
+    substituteInPlace "$out/bin/ryoku-idle" \
+      --replace-fail '@BASH@' "${pkgs.bash}/bin/bash" \
+      --replace-fail '@REAL@' "$out/libexec/ryoku-idle" \
+      --replace-fail '@SYSTEMCTL@' "${pkgs.systemd}/bin/systemctl"
+
+    chmod 755 "$out/bin/ryoku-idle"
+
     # These are useful desktop helpers. Package-management mutations
     # remain a separate NixOS-porting concern.
     install_helpers \

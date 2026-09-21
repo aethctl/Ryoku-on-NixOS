@@ -20,16 +20,9 @@ pkgs.stdenv.mkDerivation {
     export GOTOOLCHAIN=local
     export HOME="$TMPDIR/home"
 
-    mkdir -p ryoku/wm/vendor/github.com/BurntSushi
-    cp -a \
-      ryoku/hub/backend/vendor/github.com/BurntSushi/toml \
-      ryoku/wm/vendor/github.com/BurntSushi/toml
-    printf '%s\n' \
-      '# github.com/BurntSushi/toml v1.6.0' \
-      '## explicit; go 1.18' \
-      'github.com/BurntSushi/toml' \
-      'github.com/BurntSushi/toml/internal' \
-      > ryoku/wm/vendor/modules.txt
+    # Upstream now commits ryoku/wm/vendor, so the provider is fully
+    # offline-buildable from its own source tree. Do not synthesize another
+    # vendor tree from the Hub copy here.
 
     (
       cd ryoku/wm

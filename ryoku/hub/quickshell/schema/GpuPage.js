@@ -261,5 +261,119 @@ var rows = [
         "desc": "",
         "ctl": "readout",
         "src": "static copy + page.dgpuName"
+    },
+    {
+        "tab": "",
+        "group": "IDLE",
+        "key": "idle.enabled",
+        "label": "Idle timeouts",
+        "desc": "Dim, lock, blank and suspend the machine when it sits idle.",
+        "ctl": "sw",
+        "src": "ryoku-hub cpu set idle enabled (power.json, ryoku-idle apply)"
+    },
+    {
+        "tab": "",
+        "group": "IDLE",
+        "key": "idle.onDesktops",
+        "label": "Also on desktops",
+        "desc": "Run these timeouts on this desktop too, not only on laptops.",
+        "ctl": "sw",
+        "src": "ryoku-hub cpu set idle onDesktops (power.json, ryoku-idle apply)"
+    },
+    {
+        "tab": "",
+        "group": "ON BATTERY",
+        "key": "idle.battery.dimSec",
+        "label": "Dim",
+        "desc": "Minutes idle on battery before the backlight dims; 0 never dims.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle battery.dimSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 60
+    },
+    {
+        "tab": "",
+        "group": "ON BATTERY",
+        "key": "idle.battery.lockSec",
+        "label": "Lock",
+        "desc": "Minutes idle on battery before the session locks; 0 never locks.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle battery.lockSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 120
+    },
+    {
+        "tab": "",
+        "group": "ON BATTERY",
+        "key": "idle.battery.screenOffSec",
+        "label": "Screen off",
+        "desc": "Minutes idle on battery before the screen powers off; 0 keeps it on.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle battery.screenOffSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 120
+    },
+    {
+        "tab": "",
+        "group": "ON BATTERY",
+        "key": "idle.battery.suspendSec",
+        "label": "Suspend",
+        "desc": "Minutes idle on battery before the machine suspends; 0 never suspends.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle battery.suspendSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 240
+    },
+    {
+        "tab": "",
+        "group": "PLUGGED IN",
+        "key": "idle.ac.dimSec",
+        "label": "Dim",
+        "desc": "Minutes idle on AC before the backlight dims; 0 never dims.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle ac.dimSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 60
+    },
+    {
+        "tab": "",
+        "group": "PLUGGED IN",
+        "key": "idle.ac.lockSec",
+        "label": "Lock",
+        "desc": "Minutes idle on AC before the session locks; 0 never locks.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle ac.lockSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 120
+    },
+    {
+        "tab": "",
+        "group": "PLUGGED IN",
+        "key": "idle.ac.screenOffSec",
+        "label": "Screen off",
+        "desc": "Minutes idle on AC before the screen powers off; 0 keeps it on.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle ac.screenOffSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 120
+    },
+    {
+        "tab": "",
+        "group": "PLUGGED IN",
+        "key": "idle.ac.suspendSec",
+        "label": "Suspend",
+        "desc": "Minutes idle on AC before the machine suspends; 0 never suspends.",
+        "ctl": "step",
+        "src": "ryoku-hub cpu set idle ac.suspendSec (power.json, minutes)",
+        "unit": "min",
+        "lo": 0,
+        "hi": 240
     }
 ];

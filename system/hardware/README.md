@@ -35,15 +35,18 @@ in the machine, and do not waste power doing it.
 - `power/`
   - `ryoku-hw-laptop` Classifies the host as laptop or desktop from DMI chassis
     type, battery presence, and lid switches. It is shared by GPU and idle policy.
-  - `ryoku-idle` Starts `hypridle` only on laptops, using Ryoku's dim/lock/DPMS/
-    suspend timeouts.
+  - `ryoku-idle` Renders `~/.config/ryoku/hypridle.conf` from the idle policy in
+    `power.json` and runs `hypridle` for Ryoku's dim, lock, screen-off and suspend
+    timeouts. Screen-off goes through `ryoku wm act output.power`, so nothing names
+    a compositor; `apply` re-renders and restarts a running hypridle after a change.
   - `ryoku-power` Owns the CPU and power knobs the Hub's Machine page drives.
     `capabilities --json` reports what this machine actually exposes;
     `profile get|set <profile> <key> <value>` stores a per-profile definition
     (governor, EPP, `maxFreqPct`, `platformProfile`) in `~/.config/ryoku/power.json`;
     `apply-profile` writes one to sysfs; `charge-limit` caps the battery charge
     ceiling (the biggest lever on cell lifetime; the kernel reports no value at all
-    until something writes one) and `aspm` sets the PCIe link policy. `apply` is
+    until something writes one) and `aspm` sets the PCIe link policy. `idle get|set`
+    stores the dim/lock/screen-off/suspend policy that `ryoku-idle` renders. `apply` is
     the idempotent pass that converges the globals plus the active profile, and
     exits quietly on a desktop or a machine without the knobs.
 
@@ -131,13 +134,19 @@ screens up to 2x for very dense panels. Nothing is hardcoded per model, so a new
 monitor is handled sensibly the first time it is plugged in. GTK and older apps
 get a matching `GDK_SCALE` so they stay crisp too.
 
-## Laptop idle policy
+## Idle policy
 
-`ryoku-idle start` is launched from Hyprland autostart. On desktops it exits
-without starting anything. On laptops it starts `hypridle` with
-`~/.config/hypr/hypridle.conf`: 5 minutes dims, 10 minutes locks, 11 minutes
-powers displays down, and 30 minutes suspends. The shell's Keep Awake toggle uses
-Wayland idle inhibition, so hypridle stays paused while that toggle is on.
+`ryoku-idle` renders `~/.config/ryoku/hypridle.conf` from the `idle` section of
+`power.json` and starts `hypridle`, an `ext-idle-notify` client every supported
+compositor serves; both compositors' autostarts call `ryoku-idle start`. By
+default it runs on laptops only; `idle.onDesktops` opts a desktop in, and
+`idle.enabled` false turns it off. Each stage has a battery-aggressive and an
+AC-relaxed timeout (shipped defaults: dim 2/5 min, lock 5/10, screen off 5.5/11,
+suspend 15/30), and a stage set to 0 is dropped. The screen-off stage reaches the
+display through `ryoku wm act output.power`, so the config names no compositor.
+Edit the timeouts from the Hub's Machine page or with `ryoku-power idle set`; a
+change runs `ryoku-idle apply`. The shell's Keep Awake toggle uses Wayland idle
+inhibition, so hypridle stays paused while that toggle is on.
 
 ## How mic normalization works
 

@@ -10,7 +10,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os/exec"
+	"strconv"
 )
 
 const ryokuPowerBin = "ryoku-power"
@@ -25,6 +27,7 @@ type cpuCaps struct {
 		ChargeLimit *sliderCap `json:"chargeLimit"`
 	} `json:"battery"`
 	ASPM *segmentCap `json:"aspm"`
+	Idle *idleCaps   `json:"idle"`
 }
 
 type cpuKnobCaps struct {
@@ -43,6 +46,23 @@ type sliderCap struct {
 	Min     float64 `json:"min"`
 	Max     float64 `json:"max"`
 	Current float64 `json:"current"`
+}
+
+// idleCaps mirrors `ryoku-power capabilities --json` .idle: the merged idle
+// policy (defaults overlaid with power.json). Seconds are the stored unit; the
+// page shows minutes.
+type idleCaps struct {
+	Enabled    bool       `json:"enabled"`
+	OnDesktops bool       `json:"onDesktops"`
+	Battery    idleStages `json:"battery"`
+	AC         idleStages `json:"ac"`
+}
+
+type idleStages struct {
+	DimSec       int `json:"dimSec"`
+	LockSec      int `json:"lockSec"`
+	ScreenOffSec int `json:"screenOffSec"`
+	SuspendSec   int `json:"suspendSec"`
 }
 
 // profileDef is one profile's stored definition from `ryoku-power profile get`.
@@ -190,11 +210,30 @@ func cpuTunables(caps cpuCaps, def profileDef) []Tunable {
 			Risk:  "safe", Src: "pcie_aspm/parameters/policy", Desc: batDesc,
 		})
 	}
+	if idle := caps.Idle; idle != nil {
+		out = append(out,
+			Tunable{GPU: "idle", ID: "enabled", Label: "Idle timeouts", Kind: "toggle",
+				Value: onOff(idle.Enabled), Risk: "safe", Src: "power.json idle.enabled",
+				Desc: "Dim, lock, blank and suspend the machine when it sits idle"},
+			Tunable{GPU: "idle", ID: "onDesktops", Label: "Also on desktops", Kind: "toggle",
+				Value: onOff(idle.OnDesktops), Risk: "safe", Src: "power.json idle.onDesktops",
+				Desc: "Run these timeouts on this desktop too, not only on laptops"},
+			idleStepper("battery.dimSec", "Dim", idle.Battery.DimSec, 60),
+			idleStepper("battery.lockSec", "Lock", idle.Battery.LockSec, 120),
+			idleStepper("battery.screenOffSec", "Screen off", idle.Battery.ScreenOffSec, 120),
+			idleStepper("battery.suspendSec", "Suspend", idle.Battery.SuspendSec, 240),
+			idleStepper("ac.dimSec", "Dim", idle.AC.DimSec, 60),
+			idleStepper("ac.lockSec", "Lock", idle.AC.LockSec, 120),
+			idleStepper("ac.screenOffSec", "Screen off", idle.AC.ScreenOffSec, 120),
+			idleStepper("ac.suspendSec", "Suspend", idle.AC.SuspendSec, 240),
+		)
+	}
 	return out
 }
 
 func cpuSet(scope, id, value string) error {
-	if scope == "battery" {
+	switch scope {
+	case "battery":
 		switch id {
 		case "chargeLimit":
 			return ttyRun(ryokuPowerBin, "charge-limit", "set", value)
@@ -203,6 +242,63 @@ func cpuSet(scope, id, value string) error {
 		default:
 			return fmt.Errorf("unknown battery knob: %s", id)
 		}
+	case "idle":
+		return idleSet(id, value)
 	}
 	return ttyRun(ryokuPowerBin, "profile", "set", scope, id, value)
+}
+
+func onOff(b bool) string {
+	if b {
+		return "on"
+	}
+	return "off"
+}
+
+// idleStepper renders one idle timeout as a minute stepper. Seconds are the
+// stored unit, so the current value is rounded to whole minutes; 0 stays 0 and
+// means the stage is off.
+func idleStepper(id, label string, sec, maxMin int) Tunable {
+	return Tunable{
+		GPU: "idle", ID: id, Label: label,
+		Kind: "stepper", Unit: "min",
+		Min: 0, Max: float64(maxMin), StepBy: 1,
+		Current: math.Round(float64(sec) / 60),
+		Risk:    "safe", Src: "power.json idle." + id, Desc: "0 disables this stage",
+	}
+}
+
+// idleStoredValue maps a page value to what power.json stores: a toggle becomes
+// true/false, and a minute stepper is multiplied back into seconds (its stored
+// unit). Pure, so the conversion is unit-tested without shelling out.
+func idleStoredValue(id, value string) (string, error) {
+	switch id {
+	case "enabled", "onDesktops":
+		if value == "on" || value == "true" {
+			return "true", nil
+		}
+		return "false", nil
+	default: // a {battery,ac}.<stage>Sec path, in minutes from the page
+		mins, err := strconv.Atoi(value)
+		if err != nil {
+			return "", fmt.Errorf("idle %s needs a whole minute value: %w", id, err)
+		}
+		if mins < 0 {
+			mins = 0
+		}
+		return strconv.Itoa(mins * 60), nil
+	}
+}
+
+// idleSet persists one idle key through ryoku-power and re-renders hypridle so
+// the change takes effect this session, not only at the next login.
+func idleSet(id, value string) error {
+	stored, err := idleStoredValue(id, value)
+	if err != nil {
+		return err
+	}
+	if err := ttyRun(ryokuPowerBin, "idle", "set", id, stored); err != nil {
+		return err
+	}
+	return exec.Command("ryoku-idle", "apply").Run()
 }

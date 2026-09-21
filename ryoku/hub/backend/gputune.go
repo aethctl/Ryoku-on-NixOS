@@ -22,16 +22,18 @@ import (
 )
 
 // Tunable = one knob the page can render. kind picks the control:
-// slider (min/max/current + unit) or segment (options + value).
+// slider (min/max/current + unit), stepper (min/max/current/stepBy), segment
+// (options + value) or toggle.
 type Tunable struct {
 	GPU     string   `json:"gpu"`   // pci slot, or "platform"
 	ID      string   `json:"id"`    // power_limit | perf_level | ...
 	Label   string   `json:"label"` // human label
-	Kind    string   `json:"kind"`  // slider | segment | toggle
+	Kind    string   `json:"kind"`  // slider | stepper | segment | toggle
 	Unit    string   `json:"unit,omitempty"`
 	Min     float64  `json:"min,omitempty"`
 	Max     float64  `json:"max,omitempty"`
 	Current float64  `json:"current,omitempty"`
+	StepBy  float64  `json:"stepBy,omitempty"` // stepper nudge granularity
 	Options []string `json:"options,omitempty"`
 	Value   string   `json:"value,omitempty"` // segment/toggle current
 	Risk    string   `json:"risk"`            // safe | advanced

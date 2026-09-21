@@ -150,12 +150,10 @@ When a request would change the system, in order:
 - "Pin Firefox to the dock" -> `ryoku-shell dock pin firefox`
 - "Add a weather plugin from GitHub" -> `ryoku plugin add <git-url> --bar`
 - "List my installed plugins" -> `ryoku plugin list`
-- "Lock after ten minutes" -> fork `hypr/hypridle.conf` into
-  `~/.config/ryoku/user_edits/hypr/hypridle.conf` and set the lock `listener`'s
-  `timeout` to `600`, then `ryoku materialize` lays the fork live and
-  `pkill -x hypridle; setsid hypridle -c ~/.config/hypr/hypridle.conf &`
-  restarts the idle daemon on it (hypridle reads its config only at start;
-  `hyprctl reload` does not reach it)
+- "Lock after ten minutes" -> `ryoku-power idle set ac.lockSec 600` (and
+  `battery.lockSec` for the battery stage), then `ryoku-idle apply` re-renders
+  the idle daemon's config and restarts it; the same knobs sit in Ryoku Hub
+  under Machine, Idle
 - "Change my wallpaper" -> `ryogami wallpaper set <path>`
 - "Next wallpaper" -> `ryogami wallpaper next`
 - "Update the system" -> `ryoku update`

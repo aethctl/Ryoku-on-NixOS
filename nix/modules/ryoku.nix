@@ -1214,13 +1214,10 @@ in
     # exits immediately until the user enables Rashin.
     # Work around the BlueZ A2DP reconnect regression after
     # the user's PipeWire/WirePlumber session is available.
-    # Hypridle must run on both laptops and desktops.
-    #
-    # Upstream's `ryoku-idle start` intentionally launches Hypridle only on
-    # laptops. That policy is fine on Arch, but on NixOS the daemon also owns
-    # desktop session locking, DPMS and pre-suspend locking. Systemd therefore
-    # owns the daemon lifecycle while `ryoku-idle on-ac/on-battery` continues
-    # to gate the individual timeout actions.
+    # Hypridle is compositor-neutral. Upstream ryoku-idle now renders its
+    # policy from power.json and reaches display power through the WM seam.
+    # NixOS keeps only the process lifecycle declarative; policy remains owned
+    # by Ryoku and is editable from the Hub.
     systemd.user.services.hypridle = {
       description = "Ryoku idle and session lock daemon";
 
@@ -1247,8 +1244,11 @@ in
       ];
 
       serviceConfig = {
+        # ryoku-idle renders the compositor-neutral policy first, then execs
+        # hypridle. The public wrapper routes Hub/autostart changes back through
+        # this systemd-owned unit instead of spawning a second daemon.
         ExecStart =
-          "${pkgs.hypridle}/bin/hypridle -c %h/.config/hypr/hypridle.conf";
+          "${ryokuHelpers}/libexec/ryoku-idle start";
 
         Restart = "on-failure";
         RestartSec = "1s";

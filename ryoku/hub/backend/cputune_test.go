@@ -170,3 +170,73 @@ func TestBatteryKnobsIgnoreProfileDef(t *testing.T) {
 		t.Errorf("aspm value = %q, want live %q", got, "default")
 	}
 }
+
+const idleCapsJSON = `{
+  "profiles": ["power-saver","balanced","performance"],
+  "cpu": {},
+  "idle": {
+    "enabled": true,
+    "onDesktops": false,
+    "battery": {"dimSec": 120, "lockSec": 300, "screenOffSec": 330, "suspendSec": 900},
+    "ac": {"dimSec": 300, "lockSec": 600, "screenOffSec": 660, "suspendSec": 1800}
+  }
+}`
+
+func TestCpuTunablesIdle(t *testing.T) {
+	m := byID(cpuTunables(mustCaps(t, idleCapsJSON), profileDef{}))
+
+	if en := m["enabled"]; en.GPU != "idle" || en.Kind != "toggle" || en.Value != "on" {
+		t.Errorf("enabled = %+v, want idle/toggle/on", en)
+	}
+	if od := m["onDesktops"]; od.Kind != "toggle" || od.Value != "off" {
+		t.Errorf("onDesktops = %+v, want toggle/off", od)
+	}
+
+	// Stored seconds render as whole minutes; 330s (5.5m) rounds up to 6.
+	stages := map[string]struct{ cur, max float64 }{
+		"battery.dimSec":       {2, 60},
+		"battery.screenOffSec": {6, 120},
+		"battery.suspendSec":   {15, 240},
+		"ac.lockSec":           {10, 120},
+	}
+	for id, w := range stages {
+		tu, ok := m[id]
+		if !ok {
+			t.Errorf("%s missing", id)
+			continue
+		}
+		if tu.GPU != "idle" || tu.Kind != "stepper" || tu.Unit != "min" || tu.StepBy != 1 || tu.Min != 0 {
+			t.Errorf("%s = %+v, want idle/stepper/min/stepBy1/min0", id, tu)
+		}
+		if tu.Current != w.cur || tu.Max != w.max {
+			t.Errorf("%s current=%v max=%v, want current=%v max=%v", id, tu.Current, tu.Max, w.cur, w.max)
+		}
+	}
+}
+
+func TestIdleStoredValue(t *testing.T) {
+	cases := []struct {
+		id, in, want string
+		wantErr      bool
+	}{
+		{"enabled", "on", "true", false},
+		{"enabled", "off", "false", false},
+		{"onDesktops", "on", "true", false},
+		{"battery.dimSec", "5", "300", false}, // minutes -> seconds
+		{"ac.suspendSec", "0", "0", false},    // 0 stays 0 (stage off)
+		{"battery.lockSec", "-3", "0", false}, // clamped to 0
+		{"battery.dimSec", "notanumber", "", true},
+	}
+	for _, c := range cases {
+		got, err := idleStoredValue(c.id, c.in)
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("idleStoredValue(%q,%q) = %q, want error", c.id, c.in, got)
+			}
+			continue
+		}
+		if err != nil || got != c.want {
+			t.Errorf("idleStoredValue(%q,%q) = %q,%v, want %q,nil", c.id, c.in, got, err, c.want)
+		}
+	}
+}

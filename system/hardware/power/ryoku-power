@@ -445,11 +445,91 @@ apply_active_cpu() {
   [[ -n $active ]] && apply_cpu_profile "$active"
 }
 
+# ── idle policy (dim / lock / screen-off / suspend timeouts) ──────────────────
+#
+# hypridle reads these; ryoku-idle renders its config from them and reaches the
+# display through `ryoku wm act output.power`, so the policy is neutral across
+# compositors. Seconds are the stored unit (the Hub shows minutes); a stage at 0
+# is off, `onDesktops` opts a non-laptop in, and `enabled` false stops idle
+# entirely. Defaults are the numbers Ryoku has shipped since idle existed.
+idle_defaults() {
+  jq -n '{
+    enabled: true,
+    onDesktops: false,
+    battery: {dimSec: 120, lockSec: 300, screenOffSec: 330, suspendSec: 900},
+    ac:      {dimSec: 300, lockSec: 600, screenOffSec: 660, suspendSec: 1800}
+  }'
+}
+
+# the stored idle object overlaid on the defaults, so a partial power.json still
+# yields every key. Booleans merge by presence: jq `//` treats false as empty and
+# would flip a stored `false` back to the default.
+idle_merged() {
+  local stored="{}"
+  [[ -f $CONFIG ]] && stored="$(jq -c '.idle // {}' "$CONFIG" 2>/dev/null || printf '{}')"
+  idle_defaults | jq -c --argjson s "$stored" '
+    . as $d
+    | .enabled    = (if ($s | has("enabled"))    then $s.enabled    else $d.enabled    end)
+    | .onDesktops = (if ($s | has("onDesktops")) then $s.onDesktops else $d.onDesktops end)
+    | .battery = ($d.battery + ($s.battery // {}))
+    | .ac      = ($d.ac      + ($s.ac      // {}))
+  '
+}
+
+# merge one idle key into power.json, preserving every sibling. --argjson keeps a
+# bare integer a number and true/false a bool.
+idle_cfg_set() {
+  escalated && return 0
+  local path="$1" val="$2" tmp
+  mkdir -p "$(dirname "$CONFIG")"
+  tmp="$(mktemp "${CONFIG}.XXXXXX")"
+  if [[ -f $CONFIG ]]; then
+    jq --argjson v "$val" --arg p "$path" 'setpath(["idle"] + ($p | split(".")); $v)' "$CONFIG" >"$tmp"
+  else
+    jq -n --argjson v "$val" --arg p "$path" 'setpath(["idle"] + ($p | split(".")); $v)' >"$tmp"
+  fi
+  mv -f "$tmp" "$CONFIG"
+}
+
+cmd_idle() {
+  local action="${1:-get}"
+  case "$action" in
+    get)
+      local path="${2:-}"
+      if [[ -z $path ]]; then
+        idle_merged
+      else
+        idle_merged | jq -r --arg p "$path" 'getpath($p | split("."))'
+      fi
+      ;;
+    set)
+      local path="${2:-}" val="${3:-}"
+      [[ -n $path ]] || { log "idle set needs <path> <value>"; exit 2; }
+      case "$path" in
+        enabled|onDesktops)
+          case "$val" in
+            true|false) ;;
+            *) log "idle $path must be true or false"; exit 2 ;;
+          esac
+          idle_cfg_set "$path" "$val" ;;
+        battery.dimSec|battery.lockSec|battery.screenOffSec|battery.suspendSec|\
+        ac.dimSec|ac.lockSec|ac.screenOffSec|ac.suspendSec)
+          [[ $val =~ ^[0-9]+$ ]] || { log "idle $path must be a whole number of seconds"; exit 2; }
+          idle_cfg_set "$path" "$val" ;;
+        *)
+          log "unknown idle path: $path (enabled|onDesktops|{battery,ac}.{dimSec,lockSec,screenOffSec,suspendSec})"; exit 2 ;;
+      esac
+      ;;
+    *)
+      log "idle needs get [<path>] | set <path> <value>"; exit 2 ;;
+  esac
+}
+
 cmd_capabilities() {
   [[ -z ${1:-} || ${1:-} == --json ]] || { log "capabilities takes only --json"; exit 2; }
 
   local gov_opts gov_cur epp_opts epp_cur pp_opts pp_cur
-  local maxpct="" charge_cur="" aspm_opts="" aspm_cur="" active=""
+  local maxpct="" charge_cur="" aspm_opts="" aspm_cur="" active="" idle_cur=""
 
   gov_opts="$(governor_options)"; gov_cur=""
   [[ -n $gov_opts ]] && gov_cur="$(cat "$CPU_DIR/cpu0/cpufreq/scaling_governor" 2>/dev/null || true)"
@@ -488,6 +568,7 @@ cmd_capabilities() {
     aspm_opts="$(aspm_options)"; aspm_cur="$(aspm_read || true)"
   fi
   command -v powerprofilesctl >/dev/null 2>&1 && active="$(powerprofilesctl get 2>/dev/null || true)"
+  idle_cur="$(idle_merged)"
 
   jq -n \
     --arg gov_opts "$gov_opts" --arg gov_cur "$gov_cur" \
@@ -496,7 +577,8 @@ cmd_capabilities() {
     --arg maxpct "$maxpct" \
     --arg charge "$charge_cur" \
     --arg aspm_opts "$aspm_opts" --arg aspm_cur "$aspm_cur" \
-    --arg active "$active" '
+    --arg active "$active" \
+    --argjson idle "$idle_cur" '
     def words($s): ($s | split(" ") | map(select(length > 0)));
     def seg($o; $c): {options: words($o), current: $c};
     {}
@@ -509,6 +591,7 @@ cmd_capabilities() {
         | (if $pp_opts  != "" then .platformProfile = seg($pp_opts; $pp_cur) else . end) )
     | (if $charge    != "" then .battery = {chargeLimit: {min: 50, max: 100, current: ($charge | tonumber)}} else . end)
     | (if $aspm_opts != "" then .aspm = seg($aspm_opts; $aspm_cur) else . end)
+    | .idle = $idle
   '
 }
 
@@ -685,6 +768,10 @@ profile set <p> <key> <val>  define a knob for a profile (governor|epp|
 profile clear <p> [<key>]    un-define one knob, or the whole profile, so ppd
                              and the firmware decide again
 apply-profile <profile>      write a saved definition to sysfs (ppd hook path)
+idle get [<path>]            print the idle policy, or one dotted key (seconds)
+idle set <path> <value>      set an idle key: enabled|onDesktops (true|false) or
+                             {battery,ac}.{dimSec,lockSec,screenOffSec,suspendSec}
+                             in seconds; ryoku-idle renders hypridle from these
 apply                        converge the hardware to ~/.config/ryoku/power.json
                              (globals are laptop-only; CPU profile applies anywhere)
 
@@ -705,6 +792,7 @@ case "$cmd" in
   capabilities) shift; cmd_capabilities "$@" ;;
   profile)      shift; cmd_profile "$@" ;;
   apply-profile) shift; cmd_apply_profile "$@" ;;
+  idle)         shift; cmd_idle "$@" ;;
   apply)        cmd_apply ;;
   -h|--help|help) usage ;;
   *)
