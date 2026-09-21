@@ -446,8 +446,8 @@ stop_recording() {
   # gsr's KMS capture leaves the screen washed out until a reconfigure (#11284);
   # a config reload triggers one. A compositor that cannot reload its config live
   # is unaffected and needs none.
-  if command -v hyprctl >/dev/null 2>&1 && wm_can configReload; then
-    hyprctl reload >/dev/null 2>&1 || true
+  if wm_can configReload; then
+    "$ryoku_bin" wm act config.reload >/dev/null 2>&1 || true
   fi
 }
 

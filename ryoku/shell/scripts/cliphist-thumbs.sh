@@ -1,6 +1,13 @@
 #!/bin/sh
-MAGICK_CONFIGURE_PATH="$(dirname "$0")/magick-policy"
-export MAGICK_CONFIGURE_PATH
+# Harden ImageMagick before we hand it clipboard image data: load the policy
+# that denies the RCE-prone delegate/coder families when it ships beside this
+# helper. Absent, ImageMagick uses its own default policy rather than a path
+# that points at nothing.
+policy_dir="$(dirname "$0")/magick-policy"
+if [ -d "$policy_dir" ]; then
+    MAGICK_CONFIGURE_PATH="$policy_dir"
+    export MAGICK_CONFIGURE_PATH
+fi
 
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/cliphist-thumbs"
 mkdir -p "$cache"

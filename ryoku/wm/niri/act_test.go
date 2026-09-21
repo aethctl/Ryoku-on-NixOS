@@ -219,3 +219,24 @@ func stubRequest(t *testing.T, fn func(any) (json.RawMessage, error)) func() {
 		os.Setenv("NIRI_SOCKET", prevSocket)
 	}
 }
+
+// The colour temperature is clamped to the range the gamma client accepts and a
+// missing or unparseable argument falls back to the default, so a stray keybind
+// argument can never ask gammastep for a value it would reject or for 0 K.
+func TestNightlightTempClamps(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want int
+	}{
+		{nil, 4000},
+		{[]string{""}, 4000},
+		{[]string{"not-a-temp"}, 4000},
+		{[]string{"4500"}, 4500},
+		{[]string{"500"}, 1000},
+		{[]string{"99999"}, 25000},
+	} {
+		if got := nightlightTemp(tc.args); got != tc.want {
+			t.Errorf("nightlightTemp(%q) = %d, want %d", tc.args, got, tc.want)
+		}
+	}
+}

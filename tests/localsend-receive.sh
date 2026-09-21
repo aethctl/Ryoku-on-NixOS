@@ -6,7 +6,7 @@
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SCRIPT="$ROOT/ryoku/hyprland/scripts/localsend.sh"
+SCRIPT="$ROOT/ryoku/shell/scripts/localsend.sh"
 PORT=53317
 fail=0
 

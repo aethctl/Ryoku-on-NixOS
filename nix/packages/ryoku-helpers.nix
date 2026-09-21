@@ -48,6 +48,16 @@ pkgs.stdenvNoCC.mkDerivation {
       system/hardware/*/ryoku-* \
       system/containers/ryoku-*
 
+    # Compositor-neutral shell helpers moved out of the Hyprland payload.
+    # They must exist under both Hyprland and Niri.
+    install_helpers \
+      ryoku/shell/scripts/ryoku-* \
+      ryoku/shell/scripts/*.sh
+
+    # Neutral helpers come directly from the source tree. Rewrite FHS/env
+    # interpreters now so every installed command has an immutable Nix runtime.
+    patchShebangs "$out/bin"
+
     # Upstream's ryoku-idle owns policy/rendering while NixOS owns the daemon
     # lifecycle. Keep the upstream implementation intact in libexec and expose
     # a tiny systemd-aware front door for session/autostart and Hub calls.

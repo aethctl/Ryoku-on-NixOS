@@ -8,25 +8,24 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	wm "ryoku-wm"
 )
 
-// TestNightlightWatcherEndToEnd drives the real watcher: a fake hyprsunset
-// binary, a PATH-shimmed ryoku-cmd-nightlight that starts/stops it and writes
-// the marker and temp files, and the inotify loop publishing to a live topic
-// subscription. It proves a toggle intent reaches QML as a pushed frame with
-// no polling anywhere. The shim never pkills by name, so the watcher test can
-// not disturb a real hyprsunset on the dev box.
+// TestNightlightWatcherEndToEnd drives the real watcher: a fake backend binary,
+// a fake provider that names it in caps, a PATH-shimmed ryoku-cmd-nightlight that
+// starts/stops it and writes the marker and temp files, and the inotify loop
+// publishing to a live topic subscription. It proves a toggle intent reaches QML
+// as a pushed frame with no polling anywhere. The injected backend name is one no
+// real process shares, so the watcher cannot see a real backend on the dev box.
 func TestNightlightWatcherEndToEnd(t *testing.T) {
-	// The watcher reads the real /proc, so a live hyprsunset on the dev box
-	// would make the startup frame on:true; skip rather than fight it.
-	if (&nightlightState{}).running() {
-		t.Skip("hyprsunset is running on this machine")
-	}
+	const backend = "nlfakelight"
+
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
 
 	bin := t.TempDir()
-	fake := filepath.Join(bin, nlProcessName)
+	fake := filepath.Join(bin, backend)
 	sleep, err := exec.LookPath("sleep")
 	if err != nil {
 		t.Skip("no sleep binary")
@@ -36,6 +35,18 @@ func TestNightlightWatcherEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(fake, raw, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// The daemon's caps probe runs ryoku-wm-<name> caps; this fake reports the
+	// backend name the watcher must grep for, injected through the same wmc the
+	// rest of the daemon reads.
+	provider := filepath.Join(bin, "ryoku-wm-testwm")
+	providerScript := "#!/usr/bin/env bash\n" +
+		"[[ \"$1\" == caps ]] && printf '%s' " +
+		"'{\"name\":\"testwm\",\"supports\":[\"nightLight\"],\"workspaceModel\":\"dynamic\",\"nightLightProcess\":\"" + backend + "\"}'\n" +
+		"exit 0\n"
+	if err := os.WriteFile(provider, []byte(providerScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -68,12 +79,12 @@ exit 0
 	if err := os.WriteFile(shim, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// The shim must win over the packaged script; without this the test drives
-	// the real ryoku-cmd-nightlight, whose hyprsunset cannot survive a session
-	// without gamma-control support and the watcher never sees it.
+	// The shim and the fake provider must win over the packaged binaries on PATH;
+	// without this the test drives the real ones and the watcher never sees the
+	// fake backend.
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	d := &daemon{}
+	d := &daemon{wmc: wm.OpenNamed("testwm")}
 	d.startNightlight()
 	topic := d.topic("nightlight")
 	sub := topic.subscribe()

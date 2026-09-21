@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# night light = warm the screen to a colour temperature.
+#
+#   (no args)   toggle at the saved temp (the Super+U binding)
+#   <temp>      toggle, using <temp> K on the way up
+#   on [temp]   ensure on (default = saved temp, or 4000)
+#   off         ensure off
+#   status      "on <temp>" | "off"
+#   restore     start only if it was left enabled (boot autostart)
+#
+# The backend is the compositor's, reached through the window-manager seam:
+# `ryoku wm act nightlight.on <K>` starts it and `nightlight.off` kills it, and
+# the compositor puts the gamma back when it goes away. Which client that is
+# (hyprsunset on Hyprland, gammastep on niri) is the provider's business; this
+# script only reads its process name from `ryoku wm caps` to tell on from off.
+# temp is persisted, so status prints it and the next enable reuses it.
+set -u
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku-nightlight"
+default_temp=4000
+# a marker records that the user left the night light ON, so the boot autostart
+# can restore it: the backend is a plain process and does not survive a reboot.
+enabled="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku-nightlight-enabled"
+
+saved_temp() {
+  if [[ -r $state ]]; then
+    cat "$state"
+  else
+    echo "$default_temp"
+  fi
+}
+
+# The backend's comm name comes from the active provider's caps; empty when this
+# desktop has no night-light capability, which is what gates every branch below.
+backend() {
+  ryoku wm caps 2>/dev/null \
+    | sed -n 's/.*"nightLightProcess"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p'
+}
+
+is_on() {
+  local proc
+  proc="$(backend)"
+  [[ -n $proc ]] && pgrep -x "$proc" >/dev/null 2>&1
+}
+
+start() {
+  local temp="$1"
+  if [[ -z "$(backend)" ]]; then
+    notify-send -u normal "Night light" "Night light is not available on this desktop"
+    exit 1
+  fi
+  mkdir -p "$(dirname "$state")" 2>/dev/null || true
+  printf '%s\n' "$temp" >"$state" 2>/dev/null || true
+  : >"$enabled" 2>/dev/null || true
+  ryoku wm act nightlight.on "$temp" >/dev/null 2>&1
+}
+
+stop() {
+  ryoku wm act nightlight.off >/dev/null 2>&1 || true
+  rm -f "$enabled" 2>/dev/null || true
+}
+
+case "${1:-toggle}" in
+  status)
+    if is_on; then echo "on $(saved_temp)"; else echo "off"; fi
+    ;;
+  off)
+    stop
+    ;;
+  on)
+    start "${2:-$(saved_temp)}"
+    ;;
+  toggle)
+    if is_on; then stop; else start "$(saved_temp)"; fi
+    ;;
+  [0-9]*)
+    if is_on; then stop; else start "$1"; fi
+    ;;
+  restore)
+    # Silent no-op when the desktop has no night-light backend, so the autostart
+    # never nags on a compositor that cannot warm the screen.
+    if [[ -f $enabled && -n "$(backend)" ]]; then start "$(saved_temp)"; fi
+    ;;
+  *)
+    echo "usage: ryoku-cmd-nightlight [status | on [temp] | off | toggle | restore | <temp>]" >&2
+    exit 1
+    ;;
+esac

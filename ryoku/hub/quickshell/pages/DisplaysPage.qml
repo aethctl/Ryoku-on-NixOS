@@ -202,6 +202,79 @@ Item {
         pg.tick++;
     }
 
+    // ── night light (a display-wide comfort setting on the daemon topic) ─────
+    // The daemon owns the on/off truth (the provider's backend process) and the
+    // saved temperature; the page reads the pushed frame and sends the intent
+    // back on a second socket, the split the Settings singleton uses. Gated on
+    // the nightLight capability, so a compositor with no backend shows no group.
+    property bool nightOn: false
+    property int nightTemp: 4000
+
+    function applyNightFrame(line) {
+        try {
+            var f = JSON.parse(line);
+            if (f && typeof f === "object" && !Array.isArray(f)) {
+                pg.nightOn = f.on === true;
+                if (typeof f.temperature === "number" && f.temperature > 0)
+                    pg.nightTemp = f.temperature;
+            }
+        } catch (e) {}
+    }
+
+    function sendNight(on, temp) {
+        nlCtl.queued += "call nightlight.set " + JSON.stringify({ on: on === true, temperature: temp }) + "\n";
+        if (nlCtl.connected)
+            nlCtl.flushQueued();
+        else
+            nlCtl.connected = true;
+    }
+
+    // Optimistic so the switch and stepper read back instantly; the confirming
+    // frame lands on the same values. Temperature applies live only while on
+    // (nightlight.set with on:false just turns off), so the row is inert when off.
+    function setNight(on) {
+        pg.nightOn = on === true;
+        pg.sendNight(pg.nightOn, pg.nightTemp);
+    }
+    function setNightTemp(temp) {
+        pg.nightTemp = temp;
+        if (pg.nightOn)
+            pg.sendNight(true, temp);
+    }
+
+    Socket {
+        id: nlSub
+        path: Settings.sockPath
+        parser: SplitParser { onRead: line => pg.applyNightFrame(line) }
+        Component.onCompleted: connected = true
+        onConnectionStateChanged: {
+            if (connected) {
+                write("subscribe nightlight\n");
+                flush();
+            } else {
+                nlRetry.restart();
+            }
+        }
+    }
+    Timer {
+        id: nlRetry
+        interval: 2000
+        onTriggered: if (!nlSub.connected) nlSub.connected = true
+    }
+    Socket {
+        id: nlCtl
+        path: Settings.sockPath
+        property string queued: ""
+        function flushQueued() {
+            if (queued.length === 0)
+                return;
+            write(queued);
+            flush();
+            queued = "";
+        }
+        onConnectionStateChanged: if (connected) flushQueued()
+    }
+
     // ── data load: the seam's output list + saved profiles ──────────────────
     Process {
         id: listProc
@@ -1441,6 +1514,42 @@ Item {
 
                     // breathing room below the list so it clears the card border.
                     Item { width: parent.width; height: Tokens.s3 }
+                }
+
+                // Night light: a display-wide comfort setting, not per-monitor,
+                // so it sits in its own card. On/off and temperature ride the
+                // daemon `nightlight` topic; gated on the capability so a
+                // compositor with no backend shows nothing here.
+                SettingCard {
+                    width: ctlCol.width
+                    visible: Settings.supports("nightLight")
+                    title: I18n.tr("NIGHT LIGHT")
+
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        label: I18n.tr("WARM SCREEN")
+                        desc: I18n.tr("Cut blue light with a warmer screen tint.")
+                        controlWidth: 54
+                        Sw {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            on: pg.nightOn
+                            onToggled: (v) => pg.setNight(v)
+                        }
+                    }
+                    SettingRow {
+                        anchors.left: parent.left; anchors.right: parent.right
+                        divider: true
+                        enabled: pg.nightOn
+                        label: I18n.tr("TEMPERATURE")
+                        value: pg.nightTemp + " K"
+                        controlWidth: 58
+                        Step {
+                            anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
+                            from: 1000; to: 6500; stepBy: 100
+                            value: pg.nightTemp
+                            onModified: (v) => pg.setNightTemp(v)
+                        }
+                    }
                 }
             }
         }

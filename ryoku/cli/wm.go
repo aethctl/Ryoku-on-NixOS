@@ -29,6 +29,8 @@ func cmdWm(args []string) {
 	switch args[0] {
 	case "status":
 		cmdWmStatus()
+	case "caps":
+		cmdWmCaps()
 	case "act":
 		cmdWmAct(args[1:])
 	case "session":
@@ -45,7 +47,7 @@ func cmdWm(args []string) {
 }
 
 func wmUsage() {
-	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
+	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  caps              print the active provider's capability manifest (JSON)\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
 }
 
 func cmdWmStatus() {
@@ -74,6 +76,21 @@ func cmdWmStatus() {
 	sort.Strings(supports)
 	fmt.Printf(i18n.T("Capabilities: %s\n"), strings.Join(supports, ", "))
 	fmt.Printf(i18n.T("Setting domains: %s\n"), strings.Join(caps.SettingDomains, ", "))
+}
+
+// cmdWmCaps prints the active provider's capability manifest as indented JSON,
+// so a script (ryoku-cmd-nightlight) reads nightLightProcess and the rest
+// through one verb instead of probing the provider a second way.
+func cmdWmCaps() {
+	caps, err := wm.Open().Caps()
+	if err != nil {
+		die("%v", err)
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(caps); err != nil {
+		die("%v", err)
+	}
 }
 
 // cmdWmAct dispatches an action and maps the two seam errors to distinct exit

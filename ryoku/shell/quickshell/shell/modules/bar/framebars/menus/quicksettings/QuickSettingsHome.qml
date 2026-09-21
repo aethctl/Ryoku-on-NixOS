@@ -235,7 +235,11 @@ Item {
                     on: !Toggles.wifiOn
                     onToggled: Toggles.toggleWifi()
                 }
+                // Only where the compositor can warm the screen. Both shipping
+                // compositors can; one that reports no night-light backend hides
+                // the tile instead of showing a dead toggle.
                 Menus.QsTile {
+                    visible: Wm.caps.nightLight === true
                     width: tileGrid.tileWidth
                     icon: "bedtime"
                     label: I18n.tr("Night light")

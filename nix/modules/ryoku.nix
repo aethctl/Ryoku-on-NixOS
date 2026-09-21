@@ -369,6 +369,7 @@ EOF
       "zbar"
       "wf-recorder"
       "hyprsunset"
+      "gammastep"
       "wtype"
       "openrgb"
       "libqalculate"

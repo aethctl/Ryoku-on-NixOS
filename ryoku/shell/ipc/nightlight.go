@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"os"
 	"os/exec"
@@ -15,23 +16,27 @@ import (
 )
 
 // nightlight.go owns the night light so its state is a pushed topic instead of
-// a shell poll. The on/off truth is the hyprsunset process (gamma lives in the
-// compositor, so a dead process is the only honest "off"); the temperature is
-// the state file ryoku-cmd-nightlight already writes. The watcher inotifies the
-// state directory and rescans /proc on every change, so a toggle from the
-// keybind, the script, the Hub, or a kill all reach QML without anything
-// polling. Toggling from QML rides the same script: an intent is a user action,
-// not a poll, and the script stays the single writer of the temp file.
+// a shell poll. The on/off truth is the provider's backend process, named by its
+// caps (gamma lives in the compositor, so a dead process is the only honest
+// "off"); the temperature is the state file ryoku-cmd-nightlight writes. The
+// watcher inotifies the state directory and rescans /proc on every change, so a
+// toggle from the keybind, the script, the Hub, or a kill all reach QML without
+// anything polling. Toggling from QML rides the same script: an intent is a user
+// action, not a poll, and the script stays the single writer of the temp file.
 
-const (
-	nlProcessName = "hyprsunset"
-	nlDefaultTemp = 4000
-)
+const nlDefaultTemp = 4000
+
+// errNightlightUnavailable is what the intents return when the active compositor
+// has no night-light capability, so the caller reports the absence by name.
+var errNightlightUnavailable = errors.New("night light is not available on this desktop")
 
 type nightlightState struct {
 	topic    *stateTopic
 	stateDir string
 	tempFile string
+	// process is the backend's comm name from the provider's caps; empty when
+	// this desktop has no night-light capability.
+	process string
 }
 
 // nightlightPaths derives the script's state files from XDG_STATE_HOME. The
@@ -49,11 +54,29 @@ func nightlightPaths() (dir, temp string) {
 }
 
 // startNightlight registers the `nightlight` topic and its intents, then starts
-// the watcher. An unresolvable state directory leaves the topic publishing the
-// off frame only; nothing else degrades.
+// the watcher. With no night-light capability the intents refuse by name and the
+// topic publishes the off frame only; an unresolvable state directory does the
+// same. Nothing else degrades.
 func (d *daemon) startNightlight() {
 	dir, temp := nightlightPaths()
-	n := &nightlightState{topic: d.registerTopic("nightlight"), stateDir: dir, tempFile: temp}
+	process := ""
+	if caps, err := d.wmc.Caps(); err == nil {
+		process = caps.NightLightProcess
+	}
+	n := &nightlightState{topic: d.registerTopic("nightlight"), stateDir: dir, tempFile: temp, process: process}
+
+	// No backend named: the intents fail loudly here instead of forking a script
+	// that would only notify and exit, and the tile reads off.
+	if process == "" {
+		d.registerCall("nightlight.toggle", func(json.RawMessage) (any, error) {
+			return nil, errNightlightUnavailable
+		})
+		d.registerCall("nightlight.set", func(json.RawMessage) (any, error) {
+			return nil, errNightlightUnavailable
+		})
+		n.publish(false)
+		return
+	}
 
 	d.registerCall("nightlight.toggle", func(json.RawMessage) (any, error) {
 		return nil, n.run("toggle")
@@ -187,17 +210,20 @@ func (n *nightlightState) savedTemp() int {
 	return v
 }
 
-// running scans /proc for a process named hyprsunset. This is the fork-free
-// pgrep: read each pid's comm (one small file per process, no exec) and compare
-// the name. comm truncates at 15 characters; hyprsunset fits, so an exact
-// compare is right.
+// running scans /proc for the provider's night-light backend, named by caps.
+// This is the fork-free pgrep: read each pid's comm (one small file per process,
+// no exec) and compare the name. comm truncates at 15 characters; the backend
+// names fit, so an exact compare is right. False when no backend is named.
 func (n *nightlightState) running() bool {
+	if n.process == "" {
+		return false
+	}
 	ents, err := os.ReadDir("/proc")
 	if err != nil {
 		return false
 	}
 	for _, e := range ents {
-		if procCommIs(e.Name(), nlProcessName) {
+		if procCommIs(e.Name(), n.process) {
 			return true
 		}
 	}

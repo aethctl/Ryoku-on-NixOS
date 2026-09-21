@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 func TestNightlightSavedTemp(t *testing.T) {
@@ -64,7 +66,7 @@ func TestNightlightFrameShape(t *testing.T) {
 
 func TestNightlightRegistration(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	d := &daemon{}
+	d := &daemon{wmc: wm.OpenNamed("does-not-exist")}
 	d.startNightlight()
 
 	if d.topic("nightlight") == nil {
@@ -89,7 +91,7 @@ func TestProcCommIsSelf(t *testing.T) {
 	// The test binary's own comm is its file name (truncated to 15 chars),
 	// never hyprsunset.
 	self := strconv.Itoa(os.Getpid())
-	if procCommIs(self, nlProcessName) {
+	if procCommIs(self, "hyprsunset") {
 		t.Fatal("test process matched hyprsunset")
 	}
 	if !procCommIs(self, commOfSelf(t)) {

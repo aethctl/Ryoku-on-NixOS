@@ -67,8 +67,8 @@ with nothing behind it.
 Shared by both providers:
 
     animations  focusHistory  keyboardLayoutSwitch  layerRules  monitorConfig
-    outputPower  sessionExit  windowFloat  windowRules  windowWorkspaceMap
-    workspaceMoveToOutput  workspaces
+    nightLight  outputPower  sessionExit  windowFloat  windowRules
+    windowWorkspaceMap  workspaceMoveToOutput  workspaces
 
 Hyprland only:
 
@@ -96,6 +96,14 @@ change what a user sees on niri:
 - **`submap`**, **`specialWorkspace`**, **`screenShader`**, **`plugins`** and
   **`cursorSet`** have no niri equivalent, so the binds and settings that need
   them are reported by `apply` rather than silently dropped.
+
+`nightLight` is the one shared capability the desktop drives through named
+actions rather than a settings row:
+
+- `nightlight.on <K>` warms the screen to a colour temperature; the provider runs
+  its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
+- `nightlight.off` stops that backend, and the compositor restores the gamma when
+  it goes away.
 
 ## Where the config lives
 

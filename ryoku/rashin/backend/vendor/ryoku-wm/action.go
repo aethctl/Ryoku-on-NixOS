@@ -60,6 +60,13 @@ const (
 	// change, and rewriting plus reloading the config for two colours is slow
 	// and visible.
 	ActionBorderColors Action = "decoration.borderColors"
+
+	// ActionNightLightOn takes one arg, the colour temperature in Kelvin, and
+	// replaces any running backend with one warmed to it. ActionNightLightOff
+	// stops the backend; the compositor restores the gamma once the client is
+	// gone. Both need CapNightLight.
+	ActionNightLightOn  Action = "nightlight.on"
+	ActionNightLightOff Action = "nightlight.off"
 )
 
 // Capability returns what an action needs, so callers gate on one lookup
@@ -95,6 +102,8 @@ func (a Action) Capability() Capability {
 		return CapScreenShader
 	case ActionWorkspaceLayout:
 		return CapTiledLayout
+	case ActionNightLightOn, ActionNightLightOff:
+		return CapNightLight
 	}
 	return ""
 }

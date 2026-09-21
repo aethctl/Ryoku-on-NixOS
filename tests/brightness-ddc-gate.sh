@@ -13,7 +13,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")/.." && pwd)"
-script="$here/ryoku/hyprland/scripts/ryoku-cmd-brightness"
+script="$here/ryoku/shell/scripts/ryoku-cmd-brightness"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 

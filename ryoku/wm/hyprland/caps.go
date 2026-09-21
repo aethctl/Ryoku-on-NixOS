@@ -40,6 +40,7 @@ var capsManifest = []wm.Capability{
 	wm.CapWindowFloat,
 	wm.CapTiledLayout,
 	wm.CapSessionExit,
+	wm.CapNightLight,
 }
 
 // The packages ryoku-desktop-hyprland installs for the compositor: Hyprland
@@ -57,6 +58,7 @@ var compositorPackages = []string{
 	"hyprpolkitagent",
 	"xdg-desktop-portal-hyprland",
 	"hyprland-preview-share-picker",
+	"hyprsunset",
 	"hypridle",
 	"hyprpicker",
 }
@@ -76,6 +78,7 @@ func runCaps() error {
 		ConfigFiles:    wm.ConfigFiles(wm.ProviderHyprland),
 		GeneratedFiles: wm.GeneratedConfig(wm.ProviderHyprland),
 		PortalBackend:  "hyprland",
+		NightLightProcess: "hyprsunset",
 		Packages:       compositorPackages,
 	}
 	enc := json.NewEncoder(stdout)

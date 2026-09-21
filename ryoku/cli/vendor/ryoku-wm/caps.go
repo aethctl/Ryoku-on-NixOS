@@ -47,6 +47,12 @@ const (
 	CapWindowFloat  Capability = "windowFloat"
 	CapTiledLayout  Capability = "tiledLayout"
 	CapSessionExit  Capability = "sessionExit"
+	// CapNightLight is set when the provider can warm the screen to a colour
+	// temperature and restore it, through the nightlight.on and nightlight.off
+	// actions. The warm gamma is held by a detached backend the provider owns
+	// (hyprsunset on Hyprland, gammastep on niri); NightLightProcess below names
+	// it so a consumer can tell the light is on without knowing the compositor.
+	CapNightLight Capability = "nightLight"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -62,7 +68,7 @@ func All() []Capability {
 		CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
-		CapTiledLayout, CapSessionExit,
+		CapTiledLayout, CapSessionExit, CapNightLight,
 	}
 }
 
@@ -103,6 +109,12 @@ type Caps struct {
 	// the preferred default. Doctor repairs portals.conf against it, so the
 	// backend name lives with the compositor rather than in a reconciler.
 	PortalBackend string `json:"portalBackend,omitempty"`
+	// NightLightProcess is the comm name (<=15 chars, so it survives /proc/<pid>/comm
+	// truncation) of the detached backend that holds the warm gamma while the
+	// night light is on. Provider-owned like PortalBackend, because only a
+	// provider knows which client it starts; the daemon scans /proc for this
+	// name and the neutral script pgreps it. Empty when CapNightLight is absent.
+	NightLightProcess string `json:"nightLightProcess,omitempty"`
 	// Packages are the pacman packages this compositor is made of: the
 	// compositor package and the satellites ryoku-desktop-<name> installs for
 	// it, most significant first. Provider-owned because only a provider knows

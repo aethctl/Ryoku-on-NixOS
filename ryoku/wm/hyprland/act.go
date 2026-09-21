@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	wm "ryoku-wm"
 )
@@ -238,6 +240,13 @@ func runAct(args []string) error {
 			return err
 		}
 		return setBorderColors(active, inactive)
+
+	case wm.ActionNightLightOn:
+		return nightlightStart("hyprsunset", "-t", strconv.Itoa(nightlightTemp(rest)))
+
+	case wm.ActionNightLightOff:
+		nightlightStop("hyprsunset")
+		return nil
 	}
 
 	return fmt.Errorf("act: unknown action %q", action)
@@ -303,4 +312,66 @@ func arg(args []string, i int, name string) (string, error) {
 		return "", fmt.Errorf("act: missing %s", name)
 	}
 	return args[i], nil
+}
+
+// nightlightTemp parses the colour temperature, defaulting to 4000 K and
+// clamping to the range the gamma client accepts, so a stray keybind argument
+// can never ask for a value it would reject.
+func nightlightTemp(args []string) int {
+	t := 4000
+	if len(args) > 0 {
+		if v, err := strconv.Atoi(strings.TrimSpace(args[0])); err == nil {
+			t = v
+		}
+	}
+	if t < 1000 {
+		t = 1000
+	}
+	if t > 25000 {
+		t = 25000
+	}
+	return t
+}
+
+// nightlightStart replaces any running backend with a fresh one warmed to the
+// temperature. The backend is detached (its own session, stdio to /dev/null,
+// released) so it outlives this short-lived invocation and holds the gamma
+// until it is killed; Hyprland restores the gamma when it goes away.
+func nightlightStart(argv ...string) error {
+	nightlightStop(argv[0])
+	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer null.Close()
+	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = null, null, null
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+// nightlightStop signals every process of this uid whose comm is name, which is
+// how nightlight.off stops the backend without a pkill fork. comm truncates at
+// 15 characters; the backend name fits, so an exact compare is right.
+func nightlightStop(name string) {
+	ents, err := os.ReadDir("/proc")
+	if err != nil {
+		return
+	}
+	for _, e := range ents {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		b, err := os.ReadFile("/proc/" + e.Name() + "/comm")
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(b)) == name {
+			_ = syscall.Kill(pid, syscall.SIGTERM)
+		}
+	}
 }

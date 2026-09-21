@@ -7,7 +7,7 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
-radio="$here/../ryoku/hyprland/scripts/ryoku-cmd-radio"
+radio="$here/../ryoku/shell/scripts/ryoku-cmd-radio"
 
 command -v jq >/dev/null 2>&1 || { echo "SKIP: jq required" >&2; exit 0; }
 
@@ -176,7 +176,7 @@ fi
 # ---- one title prefix across the stack ----------------------------------------
 # the engine's forced title, the launcher's matcher and the media service's copy
 # must agree, or the broadcast dress silently falls off a surface.
-eng="$here/../ryoku/hyprland/scripts/ryoku-cmd-radio"
+eng="$here/../ryoku/shell/scripts/ryoku-cmd-radio"
 if grep -q 'force-media-title="LIVE · ' "$eng" \
   && grep -q 'TITLE_PREFIX = "LIVE · "' "$here/../ryoku/shell/quickshell/shell/modules/launcher/shared/lib/radio.js" \
   && grep -q '"LIVE · "' "$here/../ryoku/shell/quickshell/shell/services/Media.qml"; then
