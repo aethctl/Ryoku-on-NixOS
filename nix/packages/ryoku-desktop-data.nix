@@ -183,6 +183,16 @@ pkgs.stdenvNoCC.mkDerivation {
         "$out/bin/$(basename "$helper")"
     done
 
+    # NixOS coreutils is a multicall binary and dispatches by argv[0].
+    # Upstream uses `exec -a ryoku-caffeine-inhibit sleep infinity` to give
+    # the inhibitor child a friendly process name, but renaming argv[0] makes
+    # Nix coreutils reject it as an unknown applet. The surrounding
+    # systemd-inhibit process/unit already identifies and owns the inhibitor.
+    substituteInPlace "$out/bin/ryoku-cmd-caffeine" \
+      --replace-fail \
+        "exec -a ryoku-caffeine-inhibit sleep infinity" \
+        "exec sleep infinity"
+
     install -Dm755 \
       ryoku/shell/quickshell/plugins/ryoku-plugins-place \
       "$out/bin/ryoku-plugins-place"
