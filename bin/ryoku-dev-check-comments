@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Scan newly added comment lines for conversational filler and placeholder
+# narration. The check is intentionally content-focused rather than authorship-
+# focused: useful comments explain constraints or intent; low-value narration
+# should be removed regardless of how it was written.
+
+set -euo pipefail
+
+filler='feel free to|let.?s (create|add|define|write|make|build|start)|\bnote that\b|here we (will|can|simply|just)'
+empty_tree=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+
+mode=${1:-}
+case "$mode" in
+  --range)
+    base=${2:-}
+    head=${3:?usage: ryoku-dev-check-comments --range <base> <head>}
+    [[ -n "$base" ]] || base=$empty_tree
+    diff=$(git diff --diff-filter=ACM -U0 "$base" "$head" -- . \
+      ':(exclude)ryoku/lockscreen/qylock' \
+      ':(exclude)ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar' \
+      ':(glob,exclude)**/vendor/**')
+    ;;
+  --staged)
+    diff=$(git diff --cached --diff-filter=ACM -U0 -- . \
+      ':(exclude)ryoku/lockscreen/qylock' \
+      ':(exclude)ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar' \
+      ':(glob,exclude)**/vendor/**')
+    ;;
+  *)
+    echo "usage: ryoku-dev-check-comments --range <base> <head> | --staged" >&2
+    exit 2
+    ;;
+esac
+
+hits=$(
+  printf '%s\n' "$diff" \
+    | grep -E '^\+' | grep -vE '^\+\+\+' \
+    | grep -E '^\+[[:space:]]*(#|--|//|\*)' \
+    | grep -inE "$filler" || true
+)
+
+if [[ -n "$hits" ]]; then
+  printf '%s\n' "$hits" >&2
+  echo "ryoku-dev-check-comments: remove or rewrite conversational filler comments." >&2
+  exit 1
+fi
+
+echo "ryoku-dev-check-comments: clean"

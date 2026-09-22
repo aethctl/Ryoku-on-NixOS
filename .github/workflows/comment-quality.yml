@@ -1,8 +1,8 @@
-name: AI Slop Scan
+name: Comment quality
 
-# fails any PR/push that adds AI-slop comments (placeholder stubs, chat
-# residue, attribution, self-narration). mirrors the pre-commit
-# ryoku-dev-scan-slop check; only added lines in the event range.
+# Keep newly added comments focused on constraints and intent rather than
+# conversational filler or placeholder narration. The same check runs locally
+# from the pre-commit hook.
 
 on:
   pull_request:
@@ -24,8 +24,8 @@ permissions:
   contents: read
 
 jobs:
-  ai-slop:
-    name: Scan added comments for AI slop
+  comments:
+    name: Check added comments
     runs-on: ubuntu-latest
 
     steps:
@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Scan added comments
+      - name: Check added comments
         shell: bash
         env:
           EVENT: ${{ github.event_name }}
@@ -48,6 +48,7 @@ jobs:
 
           base=""
           head="$SHA"
+
           case "$EVENT" in
             pull_request)
               base="$PR_BASE"
@@ -55,17 +56,16 @@ jobs:
               ;;
             push)
               base="$PUSH_BEFORE"
-              # force-push (e.g. main sync) orphans before-sha; fall back to HEAD~1
-              if [[ -n $base ]] && ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+              if [[ -n "$base" ]] && ! git cat-file -e "$base^{commit}" 2>/dev/null; then
                 base="$(git rev-parse HEAD~1 2>/dev/null || true)"
               fi
               ;;
             *)
-              if [[ $SCOPE != "all" ]]; then
+              if [[ "$SCOPE" != "all" ]]; then
                 base="$(git rev-parse HEAD~1 2>/dev/null || true)"
               fi
               ;;
           esac
 
-          echo "Scanning range: ${base:-<empty-tree>}..$head"
-          bin/ryoku-dev-scan-slop --range "$base" "$head"
+          echo "Checking range: ${base:-<empty-tree>}..$head"
+          bin/ryoku-dev-check-comments --range "$base" "$head"

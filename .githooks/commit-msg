@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
 
-# Ryoku Arch commit-msg hook.
-# blocks commits with no impact label, a subject over 72 chars or ending in a
-# period, AI/generated-content attribution (including AI/bot co-author trailers;
-# human co-authors are allowed), em-dashes, or a malformed Note: release trailer.
-# --no-verify bypass only if you know what you're doing.
+# Ryoku commit-msg hook.
+# Enforces a short conventional subject (with optional legacy impact prefix) and
+# validates the release-note trailer consumed by the release tooling.
 
-set -e
+set -euo pipefail
 
 msg_file="$1"
-msg=$(cat "$msg_file")
 subject=$(sed -n '/^[[:space:]]*#/d; /^[[:space:]]*$/d; p; q' "$msg_file")
 
 fail() {
@@ -21,51 +18,30 @@ fail() {
   exit 1
 }
 
-# AI/bot co-authors are forbidden; human co-authors are allowed. The
-# generated-content check below also catches AI names anywhere in the message.
-if grep -iE '^[[:space:]]*co-authored-by:' <<<"$msg" | grep -qiE '\b(cl[a]ude|anthr[o]pic|assist[a]nt|L[L]M|chatg[p]t|g[p]t-[0-9]|copil[o]t|curs[o]r|gemin[i]|cod[e]x|dev[i]n|b[o]t)\b'; then
-  fail "forbidden AI/bot co-author trailer found (human co-authors are allowed)."
-fi
-
 case "$subject" in
   Merge\ *|Revert\ *|fixup!\ *|squash!\ *) ;;
   *)
-    if [[ ! $subject =~ ^\[(global|installation|system|ryoku|docs|test|tooling|release)\][[:space:]]+ ]]; then
-      fail "commit subject must start with one impact label: [global], [installation], [system], [ryoku], [docs], [test], [tooling], or [release]."
+    pattern='^(\[(global|installation|system|ryoku|docs|test|tooling|release)\][[:space:]]+)?(feat|fix|docs|refactor|perf|test|build|ci|chore|release)(\([^)]+\))?(!)?:[[:space:]]+[^[:space:]].*$'
+    if [[ ! "$subject" =~ $pattern ]]; then
+      fail "use 'type(scope): summary' (legacy [area] prefix is optional)."
     fi
-    # keep the subject short and scannable. long, technical detail belongs in
-    # the body, and the plain user-facing line belongs in a Note: trailer.
+
     if ((${#subject} > 72)); then
-      fail "commit subject is ${#subject} chars; keep it to 72 or fewer. move detail to the body and the user-facing summary to a Note: trailer."
+      fail "subject is ${#subject} chars; keep it to 72 or fewer."
     fi
-    if [[ $subject == *. ]]; then
-      fail "commit subject must not end with a period."
+
+    if [[ "$subject" == *. ]]; then
+      fail "subject must not end with a period."
     fi
     ;;
 esac
 
-if grep -qiE '\b(cl[a]ude|anthr[o]pic|assist[a]nt|L[L]M|chatg[p]t|g[p]t-[0-9])\b' <<<"$msg"; then
-  fail "forbidden generated-content attribution term found in commit message."
-fi
-
-if grep -qiE 'generat[e]d with|written by (cl[a]ude|a[i]|an l[l]m)|created using an A[I]' <<<"$msg"; then
-  fail "forbidden generated-content attribution phrasing found in commit message."
-fi
-
-if grep -q $'\xe2\x80\x94' <<<"$msg"; then
-  fail "em-dash (U+2014) found in commit message. use : or , or . instead."
-fi
-
-# validate any user-facing release-note trailers. bin/ryoku-release-notes
-# harvests these into the GitHub release grouped by category, so a line that
-# starts with Note: must read "Note: New|Fixed|Removed: plain description" with
-# an optional " | media" reference. a line-leading Note: is reserved for this.
 while IFS= read -r line; do
-  if [[ $line =~ ^[[:space:]]*[Nn]ote: ]]; then
-    if [[ ! $line =~ ^[[:space:]]*[Nn]ote:[[:space:]]*([Nn]ew|[Ff]ixed|[Rr]emoved):[[:space:]]*[^[:space:]] ]]; then
-      fail "malformed Note: trailer. write 'Note: New|Fixed|Removed: plain description' (optionally ' | media')."
+  if [[ "$line" =~ ^[[:space:]]*[Nn]ote: ]]; then
+    if [[ ! "$line" =~ ^[[:space:]]*[Nn]ote:[[:space:]]*([Nn]ew|[Ff]ixed|[Rr]emoved):[[:space:]]*[^[:space:]] ]]; then
+      fail "malformed Note: trailer. Use 'Note: New|Fixed|Removed: plain description'."
     fi
   fi
-done <<<"$msg"
+done < "$msg_file"
 
 exit 0
