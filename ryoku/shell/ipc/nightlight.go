@@ -302,13 +302,25 @@ func (n *nightlightState) running() bool {
 // is not a numeric process directory, so the caller can hand it every /proc
 // entry. comm truncates at 15 characters; hyprsunset fits, so an exact compare
 // is right.
+
 func procCommIs(pid, name string) bool {
 	if _, err := strconv.Atoi(pid); err != nil {
 		return false
 	}
+
 	b, err := os.ReadFile("/proc/" + pid + "/comm")
-	if err != nil {
+	if err == nil && strings.TrimSpace(string(b)) == name {
+		return true
+	}
+
+	// Nix wrappers can change comm to the hidden wrapped executable while
+	// preserving the public command in argv[0]. Treat either identity as the
+	// backend so state remains truthful on NixOS.
+	raw, err := os.ReadFile("/proc/" + pid + "/cmdline")
+	if err != nil || len(raw) == 0 {
 		return false
 	}
-	return strings.TrimSpace(string(b)) == name
+
+	argv0 := strings.SplitN(string(raw), "\x00", 2)[0]
+	return filepath.Base(argv0) == name
 }

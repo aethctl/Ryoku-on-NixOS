@@ -662,21 +662,39 @@ func nightlightStart(argv ...string) error {
 // nightlightStop signals every process of this uid whose comm is name, which is
 // how nightlight.off stops the backend without a pkill fork. comm truncates at
 // 15 characters; the backend name fits, so an exact compare is right.
+
+func nightlightProcessMatches(pid, name string) bool {
+	b, err := os.ReadFile("/proc/" + pid + "/comm")
+	if err == nil && strings.TrimSpace(string(b)) == name {
+		return true
+	}
+
+	// NixOS commonly wraps executables. The kernel comm then names the hidden
+	// wrapped binary (for example .gammastep-wrap), while argv[0] still names
+	// the public command that Ryoku launched. Accept that public executable name
+	// as the process identity too.
+	raw, err := os.ReadFile("/proc/" + pid + "/cmdline")
+	if err != nil || len(raw) == 0 {
+		return false
+	}
+
+	argv0 := strings.SplitN(string(raw), "\x00", 2)[0]
+	return filepath.Base(argv0) == name
+}
+
 func nightlightStop(name string) {
 	ents, err := os.ReadDir("/proc")
 	if err != nil {
 		return
 	}
+
 	for _, e := range ents {
 		pid, err := strconv.Atoi(e.Name())
 		if err != nil {
 			continue
 		}
-		b, err := os.ReadFile("/proc/" + e.Name() + "/comm")
-		if err != nil {
-			continue
-		}
-		if strings.TrimSpace(string(b)) == name {
+
+		if nightlightProcessMatches(e.Name(), name) {
 			_ = syscall.Kill(pid, syscall.SIGTERM)
 		}
 	}

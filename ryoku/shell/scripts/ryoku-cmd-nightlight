@@ -38,9 +38,22 @@ backend() {
 }
 
 is_on() {
-  local proc
+  local proc pid argv0
   proc="$(backend)"
-  [[ -n $proc ]] && pgrep -x "$proc" >/dev/null 2>&1
+  [[ -n $proc ]] || return 1
+
+  # Native/FHS package: the kernel process name is the public executable.
+  pgrep -x "$proc" >/dev/null 2>&1 && return 0
+
+  # NixOS package wrappers keep the public command in argv[0] while /proc/comm
+  # names the hidden wrapped binary. Recognise that identity without relying on
+  # a regex over the complete command line.
+  for pid in /proc/[0-9]*; do
+    IFS= read -r -d '' argv0 <"$pid/cmdline" 2>/dev/null || continue
+    [[ ${argv0##*/} == "$proc" ]] && return 0
+  done
+
+  return 1
 }
 
 start() {
