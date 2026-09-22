@@ -15,6 +15,7 @@ If you are using the NixOS port, start with [`nixos.md`](nixos.md).
 | --- | --- | --- |
 | [`nixos.md`](nixos.md) | NixOS | Installation, updates, module ownership, materialization and Nix-specific behavior |
 | [`structure.md`](structure.md) | NixOS port | How this repository is organized |
+| [`maintenance.md`](maintenance.md) | NixOS port | Port ownership, upstream sync and validation workflow |
 | [`store.md`](store.md) | Shared desktop | Ryostore architecture and product model |
 | [`plugins.md`](plugins.md) | Shared desktop | Plugin architecture |
 | [`barstyles.md`](barstyles.md) | Shared desktop | External bar-style contract and development |
@@ -49,6 +50,7 @@ NixOS. When that matters, the NixOS implementation lives under `nix/`.
 - [`nixos.md`](nixos.md): install, module behavior, updates, materialization,
   package reporting and development entry points
 - [`structure.md`](structure.md): the NixOS port's repository layout
+- [`maintenance.md`](maintenance.md): port ownership, upstream sync and validation
 
 The public Nix entry point is the repository root `flake.nix`.
 

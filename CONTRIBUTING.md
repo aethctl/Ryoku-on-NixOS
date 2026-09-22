@@ -1,129 +1,140 @@
-# Contributing to Ryoku
+# Contributing to Ryoku on NixOS
 
-Thanks for helping build Ryoku. This guide covers how to work in this repository
-so your change lands cleanly. It is short on purpose; the deeper detail lives in
-[`docs/`](docs/) and [`AGENTS.md`](AGENTS.md).
+Ryoku on NixOS is a maintained platform port of the Ryoku desktop. Contributions
+are easiest to review when they keep the upstream/NixOS boundary clear and show
+how the change was actually tested.
 
-## Before you start
+Start with:
 
-Read these first, then keep them open while you work:
+- [`docs/maintenance.md`](docs/maintenance.md) for port ownership and upstream sync;
+- [`docs/structure.md`](docs/structure.md) for the repository map;
+- [`docs/nixos.md`](docs/nixos.md) for NixOS behavior and supported integration;
+- [`AGENTS.md`](AGENTS.md) if you are using an automated coding tool.
 
-- [`AGENTS.md`](AGENTS.md) the cardinal rules. They are not negotiable, and most
-  are enforced by the git hooks.
-- [`docs/ryoku.md`](docs/ryoku.md) what Ryoku is and how the parts fit.
-- [`docs/structure.md`](docs/structure.md) where everything lives and the one job
-  it has.
-- [`docs/conventions.md`](docs/conventions.md) how code and config are written
-  here.
-- [`docs/development.md`](docs/development.md) the deploy, test, and commit loop.
+## Development setup
 
-## The cardinal rules, in brief
-
-- **Organization is the point.** Every file and folder has one purpose and
-  appears once. Search before adding; if a thing exists, reference it rather than
-  copying it.
-- **The Hyprland config is Lua.** Author it as Lua modules under
-  `ryoku/hyprland/`, one concern per file. Never hand-write a raw `hyprland.conf`.
-- **One concern per file.** A Lua module does one thing; a QML component is one
-  component in one file.
-- **The repository is the source of truth.** Deployment is one way, from the
-  repository into the live machine. Never copy a live tweak back; change the
-  repository and redeploy.
-- **Pass the git hooks.** Never bypass them. `--no-verify` is forbidden.
-- **Do not bury code in comments.** Comment the *why* when it is not obvious,
-  never the *what*. Delete dead code instead of commenting it out.
-
-## Set up the dev loop
-
-Ryoku is developed on a running Ryoku (or Arch + Hyprland) machine. Edit the
-repository, deploy, and test live:
+Enter the Nix development shell:
 
 ```bash
-ryoku/shell/dev-run.sh       # build ryoku-shell and run it from the checkout (hot reload)
-ryoku/shell/dev-binds.sh on  # bind the shell keys for this session
-ryoku/shell/dev-stop.sh      # stop the dev shell
-ryoku/shell/deploy.sh        # lay the repo configs into ~/.config one way
+nix develop
 ```
 
-`dev-run.sh` leaves your own `~/.config` untouched. Use `deploy.sh` to apply the
-full set, or let the installer's deploy step do it on a fresh machine.
+Run the desktop from a checkout when working on shared shell behavior:
 
-## Where changes go
+```bash
+nix run .#ryoku-dev
+```
 
-- A **package**: the right set in `system/packages/` (`base` for everyone, `dev`
-  for toolchains, `hardware` per profile, `aur` for the AUR). Prefer the official
-  repositories over the AUR when both have it.
-- A **keybind**: `ryoku/hyprland/modules/binds.lua`.
-- A **Hyprland concern**: a new module under `ryoku/hyprland/modules/` plus one
-  `require` in `hyprland.lua`. Do not grow an unrelated module.
-- A **shell surface**: a new component under `ryoku/shell/quickshell/`, with any
-  state wired through `ryoku-shell` (`ryoku/shell/ipc/`).
-- A **system helper**: a `ryoku-<thing>` script under `system/hardware/.../`,
-  installed via `install_bin` in `installation/backend/lib/deploy.sh`, and invoked
-  by name from Lua autostart or a keybind.
+Run the full flake checks before a release or broad integration change:
 
-## Verify before you commit
+```bash
+nix flake check
+```
 
-Test behavior on the running system, not only that a file parses:
+During development, prefer the narrowest relevant package or test so failures
+stay attributable to the change you are making.
 
-- Lua: `luac -p <file>` parses every changed Lua file.
-- Shell scripts: `bash -n <file>`; the pre-commit hook also checks staged scripts,
-  and `shellcheck` runs on push.
-- QML: `qmllint <file>` when available.
-- Installer: run the backend with `RYOKU_DRYRUN=1` and the required `RYOKU_*`
-  variables to print every action without touching a disk.
+## Where a change belongs
 
-Go programs (the TUI, `ryoku-shell`, `ryoku-hub`) and the `Ryoku.Blobs` QML plugin
-ship prebuilt in the ISO. The target has no build toolchain, so never assume `go`,
-`cmake`, or `ninja` at install time.
+Use the platform boundary rather than the package manager as the deciding rule.
+
+- Shared desktop/application behavior belongs under `ryoku/`.
+- Nix packaging belongs under `nix/packages/`.
+- NixOS machine/service integration belongs under `nix/modules/`.
+- Installer and materialization entry points belong under `nix/apps/`.
+- Port-specific tests belong under `nix/tests/` or `tests/`.
+- Arch-oriented top-level `installation/`, `system/` and `release/` trees are
+  retained for upstream parity/reference; they are not the NixOS implementation.
+
+If a bug also exists in upstream Ryoku and the fix is portable, prefer fixing it
+upstream and carrying the same correction here rather than creating a permanent
+Nix-only fork.
+
+## Verification
+
+Test the behavior you changed, not just the syntax around it.
+
+Typical checks include:
+
+```bash
+bash -n path/to/script
+qmllint path/to/file.qml
+python3 nix/tests/test-ryoku-install-edit.py
+nix build .#ryoku-shell
+nix flake check
+```
+
+Hardware-facing and session-runtime changes need runtime evidence. In the pull
+request, record the compositor/session used and what you actually exercised.
 
 ## Commits
 
-Every commit passes the hooks in `.githooks/`. Never use `--no-verify`.
+Use short conventional subjects. Preferred forms are:
 
-- Subjects are `[area] scope: imperative summary`, where area is one of
-  `global`, `installation`, `system`, `ryoku`, `docs`, `test`, `tooling`,
-  `release`. Shell changes use `[global]`.
-- Keep the subject short: 72 characters or fewer, no trailing period. Long or
-  technical detail belongs in the body, not the subject.
-- No em-dash anywhere in text. No authorship or attribution trailers. No filler.
-- One logical change per commit.
-- Update the matching `CHANGELOG.md` in the area you touched.
+```text
+fix(installer): preserve imported multi-host flakes
+feat(hub): expose NixOS update channels
+docs: document Niri workspace ownership
+test(parser): cover dotted flake inputs
+release: bump stable channel to 0.63.3-beta.19
+```
 
-### Release notes
+Accepted types are `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`,
+`ci`, `chore` and `release`.
 
-When a change is something a user would notice, add a plain-language note as a
-commit trailer. The release bot (`bin/ryoku-release-notes`) harvests these into
-the GitHub release, grouped under New / Fixed / Removed; a commit with no note
-stays internal.
+Legacy impact prefixes such as `[ryoku]` or `[docs]` are still accepted so old
+and new history remain compatible, but new work should prefer the conventional
+form.
 
-    Note: New: pin an app by right-clicking it in the dock
-    Note: Fixed: right-clicking a dock app now saves or removes the pin
-    Note: Removed: the old instant-replay buffer
+Keep each commit focused. Put technical explanation in the body when it helps
+future maintainers understand why the change exists.
 
-Write it the way you would tell a friend, not the way you would tell a compiler.
-Attach a demo image or gif with a trailing `| <path-or-url>`, where a
-repo-relative path lives under `release/media/`:
+### Release-note trailers
 
-    Note: New: redesigned wallpaper picker | release/media/wallpaper.gif
+User-visible changes keep the existing release trailer format:
 
-A note only reaches a release if its commit reaches the tag intact, so `main`
-advances by fast-forward from `unstable-dev`. Never squash-merge into a release
-branch: squashing collapses commits and drops their notes.
+```text
+Note: New: expose stable and unstable update channels
+Note: Fixed: preserve Home Manager-managed config symlinks
+Note: Removed: retire the old update path
+```
+
+Release automation harvests these lines into the generated notes.
 
 ## Pull requests
 
-1. Fork the repository and branch off the current development branch.
-2. Make one focused change, with its changelog entry, and verify it on a running
-   system.
-3. Make sure the hooks pass locally; do not bypass them.
-4. Open a pull request describing what changed and how you tested it.
+A reviewable pull request should make the engineering decision visible:
 
-## Reporting bugs and ideas
+- explain why the change is needed;
+- say whether it touches shared Ryoku or the NixOS-only boundary;
+- include the commands/checks that were run;
+- include runtime evidence where CI cannot prove the behavior;
+- say whether the same bug/change applies upstream.
 
-- Bugs: open a [Bug issue](https://github.com/Ryoku-dev/ryoku-arch/issues/new/choose)
-  with system details and steps to reproduce.
-- Ideas, questions, and feature suggestions:
-  [Discussions](https://github.com/Ryoku-dev/ryoku-arch/discussions).
-- Security reports: see [`SECURITY.md`](SECURITY.md). Do not file them as public
-  issues.
+Keep one logical problem per pull request when practical.
+
+## Tool-assisted contributions
+
+Use whatever editor, linter, generator or code-assistance tooling helps you work.
+The submitter still owns the patch.
+
+Automated output is not a substitute for understanding the change, removing
+placeholder/chat residue, keeping the diff focused, or providing test evidence.
+The project does not ban code-assistance tools or their attribution; patches are
+reviewed on technical quality and reproducibility.
+
+## Reporting bugs
+
+For NixOS-port bugs, open an issue in this repository with:
+
+- NixOS version/channel;
+- Ryoku version/channel;
+- compositor (Hyprland or Niri where applicable);
+- relevant hardware when the issue is hardware-facing;
+- exact reproduction steps;
+- logs or command output needed to demonstrate the failure.
+
+For a bug that is clearly shared with upstream Ryoku, link the upstream issue or
+open one there as well.
+
+Security reports follow [`SECURITY.md`](SECURITY.md).
