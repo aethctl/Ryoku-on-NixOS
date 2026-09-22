@@ -30,7 +30,14 @@ func TestAdoptExactReceiptClaimsOnlyExactPayload(t *testing.T) {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dst, "Main.qml"), body, 0o644); err != nil {
+	target := filepath.Join(dst, "Main.qml")
+	if err := os.WriteFile(target, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// os.WriteFile applies the process umask when creating a file. Force the
+	// receipt-declared mode so this fixture is exact even under a hardened 077
+	// developer/test environment.
+	if err := os.Chmod(target, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -95,7 +102,14 @@ func TestAdoptExactReceiptRejectsSymlinkedParent(t *testing.T) {
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dst, "Main.qml"), body, 0o644); err != nil {
+	target := filepath.Join(dst, "Main.qml")
+	if err := os.WriteFile(target, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// os.WriteFile applies the process umask when creating a file. Force the
+	// receipt-declared mode so this fixture is exact even under a hardened 077
+	// developer/test environment.
+	if err := os.Chmod(target, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
