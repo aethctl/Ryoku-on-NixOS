@@ -123,6 +123,7 @@
         ryoku-desktop-data = ryoku.desktopData;
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
+        ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
 
         # Ryoku owns its compositor ABI. These come from Ryoku's
         # locked nixpkgs rather than the host's package set.
@@ -212,6 +213,7 @@
         ryoku-desktop-data = ryoku.desktopData;
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
+        ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;
         ryoku-bundle = ryoku.bundle;

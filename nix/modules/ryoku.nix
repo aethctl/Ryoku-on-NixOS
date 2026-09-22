@@ -26,6 +26,7 @@ let
   ryokuHyprland = ryokuPkgs.ryoku-hyprland;
   ryokuHyprlandPortal = ryokuPkgs.ryoku-xdg-desktop-portal-hyprland;
   ryokuNiri = ryokuNixpkgs.niri;
+  ryokuXwaylandSatellite = ryokuPkgs.ryoku-xwayland-satellite;
   ryokuMatugen = ryokuPkgs.ryoku-matugen;
   ryokuHyprPlugins = ryokuPkgs.ryoku-hypr-plugins;
   ryokuCursorMaterial = ryokuPkgs.ryoku-cursor-material;
@@ -449,7 +450,7 @@ EOF
     ryokuWmHyprland
     ryokuWmNiri
     ryokuNiri
-    xwayland-satellite
+    ryokuXwaylandSatellite
 
     # ─────────────────────────────────────────────────────────
     # Qt / QML

@@ -29,6 +29,10 @@ let
     provider = "niri";
   };
 
+  xwaylandSatellite = import ./xwayland-satellite.nix {
+    inherit pkgs;
+  };
+
   cli = import ./ryoku-cli.nix {
     inherit
       pkgs
@@ -305,6 +309,8 @@ in
     wmHyprlandQml
     blobs
     qml
+
+    xwaylandSatellite
 
     bundle
     ;
