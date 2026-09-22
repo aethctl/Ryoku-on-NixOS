@@ -992,22 +992,6 @@ in
           }
       });
 
-      // The Machine page may deliberately change the hardware GPU MUX.
-      // The helper accepts only hybrid|discrete and the change takes effect
-      // after reboot, so grant only this immutable helper to active wheel users.
-      polkit.addRule(function (action, subject) {
-          var program = action.lookup("program");
-
-          if (action.id === "org.freedesktop.policykit.exec" &&
-              (program === "${ryokuHelpers}/bin/ryoku-gpu-mux" ||
-               program === "/run/current-system/sw/bin/ryoku-gpu-mux") &&
-              subject.local &&
-              subject.active &&
-              subject.isInGroup("wheel")) {
-              return polkit.Result.YES;
-          }
-      });
-
       '';
     } // lib.optionalAttrs (
       lib.hasAttrByPath
