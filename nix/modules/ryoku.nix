@@ -1,6 +1,6 @@
 { self, ryokuNixpkgs }:
 
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, options, ... }:
 
 let
   cfg = config.programs.ryoku;
@@ -740,15 +740,18 @@ in
       ];
     };
 
-    security.polkit.enable = true;
-    security.polkit.enablePkexecWrapper = lib.mkDefault true;
-
-    # Ryoku NixOS privileged helper policy.
+    # NixOS 26.05 creates the pkexec wrapper automatically when Polkit is
+    # enabled. Newer nixpkgs exposes enablePkexecWrapper separately.
+    # Feature-detect that newer option so this module evaluates on both.
     #
-    # These grants use immutable Nix-store paths instead of Arch's
+    # Ryoku NixOS privileged helper policy:
+    # these grants use immutable Nix-store paths instead of Arch's
     # /usr/bin paths. Mutable NetworkManager/Docker helpers are not
     # authorized here; they receive Nix-aware implementations separately.
-    security.polkit.extraConfig = lib.mkAfter ''
+    security.polkit = {
+      enable = true;
+
+      extraConfig = lib.mkAfter ''
       polkit.addRule(function (action, subject) {
           if (action.id === "org.freedesktop.systemd1.manage-units" &&
               action.lookup("unit") === "bluetooth.service" &&
@@ -829,7 +832,14 @@ in
           }
       });
 
-    '';
+      '';
+    } // lib.optionalAttrs (
+      lib.hasAttrByPath
+        [ "security" "polkit" "enablePkexecWrapper" ]
+        options
+    ) {
+      enablePkexecWrapper = lib.mkDefault true;
+    };
     services.gnome.gnome-keyring.enable = true;
 
     security.rtkit.enable = true;
