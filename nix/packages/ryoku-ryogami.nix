@@ -65,7 +65,12 @@ pkgs.stdenv.mkDerivation {
     export GOTOOLCHAIN=local
     export CGO_ENABLED=0
 
-    go test ./...
+    # Ryogami's E2E tests intentionally build and launch another copy of the
+    # daemon. That nested `go build` is unsuitable inside the Nix build sandbox
+    # and can wait until the outer Go test watchdog fires. Run the ordinary
+    # package tests here; the E2E suite is validated separately outside the
+    # derivation against the same source.
+    go test -skip '^TestE2E' ./...
 
     go build \
       -trimpath \
