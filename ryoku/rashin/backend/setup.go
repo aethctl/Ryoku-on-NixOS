@@ -79,9 +79,15 @@ func RunSetup() error {
 	// "uv lock missing" a broken or offline install throws) into one clear line.
 	reportPhase("preflight", "checking tools, connectivity, and disk space", true)
 	if !haveCmd("curl") {
+		if rashinNixBackend() {
+			return errors.New("curl is missing from the active NixOS generation; rebuild Ryoku")
+		}
 		return errors.New("curl is required for the Hermes installer (sudo pacman -S curl)")
 	}
 	if !haveCmd("uv") && !haveCmd("python3") {
+		if rashinNixBackend() {
+			return errors.New("Hermes runtime prerequisites are missing from the active NixOS generation; rebuild Ryoku")
+		}
 		return errors.New("Hermes needs uv or python3 to install (sudo pacman -S uv), then re-run setup")
 	}
 	if !setupOnline() {
@@ -99,13 +105,16 @@ func RunSetup() error {
 	if _, ok := FindHermes(); ok {
 		reportPhase("install", "existing Hermes detected, leaving it untouched", true)
 	} else {
+		if rashinNixBackend() {
+			return errors.New("Hermes is missing from the active NixOS generation; rebuild Ryoku so the native Hermes package is present")
+		}
 		reportPhase("install", "running the official Hermes installer", true)
 		// Not `curl | bash`: piping leaves the installer's stdin on the pipe, so
 		// its optional-package steps block on a hidden /dev/tty y/n + sudo prompt.
 		// --non-interactive skips them; --skip-browser drops the Chromium hang.
 		script := "set -e; f=$(mktemp); trap 'rm -f \"$f\"' EXIT; " +
 			"curl -fsSL " + hermesInstallURL + " -o \"$f\"; " +
-			"bash \"$f\" --non-interactive --skip-browser --skip-computer-use"
+			"bash \"$f\" --non-interactive --skip-browser"
 		if err := runInteractive("bash", "-c", script); err != nil {
 			return fmt.Errorf("hermes installer: %w", err)
 		}

@@ -42,7 +42,7 @@ func quickToolSchemas() []map[string]any {
 		}
 	}
 	return []map[string]any{
-		fn("system_query", "Read live system state on this Ryoku (Arch) machine.",
+		fn("system_query", "Read live system state on this Ryoku machine.",
 			map[string]any{"topic": map[string]any{
 				"type":        "string",
 				"enum":        []string{"packages", "updates", "service", "processes", "disk", "kernel", "gpu", "network"},
@@ -104,11 +104,45 @@ func runCapped(ctx context.Context, cap int, name string, args ...string) string
 func toolSystemQuery(ctx context.Context, topic, arg string) string {
 	switch topic {
 	case "packages":
+		if rashinNixBackend() {
+			if arg == "" {
+				if count := nixSystemPackageCount(); count != "" {
+					return count + " direct system packages (NixOS)"
+				}
+				return "NixOS package count unavailable"
+			}
+
+			if _, err := exec.LookPath("nix-store"); err != nil {
+				return "error: nix-store is unavailable in the Rashin runtime"
+			}
+
+			refs := runCapped(ctx, 16384, "nix-store", "-q", "--references", "/run/current-system/sw")
+			needle := strings.ToLower(strings.TrimSpace(arg))
+			var hits []string
+			for _, line := range nonEmptyLines(refs) {
+				name := filepath.Base(line)
+				if strings.Contains(strings.ToLower(name), needle) {
+					hits = append(hits, name)
+				}
+			}
+			if len(hits) == 0 {
+				return "no direct NixOS system package matching " + arg
+			}
+			if len(hits) > 20 {
+				hits = hits[:20]
+			}
+			return strings.Join(hits, "\n")
+		}
+
 		if arg != "" {
 			return runCapped(ctx, 4096, "pacman", "-Qi", arg)
 		}
 		return runCapped(ctx, 2048, "sh", "-c", "pacman -Qq | wc -l")
+
 	case "updates":
+		if rashinNixBackend() {
+			return runCapped(ctx, 4096, "ryoku-nix-update", "status", "--json")
+		}
 		return runCapped(ctx, 4096, "sh", "-c", "checkupdates 2>/dev/null | head -50 || echo 'no updates or checkupdates unavailable'")
 	case "service":
 		if arg == "" {

@@ -136,7 +136,7 @@ func manifestSnippet(skillDir string) string {
 		skill = tildeAbbrev(filepath.Join(skillDir, "SKILL.md"))
 	}
 	var b strings.Builder
-	b.WriteString("You are working on a Ryoku machine (Arch Linux + Hyprland + Quickshell).\n\n")
+	b.WriteString("You are working on a Ryoku desktop (Wayland + Quickshell).\n\n")
 	fmt.Fprintf(&b, "- Read the Ryoku vault first, at %s/ -- start with AGENTS.md (where every\n", vault)
 	b.WriteString("  config lives, the binary that owns it, and how to reload it), then desktop.md,\n")
 	b.WriteString("  system.md, packages.md, ryoku-repo.md, user.md.\n")

@@ -1,7 +1,7 @@
 ---
 name: ryoku
 description: >
-  Customize a Ryoku desktop: an Arch Linux system with a Hyprland compositor and
+  Customize a Ryoku desktop: a Wayland system with a supported compositor and
   a Quickshell shell (the QS Bar, the dock, widgets, the launcher, and the Hub).
   Use for end-user requests that touch the desktop or its config. Triggers:
   Hyprland, window rules, keybinds, monitors, gaps, borders, the bar, the dock,
@@ -13,7 +13,7 @@ description: >
 
 # Ryoku
 
-Ryoku is an Arch Linux desktop: a Hyprland compositor, a single Quickshell shell
+Ryoku is a Wayland desktop: a supported compositor, a single Quickshell shell
 that draws the bar, the dock, the launcher, the popouts and the widgets, and a
 set of Go command-line tools that own the config. This skill is for changing a
 running Ryoku system on behalf of its user. It is not for developing Ryoku
@@ -156,8 +156,9 @@ When a request would change the system, in order:
    `ryoku-hub desktop plugins rebuild --stale`.
 5. **Is it a theme or wallpaper?** Drive it through `ryogami` and `ryoku-hub`,
    which own the colour master; never write the palette or theme shadow by hand.
-6. **Is it a package?** `ryoku update` for the whole system; pacman/yay for one
-   package.
+6. **Is it a package?** `ryoku update` for Ryoku-managed system updates. For
+   one package, use the host package backend; on NixOS that means declarative
+   Nix configuration, never pacman/yay.
 7. **Unsure a command exists?** Read the tool's `--help`, or `desktop.md`.
 
 ## Example requests
