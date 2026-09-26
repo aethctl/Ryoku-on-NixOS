@@ -1,23 +1,50 @@
-<!-- Keep one logical change per pull request. See CONTRIBUTING.md. -->
+<!-- Keep the PR focused. See CONTRIBUTING.md and docs/maintenance.md. -->
+
+## Why
+
+What problem or maintenance need does this address?
 
 ## What changed
 
-Describe the change and why it is needed.
+Describe the implementation at the level a future maintainer will care about.
 
-## Area
+## Ownership / scope
 
-<!-- The commit subject area: global | installation | system | ryoku | docs | test | tooling | release -->
+- [ ] Shared Ryoku desktop (`ryoku/`)
+- [ ] NixOS packaging or module layer (`nix/`)
+- [ ] Installer / materialization
+- [ ] Documentation / tooling only
+- [ ] Upstream Ryoku is also affected
 
-## How it was tested
+If upstream is also affected, link the upstream issue/PR or explain why this
+change remains NixOS-only.
 
-Describe how you verified this on a running system, not only that it parses.
+## Verification
+
+Commands/checks run:
+
+```text
+# paste the relevant commands, not the entire terminal session
+```
+
+Runtime verification (when applicable):
+
+- NixOS version/channel:
+- Ryoku channel/version:
+- Compositor:
+- Hardware/context:
+- Behavior exercised:
+
+## User-visible result
+
+<!-- Leave blank for internal-only changes. -->
+
+`Note: New|Fixed|Removed: ...`
 
 ## Checklist
 
-- [ ] One logical change, with a clear `[area] scope: summary` commit subject.
-- [ ] Matching `CHANGELOG.md` updated in the area I touched.
-- [ ] The git hooks pass locally; I did not use `--no-verify`.
-- [ ] Lua parses (`luac -p`), shell scripts pass `bash -n`, and QML passes
-      `qmllint` where applicable.
-- [ ] No duplicated config, no dead code, no commented-out code, no em-dash.
-- [ ] Docs updated if behavior or layout changed.
+- [ ] The diff is one logical change without unrelated cleanup.
+- [ ] I can explain why each changed file belongs in its current ownership layer.
+- [ ] Relevant focused tests/builds pass.
+- [ ] Runtime-sensitive behavior was tested on a running system when applicable.
+- [ ] Documentation changed if the public behavior or maintenance contract changed.

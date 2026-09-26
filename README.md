@@ -9,12 +9,12 @@
 ### 力と美のために
 **For the sake of power and beauty.**
 
-Ryoku is a hand built Hyprland desktop built for Power, Beauty and Declarative setups.
-This repository is an official port of [**RyokuArch**](https://github.com/Ryoku-dev/ryoku-arch) that brings that same desktop to NixOS with a native declarative system layer.
+Ryoku on NixOS is the maintained NixOS port of [**Ryoku**](https://github.com/Ryoku-dev/ryoku), a Hyprland + Quickshell desktop.
+The shared desktop stays close to upstream; NixOS-specific packaging, modules, installer behavior, system bridges and update integration live under `nix/`.
 
 <br />
 
-[**Install**](#install) · [**Explore the desktop**](#the-desktop) · [**Documentation**](docs/README.md) · [**NixOS guide**](docs/nixos.md) · [**Upstream Ryoku**](https://github.com/Ryoku-dev/ryoku-arch)
+[**Install**](#install) · [**Explore the desktop**](#the-desktop) · [**Documentation**](docs/README.md) · [**Maintainer notes**](docs/maintenance.md) · [**Upstream Ryoku**](https://github.com/Ryoku-dev/ryoku)
 
 <br />
 
@@ -28,12 +28,14 @@ nix run github:aethctl/Ryoku-on-NixOS/main#install
 
 ---
 
-## Ryoku, rebuilt for NixOS
+## What this port owns
 
-Ryoku on NixOS keeps the desktop experience shared with upstream while replacing
-the Arch-specific system layer with Nix-native packaging, modules and generations.
+Ryoku's desktop code and interaction model remain shared with upstream. This
+repository owns the NixOS boundary: packaging, module integration, installer and
+update behavior, service wiring, compatibility fixes and Nix-specific runtime
+bridges.
 
-The result is one Ryoku desktop with two different foundations:
+That gives the same desktop two different system foundations:
 
 <table>
   <tr>
@@ -52,8 +54,9 @@ The result is one Ryoku desktop with two different foundations:
   </tr>
 </table>
 
-The shell, Hub, Ryostore, launcher, theming, lockscreen, bar styles and visual
-language remain identical to RyokuArch.
+The shell, Hub, Ryostore, launcher, theming, lockscreen and bar styles are kept
+in sync with upstream wherever the host operating system does not require a
+different implementation.
 
 ---
 
@@ -271,6 +274,47 @@ For custom flake paths, multi-host setups and manual integration, see the
 The repository is intentionally split at the platform boundary. Shared desktop
 features stay shared. Nix-specific behavior lives under `nix/`.
 
+The Nix layer packages the major Ryoku components independently rather than
+treating the desktop as one opaque wrapper. The root flake exposes the shell,
+Hub, CLI, Ryostore, Ryotunes, Ryogami, RyoMotion, helper packages, compositor
+integration and the combined bundle as separate outputs.
+
+---
+
+## How the port is maintained
+
+This is a maintained platform port, not a one-time source translation. Upstream
+changes are reviewed at the operating-system boundary:
+
+1. Shared desktop and application changes stay in `ryoku/` whenever possible.
+2. Arch-specific package, service and filesystem assumptions are replaced with
+   Nix packages, NixOS modules or narrow runtime bridges.
+3. Bugs that also affect upstream Ryoku are fixed upstream when practical; fixes
+   that only exist because of NixOS semantics stay in this repository.
+4. User-visible runtime changes are tested on NixOS before they are released.
+
+The detailed ownership rules and sync workflow live in
+[**docs/maintenance.md**](docs/maintenance.md).
+
+---
+
+## Validation
+
+The public flake makes the core port buildable through one entry point:
+
+```bash
+nix flake check
+```
+
+Its checks build the main runtime packages, QML modules, desktop integration,
+installer and materializer, and run focused installer/parser checks. CI adds
+shell linting, QML linting, Go tests, installer safety checks and targeted
+integration guards.
+
+For compositor, display, audio, GPU or installer behavior, a green CI run is not
+treated as runtime proof. Pull requests should record the machine/runtime test
+that was actually performed.
+
 ---
 
 ## Development
@@ -303,7 +347,7 @@ See [**docs/README.md**](docs/README.md) for the documentation map and
 ## Upstream and credits
 
 Ryoku on NixOS is the NixOS port of
-[**Ryoku**](https://github.com/Ryoku-dev/ryoku-arch).
+[**Ryoku**](https://github.com/Ryoku-dev/ryoku).
 
 Ryoku was created by [**Neur0map**](https://github.com/neur0map). The NixOS port
 keeps upstream desktop behavior close while adapting system integration to NixOS.
