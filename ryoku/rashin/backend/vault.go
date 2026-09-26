@@ -42,7 +42,7 @@ var generatedFiles = map[string]bool{
 const AgentsTemplate = "# Ryoku system vault\n" +
 	"\n" +
 	"This is the shared knowledge base for every coding agent on this machine\n" +
-	"(Arch Linux, the Ryoku desktop, managed by Ryoku). Read it before exploring\n" +
+	"(the Ryoku desktop, managed by Ryoku). Read it before exploring\n" +
 	"the filesystem or guessing where things live.\n" +
 	"\n" +
 	"## The one rule\n" +

@@ -9,6 +9,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    hermesAgent = {
+      url = "github:NousResearch/hermes-agent";
+    };
+
     hyprglassSrc = {
       url = "github:hyprnux/hyprglass/v0.7.0";
       flake = false;
@@ -32,7 +36,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, glazepkg, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
+  outputs = { self, nixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
     let
       version =
         builtins.replaceStrings
@@ -90,7 +94,7 @@
 
       nixosModules.default =
         import ./nix/modules/ryoku.nix {
-          inherit self;
+          inherit self hermesAgent;
           ryokuNixpkgs = pkgs;
         };
 

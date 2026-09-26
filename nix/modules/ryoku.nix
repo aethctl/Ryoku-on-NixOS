@@ -1,4 +1,4 @@
-{ self, ryokuNixpkgs }:
+{ self, ryokuNixpkgs, hermesAgent }:
 
 { config, lib, pkgs, options, ... }:
 
@@ -11,6 +11,7 @@ let
 
   ryokuShell = ryokuPkgs.ryoku-shell;
   ryokuRashin = ryokuPkgs.ryoku-rashin;
+  hermesPackage = hermesAgent.packages.${system}.default;
   ryokuBundle = ryokuPkgs.ryoku-bundle;
   ryokuHelpers = ryokuPkgs.ryoku-helpers;
   ryokuSystemBridge = ryokuPkgs.ryoku-nixos-system-bridge;
@@ -561,10 +562,12 @@ EOF
 
     # Rashin setup/runtime prerequisites. Rashin itself remains
     # opt-in; these mirror the dependencies of the upstream package.
+    nix
     uv
     nodejs
     gcc
     sqlite
+    hermesPackage
 
     curl
     glib
@@ -1388,6 +1391,7 @@ in
       environment = {
         RYOKU_RASHIN_SKILLS =
           "${ryokuRashin}/share/ryoku/skills";
+        RYOKU_UPDATE_BACKEND = "nix";
       };
 
       unitConfig = {
