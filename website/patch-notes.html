@@ -1,0 +1,998 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="description" content="Ryoku on NixOS patch notes and release archive." />
+  <title>Ryoku on NixOS — Patch Notes</title>
+  <link rel="stylesheet" href="styles-v2-4.css" />
+</head>
+<body class="subpage-body">
+  <div class="page-progress" aria-hidden="true"><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header scrolled">
+    <a class="brand" href="index.html" aria-label="Ryoku on NixOS home">
+      <span class="brand-mark">力</span>
+      <span class="brand-text">RYOKU // NIXOS</span>
+    </a>
+    <button class="nav-toggle" type="button" aria-label="Toggle navigation" aria-expanded="false"><span></span><span></span></button>
+    <nav class="nav" aria-label="Primary navigation">
+      <a href="index.html#showcase">Showcase</a>
+      <a href="install.html">Install guide</a>
+      <a class="active" href="patch-notes.html">Patch notes</a>
+      <a href="index.html#faq">FAQ</a>
+      <a class="nav-github" href="https://github.com/aethctl/Ryoku-on-NixOS" target="_blank" rel="noreferrer">GitHub ↗</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="subpage-hero patch-hero">
+      <div class="subpage-hero-copy reveal visible">
+        <div class="subpage-kicker">報 // RELEASE</div>
+        <h1>PATCH<em>NOTES.</em></h1>
+        <p>All patch notes are stored here</p>
+      </div>
+      <dl class="subpage-meta reveal visible">
+        <div><dt>Current</dt><dd>0.70.3-beta.19 · UNSTABLE</dd></div>
+        <div><dt>Previous</dt><dd>0.70.2-beta.19</dd></div>
+        <div><dt>Order</dt><dd>Newest first</dd></div>
+        <div><dt>Archive</dt><dd>Persistent</dd></div>
+      </dl>
+    </section>
+
+    <div class="docs-shell">
+      <aside class="docs-sidebar">
+        <div class="docs-sidebar-title">RELEASES // INDEX</div>
+        <nav>
+          <a href="#v0-70-3-beta-19"><span>01</span>UNSTABLE 0.70.3-beta.19</a>
+          <a href="#v0-70-2-beta-19"><span>02</span>UNSTABLE 0.70.2-beta.19</a>
+          <a href="#v0-66-3-beta-19"><span>03</span>Onogoro 0.66.3-beta.19</a>
+          <a href="#v0-63-1-beta-19"><span>04</span>Musubi 0.63.1-beta.19</a>
+          <a href="#v0-60-1-beta-19"><span>05</span>0.60.1-beta.19</a>
+          <a href="#v0-58-6-beta-19"><span>06</span>Musubi 0.58.6-beta.19</a>
+        </nav>
+        <a class="button" href="index.html">← Back to site</a>
+      </aside>
+
+      <div class="docs-content patch-notes-content">
+
+        <article id="v0-70-3-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">UNSTABLE // CURRENT DEVELOPMENT BRANCH</div>
+
+          <header class="release-head">
+            <h2 class="release-version">RYOKU ON NIXOS<br>0.70.3</h2>
+            <div class="release-date">UNSTABLE BRANCH<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">
+            This release brings another substantial upstream sync to
+            <strong>Ryoku on NixOS</strong>, with new desktop functionality,
+            stronger Niri support, improved wallpaper controls, and several fixes
+            for behaviour that differs specifically under NixOS.
+          </p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Keybind editing.</strong>
+                Ryoku Settings now includes the newer keybind management
+                experience. Keybinds can be edited directly through the UI with
+                improved grouping and clearer presentation of related bindings.
+                The underlying WM layer has also been updated to support the newer
+                binding model across both supported compositors.
+              </li>
+
+              <li>
+                <strong>Ryowalls Crossfade.</strong>
+                Ryowalls now includes the new <strong>Crossfade</strong> wallpaper
+                transition. Rather than moving, distorting, or revealing the next
+                wallpaper through a more complex shader effect, Crossfade provides
+                a clean direct blend between the current and incoming wallpaper.
+                The transition picker has also been reorganized to make wallpaper
+                effects easier to browse and configure.
+              </li>
+
+              <li>
+                <strong>Center and Tile wallpaper modes.</strong>
+                Two additional wallpaper layout modes are now available:
+                <ul>
+                  <li><strong>Center</strong> — displays the wallpaper at its natural proportions without stretching it to fill the display.</li>
+                  <li><strong>Tile</strong> — repeats the wallpaper across the available display area.</li>
+                </ul>
+                These are integrated through Ryogami and the Ryowalls
+                configuration UI alongside the existing fill modes.
+              </li>
+
+              <li>
+                <strong>Improved desktop widget infrastructure.</strong>
+                Ryoku's desktop plugin system now contains the newer
+                infrastructure needed for store-provided widgets to behave more
+                like native desktop components.
+                <ul>
+                  <li>Improved desktop widget slots.</li>
+                  <li>Widget context and configuration menus.</li>
+                  <li>Plugin colour handling.</li>
+                  <li>Store widget cards.</li>
+                  <li>Improved widget placement.</li>
+                  <li>Better grouping of store-provided widget products.</li>
+                </ul>
+                This is infrastructure for future or third-party RyoStore
+                widgets. It does not mean additional built-in widgets have been
+                added to the current catalogue.
+              </li>
+
+              <li>
+                <strong>RyoStore product integration.</strong>
+                RyoStore now includes the latest product infrastructure from
+                upstream. Products can carry richer project relationships and
+                metadata, with improvements to product registry handling,
+                manifests, migrations, provider plugins, product detail
+                presentation, installation state and store widget product support.
+              </li>
+
+              <li>
+                <strong>Rashin GUI-first workflow.</strong>
+                Rashin has been updated with the newer GUI-first Ryoku knowledge
+                and agent behaviour. Agents now have better awareness of how
+                Ryoku's graphical tools should be used before falling back to
+                lower-level configuration editing. Supporting Ryoku skills and
+                documentation have also been expanded.
+              </li>
+
+              <li>
+                <strong>Prowl integration.</strong>
+                Rashin's code-index integration now follows the newer upstream
+                naming where <code>prowl</code> replaces the older
+                <code>prowl-agent</code> command. The NixOS port retains
+                compatibility where necessary while preferring the new command.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Fixes</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Night Light now works correctly on NixOS.</strong>
+                The Nix package for <code>gammastep</code> launches through a
+                wrapper rather than exposing the real executable directly:
+                <code>gammastep → wrapper → .gammastep-wrapped</code>.
+                Ryoku previously checked process identity through
+                <code>/proc/&lt;pid&gt;/comm</code>, causing it to incorrectly
+                believe Night Light was disabled.
+                <br><br>
+                Repeated toggles could therefore create additional
+                <code>gammastep</code> processes instead of stopping the existing
+                instance. Ryoku now falls back to the process command line and
+                recognizes the preserved public <code>argv[0]</code> identity
+                used by Nix wrappers.
+                <ul>
+                  <li>Fixed incorrect Night Light ON/OFF reporting.</li>
+                  <li>Fixed Night Light refusing to turn off.</li>
+                  <li>Fixed duplicate <code>gammastep</code> processes.</li>
+                  <li>Fixed backend cleanup under Niri.</li>
+                  <li>Fixed backend cleanup under Hyprland.</li>
+                </ul>
+                Runtime testing confirmed the correct lifecycle:
+                <code>OFF → 0</code>,
+                <code>ON at 4000K → 1</code>,
+                <code>OFF → 0</code>.
+              </li>
+
+              <li>
+                <strong>Caffeine fixed on NixOS.</strong>
+                Ryoku's caffeine inhibitor previously launched its hold process
+                using
+                <code>exec -a ryoku-caffeine-inhibit sleep infinity</code>.
+                NixOS uses a coreutils multicall executable that interprets
+                <code>argv[0]</code> as the utility it should run. Changing that
+                value caused coreutils to reject the process.
+                <br><br>
+                The NixOS package now launches <code>sleep infinity</code>
+                normally. Caffeine now starts correctly, registers its inhibitor,
+                stays active, stops cleanly and restores the requested state.
+              </li>
+
+              <li>
+                <strong>Niri X11 popup focus fixed.</strong>
+                Ryoku on NixOS now ships a pinned
+                <code>xwayland-satellite</code> revision containing the
+                popup-focus fix required by Niri. This addresses the regression
+                affecting override-redirect and X11 transient windows such as
+                menus and popups. The NixOS port now owns the Xwayland Satellite
+                package used by Ryoku rather than relying on the stock package
+                independently.
+              </li>
+
+              <li>
+                <strong>Niri window opacity and blur issue fixed.</strong>
+                Ryoku no longer forces Niri window blur configuration that could
+                cause windows to render incorrectly or appear opaque. The port
+                now follows Niri's native rendering behaviour instead of applying
+                Hyprland-style assumptions where they are not appropriate.
+              </li>
+
+              <li>
+                <strong>RyoStore migration tests fixed for strict umasks.</strong>
+                Some RyoStore migration tests assumed newly-created files would
+                receive mode <code>0644</code>. Systems using a stricter user
+                <code>umask</code>, such as <code>0077</code>, created those
+                fixtures with different permissions and caused otherwise-correct
+                migration matching tests to fail. The affected fixtures now
+                explicitly apply the expected mode while keeping production
+                exact-match behaviour intact.
+              </li>
+
+              <li>
+                <strong>Ryogami Nix sandbox build fixed.</strong>
+                Ryogami's tests launch additional build and runtime processes.
+                Those tests are valid on a normal system but incompatible with
+                the restrictions of a Nix package build sandbox. The Nix package
+                now keeps normal tests inside the sandbox while excluding the
+                E2E suite from that phase. The complete E2E suite was separately
+                validated outside the sandbox.
+              </li>
+
+              <li>
+                <strong>Night Light process reporting fixed.</strong>
+                The shell daemon, Night Light command helper and compositor
+                providers now use compatible process identity handling. This
+                prevents the UI, command-line state and compositor action layer
+                from disagreeing about whether Night Light is actually running.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Changes</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Updated Niri integration.</strong>
+                Niri support has received another upstream synchronization pass
+                covering compositor actions, configuration generation, keybind
+                handling, workspace behaviour, Night Light, window rules, layout
+                settings, provider capabilities and WM client interfaces. The
+                provider continues to report through the Niri socket with
+                Niri-specific capabilities exposed through the common Ryoku WM
+                layer.
+              </li>
+
+              <li>
+                <strong>Updated Hyprland integration.</strong>
+                Hyprland has received the corresponding WM seam and keybind
+                updates required by the newer shared Ryoku interfaces. Night
+                Light wrapper compatibility is implemented for Hyprland as well
+                as Niri.
+              </li>
+
+              <li>
+                <strong>Updated WM seam.</strong>
+                The shared Ryoku WM layer has been synchronized with upstream
+                changes around keybind representation, compositor capabilities,
+                Night Light metadata, provider communication, configuration
+                editing and client behaviour. Vendored copies used by Ryoku
+                components remain aligned with the canonical WM implementation.
+              </li>
+
+              <li>
+                <strong>Updated Ryogami.</strong>
+                Ryogami has been synchronized with the newer wallpaper
+                functionality, including Crossfade transition support, Center and
+                Tile wallpaper modes, updated transition handling, improved shader
+                selection and wallpaper settings UI improvements.
+              </li>
+
+              <li>
+                <strong>Updated RyoStore backend.</strong>
+                RyoStore received upstream backend changes covering catalogue
+                revision handling, product manifests, registry behaviour,
+                transaction handling, plugin providers, product migration logic
+                and project/product relationships. The Product Detail UI has also
+                received substantial updates.
+              </li>
+
+              <li>
+                <strong>Updated desktop shell.</strong>
+                The shell now includes the corresponding support required for
+                store widgets and newer desktop plugin behaviour, including
+                desktop widget hosting, plugin slots, widget menus, plugin colour
+                configuration, desktop composition and shell IPC integration.
+              </li>
+
+              <li>
+                <strong>Updated Rashin backend.</strong>
+                Rashin received updates across agents, indexing, vault handling,
+                Prowl integration, commands, source mirrors, skills, GUI guidance
+                and web UI references.
+              </li>
+
+              <li>
+                <strong>Updated translations.</strong>
+                The source i18n catalogue has been refreshed to include the new
+                and changed user-facing strings introduced by this sync.
+              </li>
+
+              <li>
+                <strong>Xwayland Satellite is now packaged by the NixOS port.</strong>
+                The port now provides its own Ryoku Xwayland Satellite package.
+                This makes the Niri runtime dependency deterministic and allows
+                the popup-safe revision to be pinned instead of depending on
+                whichever version currently exists in nixpkgs.
+              </li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-70-2-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // UNSTABLE 0.70.2</div>
+
+          <header class="release-head">
+            <h2 class="release-version">RYOKU ON NIXOS<br>0.70.2</h2>
+            <div class="release-date">UNSTABLE BRANCH<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">
+            This is a major parity and stability update for the
+            <strong>unstable branch</strong> of Ryoku on NixOS.
+            It brings the NixOS port substantially closer to current upstream
+            Ryoku, expands Niri support, moves more desktop behaviour behind
+            Ryoku's compositor-neutral WM provider layer, and improves how
+            generated compositor configuration follows the active NixOS generation.
+          </p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>New and expanded</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Major Niri 26.04 parity work.</strong>
+                Niri now uses the current split configuration model for input,
+                layout, rules, miscellaneous settings and persisted state instead
+                of relying on one monolithic generator.
+              </li>
+
+              <li>
+                <strong>Expanded compositor-neutral WM provider.</strong>
+                Touchpad controls, window summon, output cycling, output
+                enable/disable, Game Mode, Night Light and palette border updates
+                now travel through Ryoku's shared WM seam instead of
+                Hyprland-specific helper paths.
+              </li>
+
+              <li>
+                <strong>Provider-driven Settings pages.</strong>
+                Animations, performance, window rules, layer rules, import and
+                other compositor-facing controls now follow the active WM provider
+                and its advertised capabilities.
+              </li>
+
+              <li>
+                <strong>Unified keybind catalogue.</strong>
+                Settings and the shell cheatsheet now read the live provider's
+                keybind inventory instead of parsing Hyprland configuration
+                directly. Hyprland and Niri can both report real shortcuts,
+                unsupported actions, rebinds, custom shortcuts and
+                provider-specific behaviour.
+              </li>
+
+              <li>
+                <strong>Palette-following borders.</strong>
+                Borders can now dynamically follow the active Ryoku colour palette
+                while still supporting manually pinned colours. This works across
+                both Hyprland and Niri.
+              </li>
+
+              <li>
+                <strong>Numpad parity.</strong>
+                Workspace and custom bindings now account for both NumLock-on and
+                NumLock-off keypad keysyms so shortcuts remain functional in
+                either state.
+              </li>
+
+              <li>
+                <strong>Neutral shell helpers.</strong>
+                A large group of desktop helpers has moved out of the
+                Hyprland-specific tree and into Ryoku's shared shell payload,
+                including brightness, calculator, colour picker, OCR, QR,
+                recording, radio, song recognition, LocalSend, application
+                launching and system-information helpers.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Fixed</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Niri session handoff.</strong>
+                Ryoku now stops its session when the Wayland compositor exits
+                instead of leaving background services attached to a dead Wayland
+                socket after logout.
+              </li>
+
+              <li>
+                <strong>Ryogami NVIDIA crash path.</strong>
+                Ryoku shell services now avoid the problematic Qt FFmpeg hardware
+                decoding path that could crash Quickshell through NVIDIA
+                VA-API/CUDA surface export while using Ryogami.
+              </li>
+
+              <li>
+                <strong>Chroma workspace presentation.</strong>
+                The Chroma workspace rail has been restored to the intended
+                dot/circle design and once again reacts correctly to live
+                workspace state.
+              </li>
+
+              <li>
+                <strong>Chroma per-display overrides.</strong>
+                Individual displays now use a proper
+                <strong>Follow global / On / Off</strong> model instead of an
+                explicit boolean silently overriding the global shell setting.
+              </li>
+
+              <li>
+                <strong>Brightness persistence.</strong>
+                Ryoku now persists the intended brightness setting rather than
+                using the panel's nonlinear raw readback value.
+              </li>
+
+              <li>
+                <strong>Backlight device selection.</strong>
+                Internal-panel brightness now uses the appropriate hardware
+                backlight selector.
+              </li>
+
+              <li>
+                <strong>Smarter DDC handling.</strong>
+                Ryoku avoids unnecessary DDC probing when no external DRM display
+                is connected and caches I²C bus discovery against the connected
+                monitor set.
+              </li>
+
+              <li>
+                <strong>Settings null handling.</strong>
+                Literal JSON <code>null</code> values are guarded correctly rather
+                than leaking invalid state into settings maps.
+              </li>
+
+              <li>
+                <strong>Hyprland native maximize.</strong>
+                Maximize behaviour now uses current Hyprland-native functionality
+                instead of the retired fullscreen workaround.
+              </li>
+
+              <li>
+                <strong>Animation preset safety.</strong>
+                Snap/base curve handling was corrected so animation presets cannot
+                reference a curve that does not exist.
+              </li>
+
+              <li>
+                <strong>Launcher frost stability.</strong>
+                Screencopy capture lifetime is preserved correctly so launcher
+                dismissal cannot destroy capture objects too early.
+              </li>
+
+              <li>
+                <strong>Wallpaper reveal shader.</strong>
+                Synced the upstream fix for reveal artefacts.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🖥️</span><h3>Niri</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Expanded output management.</strong>
+                Ryoku can cycle outputs, enable outputs and move windows or
+                workspaces between outputs through the provider layer.
+              </li>
+
+              <li>
+                <strong>Touchpad state.</strong>
+                Touchpad enable/disable state is persisted through the Niri
+                provider and regenerated into the effective configuration.
+              </li>
+
+              <li>
+                <strong>Rules and layout parity.</strong>
+                Expanded input, layout, window-rule and configuration generation
+                is now provided by the split Niri backend.
+              </li>
+
+              <li>
+                <strong>Provider window rules.</strong>
+                Niri advertises the rule actions it actually supports so Settings
+                does not present controls the compositor cannot honour.
+              </li>
+
+              <li>
+                <strong>Removed obsolete Super-tap handling.</strong>
+                The old standalone Super-key tap path has been removed now that
+                the provider-driven desktop no longer depends on it.
+              </li>
+
+              <li>
+                <strong>Current Niri configuration syntax.</strong>
+                Generated configuration has been updated for the current Niri
+                26.04 behaviour and was validated with <code>niri validate</code>.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⌨️</span><h3>Keybindings</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>One catalogue for both compositors.</strong>
+                Ryoku now owns a compositor-neutral keybind catalogue shared by
+                Settings, the shell cheatsheet and WM providers.
+              </li>
+
+              <li>
+                <strong>Live provider inventory.</strong>
+                The Keybinds page now reflects the compositor actually running
+                rather than assuming Hyprland's <code>binds.lua</code> is the
+                source of truth.
+              </li>
+
+              <li>
+                <strong>Rebinds remain understandable.</strong>
+                Providers expose both the shipped default chord and the effective
+                rebound chord so Settings can display and reset shortcuts
+                correctly.
+              </li>
+
+              <li>
+                <strong>Unsupported binds are visible.</strong>
+                When a compositor cannot express one of Ryoku's catalogue actions,
+                the provider reports that limitation instead of silently dropping
+                the shortcut.
+              </li>
+
+              <li>
+                <strong>Custom shortcuts remain supported.</strong>
+                User-defined shortcuts are folded into the same provider-driven
+                inventory alongside Ryoku's shipped binds.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🎨</span><h3>Settings and appearance</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Provider-aware Settings search.</strong>
+                The Window Manager page no longer hard-codes compositor names.
+                Search learns the active provider dynamically.
+              </li>
+
+              <li>
+                <strong>Capability-gated controls.</strong>
+                Features such as output mirroring, touchpad controls and
+                window-rule actions are shown only when the active provider says
+                it supports them.
+              </li>
+
+              <li>
+                <strong>Palette-following borders.</strong>
+                When enabled, wallpaper/theme palette changes update compositor
+                border colours automatically.
+              </li>
+
+              <li>
+                <strong>Pinned border colours remain respected.</strong>
+                Disabling palette-following preserves the user's explicitly chosen
+                border instead of allowing later palette changes to overwrite it.
+              </li>
+
+              <li>
+                <strong>Provider-driven Hub pages.</strong>
+                Several compositor-facing Settings pages have been separated from
+                Hyprland assumptions so the same UI works correctly under Niri.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🌙</span><h3>Night Light</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                Night Light now uses Ryoku's WM capability/action layer instead of
+                having the shell directly assume one compositor backend.
+              </li>
+
+              <li>
+                Hyprland continues to use <code>hyprsunset</code>.
+              </li>
+
+              <li>
+                Niri uses the appropriate Wayland gamma backend.
+              </li>
+
+              <li>
+                The shell discovers the active backend from provider capabilities
+                and presents a common interface to both compositors.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>❄️</span><h3>NixOS integration</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>Generated compositor config now follows the NixOS generation.</strong>
+                Ryoku re-authors the effective configuration for both
+                <code>ryoku-wm-hyprland</code> and
+                <code>ryoku-wm-niri</code> from <code>desktop.json</code>
+                during materialization.
+              </li>
+
+              <li>
+                Provider-side config-generation fixes therefore take effect as
+                soon as the new NixOS generation is switched rather than waiting
+                for the user to save a setting later.
+              </li>
+
+              <li>
+                <strong>Both compositor trees stay current.</strong>
+                Even the compositor that is not currently active gets its
+                generated configuration refreshed, preventing a later switch from
+                reviving stale <code>settings.lua</code>,
+                <code>rebinds.lua</code>, <code>settings.kdl</code> or
+                <code>rebinds.kdl</code>.
+              </li>
+
+              <li>
+                <strong>Nix-safe helper packaging.</strong>
+                Shared shell helpers use Nix-patched interpreters instead of
+                depending on FHS paths such as <code>/bin/bash</code>.
+              </li>
+
+              <li>
+                <strong>Non-FHS tests corrected.</strong>
+                Helper tests that previously replaced <code>PATH</code> with
+                <code>/usr/bin:/bin</code> now preserve the NixOS environment.
+              </li>
+
+              <li>
+                <strong>WM vendor tree.</strong>
+                The NixOS packages now build against the real vendored WM seam,
+                with consistency checks ensuring every bundled copy matches
+                <code>ryoku/wm</code>.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Internal cleanup</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                Multiple compositor-specific helper scripts have been removed or
+                relocated now that their behaviour belongs to the shared WM or
+                shell layers.
+              </li>
+
+              <li>
+                Game Mode is now dispatched through
+                <code>ryoku wm act decoration.gameMode</code> rather than the shell
+                directly driving Hyprland.
+              </li>
+
+              <li>
+                The stale Game Mode test was corrected to validate the new WM seam
+                instead of expecting the old direct <code>hyprctl</code> path.
+              </li>
+
+              <li>
+                Shared WM vendor copies used by the CLI, Hub, Rashin, shell and
+                Ryogami are kept aligned with the canonical implementation.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>✅</span><h3>Validation</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                This update was validated on an actual switched NixOS generation,
+                not only from the source tree.
+              </li>
+
+              <li>
+                Runtime-tested areas include the Niri provider and generated
+                configuration, Hyprland provider behaviour, Settings / Hub,
+                Keybinds, Window Manager pages, Chroma, palette borders,
+                Night Light, shell helpers and Nix materialization.
+              </li>
+
+              <li>
+                The generated Niri configuration passed
+                <code>niri validate</code>.
+              </li>
+
+              <li>
+                WM provider, Hub backend, border policy, JavaScript keybind,
+                vendoring and Nix integration checks passed during the port.
+              </li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⬆️</span><h3>Branch and update notes</h3></div>
+
+            <ul class="notes-list">
+              <li>
+                <strong>This release is for the <code>unstable</code> branch.</strong>
+                It is the current development build of Ryoku on NixOS and is
+                <strong>not</strong> the stable channel release.
+              </li>
+
+              <li>
+                Version: <strong>0.70.2-beta.19</strong>.
+              </li>
+
+              <li>
+                Users already tracking unstable can update normally with
+                <code>ryoku update</code>.
+              </li>
+
+              <li>
+                NixOS generation rollback remains available if a future unstable
+                build causes problems.
+              </li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-66-3-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // PREVIOUS NIXOS PORT</div>
+          <header class="release-head">
+            <h2 class="release-version">ONOGORO<br>0.66.3</h2>
+            <div class="release-date">NIXOS PATCH<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">This update focuses on polishing the NixOS experience, expanding display controls, improving desktop responsiveness, and making Ryoku's update system properly Nix-native.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>New</h3></div>
+            <ul class="notes-list">
+              <li><strong>Stable and unstable update channels.</strong> Ryoku on NixOS can now switch between release and development channels with <code>ryoku track stable</code> and <code>ryoku track unstable</code>. The selected channel is persisted directly in the system's Nix flake configuration.</li>
+              <li><strong>Commit-aware unstable updates.</strong> The unstable channel now follows new Ryoku commits even when the visible version number has not changed, so development updates no longer require a version bump before <code>ryoku update</code> can detect them.</li>
+              <li><strong>Per-display shell controls.</strong> Ryoku shell visibility can now be configured independently for each display, with bars and shell components enabled or disabled per monitor while retaining sensible global fallbacks.</li>
+              <li><strong>Expanded Chroma controls.</strong> Chroma gains additional display and appearance controls, including per-output configuration and more flexible bar presentation.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Fixed</h3></div>
+            <ul class="notes-list">
+              <li><strong>Hyprland focus-change stutter.</strong> Fixed severe desktop stuttering that could occur when moving the pointer between different Hyprland windows while focus-follows-mouse was enabled. Active-window events no longer force unnecessary full compositor state refreshes, and unchanged window-manager state is no longer repeatedly republished.</li>
+              <li><strong>Correct NixOS branding.</strong> Ryoku Settings now identifies the platform as <strong>RYOKU NIXOS</strong> instead of carrying over stale <strong>RYOKU ARCH</strong> branding. Additional active Arch-specific branding has also been cleaned up.</li>
+              <li><strong>Correct NixOS package statistics.</strong> The Profile page no longer presents Arch-specific package terminology and now uses the NixOS-appropriate <strong>SYSTEM · USER · TOTAL</strong> labels.</li>
+              <li><strong>NixOS Information integration.</strong> The dedicated NixOS Information section in Settings has been restored and correctly integrated into the current Hub interface.</li>
+              <li><strong>Stale DDC helper packaging.</strong> Removed an obsolete Nix package reference to the old <code>ryoku-ddc-monitors</code> helper. Monitor brightness and DDC/CI support continue through Ryoku's current display services and brightness controls.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⚙️</span><h3>Improved</h3></div>
+            <ul class="notes-list">
+              <li><strong>Safer NixOS updates.</strong> Ryoku's Nix update path now builds the complete NixOS configuration before switching generations. If a channel switch fails to build, Ryoku restores the previous flake configuration and lock file instead of leaving the system partially switched.</li>
+              <li><strong>Native Nix update workflow.</strong> Ryoku updates on NixOS now operate through the configured Ryoku flake input, with declarative channel selection, flake-input-only updates, pre-switch builds, generation-based rollback, automatic Ryoku service refresh and clear channel/source reporting through <code>ryoku status</code>.</li>
+              <li><strong>Display-state performance.</strong> Compositor state handling now refreshes only the window-manager state affected by an event instead of unnecessarily rebuilding unrelated state, substantially reducing shell overhead during frequent focus changes.</li>
+              <li><strong>Documentation and project presentation.</strong> The polished Ryoku on NixOS README and artwork have been restored, including the monochrome/editorial project presentation and updated NixOS-specific documentation.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>⬆️</span><h3>Update</h3></div>
+            <ul class="notes-list">
+              <li>Users already tracking Ryoku can update normally with <code>ryoku update</code>.</li>
+              <li>To follow development builds, use <code>ryoku track unstable</code>.</li>
+              <li>To return to the stable release channel, use <code>ryoku track stable</code>.</li>
+              <li>NixOS updates continue to use normal NixOS generations for rollback.</li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-63-1-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // MUSUBI</div>
+          <header class="release-head">
+            <h2 class="release-version">MUSUBI<br>0.63.1</h2>
+            <div class="release-date">結び<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">This update brings Ryoku on NixOS up to <strong>v0.63.1-beta.19</strong>, completing the latest upstream sync while preserving the NixOS-specific adaptations required to keep Ryoku fully declarative and functional. This is a much larger update than the previous patch, with major changes to wallpaper effects, audio, translations, Ryotunes, RyoStore, Ryoku Settings and several parts of the desktop.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li>Added <strong>Ryostage</strong>, Ryoku's new wallpaper staging system which replaces the old Depth and Parallax systems.</li>
+              <li>Added support for both Ryostage segmentation models:
+                <ul>
+                  <li><strong>U2NetP</strong> — smaller and faster model for quicker processing.</li>
+                  <li><strong>BiRefNet General Lite</strong> — much larger model for higher quality cutouts.</li>
+                </ul>
+              </li>
+              <li>Added the new <strong>10-band Ryoku Equalizer</strong>, including support for EQ presets, individual band controls, enabling/disabling the EQ and automatic audio sink retargeting.</li>
+              <li>Added a fully declarative <strong>Ryoku EQ systemd user service</strong> for NixOS.</li>
+              <li>Added Ryoku's new <strong>shared internationalisation system</strong>, including the full upstream translation catalogue and language metadata.</li>
+              <li>Added the new <code>ryoku-i18n</code> tooling to NixOS while keeping all translation data inside the immutable Nix store.</li>
+              <li>Added the new upstream <strong>Stage controls and editor</strong>, including wallpaper foreground layers, positioning, angles, outlines and Stage widgets.</li>
+              <li>Added the latest upstream <strong>Ryoku Settings / Hub</strong> changes, including improvements to plugins, profile information, updates and translated UI elements.</li>
+              <li>Added the latest <strong>RyoStore</strong> backend and interface changes.</li>
+              <li>Added the latest <strong>Ryoport</strong> interface and backend changes.</li>
+              <li>Added the latest upstream <strong>Hyprland integration changes</strong>, including updated workspace, keybind and window-rule behaviour.</li>
+              <li>Updated <strong>Ryotunes to v1.0.6</strong>, replacing the previous legacy v2.5.1 build and bringing the latest native QML client, daemon, CLI and playback changes to Ryoku on NixOS.</li>
+              <li>Added the latest upstream Ryotunes integration used by the Ryoku CLI and Doctor.</li>
+              <li>Added the latest upstream Doctor checks including Stage, language and other new system reconciliation logic while retaining the NixOS-specific Doctor backend.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Ryotunes packaging for the new v1 release layout.</li>
+              <li>Fixed the Ryotunes native QML client runtime path on NixOS while retaining the declarative <code>ryotunesd</code> service.</li>
+              <li>Fixed Ryotunes launching normal desktop helpers from its daemon by exposing the required NixOS runtime environment without reverting to mutable Arch-style paths.</li>
+              <li>Fixed shared translations not having a stable system-wide location on NixOS by exposing the immutable catalogue through <code>RYOKU_I18N_DIR</code>.</li>
+              <li>Fixed the Ryoku CLI not automatically seeing the new shared translation catalogue.</li>
+              <li>Fixed the shell, Hub and other Ryoku components not having a common NixOS translation path.</li>
+              <li>Fixed Ryostage's upstream mutable Python/venv installation model for NixOS. Required Python libraries are now supplied declaratively instead.</li>
+              <li>Fixed Ryostage model discovery on NixOS while retaining compatibility with existing Depth/Parallax model caches.</li>
+              <li>Fixed the new equalizer relying on Arch system paths by providing the required PipeWire, PulseAudio, systemd and helper tools through its Nix runtime.</li>
+              <li>Preserved the NixOS-specific Docker/Stash behaviour while updating it to the new translated upstream UI.</li>
+              <li>Preserved all existing NixOS-specific CLI, updater, Doctor, Ryogami, Ryotunes and system integration behaviour during the upstream rebase.</li>
+              <li>Fixed remaining references to the old <code>neur0map</code> Ryoku repositories following the upstream move to <strong>Ryoku-dev</strong>.</li>
+              <li>Synced previously missed lockscreen and shared UI changes discovered during the final upstream integrity audit.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Changes</h3></div>
+            <ul class="notes-list">
+              <li><strong>Depth and Parallax have been retired upstream</strong> and replaced by Ryostage.</li>
+              <li><code>ryoku-depth</code> has been removed and the old Parallax engine has transitioned to the new <code>ryostage</code> command.</li>
+              <li><strong>awww has been removed</strong> from the Ryoku Nix runtime. Wallpaper rendering and transitions are now handled by <strong>Ryogami</strong>.</li>
+              <li>Ryostage model installation is declarative on NixOS. The upstream command is still supported, but NixOS does not create a mutable Python environment behind the user's back.</li>
+              <li>Equalizer startup is managed declaratively through NixOS rather than installing the upstream <code>/usr/bin/pipewire</code> systemd unit.</li>
+              <li>Translation catalogues now live in the shared <code>ryoku/i18n</code> tree instead of the older <code>ryoku/ui/translations</code> layout.</li>
+              <li>Ryoku on NixOS now tracks the new <strong>Ryoku-dev</strong> organisation for Ryoku and Ryotunes. Unrelated upstream repositories such as <code>neur0map/glazepkg</code> remain unchanged.</li>
+              <li>Ryotunes is now pinned to the exact <strong>v1.0.6</strong> source used alongside this Ryoku release rather than following a moving latest version.</li>
+              <li>The old separate <code>ryotunes-qml.desktop</code> launcher has been removed in line with upstream Ryotunes. The standard Ryotunes launcher is now the canonical application entry.</li>
+              <li>RyoStore, Ryoport, Hyprland, the lockscreen and shared Ryoku UI have all been synchronised against the exact <strong>v0.63.1-beta.19</strong> upstream source.</li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-60-1-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // 0.60.1</div>
+          <header class="release-head">
+            <h2 class="release-version">0.60.1<br>BETA.19</h2>
+            <div class="release-date">RYOKU ON NIXOS<br>UPDATE PATCH NOTES</div>
+          </header>
+
+          <p class="release-summary">This update brings Ryoku on NixOS up to <strong>v0.60.1-beta.19</strong>, adding the latest upstream features while fixing several NixOS-specific issues found during testing/ bug reporting.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li>Parallax Wallpapers with layered foreground/background effects and multi-monitor support</li>
+              <li>Parallax tab added beside Depth in Quick Settings</li>
+              <li>KDE colour integration allowing KDE apps to follow Ryoku/Matugen themes</li>
+              <li>Music visualizers now automatically update colours with your wallpaper</li>
+              <li>Improved visualizer rotation and edge positioning</li>
+              <li>Improved HDMI/TV monitor persistence</li>
+              <li>Power profiles now persist more reliably between sessions</li>
+              <li>Ghostty now keeps your personal configuration when Ryoku updates its theme</li>
+              <li>Full visible shell/widget parity with the latest upstream Ryoku</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Ryogami wallpaper UI failing to open on NixOS</li>
+              <li>Fixed Qt/QuickShell incompatibilities which could break wallpaper previews and multimedia features</li>
+              <li>Fixed Parallax not appearing automatically for users upgrading from older Ryoku versions</li>
+              <li>Fixed HDMI displays and TVs losing saved monitor settings after connector changes</li>
+              <li>Fixed wallpaper/theme changes not updating the now-playing spectrum correctly</li>
+              <li>Fixed Ghostty theme updates overwriting user settings</li>
+              <li>Fixed power profile state being lost unexpectedly</li>
+              <li>Removed outdated Spotify/Spicetify integration and leftover packaging</li>
+              <li>Fixed several NixOS packaging, service and dependency issues discovered during the 0.60 port</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>Changes</h3></div>
+            <ul class="notes-list">
+              <li>Spotify and Spicetify are no longer bundled or managed by Ryoku</li>
+              <li>Ryoku's Qt and QuickShell components are now kept on the same locked version to prevent compatibility issues</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-known">
+            <div class="notes-group-head"><span>⁉️</span><h3>Known Issues</h3></div>
+            <ul class="notes-list">
+              <li>Ryotunes Spotify doesnt work as intended (This song is not avaliable on spotify errors on every song), this is not a bug with NixOS and simply an upstream bug from the main repo</li>
+            </ul>
+          </section>
+        </article>
+
+        <article id="v0-58-6-beta-19" class="release-entry release-entry-full">
+          <div class="eyebrow">ARCHIVE // MUSUBI</div>
+          <header class="release-head">
+            <h2 class="release-version">MUSUBI<br>0.58.6</h2>
+            <div class="release-date">結び<br>BETA.19</div>
+          </header>
+
+          <p class="release-summary">Musubi, (meaning to tie together in Japanese) updates Ryoku on NixOS from <strong>0.48.8-beta.18 → 0.58.6-beta.19</strong>.</p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>Features added</h3></div>
+            <ul class="notes-list">
+              <li><strong>Ryogami</strong> wallpaper engine with live wallpapers, shaders, transitions, playlists and multi-monitor support</li>
+              <li><strong>Depth Wallpapers</strong> fully integrated into Ryogami</li>
+              <li><strong>Ryotunes</strong> with MPRIS and playerctl support</li>
+              <li><strong>Ryoport</strong> with Looking Glass and optional GPU passthrough</li>
+              <li><strong>Plugin system</strong> with install, validate, remove, export and QS Bar integration</li>
+              <li><strong>QS Bar overhaul</strong> with persistent layouts, widget catalogue and improved Control Center</li>
+              <li><strong>Rashin upgrades</strong> with packaged skills and Prowl code intelligence</li>
+              <li><strong>New NixOS installer</strong> with dry runs, backups, rollback and safe flake editing aswell as <strong>finally</strong> fully supporting NixOS stable</li>
+              <li><strong>Native Nix update backend</strong></li>
+              <li><strong>Declarative GPU passthrough module</strong></li>
+              <li>New keyboard OSD, widgets, launcher actions and visual improvements</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug Fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed Arch-only pacman, AUR and system management behaviour on NixOS</li>
+              <li>Fixed Doctor attempting unsafe Arch-specific repairs</li>
+              <li>Fixed update/version detection for local NixOS checkouts</li>
+              <li>Fixed SDDM theme switching and Polkit integration</li>
+              <li>Fixed Rashin skills not being packaged or detected</li>
+              <li>Fixed Rashin incorrectly identifying NixOS as Arch</li>
+              <li>Fixed Ryogami/Depth paths, renderer cleanup and multi-monitor behaviour</li>
+              <li>Fixed RyoVM help commands and missing xorriso</li>
+              <li>Fixed GPU passthrough being exposed before the host is configured</li>
+              <li>Fixed plugin install, discovery and cleanup issues</li>
+              <li>Fixed installer host detection and flake parsing edge cases</li>
+              <li>Fixed Git hooks failing on NixOS due to /bin/bash</li>
+              <li>Numerous additional NixOS path, service and dependency fixes</li>
+            </ul>
+          </section>
+
+          <div class="tested-stamp">✅ Fully tested on my main PC and Testing laptop</div>
+        </article>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div><span>力</span><strong>RYOKU // NIXOS</strong></div>
+    <nav><a href="index.html">Home</a><a href="install.html">Install guide</a><a href="https://ryoku.dev" target="_blank" rel="noreferrer">Ryoku ↗</a></nav>
+    <small>力と美のために · For the sake of power and beauty.</small>
+  </footer>
+  <script src="script-v2-4.js"></script>
+</body>
+</html>
