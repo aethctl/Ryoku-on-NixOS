@@ -35,8 +35,8 @@
         <p>All patch notes are stored here</p>
       </div>
       <dl class="subpage-meta reveal visible">
-        <div><dt>Current</dt><dd>0.70.3-beta.19 · UNSTABLE</dd></div>
-        <div><dt>Previous</dt><dd>0.70.2-beta.19</dd></div>
+        <div><dt>Current</dt><dd>0.73.6-beta.20 · MUSUBI</dd></div>
+        <div><dt>Previous</dt><dd>0.70.3-beta.19</dd></div>
         <div><dt>Order</dt><dd>Newest first</dd></div>
         <div><dt>Archive</dt><dd>Persistent</dd></div>
       </dl>
@@ -46,17 +46,94 @@
       <aside class="docs-sidebar">
         <div class="docs-sidebar-title">RELEASES // INDEX</div>
         <nav>
-          <a href="#v0-70-3-beta-19"><span>01</span>UNSTABLE 0.70.3-beta.19</a>
-          <a href="#v0-70-2-beta-19"><span>02</span>UNSTABLE 0.70.2-beta.19</a>
-          <a href="#v0-66-3-beta-19"><span>03</span>Onogoro 0.66.3-beta.19</a>
-          <a href="#v0-63-1-beta-19"><span>04</span>Musubi 0.63.1-beta.19</a>
-          <a href="#v0-60-1-beta-19"><span>05</span>0.60.1-beta.19</a>
-          <a href="#v0-58-6-beta-19"><span>06</span>Musubi 0.58.6-beta.19</a>
+          <a href="#v0-73-6-beta-20"><span>01</span>Musubi 0.73.6-beta.20</a>
+          <a href="#v0-70-3-beta-19"><span>02</span>UNSTABLE 0.70.3-beta.19</a>
+          <a href="#v0-70-2-beta-19"><span>03</span>UNSTABLE 0.70.2-beta.19</a>
+          <a href="#v0-66-3-beta-19"><span>04</span>Onogoro 0.66.3-beta.19</a>
+          <a href="#v0-63-1-beta-19"><span>05</span>Musubi 0.63.1-beta.19</a>
+          <a href="#v0-60-1-beta-19"><span>06</span>0.60.1-beta.19</a>
+          <a href="#v0-58-6-beta-19"><span>07</span>Musubi 0.58.6-beta.19</a>
         </nav>
         <a class="button" href="index.html">← Back to site</a>
       </aside>
 
       <div class="docs-content patch-notes-content">
+
+        <article id="v0-73-6-beta-20" class="release-entry release-entry-full">
+          <div class="eyebrow">MUSUBI // CURRENT RELEASE</div>
+
+          <header class="release-head">
+            <h2 class="release-version">RYOKU ON NIXOS<br>0.73.6</h2>
+            <div class="release-date">MUSUBI<br>BETA.20</div>
+          </header>
+
+          <p class="release-summary">
+            Musubi 0.73.6-beta.20 is a major NixOS update centred around
+            <strong>full Niri support alongside Hyprland</strong>, broader
+            compositor-neutral desktop plumbing, native Rashin + Hermes support,
+            and a large round of NixOS-specific fixes and maintenance.
+          </p>
+
+          <section class="notes-group notes-features">
+            <div class="notes-group-head"><span>✨</span><h3>New features</h3></div>
+            <ul class="notes-list">
+              <li>Full <strong>Niri support</strong> alongside Hyprland.</li>
+              <li>Native Niri IPC for windows, workspaces, outputs and focus state.</li>
+              <li>Hyprland ↔ Niri switching while preserving each compositor's config.</li>
+              <li>Per-output Niri workspaces and improved multi-monitor support.</li>
+              <li><strong>Super + Tab</strong> opens the Niri overview.</li>
+              <li>Wallpaper-backed Niri overview.</li>
+              <li>Niri-specific settings and keybinds.</li>
+              <li>Expanded Niri support for window rules, opacity, shadows, layouts, input and outputs.</li>
+              <li>Night Light support through the shared compositor layer.</li>
+              <li>Provider-aware Doctor and recovery tools.</li>
+              <li>Hybrid AMD/NVIDIA cursor handling under Niri.</li>
+              <li>First-login config bootstrap for fresh Niri installs.</li>
+              <li>Native <strong>Rashin + Hermes support on NixOS</strong>.</li>
+              <li>Hermes is packaged through the Nix flake and pinned in <code>flake.lock</code>.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-fixes">
+            <div class="notes-group-head"><span>🛠️</span><h3>Bug fixes</h3></div>
+            <ul class="notes-list">
+              <li>Fixed invalid keyboard layouts such as <code>English (US)</code> being passed to Niri instead of <code>us</code>.</li>
+              <li>Fixed Steam/Wine popup menus instantly closing under Niri/Xwayland.</li>
+              <li>Fixed translucent Niri windows becoming opaque when blur was enabled.</li>
+              <li>Fixed Niri portal and GTK file-picker routing.</li>
+              <li>Improved screen sharing and screencast portal behaviour.</li>
+              <li>Fixed Ryoku surfaces failing to find shared QML modules under Niri.</li>
+              <li>Fixed compositor switching removing the other compositor's config.</li>
+              <li>Fixed Doctor and recovery assuming every system was running Hyprland.</li>
+              <li>Fixed stale <code>depth.md</code> documentation links after Depth/Parallax moved to Ryostage.</li>
+              <li>Fixed several session, workspace and compositor-state integration issues.</li>
+            </ul>
+          </section>
+
+          <section class="notes-group notes-changes">
+            <div class="notes-group-head"><span>🧹</span><h3>What changed</h3></div>
+            <ul class="notes-list">
+              <li>
+                A large part of Ryoku's desktop now sits behind a shared
+                window-manager layer, allowing the same shell, settings and tools
+                to work across both <strong>Hyprland and Niri</strong> while still
+                exposing compositor-specific features where needed.
+              </li>
+              <li>
+                Rashin has been updated to properly understand NixOS instead of
+                treating every Ryoku installation like Arch. Hermes is now
+                provided through Nix, package and update information comes from
+                the Nix backend, and Arch-only <code>pacman</code>/<code>yay</code>
+                behaviour is avoided.
+              </li>
+              <li>
+                The repository received a major maintenance pass with updated
+                documentation, cleaner development tooling, improved PR workflows
+                and new website and patch-note infrastructure.
+              </li>
+            </ul>
+          </section>
+        </article>
 
         <article id="v0-70-3-beta-19" class="release-entry release-entry-full">
           <div class="eyebrow">UNSTABLE // CURRENT DEVELOPMENT BRANCH</div>
