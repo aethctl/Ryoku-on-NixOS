@@ -21,7 +21,7 @@ If you are using the NixOS port, start with [`nixos.md`](nixos.md).
 | [`barstyles.md`](barstyles.md) | Shared desktop | External bar-style contract and development |
 | [`launcher.md`](launcher.md) | Shared desktop | Launcher behavior and providers |
 | [`frame.md`](frame.md) | Shared desktop | Ryoku frame architecture |
-| [`depth.md`](depth.md) | Shared desktop | Depth and surface conventions |
+| [`stage.md`](stage.md) | Shared desktop | Depth and surface conventions |
 | [`conventions.md`](conventions.md) | Shared desktop | Project conventions |
 
 ## Shared desktop documentation
@@ -33,7 +33,7 @@ Ryoku on NixOS:
 - [`barstyles.md`](barstyles.md)
 - [`config-import.md`](config-import.md)
 - [`conventions.md`](conventions.md)
-- [`depth.md`](depth.md)
+- [`stage.md`](stage.md)
 - [`frame.md`](frame.md)
 - [`hyprland-plugins.md`](hyprland-plugins.md)
 - [`launcher.md`](launcher.md)
