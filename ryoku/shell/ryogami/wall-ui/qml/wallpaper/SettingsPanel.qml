@@ -75,6 +75,13 @@ Item {
   z: 102
   width: Math.min(((settingsPanel.activeTab === "performance" ? 1080 : (settingsPanel.activeTab === "general" || settingsPanel.activeTab === "edit") ? 900 : 760) * Config.uiScale) + _keybindsColW + _s(24), Screen.width - _s(48))
   Behavior on width { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
+  // A tab taller than the screen scrolls inside contentLoader instead of
+  // running off the bottom edge. The budget is the screen minus the panel's
+  // own offset (the picker places it _s(16) from the top), the tab strip and
+  // the bottom padding; the panel height then follows the capped content.
+  readonly property real _contentMaxHeight: Math.max(
+    _s(240),
+    Screen.height - _s(16) - _s(16) - tabRow.height - 36)
   height: tabRow.height + contentLoader.height + 36
 
   visible: settingsOpen || opacity > 0.01
@@ -145,7 +152,16 @@ Item {
         hexCols: Config.hexCols,
         hexScrollStep: Config.hexScrollStep,
         hexArc: Config.hexArc,
-        hexArcIntensity: Config.hexArcIntensity
+        hexArcIntensity: Config.hexArcIntensity,
+        hexCurve: Config.hexCurve,
+        hexShape: Config.hexShape,
+        hexWaves: Config.hexWaves,
+        hexGapX: Config.hexGapX,
+        hexGapY: Config.hexGapY,
+        hexStagger: Config.hexStagger,
+        hexLens: Config.hexLens,
+        hexTwist: Config.hexTwist,
+        hexScatter: Config.hexScatter
       }
     } else if (Config.displayMode === "wall") {
       preset = {
@@ -153,6 +169,36 @@ Item {
         gridRows: Config.gridRows,
         gridThumbWidth: Config.gridThumbWidth,
         gridThumbHeight: Config.gridThumbHeight
+      }
+    } else if (Config.displayMode === "hand") {
+      preset = {
+        handCardWidth: Config.handCardWidth, handCardHeight: Config.handCardHeight,
+        handCount: Config.handCount, handFanAngle: Config.handFanAngle,
+        handFanRoll: Config.handFanRoll, handArch: Config.handArch,
+        handCornerRadius: Config.handCornerRadius, handSkew: Config.handSkew,
+        handSpread: Config.handSpread, handSpeed: Config.handSpeed,
+        handTilt: Config.handTilt, handPerspective: Config.handPerspective,
+        handGhosts: Config.handGhosts, handBob: Config.handBob, handBackdrop: Config.handBackdrop
+      }
+    } else if (Config.displayMode === "sandy") {
+      preset = {
+        sandyCenter: Config.sandyCenter, sandySliceWidth: Config.sandySliceWidth,
+        sandySliceHeight: Config.sandySliceHeight, sandySkew: Config.sandySkew,
+        sandySpacing: Config.sandySpacing, sandyDuration: Config.sandyDuration,
+        sandyStrands: Config.sandyStrands, sandyTwist: Config.sandyTwist,
+        sandyOrbit: Config.sandyOrbit, sandyTurbulence: Config.sandyTurbulence,
+        sandyWaist: Config.sandyWaist, sandyFront: Config.sandyFront,
+        sandyArc: Config.sandyArc, sandyEdgeSpeed: Config.sandyEdgeSpeed,
+        sandyGrain: Config.sandyGrain, sandyFan: Config.sandyFan
+      }
+    } else if (Config.displayMode === "grid") {
+      preset = {
+        gridLayout: Config.gridLayout, gridColumns: Config.gridColumns, gridRows: Config.gridRows,
+        gridThumbWidth: Config.gridThumbWidth, gridThumbHeight: Config.gridThumbHeight,
+        gridStagger: Config.gridStagger, gridSelectedScale: Config.gridSelectedScale,
+        gridFlowWave: Config.gridFlowWave, gridFlowFrequency: Config.gridFlowFrequency,
+        gridScatter: Config.gridScatter, gridScaleVariance: Config.gridScaleVariance,
+        gridCylinderBend: Config.gridCylinderBend, gridCylinderRadius: Config.gridCylinderRadius
       }
     }
     Config.saveKey("components.wallpaperSelector.customPresets." + key, preset)
@@ -164,18 +210,11 @@ Item {
     if (!p) return
     if (Config.displayMode === "slices") {
       _applyPreset(p.expandedWidth, p.sliceHeight, p.sliceWidth, p.visibleCount, p.sliceSpacing, p.skewOffset)
-    } else if (Config.displayMode === "hex") {
-      if (p.hexRadius !== undefined) settingsPanel._saveField("hexRadius", p.hexRadius)
-      if (p.hexRows !== undefined) settingsPanel._saveField("hexRows", p.hexRows)
-      if (p.hexCols !== undefined) settingsPanel._saveField("hexCols", p.hexCols)
-      if (p.hexScrollStep !== undefined) settingsPanel._saveField("hexScrollStep", p.hexScrollStep)
-      if (p.hexArc !== undefined) settingsPanel._saveField("hexArc", p.hexArc)
-      if (p.hexArcIntensity !== undefined) settingsPanel._saveField("hexArcIntensity", p.hexArcIntensity)
-    } else if (Config.displayMode === "wall") {
-      if (p.gridColumns !== undefined) settingsPanel._saveField("gridColumns", p.gridColumns)
-      if (p.gridRows !== undefined) settingsPanel._saveField("gridRows", p.gridRows)
-      if (p.gridThumbWidth !== undefined) settingsPanel._saveField("gridThumbWidth", p.gridThumbWidth)
-      if (p.gridThumbHeight !== undefined) settingsPanel._saveField("gridThumbHeight", p.gridThumbHeight)
+      return
+    }
+    // Every other mode persists a flat map of selector fields; replay each one.
+    for (var k in p) {
+      if (p[k] !== undefined) settingsPanel._saveField(k, p[k])
     }
   }
 
@@ -293,14 +332,19 @@ Item {
     }
   }
 
-  Item {
+  // The active tab's content. A tab taller than the screen scrolls inside this
+  // Flickable rather than growing the panel past the bottom edge; the explicit
+  // WheelHandler is what the rest of the shell uses (Qt 6.11 Flickables do not
+  // take the wheel on their own), and it also keeps the wheel over the panel
+  // from falling through to the carousel behind it.
+  Flickable {
     id: contentLoader
     anchors.top: tabRow.bottom
     anchors.left: keybindsColumn.right
     anchors.right: parent.right
     anchors.margins: 12
     anchors.topMargin: 8
-    height: {
+    property real _contentHeight: {
       if (settingsPanel.activeTab === "selector") return selectorContent.implicitHeight
       if (settingsPanel.activeTab === "edit") return editContent.implicitHeight
       if (settingsPanel.activeTab === "paper") return paperContent.implicitHeight
@@ -311,13 +355,30 @@ Item {
       if (settingsPanel.activeTab === "lighting") return lightingContent.implicitHeight
       if (settingsPanel.activeTab === "wallpaper-engine") return wallpaperEngineContent.implicitHeight
       if (settingsPanel.activeTab === "performance") return performanceContent.implicitHeight
-      if (settingsPanel.activeTab === "postprocessing") return Math.min(postprocessingContent.implicitHeight, 360)
+      if (settingsPanel.activeTab === "postprocessing") return postprocessingContent.implicitHeight
       if (settingsPanel.activeTab === "theme") return themeContent.implicitHeight
-      if (settingsPanel.activeTab === "matugen") return Math.min(matugenContent.implicitHeight, 360)
+      if (settingsPanel.activeTab === "matugen") return matugenContent.implicitHeight
       if (settingsPanel.activeTab === "overview-backdrop") return overviewBackdropContent.implicitHeight
       return 0
     }
+    height: Math.min(_contentHeight, settingsPanel._contentMaxHeight)
+    contentWidth: width
+    contentHeight: _contentHeight
+    clip: true
+    interactive: contentHeight > height
+    boundsBehavior: Flickable.StopAtBounds
+    flickableDirection: Flickable.VerticalFlick
+    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
     Behavior on height { NumberAnimation { duration: Style.animFast; easing.type: Easing.OutCubic } }
+
+    WheelHandler {
+      acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+      onWheel: function (ev) {
+        var step = (ev.angleDelta.y !== 0 ? ev.angleDelta.y : ev.angleDelta.x)
+        var limit = Math.max(0, contentLoader.contentHeight - contentLoader.height)
+        contentLoader.contentY = Math.max(0, Math.min(limit, contentLoader.contentY - step))
+      }
+    }
 
     property real _slide: 0
     transform: Translate { y: contentLoader._slide }
@@ -515,6 +576,9 @@ Item {
         item.colors = Qt.binding(function() { return settingsPanel.colors })
         item.saveConfigKey = function(k, v) { settingsPanel._saveConfigKey(k, v) }
         item.cloneIntegrations = function() { return settingsPanel._cloneIntegrations() }
+        item.notify = function(message, success) {
+          if (!success) settingsPanel._showWarning(I18n.tr("Palette Bridge"), message)
+        }
       }
     }
   }

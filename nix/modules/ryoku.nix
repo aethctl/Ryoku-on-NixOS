@@ -16,6 +16,7 @@ let
   ryokuSystemBridge = ryokuPkgs.ryoku-nixos-system-bridge;
   ryokuDesktopData = ryokuPkgs.ryoku-desktop-data;
   ryokuRyogami = ryokuPkgs.ryoku-ryogami;
+  ryokuPaletteBridge = ryokuPkgs.ryoku-palette-bridge;
   ryokuQuickshell = ryokuNixpkgs.quickshell;
   ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
   ryokuWmHyprland = ryokuPkgs.ryoku-wm-hyprland;
@@ -841,6 +842,64 @@ in
       };
     };
 
+    # xdg-desktop-portal-gnome disables its screencast backend when it inherits
+    # Ryoku's global GDK_BACKEND override under Niri. Keep the session setting
+    # intact and remove it only from the GNOME portal process.
+    environment.etc."systemd/user/xdg-desktop-portal-gnome.service.d/10-ryoku.conf".text = ''
+      [Service]
+      UnsetEnvironment=GDK_BACKEND
+    '';
+
+    # Export localized XDG user directories into the systemd user-manager
+    # environment so Ryoku does not invent ~/Pictures or ~/Downloads on systems
+    # whose real directories have localized names.
+    environment.etc."systemd/user-environment-generators/60-ryoku-xdg-dirs" = {
+      mode = "0755";
+
+      text = ''
+        #!${pkgs.runtimeShell}
+        set -eu
+
+        [ -f "$HOME/.config/user-dirs.dirs" ] || exit 0
+
+        for dir in PICTURES DOWNLOAD DOCUMENTS MUSIC VIDEOS DESKTOP PUBLICSHARE TEMPLATES; do
+          path="$(${pkgs.xdg-user-dirs}/bin/xdg-user-dir "$dir" 2>/dev/null)" || continue
+          [ -n "$path" ] || continue
+          printf 'XDG_%s_DIR=%s\n' "$dir" "$path"
+        done
+      '';
+    };
+
+    # Palette Bridge is packaged declaratively, but enablement is intentionally
+    # user state: the Ryogami settings page exposes Enable/Disable and upstream
+    # implements that through `systemctl --user enable --now`.
+    #
+    # NixOS' systemd.user.services.wantedBy creates stateless Nix-owned wants
+    # links and does not emit an [Install] section, so define the immutable unit
+    # file directly under /etc/systemd/user. The user may then enable/disable
+    # this one service normally without being able to replace its definition.
+    systemd.user.units."ryoku-palette-bridge.service".text = ''
+      [Unit]
+      Description=Ryoku wallpaper palette event bridge
+      PartOf=ryoku-session.target
+      After=ryoku-session.target ryoku-shell.service
+
+      # colors.json can legitimately be absent briefly after a cleared cache or
+      # first login. Keep retrying until the shell authors a valid palette
+      # instead of permanently hitting systemd's default start-rate limit.
+      StartLimitIntervalSec=0
+
+      [Service]
+      Type=simple
+      ExecStart=${ryokuPaletteBridge}/bin/ryoku-palette-bridge
+      Restart=on-failure
+      RestartSec=5
+      Slice=session.slice
+
+      [Install]
+      WantedBy=ryoku-session.target
+    '';
+
     # NixOS 26.05 creates the pkexec wrapper automatically when Polkit is
     # enabled. Newer nixpkgs exposes enablePkexecWrapper separately.
     # Feature-detect that newer option so this module evaluates on both.
@@ -926,6 +985,22 @@ in
           if (action.id === "org.freedesktop.policykit.exec" &&
               (program === "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply" ||
                program === "/run/current-system/sw/bin/ryoku-sddm-theme-apply") &&
+              subject.local &&
+              subject.active &&
+              subject.isInGroup("wheel")) {
+              return polkit.Result.YES;
+          }
+      });
+
+      // The Machine page may deliberately change the hardware GPU MUX.
+      // The helper accepts only hybrid|discrete and the change takes effect
+      // after reboot, so grant only this immutable helper to active wheel users.
+      polkit.addRule(function (action, subject) {
+          var program = action.lookup("program");
+
+          if (action.id === "org.freedesktop.policykit.exec" &&
+              (program === "${ryokuHelpers}/bin/ryoku-gpu-mux" ||
+               program === "/run/current-system/sw/bin/ryoku-gpu-mux") &&
               subject.local &&
               subject.active &&
               subject.isInGroup("wheel")) {
@@ -1521,6 +1596,9 @@ in
 
       environment = {
         RYOKU_WAIFU2X_MODELS = waifu2xModels;
+
+        MALLOC_CONF =
+          "narenas:2,background_thread:true,dirty_decay_ms:5000,muzzy_decay_ms:5000";
 
         QT_MEDIA_BACKEND = "ffmpeg";
         QT_FFMPEG_DECODING_HW_DEVICE_TYPES = ",";

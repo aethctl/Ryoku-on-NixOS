@@ -40,37 +40,64 @@ func (d *daemon) activeMonitor() string {
 }
 
 // onWMFrame folds one watch frame into the cache and republishes the wm topic.
-// A FrameFocus with an empty output clears the cached focus.
+// A FrameFocus with an empty output clears the cached focus. Each kind carries
+// a version so a QML consumer can rebind only what moved: one niri window
+// event emits several frames, and without the version every derived list would
+// re-evaluate on every one of them.
 func (d *daemon) onWMFrame(f wm.Frame) {
 	d.wmMu.Lock()
 	changed := false
+
 	switch f.Kind {
 	case wm.FrameFocus:
 		changed = !reflect.DeepEqual(d.activeMon, f.FocusedOutput)
 		d.activeMon = f.FocusedOutput
+
 	case wm.FrameOutputs:
 		changed = !reflect.DeepEqual(d.wmOutputs, f.Outputs)
 		d.wmOutputs = f.Outputs
+
 	case wm.FrameWorkspaces:
 		changed = !reflect.DeepEqual(d.wmWorkspaces, f.Workspaces)
 		d.wmWorkspaces = f.Workspaces
+
 	case wm.FrameWindows:
 		changed = !reflect.DeepEqual(d.wmWindows, f.Windows)
 		d.wmWindows = f.Windows
+
+	case wm.FrameKeyboard:
+		changed = d.wmKbdLayout != f.KeyboardLayout ||
+			!reflect.DeepEqual(d.wmKbdList, f.KeyboardLayouts)
+		d.wmKbdLayout = f.KeyboardLayout
+		d.wmKbdList = f.KeyboardLayouts
+
 	case wm.FrameOverview:
 		changed = d.wmOverview != f.OverviewOpen
 		d.wmOverview = f.OverviewOpen
-	case wm.FrameKeyboard:
-		changed = d.wmKeyboardLayout != f.KeyboardLayout || !reflect.DeepEqual(d.wmKeyboardLayouts, f.KeyboardLayouts)
-		d.wmKeyboardLayout, d.wmKeyboardLayouts = f.KeyboardLayout, f.KeyboardLayouts
+
 	case wm.FrameReady:
-		changed = !reflect.DeepEqual(d.wmReady, true)
+		// Ready also means a provider stream (re)connected. Always advance it:
+		// caps, config files and workspace model are provider-static and must
+		// refresh after a compositor/session change even when "ready" was
+		// already true.
+		changed = true
 		d.wmReady = true
-	}
-	d.wmMu.Unlock()
-	if !changed {
+
+	default:
+		d.wmMu.Unlock()
 		return
 	}
+
+	if !changed {
+		d.wmMu.Unlock()
+		return
+	}
+
+	if d.wmVersions == nil {
+		d.wmVersions = map[string]int{}
+	}
+	d.wmVersions[string(f.Kind)]++
+	d.wmMu.Unlock()
 
 	switch f.Kind {
 	case wm.FrameFocus, wm.FrameOutputs, wm.FrameWorkspaces:
@@ -79,16 +106,20 @@ func (d *daemon) onWMFrame(f wm.Frame) {
 		default:
 		}
 	}
+
 	d.publishWM()
 }
 
 // wmTopicFrame carries caps and state in one coalesced frame so a QML consumer
 // needs a single subscription. Every capability is present with an explicit
 // boolean and the lists are never null, so a consumer never tells absent from
-// false.
+// false. Versions tags each section with the count of frames that changed it
+// since the daemon started. The frame is always a full snapshot, so a consumer
+// rebinds only the sections whose version moved and catches up on any it missed
+// while the coalescing topic dropped intermediate frames. The provider-static
+// fields (caps, model, config) ride the "ready" version, which moves when the
+// provider stream (re)connects, so a compositor switch refreshes them.
 type wmTopicFrame struct {
-	KeyboardLayout  string                 `json:"keyboardLayout"`
-	KeyboardLayouts []string               `json:"keyboardLayouts"`
 	Provider        string                 `json:"provider"`
 	WorkspaceModel  string                 `json:"workspaceModel"`
 	Ready           bool                   `json:"ready"`
@@ -99,6 +130,9 @@ type wmTopicFrame struct {
 	Windows         []wm.Window            `json:"windows"`
 	ConfigFiles     []string               `json:"configFiles"`
 	OverviewOpen    bool                   `json:"overviewOpen"`
+	KeyboardLayout  string                 `json:"keyboardLayout"`
+	KeyboardLayouts []string               `json:"keyboardLayouts"`
+	Versions        map[string]int         `json:"versions"`
 }
 
 func (d *daemon) publishWM() {
@@ -125,12 +159,12 @@ func (d *daemon) publishWM() {
 	}
 	d.wmMu.Lock()
 	frame.Ready = d.wmReady
-	frame.OverviewOpen = d.wmOverview
-	frame.KeyboardLayout = d.wmKeyboardLayout
-	if d.wmKeyboardLayouts != nil {
-		frame.KeyboardLayouts = d.wmKeyboardLayouts
-	}
 	frame.FocusedOutput = d.activeMon
+	frame.OverviewOpen = d.wmOverview
+	frame.KeyboardLayout = d.wmKbdLayout
+	if d.wmKbdList != nil {
+		frame.KeyboardLayouts = d.wmKbdList
+	}
 	if d.wmOutputs != nil {
 		frame.Outputs = d.wmOutputs
 	}
@@ -139,6 +173,10 @@ func (d *daemon) publishWM() {
 	}
 	if d.wmWindows != nil {
 		frame.Windows = d.wmWindows
+	}
+	frame.Versions = make(map[string]int, len(d.wmVersions)+1)
+	for k, v := range d.wmVersions {
+		frame.Versions[k] = v
 	}
 	d.wmMu.Unlock()
 	if b, err := json.Marshal(frame); err == nil {

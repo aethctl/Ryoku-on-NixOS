@@ -183,6 +183,12 @@ pkgs.stdenvNoCC.mkDerivation {
         "$out/bin/$(basename "$helper")"
     done
 
+    # Keep Awake is compositor-neutral upstream now, so it lives under
+    # ryoku/shell/scripts rather than the Hyprland helper directory.
+    install -Dm755 \
+      ryoku/shell/scripts/ryoku-cmd-caffeine \
+      "$out/bin/ryoku-cmd-caffeine"
+
     # NixOS coreutils is a multicall binary and dispatches by argv[0].
     # Upstream uses `exec -a ryoku-caffeine-inhibit sleep infinity` to give
     # the inhibitor child a friendly process name, but renaming argv[0] makes

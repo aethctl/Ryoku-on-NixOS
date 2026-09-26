@@ -7,6 +7,9 @@ import (
 	wm "ryoku-wm"
 )
 
+// foldEvents runs one or more niri events through the session fold and returns
+// every frame the stream would emit for them, so the wiring between an event
+// and the frame a consumer sees is pinned without a compositor or a socket.
 func foldEvents(t *testing.T, s *session, wants func(wm.FrameKind) bool, events ...map[string]any) []wm.Frame {
 	t.Helper()
 	var out []wm.Frame
@@ -25,6 +28,9 @@ func foldEvents(t *testing.T, s *session, wants func(wm.FrameKind) bool, events 
 
 func allKinds(wm.FrameKind) bool { return true }
 
+// The overview state is what gates the backdrop's blur pass, so the fold must
+// carry is_open straight onto a FrameOverview and keep it on the session for a
+// later connect replay.
 func TestFoldOverviewEmitsFrame(t *testing.T) {
 	s := &session{}
 	frames := foldEvents(t, s, allKinds,
@@ -45,6 +51,8 @@ func TestFoldOverviewEmitsFrame(t *testing.T) {
 	}
 }
 
+// A narrowed watch that does not ask for the overview kind must not be sent it,
+// the same skip every other kind honours.
 func TestFoldOverviewSkippedWhenNotWanted(t *testing.T) {
 	s := &session{}
 	wants := func(k wm.FrameKind) bool { return k == wm.FrameWindows }
@@ -52,9 +60,9 @@ func TestFoldOverviewSkippedWhenNotWanted(t *testing.T) {
 		map[string]any{"OverviewOpenedOrClosed": map[string]any{"is_open": true}},
 	)
 	if len(frames) != 0 {
-		t.Fatalf("got %d frames, want none", len(frames))
+		t.Fatalf("got %d frames, want none for a watch that skips overview", len(frames))
 	}
 	if !s.overview {
-		t.Error("session must still track overview state")
+		t.Error("the session still tracks overview state even when the frame is skipped")
 	}
 }

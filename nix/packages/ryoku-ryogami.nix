@@ -3,6 +3,7 @@
   src,
   livewall,
   waifu2x,
+  paletteBridge,
 }:
 
 let
@@ -51,6 +52,14 @@ pkgs.stdenv.mkDerivation {
       --replace-fail \
         '/usr/lib/dri/radeonsi_drv_video.so' \
         '/run/opengl-driver/lib/dri/radeonsi_drv_video.so'
+
+    # The picker normally expects the Arch package payload under /usr/share.
+    # Point its Palette Bridge source selector at this generation's immutable
+    # Nix package instead.
+    substituteInPlace wall-ui/qml/Config.qml \
+      --replace-fail \
+        '/usr/share/ryoku/palette-bridge' \
+        '${paletteBridge}/share/ryoku/palette-bridge'
   '';
 
   buildPhase = ''

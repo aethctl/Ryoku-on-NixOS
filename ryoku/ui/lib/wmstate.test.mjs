@@ -29,3 +29,85 @@ test('fixed workspace activity comes from Wayland protocol',()=>{
  const rows=copy(ctx.workspaceRows([{id:'1',name:'1',windows:2,output:'DP-1'}],[{name:'1',active:true,canActivate:true}],false));
  assert.equal(rows[0].active,true);assert.equal(rows[0].id,'1');assert.equal(rows[0].windows,2);
 });
+
+test('versioned snapshot updates only the section whose counter moved', () => {
+ const target={versions:null};
+
+ ctx.applyFrame(target,{
+   ready:true,
+   caps:{workspaces:true},
+   outputs:[{name:'DP-1'}],
+   workspaces:[{id:'1'}],
+   windows:[{id:'a'}],
+   versions:{ready:1,outputs:1,workspaces:1,windows:1,focus:1,keyboard:1,overview:1}
+ });
+
+ const outputs=target.outputs;
+ const workspaces=target.workspaces;
+ const caps=target.caps;
+ const writes=[];
+
+ const proxy=new Proxy(target,{
+   set(o,k,v){
+     if(k!=='versions') writes.push(k);
+     o[k]=v;
+     return true;
+   }
+ });
+
+ ctx.applyFrame(proxy,{
+   ready:true,
+   caps:{thisMustNotReplace:true},
+   outputs:[{name:'WRONG'}],
+   workspaces:[{id:'WRONG'}],
+   windows:[{id:'b'}],
+   versions:{ready:1,outputs:1,workspaces:1,windows:2,focus:1,keyboard:1,overview:1}
+ });
+
+ assert.deepEqual(writes,['windows']);
+ assert.equal(target.outputs,outputs);
+ assert.equal(target.workspaces,workspaces);
+ assert.equal(target.caps,caps);
+ assert.deepEqual(copy(target.windows),[{id:'b'}]);
+});
+
+test('versioned snapshot updates only the section whose counter moved', () => {
+ const target={versions:null};
+
+ ctx.applyFrame(target,{
+   ready:true,
+   caps:{workspaces:true},
+   outputs:[{name:'DP-1'}],
+   workspaces:[{id:'1'}],
+   windows:[{id:'a'}],
+   versions:{ready:1,outputs:1,workspaces:1,windows:1,focus:1,keyboard:1,overview:1}
+ });
+
+ const outputs=target.outputs;
+ const workspaces=target.workspaces;
+ const caps=target.caps;
+ const writes=[];
+
+ const proxy=new Proxy(target,{
+   set(o,k,v){
+     if(k!=='versions') writes.push(k);
+     o[k]=v;
+     return true;
+   }
+ });
+
+ ctx.applyFrame(proxy,{
+   ready:true,
+   caps:{thisMustNotReplace:true},
+   outputs:[{name:'WRONG'}],
+   workspaces:[{id:'WRONG'}],
+   windows:[{id:'b'}],
+   versions:{ready:1,outputs:1,workspaces:1,windows:2,focus:1,keyboard:1,overview:1}
+ });
+
+ assert.deepEqual(writes,['windows']);
+ assert.equal(target.outputs,outputs);
+ assert.equal(target.workspaces,workspaces);
+ assert.equal(target.caps,caps);
+ assert.deepEqual(copy(target.windows),[{id:'b'}]);
+});

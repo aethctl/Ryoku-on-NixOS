@@ -205,41 +205,65 @@ func pacmanInstalled(name string) bool {
 	return exec.Command("pacman", "-Q", name).Run() == nil
 }
 
+// compositorVirtual is the package every compositor variant provides and the
+// ryoku-desktop umbrella depends on. A switch installs the incoming variant
+// before removing the outgoing one, so the plan is measured with this virtual
+// assumed present: without that, pacman refuses to drop the outgoing variant
+// (the umbrella still needs the virtual) and every satellite it owns with it.
+const compositorVirtual = "ryoku-desktop-compositor"
+
 // breaksDep matches pacman's "cannot remove, a survivor needs it" line, whose
 // first name is the target that has to stay: "removing X breaks dependency ...".
 var breaksDep = regexp.MustCompile(`removing (\S+) breaks dependency`)
 
-// pacmanRemovalOnce asks pacman what `-Rs` would remove for the targets. On a
-// clean plan it returns the packages removed. When pacman refuses because a
-// target is still required by a surviving package, it returns those targets as
-// blocked (and a nil error) so the caller can drop them and ask again. --print
-// touches nothing, and -n (nosave) is illegal with --print and removes the same
-// packages, so it is left to the real removal.
-func pacmanRemovalOnce(targets []string) (set, blocked []string, err error) {
-	if len(targets) == 0 {
-		return nil, nil, nil
-	}
-	args := append([]string{"-Rs", "--print", "--print-format", "%n"}, targets...)
-	cmd := exec.Command("pacman", args...)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, runErr := cmd.Output()
-	if runErr == nil {
-		return nonEmptyLines(out), nil, nil
-	}
+// parseRemovalPlan reads a `pacman -Rs --print` transcript. pacman writes the
+// refusal lines to STDOUT, not stderr, so the scan covers both streams: the
+// targets it refuses to remove come back as blocked (the caller drops them and
+// re-plans), and a clean plan's package list is returned as the set.
+func parseRemovalPlan(stdout, stderr string, targets []string) (set, blocked []string) {
 	want := make(map[string]bool, len(targets))
 	for _, t := range targets {
 		want[t] = true
 	}
-	for _, m := range breaksDep.FindAllStringSubmatch(stderr.String(), -1) {
+	for _, m := range breaksDep.FindAllStringSubmatch(stdout+stderr, -1) {
 		if want[m[1]] {
 			blocked = append(blocked, m[1])
 		}
 	}
-	if len(blocked) == 0 {
-		return nil, nil, fmt.Errorf("pacman -Rs --print: %w: %s", runErr, strings.TrimSpace(stderr.String()))
+	if len(blocked) > 0 {
+		return nil, blocked
 	}
-	return nil, blocked, nil
+	return nonEmptyLines([]byte(stdout)), nil
+}
+
+// pacmanRemovalOnce asks pacman what `-Rs` would remove for the targets, with
+// the compositor virtual assumed present so the plan matches the transaction
+// the switch will actually run after the incoming variant is installed. On a
+// clean plan it returns the packages removed; when pacman still refuses a
+// target a survivor needs, that target comes back blocked (nil error) so the
+// caller can drop it and ask again. --print touches nothing, and -n (nosave) is
+// illegal with --print and removes the same packages, so it is left to the real
+// removal.
+func pacmanRemovalOnce(targets []string) (set, blocked []string, err error) {
+	if len(targets) == 0 {
+		return nil, nil, nil
+	}
+	args := append([]string{
+		"-Rs", "--print", "--print-format", "%n",
+		"--assume-installed", compositorVirtual + ",1",
+	}, targets...)
+	cmd := exec.Command("pacman", args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, runErr := cmd.Output()
+	set, blocked = parseRemovalPlan(string(out), stderr.String(), targets)
+	if len(blocked) > 0 {
+		return nil, blocked, nil
+	}
+	if runErr != nil {
+		return nil, nil, fmt.Errorf("pacman -Rs --print: %w: %s", runErr, strings.TrimSpace(string(out)+stderr.String()))
+	}
+	return set, nil, nil
 }
 
 // pacmanInstalledSizes sums the installed size in bytes of the named packages,

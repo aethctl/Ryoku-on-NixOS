@@ -108,6 +108,7 @@
         ryoku-cli = ryoku.cli;
         ryoku-nix-update = ryoku.nixUpdate;
         ryoku-hub = ryoku.hub;
+        ryoku-palette-bridge = ryoku.paletteBridge;
         ryoku-rashin = ryoku.rashin;
         ryoku-ryostore = ryoku.ryostore;
         ryoku-ryomotion = ryoku.ryomotion;
@@ -177,6 +178,7 @@
         ryoku-shell = ryoku.shell;
         ryoku-cli = ryoku.cli;
         ryoku-hub = ryoku.hub;
+        ryoku-palette-bridge = ryoku.paletteBridge;
         ryoku-rashin = ryoku.rashin;
         ryoku-ryostore = ryoku.ryostore;
         ryoku-ryomotion = ryoku.ryomotion;
@@ -217,6 +219,48 @@
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;
         ryoku-bundle = ryoku.bundle;
+
+        # GPU/MUX policy
+        #
+        # These are upstream's hermetic hardware-policy regressions. They use
+        # synthetic DRM/sysfs trees and never touch the host GPU or firmware.
+        ryoku-gpu-mux-policy = pkgs.runCommand
+          "ryoku-gpu-mux-policy-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              gawk
+              gnugrep
+              gnused
+              jq
+              pciutils
+              procps
+            ];
+          }
+          ''
+            bash ${self}/tests/gpu-mux.sh
+            touch "$out"
+          '';
+
+        ryoku-gpu-pin-policy = pkgs.runCommand
+          "ryoku-gpu-pin-policy-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              gawk
+              gnugrep
+              gnused
+              jq
+              pciutils
+              procps
+            ];
+          }
+          ''
+            bash ${self}/tests/gpu-pin-policy.sh
+            touch "$out"
+          '';
 
         # CLI integration
         ryoku-cli-config-base = pkgs.runCommand

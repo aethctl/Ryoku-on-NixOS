@@ -16,9 +16,13 @@ const (
 	FrameOutputs    FrameKind = "outputs"
 	FrameWorkspaces FrameKind = "workspaces"
 	FrameWindows    FrameKind = "windows"
-	FrameOverview   FrameKind = "overview"
+	// FrameOverview reports the compositor's native overview opening or
+	// closing. Only compositors with an overview (niri) send it; the state
+	// rides the connect replay too, so a consumer's default of "closed" is
+	// corrected the moment the stream starts.
+	FrameOverview FrameKind = "overview"
 	// FrameReady marks the first full sync, so a consumer can tell "nothing
-	// yet" from "genuinely empty".
+	// yet" from "nothing now".
 	FrameReady FrameKind = "ready"
 )
 
@@ -100,7 +104,8 @@ type Frame struct {
 	// Keyboard layout in effect, and the loaded set, for the bar indicator.
 	KeyboardLayout  string   `json:"keyboardLayout,omitempty"`
 	KeyboardLayouts []string `json:"keyboardLayouts,omitempty"`
-	OverviewOpen    bool     `json:"overviewOpen,omitempty"`
+	// OverviewOpen is set only on FrameOverview.
+	OverviewOpen bool `json:"overviewOpen,omitempty"`
 }
 
 // Snapshot is one full read, for the one-shot callers (doctor, the CLI) that

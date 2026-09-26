@@ -23,7 +23,7 @@ Item {
     width: 0
     height: 0
 
-    Theme {
+    QsTheme {
         id: theme
     }
 

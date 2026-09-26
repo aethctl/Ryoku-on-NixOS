@@ -4,15 +4,64 @@
 
 ### Added
 
-- **The wallpaper crossfade transition, and a picker grouped by family.** skwd-wall
-  v2 ships a plain crossfade its earlier catalogue lacked: a clean dissolve
-  between the two frames on a smoothed progress. It rides the shell as a real
-  shader (`modules/wallpaper/skwd/crossfade.frag`, the daemon catalogue in
-  `ryogami/daemon/transitions.go`), so "random" rotates it and the picker pins
-  it like any other. The transition picker no longer reads as a flat list of 39
-  names: it draws them under the Fade, Wipe, Warp and Break up families v2
-  carries, each shader placed by what its math does
-  (`ryogami/wall-ui/qml/wallpaper/ShaderPicker.qml`, `settings/PaperSettings.qml`).
+- **Palette Bridge rides the wallpaper palette to your apps.** A small local
+  event server publishes the current matugen palette over HTTP so Spicetify,
+  Vesktop and Zen recolour with the wallpaper. The wallpaper settings' Matugen
+  tab grew a Palette Bridge page to build it, run it as a user service, and
+  install or remove each integration; the ryoku-palette-bridge package ships
+  the source tree and the unit
+  (`ryoku/palette-bridge/`, `ryoku/hub/backend/palettebridge.go`,
+  `settings/PaletteBridgeSettings.qml`).
+
+- **The Super+K cheatsheet reads the shared legend.** Short labels with the
+  hint on hover or while searching, a "not here" tag on a shortcut the running
+  compositor cannot do (the reason on hover), caps wide enough for "Num 1" and
+  "Page Up", and rail counts that only count usable shortcuts
+  (`quickshell/keys/BindRow.qml`, `Cheatsheet.qml`, `KeyCap.qml`).
+- **Night light on every compositor, from the Hub.** The warm screen was a
+  Hyprland leaf: the script shipped only with that variant and drove a CTM
+  client niri cannot serve. The backend is the window-manager provider's now
+  (`nightlight.on` / `nightlight.off` actions, a `nightLight` capability, the
+  backend's process name in caps): hyprsunset on Hyprland, gammastep over gamma
+  control on niri. The script rides the shell to every box, the daemon tracks
+  whichever backend the provider names, and the quick tile and launcher action
+  hide where there is none (`scripts/ryoku-cmd-nightlight`, `ipc/nightlight.go`).
+- **The leaf scripts ship with the shell.** `ryoku-app`, the `ryoku-cmd-*`
+  tools, the recorder helpers, folder tinting and the sysinfo readouts are
+  called by bare name on every compositor but shipped only inside the Hyprland
+  variant, so a packaged niri box had none of them while a dev checkout laid
+  every provider's scripts. They live in `scripts/` now and ship from
+  `ryoku-shell` by one glob; `deploy.sh` lays only the live provider's own
+  leaf scripts, so a checkout finally looks like a package.
+- **Summon, game mode, studio recording and the touchpad keys go through the
+  seam.** `window.summon`, `decoration.gameMode`, `input.touchpad`,
+  `output.cycle` and `output.enable` are provider actions; the cursor tracker
+  studio recording uses stays Hyprland payload, reached by capability
+  (`scripts/ryoku-summon`, `scripts/ryoku-cmd-game-mode`,
+  `scripts/ryoku-cmd-studiorecord`).
+- **The wallpaper crossfade transition, and one pool of every transition.**
+  skwd-wall v2 ships a plain crossfade its earlier catalogue lacked: a clean
+  dissolve between the two frames on a smoothed progress. It rides the shell as a
+  real shader (`modules/wallpaper/skwd/crossfade.frag`, the daemon catalogue in
+  `ryogami/daemon/transitions.go`), so "random" rotates it and the picker pins it
+  like any other. The transition picker no longer reads as a flat list: it groups
+  the 39 skwd shaders under the Fade, Wipe, Warp and Break up families v2 carries,
+  each placed by what its math does, and folds Ryogami's original 22 reveal presets
+  into the same list under a Reveal family. Both engines are now one selectable
+  pool and "random" rotates across all 61, where the reveal presets had been
+  stranded on a second, shadowed control the picker never read
+  (`ryogami/wall-ui/qml/wallpaper/ShaderPicker.qml`, `settings/PaperSettings.qml`,
+  `settings/ThemeSettings.qml`, `ryogami/daemon/transitions.go`).
+
+- **Three more wallpaper picker modes from skwd-wall v2: Hand, Sandy, Grid.**
+  The picker could fan cards (Slices), tile them (Wall, Hex, Mosaic); v2 carries
+  three layouts Ryogami lacked. Hand is a fanned deck of cards you scroll through,
+  Sandy a twisting strand carousel, and Grid six packing arrangements (uniform,
+  brick, masonry, justified, editorial and a curved cylinder). Each is a standalone
+  leaf view sharing the picker's one selection cursor, every geometry knob is a
+  live slider, and the whole set persists per-mode like the others
+  (`ryogami/wall-ui/qml/wallpaper/HandView.qml`, `SandyView.qml`,
+  `GridLayoutsView.qml`, `settings/SelectorSettings.qml`, `components/RowSlider.qml`).
 
 - **Bars and Chroma modules can be assigned per display.** Each connector can
   follow the global Bar Studio style or select its own, while Chroma inherits
@@ -94,6 +143,16 @@
   Pages push in from the side rather than cutting. Dismiss by clicking outside,
   moving the pointer away, Escape, or the tune icon; Ryoku Settings is untouched
   (`barstyles/kairos/quicksettings/`, `components/Island.qml`).
+
+- **Kairos carries a system tray in the clock pill.** A caret in the sliver
+  under the date wheel opens the tray's icon row inside the same pill; the row
+  scrolls when more apps than fit show up, and right-clicking an icon swaps the
+  row for that app's own menu, rendered live off the tray daemon. Nothing
+  appears until a tray app is actually running, and the island's surface is
+  sized once for the tallest the tray can get, so opening it never resizes the
+  bar mid-morph. Toggle it from the island's Clock settings
+  (`barstyles/kairos/components/TrayFlyout.qml`, `components/Island.qml`,
+  `settings/IslandSettings.qml`).
 
 - **Rashin works with any coding agent now, not just Hermes.** The Hub's Rashin
   page and the dashboard both list your detected agents with a one-click Wire
@@ -190,6 +249,53 @@
   config migrates (`ryogami/wall-ui/qml/Config.qml`).
 
 ### Fixed
+- **Waking from suspend no longer leaves a black screen.** The shell daemon
+  watches logind's PrepareForSleep and holds the panel lit for a window after
+  every wake, through the compositor seam, so a lid-close on a box with idle
+  timeouts off (or a DPMS-on that raced the driver's late panel re-train on a
+  MUX-discrete laptop) comes back to a live desktop (`ipc/sleepwake.go`).
+- **The bar's power profile is one owner's, not two.** The qsbar widget and
+  panel polled and wrote power-profiles-daemon with raw `powerprofilesctl`,
+  beside the daemon that banks the user's pick; a switch the daemon
+  re-asserted looked like a dead button. They now read the daemon's
+  powerprofiles stream and set through its socket, the path the sidebar and
+  the Hub use (`barstyles/qsbar/`).
+
+- **The picker toolbar stays on screen in every display mode.** The new
+  Hand/Sandy/Grid modes shipped with two layout faults a scaled or smaller
+  display hits hard: the Slices carousel lost the top margin that keeps it
+  below the toolbar strip, so the two overlapped at every size preset, and the
+  Hand stage was sized without any cap against the screen, so on a logical
+  800px-tall display the card (with the toolbar inside it) pushed the strip
+  204px above the top edge. The slice margin is restored, the fan now scales
+  its card size down to fit short screens instead of overflowing them (full
+  size on tall ones), and the card height is clamped to the panel for every
+  mode, since the toolbar lives inside the card's top
+  (`ryogami/wall-ui/qml/wallpaper/WallpaperSelector.qml`).
+- **The slice picker no longer collapses or stalls on extreme sizes.** The
+  slice-width, gap, skew and visible-count controls were free ranges that the
+  layout math could not survive: a gap more negative than the slice width made
+  the row's pitch go negative so every delegate stacked on one point and the
+  images and videos vanished; a skew wider than the slice collapsed the
+  parallelogram mask to nothing and the slice disappeared too; and the offscreen
+  cache was sized in raw pixels (up to 1800), which at a small slice width pulled
+  hundreds of full-height image and shader-effect delegates into memory at once
+  and lagged the shell toward a crash. The effective gap is now floored at a
+  one-pixel pitch, the skew is capped at the narrower slice edge, and the cache
+  is a bounded band of five pitches on each side, materialising about ten
+  delegates whatever the configured widths are
+  (`ryogami/wall-ui/qml/wallpaper/WallpaperSelector.qml`, `SliceDelegate.qml`).
+- **The autohiding dock stays up in Power Saver when you move onto an app.**
+  The edge hover strip was 3 px and the revealed dock sits 8 px in, so the
+  pointer fell through. The strip is now 8 px (`modules/dock/DockSurface.qml`).
+- **Closing the launcher no longer risks crashing the shell on niri.** Where the
+  compositor has no focus-grab protocol the launcher tore its screen capture
+  down on every close and unmapped its dismiss scrim from inside the press that
+  closed it, the lifecycle quickshell segfaults on under niri. The capture
+  object now lives as long as the surface and the scrim unmaps one turn later;
+  the daemon logs the exit status and stderr tail when the shell dies
+  (`modules/launcher/variants/hero/LauncherSurface.qml`, `LocalFrost.qml`,
+  `ipc/daemon.go`).
 - **Bluetooth devices no longer show as MAC addresses when BlueZ has no name
   for them.** BlueZ leaves a device's alias equal to its own address (dashed,
   such as `73-EC-EF-CD-48-8C`) until it learns a name, and Quickshell exposes

@@ -26,15 +26,11 @@ func TestNightlightWatcherEndToEnd(t *testing.T) {
 
 	bin := t.TempDir()
 	fake := filepath.Join(bin, backend)
-	sleep, err := exec.LookPath("sleep")
-	if err != nil {
-		t.Skip("no sleep binary")
-	}
-	raw, err := os.ReadFile(sleep)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(fake, raw, 0o755); err != nil {
+	fakeScript := `#!/usr/bin/env bash
+	name="${0##*/}"
+exec -a "$name" bash -c 'while :; do sleep 600; done'
+`
+	if err := os.WriteFile(fake, []byte(fakeScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -183,18 +179,14 @@ func buildNlFake(t *testing.T, backend string, capsFailFirst bool) nlFake {
 	state := t.TempDir()
 	bin := t.TempDir()
 
-	// A renamed copy of sleep is the fake backend: its comm is <backend>, the
-	// name the watcher greps for and the provider reports.
-	sleep, err := exec.LookPath("sleep")
-	if err != nil {
-		t.Skip("no sleep binary")
-	}
-	raw, err := os.ReadFile(sleep)
-	if err != nil {
-		t.Fatal(err)
-	}
+	// Deliberately model a Nix wrapper: comm is bash, while argv[0]
+	// carries the public backend name that procCommIs must recognise.
 	fake := filepath.Join(bin, backend)
-	if err := os.WriteFile(fake, raw, 0o755); err != nil {
+	fakeScript := `#!/usr/bin/env bash
+name="${0##*/}"
+exec -a "$name" bash -c 'while :; do sleep 600; done'
+`
+	if err := os.WriteFile(fake, []byte(fakeScript), 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -228,7 +220,7 @@ printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"@BA
 	).Replace(`#!/usr/bin/env bash
 set -u
 pid="@PID@"; marker="@MARKER@"; temp="@TEMP@"; fake="@FAKE@"; name="@NAME@"
-up() { pgrep -x "$name" >/dev/null 2>&1; }
+up() { [[ -f $pid ]] && kill -0 "$(cat "$pid")" 2>/dev/null; }
 case "${1:-toggle}" in
   on|toggle)
     printf '%s\n' "${2:-4000}" >"$temp"

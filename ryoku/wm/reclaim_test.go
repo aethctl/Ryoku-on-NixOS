@@ -247,3 +247,30 @@ func TestVerifyRemovalSkipsEmptySet(t *testing.T) {
 		t.Errorf("nothing to remove must not refuse: %v", err)
 	}
 }
+
+// pacman writes its refusal lines to stdout, not stderr. The parser must read
+// the stream the refusals actually arrive on, or a packaged box -- where the
+// variant package owns every satellite -- sees "nothing to remove" and the
+// switch loses its keep-or-remove choice. This is the seam the mocked tests
+// cannot catch, so it is pinned on the real transcript shape.
+func TestParseRemovalPlanReadsStdoutRefusals(t *testing.T) {
+	targets := []string{"ryoku-desktop-hyprland", "hyprland"}
+	stdout := ":: removing hyprland breaks dependency 'hyprland' required by ryoku-desktop-hyprland\n" +
+		":: removing ryoku-desktop-hyprland breaks dependency 'ryoku-desktop-compositor' required by ryoku-desktop\n"
+	_, blocked := parseRemovalPlan(stdout, "", targets)
+	if len(blocked) != 2 {
+		t.Fatalf("blocked = %v, want both targets", blocked)
+	}
+}
+
+func TestParseRemovalPlanCleanPrintList(t *testing.T) {
+	targets := []string{"hyprland"}
+	stdout := "hyprland\nhyprcursor\naquamarine\n"
+	set, blocked := parseRemovalPlan(stdout, "", targets)
+	if blocked != nil {
+		t.Fatalf("blocked = %v, want none", blocked)
+	}
+	if !reflect.DeepEqual(set, []string{"hyprland", "hyprcursor", "aquamarine"}) {
+		t.Errorf("set = %v", set)
+	}
+}

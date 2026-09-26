@@ -2,7 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.UPower
-import shell.services
+import shell.services as Svc
 import Ryoku.Ui.Singletons
 import "core"
 import "Palette.js" as Palette
@@ -1482,7 +1482,7 @@ Item {
 
     Timer {
         // 30s normally; 5s while the AI panel is open (responsive when looked at)
-        interval: (theme.aiUsageVisible ? 5000 : 30000) * Perf.pollFactor
+        interval: (theme.aiUsageVisible ? 5000 : 30000) * Svc.Perf.pollFactor
         running: true; repeat: true; triggeredOnStart: true
         onTriggered: theme.refreshAiUsage(false)
     }
@@ -2048,7 +2048,7 @@ Item {
     }
 
     Timer {
-        interval: ((theme.modCpu || theme.cpuVisible || theme.modMemory || theme.memVisible) ? 2000 : 10000) * Perf.pollFactor
+        interval: ((theme.modCpu || theme.cpuVisible || theme.modMemory || theme.memVisible) ? 2000 : 10000) * Svc.Perf.pollFactor
         running: true; repeat: true; triggeredOnStart: true
         onTriggered: {
             systemCpuFile.reload()
@@ -2058,7 +2058,7 @@ Item {
     }
 
     Timer {
-        interval: 2500 * Perf.pollFactor
+        interval: 2500 * Svc.Perf.pollFactor
         running: theme.cpuVisible
         repeat: true
         triggeredOnStart: true
@@ -2066,7 +2066,7 @@ Item {
     }
 
     Timer {
-        interval: 3000 * Perf.pollFactor
+        interval: 3000 * Svc.Perf.pollFactor
         running: theme.cpuVisible
         repeat: true
         triggeredOnStart: true
@@ -2074,7 +2074,7 @@ Item {
     }
 
     Timer {
-        interval: 2500 * Perf.pollFactor
+        interval: 2500 * Svc.Perf.pollFactor
         running: theme.modGpu || theme.gpuVisible || theme.thermalVisible
         repeat: true
         triggeredOnStart: true
@@ -2082,7 +2082,7 @@ Item {
     }
 
     Timer {
-        interval: 5000 * Perf.pollFactor
+        interval: 5000 * Svc.Perf.pollFactor
         running: theme.modCpuTemperature || theme.cpuVisible || theme.thermalVisible
         repeat: true
         triggeredOnStart: true
@@ -2090,7 +2090,7 @@ Item {
     }
 
     Timer {
-        interval: 30000 * Perf.pollFactor
+        interval: 30000 * Svc.Perf.pollFactor
         running: theme.modStorage || theme.storageVisible
         repeat: true
         triggeredOnStart: true
@@ -2098,7 +2098,7 @@ Item {
     }
 
     Timer {
-        interval: (theme.storageVisible ? 5000 : 60000) * Perf.pollFactor
+        interval: (theme.storageVisible ? 5000 : 60000) * Svc.Perf.pollFactor
         running: theme.modStorage || theme.storageVisible
         repeat: true
         triggeredOnStart: true
@@ -3206,7 +3206,7 @@ Item {
     // one writer, the daemon; reach it over the settings.patch seam Weather uses.
     readonly property string _cfgSockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
     function persistWidgetsToConfig() {
-        var cur = Config.qsbar || ({})
+        var cur = Svc.Config.qsbar || ({})
         var q = ({})
         for (var k in cur) q[k] = cur[k]
         // Mirror EVERY key applyStudioSettings() applies, from the LIVE
@@ -3274,7 +3274,7 @@ Item {
     // singleton watches it, so these settings apply live and win over the local
     // widget cache. Only keys the user set are present; the rest keep defaults.
     function applyStudioSettings() {
-        var q = Config.qsbar
+        var q = Svc.Config.qsbar
         if (!q) return
         // Config is the source of truth for these keys, so suppress the widget
         // cache writes the property-change handlers would make (all gated on
@@ -3353,7 +3353,7 @@ Item {
         _widgetsLoaded = wl
     }
     Connections {
-        target: Config
+        target: Svc.Config
         function onQsbarChanged() { theme.applyStudioSettings() }
     }
     Component.onCompleted: theme.applyStudioSettings()
@@ -3394,44 +3394,14 @@ Item {
     // ── Power Profile state ──
     property bool powerProfileVisible: false
     onPowerProfileVisibleChanged: popupOpened("powerProfileVisible")
-    property string powerProfileCurrent: ""
-
-    Process {
-        id: initPowerProfile
-        command: ["bash", "-c", "powerprofilesctl get 2>/dev/null || echo balanced"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var p = this.text.trim()
-                if (p) theme.powerProfileCurrent = p
-            }
-        }
-    }
-
-    // Available power profiles, parsed from `powerprofilesctl list`. Header lines
-    // look like "* performance:" / "  balanced:" (the marker flags the active one);
-    // detail lines have a value after the colon, so we keep only lines that END at
-    // the colon. Defaults to the standard three so nothing regresses if the list
-    // can't be read; the panel/widget offer and cycle only through this set, so a
-    // profile the hardware lacks never shows up as a dead button.
-    property var powerProfileAvailable: ["power-saver", "balanced", "performance"]
-
-    Process {
-        id: initPowerProfileList
-        command: ["bash", "-c", "powerprofilesctl list 2>/dev/null"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var lines = this.text.split("\n")
-                var found = []
-                for (var i = 0; i < lines.length; i++) {
-                    var m = lines[i].match(/^\s*\*?\s*([a-z][a-z0-9-]*):\s*$/)
-                    if (m) found.push(m[1])
-                }
-                if (found.length > 0) theme.powerProfileAvailable = found
-            }
-        }
-    }
+    // The shell daemon owns power-profiles-daemon (ryoku-shell powerprofiles.go)
+    // and streams the live pick on the powerprofiles topic; these read that
+    // stream. A second poller of powerprofilesctl here would drift from the
+    // daemon's banked profile and make a switch look like it did nothing.
+    readonly property string powerProfileCurrent: PowerProfiles.profile
+    readonly property var powerProfileAvailable: PowerProfiles.available
+        ? PowerProfiles.profiles
+        : ["power-saver", "balanced", "performance"]
 
     function gotoWorkspace(id) { Wm.focusWorkspace(id) }
 

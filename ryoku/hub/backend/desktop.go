@@ -239,6 +239,7 @@ func saveDesktop(raw string) error {
 		if err := atomicWrite(desktopStorePath(), mustJSON(m), 0o644); err != nil {
 			return err
 		}
+		os.Remove(desktopPreviewPath())
 		if err := applyLive(); err != nil {
 			return err
 		}
@@ -276,14 +277,33 @@ func previewDesktop(raw string) error {
 		return err
 	}
 	f.Close()
-	_, err = desktopClient().Preview(tmp)
-	return err
+	if _, err := desktopClient().Preview(tmp); err != nil {
+		return err
+	}
+	// Record the live draft so the shell daemon can land it again after a
+	// config reload; save/restore clear it. The owner is the calling Hub, not
+	// this short-lived CLI: the Hub spawns it as a child, so the parent is the
+	// process whose life the preview depends on. Once that Hub quits, the next
+	// reload drops the marker and reverts to disk -- an unsaved quit still
+	// means unsaved.
+	b, _ := json.Marshal(map[string]any{"pid": os.Getppid(), "draft": m})
+	_ = os.MkdirAll(ryokuConfigDir(), 0o755)
+	_ = os.WriteFile(desktopPreviewPath(), b, 0o600)
+	return nil
 }
+
+// desktopPreviewPath is the hand-off between the Hub's live preview and the
+// shell daemon's palette reloads. A preview is live-only state: it writes no
+// config, so a config-only reload re-reads disk and silently drops it. The
+// daemon re-asserts the draft after every such reload while the Hub that owns
+// it is alive.
+func desktopPreviewPath() string { return filepath.Join(ryokuConfigDir(), ".desktop-preview.json") }
 
 // restoreDesktop reverts the live session to the saved config: a reload resets
 // every keyword, and the cursor is re-asserted since it is imperative state a
 // reload leaves alone.
 func restoreDesktop() {
+	os.Remove(desktopPreviewPath())
 	c := desktopClient()
 	_ = c.Act(wm.ActionConfigReload)
 	setLiveCursorFromStore()

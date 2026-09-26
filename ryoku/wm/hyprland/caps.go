@@ -45,9 +45,10 @@ var capsManifest = []wm.Capability{
 	wm.CapPaletteBorder,
 }
 
-// windowRuleActions are the neutral window-rule action ids this
-// provider's config writer actually honours. The Hub reads this
-// list so it never offers controls the active compositor drops.
+// windowRuleActions are the neutral window-rule action ids genWindowRule and
+// genLayerRule accept, in the order the Hub offers them. It is the source the
+// window-rules editor reads, so a control is never shown for a property this
+// provider's config writer would drop.
 var windowRuleActions = []string{
 	"float", "tile", "pin", "fullscreen", "maximize", "center", "immediate",
 	"pseudo", "norounding", "noborder", "opacity", "size", "move", "workspace",
@@ -55,12 +56,15 @@ var windowRuleActions = []string{
 	"abovelock", "noshadow", "ignorealpha", "dimaround",
 }
 
-// The packages ryoku-desktop-hyprland installs for the compositor: Hyprland
-// itself, its plugins, its portal and its satellites. Kept in step with that
+// The packages ryoku-desktop-hyprland is made of: the variant package itself,
+// Hyprland, its plugins, its portal and its satellites. Kept in step with that
 // package's depends (release/packages/ryoku-desktop-hyprland/PKGBUILD); this is
 // the list a switch away from Hyprland reclaims, minus ryoku-desktop, which is
-// shared with the compositor that replaces it.
+// shared with the compositor that replaces it. The variant package belongs in
+// the list: on a packaged box it owns every satellite below, so a reclaim that
+// left it out could free none of them.
 var compositorPackages = []string{
+	"ryoku-desktop-hyprland",
 	"hyprland",
 	"hypr-dynamic-cursors",
 	"ryoku-hypr-plugins",
@@ -70,9 +74,11 @@ var compositorPackages = []string{
 	"hyprpolkitagent",
 	"xdg-desktop-portal-hyprland",
 	"hyprland-preview-share-picker",
-	"hyprsunset",
 	"hypridle",
 	"hyprpicker",
+	// hyprsunset holds the warm gamma while the night light is on. A Hyprland-only
+	// CTM client, so it is the Hyprland variant's to ship and reclaim.
+	"hyprsunset",
 }
 
 // The manifest is fixed, not probed: Hyprland does not gain features while
@@ -91,7 +97,7 @@ func runCaps() error {
 		GeneratedFiles: wm.GeneratedConfig(wm.ProviderHyprland),
 		PortalBackend:  "hyprland",
 		NightLightProcess: "hyprsunset",
-		Packages:       compositorPackages,
+		Packages:          compositorPackages,
 		WindowRuleActions: windowRuleActions,
 	}
 	enc := json.NewEncoder(stdout)

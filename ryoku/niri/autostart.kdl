@@ -21,21 +21,15 @@ spawn-at-startup "gsettings" "set" "org.gnome.desktop.interface" "gtk-theme" "ad
 // Folder icons tinted to the wallpaper accent, rebuilt on every palette change.
 spawn-sh-at-startup "command -v ryoku-cmd-folders >/dev/null 2>&1 && ryoku-cmd-folders"
 
-// The session, in one chained command. GDK_BACKEND belongs to the Hyprland
-// session and must not survive into niri: xdg-desktop-portal-gnome deliberately
-// disables screencasting when GDK_BACKEND is forced globally. Remove it from
-// both this startup shell and the persistent user manager before re-importing
-// niri's compositor environment.
-//
-// Push the compositor env into the user manager first: a lost race skips
-// ConditionEnvironment=WAYLAND_DISPLAY units
+// The session, in one chained command. Push the compositor env into the user
+// manager first: a lost race skips ConditionEnvironment=WAYLAND_DISPLAY units
 // and lands a black desktop. restart, not start: a daemon the manager still
 // holds from a previous login answers `start` with "already active" while bound
 // to the dead session; reset-failed lets a unit that hit its start limit run
 // again, and daemon-reload picks up a freshly laid unit. Portals restart last,
 // once the desktop is up, so a stale frontend does not proxy dead ScreenCast
 // requests; the backend niri's caps report is the GNOME one.
-spawn-sh-at-startup "unset GDK_BACKEND; systemctl --user unset-environment GDK_BACKEND; dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start ryoku-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"
+spawn-sh-at-startup "dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start ryoku-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"
 
 // No autoscale line: niri picks each output's scale itself, and ryoku-monitor is the Hyprland provider's display tool.
 

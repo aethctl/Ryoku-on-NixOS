@@ -31,6 +31,7 @@ Singleton {
         property var keyboardLayouts: []
         property var windows: []
         property var workspaces: []
+        property var versions: null
     }
     readonly property bool ready: state.ready === true
 

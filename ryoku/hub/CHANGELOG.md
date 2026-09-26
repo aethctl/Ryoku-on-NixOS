@@ -1,6 +1,59 @@
 # Changelog: ryoku/hub/
 
 
+### Added
+- **The Machine page owns the two switches it used to describe.** The
+  hardware display-routing knob (GPU Mode / MUX / Optimus) and the live CPU
+  power profile were CLI-only, and both the render card's Hybrid and the
+  firmware's Hybrid read as one setting with two names. The render card now
+  carries a "Display wired to" segment (a pkexec grant makes the firmware
+  write terminal-free; a reboot-pending flag says when it lands) and the CPU
+  card a "Live profile" segment that switches through the shell daemon, the
+  one owner of the pick. Each row names its layer: a software choice applied
+  at next login, versus a hardware switch applied at next reboot
+  (`quickshell/pages/GpuPage.qml`, `backend/gpumux.go`, `backend/daemonclient.go`).
+
+- **Keybinds, rebuilt around use.** A search field that fuzzy-matches labels,
+  hints, categories and key tokens ("clw" finds Close window, "num 3" the
+  number-pad workspaces), a category rail with counts, and one calm column of
+  36px rows: a short label, the key caps, a hint only for the row under the
+  pointer. A shortcut the running compositor cannot do stays listed, greyed,
+  with the reason a hover away. Rebinding clicks the caps and captures the
+  chord through a shortcut inhibitor, so the compositor hands the keys to the
+  Hub instead of running them, on niri as on Hyprland; the number pad records
+  as `Num 1` whatever NumLock says (`pages/KeybindsPage.qml`, `Combos.js`).
+- **The legend comes from the provider.** `ryoku-hub keybinds` asks the running
+  window-manager provider for the full effective bind list from the neutral
+  catalogue, so the page and the cheatsheet show what is actually bound rather
+  than a parse of one compositor's config (`backend/keybinds.go`).
+- **Night light, on the Displays page.** A switch and a colour temperature that
+  read and drive the daemon's `nightlight` topic, shown only where the running
+  compositor's provider offers a night light (`pages/DisplaysPage.qml`).
+- **Idle timeouts, on the Machine page.** Dim, lock, screen off and suspend, on
+  battery and plugged in, plus a master switch and an opt-in for desktops; they
+  persist as the idle policy in `power.json` and re-render the idle daemon's
+  config on every change (`pages/GpuPage.qml`, `schema/GpuPage.js`,
+  `backend/cputune.go`).
+- **A touchpad switch, on the Input page.** Reads and flips the pad through the
+  `input.touchpad` seam action, shown where the provider reports the
+  `touchpadToggle` capability (`pages/InputPage.qml`).
+- **The compositor pages follow the running provider.** The Animations page
+  renders a provider's own animation rows (niri's per-animation springs and
+  curves) beside the shell motion controls and keeps the Hyprland curve editor
+  only where that store is live; the Layer Rules page renders a provider's
+  layer-rule list through a shared list control built from the row's declared
+  fields; the Window Rules action picker takes its vocabulary from the actions
+  the provider honours (`pages/AnimationsPage.qml`, `pages/LayerRulesPage.qml`,
+  `pages/WindowRulesPage.qml`, `SettingsSheet.qml`, `Singletons/Settings.qml`).
+
+### Fixed
+- **No Hyprland wording or dead compositor toggles on niri.** The search
+  vocabulary derives from the active provider's rows and name, the import
+  wizard names the desktop you run and stands down where it cannot read its
+  config, and the Performance page hides the blur, shadow and low-power
+  switches where nothing reads them (`Hub.qml`, `pages/ImportPage.qml`,
+  `pages/PerformancePage.qml`).
+
 ### Changed
 - **Ryoku Settings is a full-page window.** It opens at 99% of the screen (the
   Hyprland rule floats it at the same 99% and centres it; niri sizes the column),

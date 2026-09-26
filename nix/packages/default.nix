@@ -50,6 +50,10 @@ let
     inherit pkgs src;
   };
 
+  paletteBridge = import ./ryoku-palette-bridge.nix {
+    inherit pkgs src;
+  };
+
   rashin = import ./ryoku-rashin.nix {
     inherit pkgs src desktopData;
   };
@@ -88,6 +92,7 @@ let
       src
       livewall
       waifu2x
+      paletteBridge
       ;
   };
 
@@ -256,6 +261,7 @@ let
       cli
       nixUpdate
       hub
+      paletteBridge
       rashin
       prowlAgent
       ryostore
@@ -281,6 +287,7 @@ in
     cli
     nixUpdate
     hub
+    paletteBridge
     rashin
     prowlAgent
     ryostore

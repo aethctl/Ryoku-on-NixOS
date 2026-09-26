@@ -65,7 +65,8 @@ pkgs.writeShellApplication {
         ryoku-shell.service \
         ryoku-rashin.service \
         ryoku-ai-usage.service \
-        ryoku-ai-usage.timer
+        ryoku-ai-usage.timer \
+        ryoku-palette-bridge.service
       do
         current="$user_units/$unit"
 
@@ -307,15 +308,28 @@ EOF
     # override the NixOS-managed definitions.
     # ----------------------------------------------------------
 
+    # Preserve the Palette Bridge's user-selected enablement while replacing
+    # any old Arch/self-installed unit definition with the immutable NixOS one.
+    palette_bridge_enabled=0
+
+    if systemctl --user is-enabled --quiet ryoku-palette-bridge.service 2>/dev/null; then
+      palette_bridge_enabled=1
+    fi
+
     rm -f -- \
       "$user_units/ryoku-session.target" \
       "$user_units/hyprland-session.target" \
       "$user_units/ryoku-shell.service" \
       "$user_units/ryoku-rashin.service" \
       "$user_units/ryoku-ai-usage.service" \
-      "$user_units/ryoku-ai-usage.timer"
+      "$user_units/ryoku-ai-usage.timer" \
+      "$user_units/ryoku-palette-bridge.service"
 
     systemctl --user daemon-reload 2>/dev/null || true
+
+    if [ "$palette_bridge_enabled" -eq 1 ]; then
+      systemctl --user reenable ryoku-palette-bridge.service         >/dev/null 2>&1 || true
+    fi
 
     # ----------------------------------------------------------
     # Seed visible assets without replacing user files

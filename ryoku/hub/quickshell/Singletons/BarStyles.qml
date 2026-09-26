@@ -7,10 +7,10 @@ QtObject {
     id: root
 
     readonly property var builtins: [
-        { "id": "sumi", "name": "Sumi", "desc": "The framed Ryoku desktop." },
-        { "id": "qsbar", "name": "QS Bar", "desc": "The configurable module bar." },
-        { "id": "chroma", "name": "Chroma", "desc": "A vivid compact status bar." },
-        { "id": "kairos", "name": "Kairos", "desc": "A centered editorial bar." }
+        { "id": "sumi", "name": "Sumi", "desc": "The framed Ryoku desktop.", "installed": true, "unavailable": false },
+        { "id": "qsbar", "name": "QS Bar", "desc": "The configurable module bar.", "installed": true, "unavailable": false },
+        { "id": "chroma", "name": "Chroma", "desc": "A vivid compact status bar.", "installed": true, "unavailable": false },
+        { "id": "kairos", "name": "Kairos", "desc": "A centered editorial bar.", "installed": true, "unavailable": false }
     ]
     property var items: builtins
     readonly property var chromaWidgets: [
@@ -43,7 +43,16 @@ QtObject {
             out.push(found ? {
                 "id": found.id,
                 "name": found.name || fallback.name,
-                "desc": found.summary || found.description || fallback.desc
+                "desc": found.summary || found.description || fallback.desc,
+                "installed": found.installed === true,
+                "active": found.active === true,
+                "version": found.version || "",
+                "installedVersion": found.installedVersion || "",
+                "updateAvailable": found.updateAvailable === true,
+                "downloadPaused": found.downloadPaused === true,
+                "unavailable": found.unavailable === true,
+                "unavailableReason": found.unavailableReason || "",
+                "metadata": found.metadata || ({})
             } : fallback);
         }
         for (let i = 0; i < installed.length; ++i)
@@ -51,7 +60,16 @@ QtObject {
                 out.push({
                     "id": installed[i].id,
                     "name": installed[i].name || installed[i].id,
-                    "desc": installed[i].summary || installed[i].description || ""
+                    "desc": installed[i].summary || installed[i].description || "",
+                    "installed": true,
+                    "active": installed[i].active === true,
+                    "version": installed[i].version || "",
+                    "installedVersion": installed[i].installedVersion || "",
+                    "updateAvailable": installed[i].updateAvailable === true,
+                    "downloadPaused": installed[i].downloadPaused === true,
+                    "unavailable": installed[i].unavailable === true,
+                    "unavailableReason": installed[i].unavailableReason || "",
+                    "metadata": installed[i].metadata || ({})
                 });
         root.items = out;
     }

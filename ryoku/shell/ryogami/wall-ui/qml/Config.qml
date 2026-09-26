@@ -92,7 +92,7 @@ QtObject {
         || Quickshell.env("RYOGAMI_WALL_CACHE")
         || (Quickshell.env("XDG_CACHE_HOME") || (homeDir + "/.cache")) + "/ryogami-wall"
     readonly property string wallpaperDir: _resolve(_data.paths?.wallpaper)
-        || (homeDir + "/Pictures/Wallpapers")
+        || ((Quickshell.env("XDG_PICTURES_DIR") || (homeDir + "/Pictures")) + "/Wallpapers")
     readonly property string videoDir: _resolve(_data.paths?.videoWallpaper)
         || wallpaperDir
     readonly property string weDir: _resolve(_data.paths?.steamWorkshop)
@@ -108,12 +108,21 @@ QtObject {
     readonly property string mainMonitor: _data.monitor ?? ""
 
     readonly property bool closeOnSelection: _data.general?.closeOnSelection !== false
-    readonly property bool filterBarAlwaysVisible: _data.general?.filterBarAlwaysVisible !== false
+    readonly property bool filterBarAlwaysVisible: _data.general?.filterBarAlwaysVisible === true
     readonly property int randomInterval: _data.general?.randomInterval ?? 300
     readonly property bool randomIncludeStatic: _data.general?.randomIncludeStatic !== false
     readonly property bool randomIncludeVideo: _data.general?.randomIncludeVideo !== false
     readonly property bool randomIncludeWE: _data.general?.randomIncludeWE !== false
     readonly property bool randomIncludeFavourites: _data.general?.randomIncludeFavourites !== false
+
+    // Day/night video rotation (#247): two pools switched by the shell's real
+    // sunrise/sunset, rotating within the active pool on an interval. The
+    // daemon owns the timer and the isDay read; these keys are the GUI's view.
+    readonly property bool dayNightEnabled: _data.daynight?.enabled === true
+    readonly property string dayNightDayDir: _resolve(_data.daynight?.dayDir)
+    readonly property string dayNightNightDir: _resolve(_data.daynight?.nightDir)
+    readonly property int dayNightInterval: Math.max(1, _data.daynight?.rotateIntervalMinutes ?? 60)
+    readonly property bool dayNightNoRepeat: _data.daynight?.noRepeatWithinDay !== false
     readonly property bool wallpaperPerMonitor: _data.general?.wallpaperPerMonitor === true
     readonly property int selectorBackdropOpacity: Math.max(0, Math.min(100, _data.general?.selectorBackdropOpacity ?? 0))
     readonly property bool notifyOnWallpaperChange: _data.general?.notifyOnWallpaperChange !== false
@@ -243,6 +252,10 @@ QtObject {
         onFileChanged: { reload(); config._reparseMatugenKnobs() }
     }
 
+    // Where the Palette Bridge source tree lives for build/doctor actions; the
+    // packaged default is the read-only data dir, overridable in config.json.
+    readonly property string paletteBridgeSource: _resolve(_data.paletteBridgeSource ?? "/usr/share/ryoku/palette-bridge")
+
     readonly property string matugenScheme: _matugenKnobs.schemeType || (_data.matugen && _data.matugen.schemeType) || "scheme-fidelity"
     readonly property string matugenMode: _matugenKnobs.mode || (_data.matugen && _data.matugen.mode) || "dark"
     // The hub's source index runs 0..4 and the picker offers all five, so the
@@ -324,6 +337,82 @@ QtObject {
     readonly property int hexScrollStep: _wallpaperSelector.hexScrollStep ?? 1
     readonly property bool hexArc: _wallpaperSelector.hexArc !== false
     readonly property real hexArcIntensity: _wallpaperSelector.hexArcIntensity ?? 1.2
+    readonly property string hexCurve: _wallpaperSelector.hexCurve ?? (hexArc ? "arc" : "flat")
+    readonly property string hexShape: _wallpaperSelector.hexShape ?? "hexagon"
+    readonly property real hexWaves: _wallpaperSelector.hexWaves ?? 1.0
+
+    // Hand mirrors v2's fanned-card geometry. The defaults are the values the
+    // ported QML layout math is tuned against (the view's own property
+    // defaults), NOT v2's Rust camera parameters: the QML port re-expresses
+    // perspective as a per-step shrink factor (≈18), not v2's pixel camera
+    // distance (1700), so seeding it with the Rust number collapses every
+    // off-centre card to a sliver. A config written by an older picker keeps
+    // its stored values.
+    readonly property int handCardWidth: _wallpaperSelector.handCardWidth ?? 200
+    readonly property int handCardHeight: _wallpaperSelector.handCardHeight ?? 300
+    readonly property int handCount: _wallpaperSelector.handCount ?? 9
+    readonly property real handFanAngle: _wallpaperSelector.handFanAngle ?? 7
+    readonly property real handFanRoll: _wallpaperSelector.handFanRoll ?? 0
+    readonly property real handArch: _wallpaperSelector.handArch ?? 26
+    readonly property real handCornerRadius: _wallpaperSelector.handCornerRadius ?? 16
+    readonly property real handSkew: _wallpaperSelector.handSkew ?? 0
+    readonly property real handSpread: _wallpaperSelector.handSpread ?? 96
+    readonly property real handSpeed: _wallpaperSelector.handSpeed ?? 1
+    readonly property real handTilt: _wallpaperSelector.handTilt ?? 8
+    readonly property real handPerspective: _wallpaperSelector.handPerspective ?? 18
+    readonly property bool handGhosts: _wallpaperSelector.handGhosts === true
+    readonly property bool handBob: _wallpaperSelector.handBob === true
+    readonly property bool handBackdrop: _wallpaperSelector.handBackdrop === true
+
+    // Sandy mirrors v2's strand carousel. As with Hand, the defaults are the
+    // values the ported QML layout math is tuned against (the view's own
+    // property defaults), not v2's Rust parameters. spacing is a fraction of a
+    // slice width, ringBlend 0 keeps the strand linear rather than folding it
+    // onto the ring, and strands is the lane count (the view clamps it to 6).
+    // center is the horizontal anchor as a fraction of the stage width.
+    readonly property real sandyCenter: _wallpaperSelector.sandyCenter ?? 0.5
+    readonly property int sandySliceWidth: _wallpaperSelector.sandySliceWidth ?? 200
+    readonly property int sandySliceHeight: _wallpaperSelector.sandySliceHeight ?? 260
+    readonly property real sandySkew: _wallpaperSelector.sandySkew ?? 0
+    readonly property real sandySpacing: _wallpaperSelector.sandySpacing ?? 55
+    readonly property int sandyDuration: _wallpaperSelector.sandyDuration ?? 1500
+    readonly property int sandyStrands: _wallpaperSelector.sandyStrands ?? 5
+    readonly property real sandyTwist: _wallpaperSelector.sandyTwist ?? 1
+    readonly property real sandyOrbit: _wallpaperSelector.sandyOrbit ?? 1
+    readonly property real sandyTurbulence: _wallpaperSelector.sandyTurbulence ?? 1
+    readonly property real sandyWaist: _wallpaperSelector.sandyWaist ?? 1
+    readonly property real sandyFront: _wallpaperSelector.sandyFront ?? 1
+    readonly property real sandyArc: _wallpaperSelector.sandyArc ?? 1
+    readonly property real sandyEdgeSpeed: _wallpaperSelector.sandyEdgeSpeed ?? 14
+    readonly property real sandyRingSpin: _wallpaperSelector.sandyRingSpin ?? 0
+    readonly property real sandyRingSize: _wallpaperSelector.sandyRingSize ?? 1
+    readonly property real sandyRingWave: _wallpaperSelector.sandyRingWave ?? 1
+    readonly property real sandyRingSoft: _wallpaperSelector.sandyRingSoft ?? 1
+    readonly property real sandyRingBlend: _wallpaperSelector.sandyRingBlend ?? 0
+    readonly property real sandyRingHold: _wallpaperSelector.sandyRingHold ?? 0.4
+    readonly property int sandyGrain: _wallpaperSelector.sandyGrain ?? 3
+    readonly property real sandyFan: _wallpaperSelector.sandyFan ?? 0.6
+
+    readonly property string gridLayout: _wallpaperSelector.gridLayout ?? "uniform"
+    readonly property real gridStagger: _wallpaperSelector.gridStagger ?? 0
+    readonly property real gridSelectedScale: _wallpaperSelector.gridSelectedScale ?? 1.08
+    readonly property real gridFlowWave: _wallpaperSelector.gridFlowWave ?? 0
+    readonly property real gridFlowFrequency: _wallpaperSelector.gridFlowFrequency ?? 1
+    readonly property real gridScatter: _wallpaperSelector.gridScatter ?? 0
+    readonly property real gridScaleVariance: _wallpaperSelector.gridScaleVariance ?? 0
+    readonly property real gridCylinderBend: _wallpaperSelector.gridCylinderBend ?? 0.6
+    readonly property real gridCylinderRadius: _wallpaperSelector.gridCylinderRadius ?? 900
+
+    readonly property real hexGapX: _wallpaperSelector.hexGapX ?? 6
+    readonly property real hexGapY: _wallpaperSelector.hexGapY ?? 6
+    readonly property real hexAspect: _wallpaperSelector.hexAspect ?? 1
+    readonly property real hexStagger: _wallpaperSelector.hexStagger ?? 0.5
+    readonly property real hexLens: _wallpaperSelector.hexLens ?? 0
+    readonly property real hexLensRadius: _wallpaperSelector.hexLensRadius ?? 600
+    readonly property real hexOrbit: _wallpaperSelector.hexOrbit ?? 0
+    readonly property real hexOrbitRadius: _wallpaperSelector.hexOrbitRadius ?? 300
+    readonly property real hexTwist: _wallpaperSelector.hexTwist ?? 0
+    readonly property real hexScatter: _wallpaperSelector.hexScatter ?? 0
 
     readonly property int gridColumns: _wallpaperSelector.gridColumns ?? (_isSmallScreen ? 4 : 6)
     readonly property int gridRows: _wallpaperSelector.gridRows ?? 3

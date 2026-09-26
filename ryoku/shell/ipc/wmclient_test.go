@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os/exec"
 	"testing"
+	"time"
 
 	wm "ryoku-wm"
 )
@@ -46,6 +47,8 @@ func TestMonitorConcurrent(t *testing.T) {
 	<-done
 }
 
+// An overview frame warms the cached overview state the wm topic publishes, so
+// the backdrop's blur gate reads the compositor's live overview, not a stale one.
 func TestOverviewFrameUpdatesCache(t *testing.T) {
 	d := &daemon{}
 	d.onWMFrame(wm.Frame{Kind: wm.FrameOverview, OverviewOpen: true})
@@ -53,15 +56,49 @@ func TestOverviewFrameUpdatesCache(t *testing.T) {
 	got := d.wmOverview
 	d.wmMu.Unlock()
 	if !got {
-		t.Fatal("overview frame did not set cached state")
+		t.Fatal("overview frame did not set the cached state")
 	}
-
 	d.onWMFrame(wm.Frame{Kind: wm.FrameOverview})
 	d.wmMu.Lock()
 	got = d.wmOverview
 	d.wmMu.Unlock()
 	if got {
-		t.Fatal("closed overview frame did not clear cached state")
+		t.Fatal("a closed overview frame must clear the cached state")
+	}
+}
+
+// The bar's layout indicator reads Wm.keyboardLayout off the wm topic, so a
+// keyboard frame must reach the published snapshot (it was silently dropped
+// once) and every section must carry a version so a QML consumer rebinds only
+// what moved. This asserts the wire, not just the cache.
+func TestPublishCarriesKeyboardAndVersions(t *testing.T) {
+	d := &daemon{wmc: wm.OpenNamed("does-not-exist")}
+	d.wmTopic = newStateTopic()
+	sub := d.wmTopic.subscribe()
+	defer d.wmTopic.unsubscribe(sub)
+
+	d.onWMFrame(wm.Frame{Kind: wm.FrameKeyboard, KeyboardLayout: "English (US)", KeyboardLayouts: []string{"us", "dvorak"}})
+
+	select {
+	case frame := <-sub.frames:
+		var out wmTopicFrame
+		if err := json.Unmarshal(frame, &out); err != nil {
+			t.Fatal(err)
+		}
+		if out.KeyboardLayout != "English (US)" {
+			t.Errorf("keyboardLayout = %q, want the folded layout", out.KeyboardLayout)
+		}
+		if len(out.KeyboardLayouts) != 2 {
+			t.Errorf("keyboardLayouts = %v, want two", out.KeyboardLayouts)
+		}
+		if out.Versions["keyboard"] != 1 {
+			t.Errorf("versions[keyboard] = %d, want 1", out.Versions["keyboard"])
+		}
+		if out.Versions["windows"] != 0 {
+			t.Errorf("versions[windows] = %d, want 0 (untouched by a keyboard frame)", out.Versions["windows"])
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no frame published")
 	}
 }
 
@@ -88,33 +125,52 @@ func BenchmarkMonitorSpawnProxy(b *testing.B) {
 	}
 }
 
-func TestKeyboardFramesReachPublishedState(t *testing.T) {
-	d := &daemon{wmc: wm.OpenNamed("missing-test-provider"), wmTopic: newStateTopic()}
-	d.onWMFrame(wm.Frame{Kind: wm.FrameKeyboard, KeyboardLayout: "English (UK)", KeyboardLayouts: []string{"English (UK)", "English (US)"}})
-	var frame wmTopicFrame
-	if err := json.Unmarshal(d.wmTopic.last, &frame); err != nil {
-		t.Fatal(err)
-	}
-	if frame.KeyboardLayout != "English (UK)" || len(frame.KeyboardLayouts) != 2 {
-		t.Fatal(frame)
-	}
-}
-
 func TestUnchangedWorkspaceFrameDoesNotWakeWidgets(t *testing.T) {
 	d := &daemon{widgetSig: make(chan struct{}, 1)}
-	f := wm.Frame{Kind: wm.FrameWorkspaces, Workspaces: []wm.Workspace{{ID: "1", Windows: 2}}}
+
+	f := wm.Frame{
+		Kind:       wm.FrameWorkspaces,
+		Workspaces: []wm.Workspace{{ID: "1", Windows: 2}},
+	}
+
 	d.onWMFrame(f)
 	<-d.widgetSig
+
+	first := d.wmVersions[string(wm.FrameWorkspaces)]
 	d.onWMFrame(f)
+
 	select {
 	case <-d.widgetSig:
 		t.Fatal("unchanged frame woke widget gate")
 	default:
 	}
-	d.onWMFrame(wm.Frame{Kind: wm.FrameWorkspaces, Workspaces: []wm.Workspace{}})
+
+	if got := d.wmVersions[string(wm.FrameWorkspaces)]; got != first {
+		t.Fatalf("unchanged workspace frame advanced version: %d -> %d", first, got)
+	}
+
+	d.onWMFrame(wm.Frame{
+		Kind:       wm.FrameWorkspaces,
+		Workspaces: []wm.Workspace{},
+	})
+
 	select {
 	case <-d.widgetSig:
 	default:
 		t.Fatal("empty workspace transition lost")
+	}
+}
+
+func TestReadyFrameAdvancesVersionOnReconnect(t *testing.T) {
+	d := &daemon{}
+
+	d.onWMFrame(wm.Frame{Kind: wm.FrameReady})
+	first := d.wmVersions[string(wm.FrameReady)]
+
+	d.onWMFrame(wm.Frame{Kind: wm.FrameReady})
+	second := d.wmVersions[string(wm.FrameReady)]
+
+	if second != first+1 {
+		t.Fatalf("ready version = %d after reconnect, want %d", second, first+1)
 	}
 }
