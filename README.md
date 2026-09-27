@@ -117,7 +117,8 @@ one product rather than a collection of unrelated widgets or amalgamation of con
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/readme/assets/ui/desktop.webp" alt="Ryoku desktop" width="100%" />
+      <img src="<img width="2560" height="1440" alt="image" src="https://github.com/user-attachments/assets/61f7862e-a73c-4333-972c-122347038437" />
+" alt="Ryoku desktop" width="100%" />
       <br />
       <sub><b>Desktop.</b> Aesthetic by default and heavily customisable.</sub>
     </td>
