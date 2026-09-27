@@ -117,7 +117,7 @@ one product rather than a collection of unrelated widgets or amalgamation of con
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku desktop" width=100%" />
+      <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku desktop" width="100%" />
       <br />
       <sub><b>Desktop.</b> Aesthetic by default and heavily customisable.</sub>
     </td>
@@ -134,21 +134,21 @@ one product rather than a collection of unrelated widgets or amalgamation of con
       <sub><b>Controls.</b> Session, connectivity, sound, brightness, media and power in one sidebar.</sub>
     </td>
     <td width="50%">
-      <img src="docs/readme/assets/ui/hub-page.webp" alt="Ryoku Hub" width="100%" />
+      <img src="docs/readme/assets/ui/profile.webp" alt="Ryoku profile page" width="100%" />
       <br />
-      <sub><b>Ryoku Hub.</b> System information, settings and Ryoku-specific control in one place.</sub>
+      <sub><b>Profile.</b> User-facing customizable configuration bundled in one sleek page.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/readme/assets/ui/profile.webp" alt="Ryoku profile page" width="100%" />
+      <img src="docs/readme/assets/ui/hub-page.webp" alt="Ryoku Hub" width="100%" />
       <br />
-      <sub><b>Profile.</b> User-facing customizable configuration bundled in one sleek page</sub>
+      <sub><b>Ryoku Hub.</b> System information, settings and Ryoku-specific control in one place.</sub>
     </td>
     <td width="50%">
       <img src="docs/readme/assets/ui/batgirl.webp" alt="Ryoku themed desktop" width="100%" />
       <br />
-      <sub><b>Matugen.</b> No matter the wallpaper, components recolour themselves around it</sub>
+      <sub><b>Matugen.</b> No matter the wallpaper, components recolour themselves around it.</sub>
     </td>
   </tr>
 </table>
