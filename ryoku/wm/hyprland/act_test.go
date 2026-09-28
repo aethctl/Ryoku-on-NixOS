@@ -192,6 +192,7 @@ func TestActRejectsUnknownAction(t *testing.T) {
 func TestActTouchpadFlipsPadsAndTracksState(t *testing.T) {
 	state := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", state)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	flag := filepath.Join(state, "ryoku", "touchpad.disabled")
 
 	prevNotify := touchpadNotify
