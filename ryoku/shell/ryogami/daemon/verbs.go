@@ -75,6 +75,13 @@ func (d *daemon) wallpaperVerb(line string) string {
 			d.broadcast("ryogami.wall.toggle", map[string]interface{}{})
 		}
 		return "ok"
+	case "settings":
+		tab := ""
+		if f := strings.Fields(rest); len(f) > 1 {
+			tab = f[1]
+		}
+		d.openSettings(tab)
+		return "ok"
 	case "resource":
 		f := strings.Fields(rest)
 		if len(f) < 2 || (f[1] != "low" && f[1] != "medium" && f[1] != "high") {
@@ -204,15 +211,6 @@ func (d *daemon) candidatePaths(types []string, favouritesOnly bool) []string {
 
 func (d *daemon) randomPick(types []string, favouritesOnly bool) {
 	if pick := d.pickRandom(types, favouritesOnly); pick != "" {
-		_ = d.applyWallpaper(typeOf(pick), pick, "set", nil, nil, nil)
+		_ = d.applyWallpaperReason("random", typeOf(pick), pick, "set", nil, nil, nil)
 	}
-}
-
-// dayNightTick applies a clip the daynight rotation picked. The pool is video,
-// so it routes through the same video apply path the picker uses.
-func (d *daemon) dayNightTick(path string) {
-	if path == "" {
-		return
-	}
-	_ = d.applyWallpaper(typeOf(path), path, "set", nil, nil, nil)
 }

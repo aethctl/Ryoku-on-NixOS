@@ -253,7 +253,7 @@ Singleton {
             property string formatLocale: ""
             property string screenShader: ""
             property var frameBars: FrameBars.defaultConfig()
-            property string barStyle: "qsbar"
+            property string barStyle: "iris"
             property string launcherTarget: "studio"
             property var obi: ({})
             property var nacre: NacreConfig.defaultConfig()

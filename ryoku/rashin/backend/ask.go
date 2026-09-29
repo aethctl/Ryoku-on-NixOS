@@ -17,12 +17,12 @@ import (
 // ask.go is the launcher's one-shot CLI: it POSTs the question to the running
 // daemon's /api/ask and pipes the streamed marker lines straight to stdout.
 // The daemon does the thinking (fast lane or hermes session) and records the
-// conversation in the shared transcript, so "continue in dashboard" opens the
-// very conversation this started.
+// conversation in the shared transcript, so continuing in the Super+S chat
+// opens the very conversation this started.
 //
 // stdout protocol (one marker per line):
 //   @working <label>   what the agent is doing right now
-//   @perm <title>      a permission is waiting (answer it in the dashboard)
+//   @perm <title>      a permission is waiting (answer it in the Super+S chat)
 //   @answer <json>     {"text":"...","images":["/abs.png"]} final answer
 //   @error <message>   terminal failure
 

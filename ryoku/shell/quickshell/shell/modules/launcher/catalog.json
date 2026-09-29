@@ -34,6 +34,14 @@
       "entrypoint": "variants/kairos/Main.qml",
       "preview": "variants/kairos/Preview.qml",
       "capabilities": []
+    },
+    {
+      "id": "spotlight",
+      "name": "Spotlight",
+      "description": "The iRiS launcher: the frame's morphing-glass search, with apps, actions, commands and web in one row.",
+      "entrypoint": "variants/spotlight/Main.qml",
+      "preview": "variants/spotlight/Preview.qml",
+      "capabilities": []
     }
   ]
 }

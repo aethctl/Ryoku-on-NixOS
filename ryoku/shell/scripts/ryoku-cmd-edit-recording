@@ -3,8 +3,8 @@
 # ryoku-cmd-edit-recording: open the Quick screen recording the shell just wrote
 # in Ryoku Motion for editing. Driven by the record card's "Edit in Ryomotion
 # when done" toggle, for Quick captures only -- Studio already records straight
-# through the editor. Waits for gpu-screen-recorder / wf-recorder to finalise the
-# mp4 (a half-written file imports broken), then hands the clip to ryomotion.
+# through the editor. Waits for wf-recorder to finalise the mp4 (a half-written
+# file imports broken), then hands the clip to ryomotion.
 #
 #   ryoku-cmd-edit-recording [FILE]   (no arg = the path the recorder wrote)
 
@@ -22,13 +22,12 @@ input="${1:-}"
 
 command -v ryomotion >/dev/null 2>&1 || { notify "Ryomotion" "Not installed yet"; exit 0; }
 
-# wait for the recorder to finish writing: gpu-screen-recorder / wf-recorder both
-# finalise the mp4 on SIGINT, so hold until neither is running, then until the
-# file size stops growing. time-boxed so a stuck capture can't hang the helper.
-gsr='(^|/)gpu-screen-recorder( |$)'
+# wait for the recorder to finish writing: wf-recorder finalises the mp4 on
+# SIGINT, so hold until it is no longer running, then until the file size stops
+# growing. Time-boxed so a stuck capture can't hang the helper.
 wf='(^|/)wf-recorder( |$)'
 for _ in $(seq 1 60); do
-  if pgrep -f "$gsr" >/dev/null 2>&1 || pgrep -f "$wf" >/dev/null 2>&1; then
+  if pgrep -f "$wf" >/dev/null 2>&1; then
     sleep 0.5
   else
     break

@@ -161,9 +161,6 @@ Scope {
         // True when this monitor's active workspace holds a fullscreen window;
         // the frame then unmaps its input and hides so the window is unobstructed.
         readonly property bool monFullscreen: Wm.outputHasFullscreen(root.modelData ? root.modelData.name : "")
-        // The record island through its loader: null until the session's first
-        // recording flow, and every mask binding reads it guarded.
-        readonly property Item hud: hudLoader.item
 
         onMonFullscreenChanged: if (monFullscreen) frameMenus.closeAll()
 
@@ -183,9 +180,8 @@ Scope {
         // dragging island or any visible menu widens the mask to the whole
         // surface so the pointer never slips off its rect mid-interaction.
         mask: overlay.monFullscreen ? hiddenRegion
-            : (frameMenus.anyVisible || (overlay.hud && overlay.hud.dragging)) ? fullRegion
+            : frameMenus.anyVisible ? fullRegion
             : root.sumiActive ? railRegion
-            : (Recorder.anyActive || Recorder.chooserOpen) ? recRegion
             : dragRegion
 
         Region { id: hiddenRegion }
@@ -226,24 +222,9 @@ Scope {
             Region { x: frameMenus.masks["bottom-left"].bx; y: frameMenus.masks["bottom-left"].by; width: frameMenus.masks["bottom-left"].bw; height: frameMenus.masks["bottom-left"].bh }
             Region { x: frameMenus.masks["bottom-right"].tx; y: frameMenus.masks["bottom-right"].ty; width: frameMenus.masks["bottom-right"].tw; height: frameMenus.masks["bottom-right"].th }
             Region { x: frameMenus.masks["bottom-right"].bx; y: frameMenus.masks["bottom-right"].by; width: frameMenus.masks["bottom-right"].bw; height: frameMenus.masks["bottom-right"].bh }
-            // record island: its resting card and the tucked-nub reveal strip.
-            Region { x: overlay.hud ? overlay.hud.hudX : 0; y: overlay.hud ? overlay.hud.hudY : 0; width: ((Recorder.anyActive || Recorder.chooserOpen) && overlay.hud && overlay.hud.prog > 0.25) ? overlay.hud.hudW : 0; height: ((Recorder.anyActive || Recorder.chooserOpen) && overlay.hud && overlay.hud.prog > 0.25) ? overlay.hud.hudH : 0 }
-            Region { x: overlay.hud ? overlay.hud.trigX : 0; y: overlay.hud ? overlay.hud.trigY : 0; width: Recorder.anyActive && overlay.hud ? overlay.hud.trigW : 0; height: Recorder.anyActive && overlay.hud ? overlay.hud.trigH : 0 }
             // right edge stays masked so a file drag lands on the DropArea below.
             Region { x: overlay.width - overlay.rightDropW; y: 0; width: overlay.rightDropOn ? overlay.rightDropW : 0; height: overlay.rightDropOn ? overlay.height : 0 }
             // centred plugin popout: no edge anchor, so its body rides here.
-            Region { x: frameMenus.pluginMask.x; y: frameMenus.pluginMask.y; width: frameMenus.pluginMask.w; height: frameMenus.pluginMask.h }
-        }
-
-        // Record island only, for a folder bar style (sumi frame + rails off). The
-        // dock preview body rides along so its live tiles stay hoverable while a
-        // recording HUD owns the mask.
-        Region {
-            id: recRegion
-            Region { x: overlay.hud ? overlay.hud.hudX : 0; y: overlay.hud ? overlay.hud.hudY : 0; width: ((Recorder.anyActive || Recorder.chooserOpen) && overlay.hud && overlay.hud.prog > 0.25) ? overlay.hud.hudW : 0; height: ((Recorder.anyActive || Recorder.chooserOpen) && overlay.hud && overlay.hud.prog > 0.25) ? overlay.hud.hudH : 0 }
-            Region { x: overlay.hud ? overlay.hud.trigX : 0; y: overlay.hud ? overlay.hud.trigY : 0; width: Recorder.anyActive && overlay.hud ? overlay.hud.trigW : 0; height: Recorder.anyActive && overlay.hud ? overlay.hud.trigH : 0 }
-            Region { x: frameMenus.dockMask.x; y: frameMenus.dockMask.y; width: frameMenus.dockMask.w; height: frameMenus.dockMask.h }
-            Region { x: frameMenus.musicMask.x; y: frameMenus.musicMask.y; width: frameMenus.musicMask.w; height: frameMenus.musicMask.h }
             Region { x: frameMenus.pluginMask.x; y: frameMenus.pluginMask.y; width: frameMenus.pluginMask.w; height: frameMenus.pluginMask.h }
         }
 
@@ -301,7 +282,7 @@ Scope {
             Keys.onEscapePressed: if (frameMenus.keyboardMode === "exclusive") frameMenus.closeAll()
 
             // Shared blob field for retained Ryoku-owned credential, voice,
-            // stash, capture, and rail-card popouts plus RecordHud.
+            // stash, capture, and rail-card popouts.
             BlobGroup {
                 id: blobGroup
                 color: Theme.surface
@@ -419,33 +400,6 @@ Scope {
             // plus the backdrop press above dismisses a click outside, and Escape
             // closes through the FocusScope.
 
-            // The record island: built for the first recording flow of the
-            // session (async, so opening the chooser never blocks on a build)
-            // and dropped 2 s after the flow ends, once the 620 ms melt has
-            // finished. The hold covers the beat between closing the chooser
-            // and the recorder starting, so the island is never destroyed
-            // mid-handoff.
-            Loader {
-                id: hudLoader
-                anchors.fill: parent
-                readonly property bool wanted: Recorder.anyActive || Recorder.chooserOpen || Recorder.countingDown
-                active: wanted || hudHold.running
-                onWantedChanged: if (!wanted && active) hudHold.restart()
-                sourceComponent: Component {
-                    RecordHud {
-                        id: recHud
-                        s: overlay.s
-                        clearanceTop: overlay.railClearance("top")
-                        clearanceBottom: overlay.railClearance("bottom")
-                        clearanceLeft: overlay.railClearance("left")
-                        clearanceRight: overlay.railClearance("right")
-                        laneDockEdge: root.dockLaneEdge
-                        laneDockSize: root.dockLaneSize
-                        laneDockCenter: root.dockLaneCenter
-                    }
-                }
-            }
-            Timer { id: hudHold; interval: 2000 }
         }
     }
 

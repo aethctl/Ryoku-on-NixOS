@@ -158,12 +158,12 @@ hl.layer_rule({
 -- no full-screen dim. QML owns the open/close morph, so suppress the layer anim.
 hl.layer_rule({
   name    = "wallpaper-picker-noanim",
-  match   = { namespace = "^ryoku-wallpaper-picker$" },
+  match   = { namespace = "^ryogami-picker$" },
   no_anim = true,
 })
 hl.layer_rule({
   name         = "wallpaper-picker-blur",
-  match        = { namespace = "^ryoku-wallpaper-picker$" },
+  match        = { namespace = "^ryogami-picker$" },
   blur         = not no_blur,
   ignore_alpha = 0.05,
 })

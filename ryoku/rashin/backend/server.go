@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/fs"
 	"net"
 	"net/http"
@@ -101,6 +102,41 @@ func Serve(cfg Config) error {
 	mux.HandleFunc("GET /api/vitals", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, SampleVitals())
 	})
+	mux.HandleFunc("GET /api/system", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, SystemNow())
+	})
+	mux.HandleFunc("GET /api/doctor", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, DoctorNow(r.URL.Query().Get("refresh") == "1"))
+	})
+	mux.HandleFunc("POST /api/fix", handleFix)
+	mux.HandleFunc("GET /api/theme", func(w http.ResponseWriter, r *http.Request) {
+		th := ThemeNow()
+		wall := map[string]any{"available": false}
+		if path, kind, ok := CurrentWallpaper(); ok {
+			h := fnv.New32a()
+			_, _ = h.Write([]byte(path))
+			rev := strconv.FormatUint(uint64(h.Sum32()), 36)
+			if st, err := os.Stat(path); err == nil {
+				rev += "-" + strconv.FormatInt(st.ModTime().UnixNano(), 36)
+			}
+			wall = map[string]any{"available": true, "kind": kind, "rev": rev}
+		}
+		writeJSON(w, map[string]any{
+			"roles":        th.Roles,
+			"source":       th.Source,
+			"reduceMotion": th.ReduceMotion,
+			"wallpaper":    wall,
+		})
+	})
+	mux.HandleFunc("GET /api/wallpaper", func(w http.ResponseWriter, r *http.Request) {
+		path, _, ok := CurrentWallpaper()
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-cache")
+		http.ServeFile(w, r, path)
+	})
 	mux.HandleFunc("GET /api/vault", func(w http.ResponseWriter, r *http.Request) {
 		files, err := VaultTree()
 		if err != nil {
@@ -127,6 +163,9 @@ func Serve(cfg Config) error {
 	})
 	mux.HandleFunc("GET /api/agents", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, DetectAgents())
+	})
+	mux.HandleFunc("GET /api/harnesses", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"harnesses": HarnessesNow()})
 	})
 	mux.HandleFunc("POST /api/agents/wire", agentMutation(func(id string) error {
 		if err := Wire(id); err != nil {
@@ -172,6 +211,35 @@ func Serve(cfg Config) error {
 	})
 	mux.HandleFunc("GET /api/prowl/search", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{"hits": ProwlSearch(r.URL.Query().Get("q"))})
+	})
+	// The prowl code-intelligence proxy: the dashboard keeps one origin;
+	// /api/code/* forwards to `prowl api` on its own loopback port, and
+	// /api/providers answers the consolidated free/paid/subscription
+	// directory from the same service.
+	mux.HandleFunc("GET /api/code/status", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, prowlAPIStatus())
+	})
+	mux.HandleFunc("GET /api/code/", func(w http.ResponseWriter, r *http.Request) {
+		sub := "/api" + strings.TrimPrefix(r.URL.Path, "/api/code")
+		if r.URL.RawQuery != "" {
+			sub += "?" + r.URL.RawQuery
+		}
+		body, err := prowlAPIGet(sub)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
+	})
+	mux.HandleFunc("GET /api/providers", func(w http.ResponseWriter, r *http.Request) {
+		body, err := prowlAPIGet("/api/providers")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(body)
 	})
 	mux.HandleFunc("GET /api/about", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, AboutReportNow(cfg))
@@ -251,14 +319,23 @@ func agentMutation(f func(string) error) http.HandlerFunc {
 	}
 }
 
+// loopbackOrigin reports whether a browser request came from this machine's
+// own dashboard. A request with no Origin (the CLI, curl) is local by the
+// listener's own bind.
+func loopbackOrigin(r *http.Request) bool {
+	o := r.Header.Get("Origin")
+	if o == "" {
+		return true
+	}
+	u, err := url.Parse(o)
+	return err == nil && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost")
+}
+
 // acceptWS upgrades only when the Origin is this machine's own dashboard.
 func acceptWS(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
-	if o := r.Header.Get("Origin"); o != "" {
-		u, err := url.Parse(o)
-		if err != nil || (u.Hostname() != "127.0.0.1" && u.Hostname() != "localhost") {
-			http.Error(w, "forbidden origin", http.StatusForbidden)
-			return nil, errors.New("bad origin")
-		}
+	if !loopbackOrigin(r) {
+		http.Error(w, "forbidden origin", http.StatusForbidden)
+		return nil, errors.New("bad origin")
 	}
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"127.0.0.1:*", "localhost:*"},

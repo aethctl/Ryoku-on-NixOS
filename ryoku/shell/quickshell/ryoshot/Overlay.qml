@@ -16,6 +16,10 @@ Item {
     property bool ready: false
     property bool resizable: false
     property bool eyedropArmed: false
+    // The region-selector front draws its crosshair and reads the pointer here;
+    // pickMode arms the compositor-neutral colour sample (from the frozen plate).
+    property bool frontActive: false
+    property bool pickMode: false
 
     property var model: null
     property var draft: null
@@ -214,6 +218,75 @@ Item {
         }
     }
 
+    // Crosshair guides that track the pointer while the front chooses a region,
+    // shown only on the monitor the cursor is over.
+    Item {
+        anchors.fill: parent
+        visible: overlay.frontActive && overlay.ready && input.containsMouse
+        z: 15
+        Rectangle {
+            x: Math.round(input.mouseX)
+            y: 0
+            width: 1
+            height: parent.height
+            color: Theme.accent
+            opacity: 0.35
+        }
+        Rectangle {
+            x: 0
+            y: Math.round(input.mouseY)
+            width: parent.width
+            height: 1
+            color: Theme.accent
+            opacity: 0.35
+        }
+    }
+
+    // Colour-pick loupe: a magnified window on the frozen plate under the pointer,
+    // hyprpicker-style, but sampled from ScreencopyView so it works on any
+    // compositor. The pixel is read on click (see sampleAt).
+    Item {
+        id: loupe
+        readonly property int box: 128
+        readonly property real zoom: 8
+        visible: overlay.pickMode && overlay.ready && input.containsMouse
+        z: 30
+        width: box
+        height: box
+        x: Math.max(8, Math.min(input.mouseX + 22, overlay.width - box - 8))
+        y: Math.max(8, Math.min(input.mouseY + 22, overlay.height - box - 8))
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: Theme.panelSolid
+            border.color: Theme.hair
+            border.width: 1
+            clip: true
+
+            ShaderEffectSource {
+                anchors.centerIn: parent
+                width: loupe.box - 8
+                height: loupe.box - 8
+                sourceItem: plate
+                smooth: false
+                live: overlay.pickMode
+                sourceRect: Qt.rect(input.mouseX - (loupe.box / loupe.zoom) / 2,
+                                    input.mouseY - (loupe.box / loupe.zoom) / 2,
+                                    loupe.box / loupe.zoom, loupe.box / loupe.zoom)
+            }
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: loupe.zoom
+                height: loupe.zoom
+                color: "transparent"
+                border.color: Theme.accent
+                border.width: 1
+            }
+        }
+    }
+
     Item {
         id: chrome
         visible: overlay.ready && overlay.localSel !== null
@@ -375,14 +448,14 @@ Item {
         acceptedButtons: Qt.LeftButton
         cursorShape: overlay.eyedropArmed ? Qt.PointingHandCursor : Qt.CrossCursor
         onPressed: (m) => {
-            if (overlay.eyedropArmed) { overlay.sampleAt(m.x, m.y); return; }
+            if (overlay.eyedropArmed || overlay.pickMode) { overlay.sampleAt(m.x, m.y); return; }
             overlay.pressedAt(m.x + overlay.sx, m.y + overlay.sy, m.modifiers);
         }
         onPositionChanged: (m) => {
             if (overlay.capturing) overlay.movedTo(m.x + overlay.sx, m.y + overlay.sy, m.modifiers);
             else overlay.hovered(m.x + overlay.sx, m.y + overlay.sy);
         }
-        onReleased: { if (!overlay.eyedropArmed) overlay.released(); }
+        onReleased: { if (!overlay.eyedropArmed && !overlay.pickMode) overlay.released(); }
         onWheel: (w) => {
             if (w.angleDelta.y === 0) return;
             overlay.wheeled(w.angleDelta.y > 0 ? 1 : -1);

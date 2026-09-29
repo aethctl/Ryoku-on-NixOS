@@ -1,0 +1,3 @@
+module inir.modules.iris.field
+IrisField 1.0 IrisField.qml
+IrisGlassSource 1.0 IrisGlassSource.qml

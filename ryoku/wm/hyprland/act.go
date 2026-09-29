@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	wm "ryoku-wm"
 )
@@ -417,18 +418,23 @@ func touchpad(args []string) error {
 	case "off", "disable":
 		return touchpadSet(false)
 	case "toggle":
+		if wm.TouchpadToggleIsEcho(time.Now()) {
+			return nil
+		}
 		// A stored off means re-enable; otherwise lock it.
 		return touchpadSet(touchpadOff())
 	case "restore":
 		// Login and reload re-enable every pad (the state is a runtime override,
-		// not config), so a stored off is pushed back. Silent: an unattended
-		// restore must not toast, and no stored off has nothing to say.
+		// not config), so a stored off is pushed back. A reload stays silent; at
+		// login the lock is named once, so a pad left off is never a mystery.
 		if !touchpadOff() {
 			return nil
 		}
 		// Best-effort like the ported script: a transient device-list failure at
 		// login must not turn an unattended re-assert into an error.
-		_, _ = setPads(false)
+		if found, _ := setPads(false); found && len(args) > 1 && args[1] == "login" {
+			touchpadNotify("Touchpad is locked off", "Press the touchpad key (Fn+F10 on most laptops) to turn it back on")
+		}
 		return nil
 	}
 	return fmt.Errorf("act input.touchpad: mode must be on|off|toggle|status|restore, got %q", mode)

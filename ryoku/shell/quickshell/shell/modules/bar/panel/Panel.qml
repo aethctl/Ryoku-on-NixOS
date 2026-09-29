@@ -17,8 +17,8 @@ Item {
     property bool open: false
     property string monitorName: ""
     property string surfaceId: ""
-    // A deep-link fragment (stash#compress / stash#install) opens straight into
-    // that picker.
+    // A deep-link fragment opens straight into a page: stash#compress /
+    // stash#install into that picker, stash#chat onto the chat tab.
     property string page: ""
 
     // "" | "compress" | "install": the in-shell file picker takes over content.
@@ -43,6 +43,9 @@ Item {
         if (root.page === "compress" || root.page === "install") {
             root.activeTab = "tools";
             root.picking = root.page;
+        } else if (root.page === "chat") {
+            root.picking = "";
+            root.activeTab = "chat";
         }
     }
 

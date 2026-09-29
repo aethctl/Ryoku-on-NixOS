@@ -147,14 +147,15 @@ Item {
         { id: "tray", label: I18n.tr("Tray"), desc: I18n.tr("System tray icons.") },
         { id: "weather", label: I18n.tr("Weather"), desc: I18n.tr("Current conditions.") }
     ]
-
     readonly property var chromaWidgets: BarStyles.chromaWidgets
     // The running bar style, default the built-in frame style. The frame, rails
     // and zone editors below are Sumi's; a folder style owns its own layout.
     readonly property string activeStyle: page.fval("barStyle", "sumi")
     readonly property bool sumiActive: page.activeStyle === "sumi"
     readonly property string activeName: {
-        return BarStyles.nameFor(page.activeStyle);
+        for (let i = 0; i < page.barStyles.length; i++)
+            if (page.barStyles[i].id === page.activeStyle) return page.barStyles[i].name;
+        return page.activeStyle;
     }
 
     // Stage AND apply: edits ride the shared draft like every page, and the
@@ -240,6 +241,10 @@ Item {
     // only a read-only summary of the order, watched off shell.json so it tracks a
     // move made from the panel or the CLI without a Hub reload.
     property var qsbarLayout: ({})
+    // The iRiS family's frontend (paper-and-ink "ryoku" or the upstream "inir"
+    // look) lives at inir.iris.appearance.frontend in shell.json; watched here so
+    // the toggle below tracks a flip made from the iRiS settings overlay too.
+    property string irisFrontend: "ryoku"
     readonly property string qsbarLayoutSummary: {
         const layout = page.qsbarLayout || ({});
         const lane = a => Array.isArray(a) ? a.join(" \u00b7 ") : "";
@@ -256,6 +261,8 @@ Item {
             try {
                 const cfg = JSON.parse(shellJsonFile.text() || "{}");
                 page.qsbarLayout = (cfg.qsbar && cfg.qsbar.layout) ? cfg.qsbar.layout : ({});
+                page.irisFrontend = (cfg.inir && cfg.inir.iris && cfg.inir.iris.appearance
+                    && cfg.inir.iris.appearance.frontend) || "ryoku";
             } catch (e) {
                 page.qsbarLayout = ({});
             }
@@ -263,6 +270,18 @@ Item {
     }
     function openQsBarSettings() {
         Quickshell.execDetached(["ryoku-shell", "bar", "settings"]);
+    }
+
+    // The frame family opens its own settings overlay through the shell IPC.
+    function openIrisSettings() {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "iris", "settings", ""]);
+    }
+
+    // Writes through the shell's own config writer (iris set IPC), never the Hub
+    // draft, so it does not fight the frame's live Config and applies at once.
+    function setIrisFrontend(v) {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "iris", "set",
+            "iris.appearance.frontend", JSON.stringify(v)]);
     }
 
     CatalogLabels { id: labels }
@@ -388,7 +407,7 @@ Item {
                             height: rowCount * tileH + (rowCount - 1) * spacing
                             Repeater {
                                 id: styleRep
-                                model: BarStyles.items
+                                model: page.barStyles
                                 delegate: Rectangle {
                                     id: styleCard
                                     required property var modelData
@@ -549,7 +568,7 @@ Item {
 
             SettingCard {
                 id: chromaSect
-                width: col.width
+                width: col.colWidth
                 visible: page.activeStyle === "chroma"
                 title: I18n.tr("CHROMA")
 
@@ -675,12 +694,64 @@ Item {
                 }
             }
 
+            // iRiS arranges itself live: the island opens its own settings
+            // overlay and Studio, so this card only routes there, like QS Bar.
+            SettingCard {
+                id: irisSect
+                width: col.colWidth
+                visible: page.activeStyle === "iris"
+                title: I18n.tr("IRIS")
+                kana: "虹"
+
+                Item {
+                    width: parent.width
+                    height: irisBody.height + Tokens.s3 + Tokens.s4
+                    Column {
+                        id: irisBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
+                        spacing: Tokens.s3
+                        Text {
+                            width: parent.width
+                            text: I18n.tr("iRiS arranges its own island, bubbles, dock and look in its settings overlay: hover the island and press the gear, or use the button below.")
+                            color: Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fBody
+                            wrapMode: Text.WordWrap
+                        }
+                        Item {
+                            width: parent.width
+                            height: Tokens.ctlH
+                            Text {
+                                anchors.left: parent.left
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: I18n.tr("Look")
+                                color: Tokens.ink
+                                font.family: Tokens.ui
+                                font.pixelSize: Tokens.fRow
+                            }
+                            Seg {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                options: ["RYOKU", "INIR"]
+                                current: page.irisFrontend === "inir" ? "INIR" : "RYOKU"
+                                onChose: key => page.setIrisFrontend(key === "INIR" ? "inir" : "ryoku")
+                            }
+                        }
+                        Btn {
+                            text: I18n.tr("OPEN IRIS SETTINGS")
+                            onAct: page.openIrisSettings()
+                        }
+                    }
+                }
+            }
+
             // A folder style owns its own frame, rails and widgets inside its
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
                 width: col.colWidth
-                visible: !page.sumiActive && page.activeStyle !== "qsbar" && page.activeStyle !== "chroma"
+                visible: !page.sumiActive && page.activeStyle !== "qsbar" && page.activeStyle !== "chroma" && page.activeStyle !== "iris"
                 title: I18n.tr("LAYOUT")
 
                 Text {

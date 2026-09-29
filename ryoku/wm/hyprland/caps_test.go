@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	wm "ryoku-wm"
 )
 
 // The caps list is documented as "kept in step with that package's depends".
@@ -45,5 +47,29 @@ func TestReclaimListMatchesVariantDepends(t *testing.T) {
 		if !have[p] {
 			t.Errorf("PKGBUILD depends on %s but the reclaim list omits it", p)
 		}
+	}
+}
+
+// A capability the manifest claims but wm.All() omits never reaches a QML
+// consumer: the caps frame carries one boolean per All() entry, so the shell
+// reads the gate as false and the affordance silently disappears on Hyprland.
+func TestManifestIsDeliverable(t *testing.T) {
+	all := map[wm.Capability]bool{}
+	for _, c := range wm.All() {
+		all[c] = true
+	}
+	for _, c := range capsManifest {
+		if !all[c] {
+			t.Errorf("manifest claims %q but wm.All() omits it, so it never rides the caps frame", c)
+		}
+	}
+}
+
+// The launcher's frost backdrop is gated on this capability, so Hyprland must
+// claim it or every Hyprland user loses the blurred launcher.
+func TestClaimsPersistentScreenCapture(t *testing.T) {
+	c := wm.Caps{Supports: capsManifest}
+	if !c.Has(wm.CapPersistentScreenCapture) {
+		t.Error("Hyprland hosts long-lived capturing layer surfaces; the manifest must say so")
 	}
 }

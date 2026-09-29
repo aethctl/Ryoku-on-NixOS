@@ -18,7 +18,6 @@ import "schema/RecordingPage.js" as RecordingSchema
 import "schema/DictationPage.js" as DictationSchema
 import "schema/LauncherPage.js" as LauncherSchema
 import "schema/FastfetchPage.js" as FastfetchSchema
-import "schema/WidgetsPage.js" as WidgetsSchema
 import "schema/LockscreenPage.js" as LockscreenSchema
 import "schema/AnimationsPage.js" as AnimationsSchema
 import "schema/AddonsPage.js" as AddonsSchema
@@ -112,7 +111,7 @@ Rectangle {
             { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
             { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
-            { key: "widgets", name: "Widgets" }, { key: "launcher", name: "App Launcher" } ] },
+            { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
             { key: "windowrules", name: "Window Rules", adv: true } ] },
@@ -135,7 +134,7 @@ Rectangle {
         "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
         "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
-        "widgets": "部品", "lockscreen": "施錠", "animations": "動き",
+        "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "session": "起動", "performance": "性能", "rashin": "羅針",
         "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
@@ -161,7 +160,6 @@ Rectangle {
         "desktop": "desktop visualizer visualiser spectrum brand logo mark name widget board wallpaper",
         "launcher": "launcher spotlight command palette greeting weather home",
         "fastfetch": "fetch neofetch terminal system info logo ascii emblem readout",
-        "widgets": "desktop widget clock calendar weather face overlay wallpaper",
         "lockscreen": "lock screensaver signin greeter skin theme login",
         "animations": "animation animations motion transition bezier curve speed feel wobbly disable enable toggle",
         "addons": "installed plugin addon extension manage enable remove update widget bundle extras store marketplace browse",
@@ -189,7 +187,7 @@ Rectangle {
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
         "launcher": LauncherSchema.rows, "fastfetch": FastfetchSchema.rows,
-        "widgets": WidgetsSchema.rows, "lockscreen": LockscreenSchema.rows,
+        "lockscreen": LockscreenSchema.rows,
         "animations": AnimationsSchema.rows, "addons": AddonsSchema.rows,
         "windowrules": WindowRulesSchema.rows, "appoverrides": AppOverridesSchema.rows,
         "layerrules": LayerRulesSchema.rows, "session": SessionSchema.rows,
@@ -222,8 +220,9 @@ Rectangle {
                 // the deep-link path through a search hit must be closed here too.
                 if (!hub.needsMet(it)) continue;
                 var pkw = sectionKeywords[it.key] || "";
-                // The window-manager page answers to the running compositor's own
-                // name rather than a hard-coded provider list.
+                // the window-manager page answers to the running compositor's own
+                // name, read live from the provider rather than a hardcoded list, so
+                // a user reaches it by typing the name of the desktop they run.
                 if (it.key === "windowmanager" && Settings.provider)
                     pkw += " " + Settings.provider;
                 out.push({ section: it.key, sectionName: it.name, group: "", tab: "", label: it.name, desc: "", kw: pkw, key: "", isPage: true });
@@ -283,7 +282,7 @@ Rectangle {
         "titlebar": "title bar", "titlebars": "title bar", "plugin": "plugins addon", "plugins": "plugin addon",
         "monitor": "displays screen", "monitors": "displays screen", "resolution": "displays screen", "hidpi": "displays scale", "refresh": "displays",
         "mouse": "input pointer", "pointer": "input", "keyboard": "input", "touchpad": "input trackpad", "trackpad": "input touchpad",
-        "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "clock": "widgets desktop", "notifications": "layerrules",
+        "visualizer": "desktop spectrum", "visualiser": "desktop spectrum", "notifications": "layerrules",
         "update": "updates upgrade", "upgrade": "updates", "blur": "windows glass", "rounding": "windows corners", "corners": "windows rounding",
         "animation": "animations motion", "motion": "animations", "gpu": "graphics", "graphics": "gpu",
         "voice": "dictation", "speech": "dictation voice", "microphone": "dictation", "mic": "dictation"
@@ -491,7 +490,7 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "widgets": "WidgetsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -527,6 +526,18 @@ Rectangle {
         "mirror": false, "segments": 10, "fps": 30,
         "adaptive": true, "smoothing": 0.5, "gain": 1.0, "peaks": false,
         "spin": 0, "x": 0, "y": 0.58, "w": 1, "h": 0.42, "grow": "up", "angle": 0, "tiltX": 0, "tiltY": 0,
+        "auraEdges": ["left", "right"], "auraDepth": 180, "auraSpan": 1.0,
+        "auraTaper": 0.14, "auraCornerRadius": 24, "auraJoin": "auto",
+        "auraCornerBlend": 0.55, "auraFlow": "clockwise", "auraMaterial": "silk",
+        "auraShape": "flow", "auraEffect": "clean", "auraEffectStrength": 0.38,
+        "auraColorMode": "flow", "auraColor2": "", "auraColor3": "", "auraOpacity": 1.0,
+        "auraColorSpeed": 0.35, "auraBodyOpacity": 0.32, "auraCrestStrength": 0.9,
+        "auraGlow": 0.52, "auraGlowSpread": 0.48, "auraAudioRange": 0.78,
+        "auraThickness": 0.22, "auraDetail": 0.42, "auraBassDrive": 0.88,
+        "auraTrebleDrive": 0.68, "auraTransient": 0.9, "auraBeatGlow": 0.64,
+        "auraCompression": 0.12, "auraMotionSpeed": 1.0, "auraIdleMotion": 0.14,
+        "auraAttack": 1.05, "auraRelease": 0.82, "auraProfile": "flat",
+        "auraAccent": 0.7, "auraSensitivity": 0.72,
         "markText": "力", "markImage": "", "markTint": true, "name": "Ryoku",
         "reloadCover": ReloadCoverModel.empty(),
         "language": "Auto", "barStyle": "sumi", "obi": {}, "nacre": NacreConfig.defaultConfig(), "qsbar": {}, "chroma": {}, "dock": {},
@@ -863,6 +874,42 @@ Rectangle {
         property real angle: 0
         property real tiltX: 0
         property real tiltY: 0
+        property var auraEdges: ["left", "right"]
+        property real auraDepth: 180
+        property real auraSpan: 1.0
+        property real auraTaper: 0.14
+        property real auraCornerRadius: 24
+        property string auraJoin: "auto"
+        property real auraCornerBlend: 0.55
+        property string auraFlow: "clockwise"
+        property string auraMaterial: "silk"
+        property string auraShape: "flow"
+        property string auraEffect: "clean"
+        property real auraEffectStrength: 0.38
+        property string auraColorMode: "flow"
+        property string auraColor2: ""
+        property string auraColor3: ""
+        property real auraOpacity: 1.0
+        property real auraColorSpeed: 0.35
+        property real auraBodyOpacity: 0.32
+        property real auraCrestStrength: 0.9
+        property real auraGlow: 0.52
+        property real auraGlowSpread: 0.48
+        property real auraAudioRange: 0.78
+        property real auraThickness: 0.22
+        property real auraDetail: 0.42
+        property real auraBassDrive: 0.88
+        property real auraTrebleDrive: 0.68
+        property real auraTransient: 0.9
+        property real auraBeatGlow: 0.64
+        property real auraCompression: 0.12
+        property real auraMotionSpeed: 1.0
+        property real auraIdleMotion: 0.14
+        property real auraAttack: 1.05
+        property real auraRelease: 0.82
+        property string auraProfile: "flat"
+        property real auraAccent: 0.7
+        property real auraSensitivity: 0.72
         // Preserved so a hub save never drops the desktop's extra visualisers or
         // which one it is editing; the hub itself tunes the primary (flat keys).
         property var extras: []
@@ -1320,17 +1367,49 @@ Rectangle {
             ? 0
             : Math.max(Tokens.s6, Math.round((parent.width - rail.width - width) / 2)))
 
-        // Two loaders crossfade the page: the incoming page loads async into the
-        // hidden loader, then fades in as the visible one fades out, so the
-        // content never blanks to bare paper mid-swap (that blank was the
-        // "flicker on section change"). The new page always loads into the
-        // non-front loader, so the visible page is never disturbed even on rapid
+        // Two loaders swap the page: the incoming page loads async into the
+        // hidden loader, then takes over with a settle slide in the direction
+        // of the navigation, so the content never blanks to bare paper
+        // mid-swap (that blank was the "flicker on section change") and never
+        // sits half-transparent over its successor (the crossfade read as the
+        // words flashing). The new page always loads into the non-front
+        // loader, so the visible page is never disturbed even on rapid
         // switches, and a stale load from a superseded switch never reveals.
         Item {
             id: pageHost
             anchors.fill: parent
+            clip: true
             readonly property string src: hub.pageFile(hub.section)
             property Item front: lb
+            // the loader parked mid-slide, waiting for its exit to finish
+            property Item parking: null
+            // the settle slide: content enters from the direction of travel and
+            // its predecessor leaves the other way, both fully opaque. A
+            // crossfade put two half-transparent pages on screen at once, which
+            // read as the words flashing.
+            property int dir: 1
+            readonly property int slide: Tokens.s6 * 2
+            // the rail/router set `section` before the async load lands, so the
+            // direction of travel is decided here, once, off the section the
+            // screen is still showing.
+            property string shown: hub.section
+            Connections {
+                target: hub
+                function onSectionChanged() {
+                    pageHost.dir = pageHost.indexOf(hub.section) >= pageHost.indexOf(pageHost.shown) ? 1 : -1;
+                }
+            }
+            function indexOf(section) {
+                var n = 0;
+                for (var gi = 0; gi < hub.groups.length; gi++)
+                    for (var ii = 0; ii < hub.groups[gi].items.length; ii++) {
+                        var it = hub.groups[gi].items[ii];
+                        if (!hub.needsMet(it)) continue;
+                        if (it.key === section) return n;
+                        n++;
+                    }
+                return -1;
+            }
             onSrcChanged: pageHost.swap()
             Component.onCompleted: pageHost.swap()
             function swap() {
@@ -1343,29 +1422,72 @@ Rectangle {
             function reveal(l) {
                 if (l.source != pageHost.src)
                     return;
+                var out = pageHost.front;
                 pageHost.front = l;
-                la.opacity = la === l ? 1 : 0; la.z = la === l ? 1 : 0;
-                lb.opacity = lb === l ? 1 : 0; lb.z = lb === l ? 1 : 0;
+                pageHost.shown = hub.section;
+                // a superseded switch still mid-slide: snap the old exit home
+                // before the new pair takes over, or a parked loader can be
+                // left slid and half-visible under the new page.
+                if (pageHost.parking && pageHost.parking !== out) {
+                    pageHost.parking.opacity = 0;
+                    pageHost.parking.x = 0;
+                    pageHost.parking = null;
+                }
+                l.z = 1;
+                l.opacity = 1;
+                inAnim.target = l; inAnim.from = pageHost.dir * pageHost.slide; inAnim.to = 0;
+                inAnim.restart();
+                if (out && out !== l && out.item) {
+                    out.z = 0;
+                    pageHost.parking = out;
+                    outAnim.target = out; outAnim.from = out.x; outAnim.to = -pageHost.dir * pageHost.slide;
+                    outAnim.restart();
+                } else if (out && out !== l) {
+                    out.opacity = 0; out.x = 0;
+                }
             }
+            NumberAnimation {
+                id: inAnim
+                property: "x"
+                duration: Tokens.move
+                easing.type: Tokens.ease
+            }
+            NumberAnimation {
+                id: outAnim
+                property: "x"
+                duration: Tokens.move
+                easing.type: Tokens.ease
+                onFinished: {
+                    if (pageHost.parking) {
+                        pageHost.parking.opacity = 0;
+                        pageHost.parking.x = 0;
+                        pageHost.parking = null;
+                    }
+                }
+            }
+            // sized, not anchors.fill: an anchor would silently win over the
+            // slide's x and pin the page back in place.
             Loader {
                 id: la
-                anchors.fill: parent
+                width: pageHost.width
+                height: pageHost.height
+                x: 0
                 asynchronous: true
                 opacity: 1
-                // hidden once fully faded, so the parked page stops taking hover
+                // hidden once parked, so the idle page stops taking hover
                 // (a stale tooltip was leaking through the overlay layer).
                 visible: opacity > 0.01
                 onLoaded: { if (item) item.hub = hub; pageHost.reveal(la); }
-                Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             }
             Loader {
                 id: lb
-                anchors.fill: parent
+                width: pageHost.width
+                height: pageHost.height
+                x: 0
                 asynchronous: true
                 opacity: 0
                 visible: opacity > 0.01
                 onLoaded: { if (item) item.hub = hub; pageHost.reveal(lb); }
-                Behavior on opacity { NumberAnimation { duration: Tokens.swap; easing.type: Tokens.ease } }
             }
         }
 

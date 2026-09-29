@@ -24,10 +24,17 @@ Item {
     property bool locked: false
     property real pad: 0
     property string bg: "none"                 // none | card | glass
-    property real radius: Theme.radius
+    property real radiusOverride: -1           // -1 keeps Theme.radius
+    property real radius: slot.radiusOverride >= 0 ? slot.radiusOverride : Theme.radius
     property real gridSize: 32
+    property bool snapEnabled: true             // editor snap: off drops the grid snap
     property real zoneMargin: 64
     property real scaleCfg: 1                   // current Config <widget>Scale, for the resize readout
+    // Optional per-widget backing geometry (Ryoku style). -1 keeps today's look,
+    // so a plate that never sets them is byte-identical.
+    property real backingOpacity: -1           // fill alpha override
+    property real borderWidth: -1              // hairline width override
+    property real borderOpacity: -1            // hairline alpha override
     // While an Edit widgets session is on, keep the resize bracket present (not
     // just on hover): the frame overlay above intercepts hover, so a hover-only
     // bracket would never reveal, leaving the widget un-resizable in the editor.
@@ -97,7 +104,7 @@ Item {
             return v;
         return Math.max(0, Math.min(v, h - slot.height));
     }
-    function snap(v) { return Math.round(v / slot.gridSize) * slot.gridSize; }
+    function snap(v) { return slot.snapEnabled ? Math.round(v / slot.gridSize) * slot.gridSize : v; }
     function zoneX() {
         const w = slot.parent ? slot.parent.width : 0;
         if (w <= 0)
@@ -189,7 +196,7 @@ Item {
         anchors.fill: backing
         visible: !Performance.shadowsDisabled && slot.bg !== "none"
         shadowEnabled: true
-        shadowColor: Qt.rgba(0, 0, 0, 0.5)
+        shadowColor: Theme.shadow
         shadowBlur: 1.0
         shadowVerticalOffset: 6
         blurMax: 32
@@ -201,9 +208,16 @@ Item {
         anchors.fill: parent
         visible: slot.bg !== "none"
         radius: slot.radius
-        color: slot.bg === "card" ? Qt.rgba(0, 0, 0, 0.42) : Qt.rgba(16 / 255, 16 / 255, 24 / 255, 0.26)
-        border.width: 1
-        border.color: slot.bg === "card" ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.16)
+        // A floating widget plate is pure-black paper with a bone hairline
+        // (docs/ui-ux.md): black reads on any wallpaper, and the hairline follows
+        // the palette ink. Glass is the same plate, thinner, under the sheen.
+        color: Qt.rgba(0, 0, 0, slot.backingOpacity >= 0 ? slot.backingOpacity
+            : slot.bg === "card" ? 0.5 : 0.32)
+        border.width: slot.borderWidth >= 0 ? slot.borderWidth : 1
+        border.color: slot.borderOpacity >= 0
+            ? Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, slot.borderOpacity)
+            : slot.bg === "card" ? Theme.line
+            : Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, 0.12)
 
         // glass sheen: faint top-down highlight so the panel reads as a pane
         // of glass rather than a flat fill.
@@ -212,15 +226,15 @@ Item {
             anchors.fill: parent
             radius: parent.radius
             gradient: Gradient {
-                GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0.10) }
-                GradientStop { position: 0.5; color: Qt.rgba(1, 1, 1, 0.0) }
-                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.06) }
+                GradientStop { position: 0.0; color: Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, 0.07) }
+                GradientStop { position: 0.5; color: "transparent" }
+                GradientStop { position: 1.0; color: Qt.rgba(0, 0, 0, 0.05) }
             }
         }
     }
 
     // interaction grip UNDER the content: left-drag on bare widget area moves
-    // the tile (grid-snapped) and right-click opens the menu, while an
+    // the tile (free-follow, snapping to the grid on release) and right-click
     // interactive widget keeps its own clicks on top. the clock has no
     // interactive children, so the whole surface still drags. a grip above the
     // content would swallow every click.
@@ -259,13 +273,17 @@ Item {
                     return;
                 slot.dragging = true;
             }
-            slot.dragX = slot.clampX(slot.snap(nx));
-            slot.dragY = slot.clampY(slot.snap(ny));
+            // Follow the pointer freely while dragging (no live grid step, so
+            // it never feels laggy); the grid snap happens once, on release.
+            slot.dragX = slot.clampX(nx);
+            slot.dragY = slot.clampY(ny);
         }
         onReleased: (mouse) => {
             if (slot.dragging) {
-                Config.setFree(slot.widget, Math.round(slot.dragX), Math.round(slot.dragY));
-                slot.dropped(Qt.rect(slot.dragX, slot.dragY, slot.width, slot.height));
+                const fx = Math.round(slot.snap(slot.dragX));
+                const fy = Math.round(slot.snap(slot.dragY));
+                Config.setFree(slot.widget, fx, fy);
+                slot.dropped(Qt.rect(fx, fy, slot.width, slot.height));
                 slot.dragging = false;
                 guard.restart();
             }

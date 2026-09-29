@@ -74,15 +74,19 @@ func ScanDirs(wallDir, videoDir, cacheDir string, prior map[string]Entry, onItem
 	}
 	collectMedia(wallDir, videoThumbsDir, thumbsSmDir, "video", videoExts, "vid-", cacheDir, &items)
 
-	result := make(map[string]Entry, len(items))
-	for _, it := range items {
-		if _, dup := result[it.key]; dup {
-			continue
+	result := processItemsParallel(items, prior, onItem)
+	// Workshop rows join the scan; a local file with the same key wins.
+	if weScanHook != nil {
+		for k, e := range weScanHook(cacheDir, prior, onItem) {
+			if _, dup := result[k]; !dup {
+				result[k] = e
+			}
 		}
-		result[it.key] = processItem(it, prior, onItem)
 	}
 	return result, nil
 }
+
+var weScanHook func(cacheDir string, prior map[string]Entry, onItem func(Entry)) map[string]Entry
 
 // collectMedia walks root recursively, skipping dotfiles and the cache subtree,
 // and appends every file whose extension is in exts. name is the slash-joined
@@ -145,13 +149,25 @@ func collectMedia(root, thumbDir, thumbSmDir, wpType string, exts map[string]boo
 }
 
 // processItem resolves one scanned file against prior state: an unchanged mtime
-// returns the prior entry untouched; otherwise thumbs and colors are (re)built
-// while favourites and apply counts carry over.
+// reuses the prior entry at the file's current location; otherwise thumbs and
+// colors are (re)built while favourites and apply counts carry over.
 func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	if p, ok := prior[it.key]; ok && p.Mtime == it.mtime {
-		// A warm entry may predate preview clips: backfill without a rescan.
+		// Location follows the file, so a moved library or home keeps applying.
+		p.Path = it.src
+		// An animated still's VideoFile is its cached clip, not a location.
+		if it.videoFile != "" {
+			p.VideoFile = it.videoFile
+		}
+		// A warm entry may predate newer fields: backfill them without rebuilding thumbnails.
 		if it.wpType == "video" && (p.VideoPrev == "" || !fileExists(p.VideoPrev)) {
 			p.VideoPrev = ensureVideoPreview(it)
+		}
+		if p.Width == 0 && p.Height == 0 {
+			fillDims(&p, it)
+		}
+		if p.Tags == "" {
+			p.Tags = buildTags(it, p.Hue)
 		}
 		return p
 	}
@@ -160,6 +176,7 @@ func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 		Key:       it.key,
 		Name:      it.name,
 		Type:      it.wpType,
+		Path:      it.src,
 		VideoFile: it.videoFile,
 		Mtime:     it.mtime,
 		Filesize:  it.filesize,
@@ -209,6 +226,8 @@ func processItem(it scanned, prior map[string]Entry, onItem func(Entry)) Entry {
 	e.Hue = int(hueBucket(hue, sat))
 	e.Sat = int(sat)
 	e.Richness = int(richness)
+	fillDims(&e, it)
+	e.Tags = buildTags(it, e.Hue)
 
 	if regen {
 		onItem(e)

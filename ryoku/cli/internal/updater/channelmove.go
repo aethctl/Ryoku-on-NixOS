@@ -1,0 +1,186 @@
+package updater
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
+
+	"ryoku-cli/internal/sys"
+	i18n "ryoku-i18n"
+)
+
+// The one place that moves the Ryoku set onto a package channel.
+//
+// Two things always travel together and used to be reimplemented per caller
+// (`ryoku track` and the boot guard's revert), which is how #291 happened: the
+// boot guard rewrote the pin to the previous release, then ran a narrower
+// pacman transaction (`-S ryoku-desktop`) that could not move the compositor
+// split metas, so the downgrade failed with the pin already changed and the
+// box left with its pin, sync db, and installed set all disagreeing.
+//
+//   - moveRyokuSetToChannel does the pacman side once: force-refresh the dbs,
+//     read the set the target channel serves (downgrades allowed), drop the
+//     split metas it does not serve (#271), and move the whole set in one
+//     transaction. It runs the pacman commands root-aware and with no progress
+//     UI, so it holds from the boot-guard service (no session) exactly as it
+//     does from an interactive `ryoku track`.
+//   - retargetChannel makes the pin transactional: record the current Server,
+//     write the new one, run the move, and on ANY failure put the previous
+//     Server back byte-for-byte and re-sync, so the three never drift apart.
+
+// errChannelUnreachable marks a move that failed at the database refresh (no
+// network / mirror down) rather than at the transaction. The boot guard retries
+// such a boot instead of writing a revert-failed notice.
+var errChannelUnreachable = errors.New("the [ryoku] package channel is unreachable")
+
+// privileged runs argv as root: directly when the process already is root (the
+// boot-guard service), else through sudo. So the same move works from the guard
+// and from a user command, and a test can record the exact argv. Root's sudo
+// never prompts, but the guard has no reason to shell through it at all.
+var privileged = func(argv ...string) error {
+	if os.Geteuid() == 0 {
+		return sys.Run(argv[0], argv[1:]...)
+	}
+	return sys.Sudo(argv...)
+}
+
+// ryokuMoveArgs is the one channel-move transaction: move exactly the set from
+// our repo, in either direction. `-S <targets>` (never `-Su`) moves a package
+// DOWN as well as up, which a channel move and a rollback onto a frozen release
+// need; --needed leaves a package already at the channel's version alone.
+// SNAP_PAC_SKIP because the interactive path brackets the run with a snapper
+// pair and the guard wants no snapshot noise; --overwrite adopts the paths the
+// installer and deploy.sh seed unowned (see ryokuOverwriteGlob).
+func ryokuMoveArgs(set []string) []string {
+	args := []string{"env", "SNAP_PAC_SKIP=y", "RYOKU_MANAGED_UPDATE=1",
+		"pacman", "-S", "--needed", "--noconfirm", "--overwrite", ryokuOverwriteGlob}
+	return append(args, set...)
+}
+
+// moveRyokuSetToChannel performs the pacman side of a channel move against the
+// currently pointed [ryoku] repo. The pin is the caller's job (retargetChannel);
+// this only moves packages. Returns the set it moved so the caller can exclude
+// it from the system lane.
+func moveRyokuSetToChannel() ([]string, error) {
+	clearStalePacmanLock()
+	// -Syy, forced: pacman skips a db that is not newer than its cached copy,
+	// and a frozen release directory is older than the channel the box just
+	// left, so a plain -Sy keeps the stale db against the new signature.
+	if err := privileged("pacman", "-Syy", "--noconfirm"); err != nil {
+		return nil, fmt.Errorf("%w: %v", errChannelUnreachable, err)
+	}
+	set, err := ryokuSetForMove()
+	if err != nil {
+		return nil, fmt.Errorf(i18n.T("cannot read the [ryoku] repository, so there is nothing safe to move: %w"), err)
+	}
+	// A channel that predates the compositor split carries no
+	// ryoku-desktop-hyprland/niri; their exact-version pins would fail the
+	// whole transaction, so drop the installed metas the target does not serve
+	// before building it (#271, #291). Record them: -Rdd is a separate,
+	// committed step, so a transaction that then fails must be able to put them
+	// back from the restored channel, which does serve them.
+	lastDroppedMetas = dropSplitMetasNotServed(servedSetForMove())
+	if len(lastDroppedMetas) > 0 {
+		progress.logf(i18n.T("Removed %s: the target channel does not serve it"), strings.Join(lastDroppedMetas, ", "))
+	}
+	if len(set) == 0 {
+		return set, nil
+	}
+	if err := runRyokuMove(set); err != nil {
+		return set, err
+	}
+	return set, nil
+}
+
+// The two read-only pacman queries the move makes, as seams: both hit the real
+// /etc/pacman.conf, so a test pins them without a live database.
+var (
+	ryokuSetForMove = func() ([]string, error) {
+		set, _, err := installedRyokuSet(true)
+		return set, err
+	}
+	servedSetForMove = repoServedSet
+)
+
+// lastDroppedMetas holds the split metas the most recent move removed with -Rdd.
+// The move is single-threaded, so a package var is enough; retargetChannel reads
+// it to put them back when the transaction that followed the drop failed.
+var lastDroppedMetas []string
+
+// runRyokuMove executes the one channel-move transaction, sleep-inhibited so a
+// lid-close or idle suspend mid-transaction cannot corrupt it, and root-aware so
+// it holds from the boot guard (which is already root) as well as an interactive
+// `ryoku track` (which escalates). runInhibited renders the curated view on a
+// terminal and streams raw with no TTY, so the boot service needs no UI. A var
+// so a test records the set without a live pacman.
+var runRyokuMove = func(set []string) error {
+	argv := ryokuMoveArgs(set)
+	if os.Geteuid() != 0 {
+		argv = append([]string{"sudo"}, argv...)
+	}
+	return runInhibited("Ryoku", i18n.T("Ryoku channel move"), argv)
+}
+
+// retargetChannel makes a channel move transactional: record the current
+// [ryoku] Server, pin the new channel, run move, and on any failure put the
+// previous Server back exactly and re-sync so the pin, the sync db, and the
+// installed set never disagree (the #291 invariant). Used by both `ryoku track`
+// and the boot guard's revert.
+func retargetChannel(channel string, move func() error) error {
+	prev := sys.RyokuServer()
+	lastDroppedMetas = nil
+	if err := sys.SetPackagedChannel(channel); err != nil {
+		return err
+	}
+	if err := move(); err != nil {
+		// The pin change is undone, then the split metas the move dropped are put
+		// back from the restored channel (which serves them) -- without this a
+		// failed downgrade would strand a box with those metas gone for good,
+		// since the ordinary update only ever moves installed AND served names.
+		restorePreviousServer(prev)
+		reinstallDroppedMetas()
+		return err
+	}
+	return nil
+}
+
+// restorePreviousServer undoes a failed channel move: put the recorded Server
+// line back byte-for-byte and re-sync so the cached db matches it again. Best
+// effort -- offline it cannot re-sync, but the pin is restored and the dropped
+// db simply refetches on the next online -Sy, so nothing is left disagreeing.
+func restorePreviousServer(prev string) {
+	if prev == "" {
+		return // nothing recorded to restore
+	}
+	_ = sys.SetRyokuServer(prev)
+	_ = privileged("pacman", "-Syy", "--noconfirm")
+}
+
+// reinstallDroppedMetas puts the split metas a failed move removed back from the
+// (now restored) channel, which serves them. It runs after restorePreviousServer
+// so the pin and its db already point at the channel that has them. Best effort
+// and one-shot: it clears the record so a later successful move never re-adds a
+// meta the target legitimately dropped.
+func reinstallDroppedMetas() {
+	if len(lastDroppedMetas) == 0 {
+		return
+	}
+	targets := make([]string, 0, len(lastDroppedMetas))
+	for _, m := range lastDroppedMetas {
+		targets = append(targets, ryokuRepo+"/"+m)
+	}
+	if err := privileged(ryokuMoveArgs(targets)...); err != nil {
+		progress.logf(i18n.T("could not reinstall %s after the failed move; run `ryoku update`: %v"), strings.Join(lastDroppedMetas, ", "), err)
+	}
+	lastDroppedMetas = nil
+}
+
+// RetargetChannel is the exported transactional move the doctor uses to heal a
+// box whose pin drifted onto a stale release (reconcile_channel_pin.go).
+func RetargetChannel(channel string) error {
+	return retargetChannel(channel, func() error {
+		_, err := moveRyokuSetToChannel()
+		return err
+	})
+}

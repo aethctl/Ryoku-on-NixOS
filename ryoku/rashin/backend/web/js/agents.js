@@ -1,11 +1,14 @@
-// Agents panel: one row per detected coding agent (name, file, wired + skill
-// state, WIRE/UNWIRE). Below the list, POINT ANY AGENT shows every path Rashin
-// exposes plus a COPY AGENT SNIPPET for an agent it does not wire directly, and
-// CHAT BACKEND picks who answers the chat (Hermes recommended). All best effort:
-// an absent daemon degrades to dim placeholders.
+// Agents panel: one card per detected coding agent with wire/unwire, the
+// "point any agent" manifest (paths Rashin exposes plus a copyable instruction
+// block), the chat-backend picker, and the harness ledger fed by the shared
+// /api/harnesses scan. All best effort: an absent daemon degrades to muted
+// placeholders.
 
 import { api } from "./api.js";
 import { escapeHtml } from "./markdown.js";
+import { initLedger } from "./harnesses.js";
+
+const esc = (s) => escapeHtml(String(s == null ? "" : s));
 
 export function initAgents(root) {
   const listEl = root.querySelector("[data-agents-list]");
@@ -13,31 +16,33 @@ export function initAgents(root) {
   const chatEl = root.querySelector("[data-chatbackend]");
   let snippet = "";
 
-  function row(a) {
-    const stateChip = a.wired
-      ? '<span class="stamp stamp-ok">WIRED</span>'
+  function card(a) {
+    const state = a.wired
+      ? '<span class="state ok">wired</span>'
       : a.present
-        ? '<span class="stamp stamp-idle">UNWIRED</span>'
-        : '<span class="stamp stamp-bad">ABSENT</span>';
-    const skill = a.skillWired ? '<span class="stamp stamp-ok">SKILL</span>' : "";
+        ? '<span class="state idle">present</span>'
+        : '<span class="state bad">absent</span>';
+    const skill = a.skillWired ? '<span class="chip info">skill</span>' : "";
     const action = a.wired
-      ? '<button class="btn btn-ghost" data-act="unwire" data-id="' + escapeHtml(a.id) + '">UNWIRE</button>'
-      : '<button class="btn btn-primary" data-act="wire" data-id="' + escapeHtml(a.id) + '"' +
-        (a.present ? "" : " disabled") + ">WIRE</button>";
+      ? '<button class="btn btn-ghost" data-act="unwire" data-id="' + esc(a.id) + '">Unwire</button>'
+      : '<button class="btn btn-primary" data-act="wire" data-id="' + esc(a.id) + '"' +
+        (a.present ? "" : " disabled") + ">Wire</button>";
     return (
-      '<div class="agent-row" data-id="' + escapeHtml(a.id) + '">' +
-      '<div class="agent-id"><span class="agent-name">' + escapeHtml(a.name) + "</span>" +
-      '<span class="agent-file">' + escapeHtml(a.file || "") + "</span></div>" +
-      '<div class="agent-state">' + skill + stateChip + action + "</div></div>"
+      '<div class="card acard" data-id="' + esc(a.id) + '">' +
+      '<div class="acard-head"><b>' + esc(a.name) + "</b>" + skill + state + "</div>" +
+      '<span class="mono dim acard-file">' + esc(a.file || "") + "</span>" +
+      '<div class="acard-act">' + action + "</div></div>"
     );
   }
 
   function pathRow(label, path, owner, ok) {
     return (
-      '<div class="manifest-row' + (ok ? "" : " absent") + '">' +
-      '<span class="mlabel">' + escapeHtml(label) + "</span>" +
-      '<span class="mowner' + (owner === "yours" ? " mowner-yours" : "") + '">' + escapeHtml(owner || "") + "</span>" +
-      '<span class="mpath">' + escapeHtml(path || "not installed") + "</span></div>"
+      '<div class="mrow' + (ok ? "" : " absent") + '">' +
+      '<span class="mlabel">' + esc(label) + "</span>" +
+      '<span class="chip">' + esc(owner || "") + "</span>" +
+      '<span class="mpath">' + esc(path || "not installed") + "</span>" +
+      (ok ? "" : '<span class="state bad">missing</span>') +
+      "</div>"
     );
   }
 
@@ -48,33 +53,31 @@ export function initAgents(root) {
       pathRow("prowl", m.prowl && m.prowl.path, "tool", m.prowl && m.prowl.exists),
     ].concat((m.vault || []).map((v) => pathRow(v.label, v.path, v.owner, v.exists)));
     connectEl.innerHTML =
-      '<h3 class="sub-title">POINT ANY AGENT</h3>' +
-      '<p class="dim">Using an agent Rashin does not wire for you? Point it at these, or copy a ready-made instruction block and paste it into its config.</p>' +
+      '<div class="card-head"><h2>Point any agent</h2><span class="card-meta">paths Rashin exposes</span></div>' +
       rows.join("") +
-      '<button class="btn btn-primary manifest-copy" data-act="copy">COPY AGENT SNIPPET</button>';
+      '<button class="btn btn-primary manifest-copy" data-act="copy">Copy agent snippet</button>';
   }
 
   function renderChat(backs) {
-    const chips = (backs || [])
+    const btns = (backs || [])
       .map((b) => {
-        const cls = "chip" + (b.active ? " active" : "");
-        const star = b.recommended ? " \u2605" : "";
+        const cls = "seg-btn" + (b.active ? " active" : "");
+        const star = b.recommended ? ' <i class="seg-tag">recommended</i>' : "";
         const dis = b.available ? "" : " disabled";
-        return '<button class="' + cls + '" data-chat="' + escapeHtml(b.id) + '"' + dis + ">" + escapeHtml(b.name) + star + "</button>";
+        return '<button class="' + cls + '" data-chat="' + esc(b.id) + '"' + dis + ">" + esc(b.name) + star + "</button>";
       })
       .join("");
     chatEl.innerHTML =
-      '<h3 class="sub-title">CHAT BACKEND</h3>' +
-      '<p class="dim">Who answers the chat. Hermes is recommended; others need their own ACP adapter installed.</p>' +
-      '<div class="chip-row">' + chips + "</div>";
+      '<div class="card-head"><h2>Chat backend</h2><span class="card-meta">who answers the chat</span></div>' +
+      '<div class="seg chip-row">' + btns + "</div>";
   }
 
   async function load() {
     try {
       const list = await api.agents();
-      listEl.innerHTML = (list || []).map(row).join("");
+      listEl.innerHTML = (list || []).map(card).join("");
     } catch (err) {
-      listEl.innerHTML = '<p class="dim">agents unavailable, start the daemon</p>';
+      listEl.innerHTML = '<p class="muted">The daemon is not running, so there are no agents to show.</p>';
     }
     try { renderConnect(await api.manifest()); } catch (e) { connectEl.innerHTML = ""; }
     try { renderChat(await api.chatAgents()); } catch (e) { chatEl.innerHTML = ""; }
@@ -95,9 +98,9 @@ export function initAgents(root) {
     if (!btn) return;
     try {
       await navigator.clipboard.writeText(snippet);
-      btn.textContent = "COPIED";
-      setTimeout(() => { btn.textContent = "COPY AGENT SNIPPET"; }, 1500);
-    } catch (err) { /* clipboard blocked; snippet is also `ryoku-rashin paths` */ }
+      btn.textContent = "Copied";
+      setTimeout(() => { btn.textContent = "Copy agent snippet"; }, 1500);
+    } catch (err) { /* clipboard blocked; the paths above still stand */ }
   });
 
   chatEl.addEventListener("click", async (e) => {
@@ -108,4 +111,5 @@ export function initAgents(root) {
   });
 
   load();
+  initLedger(root.querySelector("[data-harness-ledger]"));
 }

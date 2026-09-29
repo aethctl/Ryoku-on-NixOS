@@ -61,8 +61,6 @@ const (
 var imageOptimizeExts = []string{"png", "jpg", "jpeg", "gif"}
 var videoConvertExts = []string{"mp4", "webm", "mkv", "avi", "mov"}
 
-var presetOrder = []string{"light", "balanced", "quality"}
-
 type imagePreset struct{ quality int }
 
 var imagePresets = map[string]imagePreset{
@@ -81,12 +79,6 @@ var videoPresets = map[string]videoPreset{
 	"light":    {crf: 28, maxrate: "6M", bufsize: "12M"},
 	"balanced": {crf: 26, maxrate: "10M", bufsize: "20M"},
 	"quality":  {crf: 23, maxrate: "16M", bufsize: "32M"},
-}
-
-var presetLabels = map[string]string{
-	"light":    "Light",
-	"balanced": "Balanced",
-	"quality":  "Quality",
 }
 
 type resolution struct{ maxW, maxH int }
@@ -114,7 +106,8 @@ func NewOptimizer(wallDir, videoDir string, emit func(event string, data map[str
 // Start validates the request, refuses a second concurrent run of the same
 // kind, then launches the pipeline in the background (mirroring the Rust
 // dispatcher's tokio::spawn). The RPC returns {started:true} on a nil error.
-func (o *Optimizer) Start(kind, preset, resolutionKey string) error {
+// A nil files list processes the whole source directory.
+func (o *Optimizer) Start(kind, preset, resolutionKey string, files []string) error {
 	res, ok := resolutions[resolutionKey]
 	if !ok {
 		return fmt.Errorf("unknown resolution: %s", resolutionKey)
@@ -142,7 +135,7 @@ func (o *Optimizer) Start(kind, preset, resolutionKey string) error {
 	*js = jobState{running: true, cancel: cancel}
 	o.mu.Unlock()
 
-	go o.run(ctx, kind, preset, res)
+	go o.run(ctx, kind, preset, res, files)
 	return nil
 }
 
@@ -169,47 +162,14 @@ func (o *Optimizer) Status(kind string) map[string]interface{} {
 	return statusPayload(kind, js)
 }
 
-// Presets returns the preset table for the kind as an ordered slice of
-// id/label/params objects (light, balanced, quality), values verbatim from the
-// Rust preset tables.
-func (o *Optimizer) Presets(kind string) []map[string]interface{} {
-	out := make([]map[string]interface{}, 0, len(presetOrder))
-	switch kind {
-	case kindOptimize:
-		for _, id := range presetOrder {
-			p := imagePresets[id]
-			out = append(out, map[string]interface{}{
-				"id":      id,
-				"label":   presetLabels[id],
-				"quality": p.quality,
-				"formats": []string{"png", "jpg", "jpeg", "gif"},
-			})
-		}
-	case kindConvert:
-		for _, id := range presetOrder {
-			p := videoPresets[id]
-			out = append(out, map[string]interface{}{
-				"id":      id,
-				"label":   presetLabels[id],
-				"crf":     p.crf,
-				"maxrate": p.maxrate,
-				"bufsize": p.bufsize,
-			})
+func (o *Optimizer) run(ctx context.Context, kind, preset string, res resolution, files []string) {
+	if files == nil {
+		if kind == kindOptimize {
+			files = scanDirByExt(o.wallDir, imageOptimizeExts)
+		} else {
+			files = scanDirByExt(o.videoDir, videoConvertExts)
 		}
 	}
-	return out
-}
-
-func (o *Optimizer) run(ctx context.Context, kind, preset string, res resolution) {
-	var dir string
-	var exts []string
-	if kind == kindOptimize {
-		dir, exts = o.wallDir, imageOptimizeExts
-	} else {
-		dir, exts = o.videoDir, videoConvertExts
-	}
-
-	files := scanDirByExt(dir, exts)
 
 	o.mu.Lock()
 	js := o.jobs[kind]
@@ -264,9 +224,9 @@ func (o *Optimizer) finish(kind string) {
 	o.mu.Unlock()
 }
 
-// optimizeOne re-encodes one image to webp beside the source, then removes the
-// original. Static images go through magick; animated gifs through ffmpeg's
-// libwebp_anim, exactly as the Rust pipeline split.
+// optimizeOne re-encodes one image to webp beside the source and moves the
+// original to the trash, as skwd does. Static images go through magick; animated
+// gifs through ffmpeg's libwebp_anim, exactly as the Rust pipeline split.
 func (o *Optimizer) optimizeOne(ctx context.Context, src string, quality int, res resolution) string {
 	stem := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 	dir := filepath.Dir(src)
@@ -286,11 +246,15 @@ func (o *Optimizer) optimizeOne(ctx context.Context, src string, quality int, re
 		return "fail"
 	}
 
+	// The original leaves first, so a failure never lists both copies.
+	if err := trashOriginal(src); err != nil {
+		os.Remove(tmp)
+		return "fail"
+	}
 	if err := os.Rename(tmp, final); err != nil {
 		os.Remove(tmp)
 		return "fail"
 	}
-	os.Remove(src)
 	return "ok"
 }
 

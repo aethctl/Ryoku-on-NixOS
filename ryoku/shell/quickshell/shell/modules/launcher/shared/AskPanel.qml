@@ -2,17 +2,18 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import shell.services as Svc
 import "Singletons"
 import Ryoku.Ui.Singletons
 
 // Quick-ask body panel for the "\" prefix: a terse question to the Rashin
 // agent (hermes), answered inline. `ryoku-rashin ask` streams marker lines;
 // while the agent works a pulsing dot names the step (tool title / thinking /
-// writing) and two live options sit under it: CONTINUE IN DASHBOARD (watch the
-// same turn there while it keeps running) and CANCEL. The finished answer is
-// selectable text over action chips: COPY, every entity the daemon detected
-// (files edit in nvim, folders open, URLs browse, commands and colors copy),
-// then DASHBOARD. "\resume" lists recent asks and recalls a cached answer with
+// writing) and two live options sit under it: CONTINUE IN CHAT (watch the same
+// turn in the Super+S chat while it keeps running) and CANCEL. The finished
+// answer is selectable text over action chips: COPY, every entity the daemon
+// detected (files edit in nvim, folders open, URLs browse, commands, colors),
+// then OPEN CHAT. "\resume" lists recent asks and recalls a cached answer with
 // its chips intact, no model call. Chips and the resume list walk with the
 // arrow keys and fire with ENTER.
 Item {
@@ -43,20 +44,20 @@ Item {
 
     // Working-phase actions and answer chips share the selection model.
     readonly property var workChips: [
-        { kind: "dash", value: "", label: I18n.tr("CONTINUE IN DASHBOARD") },
+        { kind: "chat", value: "", label: I18n.tr("CONTINUE IN CHAT") },
         { kind: "cancel", value: "", label: I18n.tr("CANCEL") }
     ]
     readonly property var chips: {
         if (busy)
             return workChips;
         if (permPending)
-            return [{ kind: "dash", value: "", label: I18n.tr("APPROVE IN DASHBOARD") }];
+            return [{ kind: "chat", value: "", label: I18n.tr("APPROVE IN CHAT") }];
         if (phase !== "done")
             return [];
         var c = [{ kind: "copy", value: answerText, label: I18n.tr("COPY") }];
         for (var i = 0; i < answerActions.length; i++)
             c.push(answerActions[i]);
-        c.push({ kind: "dash", value: "", label: I18n.tr("DASHBOARD") });
+        c.push({ kind: "chat", value: "", label: I18n.tr("OPEN CHAT") });
         return c;
     }
 
@@ -179,9 +180,9 @@ Item {
         case "url":
             Spawn.run(["xdg-open", String(chip.value)]);
             break;
-        case "dash":
-            // Leave the turn running on the daemon; just go watch it.
-            Spawn.run(["xdg-open", "http://127.0.0.1:3600/#/chat"]);
+        case "chat":
+            // Leave the turn running on the daemon; open the Super+S chat to watch it.
+            Svc.ShellState.requestSurfaceActive("stash#chat", undefined);
             break;
         }
         root.finished();

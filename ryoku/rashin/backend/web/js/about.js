@@ -1,7 +1,6 @@
-// About panel: static poster copy (the WHAT / QUICK START / GO DEEPER / PRIVACY
-// strings live here) with live facts from /api/about merged into THE PIECES
-// table. Degrades to dim "unknown" facts when the daemon is absent; the copy
-// still renders so the panel is never blank.
+// About panel: what Rashin is, live facts from /api/about, quick start, a
+// command crib, and the privacy note. Degrades to dim "unknown" facts when the
+// daemon is absent; the copy still renders so the panel is never blank.
 
 import { escapeHtml } from "./markdown.js";
 
@@ -88,7 +87,7 @@ export function initAbout(root) {
     const steps = QUICK_START.map((s, i) => {
       const btn =
         i === 1
-          ? ' <button type="button" class="btn btn-primary about-setup" data-about-setup>SET UP HERMES</button>'
+          ? ' <button type="button" class="btn btn-primary about-setup" data-about-setup>Set up Hermes</button>'
           : "";
       return "<li>" + escapeHtml(s) + btn + "</li>";
     }).join("");
@@ -102,23 +101,23 @@ export function initAbout(root) {
     ).join("");
 
     body.innerHTML =
-      '<section class="about-sec"><em class="eyebrow">WHAT</em>' +
+      '<section class="card about-sec"><span class="field-label">What this is</span>' +
       '<div class="about-what">' +
       what +
       "</div></section>" +
-      '<section class="about-sec"><em class="eyebrow">THE PIECES</em>' +
-      '<table class="about-def"><tbody>' +
+      '<section class="card about-sec"><span class="field-label">The pieces</span>' +
+      '<table class="data about-def"><tbody>' +
       pieceRows +
       "</tbody></table></section>" +
-      '<section class="about-sec"><em class="eyebrow">QUICK START</em>' +
+      '<section class="card about-sec"><span class="field-label">Quick start</span>' +
       '<ol class="about-steps">' +
       steps +
       "</ol></section>" +
-      '<section class="about-sec"><em class="eyebrow">GO DEEPER</em>' +
-      '<table class="about-cmds"><tbody>' +
+      '<section class="card about-sec"><span class="field-label">Go deeper</span>' +
+      '<table class="data about-cmds"><tbody>' +
       cmds +
       "</tbody></table></section>" +
-      '<section class="about-sec"><em class="eyebrow">PRIVACY</em>' +
+      '<section class="card about-sec"><span class="field-label">Privacy</span>' +
       '<p class="about-privacy">' +
       escapeHtml(PRIVACY) +
       "</p></section>";

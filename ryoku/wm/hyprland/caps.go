@@ -43,6 +43,7 @@ var capsManifest = []wm.Capability{
 	wm.CapNightLight,
 	wm.CapTouchpadToggle,
 	wm.CapPaletteBorder,
+	wm.CapPersistentScreenCapture,
 }
 
 // windowRuleActions are the neutral window-rule action ids genWindowRule and

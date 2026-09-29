@@ -5,10 +5,7 @@ import "fmt"
 const daemonVersion = "0.2.0"
 
 // dispatchRequest routes one JSON-RPC request. The method set and response
-// shapes are the wire contract the wall-ui picker parses; unimplemented
-// subsystems (effects, optimize, video_convert, analysis, steam) answer with
-// the standard unknown-method error, which the picker's default feature set
-// never triggers.
+// shapes are the wire contract the picker parses.
 func (d *daemon) dispatchRequest(req *request) response {
 	p := req.params()
 	switch req.Method {
@@ -17,12 +14,6 @@ func (d *daemon) dispatchRequest(req *request) response {
 			"version":           daemonVersion,
 			"current_wallpaper": nullable(d.currentName()),
 		})
-
-	// wm.caps lets the wall-ui gate compositor affordances on capability rather
-	// than a compositor name.
-	case "wm.caps":
-		caps, _ := wmClient.Caps()
-		return ok(req.ID, caps)
 
 	// wm.focusedOutput: the picker opens on the display in use, which no Wayland
 	// protocol reports to a client.
@@ -60,17 +51,19 @@ func (d *daemon) dispatchRequest(req *request) response {
 
 	case "wall.apply":
 		wpType := strParam(p, "type", "static")
-		if wpType != "static" && wpType != "video" {
+		switch wpType {
+		case "static", "video":
+			if err := d.applyWallpaper(wpType, strParam(p, "path", ""), "set", strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
+				return errResp(req.ID, 4, err.Error())
+			}
+		case "we":
+			if err := d.applyWE(weIDParam(p), strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
+				return errResp(req.ID, 4, err.Error())
+			}
+		default:
 			return errResp(req.ID, 1, fmt.Sprintf("unsupported type: %s", wpType))
 		}
-		if err := d.applyWallpaper(wpType, strParam(p, "path", ""), "set", strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
-			return errResp(req.ID, 4, err.Error())
-		}
 		return ok(req.ID, map[string]interface{}{"applied": d.currentName()})
-
-	case "wall.restore":
-		d.restoreOutputs()
-		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "effects.list":
 		return ok(req.ID, map[string]interface{}{"effects": EffectsList()})
@@ -96,37 +89,19 @@ func (d *daemon) dispatchRequest(req *request) response {
 		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "optimize.start", "video_convert.start":
-		kind := "optimize"
-		if req.Method == "video_convert.start" {
-			kind = "convert"
-		}
-		if err := d.optimizer.Start(kind, strParam(p, "preset", "balanced"), strParam(p, "resolution", "4k")); err != nil {
+	// Video conversion runs from the settings folio's ConvertVideos action.
+	case "optimize.start":
+		if err := d.optimizer.Start("optimize", strParam(p, "preset", "balanced"), strParam(p, "resolution", "4k"), nil); err != nil {
 			return errResp(req.ID, 3, err.Error())
 		}
 		return ok(req.ID, map[string]interface{}{"started": true})
 
-	case "optimize.cancel", "video_convert.cancel":
-		kind := "optimize"
-		if req.Method == "video_convert.cancel" {
-			kind = "convert"
-		}
-		d.optimizer.Cancel(kind)
+	case "optimize.cancel":
+		d.optimizer.Cancel("optimize")
 		return ok(req.ID, map[string]interface{}{"cancelled": true})
 
-	case "optimize.status", "video_convert.status":
-		kind := "optimize"
-		if req.Method == "video_convert.status" {
-			kind = "convert"
-		}
-		return ok(req.ID, d.optimizer.Status(kind))
-
-	case "optimize.presets", "video_convert.presets":
-		kind := "optimize"
-		if req.Method == "video_convert.presets" {
-			kind = "convert"
-		}
-		return ok(req.ID, map[string]interface{}{"presets": d.optimizer.Presets(kind)})
+	case "optimize.status":
+		return ok(req.ID, d.optimizer.Status("optimize"))
 
 	case "wall.set_favourite":
 		key := strParam(p, "key", "")
@@ -139,35 +114,27 @@ func (d *daemon) dispatchRequest(req *request) response {
 		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "wall.update_metadata":
-		key := strParam(p, "key", "")
-		d.store.mutate(key, func(e *Entry) {
-			if v := intParam(p, "filesize", 0); v > 0 {
-				e.Filesize = v
-			}
-			if v := intParam(p, "width", 0); v > 0 {
-				e.Width = int(v)
-			}
-			if v := intParam(p, "height", 0); v > 0 {
-				e.Height = int(v)
-			}
-		})
-		return ok(req.ID, map[string]interface{}{"ok": true})
-
 	case "wall.delete":
 		if err := d.deleteWallpaper(strParam(p, "key", "")); err != nil {
 			return errResp(req.ID, 2, err.Error())
 		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "wall.import":
-		if err := d.importWallpaper(strParam(p, "path", "")); err != nil {
-			return errResp(req.ID, 2, err.Error())
-		}
-		return ok(req.ID, map[string]interface{}{"ok": true})
-
 	case "wall.outputs":
 		return ok(req.ID, map[string]interface{}{"outputs": d.outputsState()})
+
+	// Forces a rescan; the daemon's end-to-end tests drive the catalogue with it.
+	case "wall.cache_rebuild":
+		go d.rescan(true)
+		return ok(req.ID, map[string]interface{}{"started": true})
+
+	case "wall.pause":
+		paused := true
+		if v, has := p["paused"].(bool); has {
+			paused = v
+		}
+		d.setManualPause(strsParam(p, "outputs"), paused)
+		return ok(req.ID, map[string]interface{}{"paused": paused})
 
 	case "wall.set_audio":
 		var mute *bool
@@ -182,39 +149,8 @@ func (d *daemon) dispatchRequest(req *request) response {
 		d.setAudio(mute, volume, strsParam(p, "outputs"))
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "wall.cache_rebuild":
-		go d.rescan(true)
-		return ok(req.ID, map[string]interface{}{"started": true})
-
-	case "wall.cache_reset":
-		go d.resetCache()
-		return ok(req.ID, map[string]interface{}{"started": true})
-
-	case "wall.recompute_colors":
-		go d.rescan(true)
-		return ok(req.ID, map[string]interface{}{"started": true})
-
-	case "wall.cache_status":
-		return ok(req.ID, map[string]interface{}{"ready": true, "count": len(d.store.list(false))})
-
-	case "wall.clear_video_cache":
-		removed, freed := pruneLivewallCache(int(intParam(p, "days", 0)))
-		return ok(req.ID, map[string]interface{}{"removed": removed, "freed": freed})
-
-	case "wall.toggle":
-		if d.ui.ensure() {
-			d.broadcast("ryogami.wall.toggle", map[string]interface{}{})
-		}
-		return ok(req.ID, map[string]interface{}{"toggled": true})
-
-	case "wall.show":
-		if d.ui.ensure() {
-			d.broadcast("ryogami.wall.show", map[string]interface{}{})
-		}
-		return ok(req.ID, map[string]interface{}{"ok": true})
-
-	case "wall.hide":
-		d.broadcast("ryogami.wall.hide", map[string]interface{}{})
+	case "picker.hidden":
+		go d.ui.refreshIfStale()
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "wall.random_start":
@@ -227,75 +163,19 @@ func (d *daemon) dispatchRequest(req *request) response {
 		})
 		return ok(req.ID, map[string]interface{}{"started": true})
 
-	case "wall.random_stop":
-		d.random.stop()
-		d.broadcast("ryogami.wall.random_stopped", map[string]interface{}{})
-		return ok(req.ID, map[string]interface{}{"stopped": true})
-
-	case "wall.random_status":
-		return ok(req.ID, d.random.status())
-
-	// Day/night video rotation (#247): the picker configures the pools and the
-	// interval; the daemon owns the timer and the day/night decision (read from
-	// the shell's weather isDay). start reads the config fresh so a GUI Save is
-	// the only writer; force pins a phase for manual testing.
-	case "wall.daynight_start":
-		cfg := dayNightFromWall()
-		d.daynight.start(cfg, d.dayNightTick, nil)
-		d.broadcast("ryogami.wall.daynight_started", map[string]interface{}{
-			"interval": cfg.Interval, "day_dir": cfg.DayDir, "night_dir": cfg.NightDir,
-		})
-		return ok(req.ID, map[string]interface{}{"started": true})
-
-	case "wall.daynight_stop":
-		d.daynight.stop()
-		d.broadcast("ryogami.wall.daynight_stopped", map[string]interface{}{})
-		return ok(req.ID, map[string]interface{}{"stopped": true})
-
-	case "wall.daynight_status":
-		return ok(req.ID, d.daynight.status())
-
-	case "wall.daynight_force":
-		d.daynight.force(strParam(p, "phase", ""))
-		return ok(req.ID, d.daynight.status())
-
-	// Unified auto-rotate: active if the random loop is running, any playlist
-	// is assigned, or day/night rotation is up (each rotates independently of
-	// the others). rotation_stop halts all three, so "auto-rotate off" truly
-	// stops every wallpaper change.
+	// Auto-rotate covers the random loop and assigned playlists; the schedule has its own switch.
 	case "wall.rotation_status":
 		st := d.random.status()
 		running, _ := st["running"].(bool)
-		dn, _ := d.daynight.status()["running"].(bool)
-		return ok(req.ID, map[string]interface{}{"active": running || dn || d.playlists.anyAssigned()})
+		return ok(req.ID, map[string]interface{}{"active": running || d.playlists.anyAssigned()})
 
 	case "wall.rotation_stop":
 		d.random.stop()
-		d.daynight.stop()
 		d.playlists.stopAll()
 		d.broadcast("ryogami.wall.random_stopped", map[string]interface{}{})
 		return ok(req.ID, map[string]interface{}{"stopped": true})
 
-	// Palette frame: which second of a video clip the still (and so the matugen
-	// palette the shell derives) is sampled from. With a "frame" param it
-	// persists the second and re-applies the current wallpaper so the new still
-	// is painted and republished; the shell's bridge re-runs matugen off it.
-	// Without a param it reports the current second.
-	case "wall.palette_frame":
-		if _, has := p["frame"]; has {
-			sec := floatParam(p, "frame", 1)
-			if sec < 0 {
-				sec = 0
-			}
-			persistVideoFrame(sec)
-			d.reloadConfig()
-			d.restoreOutputs()
-			d.broadcast("ryogami.wall.palette_frame", map[string]interface{}{"frame": sec})
-			return ok(req.ID, map[string]interface{}{"frame": sec})
-		}
-		return ok(req.ID, map[string]interface{}{"frame": d.config().videoFrame()})
-
-	case "playlist.list", "pl.list":
+	case "playlist.list":
 		return ok(req.ID, d.playlists.snapshot())
 
 	case "playlist.create":
@@ -319,7 +199,7 @@ func (d *daemon) dispatchRequest(req *request) response {
 		d.broadcast("ryogami.playlist.changed", map[string]interface{}{})
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
-	case "playlist.members", "pl.contents":
+	case "playlist.members":
 		return ok(req.ID, map[string]interface{}{"members": d.playlists.members(intParam(p, "id", 0))})
 
 	case "playlist.memberships":
@@ -392,6 +272,9 @@ func (d *daemon) dispatchRequest(req *request) response {
 		return ok(req.ID, map[string]interface{}{"cancelled": true})
 
 	default:
+		if resp, handled := d.dispatchExtended(req, p); handled {
+			return resp
+		}
 		return errResp(req.ID, -32601, fmt.Sprintf("unknown method: %s", req.Method))
 	}
 }

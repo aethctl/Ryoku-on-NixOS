@@ -15,10 +15,11 @@ var CATALOG = [
 
     { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryogami", "wallpaper", "next"] },
     { id: "pick-wallpaper",   name: "Wallpaper Picker",   category: "Appearance", icon: "image-multi", exec: ["ryogami", "wallpaper", "ui"] },
+    { id: "wallpaper-settings", name: "Wallpaper Settings", category: "Appearance", icon: "settings",  exec: ["ryogami", "wallpaper", "settings"] },
     { id: "toggle-nightlight",name: "Night Light",        category: "Appearance", icon: "moon",        exec: ["ryoku-cmd-nightlight"], caps: "nightLight" },
 
     { id: "screenshot",       name: "Screenshot",         category: "Tools",      icon: "camera",      exec: ["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"] },
-    { id: "screen-record",    name: "Screen Record",      category: "Tools",      icon: "video",       exec: ["ryoku-cmd-screenrecord"] },
+    { id: "screen-record",    name: "Screen Record",      category: "Tools",      icon: "video",       exec: ["ryoku-shell", "record"] },
     { id: "color-picker",     name: "Color Picker",       category: "Tools",      icon: "eyedropper",  exec: ["ryoku-cmd-color-picker"] },
     { id: "ocr",              name: "OCR Text Grab",      category: "Tools",      icon: "text-scan",   exec: ["ryoku-cmd-ocr"] },
     { id: "qr-scan",          name: "Scan QR Code",       category: "Tools",      icon: "qr",          exec: ["ryoku-cmd-qr-scan"] },

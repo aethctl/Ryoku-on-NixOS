@@ -59,6 +59,12 @@ Topic guides sit beside this file. Read the matching one first:
   `ryoku-shell bar` / `ryoku-shell dock` commands.
 - [`plugins.md`](plugins.md): installing, listing, and removing shell plugins
   with `ryoku plugin`, and Ryostore.
+- [`feature.md`](feature.md): the ladder for a feature the desktop does not
+  have yet. Check the store, then the machine, then the built-ins; build a
+  plugin only when all three come up empty.
+- [`troubleshoot.md`](troubleshoot.md): the break/fix playbook. Gather the logs
+  first (`ryoku-rashin logs <app>`), diagnose, fix through the owning command,
+  verify, and know the rollback paths.
 
 ## Answer policy: GUI first
 
@@ -81,6 +87,10 @@ and the dock are QS Bar Settings (`ryoku-shell bar settings`), not the Hub. See
 Ryoku separates the files it ships from the files you own, so an update can
 refresh the base freely while your changes stand. Respect the split:
 
+- **Ask `ryoku owner <path>` before you touch a file.** It classifies the path
+  (a shipped `ryoku` file, a `generated` one, a tool `store`, a `seed`, a
+  `user-override`, or the user's own) and prints where the change belongs. Never
+  edit a path it calls `ryoku`, `generated`, or `store`; edit where it points.
 - **Never edit a shipped file in place.** `/usr/share/ryoku/` (the packaged
   base) and the files Ryoku lays into `~/.config/quickshell/` are re-laid on
   every `ryoku update` (`ryoku materialize` clobbers every shipped file), so an
@@ -147,7 +157,10 @@ When a request would change the system, in order:
    file: the tool's own `user.*` file, or a fork at the mirrored path under
    `~/.config/ryoku/user_edits/`. Then reload (`ryoku reload`, or `hyprctl
    reload` for Hyprland).
-4. **Is it a plugin?** A shell widget installs from git with
+4. **Is it a feature the desktop does not have?** Climb `feature.md`:
+   `ryostore catalog` (does the store ship it?), `ryoku-shell bar catalog` and
+   `ryoku plugin list` (is it installed but hidden?), then build it as a
+   plugin. A shell widget installs from git with
    `ryoku plugin add <url> --bar`, or from Ryostore; see `plugins.md`. Never
    run a plugin's code to install it. A Hyprland compositor plugin (title
    bars, cursor motion, key sounds, a `.so` the compositor loads) is managed
@@ -169,6 +182,10 @@ When a request would change the system, in order:
   `ryoku-shell bar move clock --section right`
 - "Hide the GPU widget" -> QS Bar Settings > Widgets, or `ryoku-shell bar hide gpu`
 - "Make the bar islands" -> QS Bar Settings > Bars, or `ryoku-shell bar form islands`
+- "Add a crypto price applet to the QS Bar" -> climb `feature.md`:
+  `ryostore catalog` (a store plugin may already do it), then
+  `ryoku-shell bar catalog` (a hidden built-in?), then `ryoku plugin new` and
+  the plugin contract in `plugins.md`. Never start at "write a widget".
 - "Open the bar settings" -> `ryoku-shell bar settings` (the launcher mark opens it too)
 - "Turn the dock off" -> QS Bar Settings > Dock, or `ryoku-shell dock hide`
 - "Pin Firefox to the dock" -> QS Bar Settings > Dock, or `ryoku-shell dock pin firefox`

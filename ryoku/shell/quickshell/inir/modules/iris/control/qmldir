@@ -1,0 +1,3 @@
+module inir.modules.iris.control
+IrisControlCenter 1.0 IrisControlCenter.qml
+IrisQuickPanel 1.0 IrisQuickPanel.qml

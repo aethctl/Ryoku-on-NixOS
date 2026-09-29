@@ -237,8 +237,8 @@ func (h *chatHub) handleTerm(w http.ResponseWriter, r *http.Request) {
 		h.mu.Unlock()
 	}()
 
-	// The terminal ask joins the shared transcript, so "continue in the
-	// dashboard" (and \resume in the launcher) already have it.
+	// The terminal ask joins the shared transcript, so the Super+S chat (and
+	// \resume in the launcher) already have it.
 	h.broadcast(wsOut{Type: "user_text", Text: req.Q})
 	h.broadcast(wsOut{Type: "state", State: "busy"})
 
@@ -476,7 +476,7 @@ func (h *chatHub) handleTermRan(w http.ResponseWriter, r *http.Request) {
 
 // handlePerm answers a pending session-lane permission request from any
 // surface (the terminal, primarily). The ACP conn guards double answers, so
-// racing the dashboard is safe.
+// racing the Super+S chat is safe.
 func (h *chatHub) handlePerm(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		RequestID string `json:"requestId"`

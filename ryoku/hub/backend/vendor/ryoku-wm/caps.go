@@ -34,7 +34,10 @@ const (
 	// colour. Named for what the user gets, not for a compositor: an overview
 	// that cannot place a surface in its backdrop leaves this off and the shell
 	// maps nothing there.
-	CapOverviewBackdrop     Capability = "overviewBackdrop"
+	CapOverviewBackdrop Capability = "overviewBackdrop"
+	// CapOverviewState is set when the provider reports the native overview
+	// opening and closing, so a wallpaper can play only while it is up.
+	CapOverviewState        Capability = "overviewState"
 	CapOutputPower          Capability = "outputPower"
 	CapKeyboardLayoutSwitch Capability = "keyboardLayoutSwitch"
 	CapMonitorConfig        Capability = "monitorConfig"
@@ -46,7 +49,10 @@ const (
 	CapOutputHdr    Capability = "outputHdr"
 	CapWindowFloat  Capability = "windowFloat"
 	CapTiledLayout  Capability = "tiledLayout"
-	CapSessionExit  Capability = "sessionExit"
+	// CapColumnFill is set when the provider can tell the active window spans
+	// its output's width, the full-width column a scrolling tiler makes.
+	CapColumnFill  Capability = "columnFill"
+	CapSessionExit Capability = "sessionExit"
 	// CapNightLight is set when the provider can warm the screen to a colour
 	// temperature and restore it, through the nightlight.on and nightlight.off
 	// actions. The warm gamma is held by a detached backend the provider owns
@@ -64,6 +70,17 @@ const (
 	// records them and regenerates the file it watches; the capability says the
 	// border can follow the wallpaper, never how.
 	CapPaletteBorder Capability = "paletteBorder"
+	// CapPersistentScreenCapture is set when the compositor tolerates a
+	// layer-shell surface that captures the whole screen and stays created for
+	// the session's life, re-armed per use instead of rebuilt. A compositor
+	// without it still answers one-shot captures (the overview, a window
+	// preview, grim); it is the long-lived capturing surface that races output
+	// enter and leave, and where the client is Qt the race takes the whole
+	// shell down while resolving a screen that no longer exists. Named for the
+	// surface shape the consumer wants, never for a compositor: a shell that
+	// wants a live blurred backdrop behind a transient panel asks for this and
+	// falls back to a solid panel when it is absent.
+	CapPersistentScreenCapture Capability = "persistentScreenCapture"
 )
 
 // All is every capability, so a caps payload can carry an explicit boolean for
@@ -76,11 +93,11 @@ func All() []Capability {
 		CapFocusGrab,
 		CapScreenShader, CapPlugins, CapLiveConfigEval, CapConfigReload,
 		CapAnimations, CapCursorSet, CapNativeOverview, CapOverviewBackdrop,
-		CapOutputPower,
+		CapOverviewState, CapOutputPower,
 		CapKeyboardLayoutSwitch, CapMonitorConfig, CapOutputMirror,
 		CapOutputHdr, CapWindowFloat,
-		CapTiledLayout, CapSessionExit, CapNightLight, CapTouchpadToggle,
-		CapPaletteBorder,
+		CapTiledLayout, CapColumnFill, CapSessionExit, CapNightLight, CapTouchpadToggle,
+		CapPaletteBorder, CapPersistentScreenCapture,
 	}
 }
 

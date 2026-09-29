@@ -1,23 +1,23 @@
 #!/bin/bash
-# Ryoku Motion studio capture. Records the screen with gpu-screen-recorder (the
-# same path the shell's Quick capture uses) AND samples the cursor, then writes
-# OpenScreen's <video>.cursor.json sidecar and opens the clip in the ryomotion
-# editor -- so the editor's automatic cursor-follow zoom still works even though
-# gsr itself carries no cursor track.
+# Ryoku Motion studio capture. Records the screen with ryoku-cmd-record (the same
+# wf-recorder + strongest-GPU encode path the shell's Quick capture uses) AND
+# samples the cursor, then writes OpenScreen's <video>.cursor.json sidecar and
+# opens the clip in the ryomotion editor -- so the editor's automatic cursor-follow
+# zoom works even though the recorder itself carries no cursor track.
 #
-#   ryoku-cmd-studiorecord [--with-desktop-audio] [--with-microphone-audio]
+#   ryoku-cmd-studiorecord [--region --geometry WxH+X+Y] [--with-desktop-audio] [--with-microphone-audio]
 #
-# The shell island starts this and stops it with SIGTERM (which finalises the
-# clip, writes the cursor sidecar, and opens the editor).
+# The shell island / capture card starts this and stops it with SIGTERM (which
+# finalises the clip, writes the cursor sidecar, and opens the editor).
 set -uo pipefail
 
 state_dir="${RYOKU_STATE_PATH:-$HOME/.local/state/ryoku}"
 last_rec="$state_dir/last-recording"
 here="$(dirname "$(readlink -f "$0")")"
-# ryoku-cmd-screenrecord is a sibling in the install bin dir; fall back to PATH
-# when this runs from a source tree where the two no longer sit together.
-screenrec="$here/ryoku-cmd-screenrecord"
-[[ -x $screenrec ]] || screenrec="ryoku-cmd-screenrecord"
+# ryoku-cmd-record is a sibling in the install bin dir; fall back to PATH when
+# this runs from a source tree where the two no longer sit together.
+screenrec="$here/ryoku-cmd-record"
+[[ -x $screenrec ]] || screenrec="ryoku-cmd-record"
 raw="$(mktemp "${TMPDIR:-/tmp}/ryoku-cursor.XXXXXX")"
 sampler_pid=""
 done=0
@@ -38,16 +38,16 @@ wm_can() {  # capability -> 0 when the live compositor honours it
 # only where it honours live config eval. The read itself is a compositor payload
 # (ryoku-cursor-track ships with the Hyprland session), so ask by capability and
 # by whether the tracker is on PATH. Where it is not, the clip still records
-# through the plain focused-output path (what ryoku-cmd-screenrecord does), just
-# without the cursor sidecar the editor auto-zoom uses; say so once so the missing
-# zoom is not a mystery.
+# through the plain focused-output path (what ryoku-cmd-record does), just without
+# the cursor sidecar the editor auto-zoom uses; say so once so the missing zoom is
+# not a mystery.
 #
 # The tracker is one long-lived process: it prints the focused monitor geometry
 # (logical pixels, to normalise the global cursor position to 0..1 within the
 # recorded screen) on its first stdout line, then samples the pointer into $raw
-# until finish() kills it. It starts once the recorder is capturing, so the
-# sidecar clock lines up with the video. have_cursor stays 0 unless it started
-# and printed a usable geometry line.
+# until finish() kills it. It starts once the recorder is capturing, so the sidecar
+# clock lines up with the video. have_cursor stays 0 unless it started and printed
+# a usable geometry line.
 have_cursor=0
 MX=0; MY=0; MW=1920; MH=1080
 cursor_feed=0
@@ -66,8 +66,8 @@ start_tracker() {
   exec {tfd}<&-
   if [[ ${tw:-} =~ ^[0-9.]+$ ]] && [[ $(awk -v w="${tw:-0}" 'BEGIN{print (w>0)}') == 1 ]]; then
     have_cursor=1
-    # A region capture already re-based the sidecar to its box; only a
-    # full-screen recording takes the monitor geometry the tracker printed.
+    # A region capture already re-based the sidecar to its box; only a full-screen
+    # recording takes the monitor geometry the tracker printed.
     if [[ -z $region_geom ]]; then
       MX="$tx"; MY="$ty"; MW="$tw"; MH="$th"
     fi
@@ -102,9 +102,9 @@ fi
 finish() {
   [[ $done -eq 1 ]] && return 0
   done=1
-  "$screenrec" --stop >/dev/null 2>&1 || true
+  "$screenrec" stop >/dev/null 2>&1 || true
   [[ -n $sampler_pid ]] && kill "$sampler_pid" 2>/dev/null || true
-  sleep 1.2 # let gpu-screen-recorder finalise the mp4 container
+  sleep 1.2 # let wf-recorder finalise the mp4 container
 
   local video
   video="$(cat "$last_rec" 2>/dev/null || true)"
@@ -137,7 +137,6 @@ rec_pid=$!
 # sidecar timestamps line up with the video.
 if (( cursor_feed )); then
   for _ in $(seq 1 50); do
-    pgrep -f '(^|/)gpu-screen-recorder( |$)' >/dev/null 2>&1 && break
     pgrep -f '(^|/)wf-recorder( |$)' >/dev/null 2>&1 && break
     sleep 0.1
   done

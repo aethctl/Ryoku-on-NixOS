@@ -65,7 +65,9 @@ Item {
         function onUpdateRefreshTickChanged() { Updates.check() }
     }
 
-    Process { id: runProc; command: ["bash", "-c", "kitty ryoku update"] }
+    // The same class as the Settings page's launch, so the log floats above
+    // Ryoku Settings however the run was started (#288).
+    Process { id: runProc; command: ["bash", "-c", "kitty --class=dev.ryoku.update ryoku update"] }
 
     IconText {
         anchors.centerIn: parent

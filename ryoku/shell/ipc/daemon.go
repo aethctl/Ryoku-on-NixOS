@@ -156,6 +156,7 @@ type daemon struct {
 	settings     *settingsStore           // shell.json store (nil until startSettings)
 	pp           *powerProfilesState      // power-profiles-daemon bus state
 	keypress     *keypressManager         // evdev key stream while the overlay is enabled
+	mousemap     *mouseMapManager         // per-mouse evdev grab + uinput clone remapper
 	sun          *sunState                // latest weather sunrise/sunset window
 	sleepMu      sync.RWMutex
 	sleep        *sleepCycle // coordinated login1 suspend transaction; guarded by sleepMu
@@ -429,6 +430,7 @@ func setupQmlImportPath() {
 func (d *daemon) bootstrap() {
 	d.startSettings()
 	d.startKeypress()
+	d.startMouseMap()
 	d.startClipboard()
 	d.startTray()
 	d.startWeather()
@@ -917,6 +919,9 @@ func (d *daemon) shutdown() {
 	if d.keypress != nil {
 		d.keypress.configure(false, "all")
 	}
+	if d.mousemap != nil {
+		d.mousemap.stop()
+	}
 	d.mu.Lock()
 	pids := make([]int, 0, len(d.proc))
 	for _, c := range d.proc {
@@ -1384,6 +1389,8 @@ func (d *daemon) dispatch(line string) string {
 		}
 		playSound(args[0])
 		return "ok"
+	case "record":
+		return d.record(args)
 
 	default:
 		return "err unknown command: " + cmd

@@ -3,6 +3,7 @@ package main
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -104,6 +105,43 @@ func TestPveValidNode(t *testing.T) {
 	for _, bad := range []string{"", "pve/..", "a b", "n;rm", "../x"} {
 		if pveValidNode(bad) {
 			t.Fatalf("%q should be rejected", bad)
+		}
+	}
+}
+
+// Ghostty rejects `--class NAME` (its CLI wants `--class=NAME`) and validates the
+// value as a GTK application id, which needs a dot: a bare "ryoport-ssh" was
+// dropped on the floor, the window kept com.mitchellh.ghostty, and the float
+// window rule never matched (issue #280). Every terminal on the switch now gets
+// the equals form and the same GTK-valid id.
+func TestTerminalArgvClassForm(t *testing.T) {
+	if !strings.Contains(ryoportAppID, ".") || strings.Contains(ryoportAppID, "-") {
+		t.Fatalf("%q is not a GTK application id (needs a dot, hyphens are rejected)", ryoportAppID)
+	}
+	for _, term := range []string{"kitty", "ghostty", "foot", "alacritty"} {
+		t.Setenv("TERMINAL", term)
+		argv := terminalArgv("myhost")
+		var hasID, hasBare bool
+		for _, a := range argv {
+			if strings.HasSuffix(a, "="+ryoportAppID) {
+				hasID = true // --class=<id>, or --app-id=<id> on foot
+			}
+			if a == "--class" || a == "--app-id" {
+				hasBare = true
+			}
+		}
+		if !hasID {
+			t.Errorf("%s argv = %v, want the GTK id %q passed with =", term, argv, ryoportAppID)
+		}
+		if hasBare {
+			t.Errorf("%s argv = %v, must not pass a valueless class flag", term, argv)
+		}
+	}
+	// wezterm and xterm take no class at all: they must not gain one either way.
+	t.Setenv("TERMINAL", "wezterm")
+	for _, a := range terminalArgv("myhost") {
+		if strings.HasPrefix(a, "--class") {
+			t.Fatalf("wezterm argv carries a class flag: %v", a)
 		}
 	}
 }

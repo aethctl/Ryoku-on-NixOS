@@ -141,28 +141,6 @@ func (c config) videoFrame() float64 {
 	return c.Matugen.VideoFrame
 }
 
-// persistVideoFrame patches only matugen.videoFrame so hand-edited keys survive.
-func persistVideoFrame(sec float64) {
-	raw := map[string]json.RawMessage{}
-	loadJSON(configPath(), &raw)
-	mat := map[string]interface{}{}
-	if m, ok := raw["matugen"]; ok {
-		_ = json.Unmarshal(m, &mat)
-	}
-	mat["videoFrame"] = sec
-	b, err := json.Marshal(mat)
-	if err != nil {
-		return
-	}
-	raw["matugen"] = b
-	_ = os.MkdirAll(ryokuConfigDir(), 0o755)
-	out, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return
-	}
-	saveRaw(configPath(), out)
-}
-
 // persistResourceTier patches only the resource_tier key so hand-edited keys in
 // ryogami.json survive (the file is user-facing config, not daemon state).
 func persistResourceTier(tier string) {
@@ -250,7 +228,7 @@ func wallPrefs() wallTune {
 	return p
 }
 
-// wallAudio is the wall-ui's global video-audio default for a clip: whether it
+// wallAudio is the global video-audio default for a clip: whether it
 // plays muted and at what volume (0-100). It is the fallback for any output a
 // wall.apply audio map does not name.
 type wallAudio struct {
@@ -258,8 +236,8 @@ type wallAudio struct {
 	volume int
 }
 
-// ryogamiWallConfigDir resolves the wall-ui config directory the way its
-// Config.qml does: RYOGAMI_WALL_CONFIG when set, else $XDG_CONFIG_HOME (or
+// ryogamiWallConfigDir is where the old picker kept its config, read once by
+// the migration: RYOGAMI_WALL_CONFIG when set, else $XDG_CONFIG_HOME (or
 // ~/.config) + /ryogami-wall.
 func ryogamiWallConfigDir() string {
 	if d := os.Getenv("RYOGAMI_WALL_CONFIG"); d != "" {
@@ -271,22 +249,13 @@ func ryogamiWallConfigDir() string {
 	return filepath.Join(home(), ".config", "ryogami-wall")
 }
 
-// wallAudioDefaults reads ~/.config/ryogami-wall/config.json for the picker's
-// global audio knobs, mirroring wall-ui's Config.qml: wallpaperMute is true
-// unless the key is exactly false, and wallpaperVolume defaults to 100, rounded
-// and clamped to 0-100. An absent file yields muted at full volume.
 func wallAudioDefaults() wallAudio {
 	a := wallAudio{mute: true, volume: 100}
-	var data struct {
-		Mute   *bool    `json:"wallpaperMute"`
-		Volume *float64 `json:"wallpaperVolume"`
+	if v, ok := settingValue("wallpaperMute").(bool); ok {
+		a.mute = v
 	}
-	loadJSON(filepath.Join(ryogamiWallConfigDir(), "config.json"), &data)
-	if data.Mute != nil {
-		a.mute = *data.Mute
-	}
-	if data.Volume != nil {
-		a.volume = clampVolume(int(math.Round(*data.Volume)))
+	if n, ok := toNumber(settingValue("wallpaperVolume")); ok {
+		a.volume = clampVolume(int(math.Round(n)))
 	}
 	return a
 }

@@ -9,9 +9,10 @@ import Quickshell.Io
 // (amount, idle, music) live here; anything per-wallpaper (effect, per-layer
 // front/depth, cut artifacts) is daemon-owned in the registry and reaches the
 // shell through StageBackend's `stage` topic. `front` is the widget ids the user
-// lifted above the in-front layers from the desktop editor. Watched and
-// self-seeded; drag-y setters coalesce writes through one settle timer, while
-// deliberate segmented picks write eagerly.
+// lifted above the in-front cut-outs -- from the Depth row in a widget's
+// right-click menu, a plugin tile's menu, or the visualiser's edit bar. Watched
+// and self-seeded; drag-y setters coalesce writes through one settle timer,
+// while deliberate segmented picks write eagerly.
 Singleton {
     id: root
 
@@ -21,6 +22,13 @@ Singleton {
     property alias shadowAngle: adapter.shadowAngle
     property alias motion: adapter.motion
     property alias front: adapter.front
+    // Edit-widgets grid: the snap step and whether dragging snaps to it. These
+    // are editor preferences (not a per-widget placement), so they live on
+    // stage.json rather than widgets.json, where the Hub would drop an unknown
+    // key on Save. The desktop editor bar drives them; slots and the drag guides
+    // read them while composing.
+    property alias editGridSize: adapter.editGridSize
+    property alias editGridSnap: adapter.editGridSnap
 
     // Motion sub-fields, read directly by the renderer (defaults guard a
     // half-written file). Amount is a word the UI shows; the renderer needs the
@@ -44,12 +52,23 @@ Singleton {
     readonly property real range: (root.motion && typeof root.motion.range === "number") ? root.motion.range : 1.0
     readonly property real backdrop: (root.motion && typeof root.motion.backdrop === "number") ? root.motion.backdrop : 0.0
 
-    // `front` is read-only now: the layer owns whether it sits behind or in
-    // front of the widgets, so the desktop editor never writes a per-widget
-    // lift. Kept only so an existing stage.json that pinned widgets still
-    // renders them above the in-front layers (docs/stage.md).
+    // Lift list: the widget ids (built-in, plugin tile or "visualizer") the
+    // user pulled above every in-front cut-out from their Depth row in the
+    // widget's right-click menu or the visualiser's edit bar (docs/stage.md).
     function isFront(id) {
         return (adapter.front || []).indexOf(id) >= 0;
+    }
+    function setFront(id, on) {
+        const cur = (adapter.front || []).slice();
+        const i = cur.indexOf(id);
+        if (on === true && i < 0)
+            cur.push(id);
+        else if (on !== true && i >= 0)
+            cur.splice(i, 1);
+        else
+            return;
+        adapter.front = cur;
+        settle.restart();
     }
 
     // Quality is a plain tier the daemon maps to model + matting when it cuts;
@@ -65,6 +84,19 @@ Singleton {
     function setEdge(v) { adapter.edge = Math.max(0, Math.min(1, v)); settle.restart(); }
     function setShadow(v) { adapter.shadow = Math.max(0, Math.min(1, v)); settle.restart(); }
     function setShadowAngle(v) { adapter.shadowAngle = Math.round(v); settle.restart(); }
+
+    // Grid step cycles through a small ladder; snap is a plain toggle. Written
+    // eagerly (a deliberate editor pick, not a drag).
+    function setEditGridSize(v) {
+        const sizes = [16, 32, 48, 64];
+        adapter.editGridSize = sizes.indexOf(v) >= 0 ? v : 32;
+        file.writeAdapter();
+    }
+    function cycleEditGridSize() {
+        const sizes = [16, 32, 48, 64];
+        root.setEditGridSize(sizes[(sizes.indexOf(adapter.editGridSize) + 1) % sizes.length]);
+    }
+    function toggleEditGridSnap() { adapter.editGridSnap = !adapter.editGridSnap; file.writeAdapter(); }
 
     function _setMotion(key, v) {
         var m = {};
@@ -120,6 +152,8 @@ Singleton {
             property int shadowAngle: 90
             property var motion: ({ amount: "normal", idle: "none", music: false, musicLevel: 0.6, speed: 1.0, mouse: true, sensitivity: 1.0, range: 1.0, backdrop: 0.0 })
             property var front: []
+            property int editGridSize: 32
+            property bool editGridSnap: true
         }
     }
 

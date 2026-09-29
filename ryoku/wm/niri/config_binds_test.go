@@ -126,8 +126,8 @@ func TestNumpadTwinForCustomAndRebind(t *testing.T) {
 	// Both faces carry the rebound action, so the rebind owns the physical key
 	// whichever way NumLock sits, not a leftover workspace bind.
 	for _, o := range out {
-		if (o.chord == "Super+KP_1" || o.chord == "Super+KP_End") && o.action != "close-window" {
-			t.Errorf("chord %q action = %q, want close-window", o.chord, o.action)
+		if (o.chord == "Super+KP_1" || o.chord == "Super+KP_End") && o.action != defaultBinds()["window.close"].action {
+			t.Errorf("chord %q action = %q, want the window.close action", o.chord, o.action)
 		}
 	}
 
@@ -315,7 +315,7 @@ func TestRebindMovesChordNotDefault(t *testing.T) {
 	out, _ := resolveBinds(s)
 	got := ""
 	for _, o := range out {
-		if o.action == "close-window" {
+		if o.action == defaultBinds()["window.close"].action {
 			got = o.chord
 		}
 	}

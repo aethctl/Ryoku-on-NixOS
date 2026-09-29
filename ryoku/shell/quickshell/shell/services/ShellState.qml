@@ -78,6 +78,18 @@ Singleton {
     function requestSurface(id, mon, context) { root.surfaceRequested(id, mon, context); }
     function closeSurface(id, mon) { root.surfaceClosed(id, mon); }
 
+    // Open a desktop widget's right-click menu from off-surface (a keybind, the
+    // daemon, or a verification harness). niri routes context menus differently
+    // from Hyprland, so the shell exposes the menu as an addressable surface
+    // rather than relying on a pointer event landing on the tile.
+    signal widgetMenuRequested(string mon, string widget)
+    function requestWidgetMenu(mon, widget) { root.widgetMenuRequested(mon, widget); }
+
+    // Open a desktop widget's inspector (the Customize sheet) from off-surface,
+    // the same addressable routing as the right-click menu above.
+    signal widgetCustomizeRequested(string mon, string widget)
+    function requestWidgetCustomize(mon, widget) { root.widgetCustomizeRequested(mon, widget); }
+
     // Open a surface on the focused monitor: the menu global-shortcut handlers
     // call this so a keybind lands on the active screen, matching the old
     // `ryoku-shell menu <id>` which routed to the daemon's activeMonitor.

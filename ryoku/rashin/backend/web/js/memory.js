@@ -5,8 +5,9 @@
 // when the panel is hidden.
 
 import { escapeHtml } from "./markdown.js";
+import { humanBytes } from "./format.js";
 
-const MONO = "'JetBrains Mono', monospace";
+const MONO = "'Space Mono', monospace";
 const MONTHS = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 
 // ---- pure helpers (node-testable) ------------------------------------------
@@ -184,18 +185,7 @@ function heatLevel(c) {
   return "3";
 }
 
-function humanBytes(n) {
-  if (!Number.isFinite(n) || n < 0) return "--";
-  if (n < 1024) return n + " B";
-  const u = ["KB", "MB", "GB", "TB"];
-  let v = n / 1024;
-  let i = 0;
-  while (v >= 1024 && i < u.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return (v < 10 ? v.toFixed(1) : String(Math.round(v))) + " " + u[i];
-}
+
 
 function shortDate(iso) {
   if (!iso) return "";
@@ -222,12 +212,13 @@ export function initMemory(root) {
   const canvas = root.querySelector("[data-mem-graph]");
   const heatEl = root.querySelector("[data-mem-heatmap]");
   const sessEl = root.querySelector("[data-mem-sessions]");
+  const legendEl = root.querySelector("[data-mem-legend]");
+  const graphMeta = root.querySelector("[data-mem-graph-meta]");
   const ctx = canvas ? canvas.getContext("2d") : null;
   const reduce =
     typeof matchMedia !== "undefined" &&
     matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  const C = readColors();
   const size = { w: 600, h: 420 };
   const center = { x: 300, y: 210 };
   let model = null;
@@ -244,70 +235,68 @@ export function initMemory(root) {
   const SETTLE = 0.6;
   const SETTLE_FRAMES = 20;
 
-  function readColors() {
+  // The graph wears the page's palette: groups differ by tone and by ring,
+  // not by a rainbow, and the accent marks only the hub and what was learned.
+  let C = null;
+  function palette() {
     const cs = getComputedStyle(document.documentElement);
-    const g = (name, fb) => (cs.getPropertyValue(name) || "").trim() || fb;
-    return {
-      ink: g("--ink", "#e8d8c9"),
-      red: g("--red", "#C94E44"),
-      tan: g("--tan", "#CDA47B"),
-      teal: g("--teal", "#3E6868"),
-      slate: g("--slate", "#4b607f"),
-      orange: g("--orange", "#f3701e"),
-      dim: g("--ink-dim", "#8f8378"),
-      line: g("--line", "rgba(232,216,201,.18)"),
-      paper: g("--paper", "#0e0d0b"),
-    };
+    const v = (k) => cs.getPropertyValue(k).trim();
+    C = { ink: v("--ink"), dim: v("--ink-dim"), paper: v("--paper-lift"), sun: v("--sun"), line: v("--line") };
+    return C;
   }
+  const GROUPS = {
+    hub: { label: "hub", style: (p) => ({ fill: p.sun }) },
+    generated: { label: "generated map", style: (p) => ({ fill: p.ink }) },
+    memory: { label: "memory", style: (p) => ({ fill: p.dim }) },
+    journal: { label: "journal", style: (p) => ({ fill: p.paper, ring: p.dim }) },
+    learned: { label: "learned", style: (p) => ({ fill: p.paper, ring: p.sun }) },
+    hermes: { label: "hermes", style: (p) => ({ fill: p.dim, ring: p.sun }) },
+    skill: { label: "skill", style: (p) => ({ fill: p.ink, ring: p.sun }) },
+  };
 
   function nodeStyle(n) {
-    switch (n.group) {
-      case "hub":
-        return { fill: C.red, ring: null };
-      case "generated":
-        return { fill: C.tan, ring: null };
-      case "memory":
-        return { fill: C.teal, ring: null };
-      case "journal":
-        return { fill: C.slate, ring: null };
-      case "hermes":
-        return { fill: C.ink, ring: C.orange };
-      case "learned":
-        return { fill: C.orange, ring: null };
-      case "skill":
-        return { fill: C.ink, ring: C.red };
-      default:
-        return { fill: C.ink, ring: null };
+    const g = GROUPS[n.group];
+    return g ? g.style(C) : { fill: C.ink };
+  }
+
+  function renderLegend() {
+    if (!legendEl) return;
+    const present = [];
+    for (const key of Object.keys(GROUPS)) {
+      if ((model ? model.nodes : []).some((n) => n.group === key)) present.push(key);
     }
+    const p = C || palette();
+    legendEl.innerHTML = present
+      .map((k) => {
+        const st = GROUPS[k].style(p);
+        return (
+          '<span><i style="background:' + st.fill + ";border-color:" + (st.ring || st.fill) + '"></i>' +
+          GROUPS[k].label + "</span>"
+        );
+      })
+      .join("");
   }
 
   function radius(n) {
-    const base = 5 + Math.log((n.size || 1) + 1) * 2;
-    const r = Math.max(5, Math.min(22, base));
-    return n.group === "hub" ? r * 1.5 : r;
+    const r = Math.max(3.5, Math.min(10, 3 + Math.log((n.size || 1) + 1)));
+    return n.group === "hub" ? r * 1.4 : r;
   }
 
   // ---- tiles / heatmap / sessions ----
 
-  function tile(accent, label, main, sub, isStamp) {
-    const body = isStamp
-      ? '<div class="mem-tile-stamp">' + main + "</div>"
-      : '<b class="stat-num mem-tile-num">' + escapeHtml(main) + "</b>";
-    const subEl = isStamp
-      ? sub
-      : '<span class="stat-sub">' + escapeHtml(sub) + "</span>";
+  function tileShell(label, main, sub) {
     return (
-      '<div class="stat mem-tile" data-accent="' +
-      accent +
-      '"><span class="stat-corner" aria-hidden="true"></span>' +
-      '<em class="eyebrow">' +
-      label +
-      "</em>" +
-      body +
-      subEl +
-      "</div>"
+      '<div class="mem-tile"><span class="mem-tile-label">' +
+      escapeHtml(label) +
+      '</span><span class="mem-tile-num">' +
+      main +
+      '</span><span class="mem-tile-sub">' +
+      escapeHtml(sub) +
+      "</span></div>"
     );
   }
+  const tile = (label, html, sub) => tileShell(label, html, sub);
+  const tileRaw = (label, val, sub) => tileShell(label, escapeHtml(val), sub);
 
   function renderTiles(data) {
     const p = data.provider || {};
@@ -315,34 +304,27 @@ export function initMemory(root) {
     const learned = data.learned || {};
     const external = p.kind && p.kind !== "builtin";
     const provStamp =
-      '<span class="stamp ' +
-      (external ? "stamp-vermillion" : "stamp-ok") +
-      '">' +
-      escapeHtml((p.kind || "none").toUpperCase()) +
-      "</span>";
-    const vault = p.obsidianVault
-      ? '<span class="stat-sub dim">' + escapeHtml(p.obsidianVault) + "</span>"
-      : '<span class="stat-sub dim">no obsidian vault</span>';
+      '<span class="chip ' + (external ? "info" : "ok") + '">' + escapeHtml(p.kind || "none") + "</span>";
     const sessions = (data.sessions || []).length;
     const memBytes = files.memoryMd ? humanBytes(files.memoryBytes || 0) : "--";
-    // The growth ledger: everything the agent accumulated on its own. Starts
-    // near zero on a fresh install and fills as hermes runs.
+    // The growth ledger: everything the agent accumulated on its own, beyond
+    // the maps Ryoku generates. It fills as hermes runs.
     const grown =
       (learned.memoryEntries || 0) +
       (learned.userFacts || 0) +
       (learned.agentSkills || 0) +
       (learned.vaultNotes || 0);
     const grownSub =
-      (learned.memoryEntries || 0) + " memories / " +
-      (learned.userFacts || 0) + " user facts / " +
-      (learned.agentSkills || 0) + " skills / " +
+      (learned.memoryEntries || 0) + " memories · " +
+      (learned.userFacts || 0) + " user facts · " +
+      (learned.agentSkills || 0) + " skills · " +
       (learned.vaultNotes || 0) + " notes";
     tilesEl.innerHTML =
-      tile("teal", "PROVIDER", provStamp, vault, true) +
-      tile("vermillion", "LEARNED", String(grown), grownSub) +
-      tile("orange", "MEMORY.MD", memBytes, files.memoryMd ? "on disk" : "absent") +
-      tile("slate", "SESSIONS", String(sessions), "recorded") +
-      tile("tan", "JOURNAL DAYS", String((data.learned || {}).journalDays || 0), "active");
+      tile("Provider", provStamp, p.obsidianVault || "no obsidian vault") +
+      tileRaw("Learned", String(grown), grownSub) +
+      tileRaw("memory.md", memBytes, files.memoryMd ? "on disk" : "absent") +
+      tileRaw("Sessions", String(sessions), "recorded") +
+      tileRaw("Journal days", String(learned.journalDays || 0), "active");
   }
 
   function renderHeatmap(entries) {
@@ -384,7 +366,7 @@ export function initMemory(root) {
 
   function renderSessions(sessions) {
     if (!sessions || !sessions.length) {
-      sessEl.innerHTML = '<p class="dim">no sessions yet</p>';
+      sessEl.innerHTML = '<p class="dim">No sessions yet.</p>';
       return;
     }
     sessEl.innerHTML = sessions
@@ -467,7 +449,7 @@ export function initMemory(root) {
   function drawEmpty(msg) {
     if (!ctx) return;
     ctx.clearRect(0, 0, size.w, size.h);
-    ctx.fillStyle = C.dim;
+    ctx.fillStyle = (C || palette()).dim;
     ctx.font = "11px " + MONO;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -476,6 +458,7 @@ export function initMemory(root) {
 
   function draw() {
     if (!ctx) return;
+    palette();
     ctx.clearRect(0, 0, size.w, size.h);
     const nodes = model ? model.nodes : [];
     if (!nodes.length) {
@@ -501,7 +484,7 @@ export function initMemory(root) {
     }
     ctx.restore();
 
-    const showAll = nodes.length <= 80;
+    const showAll = nodes.length <= 160;
     for (const n of nodes) {
       const st = nodeStyle(n);
       const r = radius(n);
@@ -575,6 +558,12 @@ export function initMemory(root) {
   function isVisible() {
     return !root.hidden && document.visibilityState !== "hidden";
   }
+
+  document.addEventListener("rashin:theme", () => {
+    palette();
+    renderLegend();
+    if (model) draw();
+  });
 
   // ---- pointer interactions ----
 
@@ -664,6 +653,9 @@ export function initMemory(root) {
     renderSessions(data.sessions || []);
     model = buildGraphModel(data);
     buildIndex();
+    renderLegend();
+    if (graphMeta)
+      graphMeta.textContent = model.nodes.length + " nodes · " + model.links.length + " links";
     resize();
     seedPositions();
     if (!model.nodes.length) {
@@ -676,12 +668,12 @@ export function initMemory(root) {
       }
       settled = true;
       draw();
-      return;
+    } else {
+      warmup = 60;
+      settled = false;
+      settleFrames = 0;
+      wake();
     }
-    warmup = 60;
-    settled = false;
-    settleFrames = 0;
-    wake();
   }
 
   async function fetchMemory(force) {
@@ -695,9 +687,9 @@ export function initMemory(root) {
       applyData(data);
     } catch (err) {
       if (!model) {
-        tilesEl.innerHTML = '<p class="dim">memory unavailable, start the daemon</p>';
-        heatEl.innerHTML = '<p class="dim">no activity yet</p>';
-        sessEl.innerHTML = '<p class="dim">no sessions yet</p>';
+        tilesEl.innerHTML = '<p class="dim">The daemon is not running, so memory is out of reach.</p>';
+        heatEl.innerHTML = '<p class="dim">No activity yet.</p>';
+        sessEl.innerHTML = '<p class="dim">No sessions yet.</p>';
         drawEmpty("the daemon is offline");
       }
     } finally {

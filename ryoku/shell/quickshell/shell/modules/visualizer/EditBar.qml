@@ -3,6 +3,7 @@ import QtQuick
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "Singletons"
+import "../stage/Singletons" as StageCfg
 
 // The spectrum's editing bar, shown while a look is being placed, so a look is tuned
 // where you can see it rather than in the Hub with the desktop behind a window.
@@ -10,7 +11,7 @@ import "Singletons"
 // Fixed to an edge of the screen, never to the box: a readout of the thing being
 // moved must not move with it. Controls come from Ryoku.Ui and metrics from Tokens;
 // the tray is the Hub's gallery with the Hub's painter, so one catalogue draws what
-// the eleven looks look like.
+// the twelve looks look like.
 Item {
     id: bar
 
@@ -27,7 +28,11 @@ Item {
     // wallpaper/theme accent the rest of the shell follows.
     readonly property color wallpaperColor: Scheme.accent
     readonly property color effectiveColor: Config.hasCustomColor ? Config.customColor : bar.wallpaperColor
-
+    // The stage lift (docs/stage.md): only while the wall cuts a subject does
+    // the scene have a front for the spectrum to join, so the group dims the
+    // rest of the time rather than dead-clicking.
+    readonly property bool stageActive: StageCfg.StageBackend.isActiveFor(StageCfg.StageBackend.current)
+    readonly property bool lifted: StageCfg.Config.isFront("visualizer")
     function closeTray() { tray.open = false; }
     function toggleTray() { tray.open = !tray.open; if (tray.open) colorPop.open = false; }
     function closeColor() { colorPop.open = false; }
@@ -93,7 +98,7 @@ Item {
         Gallery {
             id: gal
             anchors.centerIn: parent
-            width: 11 * 132 + 10 * 7
+            width: VizStyles.styles.length * 132 + (VizStyles.styles.length - 1) * 7
             painter: VizStyles
             options: VizStyles.styles.map(function (s) { return { key: s.key, origin: s.kind, draw: s.key }; })
             current: Config.styleId
@@ -320,6 +325,59 @@ Item {
                     }
                 }
 
+                Group {
+                    // The edge field's own controls, dimmed (never hidden: the
+                    // bar must not reflow as the catalogue is walked) while a
+                    // boxed look is in hand. The deep knobs live in the Hub;
+                    // these three are the ones you aim by eye.
+                    label: I18n.tr("EDGES")
+                    dim: !Config.isAura
+                    Row {
+                        spacing: Tokens.s1
+                        Repeater {
+                            model: ["top", "right", "bottom", "left"]
+                            Btn {
+                                id: edgeBtn
+                                required property string modelData
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: edgeBtn.modelData.charAt(0).toUpperCase()
+                                compact: true
+                                // Lit edges wear the filled plate; every chip stays
+                                // clickable, since `armed` is Btn's enabled state.
+                                primary: Config.instance.auraEdges.indexOf(edgeBtn.modelData) >= 0
+                                onAct: Config.toggleAuraEdge(edgeBtn.modelData)
+                            }
+                        }
+                    }
+                }
+                Group {
+                    label: I18n.tr("MATERIAL")
+                    dim: !Config.isAura
+                    Btn {
+                        text: Config.instance.auraMaterial
+                        compact: true
+                        armed: true
+                        onAct: Config.cycleAuraMaterial()
+                    }
+                }
+                Group {
+                    label: I18n.tr("REACH")
+                    dim: !Config.isAura
+                    Row {
+                        spacing: Tokens.s2
+                        Step {
+                            anchors.verticalCenter: parent.verticalCenter
+                            value: Config.instance.auraDepth
+                            from: 24
+                            to: 600
+                            onModified: (v) => Config.setAuraDepth(v)
+                        }
+                        Value {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Config.instance.auraDepth + "px"
+                        }
+                    }
+                }
                 Rule {}
 
                 Group {
@@ -382,6 +440,7 @@ Item {
 
                 Group {
                     label: I18n.tr("ANGLE")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Value {
@@ -401,6 +460,7 @@ Item {
                 Group {
                     // One group, two axes: a lean is one idea.
                     label: I18n.tr("LEAN")
+                    dim: Config.isAura
                     Row {
                         spacing: Tokens.s2
                         Slid {
@@ -434,12 +494,27 @@ Item {
                 }
                 Group {
                     label: I18n.tr("SIZE")
+                    dim: Config.isAura
                     Value {
                         text: Math.round(Config.w * 100) + "\u00d7" + Math.round(Config.h * 100) + "%"
                     }
                 }
 
                 Rule {}
+
+                // Depth: behind every cut-out, or lifted above the in-front
+                // ones. Only meaningful while the scene has cut-outs, so the
+                // group dims rather than dead-clicks on a plain wallpaper.
+                Group {
+                    label: I18n.tr("DEPTH")
+                    dim: !bar.stageActive
+                    Seg {
+                        options: ["Behind", "In front"]
+                        current: bar.lifted ? "In front" : "Behind"
+                        onChose: key => StageCfg.Config.setFront("visualizer",
+                            key === "In front")
+                    }
+                }
 
                 Group {
                     label: ""
@@ -466,11 +541,17 @@ Item {
                 color: Tokens.lineSoft
             }
             Text {
-                // Phrase by phrase, so each is a translatable unit.
-                text: [I18n.tr("drag to move"), I18n.tr("corner to size"),
-                       I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
-                       "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
-                       "r " + I18n.tr("square")].join("     ")
+                // Phrase by phrase, so each is a translatable unit. The edge
+                // field owns the whole screen and has no box to aim, so its
+                // hint names only the gestures that actually edit it.
+                text: (Config.isAura
+                       ? [I18n.tr("the field fills the screen: tune it here"),
+                          "f " + I18n.tr("flow"),
+                          "[ ] " + I18n.tr("walk the looks")]
+                       : [I18n.tr("drag to move"), I18n.tr("corner to size"),
+                          I18n.tr("dot to turn"), I18n.tr("scroll to resize"),
+                          "f " + I18n.tr("flip"), "m " + I18n.tr("mirror"),
+                          "r " + I18n.tr("square")]).join("     ")
                 color: Tokens.inkFaint
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fMicro

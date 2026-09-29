@@ -57,7 +57,8 @@ func main() {
 	}
 }
 
-func sendLine(line string) (string, error) {	conn, err := net.DialTimeout("unix", socketPath(), 2*time.Second)
+func sendLine(line string) (string, error) {
+	conn, err := net.DialTimeout("unix", socketPath(), 2*time.Second)
 	if err != nil {
 		return "", fmt.Errorf("daemon not reachable at %s (is `ryogami` running?)", socketPath())
 	}

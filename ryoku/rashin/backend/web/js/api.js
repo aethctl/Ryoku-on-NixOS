@@ -32,6 +32,28 @@ export const api = {
     if (!r.ok) throw new Error("chat agent " + r.status);
     return r.json();
   },
+  system: () => getJSON("/api/system"),
+  theme: () => getJSON("/api/theme"),
+  doctor: (refresh) => getJSON("/api/doctor" + (refresh ? "?refresh=1" : "")),
+  fix: async (req) => {
+    const r = await fetch("/api/fix", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(req),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.error || "the daemon said " + r.status);
+    return body;
+  },
+  harnesses: () => getJSON("/api/harnesses"),
+  providers: () => getJSON("/api/providers"),
+  hermesSkills: () => getJSON("/api/hermes/skills"),
+  hermesMemory: () => getJSON("/api/hermes/memory"),
+  codeStatus: () => getJSON("/api/code/status"),
+  code: (endpoint, params) => {
+    const qs = params ? "?" + new URLSearchParams(params).toString() : "";
+    return getJSON("/api/code/" + endpoint + qs);
+  },
 };
 
 async function postAgent(path, id) {

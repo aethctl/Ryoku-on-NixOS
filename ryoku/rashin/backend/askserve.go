@@ -11,7 +11,7 @@ import (
 
 // askserve.go runs quick asks INSIDE the daemon (POST /api/ask): fast lane
 // first, session lane as escalation, both recorded in the hub transcript so
-// the conversation is already in the dashboard when the user continues there.
+// the conversation is already in the Super+S chat when the user continues there.
 // The response streams the same marker lines the ask CLI used to emit:
 // @working / @perm / @answer / @error.
 type askSink struct {
@@ -37,7 +37,7 @@ func (s *askSink) marker(kind, detail string) {
 
 // handleAsk is the /api/ask HTTP handler on the running daemon. The turn runs
 // on a background context, not the request's, so closing the launcher (to
-// continue in the dashboard) never aborts the work; only an explicit
+// continue in the Super+S chat) never aborts the work; only an explicit
 // /api/ask/cancel or the timeout stops it. The CLI is a viewer.
 func (h *chatHub) handleAsk(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
@@ -61,7 +61,7 @@ func (h *chatHub) handleAsk(w http.ResponseWriter, r *http.Request) {
 	gen := h.setAskCancel(cancel)
 	defer h.clearAskCancel(gen)
 
-	// The question enters the shared transcript immediately, so a dashboard
+	// The question enters the shared transcript immediately, so a chat
 	// opened mid-ask already shows it.
 	h.broadcast(wsOut{Type: "user_text", Text: q})
 	h.broadcast(wsOut{Type: "state", State: "busy"})
@@ -153,7 +153,7 @@ func (h *chatHub) handleAskRecent(w http.ResponseWriter, r *http.Request) {
 
 // sessionAsk runs the question through the real hermes session, translating
 // hub frames into markers until the turn ends. It joins as an internal client
-// so every dashboard sees the same stream. The answer comes back for the
+// so every chat surface sees the same stream. The answer comes back for the
 // caller to record and emit; error paths emit @error here and report false.
 func (h *chatHub) sessionAsk(ctx context.Context, sink *askSink, preamble, q string) (string, bool) {
 	cl := &chatClient{out: make(chan wsOut, 256)}

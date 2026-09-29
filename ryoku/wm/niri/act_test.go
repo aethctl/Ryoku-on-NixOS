@@ -310,6 +310,7 @@ func TestActCyclesOutputsOverIPC(t *testing.T) {
 // status reads the file, never the compositor, and toggle flips it.
 func TestActTouchpadTracksStateFile(t *testing.T) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	prevNotify := touchpadNotify
 	touchpadNotify = func(string, string) {}

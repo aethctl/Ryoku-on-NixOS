@@ -25,9 +25,13 @@ const usage = `ryoku-rashin: the Ryoku agent OS daemon
   backend [provider[:model]]  view or set the fast-lane assistant backend ('auto' follows hermes)
   paths [--json]         show every skill/vault/prowl path (and a paste snippet for any agent)
   agent [use <id>]       list agents + chat backends, or set which agent drives the chat
+  logs <target> [--since <dur>] [--lines <n>]
+                         gather every log relevant to <target> when it broke
+  fix doctor|tip <id>|app <name> [what happened]
+                         open your agent in a terminal on the problem (Fix with AI)
 
 Invoked as 'rashin', a bare argument is a terminal ask; status/enable/disable/
-setup/index still work as subcommands.
+setup/index/logs/fix still work as subcommands.
 `
 
 func main() {
@@ -79,6 +83,10 @@ func main() {
 		err = cmdPaths(pathsFormat(os.Args[2:]))
 	case "agent":
 		err = cmdAgent(os.Args[2:])
+	case "logs":
+		err = cmdLogs(os.Args[2:])
+	case "fix":
+		err = cmdFix(os.Args[2:])
 	default:
 		fmt.Print(usage)
 		os.Exit(2)
@@ -112,6 +120,18 @@ func dispatchRashin(args []string) error {
 			return cmdSetup()
 		case "index":
 			return cmdIndex()
+		case "logs":
+			// "rashin logs are huge" is a plain ask; only a clean
+			// `logs <target>` with optional flags routes to the command.
+			if len(args) > 1 && logsCommandTarget(args[1:]) != "" {
+				return cmdLogs(args[1:])
+			}
+		case "fix":
+			// "rashin fix the wifi" is still a plain ask; only the Fix with
+			// AI kinds route to the command.
+			if len(args) > 1 && fixKinds[args[1]] {
+				return cmdFix(args[1:])
+			}
 		}
 	}
 	return cmdTerm(args)

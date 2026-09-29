@@ -32,7 +32,65 @@
   forced. The btrfs root's read-only flip stays `reconcileBtrfsHealth`'s
   (`internal/doctor/reconcile_boot_rw.go`).
 
+### Changed
+- **`ryoku track` speaks stable and unstable.** The channel switch is now
+  `ryoku track stable` and `ryoku track unstable`; the old `ryoku track main`
+  and `ryoku track unstable-dev` are retired and fail naming their replacement.
+  `unstable` is the user-facing name of the `testing` channel (its internal key
+  -- the repo path, the `[ryoku]` `Server`, the channel-intent file -- is
+  unchanged, and `ryoku track testing` still works as a quiet synonym), and
+  every message the CLI prints (`status`, `version --branch`, the doctor, the
+  boot guard notice, help) says `unstable`, never `testing`. `--source` takes
+  the new names too: `ryoku track stable --source` builds from the `main`
+  branch, `ryoku track unstable --source` from `unstable-dev` (`track.go`,
+  `internal/sys/release.go`, `internal/updater/release.go`).
+
 ### Fixed
+- **`ryoku track unstable` explains itself on a box moved by the old name.**
+  A box that ran `ryoku track unstable-dev` is already on the unstable channel,
+  so tracking it again moves nothing; it now says so in those words instead of
+  a bare "already on unstable", and records the choice for the doctor.
+- **The doctor's reverse-PRIME guard (#270) now sees the pin the machine
+  actually runs.** The render-pin-vs-panel check resolved the pin through
+  `ryoku-gpu order`, the policy's recommendation, which refuses to speak
+  whenever a stored hybrid or passthrough choice opts out: a RYOKU_GPU_FORCE
+  pin kept under a hybrid stamp, or one drifted in by an older release, hid
+  from the guard while the panel sat on the iGPU under a NVIDIA-first pin.
+  The check now reads `order --effective`, the pin file's own value.
+- **The boot guard's revert no longer strands the channel pin.** A failed
+  update's auto-revert rewrote the `[ryoku]` pin to the previous release and
+  then ran a narrower pacman transaction that could not move the compositor
+  split metas (`ryoku-desktop-hyprland` pins `ryoku-desktop=<exact>`); the
+  downgrade failed with the pin already changed, leaving the pin, the sync db,
+  and the installed set disagreeing so `ryoku status` read "behind" backwards
+  and `ryoku wm use niri` refused (#291). The pacman side of a channel move now
+  lives in one place (`moveRyokuSetToChannel`) that both `ryoku track` and the
+  revert use: it drops the unserved split metas and moves the whole set in one
+  transaction. The pin is transactional (`retargetChannel`) -- any failure
+  restores the previous `[ryoku]` Server exactly, re-syncs, and reinstalls any
+  split meta the move had already dropped, so a failed downgrade never strands a
+  box without ryoku-desktop-hyprland/niri -- and the guard records the tracked
+  channel so its notice names `ryoku track <channel>` as the
+  way back. `ryoku doctor` heals a box already wedged this way (a stale release
+  pin older than the installed release, unless `ryoku track v...` recorded it on
+  purpose) and `ryoku status` says so plainly instead of "behind N"
+  (`internal/updater/channelmove.go`, `internal/updater/bootguard.go`,
+  `internal/doctor/reconcile_channel_pin.go`).
+- **`ryoku update` releases its sleep guard even when the cutover fails.**
+  Every failure between acquiring the durable update inhibitor and the final
+  release (a failed session-bind, a reload that errored) returned with the
+  block still live, and logind then denied every suspend with "Operation
+  denied due to active block inhibitor" until logout (#282). The release is
+  now deferred, so it runs on every exit path; the explicit success-path
+  release stays authoritative and the deferred one is a no-op after it
+  (`internal/updater/update.go`).
+- **`ryoku doctor` reclaims a sleep guard a crashed update leaked.** On a box
+  still holding the durable inhibitor from a failed cutover (the #282/#285
+  class, before the release fix shipped), every suspend is denied until
+  logout. The guard unit is only ever taken while the power-cutover lock is
+  held, so a live guard with a free lock and no deferred-cutover waiter is
+  provably orphaned, and doctor now stops it (`internal/doctor/
+  reconcile_sleep_guard.go`).
 - **`ryoku update` no longer dies where taking a sleep inhibitor is denied.**
   The transaction runs under `systemd-inhibit --mode=block`, which is
   polkit-gated in sessions with no agent (SSH, a headless run): there it exits

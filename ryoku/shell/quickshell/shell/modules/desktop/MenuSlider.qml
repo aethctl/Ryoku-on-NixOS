@@ -25,6 +25,9 @@ Item {
 
     width: parent ? parent.width : 0
     implicitHeight: Theme.s6
+    // Content width so a slider row grows the menu card too and never clips the
+    // label: label + a minimum track + the value, plus the row insets.
+    implicitWidth: Theme.s3 + lbl.implicitWidth + Theme.s3 + Theme.s7 + Theme.s3 + val.implicitWidth + Theme.s3
 
     readonly property real frac: sld.to > sld.from
         ? Math.max(0, Math.min(1, (sld.value - sld.from) / (sld.to - sld.from))) : 0
@@ -32,8 +35,6 @@ Item {
     Text {
         id: lbl
         anchors { left: parent.left; leftMargin: Theme.s3; verticalCenter: parent.verticalCenter }
-        width: Theme.s5 * 2
-        elide: Text.ElideRight
         text: I18n.tr(sld.label)
         color: Theme.inkSoft
         font.family: Theme.font
@@ -43,7 +44,6 @@ Item {
     Text {
         id: val
         anchors { right: parent.right; rightMargin: Theme.s3; verticalCenter: parent.verticalCenter }
-        width: Theme.s6
         horizontalAlignment: Text.AlignRight
         text: sld.valueText
         color: Theme.inkDim

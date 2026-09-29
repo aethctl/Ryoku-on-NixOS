@@ -30,6 +30,13 @@ import (
 // to make.
 //
 // CapSpecialWorkspace: niri has no scratchpad workspace.
+//
+// CapPersistentScreenCapture: niri tears its outputs down and recreates them on
+// a config reload and on a mode change, so a layer-shell surface that captures
+// the whole screen and lives for the session races an output leaving under it.
+// The Qt client segfaults resolving a screen that is already gone. niri still
+// answers one-shot captures (the overview, a window preview, grim), so this is
+// about the long-lived surface, not screencopy itself.
 var capsManifest = []wm.Capability{
 	wm.CapWorkspaces,
 	wm.CapWorkspaceMoveToOutput,
@@ -40,6 +47,9 @@ var capsManifest = []wm.Capability{
 	wm.CapAnimations,
 	wm.CapNativeOverview,
 	wm.CapOverviewBackdrop,
+	// Overview open/closed and tile geometry back the pause rules gated on these.
+	wm.CapOverviewState,
+	wm.CapColumnFill,
 	wm.CapOutputPower,
 	wm.CapKeyboardLayoutSwitch,
 	wm.CapMonitorConfig,

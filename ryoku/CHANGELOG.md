@@ -59,6 +59,33 @@
   honour (`wm/caps.go`, `wm/action.go`, `wm/hyprland/act.go`, `wm/niri/act.go`).
 
 ### Fixed
+- **Clicking SAVE no longer eats the text you just typed.** A TapHandler
+  button never takes focus from a TextInput, so the field's editing-finished
+  (its commit into the draft) did not fire when the user typed and clicked
+  SAVE, REVERT or the list footer's + directly: the Session page's "At Login"
+  commands looked saved, the row count persisted, and the text vanished at
+  logout (#294). `Btn`/`IconBtn` gained a `stealFocus` opt-in that grabs
+  focus on press the way a real toolkit button does; the action bar and the
+  list footers use it. Row minus buttons stay passive (their commit's rebuild
+  would destroy the delegate mid-tap), so the Session page also folds the
+  one live edit into every list mutation.
+- **Fn+F10 locks the touchpad again on laptops that report the key twice.**
+  ASUS machines (and others) send the touchpad key from two input devices at
+  once, so one press toggled the pad off and straight back on and the key
+  looked dead. A second toggle within 0.7 s is now treated as the same press,
+  on Hyprland and niri. A pad left locked off is also named with a toast at
+  login, since the lock survives reboots by design.
+- **Rashin's chat no longer stalls on harmless commands or leaves tool calls
+  pending.** Tool updates carry their output as a list of blocks, which the
+  daemon could not parse, so every row froze at PENDING with nothing to show;
+  rows now carry the command, a status that finishes, and the output or diff.
+  Calls that only read the machine (`journalctl`, `sed -n ...p`, `pacman -Q`,
+  `systemctl status`, file reads outside secret paths) run without asking,
+  under a "Run read-only tools without asking" switch stored as `approvals` in
+  `rashin.json`; anything that writes, installs, or reads a secret still asks,
+  and an approval answered anywhere clears everywhere. Agents that offer their
+  models as a config option (Oh My Pi) now show and switch their full model list
+  (`rashin/backend/acp.go`, `acptools.go`, `readonly.go`, `ws.go`, `config.go`).
 - **Rashin's Hermes setup passes only the installer flags that build supports.**
   Setup hardcoded `--non-interactive --skip-browser --skip-computer-use`, but
   the official installer exits 1 on any option it does not recognize, so the
@@ -164,6 +191,15 @@
   hand-written group indices that were often wrong.
 
 ### Changed
+- **Fix with AI opens your agent in a terminal.** The doctor, the Hub's Updates
+  page, the dashboard's tips and findings, and `ryoku-rashin fix` open the chat
+  agent's own terminal interface (Oh My Pi, Hermes, or Claude Code) in the vault
+  with the problem as its first message, instead of a chat panel: in place when
+  run from a terminal, in the Default Apps terminal otherwise, as its own user
+  unit so a daemon restart never closes it. The dashboard's chat page is gone;
+  the Super+S chat is the one chat window, and the launcher's quick ask
+  continues there (`rashin/backend/fixterm.go`, `fixcli.go`, `fixsession.go`,
+  `rashin/backend/web/`).
 - **The Hub's chrome is one fixed layout, not a per-page guess.** The `FILES` and
   `UPDATES` chips are control-sized (`30` tall, `S4` padding) and take the page's
   own right inset, so they line up with the last card instead of floating inside

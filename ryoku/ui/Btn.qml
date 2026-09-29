@@ -3,14 +3,20 @@ import "Singletons"
 
 Rectangle {
     id: btn
+
     property alias text: lab.text
     property bool primary: false
     property bool armed: true
     property bool compact: false
+    // A TapHandler is passive: it never takes focus from a TextInput, so a
+    // field's editingFinished (and its commit into the draft) does not fire
+    // when the user types and then clicks the button directly. The commit-on-
+    // save loss it causes (#294) is invisible and silent, so buttons that act
+    // on the whole page opt in to stealing focus on press, the way a real
+    // toolkit button does. Off by default: a button inside a list row would
+    // have the commit's rebuild destroy its own delegate mid-tap.
+    property bool stealFocus: false
     signal act()
-
-    activeFocusOnTab: armed
-    function activate() { if (armed) act() }
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
             activate();
@@ -41,5 +47,7 @@ Rectangle {
         font.letterSpacing: Tokens.trackLabel
     }
     HoverHandler { id: bh; enabled: btn.armed; cursorShape: Qt.PointingHandCursor }
-    TapHandler { id: tap; enabled: btn.armed; onTapped: btn.act() }
+    TapHandler { id: tap; enabled: btn.armed
+        onPressedChanged: if (tap.pressed && btn.stealFocus) btn.forceActiveFocus()
+        onTapped: btn.act() }
 }

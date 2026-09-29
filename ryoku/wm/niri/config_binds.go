@@ -46,6 +46,10 @@ func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 
 // A bind-spawned qs surface never passes through ryoku-shell's daemon, which is
 // what injects the shared QML module path into the configs it supervises.
+// irisCloseCheck succeeds when the iRiS frame is the bar style and its close
+// confirmation is switched on.
+const irisCloseCheck = `jq -e '(.barStyle // "iris") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1`
+
 const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
 
 // defaultBinds maps each catalogue id to niri's expression of it. Compositor
@@ -58,7 +62,9 @@ const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH=
 func defaultBinds() map[string]niriBind {
 	return map[string]niriBind{
 		// Windows
-		"window.close":      {action: "close-window", noRepeat: true},
+		// The iRiS frame can ask before a window closes; only when that is on and
+		// iRiS is the bar style does the close go through the shell.
+		"window.close":      {action: spawnSh(irisCloseCheck + " && qs -c shell ipc call closeConfirm trigger || niri msg action close-window"), noRepeat: true},
 		"window.fullscreen": {action: "fullscreen-window"},
 		// The catalogue names this "Float or tile", which is niri's mechanic too.
 		"window.float": {action: "toggle-window-floating"},

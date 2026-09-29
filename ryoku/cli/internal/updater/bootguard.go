@@ -2,6 +2,7 @@ package updater
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,7 +31,9 @@ import (
 //
 // Nothing here needs the user session, so it works when the session is what
 // broke.
-const (
+// The guard's on-disk state. Vars, not consts, so a test can point them at a
+// temp dir instead of /var/lib and /boot.
+var (
 	pendingFile = "/var/lib/ryoku/update-pending.json"
 	bootOKDir   = "/var/lib/ryoku/boot"
 	noticeFile  = "/var/lib/ryoku/boot/notice.json"
@@ -38,8 +41,12 @@ const (
 )
 
 type pendingUpdate struct {
-	From      string `json:"from"`
-	To        string `json:"to"`
+	From string `json:"from"`
+	To   string `json:"to"`
+	// Channel the box tracked before the update (stable, testing, ...). The
+	// revert pins the previous release tag, but the user gets back onto updates
+	// with `ryoku track <Channel>`, so the guard has to remember it (#291).
+	Channel   string `json:"channel,omitempty"`
 	Snapshot  string `json:"snapshot,omitempty"`
 	ArmedBoot string `json:"armedBoot"`
 	Boots     int    `json:"boots"`
@@ -51,6 +58,7 @@ type bootNotice struct {
 	Action   string `json:"action"` // reverted, snapshot-default, revert-failed
 	From     string `json:"from"`
 	To       string `json:"to"`
+	Channel  string `json:"channel,omitempty"` // the channel to `ryoku track` back to
 	Snapshot string `json:"snapshot,omitempty"`
 	Detail   string `json:"detail,omitempty"`
 	At       string `json:"at"`
@@ -76,7 +84,7 @@ func armBootGuard(snapshot string) {
 	if from == "" || to == "" || from == to || !sys.IsReleaseTag(from) {
 		return
 	}
-	p := pendingUpdate{From: from, To: to, Snapshot: snapshot, ArmedBoot: bootID(), At: time.Now().UTC().Format(time.RFC3339)}
+	p := pendingUpdate{From: from, To: to, Channel: sys.PackagedChannel(), Snapshot: snapshot, ArmedBoot: bootID(), At: time.Now().UTC().Format(time.RFC3339)}
 	b, _ := json.MarshalIndent(p, "", "  ")
 	// earlier ok files would read as proof of a boot after this update; clear
 	// them so only a boot from here on counts.
@@ -149,34 +157,46 @@ func disarmBootGuard(why string) error {
 	return nil
 }
 
-// revertRelease tracks the previous release back and re-materializes every
-// user's config from it. Package moves need the network: the guard waits for
-// it here (only on this boot, so a healthy boot never pays for it), and when
-// the channel is still unreachable it hands the boot back so the next one
-// retries the revert instead of escalating to the snapshot.
+// revertRelease puts the Ryoku set back on the release the box ran before and
+// re-materializes every user's config from it. It goes through the same
+// transactional set-aware move an interactive `ryoku track` uses
+// (channelmove.go): the pin is written, the whole set (split metas dropped)
+// moves in one transaction, and on ANY failure the previous pin is restored and
+// the databases re-synced -- so a downgrade that cannot satisfy the new split
+// packages never leaves the pin, sync db, and installed set disagreeing (#291,
+// the bug this file caused). Package moves need the network: the guard waits for
+// it here (only on this boot, so a healthy boot never pays for it), and when the
+// channel is still unreachable it restores the pin and hands the boot back so
+// the next one retries the revert instead of escalating to the snapshot.
 func revertRelease(p pendingUpdate) error {
 	fmt.Printf(i18n.T("boot guard: reverting to %s\n"), p.From)
-	if err := sys.SetPackagedChannel(p.From); err != nil {
-		return writeNotice(bootNotice{Action: "revert-failed", From: p.From, To: p.To, Snapshot: p.Snapshot, Detail: err.Error(), At: now()})
-	}
 	if sys.Has("nm-online") {
 		_ = sys.Run("nm-online", "-q", "--timeout=90")
 	}
-	if err := sys.Run("pacman", "-Syy", "--noconfirm"); err != nil {
-		fmt.Println(i18n.T("boot guard: package channel unreachable; retrying the revert next boot"))
-		p.Boots--
-		b, _ := json.MarshalIndent(p, "", "  ")
-		_ = os.WriteFile(pendingFile, append(b, '\n'), 0o644)
-		return nil
-	}
-	if err := sys.Run("env", "SNAP_PAC_SKIP=y", "pacman", "-S", "--noconfirm",
-		"--overwrite", ryokuOverwriteGlob, "ryoku-desktop"); err != nil {
-		return writeNotice(bootNotice{Action: "revert-failed", From: p.From, To: p.To, Snapshot: p.Snapshot, Detail: err.Error(), At: now()})
+	err := retargetChannel(p.From, func() error {
+		_, err := moveRyokuSetToChannel()
+		return err
+	})
+	if err != nil {
+		if errors.Is(err, errChannelUnreachable) {
+			// retargetChannel already put the pin back; retry the whole revert
+			// next boot rather than escalating to the snapshot.
+			fmt.Println(i18n.T("boot guard: package channel unreachable; retrying the revert next boot"))
+			p.Boots--
+			b, _ := json.MarshalIndent(p, "", "  ")
+			_ = os.WriteFile(pendingFile, append(b, '\n'), 0o644)
+			return nil
+		}
+		return writeNotice(bootNotice{Action: "revert-failed", From: p.From, To: p.To, Channel: p.Channel, Snapshot: p.Snapshot, Detail: err.Error(), At: now()})
 	}
 	rematerializeUsers()
 	_ = os.Remove(pendingFile)
-	return writeNotice(bootNotice{Action: "reverted", From: p.From, To: p.To, Snapshot: p.Snapshot,
-		Detail: "the desktop did not come up in two boots after the update; the Ryoku set is back on " + p.From + " (Arch untouched). `ryoku track stable` moves forward again once the release is fixed.",
+	back := p.Channel
+	if back == "" {
+		back = sys.ChannelStable
+	}
+	return writeNotice(bootNotice{Action: "reverted", From: p.From, To: p.To, Channel: p.Channel, Snapshot: p.Snapshot,
+		Detail: fmt.Sprintf(i18n.T("the desktop did not come up in two boots after the update; the Ryoku set is back on %s (Arch untouched). `ryoku track %s` moves forward again once the release is fixed."), p.From, sys.TrackName(back)),
 		At:     now()})
 }
 

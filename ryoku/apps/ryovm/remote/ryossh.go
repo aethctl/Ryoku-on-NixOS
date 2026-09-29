@@ -929,10 +929,18 @@ func connectArgv(alias, term string) []string {
 	return append([]string{"ssh"}, opts...)
 }
 
+// ryoportAppID is the window class every ryoport terminal launch asks for.
+// Ghostty validates --class as a GTK application id, which needs at least one
+// dot, so a bare "ryoport-ssh" is rejected and silently ignored: the window
+// keeps com.mitchellh.ghostty and the float rule can never match it. A
+// reverse-DNS id is valid for every terminal on the switch below.
+const ryoportAppID = "dev.ryoku.ryoport_ssh"
+
 // terminalArgv wraps the connect command in a real terminal window, respecting
 // $TERMINAL and its invocation quirks (kitty/foot take trailing args; alacritty/
-// xterm need -e; wezterm needs `start --`). A failed connect holds on the error
-// via a local read, since a bare terminal drops into a login shell that buries it.
+// xterm need -e; wezterm needs `start --`; ghostty wants `--class=` with an
+// equals and a GTK-valid id). A failed connect holds on the error via a local
+// read, since a bare terminal drops into a login shell that buries it.
 func terminalArgv(alias string) []string {
 	term := os.Getenv("TERMINAL")
 	if term == "" {
@@ -944,11 +952,14 @@ func terminalArgv(alias string) []string {
 	prog := append([]string{"sh", "-c", hold, "_"}, conn...)
 	switch filepath.Base(term) {
 	case "kitty":
-		return append([]string{term, "--title", title, "--class", "ryoport-ssh"}, prog...)
+		return append([]string{term, "--title", title, "--class=" + ryoportAppID}, prog...)
+	case "ghostty":
+		// ghostty has no --title; the class is what identifies the window.
+		return append([]string{term, "--class=" + ryoportAppID, "-e"}, prog...)
 	case "foot":
-		return append([]string{term, "--title", title, "--app-id", "ryoport-ssh"}, prog...)
+		return append([]string{term, "--title", title, "--app-id=" + ryoportAppID}, prog...)
 	case "alacritty":
-		return append([]string{term, "--class", "ryoport-ssh", "-e"}, prog...)
+		return append([]string{term, "--class=" + ryoportAppID, "-e"}, prog...)
 	case "wezterm":
 		return append([]string{term, "start", "--"}, prog...)
 	default: // xterm and most others accept -e <program...>

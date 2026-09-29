@@ -2,6 +2,17 @@
 
 
 ### Added
+- **Bar Studio switches iRiS between its Ryoku and iNiR looks.** The iRiS
+  card has a Look control that flips the live frame (`pages/BarStudioPage.qml`).
+- **The Visualizer tab edits the new edge field.** The Desktop page's
+  Visualizer tab grew an EDGE FIELD section - lit edges, reach, material,
+  movement, effect, colour mode, corners and flow up front, the deep drives
+  under Advanced - and the live preview renders the same `AuraField` the
+  desktop paints with, so the look retunes as you drag. Box-only rows (place,
+  angle, leans, gradient, bloom) now hide while `aura` is chosen, so no knob
+  that does nothing for the look is on screen
+  (`quickshell/schema/DesktopPage.js`, `quickshell/VizPreview.qml`,
+  `quickshell/Hub.qml`).
 - **The Machine page owns the two switches it used to describe.** The
   hardware display-routing knob (GPU Mode / MUX / Optimus) and the live CPU
   power profile were CLI-only, and both the render card's Hybrid and the
@@ -46,7 +57,28 @@
   the provider honours (`pages/AnimationsPage.qml`, `pages/LayerRulesPage.qml`,
   `pages/WindowRulesPage.qml`, `SettingsSheet.qml`, `Singletons/Settings.qml`).
 
+### Removed
+- **The Widgets page is gone; desktop widgets are edited on the desktop.** The
+  Hub's Desktop Widgets page -- the clock, calendar, music, all-in-one, stats,
+  weather, notes, day progress and shape editors, plus the vendored iRiS face
+  and canvas cards -- moved onto the wallpaper: right-click the desktop and pick
+  Widgets, then arrange and tune each widget in place. The page, its schema and
+  test, its preview cards and the rail entry are removed, and a stale
+  `ryoku-shell hub open widgets` now opens the desktop widget editor
+  (`quickshell/Hub.qml`; removed `pages/WidgetsPage.qml`, `schema/WidgetsPage.js`,
+  `schema/WidgetsPage.test.mjs` and the widget preview cards).
+
 ### Fixed
+- **The update and rollback log opens where you can see it.** Both launch a
+  terminal from inside Ryoku Settings, and a tiled window always sits under a
+  float, so the run's output hid behind the settings page until it finished
+  (#288). The launches name the `dev.ryoku.update` window class, which the
+  desktop's float-and-centre rule matches (`pages/UpdatesPage.qml`).
+- **The security-key enrolment terminal opens clean in Ghostty.** It launched
+  with `--class ryoku-passkey`; Ghostty wants `--class=NAME` and validates the
+  value as a GTK application id (a dot is required), so the old form raised its
+  configuration-error dialog on every enrol and the class never landed. The
+  launch now uses `--class=dev.ryoku.passkey` (`pages/LockscreenPage.qml`).
 - **No Hyprland wording or dead compositor toggles on niri.** The search
   vocabulary derives from the active provider's rows and name, the import
   wizard names the desktop you run and stands down where it cannot read its

@@ -12,6 +12,10 @@ Singleton {
     property bool copyOnSave: false
     property string saveDir: ""
 
+    // The front's last chosen action (shot | edit | ocr | search | record), so
+    // reopening the tool lands on the tool you used last, matching the shell.
+    property string lastAction: "shot"
+
     /**
      * Per-tool drawing style, keyed by tool id: { color, width, filled }. The
      * shell owns the live copy and writes it back through here so a chosen colour,
@@ -53,6 +57,7 @@ Singleton {
             zoomFactor: config.zoomFactor,
             copyOnSave: config.copyOnSave,
             saveDir: config.saveDir,
+            lastAction: config.lastAction,
             toolStyle: config.toolStyle
         }, null, 2));
     }
@@ -70,6 +75,7 @@ Singleton {
                 if (typeof c.zoomFactor === "number") config.zoomFactor = c.zoomFactor;
                 if (typeof c.copyOnSave === "boolean") config.copyOnSave = c.copyOnSave;
                 if (typeof c.saveDir === "string") config.saveDir = c.saveDir;
+                if (typeof c.lastAction === "string") config.lastAction = c.lastAction;
                 if (c.toolStyle && typeof c.toolStyle === "object") config.toolStyle = c.toolStyle;
             } catch (e) {
                 console.log("ryoshot: config parse failed, using defaults: " + e);

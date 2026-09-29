@@ -4,7 +4,7 @@ import Quickshell.Io
 import QtQuick.Dialogs
 import "Singletons"
 import Ryoku.Ui.Singletons
-
+import "../stage/Singletons" as StageCfg
 // The right-click menu for a plugin desktop tile, built on the shared
 // DesktopMenu chrome in the quick-settings sidebar idiom. Beyond Lock + Hide it
 // renders the plugin's own settings inline straight from its declared schema
@@ -22,12 +22,18 @@ Item {
 
     anchors.fill: parent
 
+    // Exposed so the host menu surface maps only while this menu is on screen.
+    readonly property alias showing: shell.showing
+
     property string scope: ""
     property bool locked: false
     property var manifest: ({})
     property var placement: ({})
     property var vals: ({})         // live settings copy, optimistically updated
     property var pics: []           // scanned ~/Pictures paths for the image picker
+    // The wallpaper of the monitor whose right-click opened this menu; the
+    // Depth row gates on it (docs/stage.md). Set by the owning desktop.
+    property string wall: ""
 
     readonly property var schema: (manifest && manifest.metadata && manifest.metadata.settings) || []
     readonly property bool hasImage: schema.some(function (f) { return f.type === "image"; })
@@ -46,6 +52,11 @@ Item {
     readonly property bool colorAutoOn: menu.vals.colorAuto !== false
     readonly property string colorHex: (typeof menu.vals.color === "string") ? menu.vals.color : ""
     readonly property string colorMode: menu.colorAutoOn ? "auto" : (menu.colorHex.length > 0 ? "custom" : "default")
+    // The stage lift (docs/stage.md): Depth offers this tile a place above
+    // every in-front cut-out; the row only shows while the wall cuts a subject.
+    readonly property bool stageActive: menu.wall !== ""
+        && StageCfg.StageBackend.isActiveFor(menu.wall)
+    readonly property bool lifted: StageCfg.Config.isFront(menu.scope)
 
     signal hideRequested(string id)
     signal lockToggled(string id)
@@ -53,7 +64,8 @@ Item {
     signal sizeChanged(string id, real scale)
     signal opacityChanged(string id, real opacity)
 
-    function openFor(id, locked, x, y, manifest, placement) {
+    function openFor(id, locked, x, y, manifest, placement, wall) {
+        menu.wall = wall || "";
         menu.scope = id;
         menu.locked = locked;
         shell.px = x;
@@ -128,6 +140,14 @@ Item {
                 menu.lockToggled(menu.scope);
                 menu.locked = !menu.locked;
             }
+        }
+        MenuRow {
+            visible: menu.stageActive
+            label: I18n.tr("Depth")
+            value: menu.lifted ? I18n.tr("In front") : I18n.tr("Behind")
+            on: menu.lifted
+            closeOnTrigger: false
+            onTriggered: StageCfg.Config.setFront(menu.scope, !menu.lifted)
         }
         MenuRow {
             label: I18n.tr("Hide")

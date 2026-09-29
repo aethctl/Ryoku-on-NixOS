@@ -106,10 +106,15 @@ Scope {
             budgetForScreen(screen).maxCardHeight);
     }
 
+    // The frost is a still of the desktop behind the card, so it needs a
+    // capture surface that lives as long as the launcher. Only ask where the
+    // compositor tolerates that shape; elsewhere the card opens over a solid
+    // drawer, which is the path a failed or timed-out capture already takes.
     function frostEligible() {
         return (LauncherConfig.bgBlur | 0) > 0
             && !Motion.reduce
-            && !Performance.blurDisabled;
+            && !Performance.blurDisabled
+            && Wm.caps.persistentScreenCapture === true;
     }
 
     function dispatchLifecycle(event) {

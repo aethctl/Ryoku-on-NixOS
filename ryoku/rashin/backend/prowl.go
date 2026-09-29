@@ -30,6 +30,16 @@ type ProwlReport struct {
 		Infos  int `json:"infos"`
 	} `json:"doctor,omitempty"`
 	Hotspots []ProwlHotspot `json:"hotspots,omitempty"`
+	Savings  *ProwlSavings  `json:"savings,omitempty"`
+}
+
+// ProwlSavings is what the index actually bought this machine: measured
+// answer tokens against the reading cost they replaced. It is the number the
+// dashboard leads with, because files and symbols are trivia next to it.
+type ProwlSavings struct {
+	Queries      int   `json:"queries"`
+	AnswerTokens int64 `json:"answerTokens"`
+	SavedTokens  int64 `json:"savedTokens"`
 }
 
 type ProwlHotspot struct {
@@ -47,6 +57,11 @@ type ProwlHit struct {
 // name and falls back to the legacy prowl-agent, so a box that still carries
 // only the old binary keeps working; every caller runs the resolved path.
 func findProwl() (string, bool) {
+	if v := os.Getenv("RYOKU_PROWL_BIN"); v != "" {
+		if _, err := os.Stat(v); err == nil {
+			return v, true
+		}
+	}
 	if p, err := exec.LookPath("prowl"); err == nil {
 		return p, true
 	}
@@ -152,7 +167,8 @@ func buildProwlReport() ProwlReport {
 	}
 	rep.Repo = repo
 
-	// status: file and symbol counts prove the index is live.
+	// status: file and symbol counts prove the index is live, and the savings
+	// block is the payoff the dashboard shows.
 	if out, err := prowlExec(repo, 15*time.Second, "status", "--json"); err == nil {
 		var st struct {
 			Files   int `json:"files"`
@@ -161,11 +177,23 @@ func buildProwlReport() ProwlReport {
 				Files   int `json:"files"`
 				Symbols int `json:"symbols"`
 			} `json:"counts"`
+			Savings struct {
+				Queries      int   `json:"queries"`
+				AnswerTokens int64 `json:"answer_tokens"`
+				SavedTokens  int64 `json:"saved_tokens"`
+			} `json:"savings"`
 		}
 		if json.Unmarshal(out, &st) == nil {
 			rep.Files = max(st.Files, st.Counts.Files)
 			rep.Symbols = max(st.Symbols, st.Counts.Symbols)
 			rep.Indexed = rep.Files > 0
+			if st.Savings.Queries > 0 || st.Savings.SavedTokens > 0 {
+				rep.Savings = &ProwlSavings{
+					Queries:      st.Savings.Queries,
+					AnswerTokens: st.Savings.AnswerTokens,
+					SavedTokens:  st.Savings.SavedTokens,
+				}
+			}
 		}
 	}
 	if !rep.Indexed {

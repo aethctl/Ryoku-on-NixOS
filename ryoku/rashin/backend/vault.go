@@ -33,6 +33,8 @@ var generatedFiles = map[string]bool{
 	"ryoku-repo.md": true,
 	"user.md":       true,
 	"habits.md":     true,
+	"ownership.md":  true,
+	"logs.md":       true,
 }
 
 // AgentsTemplate is the vault entry contract. Its fenced body is refreshed on
@@ -53,8 +55,11 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"\n" +
 	"To change the desktop, use the `ryoku` skill (linked into your skills dir;\n" +
 	"`desktop.md` names its path and carries the GUI map): answer \"how do I\" GUI-\n" +
-	"first, act through commands, never edit shipped files. A new bar widget is a\n" +
-	"plugin, per the skill's `plugins.md`.\n" +
+	"first, act through commands, never edit shipped files. When the ask is a\n" +
+	"feature the desktop does not have, climb the ladder in the skill's\n" +
+	"`feature.md` before writing code: `ryostore catalog`, then\n" +
+	"`ryoku-shell bar catalog`, then `ryoku plugin list`, then build a plugin per\n" +
+	"`plugins.md`. Never rebuild what the store or a hidden built-in already ships.\n" +
 	"\n" +
 	"## What is here\n" +
 	"\n" +
@@ -64,6 +69,8 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"- `ryoku-repo.md` generated: the Ryoku source tree map (pre-indexed, ships with the system).\n" +
 	"- `user.md` generated: where this user's config diverges from the shipped baseline.\n" +
 	"- `habits.md` generated: this user's directories, tool stack, and shell rhythms.\n" +
+	"- `ownership.md` generated: who owns each config path and where a change belongs.\n" +
+	"- `logs.md` generated: where the logs live and the one command that gathers them.\n" +
 	"- `memory/` durable notes agents author and keep across sessions.\n" +
 	"- `journal/` dated notes, one file per day named `YYYY-MM-DD.md`.\n" +
 	"\n" +
@@ -78,7 +85,26 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"- Changes listed in `user.md` are the user's own; never revert them to\n" +
 	"  shipped defaults without being asked.\n" +
 	"- This file's generated body is refreshed on every reindex; add your own prose\n" +
-	"  outside the `rashin:generated` markers and it is kept. `CLAUDE.md` symlinks here.\n"
+	"  outside the `rashin:generated` markers and it is kept. `CLAUDE.md` symlinks here.\n" +
+	"\n" +
+	"## Before you edit a file\n" +
+	"\n" +
+	"- Run `ryoku owner <path>` first. It says who writes the file and where a\n" +
+	"  change belongs. `ownership.md` is the same rules for this whole machine.\n" +
+	"- Never edit a path it calls `ryoku`, `generated`, or `store`; those are\n" +
+	"  overwritten on update or owned by one writer. Edit the path it points you to\n" +
+	"  instead: a user-override file, a fork under `~/.config/ryoku/user_edits/`, or\n" +
+	"  the GUI or command that owns it.\n" +
+	"- `user.md` lists the edits this user already made; treat them as their own.\n" +
+	"\n" +
+	"## When something breaks\n" +
+	"\n" +
+	"- Gather first, change nothing yet: run `ryoku-rashin logs <app>` and read\n" +
+	"  `logs.md` for where each log lives.\n" +
+	"- Check the doctor report and the recent package changes (an upgrade right\n" +
+	"  before a breakage is the usual cause) before you touch anything.\n" +
+	"- Prefer a reversible fix, and ask before anything destructive.\n" +
+	"- Record what you found and did in `journal/YYYY-MM-DD.md`.\n"
 
 // buildFence wraps a generated body in the vault markers, normalising trailing
 // whitespace so repeated runs are byte stable.

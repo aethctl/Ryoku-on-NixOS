@@ -7,6 +7,10 @@ import "Singletons"
 Item {
     id: sec
 
+    // A hosting inspector picks section headers out of a widget's options panel
+    // by this marker, to split them into tabs without touching the panel.
+    readonly property bool ryoSection: true
+
     property string label: ""
     property string gloss: ""
 

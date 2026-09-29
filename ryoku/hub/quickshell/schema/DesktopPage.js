@@ -79,6 +79,451 @@ var rows = [{
         "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line"]}
     },{
         "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraEdges",
+        "label": "Lit edges",
+        "desc": "Which screen edges carry the field",
+        "ctl": "multi",
+        "src": "viz",
+        "opts": ["top","right","bottom","left"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraDepth",
+        "label": "Reach",
+        "desc": "How far inward the current flows",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 24,
+        "hi": 600,
+        "unit": "px",
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraMaterial",
+        "label": "Material",
+        "desc": "What the current is cut from",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["silk","aurora","contour","liquid"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraShape",
+        "label": "Movement",
+        "desc": "How the current travels",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["flow","ribbon","cells","filament"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraEffect",
+        "label": "Effect",
+        "desc": "What rides on the current",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["clean","shimmer","echo","prism","bloom","caustic","afterglow"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraEffectStrength",
+        "label": "Effect strength",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraColorMode",
+        "label": "Colour mode",
+        "desc": "How the palette walks the edge",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["flow","spectrum","pulse","static"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraJoin",
+        "label": "Corners",
+        "desc": "Blend adjacent edges into one field, or keep them separate rails",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["auto","separate"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraFlow",
+        "label": "Flow",
+        "desc": "Which way the current circulates",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["clockwise","counterclockwise"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraSpan",
+        "label": "Span",
+        "desc": "How much of each edge the field covers",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0.2,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "key": "auraTaper",
+        "label": "Taper",
+        "desc": "How softly the field fades at its ends",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 0.5,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraCornerRadius",
+        "label": "Corner radius",
+        "desc": "How roundly the field turns at the screen corners",
+        "ctl": "step",
+        "src": "viz",
+        "lo": 0,
+        "hi": 64,
+        "unit": "px",
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraCornerBlend",
+        "label": "Corner blend",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraProfile",
+        "label": "Frequency profile",
+        "desc": "Which part of the mix drives the field",
+        "ctl": "seg",
+        "src": "viz",
+        "opts": ["flat","bass","warm","vocal","treble","smile"],
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraAccent",
+        "label": "Profile accent",
+        "desc": "How hard the profile tilts the look",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraColor2",
+        "label": "Field colour 2",
+        "desc": "Second stop of the triad; pin all three to fix the palette",
+        "ctl": "color",
+        "src": "viz",
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraColor3",
+        "label": "Field colour 3",
+        "desc": "Third stop of the triad",
+        "ctl": "color",
+        "src": "viz",
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraOpacity",
+        "label": "Field opacity",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0.2,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraBodyOpacity",
+        "label": "Body opacity",
+        "desc": "How solid the current reads",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraCrestStrength",
+        "label": "Crest strength",
+        "desc": "How bright the crest rides the body",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraGlow",
+        "label": "Glow",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraGlowSpread",
+        "label": "Glow spread",
+        "desc": "How wide the halo spills",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraAudioRange",
+        "label": "Audio range",
+        "desc": "The share of the spectrum the edge walks",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraThickness",
+        "label": "Body width",
+        "desc": "How thick the current sits within its reach",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0.05,
+        "hi": 0.6,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraDetail",
+        "label": "Detail",
+        "desc": "How much texture the material carries",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraBassDrive",
+        "label": "Bass drive",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1.5,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraTrebleDrive",
+        "label": "Treble drive",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1.5,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraTransient",
+        "label": "Transient kick",
+        "desc": "How sharply a hit snaps the field",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraBeatGlow",
+        "label": "Beat glow",
+        "desc": "How much the halo lifts on the beat",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraCompression",
+        "label": "Compression",
+        "desc": "How much the levels are gated toward the loud parts",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraSensitivity",
+        "label": "Field sensitivity",
+        "desc": "How hard the spectrum pushes the field",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 2,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraMotionSpeed",
+        "label": "Motion speed",
+        "desc": "How fast the current turns",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 3,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraIdleMotion",
+        "label": "Idle drift",
+        "desc": "How alive the field stays when nothing plays",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "unit": "%",
+        "pct": true,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraAttack",
+        "label": "Attack",
+        "desc": "How quickly the field rises to a level",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0.2,
+        "hi": 3,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraRelease",
+        "label": "Release",
+        "desc": "How quickly it falls back",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0.2,
+        "hi": 3,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
+        "group": "EDGE FIELD",
+        "adv": true,
+        "key": "auraColorSpeed",
+        "label": "Colour drift",
+        "desc": "How fast the palette walks the edge",
+        "ctl": "slid",
+        "src": "viz",
+        "lo": 0,
+        "hi": 1,
+        "when": {"style":["aura"]}
+    },{
+        "tab": "Visualizer",
         "group": "COLOUR",
         "key": "color",
         "label": "Colour",
@@ -92,7 +537,8 @@ var rows = [{
         "label": "Gradient",
         "desc": "Sweep from the colour above to a second one",
         "ctl": "sw",
-        "src": "viz"
+        "src": "viz",
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "COLOUR",
@@ -121,7 +567,8 @@ var rows = [{
         "label": "Place on the desktop",
         "desc": "Drag and size it directly on screen",
         "ctl": "action",
-        "actionLabel": "PLACE"
+        "actionLabel": "PLACE",
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -142,7 +589,8 @@ var rows = [{
         "src": "viz",
         "lo": 0,
         "hi": 359,
-        "unit": "°"
+        "unit": "°",
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -153,7 +601,8 @@ var rows = [{
         "src": "viz",
         "lo": -35,
         "hi": 35,
-        "unit": "°"
+        "unit": "°",
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -164,7 +613,8 @@ var rows = [{
         "src": "viz",
         "lo": -35,
         "hi": 35,
-        "unit": "°"
+        "unit": "°",
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -177,7 +627,8 @@ var rows = [{
         "lo": -0.2,
         "hi": 1,
         "unit": "%",
-        "pct": true
+        "pct": true,
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -190,7 +641,8 @@ var rows = [{
         "lo": -0.2,
         "hi": 1,
         "unit": "%",
-        "pct": true
+        "pct": true,
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -203,7 +655,8 @@ var rows = [{
         "lo": 0.05,
         "hi": 1.2,
         "unit": "%",
-        "pct": true
+        "pct": true,
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "PLACEMENT",
@@ -216,7 +669,8 @@ var rows = [{
         "lo": 0.03,
         "hi": 1.2,
         "unit": "%",
-        "pct": true
+        "pct": true,
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "SPECTRUM",
@@ -302,7 +756,8 @@ var rows = [{
         "lo": 0,
         "hi": 1,
         "unit": "%",
-        "pct": true
+        "pct": true,
+        "when": {"style":["bars","split","dots","segments","wave","ribbon","curtain","line","frame","radial","orb","spiral"]}
     },{
         "tab": "Visualizer",
         "group": "MOTION",

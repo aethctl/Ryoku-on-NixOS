@@ -2,10 +2,14 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "../Singletons"
+import "../Combos.js" as Combos
 
 // Input (DESIGN.md, SYSTEM). Keyboard layout and remaps, pointer and touchpad
 // behaviour, and key repeat for the Hyprland session. Rendered as rows off the
@@ -27,10 +31,21 @@ import "../Singletons"
 //     has no draft, no revert, no dirty state, and is gated on the keyboard
 //     keys already being saved.
 //
+// The MOUSE tab is not schema: it drives the shell daemon's evdev remapper
+// (ryoku/shell/ipc/mousemap.go), which is compositor-neutral by construction --
+// it grabs the physical mouse, replays it through a uinput clone, and swaps a
+// mapped extra button for a key chord or another button. So its state lives in
+// the daemon (mousemap.json), not the desktop store, and the page talks to it
+// over the shell socket exactly like the Recording page talks to the keypress
+// overlay: one subscription for frames, one control line per call. A machine
+// with no mouse (a laptop's built-in pad is classified out) shows the empty
+// plate and binds nothing.
+//
 // The layout/variant catalogues are scanned at runtime (xkb rules), so they are
 // filtered picks, not enums. Everything else reads hub.hyprVal / writes
 // hub.hyprEdit; the shell owns the rail, side panel, action bar, live preview
-// and restore. Nothing here writes a file except Apply system-wide.
+// and restore. Nothing here writes a file except Apply system-wide and the
+// daemon's own settings.
 Item {
     id: pg
 
@@ -82,6 +97,228 @@ Item {
         touchpadSet.command = ["ryoku", "wm", "act", "input.touchpad", on ? "on" : "off"];
         touchpadSet.running = false;
         touchpadSet.running = true;
+    }
+
+    // ── tabs ────────────────────────────────────────────────────────────────
+    readonly property var tabs: ["KEYBOARD", "MOUSE"]
+    property string tab: "KEYBOARD"
+    function switchTab(t) {
+        if (pg.tab === t)
+            return;
+        pg.tab = t;
+        if (t === "MOUSE")
+            mouseCtl.send("mouse.state", {});
+        tabHost.travel();
+    }
+
+    // ── mouse tab: the shell daemon's evdev remapper ─────────────────────
+    // One subscription for frames (devices, maps, captured presses), one
+    // control line per call; the daemon owns mousemap.json and the grabs, so
+    // the page never touches a file. Same socket grammar the Recording page
+    // uses for the keypress overlay.
+    readonly property string shellSockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
+    property var mouseDevices: []                 // [{ id, name, bus, buttons }]
+    property var mouseMaps: ({})                  // device -> button -> { kind, keys, button }
+    property bool mouseDaemonSeen: false
+    property string mouseError: ""
+    // capture: the button being bound. device "" means detect-from-press: the
+    // next physical click picks the device and button for us.
+    property var captureFor: null                 // { device, button } while the overlay is up
+    property bool captureWaitClick: false         // still waiting for the physical press
+    property string captureForming: ""            // modifiers held, shown as they land
+    readonly property bool capturing: pg.captureFor !== null
+
+    function applyMouseFrame(line) {
+        try {
+            var frame = JSON.parse(line);
+            if (!frame || !frame.devices)
+                return;
+            pg.mouseDaemonSeen = true;
+            pg.mouseDevices = frame.devices;
+            pg.mouseMaps = frame.maps || {};
+            var p = frame.pressed;
+            if (p && pg.capturing && pg.captureWaitClick) {
+                if (p.device === "" && p.button === 0) {
+                    // the daemon's waiter expired; re-arm so the overlay keeps
+                    // listening until the user presses something or cancels.
+                    mouseCtl.send("mouse.capture", { timeoutMs: 8000 });
+                    return;
+                }
+                pg.captureFor = { "device": p.device, "button": p.button };
+                pg.captureWaitClick = false;
+            }
+        } catch (e) {}
+    }
+
+    function applyMouseReply(line) {
+        try {
+            var reply = JSON.parse(line);
+            if (reply.ok && reply.result && reply.result.devices) {
+                pg.applyMouseFrame(JSON.stringify(reply.result));
+                pg.mouseError = "";
+                return;
+            }
+            if (!reply.ok) {
+                pg.mouseError = reply.error || I18n.tr("The mouse remapper refused the change.");
+                if (reply.result && reply.result.devices)
+                    pg.applyMouseFrame(JSON.stringify(reply.result));
+            }
+        } catch (e) {}
+    }
+
+    Socket {
+        id: mouseSub
+        path: pg.shellSockPath
+        parser: SplitParser { onRead: line => pg.applyMouseFrame(line) }
+        Component.onCompleted: connected = true
+        onConnectionStateChanged: {
+            if (connected) {
+                write("subscribe mouse\n");
+                flush();
+            } else {
+                mouseSubRetry.restart();
+            }
+        }
+    }
+    Timer {
+        id: mouseSubRetry
+        interval: 2000
+        onTriggered: if (!mouseSub.connected) mouseSub.connected = true
+    }
+    Socket {
+        id: mouseCtl
+        path: pg.shellSockPath
+        property string queued: ""
+        parser: SplitParser { onRead: line => pg.applyMouseReply(line) }
+        function send(method, args) {
+            queued += "call " + method + " " + JSON.stringify(args) + "\n";
+            if (connected)
+                flushQueued();
+            else
+                connected = true;
+        }
+        function flushQueued() {
+            if (queued.length === 0)
+                return;
+            write(queued);
+            flush();
+            queued = "";
+        }
+        onConnectionStateChanged: if (connected) flushQueued()
+    }
+
+    // evdev button codes 272..274 are left/right/middle and stay as they came;
+    // 275 up are the extra thumb/paddle keys this tab exists to bind. The names
+    // are what the boxes actually print on them; an unmapped button still sends
+    // its default to apps, which is what the row says.
+    function buttonLabel(code) {
+        if (code === 275) return I18n.tr("Side");
+        if (code === 276) return I18n.tr("Extra");
+        if (code === 277) return I18n.tr("Thumb");
+        if (code === 278) return I18n.tr("Thumb 2");
+        if (code === 279) return I18n.tr("Paddle");
+        if (code === 280) return I18n.tr("Sniper");
+        return I18n.tr("Button") + " " + (code - 271);
+    }
+    function buttonDefault(code) {
+        if (code === 275) return I18n.tr("Back");
+        if (code === 276) return I18n.tr("Forward");
+        return "";
+    }
+    function mapFor(device, code) {
+        var m = pg.mouseMaps[device];
+        return m ? m[String(code)] : undefined;
+    }
+    function bindingText(t) {
+        if (!t) return "";
+        if (t.kind === "disabled") return I18n.tr("Off");
+        if (t.kind === "button") return pg.buttonLabel(t.button) + " " + I18n.tr("click");
+        var out = [];
+        for (var i = 0; i < t.keys.length; i++)
+            out.push(String(t.keys[i]).toUpperCase());
+        return out.join(" + ");
+    }
+    function targetText(device, code) {
+        var t = pg.mapFor(device, code);
+        if (!t) {
+            var d = pg.buttonDefault(code);
+            return d ? I18n.tr("Default") + " (" + d + ")" : I18n.tr("Default");
+        }
+        return pg.bindingText(t);
+    }
+
+    // KeyEvent tokens (what Combos.chordFrom builds) -> the daemon's key names.
+    // Anything outside the shared table is refused, not silently dropped.
+    function keyToken(t) {
+        var m = { "SUPER": "super", "CTRL": "ctrl", "ALT": "alt", "SHIFT": "shift",
+            "Return": "enter", "Space": "space", "Tab": "tab", "BackSpace": "backspace",
+            "Prior": "pgup", "Next": "pgdn", "Left": "left", "Right": "right",
+            "Up": "up", "Down": "down", "Home": "home", "End": "end" };
+        if (m[t] !== undefined) return m[t];
+        if (/^[A-Z]$/.test(t) || /^[0-9]$/.test(t)) return t.toLowerCase();
+        if (/^F([1-9]|1[0-2])$/.test(t)) return t.toLowerCase();
+        if (["minus", "equal", "bracketleft", "bracketright", "comma", "period",
+             "slash", "semicolon", "apostrophe", "backslash", "grave"].indexOf(t) >= 0)
+            return t;
+        return "";
+    }
+    function chordToKeys(chord) {
+        var parts = String(chord).split("+");
+        var out = [];
+        for (var i = 0; i < parts.length; i++) {
+            var k = pg.keyToken(parts[i].trim());
+            if (k === "")
+                return null;
+            out.push(k);
+        }
+        return out;
+    }
+
+    function startBind(device, code) {
+        pg.captureFor = { "device": device, "button": code };
+        pg.captureWaitClick = false;
+        pg.captureForming = "";
+        pg.enterRecordSubmap();
+        recordTimeout.restart();
+    }
+    function startDetect() {
+        pg.captureFor = { "device": "", "button": 0 };
+        pg.captureWaitClick = true;
+        pg.captureForming = "";
+        mouseCtl.send("mouse.capture", { timeoutMs: 8000 });
+        pg.enterRecordSubmap();
+        recordTimeout.restart();
+    }
+    function stopBind(commit, chord) {
+        recordTimeout.stop();
+        pg.exitRecordSubmap();
+        var c = pg.captureFor;
+        pg.captureFor = null;
+        pg.captureWaitClick = false;
+        pg.captureForming = "";
+        if (!commit || !c)
+            return;
+        var keys = pg.chordToKeys(chord);
+        if (keys === null) {
+            pg.mouseError = I18n.tr("That key is outside the bindable set.");
+            return;
+        }
+        mouseCtl.send("mouse.map", { "device": c.device, "button": c.button,
+            "target": { "kind": "chord", "keys": keys } });
+    }
+    function setDisabled(device, code) {
+        mouseCtl.send("mouse.map", { "device": device, "button": code,
+            "target": { "kind": "disabled" } });
+    }
+    function clearBinding(device, code) {
+        mouseCtl.send("mouse.map", { "device": device, "button": code, "target": null });
+    }
+    function enterRecordSubmap() { if (pg.hub && Settings.supports("submap")) pg.hub.wmAct("submap.enter", ["record"]); }
+    function exitRecordSubmap() { if (pg.hub && Settings.supports("submap")) pg.hub.wmAct("submap.reset"); }
+    Timer {
+        id: recordTimeout
+        interval: 12000
+        onTriggered: pg.stopBind(false, "")
     }
 
     Component.onCompleted: {
@@ -633,11 +870,52 @@ Item {
         }
         Text {
             width: Math.min(parent.width, 720)
-            text: I18n.tr("Keyboard, pointer and touchpad, and key repeat.")
+            text: pg.tab === "MOUSE"
+                ? I18n.tr("Extra buttons on a connected mouse, rebound to keys. Touchpads and laptop pads are left alone.")
+                : I18n.tr("Keyboard, pointer and touchpad, and key repeat.")
             color: Tokens.inkMuted; font.family: Tokens.ui
             font.pixelSize: Tokens.fBody; wrapMode: Text.WordWrap
         }
+        Tabs {
+            options: pg.tabs
+            current: pg.tab
+            onChose: (label) => pg.switchTab(label)
+        }
     }
+
+    // ── the tab host: the keyboard band + body and the mouse body swap with a
+    // settle slide, never a fade. Both panes are live; only the visible one
+    // takes input, and the host clips, so a mid-slide pane never paints over
+    // the rail.
+    Item {
+        id: tabHost
+        anchors { left: parent.left; right: parent.right; top: head.bottom; bottom: parent.bottom }
+        clip: true
+        property int dir: 1
+        property string prevTab: "KEYBOARD"
+        function travel() {
+            dir = pg.tabs.indexOf(pg.tab) >= pg.tabs.indexOf(prevTab) ? 1 : -1;
+            prevTab = pg.tab;
+            var pane = pg.tab === "MOUSE" ? mousePane : kbPane;
+            var other = pg.tab === "MOUSE" ? kbPane : mousePane;
+            pane.x = dir * Tokens.s6 * 2;
+            pane.visible = true;
+            other.visible = false;
+            other.x = 0;
+            paneAnim.target = pane;
+            paneAnim.restart();
+        }
+        NumberAnimation {
+            id: paneAnim
+            property: "x"
+            to: 0
+            duration: Tokens.move
+            easing.type: Tokens.ease
+        }
+
+    Item {
+        id: kbPane
+        anchors.fill: parent
 
     // ── KEYBOARD MAP: pinned under the head so it stays in view while you edit,
     // never scrolled to. A compact live diagram of the layout and the remaps,
@@ -646,9 +924,8 @@ Item {
     // instead of leaving half its width blank.
     Section {
         id: kbmSect
-        anchors { top: head.bottom; topMargin: Tokens.s5 }
+        anchors { top: parent.top; topMargin: Tokens.s5 }
         // the showcase spans the body: its rule runs the width of the cards
-        // below and the diagram sits over the first column.
         width: parent.width - Tokens.s3
         x: 0
         title: I18n.tr("KEYBOARD MAP")
@@ -672,22 +949,30 @@ Item {
                 numlock: pg.hv("desktop.input.numlockByDefault") === true
             }
 
-            // the facts the diagram draws, in words: a mono label over its value
-            Column {
+            // the facts the diagram draws, in words: a mono label over its
+            // value, laid out across the whole band beside the map. They used
+            // to stack in one narrow column and leave the right half of the
+            // page empty; three columns of paired label/value fill the measure
+            // and read as a register, not a queue.
+            Grid {
                 width: Math.max(200, kbmSect.span(Spans.cols) - pinnedMap.width - Tokens.s6)
                 anchors.verticalCenter: pinnedMap.verticalCenter
-                spacing: Tokens.s3
+                columns: 3
+                rowSpacing: Tokens.s4
+                columnSpacing: Tokens.s5
+                readonly property real cellW: (width - 2 * columnSpacing) / 3
                 Repeater {
                     model: [
                         { k: I18n.tr("LAYOUT"), v: pg.nameIn(pg.layoutOptions, pg.primaryLayout(false)) },
                         { k: I18n.tr("VARIANT"), v: pg.nameIn(pg.variantOptions, pg.primaryVariant(false)) },
                         { k: I18n.tr("CAPS"), v: pg.mapLabel(pg.capsMap, pg.pickFrom(pg.capsIds, false)) },
                         { k: I18n.tr("COMPOSE"), v: pg.mapLabel(pg.composeMap, pg.pickFrom(pg.composeIds, false)) },
-                        { k: I18n.tr("SWITCH"), v: pg.mapLabel(pg.grpMap, pg.pickFrom(pg.grpIds, false)) }
+                        { k: I18n.tr("SWITCH"), v: pg.mapLabel(pg.grpMap, pg.pickFrom(pg.grpIds, false)) },
+                        { k: I18n.tr("NUMLOCK"), v: pg.hv("desktop.input.numlockByDefault") === true ? I18n.tr("On at login") : I18n.tr("Off") }
                     ]
                     delegate: Column {
                         required property var modelData
-                        width: parent.width
+                        width: parent.cellW
                         spacing: 1
                         Text {
                             text: modelData.k
@@ -1092,6 +1377,217 @@ Item {
         }
     }
 
+    }   // kbPane
+
+    // ── MOUSE: the extra buttons of a connected mouse, rebound to keys ────
+    // The daemon enumerates /dev/input by capability (a pad is never a mouse,
+    // a laptop alone shows the empty plate), and the remapper lives under the
+    // compositor: it grabs the device, replays it through a uinput clone, and
+    // swaps a bound button for the key chord. Bindings apply the moment they
+    // are set -- no Save, because the daemon owns the file, not the store.
+    Flickable {
+        id: mousePane
+        anchors { left: parent.left; right: parent.right; top: parent.top; bottom: parent.bottom }
+        topMargin: Tokens.s5
+        visible: false
+        contentWidth: width
+        contentHeight: Math.max(mouseBody.height, height)
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+        WheelScroll { }
+
+        CardColumns {
+            id: mouseBody
+            width: mousePane.width - Tokens.s3
+            spacing: Tokens.s5
+            fillTo: mousePane.height
+
+            // the cheap way in: press the button you mean and the daemon finds
+            // its device and code, so you never guess which of five is "Side".
+            SettingCard {
+                width: mouseBody.colWidth
+                visible: pg.mouseDevices.length > 0
+                collapsible: false
+                title: I18n.tr("BIND A BUTTON")
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: false
+                    controlWidth: 110
+                    label: I18n.tr("Press to detect")
+                    desc: I18n.tr("Click an extra button on the mouse, then the key chord you want it to send.")
+                    changed: false
+                    Btn {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        compact: true
+                        text: I18n.tr("DETECT")
+                        onAct: pg.startDetect()
+                    }
+                }
+            }
+            // one card per connected mouse, each row an extra button
+            Repeater {
+                model: pg.mouseDevices
+                delegate: SettingCard {
+                    id: devCard
+                    required property var modelData
+                    width: mouseBody.colWidth
+                    title: String(modelData.name || modelData.id).toUpperCase()
+
+                    readonly property var extra: (modelData.buttons || []).filter(function (c) { return c >= 275; })
+
+                    SettingRow {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        divider: false
+                        source: "mousemap.json"
+                        label: I18n.tr("Connected")
+                        desc: modelData.bus === "bluetooth"
+                            ? I18n.tr("Wireless; bindings follow the device.")
+                            : I18n.tr("Bindings live with this device and reload on replug.")
+                        value: String(modelData.bus || "").toUpperCase()
+                        changed: false
+                    }
+
+                    Repeater {
+                        model: devCard.extra
+                        delegate: SettingRow {
+                            id: btnRow
+                            required property int index
+                            required property var modelData
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            divider: true
+                            controlWidth: 84
+                            source: "mousemap.json"
+                            label: pg.buttonLabel(modelData)
+                            desc: pg.mapFor(devCard.modelData.id, modelData)
+                                ? I18n.tr("Press it and the chord goes to the focused app.")
+                                : I18n.tr("Still sends its default to apps.")
+                            value: ""
+                            changed: false
+
+                            Row {
+                                anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: Tokens.s2
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: pg.targetText(devCard.modelData.id, btnRow.modelData)
+                                    color: pg.mapFor(devCard.modelData.id, btnRow.modelData) ? Tokens.ink : Tokens.inkDim
+                                    font.family: Tokens.mono; font.pixelSize: 10
+                                }
+                                Btn {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    compact: true
+                                    text: pg.mapFor(devCard.modelData.id, btnRow.modelData) ? I18n.tr("CLEAR") : I18n.tr("BIND")
+                                    armed: true
+                                    onAct: {
+                                        if (pg.mapFor(devCard.modelData.id, btnRow.modelData))
+                                            pg.clearBinding(devCard.modelData.id, btnRow.modelData);
+                                        else
+                                            pg.startBind(devCard.modelData.id, btnRow.modelData);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // a mouse with no extra buttons: say so instead of an
+                    // empty card, the row is the finding.
+                    SettingRow {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        visible: devCard.extra.length === 0
+                        divider: false
+                        source: "mousemap.json"
+                        label: I18n.tr("No extra buttons")
+                        desc: I18n.tr("Left, right and wheel only; nothing here to rebind.")
+                        changed: false
+                    }
+                }
+            }
+
+            SettingCard {
+                width: mouseBody.colWidth
+                title: I18n.tr("HOW IT WORKS")
+
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: false
+                    source: "mousemap.json"
+                    label: I18n.tr("Compositor-neutral")
+                    desc: I18n.tr("The keypress is rewritten before the desktop sees it, so it works in every app, on either window manager, and on the lock screen.")
+                    changed: false
+                }
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    source: "mousemap.json"
+                    label: I18n.tr("Per mouse")
+                    desc: I18n.tr("Each device keeps its own bindings; unplug it and nothing else changes.")
+                    changed: false
+                }
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    source: "mousemap.json"
+                    label: I18n.tr("Left-handed")
+                    desc: I18n.tr("Bindings follow the physical button, so the Left-handed switch does not move them.")
+                    changed: false
+                }
+            }
+
+            // the empty plate: a laptop (or a bare three-button box) has
+            // nothing to bind, and the page says so dressed, never blank.
+            SettingCard {
+                width: mouseBody.colWidth
+                visible: pg.mouseDevices.length === 0
+                collapsible: false
+                title: I18n.tr("NO MOUSE DETECTED")
+
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    divider: false
+                    label: I18n.tr("Extra buttons")
+                    desc: pg.mouseDaemonSeen
+                        ? I18n.tr("No mouse is connected. A laptop's own pad is never a mouse, so it stays out of this page.")
+                        : I18n.tr("The shell daemon is not answering; ryoku doctor can repair the session.")
+                    changed: false
+                }
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    controlWidth: 96
+                    label: I18n.tr("Re-detect")
+                    desc: I18n.tr("Plug a mouse in and ask again; hotplugs are noticed on their own too.")
+                    changed: false
+                    Btn {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: I18n.tr("RE-DETECT")
+                        armed: pg.mouseDaemonSeen
+                        onAct: mouseCtl.send("mouse.state", {})
+                    }
+                }
+                SettingRow {
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    visible: pg.mouseError !== ""
+                    label: I18n.tr("Last change")
+                    desc: pg.mouseError
+                    changed: false
+                }
+            }
+        }
+    }
+
+    }   // tabHost
+
     // ── the catalogue overlay: paperLift + lineStrong, one z-plane above ──────
     Item {
         anchors.fill: parent
@@ -1113,5 +1609,93 @@ Item {
             onChose: (name) => pg.chooseCat(name)
             onDismissed: pg.closeCat()
         }
+    }
+
+    // ── the chord recorder: one z-plane above everything, the Keybinds page's
+    // recorder in miniature. Two phases: waiting for the physical button (only
+    // when the user chose Detect), then waiting for the key chord. The
+    // ShortcutInhibitor hands SUPER + anything to this window instead of the
+    // compositor, and the record submap backs it up where the compositor has
+    // one, so the chord lands in the field rather than closing the Hub.
+    Item {
+        visible: pg.capturing
+        z: 950
+        anchors.fill: parent
+        onVisibleChanged: if (visible) chordCapture.forceActiveFocus()
+
+        Rectangle {
+            anchors.fill: parent
+            color: Tokens.paper
+            opacity: 0.55
+            TapHandler { onTapped: pg.stopBind(false, "") }
+        }
+
+        Item {
+            id: chordCapture
+            anchors.fill: parent
+            focus: true
+            Keys.onPressed: (event) => {
+                event.accepted = true;
+                if (event.isAutoRepeat)
+                    return;
+                if (event.key === Qt.Key_Escape) {
+                    pg.stopBind(false, "");
+                    return;
+                }
+                // the physical press comes from the daemon's frames, not the
+                // keyboard; keys only bind the chord once the button is known.
+                if (pg.captureWaitClick)
+                    return;
+                pg.captureForming = Combos.formingChord(event);
+                var chord = Combos.chordFrom(event);
+                if (chord === "")
+                    return;
+                pg.stopBind(true, chord);
+            }
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: 380; height: 176
+            radius: Tokens.radius
+            color: Tokens.paper
+            border.width: Tokens.border
+            border.color: Tokens.lineStrong
+
+            Column {
+                anchors.centerIn: parent
+                width: parent.width - Tokens.s4 * 2
+                spacing: Tokens.s3
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: pg.captureWaitClick
+                        ? I18n.tr("PRESS THE MOUSE BUTTON")
+                        : I18n.tr("PRESS THE KEY CHORD")
+                    color: Tokens.ink
+                    font.family: Tokens.ui; font.pixelSize: 12
+                    font.weight: Font.Medium; font.letterSpacing: Tokens.trackLabel
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: !pg.captureWaitClick
+                    text: pg.buttonLabel(pg.captureFor ? pg.captureFor.button : 0)
+                        + (pg.captureFor && pg.captureFor.device ? " · " + pg.captureFor.device : "")
+                    color: Tokens.inkDim
+                    font.family: Tokens.mono; font.pixelSize: 10
+                }
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: pg.captureForming !== "" ? pg.captureForming : I18n.tr("Esc to cancel")
+                    color: pg.captureForming !== "" ? Tokens.ink : Tokens.inkFaint
+                    font.family: Tokens.mono; font.pixelSize: 11
+                }
+            }
+        }
+    }
+
+    ShortcutInhibitor {
+        window: pg.QsWindow ? pg.QsWindow.window : null
+        enabled: pg.capturing
     }
 }

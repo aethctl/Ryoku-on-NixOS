@@ -1,0 +1,700 @@
+#!/bin/bash
+
+# ryoku-cmd-record: Ryoku's screen recorder. The wf-recorder pipeline ported from
+# iNiR (scripts/videos/record.sh): hardware-encoder selection, PipeWire audio
+# sources with a system+microphone mix, and a live recorder-status.json the
+# shell's Recorder service reads back. Compositor-neutral -- wf-recorder captures
+# through wlr-screencopy, so it records identically on Hyprland and niri, and the
+# focused output is asked through the window-manager seam, never a compositor
+# name. Encoding is dispatched to the strongest GPU (the discrete GPU on a hybrid
+# laptop: NVENC on NVIDIA, VAAPI on a discrete AMD/Intel node); a hardware encode
+# that cannot come up falls back to libx264 so a clip is always produced.
+#
+#   ryoku-cmd-record start [--fullscreen|--region [--geometry WxH+X+Y]|--monitor NAME]
+#                          [--with-desktop-audio] [--with-microphone-audio]
+#   ryoku-cmd-record stop
+#   ryoku-cmd-record status          -> "recording" | "idle"
+#   ryoku-cmd-record --info          -> JSON backend/encoder readout for the Hub
+#   ryoku-cmd-record                 (bare) -> toggle: start fullscreen, else stop
+
+set -euo pipefail
+
+notify() {
+  if command -v notify-send >/dev/null 2>&1; then
+    notify-send -a ryoku-cli "$@" >/dev/null 2>&1 || true
+  fi
+}
+
+require_command() {
+  local command_name="$1" label="$2"
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    notify -u critical "Screen recording failed" "$label is not installed"
+    echo "ryoku-cmd-record: missing command: $command_name" >&2
+    exit 1
+  fi
+}
+
+is_truthy() {
+  case "$1" in true | yes | 1) return 0 ;; *) return 1 ;; esac
+}
+
+# ── Hub-owned recording settings (~/.config/ryoku/recording.json), written by the
+# Recording page: video encode knobs only (fps, quality, codec, framerate mode,
+# encoder). env vars still override, then this file, then the built-in default.
+# Capture mode and audio are per-recording flags, never config.
+recording_config_file() {
+  printf '%s/ryoku/recording.json' "${XDG_CONFIG_HOME:-$HOME/.config}"
+}
+
+cfg_get() {
+  local key="$1" def="$2" val="" f
+  f="$(recording_config_file)"
+  if [[ -r $f ]] && command -v jq >/dev/null 2>&1; then
+    val="$(jq -r "$key // empty" "$f" 2>/dev/null || true)"
+  fi
+  printf '%s' "${val:-$def}"
+}
+
+# ── output directory: identical resolution to Ryoku.Ui.Singletons.Paths and the
+# doctor's reconcile_recordings.go -- the env override, then the Hub's `directory`
+# setting, then ${XDG_VIDEOS_DIR:-$HOME/Videos}/Recordings. Every writer and the
+# recordings list must agree, or a saved clip lands where nothing looks for it.
+recordings_dir() {
+  local configured
+  if [[ -n ${RYOKU_SHELL_RECORDINGS_DIR:-} ]]; then
+    printf '%s\n' "$RYOKU_SHELL_RECORDINGS_DIR"
+    return
+  fi
+  configured="$(cfg_get '.directory' '')"
+  if [[ -n $configured ]]; then
+    printf '%s\n' "${configured/#\~/$HOME}"
+    return
+  fi
+  printf '%s/Recordings\n' "${XDG_VIDEOS_DIR:-$HOME/Videos}"
+}
+
+next_recording_path() {
+  local dir="$1" name_format name path suffix=1
+  name_format="${RYOKU_RECORD_NAME_FORMAT:-recording_%Y-%m-%d_%H.%M.%S}"
+  name="$(date +"$name_format")"
+  name="${name//\//-}"
+  name="${name//$'\n'/-}"
+  path="$dir/$name.mp4"
+  while [[ -e $path ]]; do
+    path="$dir/$name-$suffix.mp4"
+    ((suffix++))
+  done
+  printf '%s\n' "$path"
+}
+
+# ── state files the shell's Recorder service reconciles against.
+STATE_DIR="${RYOKU_STATE_PATH:-$HOME/.local/state/ryoku}"
+PID_FILE="$STATE_DIR/recorder.pid"
+STOP_FILE="$STATE_DIR/recorder.stop"
+STATUS_FILE="$STATE_DIR/recorder-status.json"
+LAST_FILE="$STATE_DIR/last-recording"
+mkdir -p "$STATE_DIR" 2>/dev/null || true
+
+wf_pattern='(^|/)wf-recorder( |$)'
+
+proc_running() {
+  local pattern="$1"
+  command -v pgrep >/dev/null 2>&1 || return 1
+  pgrep -f "$pattern" >/dev/null 2>&1
+}
+
+recorder_running() { proc_running "$wf_pattern"; }
+
+# ── focused output through the seam (compositor-neutral). Empty when it cannot be
+# resolved; wf-recorder then records the only/default output, which is the honest
+# result on a compositor whose outputs we cannot read.
+focused_output() {
+  command -v ryoku-hub >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  ryoku-hub outputs 2>/dev/null \
+    | jq -r 'first(.[] | select(.focused)) // .[0] // {} | .name // empty' 2>/dev/null
+}
+
+validate_monitor_name() {
+  local name="$1"
+  if [[ -z $name || ! $name =~ ^[A-Za-z0-9._-]+$ ]]; then
+    notify -u critical "Screen recording failed" "Invalid monitor: $name"
+    echo "ryoku-cmd-record: invalid monitor: $name" >&2
+    exit 1
+  fi
+}
+
+# ── GPU dispatch: strongest GPU first. NVIDIA -> NVENC on the discrete GPU;
+# otherwise VAAPI on a discrete AMD/Intel render node, then the display-owning
+# node. A runtime hw-encode failure falls through to libx264 in run_capture.
+is_nvidia_gpu() {
+  command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi >/dev/null 2>&1
+}
+
+has_ffmpeg_encoder() {
+  ffmpeg -hide_banner -encoders 2>/dev/null | awk '{print $2}' | grep -Fxq "$1"
+}
+
+# render node (/dev/dri/renderD*) for a card device (a real card or a
+# ryoku-gpu-* symlink), matched by PCI address.
+render_node_for_card() {
+  local ref="$1" card name pci node
+  card="$(readlink -f "$ref" 2>/dev/null || true)"
+  name="${card##*/}"
+  [[ $name == card* ]] || return 1
+  pci="$(readlink -f "/sys/class/drm/$name/device" 2>/dev/null || true)"
+  pci="${pci##*/}"
+  [[ -n $pci ]] || return 1
+  node="/dev/dri/by-path/pci-${pci}-render"
+  [[ -e $node ]] || return 1
+  readlink -f "$node"
+}
+
+# a VAAPI render node, strongest first: an explicit override, the primary GPU
+# pinned by ryoku-gpu (AQ_DRM_DEVICES), a discrete (non-boot_vga) card, the card
+# driving a connected display, then the first render node.
+vaapi_node() {
+  if [[ -n ${RYOKU_RECORD_DEVICE:-} ]]; then
+    printf '%s' "$RYOKU_RECORD_DEVICE"
+    return 0
+  fi
+  local first node card conn
+  if [[ -n ${AQ_DRM_DEVICES:-} ]]; then
+    first="${AQ_DRM_DEVICES%%:*}"
+    if node="$(render_node_for_card "$first")"; then printf '%s' "$node"; return 0; fi
+  fi
+  for card in /sys/class/drm/card[0-9]*; do
+    [[ -e "$card/device/boot_vga" ]] || continue
+    [[ "$(cat "$card/device/boot_vga" 2>/dev/null)" == 0 ]] || continue
+    if node="$(render_node_for_card "${card##*/}")"; then printf '%s' "$node"; return 0; fi
+  done
+  for conn in /sys/class/drm/card*-*; do
+    [[ "$(cat "$conn/status" 2>/dev/null)" == connected ]] || continue
+    [[ ${conn##*/} == *Writeback* ]] && continue
+    if node="$(render_node_for_card "${conn%%-*}")"; then printf '%s' "$node"; return 0; fi
+  done
+  for node in /dev/dri/renderD*; do
+    [[ -e $node ]] || continue
+    printf '%s' "$node"
+    return 0
+  done
+  return 1
+}
+
+# how many DRM render nodes exist: on a hybrid the capture buffer and the encoder
+# live on different cards, so NVENC needs a CPU copy (--no-dmabuf).
+render_node_count() {
+  local n=0 node
+  for node in /dev/dri/renderD*; do [[ -e $node ]] && ((n++)); done
+  printf '%s' "$n"
+}
+
+# resolve the codec + wf-recorder args for the encode. Sets globals VIDEO_CODEC,
+# ENCODER_KIND (nvenc|vaapi|cpu) and the arrays VIDEO_ARGS / VIDEO_DEVICE_ARGS.
+resolve_encoder() {
+  local codec quality encoder fps fmode qp crf bitrate node
+  codec="${RYOKU_RECORD_CODEC:-$(cfg_get '.codec' h264)}"
+  quality="${RYOKU_RECORD_QUALITY:-$(cfg_get '.quality' very_high)}"
+  encoder="${RYOKU_RECORD_ENCODER:-$(cfg_get '.encoder' gpu)}"
+  fps="${RYOKU_RECORD_FPS:-$(cfg_get '.fps' 60)}"
+  fmode="${RYOKU_RECORD_FRAMERATE_MODE:-$(cfg_get '.framerateMode' cfr)}"
+
+  case "$quality" in
+  ultra) qp=16; crf=17; bitrate=20000 ;;
+  very_high) qp=20; crf=20; bitrate=12000 ;;
+  high) qp=24; crf=23; bitrate=8000 ;;
+  *) qp=28; crf=28; bitrate=5000 ;;
+  esac
+
+  FPS="$fps"
+  FRAMERATE_MODE="$fmode"
+  VIDEO_ARGS=()
+  VIDEO_DEVICE_ARGS=()
+
+  # explicit CPU choice, or no ffmpeg to probe: libx264, no GPU.
+  if [[ $encoder == cpu ]] || ! command -v ffmpeg >/dev/null 2>&1; then
+    ENCODER_KIND=cpu
+    VIDEO_CODEC=libx264
+    VIDEO_ARGS=(-c libx264 -x yuv420p -p "preset=veryfast" -p "crf=$crf")
+    return 0
+  fi
+
+  # NVIDIA present -> NVENC on the discrete GPU (skip VAAPI, unreliable on NVIDIA).
+  if is_nvidia_gpu; then
+    local nvenc=""
+    case "$codec" in
+    hevc) has_ffmpeg_encoder hevc_nvenc && nvenc=hevc_nvenc ;;
+    av1) has_ffmpeg_encoder av1_nvenc && nvenc=av1_nvenc ;;
+    *) has_ffmpeg_encoder h264_nvenc && nvenc=h264_nvenc ;;
+    esac
+    [[ -z $nvenc ]] && has_ffmpeg_encoder h264_nvenc && nvenc=h264_nvenc
+    if [[ -n $nvenc ]]; then
+      ENCODER_KIND=nvenc
+      VIDEO_CODEC="$nvenc"
+      VIDEO_ARGS=(-c "$nvenc" -p "b=${bitrate}k")
+      # cross-GPU (display on one card, NVENC on another): the captured buffer
+      # cannot be imported by NVENC, so force a CPU copy.
+      [[ "$(render_node_count)" -gt 1 ]] && VIDEO_ARGS+=(--no-dmabuf)
+      return 0
+    fi
+  fi
+
+  # AMD/Intel -> VAAPI on a render node.
+  node="$(vaapi_node || true)"
+  if [[ -n ${node:-} && -c $node ]]; then
+    local vaapi=""
+    case "$codec" in
+    hevc) has_ffmpeg_encoder hevc_vaapi && vaapi=hevc_vaapi ;;
+    av1) has_ffmpeg_encoder av1_vaapi && vaapi=av1_vaapi ;;
+    vp9) has_ffmpeg_encoder vp9_vaapi && vaapi=vp9_vaapi ;;
+    *) has_ffmpeg_encoder h264_vaapi && vaapi=h264_vaapi ;;
+    esac
+    [[ -z $vaapi ]] && has_ffmpeg_encoder h264_vaapi && vaapi=h264_vaapi
+    if [[ -n $vaapi ]]; then
+      ENCODER_KIND=vaapi
+      VIDEO_CODEC="$vaapi"
+      VIDEO_DEVICE_ARGS=(-d "$node")
+      VIDEO_ARGS=(-c "$vaapi" -F "scale_vaapi=format=nv12" -p "qp=$qp")
+      return 0
+    fi
+  fi
+
+  # nothing hardware could be set up.
+  ENCODER_KIND=cpu
+  VIDEO_CODEC=libx264
+  VIDEO_ARGS=(-c libx264 -x yuv420p -p "preset=veryfast" -p "crf=$crf")
+}
+
+encoder_label() {
+  case "${ENCODER_KIND:-}" in
+  nvenc) printf 'NVIDIA NVENC (%s)' "$VIDEO_CODEC" ;;
+  vaapi) printf 'VAAPI (%s)' "$VIDEO_CODEC" ;;
+  *) printf 'CPU (libx264)' ;;
+  esac
+}
+
+# ── PipeWire audio. AUDIO_MODE is derived from the two capture flags.
+AUDIO_SAMPLE_RATE=48000
+MIX_SINK_PREFIX="ryoku_recorder_mix_"
+MIX_SINK_MODULE=""
+MIX_SYSTEM_MODULE=""
+MIX_MIC_MODULE=""
+AUDIO_DEVICE=""
+ACTIVE_AUDIO_MODE=none
+AUDIO_FALLBACK=false
+
+default_sink_monitor() {
+  command -v pactl >/dev/null 2>&1 || return 0
+  local sink
+  sink="$(pactl get-default-sink 2>/dev/null || true)"
+  [[ -n $sink && $sink != null ]] && printf '%s.monitor' "$sink"
+}
+
+default_source_name() {
+  command -v pactl >/dev/null 2>&1 || return 0
+  local src
+  src="$(pactl get-default-source 2>/dev/null || true)"
+  [[ -n $src && $src != null && $src != *.monitor ]] && { printf '%s' "$src"; return; }
+  pactl list sources short 2>/dev/null | awk '$2 !~ /\.monitor$/ { print $2; exit }' || true
+}
+
+audio_source_exists() {
+  local name="$1"
+  [[ -n $name ]] || return 1
+  pactl list sources short 2>/dev/null \
+    | awk -v n="$name" '$2 == n { f=1 } END { exit(f ? 0 : 1) }'
+}
+
+cleanup_audio_mix() {
+  local m
+  for m in "$MIX_MIC_MODULE" "$MIX_SYSTEM_MODULE" "$MIX_SINK_MODULE"; do
+    [[ -n $m ]] && pactl unload-module "$m" >/dev/null 2>&1 || true
+  done
+  MIX_MIC_MODULE=""; MIX_SYSTEM_MODULE=""; MIX_SINK_MODULE=""
+}
+
+cleanup_stale_audio_mix() {
+  local id
+  while read -r id; do
+    [[ -n $id ]] && pactl unload-module "$id" >/dev/null 2>&1 || true
+  done < <(pactl list modules short 2>/dev/null \
+    | awk -v p="$MIX_SINK_PREFIX" 'index($0, p) { print $1 }' | sort -rn)
+}
+
+# A null sink fed by two loopbacks. wf-recorder takes a single --audio device, so
+# a system+microphone mix has to happen in the audio graph. Ported from iNiR: the
+# combine-stream module records as silence on current PipeWire, so a null sink is
+# the shape that actually carries both signals.
+create_audio_mix() {
+  local system mic mixed
+  system="$(default_sink_monitor)"
+  mic="$(default_source_name)"
+  audio_source_exists "$system" && audio_source_exists "$mic" || return 1
+  cleanup_stale_audio_mix
+  local sink="${MIX_SINK_PREFIX}${UID}_$$"
+  MIX_SINK_MODULE="$(pactl load-module module-null-sink \
+    "sink_name=$sink" "rate=$AUDIO_SAMPLE_RATE" "channels=2" \
+    "channel_map=front-left,front-right" \
+    "sink_properties=device.description=Ryoku_Recorder_Mix" 2>/dev/null || true)"
+  [[ -n $MIX_SINK_MODULE ]] || { cleanup_audio_mix; return 1; }
+  MIX_SYSTEM_MODULE="$(pactl load-module module-loopback \
+    "source=$system" "sink=$sink" "latency_msec=20" "remix=yes" 2>/dev/null || true)"
+  [[ -n $MIX_SYSTEM_MODULE ]] || { cleanup_audio_mix; return 1; }
+  MIX_MIC_MODULE="$(pactl load-module module-loopback \
+    "source=$mic" "sink=$sink" "latency_msec=20" "remix=yes" 2>/dev/null || true)"
+  [[ -n $MIX_MIC_MODULE ]] || { cleanup_audio_mix; return 1; }
+  mixed="${sink}.monitor"
+  for _ in {1..20}; do
+    if audio_source_exists "$mixed"; then AUDIO_DEVICE="$mixed"; return 0; fi
+    sleep 0.05
+  done
+  cleanup_audio_mix
+  return 1
+}
+
+prepare_audio() {
+  AUDIO_DEVICE=""
+  ACTIVE_AUDIO_MODE=none
+  AUDIO_FALLBACK=false
+  case "$AUDIO_MODE" in
+  none) return 0 ;;
+  system)
+    AUDIO_DEVICE="$(default_sink_monitor)"
+    audio_source_exists "$AUDIO_DEVICE" && ACTIVE_AUDIO_MODE=system
+    ;;
+  microphone)
+    AUDIO_DEVICE="$(default_source_name)"
+    audio_source_exists "$AUDIO_DEVICE" && ACTIVE_AUDIO_MODE=microphone
+    ;;
+  both)
+    if create_audio_mix; then
+      ACTIVE_AUDIO_MODE=both
+      return 0
+    fi
+    AUDIO_DEVICE="$(default_sink_monitor)"
+    if audio_source_exists "$AUDIO_DEVICE"; then
+      ACTIVE_AUDIO_MODE=system
+      AUDIO_FALLBACK=true
+      notify "Recorder audio" "Could not mix desktop and microphone. Recording desktop audio only."
+      return 0
+    fi
+    AUDIO_DEVICE="$(default_source_name)"
+    if audio_source_exists "$AUDIO_DEVICE"; then
+      ACTIVE_AUDIO_MODE=microphone
+      AUDIO_FALLBACK=true
+      notify "Recorder audio" "Could not mix desktop and microphone. Recording microphone only."
+      return 0
+    fi
+    ;;
+  esac
+  if [[ $ACTIVE_AUDIO_MODE == none && $AUDIO_MODE != none ]]; then
+    AUDIO_DEVICE=""
+    AUDIO_FALLBACK=true
+    notify "Recorder audio" "The selected audio source is unavailable. Recording without audio."
+  fi
+}
+
+json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+
+write_status() {
+  local pid="$1"
+  printf '{"recorderPid":%s,"requestedAudioMode":"%s","activeAudioMode":"%s","audioFallback":%s}\n' \
+    "$pid" "$(json_escape "$AUDIO_MODE")" "$(json_escape "$ACTIVE_AUDIO_MODE")" "$AUDIO_FALLBACK" \
+    >"$STATUS_FILE" 2>/dev/null || true
+}
+
+# absolute path to the post-save hook (a sibling script), empty when missing so
+# we never call a phantom helper.
+saved_hook() {
+  local here hook
+  here="$(dirname "$(readlink -f "$0")")"
+  hook="$here/ryoku-cmd-recording-saved"
+  [[ -x $hook ]] && { printf '%s' "$hook"; return; }
+  command -v ryoku-cmd-recording-saved >/dev/null 2>&1 && printf '%s' ryoku-cmd-recording-saved
+}
+
+spawn_saved_hook() {
+  local path="$1" hook
+  hook="$(saved_hook)"
+  [[ -n $hook && -n $path && -s $path ]] || return 0
+  setsid "$hook" "$path" regular >/dev/null 2>&1 &
+}
+
+cleanup_session() {
+  cleanup_audio_mix
+  rm -f "$PID_FILE" "$STOP_FILE" "$STATUS_FILE" 2>/dev/null || true
+}
+
+# ── run wf-recorder, retrying once on libx264 if the hardware encode dies within
+# its start window, so a clip is always produced.
+run_capture() {
+  local -a base=("$@")
+  local -a preferred=(wf-recorder "${base[@]}" "${VIDEO_DEVICE_ARGS[@]}" "${VIDEO_ARGS[@]}")
+  local -a audio=()
+  if [[ -n $AUDIO_DEVICE ]]; then
+    audio=(--audio="$AUDIO_DEVICE")
+  fi
+
+  rm -f "$STOP_FILE"
+  "${preferred[@]}" "${audio[@]}" &
+  local pid=$!
+  printf '%s\n' "$pid" >"$PID_FILE"
+  write_status "$pid"
+
+  # a hardware encode that cannot ingest the captured buffer dies in its start
+  # window; give it a beat, and if it fell over with no file, retry on CPU.
+  if [[ $ENCODER_KIND != cpu ]]; then
+    sleep 1.5
+    if ! kill -0 "$pid" 2>/dev/null; then
+      wait "$pid" 2>/dev/null || true
+      if [[ ! -s $OUTPUT_PATH ]]; then
+        ENCODER_KIND=cpu
+        VIDEO_CODEC=libx264
+        notify "Screen recording" "Hardware encoder unavailable; recording on CPU."
+        rm -f "$OUTPUT_PATH"
+        local -a fb=(wf-recorder "${base[@]}" -c libx264 -x yuv420p -p "preset=veryfast" -p "crf=23")
+        "${fb[@]}" "${audio[@]}" &
+        pid=$!
+        printf '%s\n' "$pid" >"$PID_FILE"
+        write_status "$pid"
+      fi
+    fi
+  fi
+
+  local status=0
+  wait "$pid" || status=$?
+  if [[ -f $STOP_FILE ]]; then status=0; fi
+  case "$status" in 130 | 143) status=0 ;; esac
+  return "$status"
+}
+
+# ── Discord-ready copy (ported from iNiR's record.sh stage). With --discord, once
+# the capture finishes shrink the clip into a Discord-friendly size budget: a
+# <name>.discord.mp4 beside the original (the original is kept), only when the clip
+# is over target unless forced. The sibling ryoku-cmd-discord-compress does the
+# two-pass x264 encode. Studio never reaches here.
+DISCORD_TARGET_MB="${RYOKU_RECORD_DISCORD_TARGET_MB:-10}"
+DISCORD_SAFETY_MARGIN_MB="${RYOKU_RECORD_DISCORD_SAFETY_MB:-0.5}"
+DISCORD_AUDIO_KBPS="${RYOKU_RECORD_DISCORD_AUDIO_KBPS:-96}"
+DISCORD_PRESET="${RYOKU_RECORD_DISCORD_PRESET:-slow}"
+DISCORD_MAX_DIMENSION="${RYOKU_RECORD_DISCORD_MAX_DIMENSION:-1280}"
+DISCORD_ONLY_IF_NEEDED="${RYOKU_RECORD_DISCORD_ONLY_IF_NEEDED:-true}"
+
+discord_compressor() {
+  local here hook
+  here="$(dirname "$(readlink -f "$0")")"
+  hook="$here/ryoku-cmd-discord-compress"
+  [[ -x $hook ]] && { printf '%s' "$hook"; return; }
+  command -v ryoku-cmd-discord-compress >/dev/null 2>&1 && printf '%s' ryoku-cmd-discord-compress
+}
+
+maybe_compress_recording() {
+  local input_file="$1" compressor python_cmd
+  [[ -s $input_file ]] || return 0
+  compressor="$(discord_compressor)"
+  python_cmd="$(command -v python3 || true)"
+  if [[ -z $compressor || -z $python_cmd ]] || ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+    notify "Discord compression skipped" "Missing python3, ffmpeg, or ffprobe"
+    return 0
+  fi
+
+  local input_dir input_base input_stem output_file
+  input_dir="$(dirname "$input_file")"
+  input_base="$(basename "$input_file")"
+  input_stem="${input_base%.*}"
+  output_file="$input_dir/${input_stem}.discord.mp4"
+  local cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/ryoku"
+  local lock_file="$cache_dir/discord-compress.lock"
+  mkdir -p "$cache_dir"
+
+  (
+    if command -v flock >/dev/null 2>&1; then
+      exec 9>"$lock_file"
+      if ! flock -n 9; then
+        notify "Discord compression queued" "Another recording is already compressing"
+        flock 9
+      fi
+    fi
+    notify "Compressing recording" "Creating Discord-ready copy under ${DISCORD_TARGET_MB} MB"
+    local -a compress_cmd=(
+      "$python_cmd" "$compressor"
+      --input "$input_file"
+      --output "$output_file"
+      --target-mb "$DISCORD_TARGET_MB"
+      --safety-margin-mb "$DISCORD_SAFETY_MARGIN_MB"
+      --audio-kbps "$DISCORD_AUDIO_KBPS"
+      --preset "$DISCORD_PRESET"
+      --max-dimension "$DISCORD_MAX_DIMENSION"
+      --quiet --json
+    )
+    is_truthy "$DISCORD_ONLY_IF_NEEDED" || compress_cmd+=(--force)
+
+    local result="" status="" result_output="$output_file"
+    if result="$("${compress_cmd[@]}" 2>&1)"; then
+      if command -v jq >/dev/null 2>&1; then
+        status="$(printf '%s' "$result" | jq -r '.status // empty' 2>/dev/null || true)"
+        result_output="$(printf '%s' "$result" | jq -r '.output // empty' 2>/dev/null || printf '%s' "$output_file")"
+      fi
+      if [[ $status == skipped ]]; then
+        notify "Recording already Discord-ready" "$(basename "$input_file") is under ${DISCORD_TARGET_MB} MB"
+      elif [[ -s $result_output ]]; then
+        notify "Discord-ready recording" "$(basename "$result_output")"
+      else
+        notify "Discord compression finished" "$(basename "$input_file")"
+      fi
+    else
+      notify "Discord compression failed" "The original recording was kept."
+    fi
+  )
+}
+
+start_recording() {
+  if recorder_running; then
+    notify "Screen recording" "A recording is already running"
+    return 0
+  fi
+  require_command wf-recorder wf-recorder
+
+  rm -f "$PID_FILE" "$STOP_FILE" "$STATUS_FILE"
+  cleanup_stale_audio_mix
+
+  local -a target=()
+  case "$MODE" in
+  region)
+    require_command slurp slurp
+    local geom="$REGION_GEOM"
+    if [[ -z $geom ]]; then
+      geom="$(slurp -f '%wx%h+%x+%y' 2>/dev/null || true)"
+      [[ -n $geom ]] || exit 0
+    fi
+    if [[ ! $geom =~ ^([0-9]+)x([0-9]+)\+([0-9]+)\+([0-9]+)$ ]]; then
+      notify -u critical "Screen recording failed" "Invalid region: $geom"
+      echo "ryoku-cmd-record: invalid region: $geom" >&2
+      exit 1
+    fi
+    target=(-g "${BASH_REMATCH[3]},${BASH_REMATCH[4]} ${BASH_REMATCH[1]}x${BASH_REMATCH[2]}")
+    ;;
+  monitor)
+    validate_monitor_name "$MONITOR_NAME"
+    target=(-o "$MONITOR_NAME")
+    ;;
+  *)
+    local out
+    out="$(focused_output || true)"
+    [[ -n $out ]] && target=(-o "$out")
+    ;;
+  esac
+
+  resolve_encoder
+  prepare_audio
+
+  local dir path
+  dir="$(recordings_dir)"
+  mkdir -p "$dir"
+  path="$(next_recording_path "$dir")"
+  OUTPUT_PATH="$path"
+  printf '%s\n' "$path" >"$LAST_FILE" 2>/dev/null || true
+
+  local -a base=(-f "$path" -r "$FPS")
+  [[ $FRAMERATE_MODE == cfr ]] && base+=(-D)
+
+  trap cleanup_session EXIT
+  run_capture "${base[@]}" "${target[@]}" || true
+  spawn_saved_hook "$OUTPUT_PATH"
+  ((DISCORD)) && maybe_compress_recording "$OUTPUT_PATH"
+}
+
+stop_recording() {
+  local pid=""
+  pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [[ $pid =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null; then
+    : >"$STOP_FILE"
+    kill -INT "$pid" 2>/dev/null || true
+  elif recorder_running; then
+    : >"$STOP_FILE"
+    pkill -INT -x wf-recorder 2>/dev/null || true
+  else
+    notify "Screen recording" "No active recording found"
+    return 0
+  fi
+  # a wf-recorder that ignores SIGINT (never came up) gets a short grace, then a
+  # force kill so stop always clears the capture.
+  local _
+  for _ in $(seq 20); do recorder_running || break; sleep 0.1; done
+  if recorder_running; then
+    pkill -KILL -x wf-recorder 2>/dev/null || true
+  fi
+}
+
+info_recording() {
+  resolve_encoder
+  printf '{"backend":"wf","encoder":"%s","fps":"%s","quality":"%s","codec":"%s","framerateMode":"%s"}\n' \
+    "$(json_escape "$(encoder_label)")" \
+    "$(json_escape "$FPS")" \
+    "$(json_escape "${RYOKU_RECORD_QUALITY:-$(cfg_get '.quality' very_high)}")" \
+    "$(json_escape "${RYOKU_RECORD_CODEC:-$(cfg_get '.codec' h264)}")" \
+    "$(json_escape "$FRAMERATE_MODE")"
+}
+
+# ── argument parse.
+ACTION=auto
+MODE=fullscreen
+AUDIO_MODE=none
+REGION_GEOM=""
+MONITOR_NAME=""
+OUTPUT_PATH=""
+_desktop_audio=0
+_mic_audio=0
+DISCORD=0
+
+while (($# > 0)); do
+  case "$1" in
+  start) ACTION=start ;;
+  stop | --stop) ACTION=stop ;;
+  status | --status) ACTION=status ;;
+  info | --info) ACTION=info ;;
+  --fullscreen) MODE=fullscreen; ACTION=start ;;
+  --region | -r) MODE=region; ACTION=start ;;
+  --monitor)
+    shift
+    MONITOR_NAME="${1:-}"
+    MODE=monitor
+    ACTION=start
+    ;;
+  --geometry)
+    shift
+    REGION_GEOM="${1:-}"
+    ;;
+  --with-desktop-audio) _desktop_audio=1; ACTION=start ;;
+  --with-microphone-audio) _mic_audio=1; ACTION=start ;;
+  --discord) DISCORD=1; ACTION=start ;;
+  --help | -h | help)
+    sed -n '3,20p' "$0" | sed 's/^# \{0,1\}//'
+    exit 0
+    ;;
+  *)
+    echo "ryoku-cmd-record: unknown argument: $1" >&2
+    exit 2
+    ;;
+  esac
+  shift
+done
+
+if ((_desktop_audio && _mic_audio)); then
+  AUDIO_MODE=both
+elif ((_desktop_audio)); then
+  AUDIO_MODE=system
+elif ((_mic_audio)); then
+  AUDIO_MODE=microphone
+fi
+
+if [[ $ACTION == auto ]]; then
+  if recorder_running; then ACTION=stop; else ACTION=start; fi
+fi
+
+case "$ACTION" in
+start) start_recording ;;
+stop) stop_recording ;;
+status) recorder_running && echo recording || echo idle ;;
+info) info_recording ;;
+esac

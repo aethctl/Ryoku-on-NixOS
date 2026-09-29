@@ -1,0 +1,157 @@
+import QtQuick
+import Quickshell
+import Quickshell.Wayland
+import Ryoku.Ui.Singletons
+
+PanelWindow {
+    id: picker
+
+    property bool shown: false
+    property var _screen: null
+
+    screen: picker._screen
+    visible: picker.shown
+    color: "transparent"
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.namespace: "ryogami-picker"
+    WlrLayershell.keyboardFocus: picker.shown ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    anchors { top: true; bottom: true; left: true; right: true }
+
+    property SettingValue _monitorSetting: SettingValue { key: "monitor" }
+    property SettingValue _backdrop: SettingValue { key: "general.selectorBackdropOpacity" }
+    readonly property real _backdropOpacity: {
+        var v = Number(picker._backdrop.value)
+        return isNaN(v) ? 0 : Math.max(0, Math.min(1, v / 100))
+    }
+
+    Binding {
+        target: Settings
+        property: "viewportWidth"
+        value: picker.width
+        when: picker.width > 0
+    }
+
+    function show() {
+        if (picker.shown)
+            return
+        picker._latchScreen()
+        picker.shown = true
+    }
+    function hide() { picker.shown = false }
+    function toggle() { if (picker.shown) picker.hide(); else picker.show() }
+    function openSettings(tab) {
+        picker.show()
+        pickerState.openSheet("settings", tab ? { tab: tab } : ({}))
+    }
+
+    function _screenByName(name) {
+        var ss = Quickshell.screens
+        for (var i = 0; i < ss.length; ++i)
+            if (ss[i].name === name)
+                return ss[i]
+        return null
+    }
+    function _latchScreen() {
+        var name = picker._monitorSetting.value ? String(picker._monitorSetting.value) : ""
+        if (name) {
+            picker._screen = picker._screenByName(name)
+            pickerState.monitor = name
+            return
+        }
+        Daemon.call("wm.focusedOutput", {}, function(result, error) {
+            var n = ""
+            if (!error && result)
+                n = (typeof result === "string") ? result : (result.name || result.output || "")
+            picker._screen = n ? picker._screenByName(n) : null
+            pickerState.monitor = n
+        })
+    }
+
+    function _restoreFocus() {
+        if (!picker.shown)
+            return
+        if (pickerState.sheet !== "" || pickerState.searchOpen)
+            return   // a text surface owns the keyboard
+        cardField.forceActiveFocus()
+    }
+
+    Connections {
+        target: pickerState
+        function onSheetChanged() { picker._restoreFocus() }
+        function onSearchOpenChanged() { picker._restoreFocus() }
+        function onMultipickerOpenChanged() { picker._restoreFocus() }
+        function onHelpOpenChanged() { picker._restoreFocus() }
+        function onRiceWorkshopOpenChanged() { picker._restoreFocus() }
+        function onThemeBarOpenChanged() { picker._restoreFocus() }
+    }
+
+    PickerState {
+        id: pickerState
+        view: libraryView
+        field: cardField
+        shown: picker.shown
+        onHideRequested: picker.hide()
+        onToastRequested: (message, kind) => toastLayer.show(message, kind)
+    }
+
+    LibraryView {
+        id: libraryView
+        collection: pickerState.collection
+    }
+
+    FocusScope {
+        id: content
+        anchors.fill: parent
+        focus: true
+        Keys.onPressed: (event) => keymap.handleKey(event)
+
+        Rectangle {
+            anchors.fill: parent
+            color: "black"
+            opacity: picker._backdropOpacity
+            visible: opacity > 0
+        }
+
+        CardField {
+            id: cardField
+            anchors.fill: parent
+            focus: true
+            source: pickerState.view
+            settings: Settings
+            mode: pickerState.mode
+            active: picker.shown
+            interactive: pickerState.sheet === "" && !pickerState.multipickerOpen
+                && !pickerState.helpOpen && !pickerState.riceWorkshopOpen
+            palette: ({
+                primary: Theme.primary,
+                accent: Theme.primary,
+                surface: Theme.surface,
+                surfaceVariant: Theme.surfaceVariant,
+                outline: Theme.outline,
+                text: Theme.surfaceText,
+                shadow: Theme.background
+            })
+            onActivated: (row) => keymap.mouseGesture(false, Qt.NoModifier, row)
+            onContextRequested: (row, pos) => keymap.mouseGesture(true, Qt.NoModifier, row)
+            onBackgroundClicked: () => pickerState.goBack()
+        }
+
+        CardChrome { anchors.fill: parent; state: pickerState }
+        EmptyState { anchors.fill: parent; state: pickerState }
+
+        FilterBar { anchors.fill: parent; state: pickerState }
+        SearchPanel { anchors.fill: parent; state: pickerState }
+        HelpOverlay { anchors.fill: parent; state: pickerState }
+        ThemeBar { anchors.fill: parent; state: pickerState }
+        RiceWorkshop { anchors.fill: parent; state: pickerState }
+
+        CardBackPanel { anchors.fill: parent; state: pickerState }
+        Multipicker { anchors.fill: parent; state: pickerState }
+        SceneBackdrop { anchors.fill: parent; state: pickerState }
+        SheetHost { anchors.fill: parent; state: pickerState }
+        ToastLayer { id: toastLayer; anchors.fill: parent; state: pickerState }
+
+        Keymap { id: keymap; state: pickerState }
+    }
+}

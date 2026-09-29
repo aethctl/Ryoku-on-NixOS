@@ -13,10 +13,10 @@ import Ryoku.Ui.Singletons
 // Capture card: the Super+S surface, a frame-edge card on the shared PopoutCard
 // skin so it opens, melts and dismisses exactly like the music / bluetooth cards.
 // Screenshot is the quick path -- pick a delay, a save target and a mode; with
-// "Beautify after" on the saved shot then opens in Ryoshot. Record starts a Quick
-// capture (the floating island takes over the live controls), with desktop / mic
-// toggles and an "edit in Ryomotion when done" hand-off. Every option is
-// remembered (Capture / Recorder prefs). Compact by design; never grabs the keyboard.
+// "Beautify after" on the saved shot then opens in Ryoshot. Record starts a
+// capture (the floating island takes over the live controls) with desktop / mic
+// toggles. Every option is remembered (Capture / Recorder prefs). Compact by
+// design; never grabs the keyboard.
 Item {
     id: root
 
@@ -46,23 +46,27 @@ Item {
     function shoot(mode) { root.requestClose(); Capture.shoot(mode); }
     function record(mode) {
         root.requestClose();
-        // "screen" records the focused output (no target flag); the other three
-        // raise the shared selection overlay for that family via recordTarget,
-        // which applies the delay after the pick. Screen has nothing to pick, so
-        // it arms the same delay here rather than being the one target that
-        // ignores it.
-        if (mode === "screen")
-            Recorder.startAfter(Recorder.recordArgs(), Capture.delay);
-        else
-            Capture.recordTarget(mode, Recorder.recordArgs());
+        // Studio mode records with a cursor sidecar and opens the clip in Ryoku
+        // Motion; otherwise a Quick capture (save + notify, plus the optional
+        // edit-after / Discord post-actions). Screen has no target to pick, so it
+        // arms the delay here; the other three pick first, then apply the delay.
+        if (mode === "screen") {
+            if (Recorder.studioMode)
+                Recorder.startStudio(Recorder.optDesktopAudio, Recorder.optMic, "");
+            else
+                Recorder.startAfter(Recorder.recordArgs(), Capture.delay);
+        } else {
+            Capture.recordTarget(mode, Recorder.recordArgs(), Recorder.studioMode);
+        }
     }
 
     // ── recent captures gallery (roomy tab) ─────────────────────────────────────
     // The latest screenshots and recordings, each in its own labelled group so the
     // two never blur together. A recording shows a poster frame with a play badge
     // and its duration; a click on any tile opens that group's folder.
-    readonly property string recordingsDir: Quickshell.env("RYOKU_SCREENRECORD_DIR")
-        || ((Quickshell.env("XDG_VIDEOS_DIR") || (Quickshell.env("HOME") + "/Videos")) + "/Recordings")
+    // The one recordings directory every writer and list agree on (Paths resolves
+    // the env override, the Hub's setting, then the XDG Videos default).
+    readonly property string recordingsDir: Paths.recordingsDir
     readonly property string thumbDir: Quickshell.env("HOME") + "/.cache/ryoku-capture-thumbs"
     property var clipDur: ({})                // recording path -> "M:SS"
     property var clipPoster: ({})             // recording path -> poster jpg path
@@ -595,7 +599,8 @@ Item {
             ModeTile { w: (root.innerW - root.gap * 3) / 4; glyph: "region"; label: I18n.tr("Region"); accent: true; onTapped: root.record("region") }
         }
 
-        // live indicator: pulsing REC tag, elapsed clock, pause + stop.
+        // live indicator: pulsing REC tag, elapsed clock, stop. The floating island
+        // owns the full live controls; this is the card's compact mirror.
         Rectangle {
             width: parent.width
             visible: Recorder.anyActive
@@ -614,12 +619,17 @@ Item {
                     width: 8 * root.s
                     height: width
                     radius: width / 2
-                    color: Recorder.paused ? root.inkDim : Theme.vermLit
-                    opacity: Recorder.paused ? 1 : Recorder.pulse
+                    color: Theme.vermLit
+                    SequentialAnimation on opacity {
+                        running: Recorder.active
+                        loops: Animation.Infinite
+                        NumberAnimation { to: 0.25; duration: 620; easing.type: Easing.InOutSine }
+                        NumberAnimation { to: 1.0; duration: 620; easing.type: Easing.InOutSine }
+                    }
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: Recorder.paused ? I18n.tr("Paused") : I18n.tr("Recording")
+                    text: I18n.tr("Recording")
                     color: root.ink
                     font.family: Theme.fontPrimary
                     font.pixelSize: 11.5 * root.s
@@ -634,36 +644,39 @@ Item {
                     font.features: { "tnum": 1 }
                 }
             }
-            Row {
+            MiniBtn {
                 anchors.right: parent.right
                 anchors.rightMargin: 7 * root.s
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 2 * root.s
-                MiniBtn {
-                    visible: Recorder.canPause
-                    glyph: Recorder.paused ? "play" : "pause"
-                    tint: root.ink
-                    onTapped: Recorder.togglePause()
-                }
-                MiniBtn {
-                    glyph: "stop"
-                    tint: Theme.vermLit
-                    onTapped: Recorder.studioActive ? Recorder.stopStudio() : Recorder.stop()
-                }
+                glyph: "stop"
+                tint: Theme.vermLit
+                onTapped: Recorder.stop()
             }
         }
 
-        // Post-capture actions for Quick recordings.
+        // Studio / post-capture options (pre-record only). Studio records for Ryoku
+        // Motion with a cursor-follow sidecar; edit-after opens a Quick clip in the
+        // editor when it ends; Discord makes a size-capped copy. Studio always edits
+        // and never compresses, so those two hide while it is on.
         InlineToggle {
             width: parent.width
+            visible: !Recorder.anyActive
             glyph: "film"
-            label: I18n.tr("Edit in Ryomotion")
+            label: I18n.tr("Studio: Ryoku Motion + cursor zoom")
+            on: Recorder.studioMode
+            onToggled: Recorder.studioMode = !Recorder.studioMode
+        }
+        InlineToggle {
+            width: parent.width
+            visible: !Recorder.anyActive && !Recorder.studioMode
+            glyph: "folder"
+            label: I18n.tr("Edit in Ryoku Motion when done")
             on: Recorder.editMode
             onToggled: Recorder.editMode = !Recorder.editMode
         }
         InlineToggle {
             width: parent.width
-            visible: !Recorder.anyActive
+            visible: !Recorder.anyActive && !Recorder.studioMode
             glyph: "discord"
             label: I18n.tr("Compact for Discord")
             on: Recorder.discordMode

@@ -191,6 +191,7 @@ ShellRoot {
                 wallpaperLive: wallpaper.live
                 videoMuted: wallpaper.videoMuted
                 videoVolume: wallpaper.videoVolume
+                videoPaused: wallpaper.videoPaused
             }
 
             // A blurred copy of the wallpaper for the compositor's overview
@@ -385,7 +386,7 @@ ShellRoot {
             }
             LazyLoader {
                 id: regionLoader
-                property bool open: Recorder.anyActive || Recorder.chooserOpen
+                property bool open: Recorder.anyActive
                 activeAsync: open || regionHold.running
                 onOpenChanged: if (!open && active) regionHold.restart()
                 RegionOverlay {
@@ -423,6 +424,33 @@ ShellRoot {
                 }
             }
             Timer { id: keypressHold; interval: 20000 }
+            // The floating recording island: the one recording HUD on every bar
+            // style, a standalone layer-shell surface rather than frame chrome. It
+            // shows on the output being recorded -- the screen holding the region
+            // box, else the focused output, else the first screen -- so a
+            // multi-monitor setup gets one island on the right screen.
+            LazyLoader {
+                id: recordIslandLoader
+                readonly property bool isTarget: {
+                    var s = perScreen.modelData;
+                    var m = /^(\d+)x(\d+)\+(\d+)\+(\d+)$/.exec(Recorder.regionGeom);
+                    if (m) {
+                        var ox = parseInt(m[3]);
+                        var oy = parseInt(m[4]);
+                        return ox >= s.x && ox < s.x + s.width && oy >= s.y && oy < s.y + s.height;
+                    }
+                    if (Wm.focusedOutput && Wm.focusedOutput.length > 0)
+                        return s.name === Wm.focusedOutput;
+                    return ShellState.screens.length > 0 && ShellState.screens[0].name === s.name;
+                }
+                property bool open: isTarget && (Recorder.anyActive || Recorder.countingDown)
+                activeAsync: open || recordIslandHold.running
+                onOpenChanged: if (!open && active) recordIslandHold.restart()
+                RecordIsland {
+                    modelData: perScreen.modelData
+                }
+            }
+            Timer { id: recordIslandHold; interval: 20000 }
             // Shown only on the monitor whose frame bar raised it; the positive
             // button runs the power action through the daemon, then clears.
             LazyLoader {
@@ -693,10 +721,13 @@ ShellRoot {
     Connections {
         target: Polkit
         function onActiveChanged() {
-            if (Polkit.active)
-                ShellState.requestSurface("polkit", "", undefined);
-            else
+            // The iRiS bar style draws this prompt in its own dialog.
+            if (Polkit.active) {
+                if (Config.barStyle !== "iris")
+                    ShellState.requestSurface("polkit", "", undefined);
+            } else {
                 ShellState.closeSurface("polkit", "");
+            }
         }
     }
 
@@ -756,6 +787,46 @@ ShellRoot {
             const st = ShellState.forActive();
             if (st)
                 root.placeVisualizer(false);
+        }
+    }
+
+    // Enter or leave the desktop-widget editor without the right-click menu, so
+    // a keybind or the daemon can open it. niri has no global-shortcut protocol,
+    // so every shell surface is driven this way; the editor is no exception.
+    IpcHandler {
+        target: "desktop"
+        function editWidgets(mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            // The editor targets one monitor by exact name; a cold focused-output
+            // cache (niri via a keybind before a window is focused) yields "",
+            // which matches no desktop, so fall back to the first output.
+            if (!m || m.length === 0)
+                m = ShellState.screens.length > 0 ? ShellState.screens[0].name : "";
+            StageCfg.StageSession.enterWidgets(m);
+        }
+        function editDone(): void { StageCfg.StageSession.leave(); }
+        // Open a widget's right-click menu on a monitor (empty = focused).
+        function menu(widget: string, mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            ShellState.requestWidgetMenu(m, widget);
+        }
+        // Open a widget's inspector (Customize sheet) on a monitor (empty =
+        // focused), the off-surface twin of the right-click Customize row.
+        function customize(widget: string, mon: string): void {
+            var m = mon;
+            if (!m || m.length === 0) {
+                const st = ShellState.forActive();
+                m = (st && st.modelData) ? st.modelData.name : "";
+            }
+            ShellState.requestWidgetCustomize(m, widget);
         }
     }
 

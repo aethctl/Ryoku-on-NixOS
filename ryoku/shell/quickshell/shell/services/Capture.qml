@@ -42,6 +42,7 @@ Singleton {
     property bool _beautify: false         // beautify choice latched for the pending shot
     property string _outPath: ""           // resolved PNG path ("" = clipboard-only stream)
     property var _recordAudio: []          // extra Recorder args for a targeted record
+    property bool _recordStudio: false     // the pending targeted record is a Studio capture
     property var _pending: null            // { flag, val } grim target for the pending shot
 
     // Ryoku owns its screenshot location; the filename pattern is the reference
@@ -91,9 +92,10 @@ Singleton {
     // screenshot uses for this family, then hand the picked target to the
     // existing Recorder (no capture of our own). mode: "monitor" | "window" |
     // "region"; a window and a region both record their plain rect.
-    function recordTarget(mode, audioArgs) {
+    function recordTarget(mode, audioArgs, studio) {
         root._purpose = "record";
         root._recordAudio = audioArgs || [];
+        root._recordStudio = studio === true;
         root.selecting = mode;
     }
 
@@ -106,9 +108,13 @@ Singleton {
             var rgx = Math.round(result.monX + result.x);
             var rgy = Math.round(result.monY + result.y);
             var geom = Math.round(result.w) + "x" + Math.round(result.h) + "+" + rgx + "+" + rgy;
-            // A monitor becomes -w <NAME> on the KMS backend and degrades to this
-            // rect on the portal backend, so it carries both; a window is captured
-            // by its area, so window and region both record the plain --region rect.
+            // Studio records the picked rect through the wrapper (cursor sidecar +
+            // Ryoku Motion); a Quick capture records a monitor by name (or the rect
+            // for window/region) and just saves.
+            if (root._recordStudio) {
+                Recorder.startStudio(Recorder.optDesktopAudio, Recorder.optMic, geom);
+                return;
+            }
             var args = result.mode === "monitor"
                 ? ["--monitor", result.output, "--geometry", geom]
                 : ["--region", "--geometry", geom];

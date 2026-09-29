@@ -1,0 +1,9 @@
+module inir.modules.common
+IrisDefaults 1.0 IrisDefaults.js
+singleton Appearance 1.0 Appearance.qml
+singleton Config 1.0 Config.qml
+singleton Directories 1.0 Directories.qml
+singleton Icons 1.0 Icons.qml
+singleton Images 1.0 Images.qml
+singleton MascotCatalog 1.0 MascotCatalog.qml
+singleton Persistent 1.0 Persistent.qml

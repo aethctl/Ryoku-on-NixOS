@@ -278,8 +278,8 @@ func Materialize() error {
 	// retiredKeep: a path Ryoku used to lay into ~/.config and deliberately
 	// stopped shipping. The manifest prune would delete the user's copy, which
 	// for mimeapps.list means throwing away every default app they picked, the
-	// exact damage that moving Ryoku's map to the vendor layer
-	// (/usr/share/applications/mimeapps.list) exists to stop. `ryoku doctor`
+	// exact damage that moving Ryoku's map to the site layer
+	// (/usr/local/share/applications/mimeapps.list) exists to stop. `ryoku doctor`
 	// strips the stale Ryoku lines out of it instead.
 	retiredKeep := map[string]bool{"mimeapps.list": true}
 

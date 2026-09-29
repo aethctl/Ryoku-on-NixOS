@@ -49,17 +49,16 @@ type SessionMeta struct {
 
 // AcpEvent is the translated stream ws.go forwards to the dashboard.
 type AcpEvent struct {
-	Type         string // state | agent_text | agent_thought | user_text | tool | permission | turn_end | models | commands | session_info | usage | replay_start | replay_end
+	Type         string // state | agent_text | agent_thought | user_text | tool | permission | permission_resolved | turn_end | models | commands | session_info | usage | replay_start | replay_end
 	State        string
 	Err          string
 	Text         string
-	ToolID       string
-	ToolTitle    string
-	ToolKind     string
-	ToolStatus   string
+	Tool         toolView
+	ToolAuto     bool // the daemon approved this call itself (read-only policy)
 	RequestID    string
 	PermTitle    string
 	Options      []PermOption
+	Outcome      string // permission_resolved: allowed | rejected | cancelled
 	StopReason   string
 	Models       []ModelInfo
 	CurrentModel string
@@ -97,9 +96,13 @@ type acpConn struct {
 	sessionID string
 	vault     string
 	closed    bool
-	// answeredPerms: a permission request is replied to exactly once, even
+	// eventsDone: the reader closed the event stream; emit becomes a no-op.
+	eventsDone bool
+	// openPerms holds the permission requests still waiting on a person, with
+	// their options, so an answer can be named (allowed/rejected) and a cancel
+	// can release every one of them. Each is replied to exactly once, even
 	// when the dashboard and the terminal race to answer it.
-	answeredPerms map[int64]bool
+	openPerms map[int64][]PermOption
 
 	// configStamp is the hermes config the process loaded at spawn; hermes
 	// reads config.yaml and .env once, so a session outlives a `hermes setup`
@@ -115,6 +118,9 @@ type acpConn struct {
 	// agentName is the chat backend's display name (Hermes, Oh My Pi, ...), so
 	// the UI can label the session even when the agent advertises no model list.
 	agentName string
+	// modelOption is the id of the agent's model config option when it offers
+	// models as ACP configOptions (omp) instead of the legacy models block.
+	modelOption string
 
 	events chan AcpEvent
 }
@@ -138,11 +144,11 @@ func (c *acpConn) stale() bool {
 
 func newACPConn(in io.Writer, out io.Reader, closer io.Closer) *acpConn {
 	c := &acpConn{
-		in:            in,
-		closer:        closer,
-		pending:       map[int64]chan rpcMsg{},
-		events:        make(chan AcpEvent, 256),
-		answeredPerms: map[int64]bool{},
+		in:        in,
+		closer:    closer,
+		pending:   map[int64]chan rpcMsg{},
+		events:    make(chan AcpEvent, 1024),
+		openPerms: map[int64][]PermOption{},
 	}
 	go c.readLoop(out)
 	return c
@@ -206,7 +212,8 @@ func (c *acpConn) respond(id int64, result any) {
 }
 
 // sessionResult is the shape session/new|load|resume share: model state rides
-// along with the id.
+// along with the id, either as the legacy models block (hermes) or as a
+// select config option in the "model" category (omp).
 type sessionResult struct {
 	SessionID string `json:"sessionId"`
 	Models    *struct {
@@ -217,39 +224,81 @@ type sessionResult struct {
 		} `json:"availableModels"`
 		CurrentModelID string `json:"currentModelId"`
 	} `json:"models"`
+	ConfigOptions []acpConfigOption `json:"configOptions"`
+}
+
+type acpConfigOption struct {
+	ID           string `json:"id"`
+	Category     string `json:"category"`
+	Type         string `json:"type"`
+	CurrentValue string `json:"currentValue"`
+	Options      []struct {
+		Value       string `json:"value"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	} `json:"options"`
+}
+
+// modelState is the models an agent offers and the one it runs; option is
+// the config option id that switches it ("" means session/set_model).
+type modelState struct {
+	models  []ModelInfo
+	current string
+	option  string
+	ok      bool
+}
+
+func (r sessionResult) modelState() modelState {
+	if r.Models != nil {
+		st := modelState{current: r.Models.CurrentModelID, ok: true}
+		for _, m := range r.Models.Available {
+			st.models = append(st.models, ModelInfo{ID: m.ModelID, Name: m.Name, Description: m.Description})
+		}
+		return st
+	}
+	return configModelState(r.ConfigOptions)
+}
+
+func configModelState(opts []acpConfigOption) modelState {
+	for _, o := range opts {
+		if o.Category != "model" || o.Type != "select" {
+			continue
+		}
+		st := modelState{current: o.CurrentValue, option: o.ID, ok: true}
+		for _, v := range o.Options {
+			desc := v.Description
+			if desc == v.Value {
+				desc = ""
+			}
+			st.models = append(st.models, ModelInfo{ID: v.Value, Name: v.Name, Description: desc})
+		}
+		return st
+	}
+	return modelState{}
 }
 
 // emitModels always emits a models event for a fresh session, carrying the
 // backend's name so the UI can label the agent even when it advertises no
-// models (omp, for one). A stale model from a different backend is never shown.
-func (c *acpConn) emitModels(res json.RawMessage) {
-	var out sessionResult
-	_ = json.Unmarshal(res, &out)
-	var ms []ModelInfo
-	current := ""
-	if out.Models != nil {
-		ms = make([]ModelInfo, 0, len(out.Models.Available))
-		for _, m := range out.Models.Available {
-			ms = append(ms, ModelInfo{ID: m.ModelID, Name: m.Name, Description: m.Description})
-		}
-		current = out.Models.CurrentModelID
-	}
-	c.emit(AcpEvent{Type: "models", Models: ms, CurrentModel: current, AgentName: c.agentName})
+// models. A stale model from a different backend is never shown.
+func (c *acpConn) emitModels(st modelState) {
+	c.mu.Lock()
+	c.modelOption = st.option
+	c.mu.Unlock()
+	c.emit(AcpEvent{Type: "models", Models: st.models, CurrentModel: st.current, AgentName: c.agentName})
 }
 
 // reconcileModel keeps a fresh session on the remembered model, and remembers
 // the live model when nothing is stored yet, so every surface and `status`
 // agree on one model that survives restarts.
-func (c *acpConn) reconcileModel(res json.RawMessage, method string) {
-	var out sessionResult
-	if json.Unmarshal(res, &out) != nil || out.Models == nil {
+func (c *acpConn) reconcileModel(st modelState, method string) {
+	if !st.ok {
 		return
 	}
-	current := out.Models.CurrentModelID
+	current := st.current
 	saved := savedSessionModel()
 	avail := func(id string) bool {
-		for _, m := range out.Models.Available {
-			if m.ModelID == id {
+		for _, m := range st.models {
+			if m.ID == id {
 				return true
 			}
 		}
@@ -258,11 +307,7 @@ func (c *acpConn) reconcileModel(res json.RawMessage, method string) {
 	// A remembered pick that is still on offer: apply it to this fresh session.
 	if method == "session/new" && saved != "" && saved != current && avail(saved) {
 		if err := c.SetModel(saved); err == nil {
-			ms := make([]ModelInfo, 0, len(out.Models.Available))
-			for _, m := range out.Models.Available {
-				ms = append(ms, ModelInfo{ID: m.ModelID, Name: m.Name, Description: m.Description})
-			}
-			c.emit(AcpEvent{Type: "models", Models: ms, CurrentModel: saved})
+			c.emit(AcpEvent{Type: "models", Models: st.models, CurrentModel: saved, AgentName: c.agentName})
 			return
 		}
 	}
@@ -305,7 +350,7 @@ func (c *acpConn) Initialize(vault string) error {
 // optional capabilities from the initialize response.
 func (c *acpConn) applyInitResult(res json.RawMessage) {
 	var out struct {
-		ProtocolVersion int `json:"protocolVersion"`
+		ProtocolVersion   int `json:"protocolVersion"`
 		AgentCapabilities struct {
 			LoadSession        bool `json:"loadSession"`
 			PromptCapabilities struct {
@@ -330,14 +375,22 @@ func (c *acpConn) openSession(method string, params map[string]any) error {
 		return err
 	}
 	var out sessionResult
-	if err := json.Unmarshal(res, &out); err != nil || out.SessionID == "" {
+	if err := json.Unmarshal(res, &out); err != nil {
+		return errors.New(method + ": " + err.Error())
+	}
+	// ACP's session/load answers without an id: the session is the one asked for.
+	if out.SessionID == "" {
+		out.SessionID, _ = params["sessionId"].(string)
+	}
+	if out.SessionID == "" {
 		return errors.New(method + ": no sessionId")
 	}
 	c.mu.Lock()
 	c.sessionID = out.SessionID
 	c.mu.Unlock()
-	c.emitModels(res)
-	c.reconcileModel(res, method)
+	st := out.modelState()
+	c.emitModels(st)
+	c.reconcileModel(st, method)
 	return nil
 }
 
@@ -384,35 +437,59 @@ func (c *acpConn) ListSessions() []SessionMeta {
 	return list
 }
 
-// cleanTitle drops a session title that is only the injected identity preamble;
-// hermes occasionally titles a fresh session from the whole first prompt.
+// cleanTitle drops what only the agent saw from a session title (hermes
+// occasionally titles a fresh session from the whole first prompt); a title
+// cut off inside the preamble is dropped.
 func cleanTitle(t string) string {
-	if len(t) >= 8 && t[:8] == "[system:" {
+	if !hasInjectedBlock(t) {
+		return t
+	}
+	rest := stripIdentityPreamble(t)
+	if hasInjectedBlock(rest) {
 		return ""
 	}
-	return t
+	return rest
 }
 
-// stripIdentityPreamble removes the injected Needle identity from a replayed
-// user message, so a loaded session shows the question the user actually typed
-// (hermes stores the full prompt, preamble and all, and replays it verbatim).
-func stripIdentityPreamble(s string) string {
-	if len(s) < 8 || s[:8] != "[system:" {
-		return s
-	}
-	for i := 0; i+1 < len(s); i++ {
-		if s[i] == ']' && s[i+1] == ' ' {
-			return s[i+2:]
+// injectedBlocks are the bracketed notes Rashin puts in front of a user turn:
+// the Needle identity.
+var injectedBlocks = []string{"[system:"}
+
+func hasInjectedBlock(s string) bool {
+	for _, p := range injectedBlocks {
+		if strings.HasPrefix(s, p) {
+			return true
 		}
+	}
+	return false
+}
+
+// stripIdentityPreamble removes the injected notes from a replayed user
+// message, so a loaded session shows what the user actually typed or clicked
+// (hermes stores the full prompt, notes and all, and replays it verbatim).
+func stripIdentityPreamble(s string) string {
+	for hasInjectedBlock(s) {
+		end := strings.Index(s, "] ")
+		if end < 0 {
+			return s
+		}
+		s = s[end+2:]
 	}
 	return s
 }
 
-// SetModel switches the session's model.
+// SetModel switches the session's model, through the model config option when
+// the agent exposes one and the legacy session/set_model otherwise.
 func (c *acpConn) SetModel(modelID string) error {
 	c.mu.Lock()
-	sid := c.sessionID
+	sid, option := c.sessionID, c.modelOption
 	c.mu.Unlock()
+	if option != "" {
+		_, err := c.request("session/set_config_option", map[string]any{
+			"sessionId": sid, "configId": option, "value": modelID,
+		})
+		return err
+	}
 	_, err := c.request("session/set_model", map[string]any{
 		"sessionId": sid, "modelId": modelID,
 	})
@@ -488,27 +565,46 @@ func (c *acpConn) waitSession(timeout time.Duration) string {
 	}
 }
 
+// Cancel stops the running turn. ACP requires the client to answer every
+// permission request still open with "cancelled", or the agent waits on them.
 func (c *acpConn) Cancel() {
 	c.mu.Lock()
 	sid := c.sessionID
+	open := make([]int64, 0, len(c.openPerms))
+	for id := range c.openPerms {
+		open = append(open, id)
+	}
 	c.mu.Unlock()
 	c.notify("session/cancel", map[string]string{"sessionId": sid})
+	for _, id := range open {
+		c.RespondPermission(id, "")
+	}
 }
 
-// RespondPermission answers an inbound session/request_permission request.
+// RespondPermission answers an inbound session/request_permission request;
+// an empty option declines it. Every surface hears the outcome, so an
+// approval answered in one place disappears everywhere.
 func (c *acpConn) RespondPermission(requestID int64, optionID string) {
 	c.mu.Lock()
-	if c.answeredPerms[requestID] {
-		c.mu.Unlock()
+	opts, open := c.openPerms[requestID]
+	delete(c.openPerms, requestID)
+	c.mu.Unlock()
+	if !open {
 		return
 	}
-	c.answeredPerms[requestID] = true
-	c.mu.Unlock()
 	outcome := map[string]any{"outcome": "cancelled"}
+	resolved := "cancelled"
 	if optionID != "" {
 		outcome = map[string]any{"outcome": "selected", "optionId": optionID}
+		resolved = "allowed"
+		for _, o := range opts {
+			if o.ID == optionID && strings.HasPrefix(o.Kind, "reject") {
+				resolved = "rejected"
+			}
+		}
 	}
 	c.respond(requestID, map[string]any{"outcome": outcome})
+	c.emit(AcpEvent{Type: "permission_resolved", RequestID: fmt.Sprint(requestID), Outcome: resolved})
 }
 
 func (c *acpConn) Close() {
@@ -528,7 +624,14 @@ func (c *acpConn) Close() {
 	}
 }
 
+// emit forwards an event to the hub. Answers and turn ends arrive from other
+// goroutines, so it must stay safe once the reader has closed the stream.
 func (c *acpConn) emit(ev AcpEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.eventsDone {
+		return
+	}
 	select {
 	case c.events <- ev:
 	default: // a stalled dashboard must not wedge the agent
@@ -570,19 +673,21 @@ func (c *acpConn) readLoop(out io.Reader) {
 		close(ch)
 		delete(c.pending, id)
 	}
+	clear(c.openPerms)
 	c.mu.Unlock()
 	c.emit(AcpEvent{Type: "state", State: "dead"})
+	c.mu.Lock()
+	c.eventsDone = true
 	close(c.events)
+	c.mu.Unlock()
 }
 
 func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 	switch msg.Method {
 	case "session/request_permission":
 		var p struct {
-			ToolCall struct {
-				Title string `json:"title"`
-			} `json:"toolCall"`
-			Options []struct {
+			ToolCall acpToolCall `json:"toolCall"`
+			Options  []struct {
 				OptionID string `json:"optionId"`
 				Name     string `json:"name"`
 				Kind     string `json:"kind"`
@@ -593,10 +698,25 @@ func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 		for _, o := range p.Options {
 			opts = append(opts, PermOption{ID: o.OptionID, Name: o.Name, Kind: o.Kind})
 		}
+		id := *msg.ID
+		tool := p.ToolCall.display()
+		tool.Status = ""
+		if allow := autoApproval(p.ToolCall, opts); allow != "" {
+			c.respond(id, map[string]any{"outcome": map[string]any{"outcome": "selected", "optionId": allow}})
+			c.emit(AcpEvent{Type: "tool", Tool: tool, ToolAuto: true})
+			return
+		}
+		c.mu.Lock()
+		c.openPerms[id] = opts
+		c.mu.Unlock()
+		// The agent may ask before it announces the call; surface the row now
+		// so the approval has something to sit on.
+		c.emit(AcpEvent{Type: "tool", Tool: tool})
 		c.emit(AcpEvent{
 			Type:      "permission",
-			RequestID: fmt.Sprint(*msg.ID),
-			PermTitle: p.ToolCall.Title,
+			RequestID: fmt.Sprint(id),
+			PermTitle: tool.Title,
+			Tool:      tool,
 			Options:   opts,
 		})
 	default:
@@ -606,18 +726,30 @@ func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 	}
 }
 
+// autoApproval returns the allow-once option to answer with when the user
+// lets read-only calls run unasked and this call only reads the machine.
+func autoApproval(call acpToolCall, opts []PermOption) string {
+	if !LoadConfig().AutoApproveReads() {
+		return ""
+	}
+	if ok, _ := readOnlyToolCall(call.Kind, call.Title, call.RawInput); !ok {
+		return ""
+	}
+	for _, o := range opts {
+		if o.Kind == "allow_once" {
+			return o.ID
+		}
+	}
+	return ""
+}
+
 func (c *acpConn) handleUpdate(params json.RawMessage) {
 	var p struct {
 		Update struct {
 			SessionUpdate string `json:"sessionUpdate"`
-			Content       struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"content"`
-			ToolCallID string `json:"toolCallId"`
-			Title      string `json:"title"`
-			Kind       string `json:"kind"`
-			Status     string `json:"status"`
+			// A text block for message chunks, a list of blocks for tool calls.
+			Content json.RawMessage `json:"content"`
+			Title   string          `json:"title"`
 			// available_commands_update
 			AvailableCommands []struct {
 				Name        string `json:"name"`
@@ -629,7 +761,8 @@ func (c *acpConn) handleUpdate(params json.RawMessage) {
 			// usage_update
 			Size int `json:"size"`
 			Used int `json:"used"`
-			// session_info_update reuses Title; UpdatedAt unused for now.
+			// config_option_update
+			ConfigOptions []acpConfigOption `json:"configOptions"`
 		} `json:"update"`
 		SessionID string `json:"sessionId"`
 	}
@@ -637,22 +770,34 @@ func (c *acpConn) handleUpdate(params json.RawMessage) {
 		return
 	}
 	u := p.Update
+	chunk := func() string {
+		var b struct {
+			Text string `json:"text"`
+		}
+		_ = json.Unmarshal(u.Content, &b)
+		return b.Text
+	}
 	switch u.SessionUpdate {
 	case "agent_message_chunk":
-		c.emit(AcpEvent{Type: "agent_text", Text: u.Content.Text})
+		c.emit(AcpEvent{Type: "agent_text", Text: chunk()})
 	case "agent_thought_chunk":
-		c.emit(AcpEvent{Type: "agent_thought", Text: u.Content.Text})
+		c.emit(AcpEvent{Type: "agent_thought", Text: chunk()})
 	case "user_message_chunk":
-		c.emit(AcpEvent{Type: "user_text", Text: stripIdentityPreamble(u.Content.Text)})
+		c.emit(AcpEvent{Type: "user_text", Text: stripIdentityPreamble(chunk())})
 	case "tool_call", "tool_call_update":
-		status := u.Status
-		if status == "" {
-			status = "pending"
+		var call struct {
+			Update acpToolCall `json:"update"`
 		}
-		c.emit(AcpEvent{
-			Type: "tool", ToolID: u.ToolCallID, ToolTitle: u.Title,
-			ToolKind: u.Kind, ToolStatus: status,
-		})
+		if json.Unmarshal(params, &call) != nil {
+			return
+		}
+		tool := call.Update.display()
+		// A fresh call without a status is pending; an update without one
+		// leaves the status where it was.
+		if tool.Status == "" && u.SessionUpdate == "tool_call" {
+			tool.Status = "pending"
+		}
+		c.emit(AcpEvent{Type: "tool", Tool: tool})
 	case "available_commands_update":
 		cmds := make([]CommandInfo, 0, len(u.AvailableCommands))
 		for _, cm := range u.AvailableCommands {
@@ -663,6 +808,10 @@ func (c *acpConn) handleUpdate(params json.RawMessage) {
 			cmds = append(cmds, CommandInfo{Name: cm.Name, Description: cm.Description, Hint: hint})
 		}
 		c.emit(AcpEvent{Type: "commands", Commands: cmds})
+	case "config_option_update":
+		if st := configModelState(u.ConfigOptions); st.ok {
+			c.emitModels(st)
+		}
 	case "usage_update":
 		c.emit(AcpEvent{Type: "usage", UsageSize: u.Size, UsageUsed: u.Used})
 	case "session_info_update":

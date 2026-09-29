@@ -123,9 +123,11 @@ func reconcilers() []reconciler {
 		{i18n.T("multilib repository"), reconcileMultilibRepo},
 		{i18n.T("conflicting Ryoku files"), reconcileConflictingRyokuFiles},
 		{i18n.T("stale update run-state"), reconcileStaleUpdateRun},
+		{i18n.T("leaked update sleep guard"), reconcileLeakedSleepGuard},
 		{i18n.T("stale install crypt mapper"), reconcileStaleCryptMapper},
 		{i18n.T("ryoku package channel"), reconcileRyokuChannel},
 		{i18n.T("ryoku package database"), reconcileRyokuSyncDB},
+		{i18n.T("ryoku channel pin"), reconcileChannelPin},
 		{i18n.T("boot guard"), reconcileBootGuard},
 		{i18n.T("update channel checkout"), reconcileUpdateChannel},
 		{i18n.T("update checkout pointer"), reconcileRepoPointer},
@@ -367,6 +369,9 @@ func Run(args []string) error {
 			noun = i18n.T("issues")
 		}
 		fmt.Fprintf(os.Stderr, "\n  %s %s\n", sys.Brand("➜"), sys.Bold(fmt.Sprintf(i18n.T("found %d %s"), warns+fails, noun)))
+		if rashinOn() {
+			fmt.Fprintf(os.Stderr, "    %s  %s\n", sys.Brand("ryoku-rashin fix doctor"), sys.Dim(i18n.T("let Rashin's agent investigate and fix these")))
+		}
 		fmt.Fprintf(os.Stderr, "    %s  %s\n", sys.Brand("ryoku doctor --explain"), sys.Dim(i18n.T("AI diagnosis and a suggested fix")))
 		if path != "" {
 			fmt.Fprintf(os.Stderr, "    %s\n", sys.Dim(i18n.Tf("report saved: %s", path)))
@@ -1033,14 +1038,14 @@ func reconcileRyokuChannel(checkOnly bool) recResult {
 		// a private mirror is deliberate, but it means no release reaches here.
 		switch ch := sys.ChannelOfServer(sys.RyokuServer()); {
 		case ch == sys.ChannelStable:
-			return okRes(i18n.T("ryoku channel: stable packages (named releases); `ryoku track unstable-dev` follows testing"))
+			return okRes(i18n.T("ryoku channel: stable packages (named releases); `ryoku track unstable` follows the unstable channel"))
 		case ch == sys.ChannelTesting:
-			return okRes(i18n.T("ryoku channel: testing packages (rebuilt on every unstable-dev push); `ryoku track main` returns to stable releases"))
+			return okRes(i18n.T("ryoku channel: unstable packages (rebuilt on every push); `ryoku track stable` returns to stable releases"))
 		case sys.IsReleaseTag(ch):
-			return okRes(i18n.T("ryoku channel: pinned to release %s (packages); `ryoku track main` follows releases again"), ch)
+			return okRes(i18n.T("ryoku channel: pinned to release %s (packages); `ryoku track stable` follows releases again"), ch)
 		default:
 			return warnRes(i18n.T("the [ryoku] repo points at %s, which Ryoku does not publish; releases will not arrive from it"), sys.RyokuServer()).
-				withFix("ryoku track main")
+				withFix("ryoku track stable")
 		}
 	}
 	// the keyring is here but the repo stanza is gone (a pacnew merge or a

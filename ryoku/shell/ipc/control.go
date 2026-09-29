@@ -164,6 +164,13 @@ func (d *daemon) hubRaise() {
 func (d *daemon) hub(sub, section string) string {
 	switch sub {
 	case "open":
+		// The Hub's Widgets page moved onto the desktop: a stale deep link (an
+		// old keybind or script naming the retired section) enters the desktop
+		// widget editor rather than opening a page that no longer exists.
+		if section == "widgets" {
+			go ipcCallN("shell", "desktop", "editWidgets", "")
+			return "ok"
+		}
 		go func() {
 			if hubAlive() {
 				if section != "" {

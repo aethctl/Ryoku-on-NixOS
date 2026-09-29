@@ -84,7 +84,12 @@ func skillFrontmatter(path string) (name, desc, version string) {
 	if err != nil {
 		return "", "", ""
 	}
-	s := string(b)
+	return parseFrontmatter(string(b))
+}
+
+// parseFrontmatter pulls name/description/version from SKILL.md text. Shared
+// by the hermes report and the cross-harness scan.
+func parseFrontmatter(s string) (name, desc, version string) {
 	if !strings.HasPrefix(s, "---") {
 		return "", "", ""
 	}

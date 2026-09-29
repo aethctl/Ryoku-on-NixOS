@@ -108,12 +108,17 @@ Scope {
             // blurred backdrop: a still snapshot of the desktop presented through
             // a Qt blur so the palette floats over frost without driving the
             // compositor. captured once per open (live: false) so the full-screen
-            // window never samples itself. skipped on weak GPUs and at zero blur.
+            // window never samples itself. skipped on weak GPUs, at zero blur,
+            // and where the compositor cannot host a long-lived capturing
+            // surface: this view lives as long as the per-screen window, not as
+            // long as one open.
             Item {
                 id: frost
                 anchors.fill: parent
                 readonly property int radius: LauncherConfig.bgBlur | 0
-                readonly property bool wanted: !Performance.blurDisabled && radius > 0
+                readonly property bool wanted: !Performance.blurDisabled
+                    && radius > 0
+                    && Wm.caps.persistentScreenCapture === true
                 visible: opacity > 0.001 && frostCapture.hasContent
                 opacity: win.shown ? 1 : 0
                 Behavior on opacity { NumberAnimation { duration: Motion.open; easing.type: Easing.OutCubic } }

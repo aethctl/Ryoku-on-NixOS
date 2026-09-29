@@ -97,11 +97,23 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 		Active:      active == "kairos",
 		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
 	})
+	items = append(items, Item{
+		ID: "iris", Category: "barstyles", Name: "iRiS",
+		Summary:     "By iNiR shell",
+		Description: "An island on any screen edge that grows into whatever you clicked: morphing glass, bubbles, a dock, a studio and its own settings.",
+		Tags:        []string{"island", "frame", "built-in"},
+		Installed:   true,
+		Active:      active == "iris",
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	})
 
 	entries, state, registryErr := loadProductRegistry(ctx, p.cache, "barstyles", refresh)
 	if registryErr != nil && !barStyleRegistryUnavailable(registryErr) {
 		return nil, state, registryErr
 	}
+	// Built-ins always win an ID collision with the remote registry. Besides
+	// preventing duplicate catalogue rows, this keeps a registry product from
+	// impersonating a shell-owned style such as Chroma or iRiS.
 	seen := make(map[string]bool, len(entries)+len(items))
 	for _, item := range items {
 		seen[item.ID] = true
@@ -156,7 +168,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -171,7 +183,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)

@@ -8,10 +8,9 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
 // Rashin (DESIGN.md section 11, ADVANCED). The optional, fully local agent OS
-// (羅針, the system needle). This page is the Hub's welcome to Rashin, wearing
-// the Rashin/Hermes dashboard's own identity rather than the Hub's: the warm
-// bone-on-black poster palette and Archivo Black + JetBrains Mono type of the
-// web dashboard at 127.0.0.1:3600 (mirrored from ryoku/rashin/backend/web). It
+// (羅針, the system needle). This page is the Hub's welcome to Rashin, in the
+// Hub's own paper and ink, the same language the web dashboard at
+// 127.0.0.1:3600 now speaks. It
 // leads with the samurai hero banner and the live model Hermes runs on, lays
 // out what Rashin does (the vault, memory, skills, agents, chat, code), shows
 // how to use it, and keeps the master switch, one-click Hermes setup and the
@@ -23,34 +22,6 @@ Item {
 
     property var hub
     readonly property bool fullBleed: true
-
-    // ── the Rashin/Hermes palette, mirrored from the dashboard's base.css
-    // (:root). Deliberately not the Hub's Tokens: this section wears the
-    // product's own warm poster identity so it reads as Rashin, not Settings.
-    QtObject {
-        id: hx
-        readonly property color paper: "#0e0d0b"
-        readonly property color paper2: "#14120f"
-        readonly property color ink: "#e8d8c9"
-        readonly property color inkDim: "#8f8378"
-        readonly property color red: "#c94e44"
-        readonly property color redDeep: "#9f4125"
-        readonly property color teal: "#3e6868"
-        readonly property color orange: "#f3701e"
-        readonly property color slate: "#4b607f"
-        readonly property color tan: "#cda47b"
-        readonly property color line: Qt.rgba(232 / 255, 216 / 255, 201 / 255, 0.18)
-        readonly property color lineSoft: Qt.rgba(232 / 255, 216 / 255, 201 / 255, 0.09)
-    }
-
-    // Archivo Black rides display, bundled beside the Hub (converted from the
-    // dashboard's woff2) so it ships with the config tree, no font package. The
-    // rest is JetBrains Mono, the dashboard's body face, hard-depended by the
-    // desktop package; kanji is Noto CJK.
-    FontLoader { id: archivo; source: Qt.resolvedUrl("../fonts/archivo-black.ttf") }
-    readonly property string fDisplay: archivo.name || "sans-serif"
-    readonly property string fMono: "JetBrainsMono Nerd Font"
-    readonly property string fJp: "Noto Sans CJK JP"
 
     // centered body column; the hero and every section share this measure.
     readonly property real bodyW: Math.min(pg.width - Tokens.s5 * 2, 1080)
@@ -230,7 +201,7 @@ Item {
     component Stamp: Rectangle {
         id: stamp
         property string label: ""
-        property color tint: hx.inkDim
+        property color tint: Tokens.inkDim
         implicitWidth: stampT.implicitWidth + 18
         implicitHeight: 22
         color: "transparent"
@@ -241,7 +212,7 @@ Item {
             anchors.centerIn: parent
             text: I18n.tr(stamp.label)
             color: stamp.tint
-            font.family: pg.fMono
+            font.family: Tokens.mono
             font.pixelSize: 9
             font.letterSpacing: 2
         }
@@ -260,11 +231,11 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Tokens.s2
             Text {
-                text: hd.kanji; color: hx.red; font.family: pg.fJp
+                text: hd.kanji; color: Tokens.alert; font.family: Tokens.jp
                 font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter
             }
             Text {
-                text: hd.title; color: hx.ink; font.family: pg.fMono
+                text: hd.title; color: Tokens.ink; font.family: Tokens.mono
                 font.pixelSize: 11; font.letterSpacing: 3; font.weight: Font.Medium
                 anchors.verticalCenter: parent.verticalCenter
             }
@@ -272,12 +243,12 @@ Item {
         Rectangle {
             anchors.left: hdRow.right; anchors.leftMargin: Tokens.s3
             anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-            height: 1; color: hx.line
+            height: 1; color: Tokens.line
         }
     }
 
-    // a function poster card: accent tab, index + kanji, name, one-liner, and an
-    // optional live stat brightening to the accent.
+    // a function card: an ink tab, index + kanji, name, one-liner, and an
+    // optional live stat.
     component FnCard: Rectangle {
         id: fc
         property string index: ""
@@ -285,13 +256,12 @@ Item {
         property string name: ""
         property string desc: ""
         property string stat: ""
-        property color accent: hx.teal
         height: 128
-        color: hx.paper2
+        color: Tokens.paperLift
         border.width: 1
-        border.color: hx.line
+        border.color: Tokens.line
 
-        Rectangle { x: 0; y: 0; width: 34; height: 3; color: fc.accent }
+        Rectangle { x: 0; y: 0; width: 34; height: 3; color: Tokens.ink }
 
         Column {
             anchors { left: parent.left; right: parent.right; top: parent.top; margins: 16 }
@@ -299,27 +269,27 @@ Item {
             Row {
                 spacing: Tokens.s2
                 Text {
-                    text: fc.index; color: fc.accent; font.family: pg.fDisplay
+                    text: fc.index; color: Tokens.ink; font.family: Tokens.display
                     font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
-                    text: fc.kanji; color: hx.inkDim; font.family: pg.fJp
+                    text: fc.kanji; color: Tokens.inkDim; font.family: Tokens.jp
                     font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter
                 }
             }
             Text {
-                text: fc.name; color: hx.ink; font.family: pg.fDisplay; font.pixelSize: 21
+                text: fc.name; color: Tokens.ink; font.family: Tokens.display; font.pixelSize: 21
             }
             Text {
                 width: parent.width
-                text: I18n.tr(fc.desc); color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12
+                text: I18n.tr(fc.desc); color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 12
                 wrapMode: Text.WordWrap; lineHeight: 1.25
             }
         }
         Text {
             visible: fc.stat !== ""
             anchors { right: parent.right; top: parent.top; margins: 16 }
-            text: fc.stat; color: fc.accent; font.family: pg.fMono; font.pixelSize: 11
+            text: fc.stat; color: Tokens.ink; font.family: Tokens.mono; font.pixelSize: 11
         }
     }
 
@@ -332,12 +302,12 @@ Item {
         spacing: Tokens.s3
         Text {
             width: Math.round(tr.width * 0.34)
-            text: tr.cmd; color: hx.red; font.family: pg.fMono; font.pixelSize: 13
+            text: tr.cmd; color: Tokens.ink; font.family: Tokens.mono; font.pixelSize: 13
             elide: Text.ElideRight
         }
         Text {
             width: tr.width - Math.round(tr.width * 0.34) - tr.spacing
-            text: tr.note; color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 13
+            text: tr.note; color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 13
             wrapMode: Text.WordWrap
         }
     }
@@ -354,15 +324,15 @@ Item {
         opacity: bt.on ? 1 : 0.4
         Rectangle {
             anchors.fill: parent
-            color: bt.primary ? hx.ink : "transparent"
+            color: bt.primary ? Tokens.ink : "transparent"
             border.width: 1
-            border.color: bt.primary ? hx.ink : hx.line
+            border.color: bt.primary ? Tokens.ink : Tokens.line
         }
         Text {
             id: btT
             anchors.centerIn: parent
-            text: I18n.tr(bt.label); color: bt.primary ? hx.paper : hx.ink
-            font.family: pg.fMono; font.pixelSize: 11; font.letterSpacing: 2; font.weight: Font.Medium
+            text: I18n.tr(bt.label); color: bt.primary ? Tokens.paper : Tokens.ink
+            font.family: Tokens.mono; font.pixelSize: 11; font.letterSpacing: 2; font.weight: Font.Medium
         }
         MouseArea {
             anchors.fill: parent; enabled: bt.on
@@ -379,9 +349,9 @@ Item {
         property bool canChat: false
         width: parent ? parent.width : 0
         height: 56
-        color: hx.paper2
+        color: Tokens.paperLift
         border.width: 1
-        border.color: (ar.agent.present && ar.agent.wired) ? Qt.rgba(hx.ink.r, hx.ink.g, hx.ink.b, 0.3) : hx.line
+        border.color: (ar.agent.present && ar.agent.wired) ? Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.3) : Tokens.line
         opacity: ar.agent.present ? 1 : 0.5
 
         Column {
@@ -390,35 +360,35 @@ Item {
             Text {
                 width: parent.width
                 text: ar.agent.name || ar.agent.id || ""
-                color: hx.ink; font.family: pg.fDisplay; font.pixelSize: 16; elide: Text.ElideRight
+                color: Tokens.ink; font.family: Tokens.display; font.pixelSize: 16; elide: Text.ElideRight
             }
             Text {
                 width: parent.width
                 text: !ar.agent.present ? I18n.tr("not installed")
                     : (ar.agent.wired ? I18n.tr("wired to the vault") : I18n.tr("present \u00b7 not wired yet"))
-                color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; elide: Text.ElideRight
+                color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 11; elide: Text.ElideRight
             }
         }
         Row {
             id: arActions
             anchors { right: parent.right; rightMargin: 12; verticalCenter: parent.verticalCenter }
             spacing: Tokens.s2
-            Stamp { visible: ar.agent.skillWired === true; label: "SKILL"; tint: hx.teal; anchors.verticalCenter: parent.verticalCenter }
-            Stamp { visible: ar.canChat; label: "CHAT"; tint: hx.slate; anchors.verticalCenter: parent.verticalCenter }
+            Stamp { visible: ar.agent.skillWired === true; label: "SKILL"; tint: Tokens.ink; anchors.verticalCenter: parent.verticalCenter }
+            Stamp { visible: ar.canChat; label: "CHAT"; tint: Tokens.inkDim; anchors.verticalCenter: parent.verticalCenter }
             Rectangle {
                 visible: ar.agent.present === true
                 anchors.verticalCenter: parent.verticalCenter
                 width: wbT.implicitWidth + Tokens.s4 * 2
                 height: 30
-                color: ar.agent.wired ? "transparent" : hx.ink
+                color: ar.agent.wired ? "transparent" : Tokens.ink
                 border.width: 1
-                border.color: ar.agent.wired ? hx.line : hx.ink
+                border.color: ar.agent.wired ? Tokens.line : Tokens.ink
                 Text {
                     id: wbT
                     anchors.centerIn: parent
                     text: ar.agent.wired ? I18n.tr("RE-WIRE") : I18n.tr("WIRE")
-                    color: ar.agent.wired ? hx.ink : hx.paper
-                    font.family: pg.fMono; font.pixelSize: 10; font.letterSpacing: 2; font.weight: Font.Medium
+                    color: ar.agent.wired ? Tokens.ink : Tokens.paper
+                    font.family: Tokens.mono; font.pixelSize: 10; font.letterSpacing: 2; font.weight: Font.Medium
                 }
                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: pg.wireAgent(ar.agent.id) }
             }
@@ -439,26 +409,26 @@ Item {
         spacing: Tokens.s3
         Text {
             width: pr.labelW
-            text: pr.label; color: pr.ok ? hx.ink : hx.inkDim
-            font.family: pg.fMono; font.pixelSize: 12; elide: Text.ElideRight
+            text: pr.label; color: pr.ok ? Tokens.ink : Tokens.inkDim
+            font.family: Tokens.mono; font.pixelSize: 12; elide: Text.ElideRight
         }
         Text {
             width: pr.ownerW
             text: pr.owner
-            color: pr.owner === "yours" ? hx.teal : hx.inkDim
-            font.family: pg.fMono; font.pixelSize: 10; font.letterSpacing: 1
+            color: pr.owner === "yours" ? Tokens.ink : Tokens.inkDim
+            font.family: Tokens.mono; font.pixelSize: 10; font.letterSpacing: 1
             anchors.verticalCenter: parent.verticalCenter
         }
         Text {
             width: pr.width - pr.labelW - pr.ownerW - pr.spacing * 2
             text: pr.path === "" ? I18n.tr("not installed") : pr.path
-            color: pr.ok ? hx.tan : hx.inkDim
-            font.family: pg.fMono; font.pixelSize: 12; elide: Text.ElideLeft
+            color: pr.ok ? Tokens.ink : Tokens.inkDim
+            font.family: Tokens.mono; font.pixelSize: 12; elide: Text.ElideLeft
         }
     }
 
-    // ── the page: warm paper, one scrolling poster column ────────────────────
-    Rectangle { anchors.fill: parent; color: hx.paper }
+    // ── the page: paper and ink, one scrolling column ────────────────────
+    Rectangle { anchors.fill: parent; color: Tokens.paper }
 
     Flickable {
         id: flick
@@ -496,9 +466,9 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     visible: heroImg.status !== Image.Ready
-                    color: hx.paper2
+                    color: Tokens.paperLift
                 }
-                Rectangle { anchors.fill: parent; color: "transparent"; border.width: 1; border.color: hx.line }
+                Rectangle { anchors.fill: parent; color: "transparent"; border.width: 1; border.color: Tokens.line }
 
                 // bottom scrim so the cap stays legible over the art.
                 Rectangle {
@@ -506,7 +476,7 @@ Item {
                     height: parent.height * 0.7
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: "transparent" }
-                        GradientStop { position: 1.0; color: Qt.rgba(hx.paper.r, hx.paper.g, hx.paper.b, 0.92) }
+                        GradientStop { position: 1.0; color: Qt.rgba(Tokens.paper.r, Tokens.paper.g, Tokens.paper.b, 0.92) }
                     }
                 }
 
@@ -515,17 +485,17 @@ Item {
                     anchors { left: parent.left; bottom: parent.bottom; leftMargin: Tokens.s5; bottomMargin: Tokens.s4 }
                     spacing: 3
                     Text {
-                        text: I18n.tr("RYOKU RASHIN"); color: hx.ink; font.family: pg.fDisplay
+                        text: I18n.tr("RYOKU RASHIN"); color: Tokens.ink; font.family: Tokens.display
                         font.pixelSize: Math.round(Math.min(pg.bodyW * 0.05, 40))
                     }
                     Row {
                         spacing: Tokens.s2
                         Text {
-                            text: "羅針"; color: hx.red; font.family: pg.fJp; font.pixelSize: 13
+                            text: "羅針"; color: Tokens.alert; font.family: Tokens.jp; font.pixelSize: 13
                             anchors.verticalCenter: parent.verticalCenter
                         }
                         Text {
-                            text: I18n.tr("THE SYSTEM NEEDLE"); color: hx.inkDim; font.family: pg.fMono
+                            text: I18n.tr("THE SYSTEM NEEDLE"); color: Tokens.inkDim; font.family: Tokens.mono
                             font.pixelSize: 10; font.letterSpacing: 3
                             anchors.verticalCenter: parent.verticalCenter
                         }
@@ -537,7 +507,7 @@ Item {
                     anchors { right: parent.right; top: parent.top; rightMargin: Tokens.s4; topMargin: Tokens.s4 }
                     label: !pg.installed ? I18n.tr("NOT INSTALLED")
                         : (pg.running ? I18n.tr("RUNNING") : (pg.daemonEnabled ? I18n.tr("STARTING") : I18n.tr("OFF")))
-                    tint: pg.running ? hx.teal : (pg.installed ? hx.inkDim : hx.redDeep)
+                    tint: pg.running ? Tokens.ink : (pg.installed ? Tokens.inkDim : Tokens.alert)
                 }
             }
 
@@ -545,7 +515,7 @@ Item {
             Text {
                 width: parent.width
                 text: I18n.tr("The optional local agent OS. A resident Hermes agent keeps a living map of this machine - hardware, packages, every config beside the binary that owns it - so your coding agents read the terrain instead of rediscovering it. Nothing ever leaves the box.")
-                color: hx.ink; font.family: pg.fMono; font.pixelSize: 14
+                color: Tokens.ink; font.family: Tokens.mono; font.pixelSize: 14
                 wrapMode: Text.WordWrap; lineHeight: 1.5
             }
 
@@ -560,9 +530,9 @@ Item {
                 Rectangle {
                     width: parent.colW
                     height: 96
-                    color: hx.paper2
+                    color: Tokens.paperLift
                     border.width: 1
-                    border.color: pg.daemonEnabled ? Qt.rgba(hx.ink.r, hx.ink.g, hx.ink.b, 0.35) : hx.line
+                    border.color: pg.daemonEnabled ? Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.35) : Tokens.line
                     opacity: pg.installed ? 1 : 0.5
 
                     Column {
@@ -570,9 +540,9 @@ Item {
                         spacing: 6
                         Row {
                             spacing: Tokens.s2
-                            Text { text: "羅針"; color: hx.ink; font.family: pg.fJp; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: "羅針"; color: Tokens.ink; font.family: Tokens.jp; font.pixelSize: 15; anchors.verticalCenter: parent.verticalCenter }
                             Text {
-                                text: I18n.tr("RASHIN SERVICE"); color: hx.ink; font.family: pg.fDisplay
+                                text: I18n.tr("RASHIN SERVICE"); color: Tokens.ink; font.family: Tokens.display
                                 font.pixelSize: 13; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
@@ -582,7 +552,7 @@ Item {
                                 ? (pg.running ? I18n.tr("Running \u00b7 127.0.0.1:%1").arg(pg.port)
                                    : (pg.daemonEnabled ? I18n.tr("Enabled \u00b7 starting\u2026") : I18n.tr("Off \u00b7 switch on to start it with the desktop")))
                                 : I18n.tr("Not installed \u00b7 install ryoku-rashin")
-                            color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; elide: Text.ElideRight
+                            color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 11; elide: Text.ElideRight
                         }
                     }
                     Sw {
@@ -598,26 +568,26 @@ Item {
                 Rectangle {
                     width: parent.colW
                     height: 96
-                    color: hx.paper2
+                    color: Tokens.paperLift
                     border.width: 1
-                    border.color: hx.line
-                    Rectangle { x: 0; y: 0; width: 34; height: 3; color: hx.red }
+                    border.color: Tokens.line
+                    Rectangle { x: 0; y: 0; width: 34; height: 3; color: Tokens.alert }
 
                     Column {
                         anchors { left: parent.left; right: parent.right; verticalCenter: parent.verticalCenter; leftMargin: 18; rightMargin: 18 }
                         spacing: 4
                         Row {
                             spacing: Tokens.s2
-                            Text { text: "模型"; color: hx.red; font.family: pg.fJp; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
+                            Text { text: "模型"; color: Tokens.alert; font.family: Tokens.jp; font.pixelSize: 12; anchors.verticalCenter: parent.verticalCenter }
                             Text {
-                                text: I18n.tr("MODEL"); color: hx.inkDim; font.family: pg.fMono
+                                text: I18n.tr("MODEL"); color: Tokens.inkDim; font.family: Tokens.mono
                                 font.pixelSize: 10; font.letterSpacing: 3; anchors.verticalCenter: parent.verticalCenter
                             }
                         }
                         Text {
                             width: parent.width
                             text: pg.hermesConfigured ? (pg.hermesModel || I18n.tr("configured")) : "-"
-                            color: hx.ink; font.family: pg.fDisplay
+                            color: Tokens.ink; font.family: Tokens.display
                             font.pixelSize: pg.hermesConfigured ? 30 : 26
                             elide: Text.ElideRight
                         }
@@ -626,7 +596,7 @@ Item {
                             text: pg.hermesConfigured
                                 ? (I18n.tr("via %1").arg(pg.hermesProvider || "hermes") + (pg.hermesVersion ? I18n.tr("  \u00b7  Hermes v%1").arg(pg.hermesVersion) : ""))
                                 : (pg.hermesInstalled ? I18n.tr("run setup to choose a model") : I18n.tr("set up Hermes to choose a model"))
-                            color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; elide: Text.ElideRight
+                            color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 11; elide: Text.ElideRight
                         }
                     }
                 }
@@ -647,29 +617,29 @@ Item {
                     readonly property real cellW: (width - columnSpacing * (columns - 1)) / columns
 
                     FnCard {
-                        width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: I18n.tr("VAULT"); accent: hx.teal
+                        width: fnGrid.cellW; index: "01"; kanji: "\u66f8\u5eab"; name: I18n.tr("VAULT")
                         desc: I18n.tr("The living map your agents read, beside each binary.")
                         stat: pg.vaultExists ? I18n.tr("%1 files").arg(pg.vaultFiles) : ""
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "02"; kanji: "\u8a18\u61b6"; name: I18n.tr("MEMORY"); accent: hx.orange
+                        width: fnGrid.cellW; index: "02"; kanji: "\u8a18\u61b6"; name: I18n.tr("MEMORY")
                         desc: I18n.tr("What Hermes remembers, carried across every session.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: I18n.tr("SKILLS"); accent: hx.slate
+                        width: fnGrid.cellW; index: "03"; kanji: "\u6280"; name: I18n.tr("SKILLS")
                         desc: I18n.tr("Toolsets Hermes wields: search, files, the web.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: I18n.tr("AGENTS"); accent: hx.tan
+                        width: fnGrid.cellW; index: "04"; kanji: "\u4e94\u4eba\u8846"; name: I18n.tr("AGENTS")
                         desc: I18n.tr("Your coding agents, wired to one shared map of the machine.")
                         stat: pg.agentsPresent > 0 ? pg.wiredSummary : ""
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: I18n.tr("CHAT"); accent: hx.red
+                        width: fnGrid.cellW; index: "05"; kanji: "\u5bfe\u8a71"; name: I18n.tr("CHAT")
                         desc: I18n.tr("Talk to Hermes in the dashboard or a terminal.")
                     }
                     FnCard {
-                        width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: I18n.tr("CODE"); accent: hx.teal
+                        width: fnGrid.cellW; index: "06"; kanji: "\u7f85\u91dd"; name: I18n.tr("CODE")
                         desc: I18n.tr("Code intelligence: cited answers over your repos.")
                     }
                 }
@@ -683,7 +653,7 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Wire any coding agent to the same living map of this machine. One click drops a pointer into its instructions, links the ryoku skill, and installs prowl's code-intelligence skill.")
-                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
                 Column {
                     width: parent.width
@@ -709,7 +679,7 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("On an agent Rashin doesn't wire for you? Point it at these yourself, or copy the ready-made instructions and paste them into its config.")
-                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
                 Column {
                     width: parent.width
@@ -739,7 +709,7 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Which agent answers the Super+S chat. Hermes is recommended; others need their own ACP adapter installed.")
-                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
                 Flow {
                     width: parent.width
@@ -752,16 +722,16 @@ Item {
                             readonly property bool sel: cb.modelData.active === true
                             height: 34
                             width: cbT.implicitWidth + Tokens.s4 * 2
-                            color: cb.sel ? hx.ink : "transparent"
+                            color: cb.sel ? Tokens.ink : "transparent"
                             opacity: cb.modelData.available ? 1 : 0.45
                             border.width: 1
-                            border.color: cb.sel ? hx.ink : hx.line
+                            border.color: cb.sel ? Tokens.ink : Tokens.line
                             Text {
                                 id: cbT
                                 anchors.centerIn: parent
                                 text: (cb.modelData.name || cb.modelData.id) + (cb.modelData.recommended ? "  \u2605" : "")
-                                color: cb.sel ? hx.paper : (cb.modelData.available ? hx.ink : hx.inkDim)
-                                font.family: pg.fMono; font.pixelSize: 11; font.letterSpacing: 1
+                                color: cb.sel ? Tokens.paper : (cb.modelData.available ? Tokens.ink : Tokens.inkDim)
+                                font.family: Tokens.mono; font.pixelSize: 11; font.letterSpacing: 1
                             }
                             MouseArea {
                                 anchors.fill: parent
@@ -795,7 +765,7 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Set up Hermes once: it installs the agent if you don't have it, wires it to the vault, and points your other coding agents at the same map. An existing Hermes install is left untouched.")
-                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 12; wrapMode: Text.WordWrap; lineHeight: 1.4
                 }
 
                 Row {
@@ -821,8 +791,8 @@ Item {
                     width: parent.width
                     visible: pg.setupPhase !== ""
                     text: "\u2192 " + pg.setupPhase + (pg.setupDetail !== "" ? ": " + pg.setupDetail : "")
-                    color: pg.setupOk ? hx.inkDim : hx.ink
-                    font.family: pg.fMono; font.pixelSize: 11; wrapMode: Text.WordWrap
+                    color: pg.setupOk ? Tokens.inkDim : Tokens.ink
+                    font.family: Tokens.mono; font.pixelSize: 11; wrapMode: Text.WordWrap
                 }
             }
 
@@ -831,11 +801,11 @@ Item {
             Row {
                 width: parent.width
                 spacing: Tokens.s3
-                Rectangle { width: 8; height: 8; radius: 4; color: hx.red; anchors.verticalCenter: parent.verticalCenter }
+                Rectangle { width: 8; height: 8; radius: 4; color: Tokens.alert; anchors.verticalCenter: parent.verticalCenter }
                 Text {
                     width: parent.width - Tokens.s3 - 8
                     text: I18n.tr("Everything runs on this machine. The daemon binds 127.0.0.1 only - nothing you do here leaves the box.")
-                    color: hx.inkDim; font.family: pg.fMono; font.pixelSize: 11; wrapMode: Text.WordWrap
+                    color: Tokens.inkDim; font.family: Tokens.mono; font.pixelSize: 11; wrapMode: Text.WordWrap
                     anchors.verticalCenter: parent.verticalCenter
                 }
             }

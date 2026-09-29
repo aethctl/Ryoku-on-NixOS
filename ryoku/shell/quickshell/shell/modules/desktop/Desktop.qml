@@ -11,6 +11,10 @@ import "aio"
 import "stats"
 import "weather"
 import "notes"
+import "dayprogress"
+import "shape"
+import "iris"
+import "iris/IrisRoster.js" as IrisRoster
 import Ryoku.PluginKit
 import shell.services as Services
 import "../stage"
@@ -18,6 +22,9 @@ import "../stage/Singletons" as StageCfg
 import "../visualizer/Singletons" as VizCfg
 import "../visualizer" as Viz
 import "../wallpaper" as WallpaperMod
+// The iRiS frame singleton reports the dock's edge and its visible vs reserved
+// depth, so the Edit widgets bar can clear a bottom dock that reserves nothing.
+import inir.modules.iris.frame
 
 // desktop widgets layer: WlrLayer.Bottom (below windows), instantiated once per
 // monitor by the main shell, carrying the clock. only clicks on bare wallpaper
@@ -42,6 +49,7 @@ Scope {
     // backdrop's player: muted by default, volume 0-100.
     property bool videoMuted: true
     property int videoVolume: 100
+    property bool videoPaused: false
     // The ryogami-live yield flag (default "ryogami" engine): hide the painter
     // while the C player owns the background layer.
     property bool wallpaperLive: false
@@ -66,10 +74,13 @@ Scope {
     // Edit widgets on this monitor frees every widget for dragging and lifts
     // this desktop above open windows; Done restores the per-widget locks.
     readonly property bool stageComposing: StageCfg.StageSession.onMonitor(root.monitorName)
-    // Grab the keyboard while composing so Esc/Enter exit the mode (the bar owns
-    // the keys); dropping it hands the keyboard back like any widget edit.
+    // The editor grid the bar drives; slots snap to it while composing.
+    readonly property real editGridSize: StageCfg.Config.editGridSize
+    readonly property bool editGridSnap: StageCfg.Config.editGridSnap
+    // Snapshot the layout when a compose session opens so Reset can restore it.
+    // The edit bar lives on its own surface now and takes no keyboard, so the
+    // desktop layer no longer grabs the keyboard for it.
     onStageComposingChanged: {
-        win.kbWanted += root.stageComposing ? 1 : -1;
         if (root.stageComposing)
             root._snapshot();
     }
@@ -95,6 +106,8 @@ Scope {
             { id: "stats", label: "System stats", icon: "monitor_heart", enabled: Config.statsEnabled, group: "" },
             { id: "weather", label: "Weather", icon: "partly_cloudy_day", enabled: Config.weatherEnabled, group: "" },
             { id: "notes", label: "Notes", icon: "sticky_note_2", enabled: Config.notesEnabled, group: "" },
+            { id: "dayprogress", label: "Day Progress", icon: "donut_large", enabled: Config.dayprogressEnabled, group: "" },
+            { id: "shape", label: "Shape", icon: "category", enabled: Config.shapeEnabled, group: "" },
             { id: "visualizer", label: "Visualizer", icon: "graphic_eq", enabled: VizCfg.Config.enabled, group: "" }
         ];
         // Fallback group name for a plugin whose manifest names no set. Plain
@@ -122,6 +135,13 @@ Scope {
             });
         }
         const out = bi.slice();
+        // the vendored iRiS faces: one roster row each, on/off from widgets.json,
+        // grouped so the Hub's Add drop-down keeps them together.
+        const irisFaces = IrisRoster.faces;
+        for (var k = 0; k < irisFaces.length; k++) {
+            const f = irisFaces[k];
+            out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: Config[f.prefix + "Enabled"] === true, group: "iRiS widgets" });
+        }
         for (var g = 0; g < order.length; g++) {
             const rows = byGroup[order[g]];
             for (var r = 0; r < rows.length; r++)
@@ -163,26 +183,127 @@ Scope {
         }
         return null;
     }
+    // The live WidgetSlot for a built-in or iRiS scope. Every slot rides a
+    // full-screen host, so its x/y/width/height are already monitor pixels the
+    // inspector can dock beside.
+    function _outerFor(w) {
+        switch (w) {
+        case "clock": return clockLoader.item;
+        case "calendar": return calendarLoader.item;
+        case "music": return musicLoader.item;
+        case "aio": return aioLoader.item;
+        case "stats": return statsLoader.item;
+        case "weather": return weatherLoader.item;
+        case "notes": return notesLoader.item;
+        case "dayprogress": return dayprogressLoader.item;
+        case "shape": return shapeLoader.item;
+        }
+        for (var i = 0; i < irisRepeater.count; i++) {
+            const ld = irisRepeater.itemAt(i);
+            if (ld && ld.item && ld.modelData && ld.modelData.prefix === w)
+                return ld.item;
+        }
+        return null;
+    }
+    function slotFor(w) {
+        const outer = root._outerFor(w);
+        if (!outer)
+            return null;
+        const kids = outer.children;
+        for (var i = 0; i < kids.length; i++)
+            if (kids[i] && kids[i].widget === w)
+                return kids[i];
+        return null;
+    }
     // Arm-and-open for the right-click menus: the first open builds the menu
     // synchronously, and the pending request lands the moment it is ready.
     property var pendingWidgetMenu: null
+    property var pendingDesktopMenu: null
     property var pendingPluginMenu: null
+    property var pendingInspector: null
+    // The bare-wallpaper right-click opens the system desktop menu; a widget's
+    // right-click opens its own menu. Two loaders keep the desktop menu the
+    // shared iRiS-structured surface (DesktopContextMenu), never the widget one.
     function openWidgetMenu(widget, x, y) {
+        if (widget === "desktop") {
+            root.openDesktopMenu(x, y);
+            return;
+        }
         if (widgetMenuLoader.item) {
-            if (widget === "desktop") widgetMenuLoader.item.openDesktop(x, y);
-            else widgetMenuLoader.item.openFor(widget, x, y);
+            widgetMenuLoader.item.openFor(widget, x, y, root.wallpaperPath);
             return;
         }
         root.pendingWidgetMenu = [widget, x, y];
         widgetMenuLoader.active = true;
     }
+    // Open the widget inspector (the Customize sheet) docked beside `widget`.
+    // Built like the menus: the first call builds the surface and the pending
+    // request lands once it is ready. The slot is handed over live so the sheet
+    // re-docks as the widget resizes under the edits.
+    function openInspector(widget) {
+        if (widget === "desktop")
+            return;
+        if (inspectorLoader.item) {
+            inspectorLoader.item.openFor(widget, root.slotFor(widget));
+            return;
+        }
+        root.pendingInspector = widget;
+        inspectorLoader.active = true;
+    }
+    function openDesktopMenu(x, y) {
+        if (desktopMenuLoader.item) {
+            desktopMenuLoader.item.openAt(x, y);
+            return;
+        }
+        root.pendingDesktopMenu = [x, y];
+        desktopMenuLoader.active = true;
+    }
     function openPluginMenu(id, locked, x, y, manifest, placement) {
         if (pluginMenuLoader.item) {
-            pluginMenuLoader.item.openFor(id, locked, x, y, manifest, placement);
+            pluginMenuLoader.item.openFor(id, locked, x, y, manifest, placement, root.wallpaperPath);
             return;
         }
         root.pendingPluginMenu = [id, locked, x, y, manifest, placement];
         pluginMenuLoader.active = true;
+    }
+
+    // Any of the desktop right-click menus (bare wallpaper, a widget, a plugin
+    // tile) currently on screen. Drives the dedicated menu surface below so it is
+    // mapped and takes keyboard only while a menu actually shows.
+    readonly property bool menusShowing:
+        (widgetMenuLoader.item && widgetMenuLoader.item.showing === true)
+        || (desktopMenuLoader.item && desktopMenuLoader.item.showing === true)
+        || (pluginMenuLoader.item && pluginMenuLoader.item.showing === true)
+
+    // The inspector sheet currently on screen; drives its own Overlay surface so
+    // it is mapped and takes keyboard only while it shows.
+    readonly property bool inspectorShowing:
+        inspectorLoader.item && inspectorLoader.item.showing === true
+
+    // The Edit widgets bar rides a work-area surface, so a dock that reserves an
+    // exclusive zone already sits outside it. A dock that reserves nothing (the
+    // iRiS dock with reserve-space off) still paints there, so lift the bar by the
+    // visible dock depth the work area does not account for. The Ryoku dock steps
+    // aside entirely while widgets are edited, so it never needs clearing here.
+    readonly property real editBarDockClear: {
+        if (Services.Config.barStyle !== "iris" || IrisFrame.dockEdge !== "bottom")
+            return 0;
+        return Math.max(0, IrisFrame.inset("bottom") - IrisFrame.reserve("bottom", true));
+    }
+    // Off-surface open of a widget's right-click menu (the `desktop menu` IPC /
+    // niri routing). Lands near the top-left of this monitor's canvas.
+    Connections {
+        target: Services.ShellState
+        function onWidgetMenuRequested(mon, widget) {
+            if (mon !== "" && mon !== root.monitorName)
+                return;
+            root.openWidgetMenu(widget, 180, 140);
+        }
+        function onWidgetCustomizeRequested(mon, widget) {
+            if (mon !== "" && mon !== root.monitorName)
+                return;
+            root.openInspector(widget);
+        }
     }
     // A widget frame's Settings button: open that built-in's own menu at the
     // frame's corner (its design, lock, size, opacity, colour, snap).
@@ -207,7 +328,8 @@ Scope {
         "aioEnabled", "aioStyle", "aioScale", "aioAnchor", "aioX", "aioY", "aioLocked", "aioOpacity", "aioColor", "aioColor2", "aioGradient",
         "statsEnabled", "statsScale", "statsAnchor", "statsX", "statsY", "statsLocked", "statsOpacity", "statsColor", "statsColor2", "statsGradient",
         "weatherEnabled", "weatherDesign", "weatherScale", "weatherAnchor", "weatherX", "weatherY", "weatherLocked", "weatherOpacity", "weatherColor", "weatherColor2", "weatherGradient",
-        "notesEnabled", "notesScale", "notesAnchor", "notesX", "notesY", "notesLocked", "notesOpacity", "notesWidth", "notesHeight", "notesColor", "notesColor2", "notesGradient"
+        "notesEnabled", "notesScale", "notesAnchor", "notesX", "notesY", "notesLocked", "notesOpacity", "notesWidth", "notesHeight", "notesColor", "notesColor2", "notesGradient",
+        "irisClockEnabled", "irisClockScale", "irisClockAnchor", "irisClockX", "irisClockY", "irisClockLocked", "irisClockOpacity", "irisClockBg", "irisClockColor", "irisClockColor2", "irisClockGradient", "irisClockSize", "irisClockOpts", "irisWeatherEnabled", "irisWeatherScale", "irisWeatherAnchor", "irisWeatherX", "irisWeatherY", "irisWeatherLocked", "irisWeatherOpacity", "irisWeatherBg", "irisWeatherColor", "irisWeatherColor2", "irisWeatherGradient", "irisWeatherSize", "irisWeatherOpts", "irisMediaEnabled", "irisMediaScale", "irisMediaAnchor", "irisMediaX", "irisMediaY", "irisMediaLocked", "irisMediaOpacity", "irisMediaBg", "irisMediaColor", "irisMediaColor2", "irisMediaGradient", "irisMediaSize", "irisMediaOpts", "irisControlsEnabled", "irisControlsScale", "irisControlsAnchor", "irisControlsX", "irisControlsY", "irisControlsLocked", "irisControlsOpacity", "irisControlsBg", "irisControlsColor", "irisControlsColor2", "irisControlsGradient", "irisControlsSize", "irisControlsOpts", "irisMonthEnabled", "irisMonthScale", "irisMonthAnchor", "irisMonthX", "irisMonthY", "irisMonthLocked", "irisMonthOpacity", "irisMonthBg", "irisMonthColor", "irisMonthColor2", "irisMonthGradient", "irisMonthSize", "irisMonthOpts", "irisAgendaEnabled", "irisAgendaScale", "irisAgendaAnchor", "irisAgendaX", "irisAgendaY", "irisAgendaLocked", "irisAgendaOpacity", "irisAgendaBg", "irisAgendaColor", "irisAgendaColor2", "irisAgendaGradient", "irisAgendaSize", "irisAgendaOpts", "irisTodoEnabled", "irisTodoScale", "irisTodoAnchor", "irisTodoX", "irisTodoY", "irisTodoLocked", "irisTodoOpacity", "irisTodoBg", "irisTodoColor", "irisTodoColor2", "irisTodoGradient", "irisTodoSize", "irisTodoOpts", "irisNotesEnabled", "irisNotesScale", "irisNotesAnchor", "irisNotesX", "irisNotesY", "irisNotesLocked", "irisNotesOpacity", "irisNotesBg", "irisNotesColor", "irisNotesColor2", "irisNotesGradient", "irisNotesSize", "irisNotesOpts", "irisTimersEnabled", "irisTimersScale", "irisTimersAnchor", "irisTimersX", "irisTimersY", "irisTimersLocked", "irisTimersOpacity", "irisTimersBg", "irisTimersColor", "irisTimersColor2", "irisTimersGradient", "irisTimersSize", "irisTimersOpts", "irisScreenEnabled", "irisScreenScale", "irisScreenAnchor", "irisScreenX", "irisScreenY", "irisScreenLocked", "irisScreenOpacity", "irisScreenBg", "irisScreenColor", "irisScreenColor2", "irisScreenGradient", "irisScreenSize", "irisScreenOpts", "irisVitalsEnabled", "irisVitalsScale", "irisVitalsAnchor", "irisVitalsX", "irisVitalsY", "irisVitalsLocked", "irisVitalsOpacity", "irisVitalsBg", "irisVitalsColor", "irisVitalsColor2", "irisVitalsGradient", "irisVitalsSize", "irisVitalsOpts", "irisBatteryEnabled", "irisBatteryScale", "irisBatteryAnchor", "irisBatteryX", "irisBatteryY", "irisBatteryLocked", "irisBatteryOpacity", "irisBatteryBg", "irisBatteryColor", "irisBatteryColor2", "irisBatteryGradient", "irisBatterySize", "irisBatteryOpts", "irisWorldEnabled", "irisWorldScale", "irisWorldAnchor", "irisWorldX", "irisWorldY", "irisWorldLocked", "irisWorldOpacity", "irisWorldBg", "irisWorldColor", "irisWorldColor2", "irisWorldGradient", "irisWorldSize", "irisWorldOpts", "irisDateEnabled", "irisDateScale", "irisDateAnchor", "irisDateX", "irisDateY", "irisDateLocked", "irisDateOpacity", "irisDateBg", "irisDateColor", "irisDateColor2", "irisDateGradient", "irisDateSize", "irisDateOpts", "irisProfileEnabled", "irisProfileScale", "irisProfileAnchor", "irisProfileX", "irisProfileY", "irisProfileLocked", "irisProfileOpacity", "irisProfileBg", "irisProfileColor", "irisProfileColor2", "irisProfileGradient", "irisProfileSize", "irisProfileOpts", "irisUptimeEnabled", "irisUptimeScale", "irisUptimeAnchor", "irisUptimeX", "irisUptimeY", "irisUptimeLocked", "irisUptimeOpacity", "irisUptimeBg", "irisUptimeColor", "irisUptimeColor2", "irisUptimeGradient", "irisUptimeSize", "irisUptimeOpts", "irisNewsEnabled", "irisNewsScale", "irisNewsAnchor", "irisNewsX", "irisNewsY", "irisNewsLocked", "irisNewsOpacity", "irisNewsBg", "irisNewsColor", "irisNewsColor2", "irisNewsGradient", "irisNewsSize", "irisNewsOpts", "irisClockStyle", "irisWeatherStyle", "irisMediaStyle", "irisControlsStyle", "irisMonthStyle", "irisAgendaStyle", "irisTodoStyle", "irisNotesStyle", "irisTimersStyle", "irisScreenStyle", "irisVitalsStyle", "irisBatteryStyle", "irisWorldStyle", "irisDateStyle", "irisProfileStyle", "irisUptimeStyle", "irisNewsStyle", "irisClockRadius", "irisClockPad", "irisClockBorder", "irisClockBorderOpacity", "irisClockBackingOpacity", "irisWeatherRadius", "irisWeatherPad", "irisWeatherBorder", "irisWeatherBorderOpacity", "irisWeatherBackingOpacity", "irisMediaRadius", "irisMediaPad", "irisMediaBorder", "irisMediaBorderOpacity", "irisMediaBackingOpacity", "irisControlsRadius", "irisControlsPad", "irisControlsBorder", "irisControlsBorderOpacity", "irisControlsBackingOpacity", "irisMonthRadius", "irisMonthPad", "irisMonthBorder", "irisMonthBorderOpacity", "irisMonthBackingOpacity", "irisAgendaRadius", "irisAgendaPad", "irisAgendaBorder", "irisAgendaBorderOpacity", "irisAgendaBackingOpacity", "irisTodoRadius", "irisTodoPad", "irisTodoBorder", "irisTodoBorderOpacity", "irisTodoBackingOpacity", "irisNotesRadius", "irisNotesPad", "irisNotesBorder", "irisNotesBorderOpacity", "irisNotesBackingOpacity", "irisTimersRadius", "irisTimersPad", "irisTimersBorder", "irisTimersBorderOpacity", "irisTimersBackingOpacity", "irisScreenRadius", "irisScreenPad", "irisScreenBorder", "irisScreenBorderOpacity", "irisScreenBackingOpacity", "irisVitalsRadius", "irisVitalsPad", "irisVitalsBorder", "irisVitalsBorderOpacity", "irisVitalsBackingOpacity", "irisBatteryRadius", "irisBatteryPad", "irisBatteryBorder", "irisBatteryBorderOpacity", "irisBatteryBackingOpacity", "irisWorldRadius", "irisWorldPad", "irisWorldBorder", "irisWorldBorderOpacity", "irisWorldBackingOpacity", "irisDateRadius", "irisDatePad", "irisDateBorder", "irisDateBorderOpacity", "irisDateBackingOpacity", "irisProfileRadius", "irisProfilePad", "irisProfileBorder", "irisProfileBorderOpacity", "irisProfileBackingOpacity", "irisUptimeRadius", "irisUptimePad", "irisUptimeBorder", "irisUptimeBorderOpacity", "irisUptimeBackingOpacity", "irisNewsRadius", "irisNewsPad", "irisNewsBorder", "irisNewsBorderOpacity", "irisNewsBackingOpacity", "irisCustomImageEnabled", "irisCustomImageScale", "irisCustomImageAnchor", "irisCustomImageX", "irisCustomImageY", "irisCustomImageLocked", "irisCustomImageOpacity", "irisCustomImageBg", "irisCustomImageColor", "irisCustomImageColor2", "irisCustomImageGradient", "irisCustomImageSize", "irisCustomImageOpts", "irisCustomImageStyle", "irisCustomImageRadius", "irisCustomImagePad", "irisCustomImageBorder", "irisCustomImageBorderOpacity", "irisCustomImageBackingOpacity", "irisEditorialEnabled", "irisEditorialScale", "irisEditorialAnchor", "irisEditorialX", "irisEditorialY", "irisEditorialLocked", "irisEditorialOpacity", "irisEditorialBg", "irisEditorialColor", "irisEditorialColor2", "irisEditorialGradient", "irisEditorialSize", "irisEditorialOpts", "irisEditorialStyle", "irisEditorialRadius", "irisEditorialPad", "irisEditorialBorder", "irisEditorialBorderOpacity", "irisEditorialBackingOpacity", "irisConverterEnabled", "irisConverterScale", "irisConverterAnchor", "irisConverterX", "irisConverterY", "irisConverterLocked", "irisConverterOpacity", "irisConverterBg", "irisConverterColor", "irisConverterColor2", "irisConverterGradient", "irisConverterSize", "irisConverterOpts", "irisConverterStyle", "irisConverterRadius", "irisConverterPad", "irisConverterBorder", "irisConverterBorderOpacity", "irisConverterBackingOpacity", "irisJpEnabled", "irisJpScale", "irisJpAnchor", "irisJpX", "irisJpY", "irisJpLocked", "irisJpOpacity", "irisJpBg", "irisJpColor", "irisJpColor2", "irisJpGradient", "irisJpSize", "irisJpOpts", "irisJpStyle", "irisJpRadius", "irisJpPad", "irisJpBorder", "irisJpBorderOpacity", "irisJpBackingOpacity", "irisVisualizerEnabled", "irisVisualizerScale", "irisVisualizerAnchor", "irisVisualizerX", "irisVisualizerY", "irisVisualizerLocked", "irisVisualizerOpacity", "irisVisualizerBg", "irisVisualizerColor", "irisVisualizerColor2", "irisVisualizerGradient", "irisVisualizerSize", "irisVisualizerOpts", "irisVisualizerStyle", "irisVisualizerRadius", "irisVisualizerPad", "irisVisualizerBorder", "irisVisualizerBorderOpacity", "irisVisualizerBackingOpacity"
     ]
     property var _snapConfig: null
     property var _snapPlugins: null
@@ -447,6 +569,7 @@ Scope {
             live: root.wallpaperLive
             videoMuted: root.videoMuted
             videoVolume: root.videoVolume
+            videoPaused: root.videoPaused
         }
 
         // The Parallax backdrop: the inpainted background.png drifting just
@@ -460,13 +583,15 @@ Scope {
             visible: root.stageParallax
         }
 
-        // While the stage is on, the visualizer lives inside this surface so it
-        // sits behind every cut-out: above the backdrop, below every layer and
-        // widget. Its own surface (a sibling window that can never interleave
-        // with the subject) is suppressed meanwhile; Above windows and the
-        // Placer keep that surface (docs/stage.md).
+        // While the stage is on, the visualizer lives inside this surface. By
+        // default it sits behind every cut-out (above the backdrop, below every
+        // layer and widget); the Depth row in the edit bar lifts it above the
+        // in-front layers, the way a lifted built-in widget rises to z 5. Its
+        // own surface (a sibling window that can never interleave with the
+        // subject) is suppressed meanwhile; Above windows and the Placer keep
+        // that surface (docs/stage.md).
         Item {
-            z: 1.5
+            z: StageCfg.Config.isFront("visualizer") ? 5 : 1.5
             anchors.fill: parent
             visible: root.hostsVisualizer
             Viz.InlineVisualizer { anchors.fill: parent }
@@ -573,6 +698,8 @@ Scope {
                 freeY: Config.clockY
                 locked: root.stageComposing ? false : Config.clockLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: Config.clockBg
                 radius: Config.clockRadius
                 scaleCfg: Config.clockScale
@@ -604,6 +731,8 @@ Scope {
                 freeY: Config.calendarY
                 locked: root.stageComposing ? false : Config.calendarLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.calendarScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -643,6 +772,8 @@ Scope {
                 freeY: Config.musicY
                 locked: root.stageComposing ? false : Config.musicLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.musicScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -685,6 +816,8 @@ Scope {
                 freeY: Config.aioY
                 locked: root.stageComposing ? false : Config.aioLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.aioScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -718,6 +851,8 @@ Scope {
                 freeY: Config.statsY
                 locked: root.stageComposing ? false : Config.statsLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.statsScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -750,6 +885,8 @@ Scope {
                 freeY: Config.weatherY
                 locked: root.stageComposing ? false : Config.weatherLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.weatherScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -783,6 +920,8 @@ Scope {
                 freeY: Config.notesY
                 locked: root.stageComposing ? false : Config.notesLocked
                 composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
                 bg: "none"
                 scaleCfg: Config.notesScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
@@ -804,6 +943,130 @@ Scope {
             }
         }
 
+        Loader {
+            id: dayprogressLoader
+            anchors.fill: parent
+            z: root.widgetZ("dayprogress")
+            active: root.widgetsEnabled && root.reloadReady && Config.dayprogressEnabled
+            sourceComponent: Component {
+            Item {
+                anchors.fill: parent
+            WidgetSlot {
+                id: dayprogressSlot
+                widget: "dayprogress"
+                z: root.widgetZ("dayprogress")
+                visible: true
+                anchor: Config.dayprogressAnchor
+                freeX: Config.dayprogressX
+                freeY: Config.dayprogressY
+                locked: root.stageComposing ? false : Config.dayprogressLocked
+                composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
+                bg: "none"
+                scaleCfg: Config.dayprogressScale
+                onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
+                onDropped: (box) => win.flashDrop(box)
+                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                DayProgressWidget {
+                    s: Config.dayprogressScale
+                }
+            }
+            }
+            }
+        }
+
+        Loader {
+            id: shapeLoader
+            anchors.fill: parent
+            z: root.widgetZ("shape")
+            active: root.widgetsEnabled && root.reloadReady && Config.shapeEnabled
+            sourceComponent: Component {
+            Item {
+                anchors.fill: parent
+            WidgetSlot {
+                id: shapeSlot
+                widget: "shape"
+                z: root.widgetZ("shape")
+                visible: true
+                anchor: Config.shapeAnchor
+                freeX: Config.shapeX
+                freeY: Config.shapeY
+                locked: root.stageComposing ? false : Config.shapeLocked
+                composing: root.stageComposing
+                gridSize: root.editGridSize
+                snapEnabled: root.editGridSnap
+                bg: "none"
+                scaleCfg: Config.shapeScale
+                onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
+                onDropped: (box) => win.flashDrop(box)
+                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                ShapeWidget {
+                    s: Config.shapeScale
+                }
+            }
+            }
+            }
+        }
+
+        // one IrisFaceWidget slot per enabled iRiS face. Same host contract as
+        // the built-ins -- WidgetSlot owns placement/size/lock/backing and the
+        // colour modes; the adapter renders the vendored inir face in Ryoku's
+        // look. Driven by the shared roster so a face is registered once.
+        Repeater {
+            id: irisRepeater
+            model: IrisRoster.faces
+            delegate: Loader {
+                id: irisLoader
+                required property var modelData
+                anchors.fill: parent
+                z: root.widgetZ(irisLoader.modelData.prefix)
+                active: root.widgetsEnabled && root.reloadReady
+                    && (Config[irisLoader.modelData.prefix + "Enabled"] === true)
+                sourceComponent: Component {
+                    Item {
+                        anchors.fill: parent
+                        WidgetSlot {
+                            id: irisSlot
+                            widget: irisLoader.modelData.prefix
+                            z: root.widgetZ(irisLoader.modelData.prefix)
+                            visible: true
+                            anchor: Config[irisLoader.modelData.prefix + "Anchor"]
+                            freeX: Config[irisLoader.modelData.prefix + "X"]
+                            freeY: Config[irisLoader.modelData.prefix + "Y"]
+                            locked: root.stageComposing ? false : Config[irisLoader.modelData.prefix + "Locked"]
+                            composing: root.stageComposing
+                            gridSize: root.editGridSize
+                            snapEnabled: root.editGridSnap
+                            // iNiR style: the face owns its plate, so the slot draws no
+                            // backing. Ryoku style: the slot draws the chosen backing.
+                            bg: Config[irisLoader.modelData.prefix + "Style"] === "ryoku"
+                                ? Config[irisLoader.modelData.prefix + "Bg"] : "none"
+                            scaleCfg: Config[irisLoader.modelData.prefix + "Scale"]
+                            // per-widget geometry (Ryoku-style backing / iNiR plate radius)
+                            radiusOverride: Config[irisLoader.modelData.prefix + "Radius"]
+                            pad: Config[irisLoader.modelData.prefix + "Pad"] >= 0
+                                ? Config[irisLoader.modelData.prefix + "Pad"] : 0
+                            borderWidth: Config[irisLoader.modelData.prefix + "Border"]
+                            borderOpacity: Config[irisLoader.modelData.prefix + "BorderOpacity"]
+                            backingOpacity: Config[irisLoader.modelData.prefix + "BackingOpacity"]
+                            onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
+                            onDropped: (box) => win.flashDrop(box)
+                            onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                            IrisFaceWidget {
+                                faceId: irisLoader.modelData.id
+                                kind: irisLoader.modelData.kind
+                                prefix: irisLoader.modelData.prefix
+                                screen: root.screen
+                                hostX: irisSlot.x
+                                hostY: irisSlot.y
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // one draggable PluginDesktopSlot per enabled desktopWidget plugin.
         // drag = write free pos. resize bracket = write scale. right-click
         // = per-tile menu. each commit goes through its own Process so a
@@ -815,6 +1078,9 @@ Scope {
                 id: slot
                 required property string modelData
                 readonly property string pid: modelData
+                // Depth lift: a lifted tile rises above the in-front cut-outs
+                // the way a lifted built-in does (docs/stage.md).
+                z: root.widgetZ(slot.pid)
                 // live registry entry for this id, re-resolved whenever
                 // Registry reloads. placement (x/y/scale/bg) updates here
                 // without rebuilding the delegate, because the model is the
@@ -999,89 +1265,6 @@ Scope {
 
         Process { id: paletteProc }
 
-        // Menus sit above the whole stage stack (backdrop z 1, layers up to z 5),
-        // or a Parallax backdrop paints over an open right-click menu.
-        // Built on the first right-click (the sync build hides behind the press)
-        // and kept for the session.
-        Loader {
-            id: widgetMenuLoader
-            anchors.fill: parent
-            z: 90
-            active: false
-            onItemChanged: if (item && root.pendingWidgetMenu) {
-                const p = root.pendingWidgetMenu;
-                root.pendingWidgetMenu = null;
-                root.openWidgetMenu(p[0], p[1], p[2]);
-            }
-            sourceComponent: Component {
-                WidgetMenu { desktop: root }
-            }
-        }
-
-        // per-tile right-click menu, hoisted to PanelWindow level so the
-        // click-away catcher covers the whole desktop and a tile that
-        // vanishes (Hide) doesn't pull the menu down with it.
-        Loader {
-            id: pluginMenuLoader
-            anchors.fill: parent
-            z: 90
-            active: false
-            onItemChanged: if (item && root.pendingPluginMenu) {
-                const p = root.pendingPluginMenu;
-                root.pendingPluginMenu = null;
-                root.openPluginMenu(p[0], p[1], p[2], p[3], p[4], p[5]);
-            }
-            sourceComponent: Component {
-            PluginWidgetMenu {
-                id: pluginMenu
-                z: 90
-                onHideRequested: (id) => {
-                    hide.command = [root.placeTool, id, "enabled", "false"];
-                    hide.running = true;
-                    pluginMenu.close();
-                }
-                onLockToggled: (id) => {
-                    const dw = win.placementOf(id);
-                    const x = (dw.x !== undefined) ? dw.x : 80;
-                    const y = (dw.y !== undefined) ? dw.y : 80;
-                    const sc = (dw.scale !== undefined) ? dw.scale : 1;
-                    const lk = !(dw.locked === true);
-                    lockProc.command = [root.placeTool, id, "desktopWidget",
-                        "" + x, "" + y, "" + sc, "" + lk];
-                    lockProc.running = true;
-                }
-                onSettingChanged: (id, key, value) => {
-                    var obj = {};
-                    obj[key] = value;
-                    // queue so a two-key change (colour mode: colorAuto + color)
-                    // can't stomp itself on the single settings Process.
-                    root._settingsQueue.push([root.placeTool, id, "settings", JSON.stringify(obj)]);
-                    root._runSettingsQueue();
-                }
-                onSizeChanged: (id, sc) => {
-                    const dw = win.placementOf(id);
-                    const x = (dw.x !== undefined) ? dw.x : 80;
-                    const y = (dw.y !== undefined) ? dw.y : 80;
-                    const lk = (dw.locked === true);
-                    // scale only: opacity arg omitted -> ryoku-plugins-place keeps it.
-                    sizeProc.command = [root.placeTool, id, "desktopWidget",
-                        "" + x, "" + y, "" + sc, "" + lk];
-                    sizeProc.running = true;
-                }
-                onOpacityChanged: (id, op) => {
-                    const dw = win.placementOf(id);
-                    const x = (dw.x !== undefined) ? dw.x : 80;
-                    const y = (dw.y !== undefined) ? dw.y : 80;
-                    const lk = (dw.locked === true);
-                    // opacity only: scale left "" so the tool keeps the current one.
-                    opacityProc.command = [root.placeTool, id, "desktopWidget",
-                        "" + x, "" + y, "", "" + lk, "" + op];
-                    opacityProc.running = true;
-                }
-            }
-            }
-        }
-
         // Shared image viewer for desktop plugin tiles. A tile (e.g. Photo
         // Frame) calls pluginApi.expandImage(url) on a real click; this dims the
         // whole desktop and shows that image large + centered
@@ -1156,24 +1339,6 @@ Scope {
                 }
             }
         }
-        // The Edit widgets toolbar (docs/stage.md, "Edit widgets"): one row
-        // docked top-centre. The desktop draws the per-widget frames and runs
-        // the drag/resize; this owns the toolbar and the Add drop-down.
-        StageWidgetsEditor {
-            z: 101
-            visible: root.stageComposing
-            monitor: root.screen ? root.screen.name : ""
-            items: root.addItems
-            onDone: StageCfg.StageSession.leave()
-            onAddToggle: id => root.stageAddToggle(id)
-            onVisualizer: {
-                StageCfg.StageSession.leave();
-                if (!VizCfg.Config.enabled)
-                    VizCfg.Config.setEnabled(true);
-                if (root.stageState)
-                    root.stageState.visualizerPlacing = true;
-            }
-        }
 
         // position/scale writeback for plugin tiles. ryoku-plugins-place
         // merges free x/y (+ optional scale/locked) into plugins.json;
@@ -1204,6 +1369,195 @@ Scope {
         Process {
             id: resetProc
             onRunningChanged: if (!resetProc.running) root._runResetQueue()
+        }
+    }
+
+    // The desktop's right-click menus (bare wallpaper, a widget, a plugin tile)
+    // live on their own Overlay layer-shell surface, not inside the Bottom-layer
+    // widget window, so an open menu always draws above every window instead of
+    // being buried under whatever overlaps the click. exclusiveZone 0 keeps the
+    // surface inside the work area (the recording-island idiom), so a card clamped
+    // to it lands clear of the frame band and the dock. It is mapped only while a
+    // menu shows, so it never blocks the desktop's own input otherwise; while
+    // shown the whole surface is live (each menu carries its own click-away
+    // catcher) and takes keyboard on demand so Esc dismisses.
+    PanelWindow {
+        id: menuWin
+        screen: root.screen
+        visible: root.menusShowing
+        color: "transparent"
+        exclusiveZone: 0
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "ryoku-desktop-menu"
+        WlrLayershell.keyboardFocus: root.menusShowing ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        anchors { top: true; left: true; right: true; bottom: true }
+
+        Loader {
+            id: widgetMenuLoader
+            anchors.fill: parent
+            z: 90
+            active: false
+            onItemChanged: if (item && root.pendingWidgetMenu) {
+                const p = root.pendingWidgetMenu;
+                root.pendingWidgetMenu = null;
+                root.openWidgetMenu(p[0], p[1], p[2]);
+            }
+            sourceComponent: Component {
+                WidgetMenu {
+                    onCustomizeRequested: (w) => root.openInspector(w)
+                }
+            }
+        }
+
+        // The system desktop right-click menu (bare wallpaper): the shared
+        // iRiS-structured surface, its own loader so it never rides the widget one.
+        Loader {
+            id: desktopMenuLoader
+            anchors.fill: parent
+            z: 90
+            active: false
+            onItemChanged: if (item && root.pendingDesktopMenu) {
+                const p = root.pendingDesktopMenu;
+                root.pendingDesktopMenu = null;
+                root.openDesktopMenu(p[0], p[1]);
+            }
+            sourceComponent: Component {
+                DesktopContextMenu { desktop: root }
+            }
+        }
+
+        // per-tile right-click menu, hoisted to PanelWindow level so the
+        // click-away catcher covers the whole desktop and a tile that
+        // vanishes (Hide) doesn't pull the menu down with it.
+        Loader {
+            id: pluginMenuLoader
+            anchors.fill: parent
+            z: 90
+            active: false
+            onItemChanged: if (item && root.pendingPluginMenu) {
+                const p = root.pendingPluginMenu;
+                root.pendingPluginMenu = null;
+                root.openPluginMenu(p[0], p[1], p[2], p[3], p[4], p[5]);
+            }
+            sourceComponent: Component {
+            PluginWidgetMenu {
+                id: pluginMenu
+                z: 90
+                onHideRequested: (id) => {
+                    hide.command = [root.placeTool, id, "enabled", "false"];
+                    hide.running = true;
+                    pluginMenu.close();
+                }
+                onLockToggled: (id) => {
+                    const dw = win.placementOf(id);
+                    const x = (dw.x !== undefined) ? dw.x : 80;
+                    const y = (dw.y !== undefined) ? dw.y : 80;
+                    const sc = (dw.scale !== undefined) ? dw.scale : 1;
+                    const lk = !(dw.locked === true);
+                    lockProc.command = [root.placeTool, id, "desktopWidget",
+                        "" + x, "" + y, "" + sc, "" + lk];
+                    lockProc.running = true;
+                }
+                onSettingChanged: (id, key, value) => {
+                    var obj = {};
+                    obj[key] = value;
+                    // queue so a two-key change (colour mode: colorAuto + color)
+                    // can't stomp itself on the single settings Process.
+                    root._settingsQueue.push([root.placeTool, id, "settings", JSON.stringify(obj)]);
+                    root._runSettingsQueue();
+                }
+                onSizeChanged: (id, sc) => {
+                    const dw = win.placementOf(id);
+                    const x = (dw.x !== undefined) ? dw.x : 80;
+                    const y = (dw.y !== undefined) ? dw.y : 80;
+                    const lk = (dw.locked === true);
+                    // scale only: opacity arg omitted -> ryoku-plugins-place keeps it.
+                    sizeProc.command = [root.placeTool, id, "desktopWidget",
+                        "" + x, "" + y, "" + sc, "" + lk];
+                    sizeProc.running = true;
+                }
+                onOpacityChanged: (id, op) => {
+                    const dw = win.placementOf(id);
+                    const x = (dw.x !== undefined) ? dw.x : 80;
+                    const y = (dw.y !== undefined) ? dw.y : 80;
+                    const lk = (dw.locked === true);
+                    // opacity only: scale left "" so the tool keeps the current one.
+                    opacityProc.command = [root.placeTool, id, "desktopWidget",
+                        "" + x, "" + y, "", "" + lk, "" + op];
+                    opacityProc.running = true;
+                }
+            }
+            }
+        }
+    }
+
+    // The widget inspector (Customize sheet) rides its own Overlay surface next
+    // to the menu one: exclusiveZone 0 keeps it inside the work area, clear of
+    // the bars, dock and frame. Unlike the menu it never dismisses on an outside
+    // click -- the surface masks to the sheet, so a press off it falls through to
+    // the widgets and the user watches the widget retune live. Esc and the close
+    // button dismiss; keyboard is taken on demand for the text fields.
+    PanelWindow {
+        id: inspectorWin
+        screen: root.screen
+        visible: root.inspectorShowing
+        color: "transparent"
+        exclusiveZone: 0
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "ryoku-desktop-inspector"
+        WlrLayershell.keyboardFocus: root.inspectorShowing ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+        anchors { top: true; left: true; right: true; bottom: true }
+        // Masked to the sheet so an outside press reaches the widgets; the video
+        // picker draws full-surface, so drop the mask while it is open.
+        mask: (root.inspectorShowing && !(inspectorLoader.item && inspectorLoader.item.pickerOpen === true)) ? inspectorMask : null
+        Region { id: inspectorMask; item: inspectorLoader.item ? inspectorLoader.item.sheetItem : null }
+
+        Loader {
+            id: inspectorLoader
+            anchors.fill: parent
+            z: 90
+            active: false
+            onItemChanged: if (item && root.pendingInspector) {
+                const p = root.pendingInspector;
+                root.pendingInspector = null;
+                root.openInspector(p);
+            }
+            sourceComponent: Component {
+                WidgetInspector {}
+            }
+        }
+    }
+
+    // The Edit widgets bar on its own layer-shell surface (docs/stage.md). With
+    // exclusiveZone 0 its geometry already excludes the bars and any dock or
+    // frame-style island that reserves a zone (a dock that reserves nothing is
+    // cleared by editBarDockClear), so the bar rests bottom-centre in the work area on
+    // every bar style (the recording-island idiom). While the picker is closed only
+    // the bar takes input, so the widgets under it still drag; while it is open the
+    // whole surface takes input (a press off the panel closes it) and the surface
+    // takes keyboard on demand for the picker's search field and Up/Down/Space/Esc.
+    PanelWindow {
+        id: editBarWin
+        screen: root.screen
+        visible: root.stageComposing
+        color: "transparent"
+        exclusiveZone: 0
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "ryoku-widgets-editbar"
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+        anchors { top: true; bottom: true; left: true; right: true }
+        mask: editBar.pickerOpen ? null : editBarMask
+        Region { id: editBarMask; item: editBar.barItem }
+
+        WidgetEditBar {
+            id: editBar
+            anchors.fill: parent
+            monitor: root.screen ? root.screen.name : ""
+            items: root.addItems
+            dockClearance: root.editBarDockClear
+            onDone: StageCfg.StageSession.leave()
+            onAddToggle: id => root.stageAddToggle(id)
+            onCustomize: id => root.openInspector(id)
         }
     }
 }

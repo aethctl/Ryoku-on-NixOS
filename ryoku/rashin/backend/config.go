@@ -26,6 +26,11 @@ type Config struct {
 	// session. Empty means the recommended default (hermes). Only agents with
 	// an ACP adapter present can drive it; see chatBackends.
 	ChatAgent string `json:"chatAgent,omitempty"`
+	// Approvals is how the chat agent's tool calls are approved: "read-only"
+	// (the default when empty) runs calls that only read the machine without
+	// asking and asks for everything else; "ask" asks for every call the agent
+	// wants approved.
+	Approvals string `json:"approvals,omitempty"`
 	// Habits gates the vault's user-habits mining. History defaults on;
 	// nil means enabled so an absent key keeps the feature.
 	Habits struct {
@@ -36,6 +41,26 @@ type Config struct {
 // HabitsHistoryEnabled: fish-history mining is opt-out.
 func (c Config) HabitsHistoryEnabled() bool {
 	return c.Habits.History == nil || *c.Habits.History
+}
+
+// Approval modes for the chat agent's tool calls.
+const (
+	approvalsReadOnly = "read-only"
+	approvalsAsk      = "ask"
+)
+
+// ApprovalsMode is the effective mode; anything unrecognised reads as the
+// default so a hand-edited typo never turns every prompt off.
+func (c Config) ApprovalsMode() string {
+	if c.Approvals == approvalsAsk {
+		return approvalsAsk
+	}
+	return approvalsReadOnly
+}
+
+// AutoApproveReads: read-only tool calls run without a prompt.
+func (c Config) AutoApproveReads() bool {
+	return c.ApprovalsMode() == approvalsReadOnly
 }
 
 // defaultConfig: rashin is on by default (opt-out via `disable`, which records

@@ -1,0 +1,119 @@
+import QtQuick
+import Ryoku.Ui.Singletons
+
+Column {
+    id: chips
+
+    property string provider: ""
+    property var state: ({})
+    property var sources: null
+    property var collections: []
+
+    signal changed(var next)
+
+    spacing: 13 * Theme.scale
+    width: parent ? parent.width : implicitWidth
+
+    readonly property var model: {
+        if (!chips.sources || chips.provider.length === 0)
+            return []
+        var ctx = { collections: chips.collections }
+        var defs = chips.sources.sections(chips.provider)
+        var out = []
+        for (var i = 0; i < defs.length; ++i) {
+            var built = defs[i].build(chips.state, ctx)
+            if (built && built.length > 0)
+                out.push({ n: defs[i].n, group: defs[i].group, chips: built })
+        }
+        return out
+    }
+
+    function _copy() { return JSON.parse(JSON.stringify(chips.state)) }
+
+    function _isActive(chip) {
+        if (chip.kind === "bool")
+            return chips.state[chip.key] === true
+        if (chip.kind === "swatch")
+            return chips.state.colour === chip.index
+        if (chip.kind === "multi") {
+            var arr = chips.state[chip.key] || []
+            return chip.value === "" ? arr.length === 0 : arr.indexOf(chip.value) >= 0
+        }
+        if (chip.toggleMode)
+            return false
+        return chips.state[chip.key] === chip.value
+    }
+
+    function _tap(chip) {
+        var s = chips._copy()
+        if (chip.kind === "bool") {
+            s[chip.key] = !s[chip.key]
+        } else if (chip.kind === "swatch") {
+            s.colour = (s.colour === chip.index) ? -1 : chip.index
+        } else if (chip.kind === "multi") {
+            var arr = (s[chip.key] || []).slice()
+            if (chip.value === "") {
+                arr = []
+            } else {
+                var at = arr.indexOf(chip.value)
+                if (at >= 0) arr.splice(at, 1)
+                else { arr.push(chip.value); var any = arr.indexOf(""); if (any >= 0) arr.splice(any, 1) }
+            }
+            s[chip.key] = arr
+        } else {
+            s[chip.key] = chip.value
+        }
+        chips.changed(s)
+    }
+
+    Repeater {
+        model: chips.model
+        delegate: Column {
+            required property var modelData
+            width: chips.width
+            spacing: 5 * Theme.scale
+
+            Row {
+                width: parent.width
+                spacing: 6 * Theme.scale
+                Text {
+                    id: heading
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData.n + "  " + modelData.group
+                    font.family: Theme.ui
+                    font.weight: Theme.uiWeight
+                    font.pixelSize: Theme.fontTiny
+                    color: Theme.withAlpha(Theme.surfaceText, 0.42)
+                    renderType: Text.NativeRendering
+                }
+                Rectangle {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.max(0, parent.width - heading.implicitWidth - 6 * Theme.scale)
+                    height: 1
+                    color: Theme.withAlpha(Theme.outline, 0.28)
+                }
+            }
+
+            Flow {
+                width: parent.width
+                spacing: 3 * Theme.scale
+                Repeater {
+                    model: modelData.chips
+                    delegate: BrowserChip {
+                        required property var modelData
+                        kind: modelData.kind === "order" ? "order"
+                            : modelData.kind === "swatch" ? "swatch" : "plain"
+                        label: modelData.label !== undefined ? modelData.label : ""
+                        swatchIndex: modelData.index !== undefined ? modelData.index : 0
+                        swatchInner: modelData.kind === "swatch" && chips.sources
+                            ? chips.sources.swatchColor(modelData.index, false) : "gray"
+                        swatchInnerActive: modelData.kind === "swatch" && chips.sources
+                            ? chips.sources.swatchColor(modelData.index, true) : "white"
+                        active: chips._isActive(modelData)
+                        onClicked: chips._tap(modelData)
+                    }
+                }
+            }
+        }
+    }
+}

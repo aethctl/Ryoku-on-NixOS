@@ -1,0 +1,139 @@
+pragma ComponentBehavior: Bound
+
+import QtQuick
+import QtQuick.Layouts
+import inir.services
+import inir.modules.iris.style
+
+IrisWidgetFace {
+    id: root
+
+    readonly property var cities: Array.from(root.widget.cities ?? []).slice(0, 4)
+    readonly property int localOffset: -WorldClock.now.getTimezoneOffset()
+
+    function shift(index: int): string {
+        const delta = ((WorldClock.offsetsMinutes[index] ?? 0) - root.localOffset) / 60
+        const hours = Math.abs(delta) % 1 === 0 ? Math.abs(delta) : Math.abs(delta).toFixed(1)
+        const day = root.widget.cityDayDelta(index)
+        const dayWord = day > 0 ? Translation.tr("Tomorrow") : day < 0 ? Translation.tr("Yesterday") : Translation.tr("Today")
+        return delta === 0 ? dayWord : dayWord + ", " + (delta > 0 ? "+" : "−") + hours + " h"
+    }
+
+    component City: ColumnLayout {
+        id: city
+        required property var modelData
+        required property int index
+        property real diameter: root.dp(56)
+        spacing: root.dp(5)
+        FaceDial {
+            face: root
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: city.diameter
+            Layout.preferredHeight: city.diameter
+            time: WorldClock.cityDisplayDate(city.index)
+            seconds: false
+            numerals: false
+            disc: true
+            daylight: city.modelData.isDay
+        }
+        FaceText {
+            face: root
+            Layout.alignment: Qt.AlignHCenter
+            Layout.maximumWidth: city.diameter * 1.35
+            visible: root.widget.showNames
+            text: city.modelData.name
+            size: root.small ? 11 : 12
+            weight: Font.DemiBold
+        }
+        FaceText {
+            face: root
+            Layout.alignment: Qt.AlignHCenter
+            visible: root.widget.showOffsets && !root.small
+            text: root.shift(city.index)
+            color: root.inkTertiary
+            size: 11
+        }
+    }
+
+    FaceText {
+        face: root
+        visible: root.cities.length === 0
+        anchors.centerIn: parent
+        text: Translation.tr("Add a city")
+        color: root.inkTertiary
+        size: 12.5
+    }
+
+    GridLayout {
+        visible: !root.large
+        anchors.centerIn: parent
+        columns: root.small ? 2 : 4
+        columnSpacing: root.small ? root.dp(14) : root.dp(18)
+        rowSpacing: root.dp(6)
+        Repeater {
+            model: root.large ? [] : root.cities
+            City { diameter: root.small ? root.dp(44) : root.dp(58) }
+        }
+    }
+
+    ColumnLayout {
+        visible: root.large
+        anchors.fill: parent
+        spacing: root.dp(4)
+        Repeater {
+            model: root.large ? root.cities : []
+            ColumnLayout {
+                id: row
+                required property var modelData
+                required property int index
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 0
+                Rectangle {
+                    visible: row.index > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: IrisStyle.hairline
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: root.dp(12)
+                    FaceDial {
+                        face: root
+                        Layout.preferredWidth: root.dp(46)
+                        Layout.preferredHeight: root.dp(46)
+                        time: WorldClock.cityDisplayDate(row.index)
+                        seconds: false
+                        numerals: false
+                        disc: true
+                        daylight: row.modelData.isDay
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        FaceText {
+                            face: root
+                            Layout.fillWidth: true
+                            text: row.modelData.name
+                            size: 14
+                            weight: Font.DemiBold
+                        }
+                        FaceText {
+                            face: root
+                            Layout.fillWidth: true
+                            text: root.shift(row.index)
+                            color: root.inkSecondary
+                            size: 12
+                        }
+                    }
+                    FaceFigure {
+                        face: root
+                        text: row.modelData.time
+                        size: 28
+                    }
+                }
+            }
+        }
+    }
+}

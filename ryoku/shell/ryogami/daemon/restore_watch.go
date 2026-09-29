@@ -101,4 +101,3 @@ func (d *daemon) watchOutputs() {
 		time.Sleep(restoreRetryInterval)
 	}
 }
-

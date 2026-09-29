@@ -8,7 +8,7 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 
 // Recording (DESIGN.md section 11, SYSTEM). The quality knobs behind the bar's
-// one-tap screen recorder, read by ryoku-cmd-screenrecord (env vars still
+// one-tap screen recorder, read by ryoku-cmd-record (env vars still
 // override at record time). Constant framerate is the default because
 // variable-framerate files often import or play back as ~30fps and look choppy.
 //
@@ -23,7 +23,7 @@ import Ryoku.Ui.Singletons
 // the adapter property is `int` and the Step control emits an int, so the file
 // stays numeric ("fps": 60, not "60") for the consumer's `cfg_get '.fps' 60`.
 // These six defaults are mirrored in the shell consumer's cfg_get/cfg_bool
-// fallbacks (ryoku-cmd-screenrecord) and must not drift.
+// fallbacks (ryoku-cmd-record) and must not drift.
 Item {
     id: pg
 
@@ -406,7 +406,7 @@ Item {
     }
     Process {
         id: info
-        command: ["ryoku-cmd-screenrecord", "--info"]
+        command: ["ryoku-cmd-record", "--info"]
         running: true
         stdout: StdioCollector {
             onStreamFinished: {

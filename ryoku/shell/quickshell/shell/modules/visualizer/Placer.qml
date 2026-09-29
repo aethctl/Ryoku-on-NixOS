@@ -85,8 +85,12 @@ PanelWindow {
     }
 
     // The frame carries the look's turn, so a guide lands where the look actually is.
+    // The edge field owns the whole screen and has no box to aim: drawing its
+    // guide would just ring the display with a line that edits nothing (the Hub
+    // preview treats edge looks the same way), so the bar rides alone.
     Item {
         id: frame
+        visible: !Config.isAura
         x: win.box.x
         y: win.box.y
         width: win.box.width
@@ -143,8 +147,9 @@ PanelWindow {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         hoverEnabled: true
         focus: true
-        cursorShape: grab.over === "size" ? Qt.SizeFDiagCursor
-            : (grab.over === "turn" ? Qt.CrossCursor : Qt.SizeAllCursor)
+        cursorShape: Config.isAura ? Qt.ArrowCursor
+            : (grab.over === "size" ? Qt.SizeFDiagCursor
+               : (grab.over === "turn" ? Qt.CrossCursor : Qt.SizeAllCursor))
 
         // The handles ride a turned frame, so map their centres rather than compute
         // them: a mapped centre is right at every angle.
@@ -170,6 +175,11 @@ PanelWindow {
                 win.done();
                 return;
             }
+            // The edge field owns the whole screen and has no box to aim: the
+            // keys and the bar still edit it, a drag must not shove a box it
+            // never reads.
+            if (Config.isAura)
+                return;
             grab.mode = grab.over;
             win.gesture = grab.over;
             grab.pressX = m.x;
@@ -216,6 +226,8 @@ PanelWindow {
             win.th = out.h;
         }
         onWheel: (w) => {
+            if (Config.isAura)
+                return;
             var k = w.angleDelta.y > 0 ? 1.06 : 0.94;
             Config.sizeBox(Config.w * k, Config.h * k, win.width / win.height);
         }

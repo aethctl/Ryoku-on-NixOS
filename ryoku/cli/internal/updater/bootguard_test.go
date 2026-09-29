@@ -1,6 +1,13 @@
 package updater
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"ryoku-cli/internal/sys"
+)
 
 // the shape limine-snapper-sync generates (comments and paths trimmed).
 const limineFixture = `timeout: 3
@@ -37,5 +44,55 @@ func TestSnapshotEntryPathFindsTheNestedEntry(t *testing.T) {
 	// a subvol match outside //Snapshots (the live entry) never counts
 	if got := snapshotEntryPath("//Live\n    ///x\n        ////linux\n            cmdline: rootflags=subvol=/@snapshots/570/snapshot\n", "570"); got != "" {
 		t.Fatalf("entry outside Snapshots matched: %q", got)
+	}
+}
+
+// #291: arming the guard records the channel the box tracked before the update,
+// so the revert can tell the user how to get back onto updates (`ryoku track
+// <channel>`) rather than leaving them pinned to the reverted release tag.
+func TestArmBootGuardRecordsChannel(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("RYOKU_REPO", "")
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local", "state"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+
+	dir := t.TempDir()
+	oldPending, oldBootOK := pendingFile, bootOKDir
+	pendingFile = filepath.Join(dir, "update-pending.json")
+	bootOKDir = filepath.Join(dir, "boot")
+	t.Cleanup(func() { pendingFile, bootOKDir = oldPending, oldBootOK })
+	if err := os.MkdirAll(bootOKDir, 0o777); err != nil {
+		t.Fatal(err)
+	}
+
+	conf := filepath.Join(dir, "pacman.conf")
+	if err := os.WriteFile(conf, []byte("[options]\n\n[ryoku]\nServer = "+sys.ChannelServer("stable")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rel := filepath.Join(dir, "ryoku-release")
+	if err := os.WriteFile(rel, []byte("RELEASE=v0.75.3-beta.20\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	oldConf, oldRel := sys.PacmanConf, sys.ReleaseFile
+	sys.PacmanConf, sys.ReleaseFile = conf, rel
+	t.Cleanup(func() { sys.PacmanConf, sys.ReleaseFile = oldConf, oldRel })
+
+	t.Setenv("RYOKU_UPDATE_FROM", "v0.63.1-beta.19")
+	armBootGuard("")
+
+	raw, err := os.ReadFile(pendingFile)
+	if err != nil {
+		t.Fatalf("pending marker not written: %v", err)
+	}
+	var p pendingUpdate
+	if err := json.Unmarshal(raw, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.Channel != "stable" {
+		t.Fatalf("recorded channel = %q, want stable", p.Channel)
+	}
+	if p.From != "v0.63.1-beta.19" || p.To != "v0.75.3-beta.20" {
+		t.Fatalf("From/To = %q/%q, want v0.63.1-beta.19/v0.75.3-beta.20", p.From, p.To)
 	}
 }

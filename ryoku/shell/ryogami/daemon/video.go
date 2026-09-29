@@ -227,7 +227,7 @@ func (p *videoPlayer) removeLocked(cmd *exec.Cmd) bool {
 }
 
 // Stop invalidates any in-flight transcode, kills every spawned player (whole
-// process group) and, mirroring how process.go clears stale wall-ui, pkills
+// process group) and, mirroring how process.go clears a stale picker, pkills
 // orphans: livewall from a crashed daemon, mpvpaper from releases that shipped
 // it (an orphan's surface stacks above ours, hiding every later wallpaper).
 func (p *videoPlayer) Stop() {

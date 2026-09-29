@@ -1,6 +1,6 @@
-// Overview vitals: live system stats via /ws/vitals, falling back to 2s polling
-// of /api/vitals when the socket fails. Numeric stat blocks tick from old to new
-// value over 300ms (rAF), gated by prefers-reduced-motion.
+// Overview vitals: live machine stats over /ws/vitals, falling back to 2s
+// polling of /api/vitals when the socket fails. The bar widths carry the
+// load; the numbers simply update.
 
 import { api, wsUrl } from "./api.js";
 
@@ -21,108 +21,118 @@ export function formatUptime(sec) {
   return parts.join(" ");
 }
 
-const reduce = () =>
-  typeof matchMedia !== "undefined" &&
-  matchMedia("(prefers-reduced-motion: reduce)").matches;
+function setText(sel, v) {
+  const el = document.querySelector(sel);
+  if (el) el.textContent = v;
+}
 
-// tick(el, from, to, fmt): animate the number el.textContent through
-// intermediate integers over 300ms. fmt formats each frame's value.
-function tick(el, from, to, fmt) {
-  if (reduce() || from === to || !Number.isFinite(from)) {
-    el.textContent = fmt(to);
-    return;
+function setBar(sel, pct) {
+  const bar = document.querySelector(sel);
+  if (!bar) return;
+  bar.style.width = Math.max(0, Math.min(100, pct)) + "%";
+  const track = bar.closest(".bar");
+  if (track) {
+    track.classList.toggle("warn", pct >= 75 && pct < 90);
+    track.classList.toggle("bad", pct >= 90);
   }
-  const start = performance.now();
-  const dur = 300;
-  function frame(now) {
-    const p = Math.min(1, (now - start) / dur);
-    const v = from + (to - from) * p;
-    el.textContent = fmt(v);
-    if (p < 1) requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
+}
+
+export function renderVitals(v) {
+  if (!v || typeof v !== "object") return;
+  const cpu = Number(v.cpu?.percent) || 0;
+  const memPct = v.mem?.total ? (v.mem.used / v.mem.total) * 100 : 0;
+  const root = (v.disks || []).find((d) => d.mount === "/") || v.disks?.[0];
+  const diskPct = root?.total ? (root.used / root.total) * 100 : 0;
+  const gpu = v.gpu ? Number(v.gpu.percent) || 0 : null;
+
+  setText('[data-v="cpu-pct"]', Math.round(cpu) + "%");
+  setText('[data-v="cpu-model"]', v.cpu?.model || "--");
+  setBar('[data-v="cpu-bar"]', cpu);
+
+  setText('[data-v="mem-pct"]', Math.round(memPct) + "%");
+  setText('[data-v="mem-detail"]', v.mem?.total ? formatBytes(v.mem.used) + " / " + formatBytes(v.mem.total) : "--");
+  setBar('[data-v="mem-bar"]', memPct);
+
+  setText('[data-v="disk-pct"]', root?.total ? Math.round(diskPct) + "%" : "--");
+  setText('[data-v="disk-detail"]', root?.total ? formatBytes(root.total - root.used) + " free / " + formatBytes(root.total) : "--");
+  setBar('[data-v="disk-bar"]', diskPct);
+
+  setText('[data-v="gpu-pct"]', gpu === null ? "sleeping" : Math.round(gpu) + "%");
+  setText('[data-v="gpu-name"]', v.gpu?.name || (gpu === null ? "runtime-suspended" : "--"));
+  setBar('[data-v="gpu-bar"]', gpu === null ? 0 : gpu);
+
+  setText('[data-v="kernel"]', v.kernel || "--");
+  setText('[data-v="uptime"]', v.uptime != null ? formatUptime(v.uptime) : "--");
+  setText('[data-v="host"]', v.host || "");
 }
 
 export function initVitals(root) {
-  const last = {};
-  function num(sel, value, fmt) {
-    const el = root.querySelector(sel);
-    if (!el) return;
-    const to = Number(value);
-    tick(el, last[sel] == null ? to : last[sel], to, fmt);
-    last[sel] = to;
-  }
-  function txt(sel, value) {
-    const el = root.querySelector(sel);
-    if (el) el.textContent = value;
-  }
-
-  function apply(v) {
-    if (!v) return;
-    root.classList.remove("vitals-absent");
-    txt("[data-v=host]", v.host || "unknown");
-    txt("[data-v=kernel]", v.kernel || "unknown");
-    txt("[data-v=uptime]", formatUptime(v.uptime));
-    if (v.cpu) {
-      num("[data-v=cpu-pct]", v.cpu.percent, (n) => Math.round(n) + "%");
-      txt("[data-v=cpu-model]", (v.cpu.model || "") + (v.cpu.cores ? " / " + v.cpu.cores + "c" : ""));
-    }
-    if (v.mem) {
-      const pct = v.mem.total ? (v.mem.used / v.mem.total) * 100 : 0;
-      num("[data-v=mem-pct]", pct, (n) => Math.round(n) + "%");
-      txt("[data-v=mem-detail]", formatBytes(v.mem.used) + " / " + formatBytes(v.mem.total));
-    }
-    if (Array.isArray(v.disks) && v.disks[0]) {
-      const d = v.disks[0];
-      const pct = d.total ? (d.used / d.total) * 100 : 0;
-      num("[data-v=disk-pct]", pct, (n) => Math.round(n) + "%");
-      txt("[data-v=disk-detail]", (d.mount || "/") + " " + formatBytes(d.used) + " / " + formatBytes(d.total));
-    }
-    const gpuBlock = root.querySelector("[data-block=gpu]");
-    if (v.gpu) {
-      if (gpuBlock) gpuBlock.classList.remove("stat-empty");
-      num("[data-v=gpu-pct]", v.gpu.percent, (n) => Math.round(n) + "%");
-      txt("[data-v=gpu-name]", v.gpu.name || "GPU");
-    } else if (gpuBlock) {
-      gpuBlock.classList.add("stat-empty");
-      txt("[data-v=gpu-pct]", "--");
-      txt("[data-v=gpu-name]", "no GPU");
-    }
-  }
-
-  function markAbsent() {
-    root.classList.add("vitals-absent");
-  }
-
+  if (!root) return;
   let ws = null;
-  let poll = null;
+  let poll = 0;
   let stopped = false;
 
   function startPolling() {
-    if (poll) return;
-    const run = () => api.vitals().then(apply).catch(markAbsent);
-    run();
-    poll = setInterval(run, 2000);
+    if (poll || stopped) return;
+    poll = setInterval(() => {
+      api.vitals().then(renderVitals).catch(() => {});
+    }, 2000);
   }
   function stopPolling() {
-    if (poll) { clearInterval(poll); poll = null; }
+    clearInterval(poll);
+    poll = 0;
   }
 
   function connect() {
+    if (stopped) return;
     try {
       ws = new WebSocket(wsUrl("/ws/vitals"));
     } catch (err) {
       startPolling();
       return;
     }
-    ws.onmessage = (m) => {
-      stopPolling();
-      try { apply(JSON.parse(m.data)); } catch (err) { /* ignore bad frame */ }
+    ws.onmessage = (e) => {
+      try {
+        renderVitals(JSON.parse(e.data));
+      } catch (err) {
+        /* keep the last frame */
+      }
     };
-    ws.onerror = () => { if (!stopped) startPolling(); };
-    ws.onclose = () => { if (!stopped) startPolling(); };
+    ws.onclose = () => {
+      ws = null;
+      if (!stopped) {
+        startPolling();
+        setTimeout(connect, 5000);
+      }
+    };
+    ws.onerror = () => {
+      try {
+        ws.close();
+      } catch (err) {
+        /* onclose handles the fallback */
+      }
+    };
+    ws.onopen = () => stopPolling();
   }
 
+  api.vitals().then(renderVitals).catch(() => {});
   connect();
-  return { destroy() { stopped = true; stopPolling(); if (ws) try { ws.close(); } catch (err) { /* noop */ } } };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopped = true;
+      stopPolling();
+      if (ws) {
+        try {
+          ws.close();
+        } catch (err) {
+          /* already gone */
+        }
+        ws = null;
+      }
+    } else {
+      stopped = false;
+      connect();
+    }
+  });
 }

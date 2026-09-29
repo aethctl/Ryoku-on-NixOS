@@ -30,6 +30,11 @@ const RepoBase = "https://repo.ryoku.dev/stable"
 const (
 	ChannelStable  = "stable"
 	ChannelTesting = "testing"
+	// ChannelUnstable is the user-facing name of the testing channel. The
+	// command line and every message the CLI prints use it; ChannelTesting
+	// stays the internal key -- the repo path, the [ryoku] Server, and the
+	// channel-intent value on disk.
+	ChannelUnstable = "unstable"
 )
 
 // PacmanConf is where the [ryoku] stanza lives; a var so tests point it at a
@@ -49,6 +54,66 @@ var releaseTagRe = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)
 // IsReleaseTag reports whether s names a frozen release (v0.55.7-beta.19,
 // v1.0.0), the shape stable-release.yml tags.
 func IsReleaseTag(s string) bool { return releaseTagRe.MatchString(s) }
+
+// releaseTagFieldsRe splits a frozen release tag into its comparable parts.
+var releaseTagFieldsRe = regexp.MustCompile(`^v([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(alpha|beta|rc)\.([0-9]+))?$`)
+
+// releaseTagOrder is a parsed release tag. A final release carries no
+// prerelease, so preRank 3 ("released") ranks above any alpha/beta/rc of the
+// same core version.
+type releaseTagOrder struct {
+	major, minor, patch, preRank, preNum int
+	ok                                   bool
+}
+
+func parseReleaseTag(tag string) releaseTagOrder {
+	m := releaseTagFieldsRe.FindStringSubmatch(strings.TrimSpace(tag))
+	if m == nil {
+		return releaseTagOrder{}
+	}
+	o := releaseTagOrder{ok: true, preRank: 3}
+	o.major, _ = strconv.Atoi(m[1])
+	o.minor, _ = strconv.Atoi(m[2])
+	o.patch, _ = strconv.Atoi(m[3])
+	switch m[4] {
+	case "alpha":
+		o.preRank = 0
+	case "beta":
+		o.preRank = 1
+	case "rc":
+		o.preRank = 2
+	}
+	if m[5] != "" {
+		o.preNum, _ = strconv.Atoi(m[5])
+	}
+	return o
+}
+
+// CompareReleaseTags orders two frozen release tags (v0.63.1-beta.19), returning
+// -1, 0, 1 for a<b, a==b, a>b. Core version dominates; a tag with no prerelease
+// counter outranks one that has it (v1.0.0 > v1.0.0-rc.1); among prereleases
+// alpha<beta<rc, then the counter numerically. A tag that does not parse sorts
+// oldest, so an unknown never reads as ahead of a real release.
+func CompareReleaseTags(a, b string) int {
+	pa, pb := parseReleaseTag(a), parseReleaseTag(b)
+	switch {
+	case !pa.ok && !pb.ok:
+		return 0
+	case !pa.ok:
+		return -1
+	case !pb.ok:
+		return 1
+	}
+	for _, d := range []int{pa.major - pb.major, pa.minor - pb.minor, pa.patch - pb.patch, pa.preRank - pb.preRank, pa.preNum - pb.preNum} {
+		if d < 0 {
+			return -1
+		}
+		if d > 0 {
+			return 1
+		}
+	}
+	return 0
+}
 
 // ChannelServer is the [ryoku] Server line for a channel or release tag, or ""
 // for a name that is neither.
@@ -95,6 +160,32 @@ func ChannelURL(channel string) string {
 	return strings.Replace(ChannelServer(channel), "$arch", "x86_64", 1)
 }
 
+// DisplayChannel is the user-facing name of a package channel: the testing
+// channel reads as "unstable", while its internal key stays "testing". Every
+// other name (stable, a release tag) is shown as itself. Callers that print a
+// PackagedChannel or ReadChannelIntent value to the user route it through here.
+func DisplayChannel(channel string) string {
+	if channel == ChannelTesting {
+		return ChannelUnstable
+	}
+	return channel
+}
+
+// TrackName is the `ryoku track` argument a user runs to follow a channel or a
+// source branch, so a hint the CLI prints always names a command that still
+// works: the testing channel and the unstable-dev branch are both reached with
+// "unstable", the main branch with "stable". A package channel otherwise maps
+// through DisplayChannel.
+func TrackName(channel string) string {
+	switch channel {
+	case "unstable-dev":
+		return ChannelUnstable
+	case "main":
+		return ChannelStable
+	}
+	return DisplayChannel(channel)
+}
+
 // RyokuServer returns the Server line of the [ryoku] stanza in pacman.conf, or
 // "" when the stanza is absent.
 func RyokuServer() string {
@@ -126,12 +217,22 @@ func PackagedChannel() string { return ChannelOfServer(RyokuServer()) }
 
 // SetPackagedChannel rewrites the [ryoku] Server line to channel (stable,
 // testing, or a release tag). It needs a stanza to rewrite; the doctor adds a
-// missing one. Written through sudo install, so the file is replaced whole.
+// missing one.
 func SetPackagedChannel(channel string) error {
 	server := ChannelServer(channel)
 	if server == "" {
-		return fmt.Errorf(i18n.T("unknown channel %q (stable, testing, or a release tag like v0.55.7-beta.19)"), channel)
+		return fmt.Errorf(i18n.T("unknown channel %q (stable, unstable, or a release tag like v0.55.7-beta.19)"), channel)
 	}
+	return SetRyokuServer(server)
+}
+
+// SetRyokuServer rewrites the [ryoku] Server line to the exact server string and
+// drops the cached sync db so the next refresh pulls a matched pair. Unlike
+// SetPackagedChannel it takes the raw line, so a caller can put a previously
+// recorded Server back byte-for-byte after a failed channel move (the
+// transactional pin in the updater). Written through WriteRootFile, so the file
+// is replaced whole.
+func SetRyokuServer(server string) error {
 	b, err := os.ReadFile(PacmanConf)
 	if err != nil {
 		return err
@@ -305,4 +406,26 @@ func ReadRelease() Release {
 		}
 	}
 	return r
+}
+
+// ChannelIntentFile records the channel the user deliberately chose with `ryoku
+// track` (root-owned). It is the only signal that separates a pin the user asked
+// for from one a failed boot-guard revert or a hand-edit left behind, so nothing
+// but Track writes it. A var so tests point it at a fixture.
+var ChannelIntentFile = "/var/lib/ryoku/channel-intent"
+
+// ReadChannelIntent returns the channel Track recorded, or "" when none is on
+// disk (a box that never tracked; the caller defaults to stable).
+func ReadChannelIntent() string {
+	b, err := os.ReadFile(ChannelIntentFile)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
+}
+
+// WriteChannelIntent records channel as the deliberate choice. Root-owned like
+// the boot-guard marker beside it, written through WriteRootFile.
+func WriteChannelIntent(channel string) error {
+	return WriteRootFile(ChannelIntentFile, strings.TrimSpace(channel)+"\n", "0644")
 }

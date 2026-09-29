@@ -1,0 +1,3 @@
+module inir.modules.background.widgets.instrument
+InstrumentRing 1.0 InstrumentRing.qml
+InstrumentScale 1.0 InstrumentScale.qml

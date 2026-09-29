@@ -3,19 +3,45 @@
 # kitty-direct logo (image left, dossier right). fastfetch auto-enables "pipe
 # mode" when it thinks stdout isn't a real TTY, which SILENTLY disables image
 # logos and falls back to ASCII -- so in kitty we force `--pipe false` to keep
-# the image. Outside kitty: chafa if present, else fastfetch's default.
+# the image. Outside kitty: chafa if present, else no logo.
 #
-# Every branch execs fastfetch instead of bounding it with `timeout`: the
-# shell module walks the parent chain and skips known wrappers (`time`,
-# `sudo`, ...) but not `timeout`, so `timeout 8 fastfetch` reported the
-# shell as "timeout" in every greeting. A failed exec makes bash exit 127,
-# which no longer masks a missing fastfetch behind a false success.
+# A Ryostore preset may hand drawing to its own renderer (for image formats
+# fastfetch cannot show, such as icat PNGs) with a comment in its config:
+#   // ryoku:renderer <product-id>/<relative-executable>
+# The renderer must stay inside ~/.local/share/ryoku/fastfetch/<product-id>/
+# and be executable; anything else falls through to fastfetch.
+#
+# Every branch execs instead of bounding the run with `timeout`: the shell
+# module walks the parent chain and skips known wrappers (`time`, `sudo`, ...)
+# but not `timeout`, so `timeout 8 fastfetch` reported the shell as "timeout"
+# in every greeting. A failed exec makes bash exit 127, which no longer masks
+# a missing fastfetch behind a false success.
 set -uo pipefail
 
 config="${XDG_CONFIG_HOME:-$HOME/.config}/fastfetch/config.jsonc"
-if [ ! -f "$config" ]; then
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+
+if [[ -f "$config" ]]; then
+  renderer="$(
+    sed -n 's#^//[[:space:]]*ryoku:renderer[[:space:]][[:space:]]*##p' "$config" \
+      | head -n1
+  )"
+
+  case "$renderer" in
+    ""|/*|*..*|*[!A-Za-z0-9_./-]*)
+      ;;
+    *)
+      hook="$data_home/ryoku/fastfetch/$renderer"
+      if [[ -x "$hook" && -f "$hook" ]]; then
+        exec "$hook" "$@"
+      fi
+      ;;
+  esac
+fi
+
+if [[ ! -f "$config" ]]; then
   exec fastfetch "$@"
-elif [ -n "${KITTY_WINDOW_ID:-}" ] || [ "${TERM:-}" = "xterm-kitty" ]; then
+elif [[ -n "${KITTY_WINDOW_ID:-}" || "${TERM:-}" == "xterm-kitty" ]]; then
   exec fastfetch --config "$config" --pipe false "$@"
 elif command -v chafa >/dev/null 2>&1; then
   exec fastfetch --config "$config" --logo-type chafa "$@"

@@ -46,6 +46,7 @@ Item {
     // default, volume 0-100 (Backdrop scales it to 0..1).
     readonly property bool videoMuted: frame.mute
     readonly property int videoVolume: frame.volume
+    readonly property bool videoPaused: frame.paused
     // The ryogami-live yield flag: hide the in-shell painter while the C
     // player owns the background layer; false for the in-shell engine.
     readonly property bool live: frame.live

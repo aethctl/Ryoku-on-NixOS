@@ -172,69 +172,69 @@ func Update(args []string) error {
 	if from := sys.ReadRelease().Release; from != "" {
 		os.Setenv("RYOKU_UPDATE_FROM", from)
 	}
-	clearStalePacmanLock()
-	// Refresh first, then read the set: a rollback onto a frozen release must
-	// only ask for packages that release actually served. An ordinary update
-	// drops names the box already carries at a newer version than [ryoku]
-	// serves (a distro repo ahead of our vendored copy, a split package whose
-	// pinned dep a forced downgrade would break); a channel move keeps them,
-	// since moving the set down is the point there.
-	if err := sys.Sudo(refreshDBArgs(channelSwitch)[1:]...); err != nil {
-		progress.logf(i18n.T("Could not refresh the package databases: %v"), err)
-	}
-	set, held, err := installedRyokuSet(channelSwitch)
-	if err != nil {
-		e := fmt.Errorf(i18n.T("cannot read the [ryoku] repository, so there is nothing safe to update: %w"), err)
-		progress.fail(e)
-		return e
-	}
+	var set []string
 	if channelSwitch {
-		// A rollback onto a release that predates the compositor split carries
-		// no ryoku-desktop-hyprland/niri; their exact pins would fail the whole
-		// downgrade transaction (#271). Drop them before building the target.
-		if dropped := dropSplitMetasNotServed(repoServedSet()); len(dropped) > 0 {
-			progress.logf(i18n.T("Removed %s: the target release predates the compositor split"), strings.Join(dropped, ", "))
+		// A channel move / rollback goes through the one transactional path the
+		// boot guard's revert also uses: force-refresh, drop the split metas the
+		// target does not serve, then move the whole set in one transaction so a
+		// pin change and the packages can never end up disagreeing (#291).
+		s, err := moveRyokuSetToChannel()
+		if err != nil {
+			progress.fail(err)
+			return err
 		}
-	}
-	if err != nil {
-		e := fmt.Errorf(i18n.T("cannot read the [ryoku] repository, so there is nothing safe to update: %w"), err)
-		progress.fail(e)
-		return e
-	}
-	switch {
-	case len(set) == 0 && held == 0:
-		e := fmt.Errorf(i18n.T("no packages from the [ryoku] repository are installed; `ryoku doctor` checks the repo setup"))
-		progress.fail(e)
-		return e
-	case len(set) == 0:
-		// Every served package is already newer here than [ryoku] publishes
-		// (a distro repo ahead of our vendored copies). Forcing them down
-		// would flip-flop versions and churn .pacnew files every run, so the
-		// Ryoku lane has nothing to do; the rest of the update still runs.
-		progress.logf(i18n.T("%d Ryoku package(s) are already newer than the [ryoku] repository serves; leaving them as they are"), held)
-	default:
-		if held > 0 {
-			progress.logf(i18n.T("Updating %d Ryoku package(s); %d already newer than the repository serves stay as they are"), len(set), held)
-		} else {
-			progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
+		set = s
+	} else {
+		clearStalePacmanLock()
+		// Refresh first, then read the set: an ordinary update drops names the
+		// box already carries at a newer version than [ryoku] serves (a distro
+		// repo ahead of our vendored copy, a split package whose pinned dep a
+		// forced downgrade would break).
+		if err := sys.Sudo(refreshDBArgs(false)[1:]...); err != nil {
+			progress.logf(i18n.T("Could not refresh the package databases: %v"), err)
 		}
-		if conflicts, err := runRyokuUpgrade(set); err != nil {
-			healPackageUpgrade(conflicts, err)
-			// One in-place recovery, then a single retry: clear the unowned files a
-			// new package now claims (an installer/deploy stray), or, with nothing to
-			// clear, drop a stale [ryoku] db whose signature no longer matches and
-			// refresh it clean.
-			healPackageUpgrade(conflicts, err)
-			if _, err = runRyokuUpgrade(set); err != nil {
-				// only advertise `ryoku rollback` when the pre snapshot it needs exists;
-				// snapperPre is best-effort and returns "" when it was skipped.
-				hint := i18n.T("no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly")
-				if pre != "" {
-					hint = i18n.T("see `ryoku rollback` (pre-update snapshot ") + pre + ")"
+		s, held, err := installedRyokuSet(false)
+		if err != nil {
+			e := fmt.Errorf(i18n.T("cannot read the [ryoku] repository, so there is nothing safe to update: %w"), err)
+			progress.fail(e)
+			return e
+		}
+		set = s
+		switch {
+		case len(set) == 0 && held == 0:
+			e := fmt.Errorf(i18n.T("no packages from the [ryoku] repository are installed; `ryoku doctor` checks the repo setup"))
+			progress.fail(e)
+			return e
+		case len(set) == 0:
+			// Every served package is already newer here than [ryoku] publishes
+			// (a distro repo ahead of our vendored copies). Forcing them down
+			// would flip-flop versions and churn .pacnew files every run, so the
+			// Ryoku lane has nothing to do; the rest of the update still runs.
+			progress.logf(i18n.T("%d Ryoku package(s) are already newer than the [ryoku] repository serves; leaving them as they are"), held)
+		default:
+			if held > 0 {
+				progress.logf(i18n.T("Updating %d Ryoku package(s); %d already newer than the repository serves stay as they are"), len(set), held)
+			} else {
+				progress.logf(i18n.T("Updating %d Ryoku package(s); the base system stays as it is"), len(set))
+			}
+			if conflicts, err := runRyokuUpgrade(set); err != nil {
+				healPackageUpgrade(conflicts, err)
+				// One in-place recovery, then a single retry: clear the unowned files a
+				// new package now claims (an installer/deploy stray), or, with nothing to
+				// clear, drop a stale [ryoku] db whose signature no longer matches and
+				// refresh it clean.
+				healPackageUpgrade(conflicts, err)
+				if _, err = runRyokuUpgrade(set); err != nil {
+					// only advertise `ryoku rollback` when the pre snapshot it needs exists;
+					// snapperPre is best-effort and returns "" when it was skipped.
+					hint := i18n.T("no pre-update snapshot exists (snapper was unavailable), so `ryoku rollback` cannot revert this; recover with pacman directly")
+					if pre != "" {
+						hint = i18n.T("see `ryoku rollback` (pre-update snapshot ") + pre + ")"
+					}
+					e := fmt.Errorf(i18n.T("the Ryoku package upgrade failed; %s: %w"), hint, err)
+					progress.fail(e)
+					return e
 				}
-				e := fmt.Errorf(i18n.T("the Ryoku package upgrade failed; %s: %w"), hint, err)
-				progress.fail(e)
-				return e
 			}
 		}
 	}
@@ -465,7 +465,7 @@ var splitMetapackages = []string{"ryoku-desktop-hyprland", "ryoku-desktop-niri"}
 var (
 	splitMetaInstalled = func(name string) bool { return sys.PkgInstalled(name) }
 	splitMetaRemove    = func(name string) error {
-		return sys.Sudo("pacman", "-Rdd", "--noconfirm", name)
+		return privileged("pacman", "-Rdd", "--noconfirm", name)
 	}
 )
 
@@ -531,14 +531,6 @@ const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
 func systemUpgradeArgs() []string {
 	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "RYOKU_MANAGED_UPDATE=1",
 		"pacman", "-Syu", "--noconfirm", "--overwrite", ryokuOverwriteGlob}
-}
-
-// channelSwitchArgs installs the [ryoku] channel's ryoku-desktop explicitly,
-// which pacman honours in either direction (a downgrade warns and proceeds),
-// pulling the umbrella's exact-version depends with it.
-func channelSwitchArgs() []string {
-	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "RYOKU_MANAGED_UPDATE=1",
-		"pacman", "-S", "--noconfirm", "--overwrite", ryokuOverwriteGlob, "ryoku-desktop"}
 }
 
 // runAURUpgrade runs `yay -Sua` under the same sleep inhibitor.
@@ -662,6 +654,16 @@ func updateStage2(pre string, withSystem bool) error {
 		progress.fail(err)
 		return err
 	}
+	// Every later failure used to return with the durable block still live:
+	// the leaked guard denies every suspend with logind's "Operation denied
+	// due to active block inhibitor" until logout (#282, #285). The explicit
+	// release below stays authoritative; this is the silent safety net, and
+	// Release is a no-op once the unit is stopped.
+	defer func() {
+		if rerr := cutoverGuard.Release(); rerr != nil {
+			fmt.Fprintf(os.Stderr, i18n.Tf("warning: could not release the update sleep guard: %v\n", rerr))
+		}
+	}()
 	defer cutoverGuard.Disconnect()
 	// Activate logind's sessionless fallback while every old owner and the
 	// durable block are still live. Only after that succeeds may the old
@@ -1117,7 +1119,7 @@ func clearStalePacmanLock() {
 		return
 	}
 	progress.logf(i18n.T("Removing a stale pacman lock (no pacman running)"))
-	_ = sys.Sudo("rm", "-f", lock)
+	_ = privileged("rm", "-f", lock)
 }
 
 // snapHelpers: the snapshot facts the offer gates on, composed from sys
@@ -1281,12 +1283,12 @@ func printReleases() {
 	if sys.ResolveRepo() != "" {
 		fmt.Println(i18n.T("RELEASES  not on this box"))
 		fmt.Printf(i18n.T("  this box builds from a source checkout of %s; releases apply to packaged installs.\n"), ryokuChannel())
-		fmt.Println(i18n.T("  ryoku track main|unstable-dev   moves it onto stable|testing packages (with releases)"))
+		fmt.Println(i18n.T("  ryoku track stable|unstable   moves it onto stable|unstable packages (with releases)"))
 		return
 	}
 	ch := sys.PackagedChannel()
 	rel := sys.ReadRelease()
-	fmt.Printf(i18n.T("RELEASES  repo.ryoku.dev, channel: %s\n"), orDash(ch))
+	fmt.Printf(i18n.T("RELEASES  repo.ryoku.dev, channel: %s\n"), orDash(sys.DisplayChannel(ch)))
 	if rel.Release != "" {
 		fmt.Printf(i18n.T("  running    %s%s\n"), withSpace(rel.Name), rel.Release)
 	}
@@ -1521,10 +1523,15 @@ func Status(args []string) error {
 		fmt.Println("rollback:      NixOS generations")
 		return nil
 	}
-	if r.Available {
+	switch {
+	case r.ChannelPinStale:
+		// The pin is a frozen release OLDER than what is installed (#291): the box
+		// can take no updates, and "behind N commit(s)" reads exactly backwards.
+		fmt.Printf(i18n.T("channel pin:   %s is older than the installed %s; run `ryoku track %s` to reconcile\n"), orDash(r.Channel), orDash(r.Release), sys.TrackName(r.RecoverChannel))
+	case r.Available:
 		fmt.Printf(i18n.T("available:     %s\n"), orDash(r.Latest))
 		fmt.Printf(i18n.T("behind:        %d commit(s)\n"), r.Behind)
-	} else {
+	default:
 		fmt.Println(i18n.T("behind:        up to date"))
 	}
 	// the other lane, named as such: `ryoku update` never moves these, so a
@@ -1582,6 +1589,12 @@ type statusReport struct {
 	ReleaseName        string `json:"releaseName,omitempty"`
 	ChannelRelease     string `json:"channelRelease,omitempty"`
 	ChannelReleaseName string `json:"channelReleaseName,omitempty"`
+	// ChannelPinStale is set when the [ryoku] pin is a frozen release OLDER than
+	// the installed release (the boot-guard-revert wedge, #291): the box can take
+	// no updates and "behind N" would read backwards. RecoverChannel names the
+	// channel `ryoku track` moves back to.
+	ChannelPinStale bool   `json:"channelPinStale,omitempty"`
+	RecoverChannel  string `json:"recoverChannel,omitempty"`
 }
 
 // withSpace is a release name as a prefix: "Onogoro " or "" when unnamed.
@@ -1645,7 +1658,7 @@ func packagedStatus(installed, latest string) statusReport {
 		Latest:         latestSha,
 		Updates:        []updateItem{}, // non-nil, so a current box marshals [] like the git path
 		Recent:         []updateItem{}, // non-nil, so the JSON stays stable when nothing is fetched
-		Channel:        ryokuChannel(),
+		Channel:        sys.DisplayChannel(ryokuChannel()),
 		Snapshots:      snaps,
 		SnapshotsKnown: snapsKnown,
 		Release:        sys.ReadRelease().Release,
@@ -1654,6 +1667,19 @@ func packagedStatus(installed, latest string) statusReport {
 	if ch := sys.PackagedChannel(); ch != "" {
 		serves := channelServes(ch)
 		r.ChannelRelease, r.ChannelReleaseName = serves.Release, serves.Name
+	}
+	// #291: a [ryoku] pin that is a frozen release OLDER than the installed
+	// release means a channel move (a failed boot-guard revert) changed the pin
+	// but the packages never followed. Surface it plainly, since a backwards
+	// "behind N commit(s)" is exactly how this reads without it.
+	if pin := sys.PackagedChannel(); sys.IsReleaseTag(pin) {
+		if inst := sys.ReadRelease().Release; sys.IsReleaseTag(inst) && sys.CompareReleaseTags(pin, inst) < 0 {
+			r.ChannelPinStale = true
+			r.RecoverChannel = sys.ReadChannelIntent()
+			if r.RecoverChannel == "" {
+				r.RecoverChannel = sys.ChannelStable
+			}
+		}
 	}
 	// up to date: nothing incoming, but list the recent history the installed
 	// version contains (best-effort, newest-first) so the Hub's Updates page

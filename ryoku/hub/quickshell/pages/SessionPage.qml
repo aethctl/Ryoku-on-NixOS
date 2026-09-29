@@ -29,32 +29,63 @@ Item {
     // hyprEdit swaps the whole array, so a Repeater rebinds and rebuilds the
     // delegate owning a focused field. rows therefore commit on editing-finished
     // only, and every helper hands hyprEdit a fresh slice rather than mutating the
-    // live list.
+    // live list. A TapHandler button never steals that focus, so a +/-/clear tap
+    // used to act on the stale draft and eat the typed command (#294): the field
+    // still holds the edit when the tap fires. Focus is exclusive, so the page
+    // tracks the one live edit and every helper folds it into its slice first.
+    property var liveEdit: null
+    function foldLive(a, list) {
+        var e = pg.liveEdit;
+        if (!e || e.list !== list || e.i < 0 || e.i >= a.length)
+            return;
+        var row = a[e.i];
+        if ("command" in e && row.command !== e.command) {
+            row = Object.assign({}, row);
+            row.command = e.command;
+        }
+        if ("key" in e && row.key !== e.key) {
+            row = Object.assign({}, row);
+            row.key = e.key;
+        }
+        if ("value" in e && row.value !== e.value) {
+            row = Object.assign({}, row);
+            row.value = e.value;
+        }
+        a[e.i] = row;
+    }
     function patchCmd(i, val) {
         if (!pg.hub)
             return;
         var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i].command = val;
+        if (pg.liveEdit && pg.liveEdit.list === "cmd" && pg.liveEdit.i === i)
+            pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.autostart", a);
     }
     function removeCmd(i) {
         if (!pg.hub)
             return;
         var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
+        pg.foldLive(a, "cmd");
         a.splice(i, 1);
+        pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.autostart", a);
     }
     function addCmd() {
         if (!pg.hub)
             return;
         var a = (pg.hub.hyprVal("desktop.autostart") || []).slice();
+        pg.foldLive(a, "cmd");
         a.push({ "command": "" });
+        pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.autostart", a);
     }
     function clearCmd() {
-        if (pg.hub)
+        if (pg.hub) {
+            pg.liveEdit = null;
             pg.hub.hyprEdit("desktop.autostart", []);
+        }
     }
 
     function patchEnv(i, key, val) {
@@ -63,25 +94,33 @@ Item {
         var a = (pg.hub.hyprVal("desktop.env") || []).slice();
         a[i] = Object.assign({}, a[i]);
         a[i][key] = val;
+        if (pg.liveEdit && pg.liveEdit.list === "env" && pg.liveEdit.i === i)
+            pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.env", a);
     }
     function removeEnv(i) {
         if (!pg.hub)
             return;
         var a = (pg.hub.hyprVal("desktop.env") || []).slice();
+        pg.foldLive(a, "env");
         a.splice(i, 1);
+        pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.env", a);
     }
     function addEnv() {
         if (!pg.hub)
             return;
         var a = (pg.hub.hyprVal("desktop.env") || []).slice();
+        pg.foldLive(a, "env");
         a.push({ "key": "", "value": "" });
+        pg.liveEdit = null;
         pg.hub.hyprEdit("desktop.env", a);
     }
     function clearEnv() {
-        if (pg.hub)
+        if (pg.hub) {
+            pg.liveEdit = null;
             pg.hub.hyprEdit("desktop.env", []);
+        }
     }
 
     // ── a cluster footer: entry count on the left, Clear all + add on the right,
@@ -118,11 +157,13 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.tr("CLEAR ALL")
                 armed: foot.entries > 0
+                stealFocus: true
                 onAct: foot.requestClear()
             }
             IconBtn {
                 anchors.verticalCenter: parent.verticalCenter
                 glyph: "+"
+                stealFocus: true
                 onAct: foot.requestAdd()
             }
         }
@@ -230,6 +271,9 @@ Item {
                             tabular: true
                             placeholder: I18n.tr("command to run (e.g. nm-applet)")
                             text: cmdRow.modelData.command
+                            onEdited: (v) => {
+                                pg.liveEdit = { list: "cmd", i: cmdRow.index, command: v };
+                            }
                             onCommitted: (v) => {
                                 if (v !== cmdRow.modelData.command)
                                     pg.patchCmd(cmdRow.index, v);
@@ -305,6 +349,9 @@ Item {
                             tabular: true
                             placeholder: I18n.tr("NAME (e.g. MOZ_ENABLE_WAYLAND)")
                             text: envRow.modelData.key
+                            onEdited: (v) => {
+                                pg.liveEdit = { list: "env", i: envRow.index, key: v };
+                            }
                             onCommitted: (v) => {
                                 if (v !== envRow.modelData.key)
                                     pg.patchEnv(envRow.index, "key", v);

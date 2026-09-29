@@ -359,7 +359,7 @@ func TestRyokuChannelDefaultAndOverride(t *testing.T) {
 	if got := ryokuChannel(); got != "unstable-dev" {
 		t.Errorf("override channel = %q, want unstable-dev", got)
 	}
-	// `ryoku track main` persisted the switch, but the session still carries the
+	// `ryoku track` persisted the switch, but the session still carries the
 	// env it captured at login: the persisted channel must win, or status and the
 	// Hub report the old channel until a reboot.
 	if err := os.MkdirAll(filepath.Join(cfg, "environment.d"), 0o755); err != nil {

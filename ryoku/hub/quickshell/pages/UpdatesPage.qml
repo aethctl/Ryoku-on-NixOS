@@ -115,6 +115,60 @@ Item {
     readonly property string statePath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-update.json"
     readonly property string answerPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-update-answer"
 
+    // ── Rashin "Fix with AI" offer ──────────────────────────────────────────
+    // `ryoku update` runs `ryoku doctor` near the end; when the health check
+    // finds trouble it rewrites its report. If that happened during this run and
+    // Rashin (the local agent OS) is switched on, offer to let Rashin's agent
+    // investigate and fix, instead of leaving the user to read a failed check.
+    property bool rashinOn: false
+    property double runStartedAt: 0
+    property bool reportFresh: false
+    readonly property string reportPath: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/ryoku/doctor-report.txt"
+    readonly property bool showFixWithAI: (pg.phase === "done" || pg.phase === "error") && pg.rashinOn && pg.reportFresh
+
+    // Rashin is on when its master switch reads enabled; an absent binary closes
+    // stdout with empty output, which parses as off. Mirrors RashinPage.
+    Process {
+        id: rashinProbe
+        command: ["sh", "-c", "ryoku-rashin status --json"]
+        stderr: StdioCollector {}
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    pg.rashinOn = JSON.parse(this.text).enabled === true;
+                } catch (e) {
+                    pg.rashinOn = false;
+                }
+            }
+        }
+    }
+
+    // Was the doctor report rewritten during this run? Compare its mtime to when
+    // the run started; with no run start known (page opened after the fact) the
+    // offer stays off rather than firing on a stale report.
+    Process {
+        id: reportProbe
+        stdout: StdioCollector {
+            onStreamFinished: pg.reportFresh = this.text.trim() === "fresh"
+        }
+    }
+    function checkReportFresh() {
+        if (pg.runStartedAt <= 0) {
+            pg.reportFresh = false;
+            return;
+        }
+        reportProbe.command = ["sh", "-c",
+            "m=$(stat -c %Y \"$1\" 2>/dev/null || echo 0); [ \"$m\" -ge \"$2\" ] && echo fresh || echo stale",
+            "sh", pg.reportPath, "" + Math.floor(pg.runStartedAt)];
+        reportProbe.running = true;
+    }
+
+    // hand the fixing to Rashin: with no TTY here `ryoku-rashin fix doctor` opens
+    // the agent in a terminal that investigates and repairs. detached, as always.
+    function fixWithAI() {
+        Spawn.run(["ryoku-rashin", "fix", "doctor"]);
+    }
+
     // the fill fraction for the shared progress track. `ryoku update` may report
     // an explicit progress, but even when it only advances the stage list we can
     // read completion off the stages, so the track never sits dead at 0 while
@@ -193,9 +247,21 @@ Item {
             pg.logLines = [];
             pg.errorMsg = "";
         }
+        // note when the run began, so a settled run can tell whether the doctor
+        // report is from this run or an old one.
+        if (pg.phase === "running" && pg.runStartedAt <= 0)
+            pg.runStartedAt = Date.now() / 1000;
+        // settled: offer Rashin's fixer when the health check left a fresh report.
+        if ((pg.phase === "done" || pg.phase === "error") && prev !== pg.phase) {
+            rashinProbe.running = true;
+            pg.checkReportFresh();
+        }
         // settled back to idle = finished. refresh so the list clears.
-        if (prev !== "idle" && pg.phase === "idle")
+        if (prev !== "idle" && pg.phase === "idle") {
+            pg.runStartedAt = 0;
+            pg.reportFresh = false;
             Updates.check();
+        }
         pg.checkOwner();
     }
 
@@ -213,7 +279,7 @@ Item {
     function rollback() {
         if (pg.snapshot === "")
             return;
-        Spawn.run(["kitty", "-e", "sh", "-c", "ryoku rollback \"$1\"; printf '\\npress enter to close '; read -r _", "sh", pg.snapshot]);
+        Spawn.run(["kitty", "--class=dev.ryoku.update", "-e", "sh", "-c", "ryoku rollback \"$1\"; printf '\\npress enter to close '; read -r _", "sh", pg.snapshot]);
         pg.dismiss();
     }
 
@@ -222,13 +288,50 @@ Item {
     function dismiss() {
         Quickshell.execDetached(["sh", "-c", "printf '%s' '{\"phase\":\"idle\"}' > \"$1\"", "sh", pg.statePath]);
         pg.phase = "idle";
+        pg.runStartedAt = 0;
+        pg.reportFresh = false;
         Updates.check();
     }
 
     function startUpdate() {
         if (pg.nixBackend && !Updates.canUpdate)
             return;
-        Spawn.run(["kitty", "-e", "sh", "-c", "exec ryoku update"]);
+
+        // The update log is the point of the run, so it must not hide behind
+        // this very window: a tiled terminal always sits under a float in
+        // Hyprland, and Ryoku Settings floats at 99%. The class matches the
+        // desktop's float-and-centre rule (modules/window_rules.lua), so the
+        // log lands on top and stays visible while the run goes.
+        Spawn.run(["kitty", "--class=dev.ryoku.update", "-e", "sh", "-c", "exec ryoku update"]);
+    }
+
+    // one calm row under a settled run: a short line plus the Rashin handoff. The
+    // caller sets its width and gates it on showFixWithAI, so it shares the done
+    // and error views without either laying it out when Rashin has nothing to fix.
+    component FixRow: Column {
+        id: fr
+        spacing: Tokens.s3
+
+        Rectangle { width: fr.width; height: 1; color: Tokens.lineSoft }
+
+        Row {
+            width: fr.width
+            spacing: Tokens.s3
+            Text {
+                width: fr.width - fixBtn.width - Tokens.s3
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.tr("The health check found issues after this update.")
+                color: Tokens.inkMuted; font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap
+            }
+            Btn {
+                id: fixBtn
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.tr("FIX WITH AI")
+                primary: true
+                onAct: pg.fixWithAI()
+            }
+        }
     }
 
     // idle list: incoming commits when behind, else the recent history the
@@ -813,6 +916,11 @@ Item {
                     }
                 }
             }
+
+            FixRow {
+                width: parent.width
+                visible: pg.showFixWithAI
+            }
         }
     }
 
@@ -899,6 +1007,11 @@ Item {
                         text: I18n.tr("DISMISS")
                         onAct: pg.dismiss()
                     }
+                }
+
+                FixRow {
+                    width: parent.width
+                    visible: pg.showFixWithAI
                 }
             }
         }

@@ -1,37 +1,46 @@
-// Hash router: maps #/<panel> to the visible panel and the active nav item, and
-// plays a clip-path wipe on swap (skipped under prefers-reduced-motion).
+// Hash router: shows one sheet, marks its island tab, and names the tab
+// title. A sheet eases in once when it is swapped to; nothing reflows after.
 
-const PANELS = ["overview", "vault", "memory", "skills", "agents", "chat", "about"];
-const reduce = () =>
-  typeof matchMedia !== "undefined" &&
-  matchMedia("(prefers-reduced-motion: reduce)").matches;
+const PANELS = {
+  overview: "Overview",
+  system: "System",
+  vault: "Vault",
+  memory: "Memory",
+  skills: "Skills",
+  agents: "Agents",
+  models: "Models",
+  about: "About",
+};
 
 function current() {
   const h = location.hash.replace(/^#\/?/, "");
-  return PANELS.includes(h) ? h : "overview";
+  return h in PANELS ? h : "overview";
 }
 
 export function initRouter(onChange) {
   const panels = document.querySelectorAll("[data-panel]");
   const links = document.querySelectorAll("[data-nav]");
+  let shown = null;
 
   function show(name) {
     panels.forEach((p) => {
-      const active = p.dataset.panel === name;
-      p.hidden = !active;
-      if (active && !reduce()) {
-        p.classList.remove("wipe-in");
-        void p.offsetWidth; // restart the animation
-        p.classList.add("wipe-in");
-        // A throttled tab can freeze the animation at t=0 with the panel
-        // fully clipped (and unclickable). Drop the class once it ends, and
-        // unconditionally after its duration, so the wipe can never wedge.
-        const clear = () => p.classList.remove("wipe-in");
-        p.addEventListener("animationend", clear, { once: true });
-        setTimeout(clear, 700);
+      const on = p.dataset.panel === name;
+      p.hidden = !on;
+      if (on && shown !== null && shown !== name) {
+        p.classList.remove("entering");
+        void p.offsetWidth;
+        p.classList.add("entering");
       }
     });
-    links.forEach((l) => l.classList.toggle("active", l.dataset.nav === name));
+    links.forEach((l) => {
+      const on = l.dataset.nav === name;
+      l.classList.toggle("active", on);
+      if (on) l.setAttribute("aria-current", "page");
+      else l.removeAttribute("aria-current");
+    });
+    document.title = name === "overview" ? "Rashin" : PANELS[name] + " · Rashin";
+    if (shown !== name) window.scrollTo(0, 0);
+    shown = name;
     if (onChange) onChange(name);
   }
 

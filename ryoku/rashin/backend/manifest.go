@@ -61,6 +61,8 @@ func vaultManifest() []ManifestItem {
 		{"ryoku-repo.md", "the Ryoku source map", "map"},
 		{"user.md", "your own config changes over the shipped base", "map"},
 		{"habits.md", "learned usage patterns on this machine", "map"},
+		{"ownership.md", "who owns each config path and where a change belongs", "map"},
+		{"logs.md", "where the logs live and the command that gathers them", "map"},
 		{"memory", "durable notes the agent keeps across sessions", "dir"},
 		{"journal", "dated notes (journal/YYYY-MM-DD.md)", "dir"},
 	}

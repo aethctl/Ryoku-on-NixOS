@@ -89,6 +89,30 @@ ShellRoot {
     // the window under the pointer wherever the compositor reports window geometry
     // (see windowRects).
     property string target: mode
+
+    // The region-selector front. Choosing an action up front and then a region
+    // is the iNiR flow: the drawn region carries out the chosen action rather
+    // than always dropping into the annotator. RYOSHOT_ACTION preselects it (the
+    // iRiS region IPC and Control Center use that); otherwise the last choice is
+    // restored from Config. Edit is the annotate path; the rest fire and quit.
+    readonly property string envAction: Quickshell.env("RYOSHOT_ACTION") || ""
+    readonly property bool envAudio: Quickshell.env("RYOSHOT_AUDIO") === "1"
+    property string frontAction: "shot"
+    property bool recordAudio: envAudio
+    property bool colorPicking: false
+    // True between a real front press and its release, so a stray release cannot
+    // commit a region on its own.
+    property bool frontPressed: false
+    // The last pointer position in global coordinates, so the front's whole-monitor
+    // capture and colour pick know which output the cursor sits on.
+    property var lastPointer: null
+    readonly property var frontActions: [
+        { id: "shot",   icon: "camera", label: I18n.tr("Shot") },
+        { id: "edit",   icon: "pen",    label: I18n.tr("Edit") },
+        { id: "ocr",    icon: "ocr",    label: I18n.tr("OCR") },
+        { id: "search", icon: "magnify", label: I18n.tr("Search") },
+        { id: "record", icon: "video",  label: I18n.tr("Record") }
+    ]
     // RYOSHOT_OPEN=<path>: skip selection and open that image straight in the
     // beautify editor (the capture card's "Beautify after" hands the saved shot
     // here). fromFile makes Escape / close quit, since there is no live capture
@@ -192,6 +216,9 @@ ShellRoot {
             if (Config.toolStyle && typeof Config.toolStyle === "object")
                 root.toolStyle = Config.toolStyle;
             root.selectTool(root.activeTool);
+            // env wins over the remembered choice so the IPC callers stay exact.
+            var a = root.envAction.length > 0 ? root.envAction : Config.lastAction;
+            if (root.isFrontAction(a)) root.frontAction = a;
         }
     }
 
@@ -212,6 +239,7 @@ ShellRoot {
     Component.onCompleted: if (openPath.length > 0) openForBeautify(openPath);
 
     function beginSelection(gx, gy) {
+        frontPressed = true;
         pressPoint = { x: gx, y: gy };
         capturing = true;
         globalSel = { x: gx, y: gy, w: 0, h: 0 };
@@ -225,12 +253,20 @@ ShellRoot {
     function endSelection() {
         capturing = false;
         pressPoint = null;
-        if (globalSel && globalSel.w > 2 && globalSel.h > 2) { phase = "editing"; hoverWindow = null; }
-        else if (hoverWindow) {
+        // A release the surface never saw a matching press for (it can map under a
+        // held pointer) must not commit the hovered window, or the front captures
+        // by itself. Only a real press-then-release selects.
+        if (!frontPressed) { hoverWindow = null; return; }
+        frontPressed = false;
+        var have = globalSel && globalSel.w > 2 && globalSel.h > 2;
+        if (!have && hoverWindow) {
             globalSel = { x: hoverWindow.x, y: hoverWindow.y, w: hoverWindow.w, h: hoverWindow.h };
-            phase = "editing";
-            hoverWindow = null;
-        } else globalSel = null;
+            have = true;
+        } else if (!have) {
+            globalSel = null;
+        }
+        hoverWindow = null;
+        if (have) dispatchFront();
     }
 
     /** Starts a region resize; the opposite edge stays anchored for the drag. */
@@ -444,21 +480,30 @@ ShellRoot {
         var m = monitorAt(gx, gy);
         if (!m) return;
         globalSel = m;
-        phase = "editing";
         hoverWindow = null;
+        dispatchFront();
     }
     /** Ctrl+A during selection takes the whole monitor under the pointer. */
     function wholeMonitor() {
         if (phase !== "selecting") return;
         var w = overlays.length ? overlays[0] : null;
         var m = hoverWindow ? monitorAt(hoverWindow.x, hoverWindow.y) : null;
+        if (!m && lastPointer) m = monitorAt(lastPointer.x, lastPointer.y);
         if (!m && w) m = { x: w.modelData.x, y: w.modelData.y, w: w.modelData.width, h: w.modelData.height };
         if (!m) return;
         globalSel = m;
-        phase = "editing";
         hoverWindow = null;
+        dispatchFront();
+    }
+    /** The bar's whole-monitor button: capture the output holding the given rect. */
+    function frontMonitor(rect) {
+        if (phase !== "selecting" || !rect) return;
+        globalSel = rect;
+        hoverWindow = null;
+        dispatchFront();
     }
     function pointerHover(gx, gy) {
+        lastPointer = { x: gx, y: gy };
         if (phase !== "selecting") { if (hoverWindow !== null) hoverWindow = null; return; }
         hoverWindow = target === "monitor" ? monitorAt(gx, gy) : windowAt(gx, gy);
     }
@@ -473,6 +518,7 @@ ShellRoot {
         else beginDraw(gx, gy);
     }
     function pointerMoved(gx, gy, mods) {
+        lastPointer = { x: gx, y: gy };
         if (phase === "selecting") updateSelection(gx, gy, mods);
         else if (activeTool === "select") updateSelect(gx, gy);
         else updateDraw(gx, gy, mods);
@@ -486,6 +532,98 @@ ShellRoot {
         if (phase !== "editing") return;
         if (activeTool === "select" && selectedIndex !== null) scaleSelected(dir);
         else adjustWidth(dir);
+    }
+
+    function isFrontAction(a) {
+        return a === "shot" || a === "edit" || a === "ocr" || a === "search" || a === "record";
+    }
+    /** The bar and the number keys pick the action; the choice is remembered. */
+    function setFrontAction(id) {
+        if (!isFrontAction(id)) return;
+        colorPicking = false;
+        frontAction = id;
+        persistFrontAction();
+    }
+    function persistFrontAction() {
+        // Recording is never restored, or reopening the tool would start a capture.
+        if (frontAction === "record") return;
+        if (Config.lastAction === frontAction) return;
+        Config.lastAction = frontAction;
+        Config.save();
+    }
+
+    /**
+     * A region has landed in the front: carry out the chosen action. Edit hands
+     * the grab to the annotator; the rest run their capture and quit, so the
+     * front never lingers past a completed action.
+     */
+    function dispatchFront() {
+        if (!globalSel || globalSel.w < 1 || globalSel.h < 1) { globalSel = null; return; }
+        // The choice was persisted when it was picked; saving here would race the
+        // quit and drop the write.
+        // Shot keeps ryoshot's own flow: the markup bar, whose logo opens
+        // Beautify; Edit skips straight to Beautify.
+        switch (frontAction) {
+            case "edit":   phase = "editing"; openBeautify(); break;
+            case "ocr":    runOcrRegion(); break;
+            case "search": doSearchRegion(); break;
+            case "record": doRecordRegion(); break;
+            default:       phase = "editing";
+        }
+    }
+
+    function runOcrRegion() {
+        if (!globalSel) { Qt.quit(); return; }
+        var g = globalSel;
+        runOcr({ x: g.x, y: g.y }, { x: g.x + g.w, y: g.y + g.h });
+    }
+
+    // Crop, upload, then hand the URL to a reverse-image search, matching iRiS.
+    function doSearchRegion() {
+        grabTo("/tmp/ryoshot-search.png", function (ok) {
+            if (!ok) { Qt.quit(); return; }
+            root.shutter();
+            searchProc.run("/tmp/ryoshot-search.png");
+        });
+    }
+
+    // Hand the region to the shell's recorder in logical compositor pixels
+    // (WxH+X+Y); the daemon owns wf-recorder and the floating island.
+    function doRecordRegion() {
+        if (!globalSel) { Qt.quit(); return; }
+        var g = globalSel;
+        var geo = Math.round(g.w) + "x" + Math.round(g.h) + "+" + Math.round(g.x) + "+" + Math.round(g.y);
+        var args = ["ryoku-shell", "record", "start", "--region", "--geometry", geo];
+        if (root.recordAudio) args.push("--with-desktop-audio");
+        root.exported = true;
+        console.log("ryoshot: record " + args.join(" "));
+        Quickshell.execDetached(args);
+        root.quitSoon();
+    }
+
+    function startColorPick() {
+        if (phase !== "selecting") return;
+        root.openPopover = "";
+        colorPicking = true;
+    }
+    // Sample the colour under the pointer without a click, for keyboard use.
+    function pickAtPointer() {
+        if (!colorPicking || !lastPointer) return;
+        var w = overlayAt(lastPointer.x, lastPointer.y);
+        if (w) w.samplePixel(lastPointer.x, lastPointer.y);
+    }
+    // The sampled pixel is copied as text and shown with a swatch, then we leave.
+    // The colour comes from the frozen plate, so no compositor picker is needed.
+    function pickedColor(hex) {
+        if (root.exported) return;
+        root.exported = true;
+        var s = String(hex);
+        Quickshell.execDetached(["sh", "-c",
+            "f=$(mktemp); printf %s \"$1\" > \"$f\"; ryoku-shell clip-copy text/plain \"$f\"; rm -f \"$f\"", "sh", s]);
+        Quickshell.execDetached(["sh", "-c",
+            "sw=$(mktemp --suffix=.png); if magick -size 96x96 xc:\"$1\" \"$sw\" 2>/dev/null; then notify-send -a ryoku -i \"$sw\" \"$2\" \"$1\"; (sleep 5; rm -f \"$sw\") & else notify-send -a ryoku \"$2\" \"$1\"; fi",
+            "sh", s, I18n.tr("Colour copied")]);
+        root.quitSoon();
     }
 
     // Match Capture.qml's pattern exactly so both capture paths drop identically
@@ -862,6 +1000,31 @@ ShellRoot {
         }
     }
 
+    // Upload the crop, then open a reverse-image search on the hosted URL. Bing is
+    // the default engine iRiS settled on (Google and Yandex paste endpoints broke).
+    Process {
+        id: searchProc
+        stdout: StdioCollector { id: searchOut }
+        readonly property string engine: "https://www.bing.com/images/search?view=detailv2&iss=sbi&form=SBIVSP&sbisrc=UrlPaste&q=imgurl:"
+        function run(file) {
+            command = ["curl", "-sf", "--max-time", "30", "-A", "Mozilla/5.0", "-F", "reqtype=fileupload",
+                "-F", "time=1h", "-F", "fileToUpload=@" + file,
+                "https://litterbox.catbox.moe/resources/internals/api.php"];
+            running = true;
+        }
+        onExited: (code) => {
+            var url = searchOut.text.trim();
+            console.log("ryoshot: search upload exit " + code + " url=" + JSON.stringify(url));
+            if (code === 0 && url.indexOf("http") === 0) {
+                root.exported = true;
+                Quickshell.execDetached(["xdg-open", searchProc.engine + url]);
+            } else {
+                root.notifySend(I18n.tr("Image search failed"), I18n.tr("Could not upload the image"));
+            }
+            root.quitSoon();
+        }
+    }
+
     Process {
         id: stitchProc
         property var cb: null
@@ -887,6 +1050,7 @@ ShellRoot {
 
     /** The staged Escape ladder: the innermost open thing closes first. */
     function escapeStep() {
+        if (root.colorPicking) { root.colorPicking = false; return; }
         if (root.eyedropArmed) { root.eyedropArmed = false; return; }
         if (root.textEditing) { root.cancelText(); return; }
         if (root.openPopover.length > 0) { root.openPopover = ""; return; }
@@ -947,9 +1111,30 @@ ShellRoot {
 
     /** Keys that apply while the region is still being chosen. */
     function selectKey(e) {
+        if (root.colorPicking) {
+            if (e.key === Qt.Key_Escape) { root.colorPicking = false; return true; }
+            if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Space) {
+                root.pickAtPointer();
+                return true;
+            }
+            return false;
+        }
         if (e.key === Qt.Key_Space) { root.cycleTarget(); return true; }
         if (e.key === Qt.Key_A && (e.modifiers & Qt.ControlModifier)) { root.wholeMonitor(); return true; }
         if (e.key === Qt.Key_Question) { root.shortcutsOpen = !root.shortcutsOpen; return true; }
+        // Number keys pick the action; the count matches frontActions.
+        if (e.key >= Qt.Key_1 && e.key <= Qt.Key_5) {
+            var d = root.frontActions[e.key - Qt.Key_1];
+            if (d) { root.setFrontAction(d.id); return true; }
+            return false;
+        }
+        if (e.key === Qt.Key_C) { root.startColorPick(); return true; }
+        if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) {
+            var m = root.lastPointer ? root.monitorAt(root.lastPointer.x, root.lastPointer.y) : null;
+            if (!m && root.overlays.length) { var s = root.overlays[0].modelData; m = { x: s.x, y: s.y, w: s.width, h: s.height }; }
+            if (m) root.frontMonitor(m);
+            return true;
+        }
         return false;
     }
 
@@ -1008,6 +1193,8 @@ ShellRoot {
                     hoverWindow: root.hoverWindow
                     resizable: root.phase === "editing"
                     eyedropArmed: root.eyedropArmed
+                    frontActive: root.phase === "selecting" && !root.colorPicking
+                    pickMode: root.colorPicking
 
                     onPressedAt: (gx, gy, mods) => root.pointerPressed(gx, gy, mods)
                     onMovedTo: (gx, gy, mods) => root.pointerMoved(gx, gy, mods)
@@ -1020,7 +1207,26 @@ ShellRoot {
                     onResizeStarted: (role, gx, gy) => root.beginResize(role, gx, gy)
                     onResizeMoved: (gx, gy) => root.updateResize(gx, gy)
                     onResizeEnded: root.endResize()
-                    onSampled: (c) => { root.setToolColor(c); root.eyedropArmed = false; }
+                    onSampled: (c) => {
+                        if (root.colorPicking) root.pickedColor(c);
+                        else { root.setToolColor(c); root.eyedropArmed = false; }
+                    }
+                }
+
+                RegionBar {
+                    id: regionBar
+                    visible: root.phase === "selecting" && !root.colorPicking && ov.ready
+                    actions: root.frontActions
+                    activeAction: root.frontAction
+                    audioOn: root.recordAudio
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 28
+                    onActionPicked: (id) => root.setFrontAction(id)
+                    onColorPickRequested: root.startColorPick()
+                    onFullscreenRequested: root.frontMonitor({ x: win.modelData.x, y: win.modelData.y, w: win.width, h: win.height })
+                    onAudioToggled: root.recordAudio = !root.recordAudio
+                    onCloseRequested: Qt.quit()
                 }
 
                 Toolbar {
@@ -1132,6 +1338,7 @@ ShellRoot {
             function grabExport(path, cb, targetSize) { ov.grabExport(path, cb, targetSize); }
             function grabRegion(rect, path, cb) { ov.grabRegion(rect, path, cb); }
             function grabPlate(rect, path, cb, targetSize) { ov.grabPlate(rect, path, cb, targetSize); }
+            function samplePixel(gx, gy) { ov.sampleAt(gx - win.modelData.x, gy - win.modelData.y); }
             function grabToolbar(path, cb) {
                 var sched = toolbar.grabToImage(function (r) {
                     var ok = false;

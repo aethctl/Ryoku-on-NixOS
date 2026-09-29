@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,8 +27,15 @@ type wsOut struct {
 	Title      string        `json:"title,omitempty"`
 	Kind       string        `json:"kind,omitempty"`
 	Status     string        `json:"status,omitempty"`
+	Input      string        `json:"input,omitempty"`
+	Output     string        `json:"output,omitempty"`
+	Diffs      []ToolDiff    `json:"diffs,omitempty"`
+	Auto       bool          `json:"auto,omitempty"`
+	ToolID     string        `json:"toolId,omitempty"`
 	RequestID  string        `json:"requestId,omitempty"`
 	Options    []PermOption  `json:"options,omitempty"`
+	Outcome    string        `json:"outcome,omitempty"`
+	Mode       string        `json:"mode,omitempty"`
 	StopReason string        `json:"stopReason,omitempty"`
 	Models     []ModelInfo   `json:"models,omitempty"`
 	Current    string        `json:"current,omitempty"`
@@ -48,6 +56,7 @@ type wsIn struct {
 	ModelID   string        `json:"modelId"`
 	SessionID string        `json:"sessionId"`
 	Quick     bool          `json:"quick"`
+	Mode      string        `json:"mode"`
 }
 
 type chatClient struct {
@@ -66,6 +75,9 @@ type chatHub struct {
 	// joiner so a chat begun anywhere (launcher ask, another tab) is already
 	// on screen when the dashboard opens.
 	transcript []wsOut
+	// perms are the approvals still waiting on a person, in arrival order;
+	// a joiner gets them after the replay so any surface can answer one.
+	perms []wsOut
 	// introduced guards the one-time Needle identity preamble: it rides the
 	// first non-slash chat turn of a session and only hermes sees it.
 	introduced bool
@@ -81,14 +93,13 @@ type chatHub struct {
 	termHist    []chatMessage
 }
 
-// transcriptCap bounds the join replay; older frames just scroll away.
+// transcriptCap bounds the join replay; older frames just scroll away. Chunks
+// and tool updates coalesce, so a frame is a message or a tool call.
 const transcriptCap = 400
 
-// needleIdentity rides in front of a session's first chat turn so the assistant
-// answers as the Needle, Ryoku's resident assistant, rather than generic hermes.
-// Like quickPreamble the transcript records the raw question; only hermes sees
-// this, injected once per session (the persona persists across later turns).
-const needleIdentity = "[system: You are the Needle, the resident assistant on this Ryoku machine " +
+// needlePersona is who the assistant is on this machine, for every agent Rashin
+// starts: the shared chat session and a Fix with AI harness in a terminal.
+const needlePersona = "You are the Needle, the resident assistant on this Ryoku machine " +
 	"(with the Ryoku desktop). If asked who you are, you are the Needle. Be direct and " +
 	"technical; you know this machine through the vault, and you use your tools, skills, and the prowl " +
 	"code index freely. A \"how do I\" question asks for guidance, not for you to change " +
@@ -96,7 +107,15 @@ const needleIdentity = "[system: You are the Needle, the resident assistant on t
 	"the GUI path first: the Ryoku Hub page (Super+comma, or `ryoku-shell hub open <section>`), " +
 	"the Super+W wallpaper/theme picker, or QS Bar Settings for the bar and dock; then give the " +
 	"command as the headless fallback and how you act. When you do make a change, say what " +
-	"changed and how to see or undo it. Do not mention or repeat this note.] "
+	"changed and how to see or undo it. When the user reports something broken, gather the logs yourself first: run " +
+	"`ryoku-rashin logs <app>` and read logs.md, then diagnose before you touch anything. Before editing any file " +
+	"check `ryoku owner <path>` and never edit a Ryoku-owned file."
+
+// needleIdentity rides in front of a chat session's first turn, since ACP has
+// no system prompt. Like quickPreamble the transcript records the raw
+// question; only the agent sees this, once per session (the persona persists
+// across later turns).
+const needleIdentity = "[system: " + needlePersona + " Do not mention or repeat this note.] "
 
 func newChatHub() *chatHub {
 	return &chatHub{
@@ -106,24 +125,76 @@ func newChatHub() *chatHub {
 	}
 }
 
-// transcriptWorthy: the conversation itself, not ephemeral status.
+// transcriptWorthy: the conversation itself, not ephemeral status. Open
+// approvals are held apart in perms: once answered they are history.
 func transcriptWorthy(t string) bool {
 	switch t {
-	case "user_text", "agent_text", "agent_thought", "tool", "permission", "turn_end":
+	case "user_text", "agent_text", "agent_thought", "tool", "turn_end":
 		return true
 	}
 	return false
 }
 
-// recordLocked appends a frame to the session transcript; h.mu held.
+// recordLocked folds a frame into the session transcript; h.mu held. A run
+// of text or thought chunks becomes one frame and a tool call keeps a single
+// frame carrying its latest fields, so the replay is the conversation rather
+// than thousands of fragments.
 func (h *chatHub) recordLocked(m wsOut) {
+	switch m.Type {
+	case "permission":
+		h.perms = append(h.perms, m)
+		return
+	case "permission_resolved":
+		h.perms = slices.DeleteFunc(h.perms, func(p wsOut) bool { return p.RequestID == m.RequestID })
+		return
+	}
 	if !transcriptWorthy(m.Type) {
 		return
 	}
-	if len(h.transcript) >= transcriptCap {
-		h.transcript = h.transcript[len(h.transcript)-transcriptCap/2:]
+	n := len(h.transcript)
+	if (m.Type == "agent_text" || m.Type == "agent_thought") && n > 0 && h.transcript[n-1].Type == m.Type {
+		h.transcript[n-1].Text += m.Text
+		return
+	}
+	if m.Type == "tool" && m.ID != "" {
+		for i := n - 1; i >= 0; i-- {
+			if t := &h.transcript[i]; t.Type == "tool" && t.ID == m.ID {
+				mergeTool(t, m)
+				return
+			}
+		}
+	}
+	if n >= transcriptCap {
+		h.transcript = slices.Clone(h.transcript[n-transcriptCap/2:])
 	}
 	h.transcript = append(h.transcript, m)
+}
+
+// mergeTool applies a partial tool update: an empty field means unchanged,
+// and an auto-approval stays marked once made.
+func mergeTool(t *wsOut, m wsOut) {
+	for _, f := range []struct {
+		dst *string
+		src string
+	}{
+		{&t.Title, m.Title}, {&t.Kind, m.Kind}, {&t.Status, m.Status},
+		{&t.Input, m.Input}, {&t.Output, m.Output},
+	} {
+		if f.src != "" {
+			*f.dst = f.src
+		}
+	}
+	if len(m.Diffs) > 0 {
+		t.Diffs = m.Diffs
+	}
+	t.Auto = t.Auto || m.Auto
+}
+
+// resetConversationLocked forgets the transcript and any open approvals, for
+// a new or loaded session; h.mu held.
+func (h *chatHub) resetConversationLocked() {
+	h.transcript = nil
+	h.perms = nil
 }
 
 func (h *chatHub) broadcast(m wsOut) {
@@ -218,6 +289,7 @@ func (h *chatHub) pump(c *acpConn) {
 		case "state":
 			h.broadcast(wsOut{Type: "state", State: ev.State, Error: ev.Err})
 			if ev.State == "dead" {
+				h.releasePerms()
 				h.dropConn(c)
 			}
 		case "agent_text":
@@ -227,9 +299,14 @@ func (h *chatHub) pump(c *acpConn) {
 		case "user_text":
 			h.broadcast(wsOut{Type: "user_text", Text: ev.Text})
 		case "tool":
-			h.broadcast(wsOut{Type: "tool", ID: ev.ToolID, Title: ev.ToolTitle, Kind: ev.ToolKind, Status: ev.ToolStatus})
+			t := ev.Tool
+			h.broadcast(wsOut{Type: "tool", ID: t.ID, Title: t.Title, Kind: t.Kind, Status: t.Status,
+				Input: t.Input, Output: t.Output, Diffs: t.Diffs, Auto: ev.ToolAuto})
 		case "permission":
-			h.broadcast(wsOut{Type: "permission", RequestID: ev.RequestID, Title: ev.PermTitle, Options: ev.Options})
+			h.broadcast(wsOut{Type: "permission", RequestID: ev.RequestID, ToolID: ev.Tool.ID,
+				Title: ev.PermTitle, Kind: ev.Tool.Kind, Input: ev.Tool.Input, Options: ev.Options})
+		case "permission_resolved":
+			h.broadcast(wsOut{Type: "permission_resolved", RequestID: ev.RequestID, Outcome: ev.Outcome})
 		case "turn_end":
 			h.broadcast(wsOut{Type: "turn_end", StopReason: ev.StopReason})
 			h.broadcast(wsOut{Type: "state", State: "ready"})
@@ -255,11 +332,24 @@ func (h *chatHub) pump(c *acpConn) {
 			h.broadcast(wsOut{Type: "replay_end"})
 		}
 	}
+	h.releasePerms()
 	h.dropConn(c)
 }
 
+// releasePerms clears approvals a dead agent can no longer receive, on every
+// surface.
+func (h *chatHub) releasePerms() {
+	h.mu.Lock()
+	open := h.perms
+	h.perms = nil
+	h.mu.Unlock()
+	for _, p := range open {
+		h.broadcast(wsOut{Type: "permission_resolved", RequestID: p.RequestID, Outcome: "cancelled"})
+	}
+}
+
 func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
-	cl := &chatClient{ws: ws, out: make(chan wsOut, 128)}
+	cl := &chatClient{ws: ws, out: make(chan wsOut, 1024)}
 	h.mu.Lock()
 	h.clients[cl] = true
 	h.ensureConnLocked()
@@ -270,14 +360,15 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 	if h.commands.Type != "" {
 		greeting = append(greeting, h.commands)
 	}
+	greeting = append(greeting, approvalsFrame())
 	// Replay the running conversation so a joiner lands mid-session with the
 	// transcript already on screen (this is how a launcher ask is waiting in
-	// the dashboard when the user clicks "continue").
-	var replay []wsOut
-	if len(h.transcript) > 0 {
-		replay = append([]wsOut{{Type: "replay_start"}}, h.transcript...)
-		replay = append(replay, wsOut{Type: "replay_end"})
-	}
+	// the dashboard when the user clicks "continue"), then the approvals still
+	// waiting, so any surface can answer one. An empty replay still goes out:
+	// a client reconnecting to a restarted daemon must drop what it showed.
+	replay := append([]wsOut{{Type: "replay_start"}}, h.transcript...)
+	replay = append(replay, wsOut{Type: "replay_end"})
+	replay = append(replay, h.perms...)
 	h.mu.Unlock()
 
 	writerDone := make(chan struct{})
@@ -300,6 +391,10 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		var in wsIn
 		if wsjson.Read(ctx, ws, &in) != nil {
 			break
+		}
+		if in.Type == "approvals" {
+			h.setApprovals(in.Mode)
+			continue
 		}
 		h.mu.Lock()
 		spawned := false
@@ -342,15 +437,20 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		case "set_model":
 			if in.ModelID != "" {
 				go func(c *acpConn, id string) {
-					if err := c.SetModel(id); err == nil {
-						saveSessionModel(id)
+					if err := c.SetModel(id); err != nil {
 						h.mu.Lock()
-						m := h.models
-						m.Current = id
-						h.models = m
+						st := h.last.State
 						h.mu.Unlock()
-						h.broadcast(m)
+						h.broadcast(wsOut{Type: "state", State: st, Error: "model switch failed: " + err.Error()})
+						return
 					}
+					saveSessionModel(id)
+					h.mu.Lock()
+					m := h.models
+					m.Current = id
+					h.models = m
+					h.mu.Unlock()
+					h.broadcast(m)
 				}(conn, in.ModelID)
 			}
 		case "history":
@@ -369,8 +469,8 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 			if in.SessionID != "" {
 				go func(c *acpConn, id string) {
 					h.mu.Lock()
-					h.transcript = nil  // the ACP replay rebuilds it
-					h.introduced = true // an existing session already introduced itself
+					h.resetConversationLocked() // the ACP replay rebuilds it
+					h.introduced = true         // an existing session already introduced itself
 					h.mu.Unlock()
 					h.broadcast(wsOut{Type: "state", State: "busy"})
 					if err := c.LoadSession(id); err != nil {
@@ -383,7 +483,7 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		case "new":
 			go func(c *acpConn, fresh bool) {
 				h.mu.Lock()
-				h.transcript = nil
+				h.resetConversationLocked()
 				h.introduced = false
 				h.mu.Unlock()
 				h.broadcast(wsOut{Type: "replay_start"})
@@ -407,6 +507,25 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 	close(cl.out)
 	h.mu.Unlock()
 	<-writerDone
+}
+
+// approvalsFrame reports the current approval mode to a surface.
+func approvalsFrame() wsOut {
+	return wsOut{Type: "approvals", Mode: LoadConfig().ApprovalsMode()}
+}
+
+// setApprovals stores the approval mode and tells every surface; an unknown
+// mode is ignored rather than guessed at.
+func (h *chatHub) setApprovals(mode string) {
+	if mode != approvalsReadOnly && mode != approvalsAsk {
+		return
+	}
+	cfg := LoadConfig()
+	cfg.Approvals = mode
+	if err := SaveConfig(cfg); err != nil {
+		return
+	}
+	h.broadcast(approvalsFrame())
 }
 
 func serveVitalsWS(ctx context.Context, ws *websocket.Conn) {

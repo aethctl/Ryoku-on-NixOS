@@ -31,6 +31,14 @@ Item {
     property var draft: null         // the page's live values
     property var defaults: ({})      // factory values, for the struck default
     property string tab: ""
+    // the tab last shown, so a swap can slide in the direction of travel
+    property string prevTab: ""
+    function tabIndexIn(t) {
+        var g = [];
+        for (var i = 0; i < schema.length; i++)
+            if (g.indexOf(schema[i].tab) < 0) g.push(schema[i].tab);
+        return g.indexOf(t);
+    }
     property string query: ""
     // progressive disclosure: rows tagged `adv: true` are the deep knobs, hidden
     // until Advanced is on. search still reaches them (the query branch ignores
@@ -378,17 +386,25 @@ Item {
                 readonly property var buckets: sheet.bucketGroups(sheet.groups, sheet.columns)
 
                 // A tab change swaps the whole card set, which otherwise snaps.
-                // A fade is the right motion for a content exchange: nothing
-                // travels, and opacity cannot move a card.
+                // The motion is a settle slide in the direction of travel (the
+                // same one the Hub uses between pages), never a fade: fading
+                // the swap put the words through a half-transparent phase,
+                // which read as a flash. The columns clip to the sheet, so the
+                // slide never paints over the rail.
                 Connections {
                     target: sheet
-                    function onTabChanged() { tabFade.restart() }
+                    function onTabChanged() {
+                        var dir = sheet.tabIndexIn(sheet.tab) >= sheet.tabIndexIn(sheet.prevTab) ? 1 : -1;
+                        tabSlide.from = dir * Tokens.s6;
+                        tabSlide.to = 0;
+                        tabSlide.restart();
+                        sheet.prevTab = sheet.tab;
+                    }
                 }
                 NumberAnimation {
-                    id: tabFade
-                    target: cardColumns; property: "opacity"
-                    from: 0; to: 1
-                    duration: Tokens.swap; easing.type: Tokens.ease
+                    id: tabSlide
+                    target: cardColumns; property: "x"
+                    duration: Tokens.move; easing.type: Tokens.ease
                 }
 
                 Repeater {

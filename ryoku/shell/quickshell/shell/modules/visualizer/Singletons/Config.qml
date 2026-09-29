@@ -28,8 +28,22 @@ Singleton {
     // --- the instances --------------------------------------------------------
     // The primary as a plain object (its flat keys), so it sits in `list` beside
     // the extras and the renderer treats them uniformly.
+    // The edge field's knobs ride flat `aura`-prefixed keys, canonical in
+    // auraKeys: primaryData folds them into the primary, applyPrimary copies
+    // them back on promotion, and VizItem holds the shipped defaults.
+    readonly property var auraKeys: [
+        "auraEdges", "auraDepth", "auraSpan", "auraTaper", "auraCornerRadius",
+        "auraJoin", "auraCornerBlend", "auraFlow", "auraMaterial", "auraShape",
+        "auraEffect", "auraEffectStrength", "auraColorMode", "auraColor2",
+        "auraColor3", "auraOpacity", "auraColorSpeed", "auraBodyOpacity",
+        "auraCrestStrength", "auraGlow", "auraGlowSpread", "auraAudioRange",
+        "auraThickness", "auraDetail", "auraBassDrive", "auraTrebleDrive",
+        "auraTransient", "auraBeatGlow", "auraCompression", "auraMotionSpeed",
+        "auraIdleMotion", "auraAttack", "auraRelease", "auraProfile",
+        "auraAccent", "auraSensitivity"
+    ]
     function primaryData() {
-        return {
+        var d = {
             "style": adapter.style, "shape": adapter.shape,
             "color": adapter.color, "color2": adapter.color2, "gradient": adapter.gradient,
             "bars": adapter.bars, "thickness": adapter.thickness, "bloom": adapter.bloom,
@@ -40,6 +54,9 @@ Singleton {
             "h": adapter.h, "grow": adapter.grow, "angle": adapter.angle,
             "tiltX": adapter.tiltX, "tiltY": adapter.tiltY
         };
+        for (var i = 0; i < root.auraKeys.length; i++)
+            d[root.auraKeys[i]] = adapter[root.auraKeys[i]];
+        return d;
     }
     function dataAt(index) {
         if (index <= 0)
@@ -67,8 +84,12 @@ Singleton {
     // The active instance, normalised, for the editor and placer to read.
     VizItem { id: act; data: root.activeData }
 
+    // The active instance, normalised: the editors read their knobs off this
+    // rather than re-listing every alias.
+    readonly property VizItem instance: act
     readonly property string styleId:       act.styleId
     readonly property bool   isPolar:       act.isPolar
+    readonly property bool   isAura:        act.isAura
     readonly property bool   peaksApply:    act.peaksApply
     readonly property bool   mirrorApplies: act.mirrorApplies
     readonly property int    bars:          act.bars
@@ -129,11 +150,33 @@ Singleton {
         }
         settle.restart();
     }
+    // Toggling a screen edge on or off for the field; an empty field is not a
+    // valid look, so switching the last one off lights the rails again.
+    function toggleAuraEdge(name) {
+        var cur = (act.auraEdges || []).slice();
+        var i = cur.indexOf(name);
+        if (i >= 0)
+            cur.splice(i, 1);
+        else
+            cur.push(name);
+        root.poke("auraEdges", cur);
+    }
 
     function setStyle(k) {
         if (root.knownStyles.indexOf(k) < 0)
             return;
         root.poke("style", k);
+    }
+    // The aura look's vocabularies, canonical so the desktop editor and the Hub
+    // cycle the same set rather than each hand-listing it.
+    readonly property var auraMaterials: ["silk", "aurora", "contour", "liquid"]
+    function cycleAuraMaterial() {
+        var m = root.auraMaterials;
+        var i = m.indexOf(act.auraMaterial);
+        root.poke("auraMaterial", m[(i + 1) % m.length]);
+    }
+    function setAuraDepth(v) {
+        root.poke("auraDepth", Math.max(24, Math.min(600, Math.round(v))));
     }
     function cycleStyle(by) {
         var i = root.knownStyles.indexOf(root.styleId);
@@ -258,7 +301,9 @@ Singleton {
     }
     // Mirroring what is on screen is a different thing per family.
     function flip() {
-        if (root.isPolar)
+        if (root.isAura)
+            root.poke("auraFlow", act.auraFlow === "clockwise" ? "counterclockwise" : "clockwise");
+        else if (root.isPolar)
             root.poke("spin", -root.spin);
         else if (root.grow === "up")
             root.poke("grow", "down");
@@ -302,6 +347,11 @@ Singleton {
         adapter.spin = o.spin; adapter.x = o.x; adapter.y = o.y; adapter.w = o.w;
         adapter.h = o.h; adapter.grow = o.grow; adapter.angle = o.angle;
         adapter.tiltX = o.tiltX; adapter.tiltY = o.tiltY;
+        for (var i = 0; i < root.auraKeys.length; i++) {
+            var k = root.auraKeys[i];
+            if (o[k] !== undefined)
+                adapter[k] = o[k];
+        }
     }
     function removeVisualizer(i) {
         var idx = i === undefined ? root.active : i;
@@ -368,6 +418,45 @@ Singleton {
             property real angle: 0
             property real tiltX: 0
             property real tiltY: 0
+            // The edge field's knobs, flat and aura-prefixed like every other
+            // per-viz key. The values mirror VizItem's defaults, so a config
+            // that has never touched an aura key keeps them out of the file.
+            property var auraEdges: ["left", "right"]
+            property real auraDepth: 180
+            property real auraSpan: 1.0
+            property real auraTaper: 0.14
+            property real auraCornerRadius: 24
+            property string auraJoin: "auto"
+            property real auraCornerBlend: 0.55
+            property string auraFlow: "clockwise"
+            property string auraMaterial: "silk"
+            property string auraShape: "flow"
+            property string auraEffect: "clean"
+            property real auraEffectStrength: 0.38
+            property string auraColorMode: "flow"
+            property string auraColor2: ""
+            property string auraColor3: ""
+            property real auraOpacity: 1.0
+            property real auraColorSpeed: 0.35
+            property real auraBodyOpacity: 0.32
+            property real auraCrestStrength: 0.9
+            property real auraGlow: 0.52
+            property real auraGlowSpread: 0.48
+            property real auraAudioRange: 0.78
+            property real auraThickness: 0.22
+            property real auraDetail: 0.42
+            property real auraBassDrive: 0.88
+            property real auraTrebleDrive: 0.68
+            property real auraTransient: 0.9
+            property real auraBeatGlow: 0.64
+            property real auraCompression: 0.12
+            property real auraMotionSpeed: 1.0
+            property real auraIdleMotion: 0.14
+            property real auraAttack: 1.05
+            property real auraRelease: 0.82
+            property string auraProfile: "flat"
+            property real auraAccent: 0.7
+            property real auraSensitivity: 0.72
             // Additional visualisers beyond the primary, each a full per-viz
             // object, and which instance the desktop editor is tuning.
             property var extras: []

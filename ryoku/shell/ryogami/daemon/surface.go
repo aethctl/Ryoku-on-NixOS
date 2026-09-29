@@ -12,12 +12,14 @@ import (
 // in-shell clip's audio, meaningful only for a VideoPath frame.
 
 type frameEntry struct {
-	Path       string      `json:"path"`
-	Revision   int64       `json:"revision"`
-	Fit        string      `json:"fit"`
-	Live       bool        `json:"live"`
-	Video      bool        `json:"video,omitempty"`
-	VideoPath  string      `json:"videoPath,omitempty"`
+	Path      string `json:"path"`
+	Revision  int64  `json:"revision"`
+	Fit       string `json:"fit"`
+	Live      bool   `json:"live"`
+	Video     bool   `json:"video,omitempty"`
+	VideoPath string `json:"videoPath,omitempty"`
+	// Paused freezes an in-shell clip in place without reloading the image.
+	Paused     bool        `json:"paused,omitempty"`
 	Mute       bool        `json:"mute"`
 	Volume     int         `json:"volume"`
 	Transition interface{} `json:"transition"`
@@ -46,6 +48,16 @@ func (w *wallSurface) publishLocked() {
 	f := wallFrame{Default: w.def, Outputs: map[string]frameEntry{}}
 	for k, v := range w.outputs {
 		f.Outputs[k] = v
+	}
+	if fitOverrides != nil {
+		for out, fit := range fitOverrides() {
+			e, ok := f.Outputs[out]
+			if !ok {
+				e = w.def
+			}
+			e.Fit = fit
+			f.Outputs[out] = e
+		}
 	}
 	b, err := json.Marshal(f)
 	if err != nil {

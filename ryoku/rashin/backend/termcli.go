@@ -302,8 +302,8 @@ func (p *presenter) pick() string {
 }
 
 // handlePerm renders a session-lane permission request and answers it over
-// /api/perm from the tty, so an escalated turn never dead-ends outside the
-// dashboard.
+// /api/perm from the tty, so an escalated turn never dead-ends waiting on the
+// Super+S chat.
 func (p *presenter) handlePerm(detail string) {
 	p.clearSpinner()
 	var pr struct {

@@ -45,7 +45,6 @@ them (see below), never as dead settings.
 | Layer Rules | `layerrules` | LayerRulesPage.qml | layer-shell rules (advanced; shows only with rules present) |
 | Bar Studio | `bar-studio` | BarStudioPage.qml | the bar style and its studio |
 | Desktop | `desktop` | DesktopPage.qml | the desktop stage and its surfaces |
-| Widgets | `widgets` | WidgetsPage.qml | desktop widgets |
 | App Launcher | `launcher` | LauncherPage.qml | how the Super+Space launcher behaves |
 | Keybinds | `keybinds` | KeybindsPage.qml | every shortcut; the one compositor-specific page kept out of the compositor group |
 | App Overrides | `appoverrides` | AppOverridesPage.qml | per-app tweaks (advanced) |

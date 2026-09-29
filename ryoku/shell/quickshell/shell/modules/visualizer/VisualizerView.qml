@@ -3,11 +3,13 @@ import QtQuick
 import Ryoku.Ui
 import "Singletons"
 
-// The desktop spectrum: geometry and colour only. Motion eases cava into levels,
-// Ryoku.Ui.SpectrumField draws them in one GPU pass, and this decides what the
-// wallpaper behind should make them look like. Eight ramp stops are lit slice by
-// slice across the region the look covers, so a spectrum crossing a bright sky
-// and a dark tree stays legible along its whole width.
+// The desktop spectrum: geometry and colour only. Motion (or AuraMotion for the
+// edge field) eases cava into levels, Ryoku.Ui.SpectrumField or Ryoku.Ui.AuraField
+// draws them in one GPU pass, and this decides what the wallpaper behind should
+// make them look like. Eight ramp stops are lit slice by slice across the region
+// the look covers, so a spectrum crossing a bright sky and a dark tree stays
+// legible along its whole width. The aura look instead paints a wallpaper-lit
+// triad through AuraField, which has its own palette rather than a ramp.
 Item {
     id: root
 
@@ -16,18 +18,27 @@ Item {
     required property VizItem cfg
 
     readonly property string style: root.cfg.styleId
+    readonly property bool aura: root.style === "aura"
     readonly property bool polar: field.polar
 
     // What the placement overlay needs: the look's box, and a colour lit for the
-    // same wallpaper.
-    readonly property rect boxRect: field.boxRect
+    // same wallpaper. The edge field owns the whole screen, like the frame, so
+    // its box is the screen itself.
+    readonly property rect boxRect: root.aura ? Qt.rect(0, 0, root.width, root.height)
+        : field.boxRect
     readonly property color guide: root.ramp.length > 0 ? root.ramp[root.ramp.length - 1] : "white"
+
+    AuraMotion {
+        id: auraMotion
+        cfg: root.cfg
+        active: root.visible && Config.enabled && root.aura
+    }
 
     Motion {
         id: motion
         cfg: root.cfg
         style: root.style
-        active: root.visible && Config.enabled
+        active: root.visible && Config.enabled && !root.aura
     }
 
     // Normalised for the wallpaper luminance map: a turned look sits on a different
@@ -80,6 +91,7 @@ Item {
     SpectrumField {
         id: field
         anchors.fill: parent
+        visible: !root.aura
 
         levels: motion.levels
         peaks: motion.peaks
@@ -104,5 +116,70 @@ Item {
         tiltX: root.cfg.tiltX
         tiltY: root.cfg.tiltY
         spin: motion.spinDeg
+    }
+
+    // The edge field: one pass over the whole screen, lit by the same wallpaper
+    // the bars are, as a triad rather than an eight-stop ramp. A complete
+    // pinned triad wins exactly as chosen; one pinned colour is respected the
+    // way every other look respects it - the field walks that one hue - and
+    // only with nothing pinned does the wallpaper light it.
+    readonly property var auraTriad: {
+        if (root.cfg.hasAuraTriad)
+            return [root.cfg.customColor, root.cfg.auraColor2, root.cfg.auraColor3];
+        if (root.cfg.hasCustomColor) {
+            var base = root.cfg.customColor;
+            return [Qt.darker(base, 1.25), base, Qt.lighter(base, 1.25)];
+        }
+        var l = root.fieldLstar;
+        return [Scheme.colorAt(0.12, l, root.fieldSide),
+                Scheme.colorAt(0.50, l, root.fieldSide),
+                Scheme.colorAt(0.88, l, root.fieldSide)];
+    }
+
+    AuraField {
+        id: auraField
+        anchors.fill: parent
+        visible: root.aura
+
+        bands: auraMotion.bands
+        peaks: auraMotion.peaks
+        energy: auraMotion.energy
+        pulse: auraMotion.pulse
+        onset: auraMotion.onset
+        phase: auraMotion.phase
+
+        edges: root.cfg.auraEdges
+        depth: root.cfg.auraDepth
+        span: root.cfg.auraSpan
+        taper: root.cfg.auraTaper
+        cornerRadius: root.cfg.auraCornerRadius
+        join: root.cfg.auraJoin
+        cornerBlend: root.cfg.auraCornerBlend
+        flow: root.cfg.auraFlow
+        material: root.cfg.auraMaterial
+        shape: root.cfg.auraShape
+        effect: root.cfg.auraEffect
+        effectStrength: root.cfg.auraEffectStrength
+        colorMode: root.cfg.auraColorMode
+        colorSpeed: root.cfg.auraColorSpeed
+        bodyOpacity: root.cfg.auraBodyOpacity
+        crestStrength: root.cfg.auraCrestStrength
+        glow: root.cfg.auraGlow
+        glowSpread: root.cfg.auraGlowSpread
+        audioRange: root.cfg.auraAudioRange
+        thickness: root.cfg.auraThickness
+        detail: root.cfg.auraDetail
+        bassDrive: root.cfg.auraBassDrive
+        trebleDrive: root.cfg.auraTrebleDrive
+        transientStrength: root.cfg.auraTransient
+        beatGlow: root.cfg.auraBeatGlow
+        compression: root.cfg.auraCompression
+        sensitivity: root.cfg.auraSensitivity * root.cfg.gain
+        idleMotion: root.cfg.auraIdleMotion
+        pulseStrength: 0.9
+        primaryColor: root.auraTriad[0]
+        secondaryColor: root.auraTriad[1]
+        tertiaryColor: root.auraTriad[2]
+        opacity: root.cfg.auraOpacity
     }
 }

@@ -1,0 +1,121 @@
+import QtQuick
+import Ryoku.Ui.Singletons
+
+FolioTabData {
+    tabKey: "integrations"
+    title: I18n.tr("Integrations")
+    note: I18n.tr("Connect Ryogami to the desktop and the overview.")
+    sections: [
+        {
+            title: I18n.tr("Overview backdrop"),
+            subtitle: I18n.tr("Use an image, video, or Wallpaper Engine scene behind the overview. Blur and dim it independently of the desktop wallpaper."),
+            visibleWhen: "cap.overviewBackdrop",
+            controls: [
+                { id: "overviewBackdrop.enabled",
+                  key: "overviewBackdrop.enabled",
+                  kind: "toggle",
+                  label: I18n.tr("Show wallpaper in overview"),
+                  help: I18n.tr("Show the separate overview backdrop. Animated backdrops pause while the overview is closed."),
+                  visibleWhen: "cap.overviewBackdrop",
+                  search: ["overview", "backdrop", "show", "toggle"] },
+                { id: "overviewBackdrop.followWallpaper",
+                  key: "overviewBackdrop.followWallpaper",
+                  kind: "toggle",
+                  label: I18n.tr("Always use the current wallpaper"),
+                  help: I18n.tr("Follow the wallpaper you apply. Turn off to choose a separate backdrop below."),
+                  search: ["follow", "wallpaper", "backdrop", "toggle"] },
+                { id: "overviewBackdrop.path",
+                  key: "overviewBackdrop.path",
+                  kind: "text",
+                  label: I18n.tr("Backdrop source"),
+                  help: I18n.tr("Choose Set as backdrop on a wallpaper, or enter an image, video, or Wallpaper Engine project path. Leave empty to use the last wallpaper."),
+                  placeholder: I18n.tr("~/Pictures/overview.jpg"),
+                  search: ["backdrop", "source", "image", "text"] },
+                { id: "action.refreshBackdrop",
+                  key: null,
+                  kind: "action",
+                  label: I18n.tr("Refresh backdrop now"),
+                  help: I18n.tr("Reload the selected source with the current blur, dimming, and theme settings."),
+                  action: "RefreshBackdrop",
+                  search: ["refresh", "backdrop", "action"] },
+                { id: "overviewBackdrop.blurEnabled",
+                  key: "overviewBackdrop.blurEnabled",
+                  kind: "toggle",
+                  label: I18n.tr("Blur the backdrop"),
+                  help: I18n.tr("Blur the overview copy while leaving the desktop wallpaper sharp."),
+                  search: ["blur", "backdrop", "toggle"] },
+                { id: "overviewBackdrop.blur",
+                  key: "overviewBackdrop.blur",
+                  kind: "number",
+                  label: I18n.tr("Blur radius"),
+                  help: I18n.tr("Gaussian blur radius applied to the copy. Higher is softer."),
+                  search: ["blur", "radius", "number"] },
+                { id: "overviewBackdrop.dim",
+                  key: "overviewBackdrop.dim",
+                  kind: "number",
+                  label: I18n.tr("Backdrop dimming"),
+                  help: I18n.tr("Darken the overview backdrop. 0 = none, 100 = black."),
+                  unit: I18n.tr("%"),
+                  search: ["backdrop", "dim", "number"] },
+                { id: "overviewBackdrop.autoTheme",
+                  key: "overviewBackdrop.autoTheme",
+                  kind: "toggle",
+                  label: I18n.tr("Auto-theme the backdrop"),
+                  help: I18n.tr("Recolour static images with a gowall theme palette. Videos and Wallpaper Engine scenes keep their original colours."),
+                  search: ["auto", "theme", "backdrop", "toggle"] },
+                { id: "overviewBackdrop.theme",
+                  key: "overviewBackdrop.theme",
+                  kind: "dropdown",
+                  label: I18n.tr("Backdrop theme"),
+                  help: I18n.tr("Palette used when auto-theming the backdrop."),
+                  dynamic: "recolourThemes",
+                  search: ["backdrop", "theme", "palette", "dropdown"] }
+            ]
+        },
+        {
+            title: I18n.tr("Ryoku shell"),
+            subtitle: "",
+            controls: [
+                { id: "shell.hoverPreview",
+                  key: "shell.hoverPreview",
+                  kind: "toggle",
+                  label: I18n.tr("Preview colours on hover"),
+                  help: I18n.tr("Recolour the desktop while you hover wallpapers in the picker, and put your colours back when you move on."),
+                  search: ["hover", "preview", "colours", "shell"] }
+            ]
+        },
+        {
+            title: I18n.tr("Palette bridge"),
+            subtitle: "",
+            controls: [
+                { id: "paletteBridgeSource",
+                  key: "paletteBridgeSource",
+                  kind: "text",
+                  label: I18n.tr("Palette source"),
+                  help: I18n.tr("The colours file Zen, Spotify and Vesktop read their theme from. Leave empty to use Ryoku's palette."),
+                  search: ["palette", "bridge", "zen", "spotify", "vesktop"] },
+                { id: "action.paletteBridge.setup",
+                  key: null,
+                  kind: "action",
+                  label: I18n.tr("Set up"),
+                  help: I18n.tr("Install the palette bridge for the supported apps that are present."),
+                  action: "PaletteBridgeSetup",
+                  search: ["palette", "bridge"] },
+                { id: "action.paletteBridge.restart",
+                  key: null,
+                  kind: "action",
+                  label: I18n.tr("Restart apps"),
+                  help: I18n.tr("Restart the bridged apps so they pick up the current colours."),
+                  action: "PaletteBridgeRestart",
+                  search: ["palette", "bridge"] },
+                { id: "action.paletteBridge.remove",
+                  key: null,
+                  kind: "action",
+                  label: I18n.tr("Remove"),
+                  help: I18n.tr("Remove the palette bridge from every app."),
+                  action: "PaletteBridgeRemove",
+                  search: ["palette", "bridge"] }
+            ]
+        }
+    ]
+}

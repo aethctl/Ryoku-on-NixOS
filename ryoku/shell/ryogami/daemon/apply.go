@@ -17,17 +17,55 @@ import (
 // applyWallpaper handles static and video applies, dispatching on the
 // video_engine knob: "ryogami" (the C player + READY handshake, default) or
 // "in_shell" (the clip publishes as videoPath and the shell decodes it).
-func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mute map[string]bool, volume map[string]int) error {
+func (d *daemon) applyWallpaperReason(reason, wpType, path, mode string, outputs []string, mute map[string]bool, volume map[string]int) error {
 	if path == "" {
 		return fmt.Errorf("missing 'path' parameter")
 	}
 	if _, err := os.Stat(path); err != nil {
 		return fmt.Errorf("wallpaper not readable: %v", err)
 	}
+	// An empty caller set means every output; a named set a guard emptied leaves nothing to paint.
+	req := &applyRequest{Type: wpType, Path: path, Outputs: outputs, Reason: reason}
+	pickOnly := false
+	if err := d.runApplyGuards(req); err != nil {
+		if err != errPickOnly {
+			return err
+		}
+		// Pick-only: an external setter paints, so only record the choice and run the hooks.
+		pickOnly = true
+	}
+	wantedAll := len(outputs) == 0
+	outputs = req.Outputs
+	if !wantedAll && len(outputs) == 0 {
+		return nil
+	}
+	if pickOnly {
+		name := filepath.Base(path)
+		key := strings.TrimSuffix(name, filepath.Ext(name))
+		d.setCurrent(name)
+		d.saveOutputs(outputs, wpType, path, mute, volume)
+		d.store.mutate(keyFor(d.store, name, key), func(e *Entry) { e.ApplyCount++ })
+		d.broadcast("ryogami.wall.applied", map[string]interface{}{
+			"type": wpType, "name": name, "path": path, "we_id": "", "key": key,
+		})
+		d.runAfterApply(applyEvent{applyRequest: *req, Name: name, Key: key})
+		return nil
+	}
+	if handled, err := d.routeAltEngine(wpType, path, mode, outputs, mute, volume); handled {
+		if err == nil && reason != "reload" {
+			name := filepath.Base(path)
+			d.runAfterApply(applyEvent{applyRequest: *req, Name: name, Key: strings.TrimSuffix(name, filepath.Ext(name))})
+		}
+		return err
+	}
 	fit := contentFit()
 	isVideo := wpType == "video"
 	paint := path
 	prefs := wallPrefs()
+	// Stop any Wallpaper Engine scene on these outputs so the two renderers do not overdraw.
+	if d.paper != nil {
+		_ = d.paper.stop(stopTargets(outputs))
+	}
 	if isVideo {
 		if still := liveStill(path, d.config().videoFrame()); still != "" {
 			paint = still
@@ -69,6 +107,9 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 		d.broadcast("ryogami.wall.applied", map[string]interface{}{
 			"type": wpType, "name": name, "path": path, "we_id": "", "key": key,
 		})
+		if reason != "reload" {
+			d.runAfterApply(applyEvent{applyRequest: *req, Name: name, Key: key})
+		}
 		return nil
 	}
 
@@ -132,7 +173,14 @@ func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mut
 	d.broadcast("ryogami.wall.applied", map[string]interface{}{
 		"type": wpType, "name": name, "path": path, "we_id": "", "key": key,
 	})
+	if reason != "reload" {
+		d.runAfterApply(applyEvent{applyRequest: *req, Name: name, Key: key})
+	}
 	return nil
+}
+
+func (d *daemon) applyWallpaper(wpType, path, mode string, outputs []string, mute map[string]bool, volume map[string]int) error {
+	return d.applyWallpaperReason("user", wpType, path, mode, outputs, mute, volume)
 }
 
 // keyFor resolves the store key for an applied file: entries under subfolders
@@ -162,7 +210,7 @@ func contains(list []string, s string) bool {
 // cacheDir/outputs.json for the startup restore, mirroring the Rust daemon: a
 // broadcast apply clears the map to a single "*" entry, a per-output apply
 // removes "*". Audio is the clip's effective value: the per-output apply map
-// when it names the key, else the wall-ui global default (so a missing key
+// when it names the key, else the global default (so a missing key
 // stays muted at the configured volume instead of unmuting).
 func (d *daemon) saveOutputs(outputs []string, wpType, path string, mute map[string]bool, volume map[string]int) {
 	cacheDir := d.config().cacheDir()
@@ -213,6 +261,11 @@ func wallStatePath() string { return filepath.Join(stateHome(), "ryoku-wallpaper
 // setup. The stored path is the real file (a clip's own path for a live wall),
 // which is what the readers want to bundle or repaint.
 func defaultWallpaperFrom(state map[string]map[string]interface{}) string {
+	if themeOutputForState != nil {
+		if p := themeOutputForState(state); p != "" {
+			return p
+		}
+	}
 	if e, ok := state["*"]; ok {
 		if p, _ := e["path"].(string); p != "" {
 			return p
@@ -354,7 +407,40 @@ func (d *daemon) restoreOutputs() (want, applied int) {
 	restored := ""
 	restore := func(out string, e map[string]interface{}) {
 		p, _ := e["path"].(string)
-		if p == "" || !fileExists(p) {
+		if p == "" {
+			return
+		}
+		if e["type"] == "we" {
+			id := filepath.Base(p)
+			if !d.featureSteam() {
+				return
+			}
+			if _, err := validateProject(p); err != nil {
+				return
+			}
+			var outs []string
+			if out != "*" {
+				outs = []string{out}
+			}
+			m, vol := entryAudio(e, wallAudioDefaults())
+			if d.driveWE(id, p, outs, map[string]bool{out: m}, map[string]int{out: vol}) == nil {
+				restored = id
+				applied++
+			}
+			return
+		}
+		if !fileExists(p) {
+			return
+		}
+		wpType, _ := e["type"].(string)
+		var outs []string
+		if out != "*" {
+			outs = []string{out}
+		}
+		m, vol := entryAudio(e, wallAudioDefaults())
+		if handled, _ := d.routeAltEngine(wpType, p, "init", outs, map[string]bool{out: m}, map[string]int{out: vol}); handled {
+			restored = filepath.Base(p)
+			applied++
 			return
 		}
 		live := e["type"] == "video"
@@ -392,7 +478,6 @@ func (d *daemon) restoreOutputs() (want, applied int) {
 					d.transcodeAsync(p, []string{out}, prefs)
 				}
 			}
-			m, vol := entryAudio(e, wallAudioDefaults())
 			if out == "*" {
 				d.surface.show(paint, fit, nil, false, true, videoClip{path: clip, mute: m, volume: vol})
 			} else {
@@ -404,10 +489,6 @@ func (d *daemon) restoreOutputs() (want, applied int) {
 		}
 
 		if live {
-			var outs []string
-			if out != "*" {
-				outs = []string{out}
-			}
 			seq := d.paintSeq.Add(1)
 			repaint := func(l bool) {
 				if d.paintSeq.Load() != seq {
@@ -479,7 +560,7 @@ func (d *daemon) applyDefaultWallpaper() {
 	if pick == "" {
 		return
 	}
-	if err := d.applyWallpaper("static", pick, "init", nil, nil, nil); err != nil {
+	if err := d.applyWallpaperReason("restore", "static", pick, "init", nil, nil, nil); err != nil {
 		fmt.Fprintf(os.Stderr, "ryogami: default wallpaper %s: %v\n", pick, err)
 	}
 }
@@ -490,7 +571,7 @@ func fileExists(p string) bool {
 }
 
 // entryAudio resolves a persisted outputs.json entry's clip audio, falling back
-// to the wall-ui global default for a key the entry predates (an old outputs.json
+// to the global default for a key the entry predates (an old outputs.json
 // with no volume, or a mute its writer never set).
 func entryAudio(e map[string]interface{}, def wallAudio) (bool, int) {
 	m := def.mute
@@ -518,6 +599,11 @@ func (d *daemon) outputsState() map[string]interface{} {
 		if p, okPath := e["path"].(string); okPath {
 			entry["path"] = p
 		}
+		if lw, lh, okGeom := d.outputGeom(k); okGeom {
+			entry["logical_width"] = lw
+			entry["logical_height"] = lh
+		}
+		entry["paused"], entry["manual_paused"] = d.outputPauseState(k)
 		out[k] = entry
 	}
 	return out
@@ -530,6 +616,7 @@ func (d *daemon) setAudio(mute *bool, volume *int, outputs []string) {
 	cacheDir := d.config().cacheDir()
 	state := map[string]map[string]interface{}{}
 	loadJSON(filepath.Join(cacheDir, "outputs.json"), &state)
+	var weOutputs []string
 	for k, e := range state {
 		if len(outputs) > 0 && !contains(outputs, k) {
 			continue
@@ -541,51 +628,39 @@ func (d *daemon) setAudio(mute *bool, volume *int, outputs []string) {
 			e["volume"] = *volume
 		}
 		state[k] = e
+		if e["type"] == "we" {
+			weOutputs = append(weOutputs, k)
+		}
 	}
 	saveJSON(filepath.Join(cacheDir, "outputs.json"), state)
 	d.surface.setAudio(mute, volume, outputs)
+	// A Wallpaper Engine scene mixes its own audio.
+	if d.paper != nil && len(weOutputs) > 0 {
+		_ = d.paper.setAudio(mute, volume, paperAudioTargets(weOutputs))
+	}
 }
 
-// deleteWallpaper removes the source file and the catalog row, then tells
-// every client the file is gone.
+// deleteWallpaper removes the source for good, as skwd does, drops the row and
+// tells every client; the trash only keeps originals that optimisation replaced.
 func (d *daemon) deleteWallpaper(key string) error {
 	e, okKey := d.store.remove(key)
 	if !okKey {
 		return fmt.Errorf("unknown wallpaper: %s", key)
 	}
-	src := e.VideoFile
+	src := e.Path
 	if src == "" {
 		src = filepath.Join(d.config().wallpaperDir(), e.Name)
 	}
 	if err := os.Remove(src); err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	for _, t := range []string{e.Thumb, e.ThumbSm} {
-		if t != "" {
+	// Thumbnails and an animated still's clip are cache of the file just removed.
+	for _, t := range []string{e.Thumb, e.ThumbSm, e.VideoFile} {
+		if t != "" && t != src {
 			_ = os.Remove(t)
 		}
 	}
 	d.broadcast("ryogami.wall.file_removed", map[string]interface{}{"name": e.Name, "type": e.Type})
-	return nil
-}
-
-// importWallpaper copies a file into the wallpaper dir and rescans, so the new
-// entry flows to clients through the cached event.
-func (d *daemon) importWallpaper(src string) error {
-	if !fileExists(src) {
-		return fmt.Errorf("source not readable: %s", src)
-	}
-	dst := filepath.Join(d.config().wallpaperDir(), filepath.Base(src))
-	b, err := os.ReadFile(src)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(dst, b, 0o644); err != nil {
-		return err
-	}
-	now := time.Now()
-	_ = os.Chtimes(dst, now, now)
-	go d.rescan(true)
 	return nil
 }
 
@@ -613,6 +688,6 @@ func (d *daemon) transcodeAsync(path string, outputs []string, prefs wallTune) {
 		if capped == "" {
 			return
 		}
-		_ = d.applyWallpaper("video", path, "live-reload", outputs, nil, nil)
+		_ = d.applyWallpaperReason("reload", "video", path, "live-reload", outputs, nil, nil)
 	}()
 }

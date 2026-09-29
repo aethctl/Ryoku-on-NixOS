@@ -54,6 +54,7 @@ func (f *fakeAgent) update(session string, update map[string]any) {
 
 func newTestPair(t *testing.T) (*acpConn, *fakeAgent) {
 	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cr, cw := io.Pipe() // client -> agent
 	ar, aw := io.Pipe() // agent -> client
 	conn := newACPConn(cw, ar, cw)
@@ -144,11 +145,11 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 		t.Fatalf("chunk text %q", ev.Text)
 	}
 	ev = expectEvent(t, conn.Events(), "tool")
-	if ev.ToolID != "t1" || ev.ToolStatus != "in_progress" {
+	if ev.Tool.ID != "t1" || ev.Tool.Status != "in_progress" {
 		t.Fatalf("tool event %+v", ev)
 	}
 	ev = expectEvent(t, conn.Events(), "tool")
-	if ev.ToolStatus != "completed" {
+	if ev.Tool.Status != "completed" {
 		t.Fatalf("tool update %+v", ev)
 	}
 
@@ -164,6 +165,7 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 	})
 	fa.write(rpcMsg{JSONRPC: "2.0", ID: &permID, Method: "session/request_permission", Params: pp})
 
+	expectEvent(t, conn.Events(), "tool")
 	ev = expectEvent(t, conn.Events(), "permission")
 	if ev.RequestID != "77" || len(ev.Options) != 2 || ev.PermTitle != "Run ls" {
 		t.Fatalf("permission event %+v", ev)
@@ -183,6 +185,12 @@ func TestACPHandshakePromptStreamPermissionCancel(t *testing.T) {
 	if pr.Outcome.Outcome != "selected" || pr.Outcome.OptionID != "allow" {
 		t.Fatalf("permission outcome %+v", pr)
 	}
+	ev = expectEvent(t, conn.Events(), "permission_resolved")
+	if ev.RequestID != "77" || ev.Outcome != "allowed" {
+		t.Fatalf("resolved event %+v", ev)
+	}
+	// A second answer (another surface racing) is dropped, not re-sent.
+	conn.RespondPermission(77, "deny")
 
 	// Turn end.
 	fa.respond(*prompt.ID, map[string]any{"stopReason": "end_turn"})

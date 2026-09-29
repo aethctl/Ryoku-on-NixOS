@@ -55,6 +55,16 @@ Item {
     // forced silent; the daemon threads the picker's mute/volume here.
     property bool videoMuted: true
     property int videoVolume: 100
+    // Every restart path respects the pause, so a watchdog never resumes a paused clip.
+    property bool videoPaused: false
+    onVideoPausedChanged: {
+        if (view.videoPaused)
+            player.pause();
+        else if (player.playbackState === MediaPlayer.PausedState)
+            player.play();
+        else
+            view.startVideo();
+    }
 
     // Decoding is capped at the surface resolution: an 8K source costs a
     // screen-sized texture instead of a full-resolution decode, which lagged
@@ -201,7 +211,7 @@ Item {
         id: startWatch
         interval: 400
         repeat: true
-        running: view.videoUrl !== "" && !view.videoOn
+        running: view.videoUrl !== "" && !view.videoOn && !view.videoPaused
         onTriggered: {
             view.startVideo();
             view.maybeYield();
@@ -211,7 +221,7 @@ Item {
     // Begin playback at the still's moment (the daemon extracts the frame at
     // second 1); the seek runs only once the media is loaded and long enough.
     function startVideo() {
-        if (view.videoUrl === "" || player.playbackState === MediaPlayer.PlayingState)
+        if (view.videoUrl === "" || view.videoPaused || player.playbackState === MediaPlayer.PlayingState)
             return;
         const loaded = player.mediaStatus === MediaPlayer.LoadedMedia
             || player.mediaStatus === MediaPlayer.BufferedMedia;
@@ -228,7 +238,7 @@ Item {
         target: player
         function onPlaybackStateChanged() { view.maybeYield() }
         function onErrorChanged() {
-            if (player.error !== MediaPlayer.NoError && view.videoUrl !== "") {
+            if (player.error !== MediaPlayer.NoError && view.videoUrl !== "" && !view.videoPaused) {
                 player.position = 0;
                 player.play();
             }

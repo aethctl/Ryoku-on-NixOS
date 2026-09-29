@@ -11,7 +11,7 @@ import (
 )
 
 // Recordings land in one directory. Three writers used to disagree about which:
-// ryoku-cmd-screenrecord resolved it properly, the deck's list hardcoded
+// ryoku-cmd-record resolved it properly, the deck's list hardcoded
 // $HOME/Videos/Recordings, and Ryoku Motion wrote into its own Electron
 // userData dir, so a user ended up with clips scattered across
 // ~/Videos/Recordings, ~/.config/ryomotion/recordings and a stray ~/Videos
@@ -24,7 +24,7 @@ import (
 // working and its clips land where everything else looks.
 
 // recordingsDir resolves the one directory, in the same order as
-// ryoku-cmd-screenrecord's recordings_dir() and Ryoku.Ui.Singletons.Paths.
+// ryoku-cmd-record's recordings_dir() and Ryoku.Ui.Singletons.Paths.
 func recordingsDir() string {
 	if v := strings.TrimSpace(os.Getenv("RYOKU_SHELL_RECORDINGS_DIR")); v != "" {
 		return v

@@ -12,12 +12,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"syscall"
-	"time"
 )
 
 // daemon wires the pieces: the wallpaper surface (rendered by the shell QML),
-// the catalog store (served to the wall-ui picker), the event hub, and the
-// managed wall-ui process. One unix socket serves everything.
+// the catalog store (served to the picker), the event hub, and the managed
+// picker process. One unix socket serves everything.
 type daemon struct {
 	cfg     config
 	cfgMu   sync.Mutex
@@ -32,7 +31,6 @@ type daemon struct {
 	restoreMu sync.Mutex // serializes restoreOutputs: startup, retry, output-added, manual
 
 	random    *randomRotation
-	daynight  *dayNightRotation
 	video     *videoPlayer
 	optimizer *Optimizer
 	grader    *Grader
@@ -48,6 +46,11 @@ type daemon struct {
 
 	scanMu   sync.Mutex // one rescan at a time; rescans are idempotent
 	scanning bool
+
+	sources *sources
+
+	workshop *workshopLib
+	paper    *paperClient
 }
 
 func (d *daemon) config() config {
@@ -117,13 +120,17 @@ func runDaemon() error {
 		surface:        newWallSurface(),
 		store:          openStore(cfg.cacheDir()),
 		events:         newEventHub(),
-		ui:             newWallUIProcess(),
 		random:         newRandomRotation(),
-		daynight:       newDayNightRotation(),
 		lastTransition: -1,
 		video:          newVideoPlayer(),
 	}
+	d.ui = newPickerProcess(d.pickerGpuEnv)
 	d.playlists = newPlaylistManager(cfg.cacheDir(), d)
+	d.sources = newSources(d)
+	d.paper = newPaperClient(d)
+	d.workshop = newWorkshopLib(d)
+	d.migrateLegacyConfig()
+	cfg = d.config()
 	// A finished pipeline replaced sources on disk, so the catalog rescans;
 	// every pipeline event also reaches subscribed clients untouched.
 	d.optimizer = NewOptimizer(cfg.wallpaperDir(), cfg.videoDir(), func(ev string, data map[string]interface{}) {
@@ -167,7 +174,7 @@ func runDaemon() error {
 	d.surface.publishCurrent()
 	go func() {
 		d.healAnimatedWebp()
-		if d.config().restoreEnabled() {
+		if d.restoreOnStartup() {
 			d.migrateLegacyOutputs()
 			switch want, applied := d.restoreOutputs(); {
 			case want == 0:
@@ -186,10 +193,12 @@ func runDaemon() error {
 		d.rescan(false)
 		d.playlists.resumeAll()
 		d.broadcast("ryogami.wall.scan_done", map[string]interface{}{})
+		d.runStartHooks()
 	}()
-	go d.watchConfig()
-	go d.watchLibrary()
+	go d.watchSettingsFile()
+	go d.startLibraryWatch()
 	go d.watchOutputs()
+	go d.workshop.watch()
 
 	for {
 		conn, err := ln.Accept()
@@ -261,9 +270,14 @@ func (d *daemon) serveTopic(conn net.Conn, r *bufio.Reader, name string) {
 
 func (d *daemon) serveRequests(conn net.Conn, r *bufio.Reader, first string) {
 	var events chan string
+	// Only the connection that painted a hover preview restores it when it drops.
+	hovered := false
 	defer func() {
 		if events != nil {
 			d.events.unsubscribe(events)
+		}
+		if hovered {
+			d.restoreHoverPreview()
 		}
 	}()
 	lines := make(chan string, 4)
@@ -287,6 +301,7 @@ func (d *daemon) serveRequests(conn net.Conn, r *bufio.Reader, first string) {
 		if cmd != "" {
 			var reply string
 			if strings.HasPrefix(cmd, "{") {
+				hovered = hovered || strings.Contains(cmd, `"palette.hover"`)
 				reply = d.dispatchJSON(cmd, &events)
 			} else {
 				reply = d.dispatchVerb(cmd)
@@ -398,27 +413,6 @@ func (d *daemon) rescan(force bool) {
 		return
 	}
 	d.store.replaceAll(fresh)
+	d.runAfterScan(prior, fresh)
 	d.broadcast("ryogami.wall.cache", map[string]interface{}{"status": "ready", "count": len(fresh)})
-}
-
-// watchConfig reloads ryogami.json on change with a small debounce, mirroring
-// the Rust daemon's config watcher.
-func (d *daemon) watchConfig() {
-	var last time.Time
-	for {
-		time.Sleep(2 * time.Second)
-		st, err := os.Stat(configPath())
-		if err != nil {
-			continue
-		}
-		if !st.ModTime().After(last) {
-			continue
-		}
-		last = st.ModTime()
-		fresh := loadConfig()
-		d.cfgMu.Lock()
-		d.cfg = fresh
-		d.cfgMu.Unlock()
-		d.broadcast("ryogami.wall.config_changed", map[string]interface{}{})
-	}
 }

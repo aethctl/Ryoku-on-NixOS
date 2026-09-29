@@ -40,7 +40,6 @@ Item {
         case "music": return musicComponent;
         case "sysmon": return sysmonComponent;
         case "vpn": return vpnComponent;
-        case "recording": return recordingComponent;
         case "audio-input":
         case "audio-output":
         case "battery":
@@ -101,6 +100,5 @@ Item {
     Component { id: musicComponent; RailMusic { edge: root.edge; scale: root.scale } }
     Component { id: sysmonComponent; RailSysmon { edge: root.edge; scale: root.scale } }
     Component { id: vpnComponent; RailVpn { edge: root.edge; scale: root.scale; active: true } }
-    Component { id: recordingComponent; RailRecording { edge: root.edge; scale: root.scale } }
     Component { id: actionComponent; RailAction { edge: root.edge; scale: root.scale; actionId: root.widgetId } }
 }

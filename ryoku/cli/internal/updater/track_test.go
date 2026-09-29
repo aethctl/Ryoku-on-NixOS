@@ -1,6 +1,7 @@
 package updater
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -53,46 +54,70 @@ func isolateHome(t *testing.T) string {
 	return home
 }
 
-// track unstable-dev (== testing) rewrites the [ryoku] Server to channels/testing
-// and reports testing; track main (== stable) rewrites it back. A packaged box
+// retargetChannel is the transactional pin: it rewrites the [ryoku] Server to
+// the channel, runs the move, and reports where the box landed. A packaged box
 // has nothing to migrate.
-func TestSwitchToPackageChannelRewritesServer(t *testing.T) {
+func TestRetargetChannelPinsServer(t *testing.T) {
 	isolateHome(t)
 	packagedConf(t, "stable")
 
-	migrated, err := switchToPackageChannel(sys.ChannelTesting)
-	if err != nil {
-		t.Fatalf("switch to testing: %v", err)
+	moved := 0
+	if err := retargetChannel(sys.ChannelTesting, func() error { moved++; return nil }); err != nil {
+		t.Fatalf("retarget to testing: %v", err)
 	}
-	if migrated {
-		t.Fatal("a packaged box has nothing to migrate")
+	if moved != 1 {
+		t.Fatalf("move ran %d times, want 1", moved)
 	}
 	if got := sys.PackagedChannel(); got != "testing" {
 		t.Fatalf("channel = %q, want testing", got)
 	}
-	if got := ryokuChannel(); got != "testing" {
-		t.Fatalf("ryokuChannel = %q, want testing", got)
-	}
 	if srv := sys.RyokuServer(); srv != sys.ChannelServer("testing") {
 		t.Fatalf("server = %q, want %q", srv, sys.ChannelServer("testing"))
 	}
+}
 
-	if _, err := switchToPackageChannel(sys.ChannelStable); err != nil {
-		t.Fatalf("switch to stable: %v", err)
+// The #291 invariant: when the move fails, the previous [ryoku] Server is put
+// back exactly and the databases are re-synced, so the pin never drifts from the
+// packages. The old boot guard left the pin on the target after a failed
+// downgrade -- this test fails on that behaviour.
+func TestRetargetChannelRestoresOnFailure(t *testing.T) {
+	isolateHome(t)
+	packagedConf(t, "stable")
+	before := sys.RyokuServer()
+
+	var priv [][]string
+	old := privileged
+	privileged = func(argv ...string) error { priv = append(priv, argv); return nil }
+	t.Cleanup(func() { privileged = old })
+
+	err := retargetChannel(sys.ChannelTesting, func() error { return fmt.Errorf("downgrade could not satisfy dependencies") })
+	if err == nil {
+		t.Fatal("expected the failed move to surface an error")
+	}
+	if got := sys.RyokuServer(); got != before {
+		t.Fatalf("Server = %q after a failed move, want the previous %q restored exactly", got, before)
 	}
 	if got := sys.PackagedChannel(); got != "stable" {
-		t.Fatalf("channel = %q, want stable", got)
+		t.Fatalf("channel = %q after a failed move, want stable", got)
 	}
-	if srv := sys.RyokuServer(); srv != sys.ChannelServer("stable") {
-		t.Fatalf("server = %q, want %q", srv, sys.ChannelServer("stable"))
+	// the restore re-syncs so the cached db matches the pin it put back.
+	resynced := false
+	for _, c := range priv {
+		if len(c) >= 2 && c[0] == "pacman" && c[1] == "-Syy" {
+			resynced = true
+		}
+	}
+	if !resynced {
+		t.Fatalf("restore did not re-sync the databases; privileged calls: %v", priv)
 	}
 }
 
-// track main on a box whose updates come from a checkout (a recorded pointer plus
+// tracking a channel on a box whose updates come from a checkout (a recorded pointer plus
 // a RYOKU_CHANNEL=unstable-dev env file) migrates it onto packages: both are
 // removed so the update path resolves to packages, not the checkout, while the
-// clone directory itself is left on disk.
-func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
+// clone directory itself is left on disk. The pin is the caller's separate,
+// transactional step, so this touches only the checkout.
+func TestMigrateOffCheckout(t *testing.T) {
 	home := isolateHome(t)
 	packagedConf(t, "testing") // a checkout box with a leftover [ryoku] stanza
 
@@ -116,9 +141,9 @@ func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
 		t.Fatalf("precondition: SourceTracked=%v ResolveRepo=%q, want a checkout at %q", sys.SourceTracked(), sys.ResolveRepo(), clone)
 	}
 
-	migrated, err := switchToPackageChannel(sys.ChannelStable)
+	migrated, err := migrateOffCheckout()
 	if err != nil {
-		t.Fatalf("switch: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	if !migrated {
 		t.Fatal("expected a migration off the checkout")
@@ -134,8 +159,5 @@ func TestSwitchToPackageChannelMigratesOffCheckout(t *testing.T) {
 	}
 	if _, err := os.Stat(clone); err != nil {
 		t.Fatalf("clone directory removed: %v", err)
-	}
-	if got := sys.PackagedChannel(); got != "stable" {
-		t.Fatalf("channel = %q, want stable", got)
 	}
 }

@@ -10,6 +10,11 @@ export function escapeHtml(s) {
     .replace(/>/g, "&gt;");
 }
 
+// escapeAttr is escapeHtml plus quotes, for text placed inside an attribute.
+export function escapeAttr(s) {
+  return escapeHtml(s).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 function splitRow(line) {
   let s = line.trim();
   if (s.startsWith("|")) s = s.slice(1);

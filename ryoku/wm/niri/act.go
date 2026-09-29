@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	wm "ryoku-wm"
 )
@@ -267,10 +268,17 @@ func touchpadAct(args []string) error {
 	case "off", "disable":
 		off = true
 	case "toggle":
+		if wm.TouchpadToggleIsEcho(time.Now()) {
+			return nil
+		}
 		off = !off
 	case "restore":
 		// The intent already lives in the config niri watches, so restore only
-		// re-emits it. Silent, since it runs unattended at login.
+		// re-emits it. At login a stored off is named once, so a pad left off is
+		// never a mystery.
+		if off && len(args) > 1 && args[1] == "login" {
+			touchpadNotify("Touchpad is locked off", "Press the touchpad key (Fn+F10 on most laptops) to turn it back on")
+		}
 	default:
 		return fmt.Errorf("act input.touchpad: mode must be on|off|toggle|status|restore, got %q", mode)
 	}
