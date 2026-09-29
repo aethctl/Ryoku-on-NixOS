@@ -39,6 +39,9 @@ var sessionLive = func() bool { return wm.Detect().Live }
 // lifecycle entry point compositor autostart uses. A var keeps tests from
 // restarting the desktop they run on.
 var startSession = func() error {
+	if sys.NixBackend() {
+		return sys.Run("systemctl", "--user", "restart", "ryoku-session.target")
+	}
 	return sys.Run("ryoku-power-cutover", "session-start")
 }
 
