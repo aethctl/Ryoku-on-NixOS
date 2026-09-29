@@ -121,7 +121,7 @@ func runDetachedShell(command string) {
 
 func (d *daemon) restoredApplyEvent() (applyEvent, bool) {
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
 	entry := state["*"]
 	if entry == nil {
 		keys := make([]string, 0, len(state))

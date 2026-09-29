@@ -425,7 +425,7 @@ func (m *playlistManager) applyCurrentLocked(id int64, outputs []string) {
 // wall.outputs serves, sorted for a stable picker order.
 func (d *daemon) outputNames() []string {
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
 	names := make([]string, 0, len(state))
 	for k := range state {
 		names = append(names, k)

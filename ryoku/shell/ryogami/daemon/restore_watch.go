@@ -43,7 +43,7 @@ func (d *daemon) restoreFallback() {
 	if src == "" {
 		return // nothing installed to fall back to
 	}
-	path := filepath.Join(d.config().cacheDir(), "outputs.json")
+	path := filepath.Join(d.config().stateDir(), "outputs.json")
 	state := map[string]map[string]interface{}{}
 	loadJSON(path, &state)
 	if len(state) == 0 {
@@ -66,7 +66,7 @@ func (d *daemon) externalLiveStored() bool {
 		return false
 	}
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
 	for _, e := range state {
 		if e["type"] == "video" {
 			return true

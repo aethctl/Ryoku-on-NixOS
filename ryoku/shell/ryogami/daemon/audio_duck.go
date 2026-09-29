@@ -115,7 +115,7 @@ func (d *daemon) evaluateDuck() {
 
 func (d *daemon) restoreDuckedAudio() {
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
 	def := wallAudioDefaults()
 	if len(state) == 0 {
 		m, vol := def.mute, def.volume

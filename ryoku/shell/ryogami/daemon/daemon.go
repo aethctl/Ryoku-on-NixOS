@@ -98,6 +98,9 @@ func daemonLive(sock string) bool {
 
 func runDaemon() error {
 	cfg := loadConfig()
+	if err := cfg.migrateState(); err != nil {
+		return fmt.Errorf("migrate wallpaper state: %w", err)
+	}
 	sock := socketPath()
 	_ = os.MkdirAll(filepath.Dir(sock), 0o755)
 	// A bare `ryogami` in a terminal must not steal the session daemon's
@@ -118,14 +121,14 @@ func runDaemon() error {
 	d := &daemon{
 		cfg:            cfg,
 		surface:        newWallSurface(),
-		store:          openStore(cfg.cacheDir()),
+		store:          openStore(cfg.stateDir()),
 		events:         newEventHub(),
 		random:         newRandomRotation(),
 		lastTransition: -1,
 		video:          newVideoPlayer(),
 	}
 	d.ui = newPickerProcess(d.pickerGpuEnv)
-	d.playlists = newPlaylistManager(cfg.cacheDir(), d)
+	d.playlists = newPlaylistManager(cfg.stateDir(), d)
 	d.sources = newSources(d)
 	d.paper = newPaperClient(d)
 	d.workshop = newWorkshopLib(d)

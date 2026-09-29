@@ -195,7 +195,7 @@ func newWePropStore(d *daemon) *wePropStore {
 }
 
 func (s *wePropStore) path() string {
-	return filepath.Join(s.d.config().cacheDir(), "wallpaper", "we_properties.json")
+	return filepath.Join(s.d.config().stateDir(), "wallpaper", "we_properties.json")
 }
 
 func (s *wePropStore) load() map[string]weSceneProps {
@@ -302,7 +302,7 @@ func (w *workshopLib) reapplyIfCurrent(weID string) bool {
 	d := w.d
 	itemDir := filepath.Join(w.workshopDir(), weID)
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
 	mute := map[string]bool{}
 	volume := map[string]int{}
 	var outs []string
