@@ -1196,25 +1196,35 @@ in
       runtimePackages;
 
 
-    # Ryoku's login greeter. Plasma enables SDDM on systems which ship it;
-    # this overrides Plasma's default Breeze choice without overriding an
-    # explicit user-selected SDDM theme.
+    # Supply a greeter on No Desktop installs, preserving another login manager.
     services.displayManager.sessionPackages = [
       ryokuNiri
     ];
 
-    services.displayManager.sddm =
-      lib.mkIf config.services.displayManager.sddm.enable {
-        theme = lib.mkOverride 900 "ryoku";
+    services.displayManager.sddm = {
+      enable = lib.mkDefault (!(lib.any
+        (path: lib.attrByPath path false config)
+        [
+          (if lib.hasAttrByPath [ "services" "displayManager" "gdm" "enable" ] options
+           then [ "services" "displayManager" "gdm" "enable" ]
+           else [ "services" "xserver" "displayManager" "gdm" "enable" ])
+          [ "services" "xserver" "displayManager" "lightdm" "enable" ]
+          [ "services" "displayManager" "ly" "enable" ]
+          [ "services" "displayManager" "cosmic-greeter" "enable" ]
+          [ "services" "greetd" "enable" ]
+        ]));
 
-        extraPackages = [
-          ryokuSddmTheme
-          pkgs.qt6.qt5compat
-          pkgs.qt6.qtdeclarative
-          pkgs.qt6.qtmultimedia
-          pkgs.qt6.qtsvg
-        ];
-      };
+      theme = lib.mkIf config.services.displayManager.sddm.enable
+        (lib.mkOverride 900 "ryoku");
+
+      extraPackages = lib.mkIf config.services.displayManager.sddm.enable [
+        ryokuSddmTheme
+        pkgs.qt6.qt5compat
+        pkgs.qt6.qtdeclarative
+        pkgs.qt6.qtmultimedia
+        pkgs.qt6.qtsvg
+      ];
+    };
 
     # NixOS uses Ryoku's Nix-only update backend; the Arch transaction stays disabled.
     # Session scope also covers Hub instances launched directly.

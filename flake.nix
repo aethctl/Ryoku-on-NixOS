@@ -178,6 +178,11 @@
       };
 
       checks.${system} = {
+        ryoku-display-manager = import ./nix/tests/display-manager.nix {
+          inherit pkgs;
+          module = self.nixosModules.default;
+        };
+
         # Core runtime
         ryoku-shell = ryoku.shell;
         ryoku-cli = ryoku.cli;
