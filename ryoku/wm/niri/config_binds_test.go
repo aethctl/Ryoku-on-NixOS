@@ -408,3 +408,19 @@ func copyNiriTree(t *testing.T, src, dst string) {
 		}
 	}
 }
+
+func TestTouchpadBindsDoNotRepeat(t *testing.T) {
+	binds, _ := resolveBinds(loadStore(""))
+	count := 0
+	for _, bind := range binds {
+		if strings.Contains(bind.chord, "XF86Touchpad") {
+			count++
+			if !bind.noRepeat {
+				t.Errorf("%s repeats while held", bind.chord)
+			}
+		}
+	}
+	if count != 3 {
+		t.Fatalf("got %d touchpad binds", count)
+	}
+}

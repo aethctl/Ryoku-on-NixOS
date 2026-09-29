@@ -435,6 +435,7 @@ func touchpad(args []string) error {
 // touchpadSet flips every pad and records the intent, matching the ported
 // script: a machine with no touchpad says so instead of claiming a state.
 func touchpadSet(enable bool) error {
+	changed := enable == touchpadOff()
 	found, err := setPads(enable)
 	if err != nil {
 		return err
@@ -445,12 +446,16 @@ func touchpadSet(enable bool) error {
 	}
 	if enable {
 		_ = os.Remove(touchpadStatePath())
-		touchpadNotify("Touchpad", "On")
+		if changed {
+			touchpadNotify("Touchpad", "On")
+		}
 		return nil
 	}
 	_ = os.MkdirAll(filepath.Dir(touchpadStatePath()), 0o755)
 	_ = os.WriteFile(touchpadStatePath(), nil, 0o644)
-	touchpadNotify("Touchpad", "Off")
+	if changed {
+		touchpadNotify("Touchpad", "Off")
+	}
 	return nil
 }
 

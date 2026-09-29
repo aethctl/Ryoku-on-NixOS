@@ -179,9 +179,9 @@ func defaultBinds() map[string]niriBind {
 		// Hardware
 		"hardware.brightnessUp":   {action: spawnArgs("ryoku-cmd-brightness", "+5")},
 		"hardware.brightnessDown": {action: spawnArgs("ryoku-cmd-brightness", "-5")},
-		"hardware.touchpadToggle": {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "toggle")},
-		"hardware.touchpadOn":     {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "on")},
-		"hardware.touchpadOff":    {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "off")},
+		"hardware.touchpadToggle": {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "toggle"), noRepeat: true},
+		"hardware.touchpadOn":     {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "on"), noRepeat: true},
+		"hardware.touchpadOff":    {action: spawnArgs("ryoku-wm-niri", "act", "input.touchpad", "off"), noRepeat: true},
 
 		// Mouse
 		"mouse.move":   {reason: "niri moves windows with Mod and drag natively."},
