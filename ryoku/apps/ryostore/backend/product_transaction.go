@@ -70,6 +70,16 @@ func installProductFrom(ctx context.Context, cache *Cache, category string, entr
 		if err := assertProductInstallable(ctx, cache, category, entry.ID); err != nil {
 			return err
 		}
+		// The installability check refreshed the registry. Use that same
+		// revision for the manifest hash instead of the provider's stale row.
+		entries, _, err := loadProductRegistry(ctx, cache, category, false)
+		if err != nil {
+			return err
+		}
+		entry, err = findProductEntry(entries, entry.ID)
+		if err != nil {
+			return err
+		}
 	}
 	var manifest ProductManifest
 	if local != nil {
