@@ -1217,6 +1217,14 @@ in
       theme = lib.mkIf config.services.displayManager.sddm.enable
         (lib.mkOverride 900 "ryoku");
 
+      # A No Desktop NixOS install has no Xserver for SDDM to run on.
+      # Ryoku is Wayland-native, so when SDDM is active without Xserver,
+      # supply its Wayland greeter backend as the default. An explicit user
+      # choice still wins because this remains mkDefault.
+      wayland.enable = lib.mkIf
+        (config.services.displayManager.sddm.enable && !config.services.xserver.enable)
+        (lib.mkDefault true);
+
       extraPackages = lib.mkIf config.services.displayManager.sddm.enable [
         ryokuSddmTheme
         pkgs.qt6.qt5compat
