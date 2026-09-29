@@ -848,10 +848,10 @@ in
     # xdg-desktop-portal-gnome disables its screencast backend when it inherits
     # Ryoku's global GDK_BACKEND override under Niri. Keep the session setting
     # intact and remove it only from the GNOME portal process.
-    environment.etc."systemd/user/xdg-desktop-portal-gnome.service.d/10-ryoku.conf".text = ''
-      [Service]
-      UnsetEnvironment=GDK_BACKEND
-    '';
+    systemd.user.services.xdg-desktop-portal-gnome = {
+      overrideStrategy = "asDropin";
+      serviceConfig.UnsetEnvironment = "GDK_BACKEND";
+    };
 
     # Export localized XDG user directories into the systemd user-manager
     # environment so Ryoku does not invent ~/Pictures or ~/Downloads on systems
