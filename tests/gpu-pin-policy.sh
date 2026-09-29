@@ -40,8 +40,8 @@ ln -s card1 "$dri/ryoku-gpu-0000-02-00-0"
 # stub MUX: always capable, always hybrid -> mode performance must print the
 # discrete-MUX hint; `set` is never called by these paths.
 bin="$tmp/bin"; mkdir -p "$bin"
-cat >"$bin/ryoku-gpu-mux" <<'EOF'
-#!/usr/bin/env bash
+printf '#!%s\n' "$(command -v bash)" >"$bin/ryoku-gpu-mux"
+cat >>"$bin/ryoku-gpu-mux" <<'EOF'
 case "${1:-}" in
   capable) exit 0 ;;
   get) printf 'hybrid\n'; exit 0 ;;

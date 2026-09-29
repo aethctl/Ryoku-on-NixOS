@@ -25,8 +25,8 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 # nvidia-smi stub: drops a sentinel if ever called, so a spawn is provable.
 bin="$tmp/bin"; mkdir -p "$bin"
 sentinel="$tmp/nvidia-smi-called"
-cat >"$bin/nvidia-smi" <<EOF
-#!/usr/bin/env bash
+printf '#!%s\n' "$(command -v bash)" >"$bin/nvidia-smi"
+cat >>"$bin/nvidia-smi" <<EOF
 echo called >"$sentinel"
 exit 0
 EOF

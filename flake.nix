@@ -248,7 +248,20 @@
             ];
           }
           ''
-            bash ${self}/tests/gpu-mux.sh
+            work="$TMPDIR/ryoku-gpu-mux"
+
+            mkdir -p "$work/tests" "$work/system/hardware"
+
+            cp ${self}/tests/gpu-mux.sh "$work/tests/"
+            cp -R ${self}/system/hardware/gpu "$work/system/hardware/"
+
+            mkdir -p "$work/system/hardware/power"
+            cp ${self}/system/hardware/power/ryoku-hw-laptop               "$work/system/hardware/power/"
+
+            chmod -R u+w "$work"
+            patchShebangs "$work"
+
+            bash "$work/tests/gpu-mux.sh"
             touch "$out"
           '';
 
@@ -267,7 +280,20 @@
             ];
           }
           ''
-            bash ${self}/tests/gpu-pin-policy.sh
+            work="$TMPDIR/ryoku-gpu-pin"
+
+            mkdir -p "$work/tests" "$work/system/hardware"
+
+            cp ${self}/tests/gpu-pin-policy.sh "$work/tests/"
+            cp -R ${self}/system/hardware/gpu "$work/system/hardware/"
+
+            mkdir -p "$work/system/hardware/power"
+            cp ${self}/system/hardware/power/ryoku-hw-laptop               "$work/system/hardware/power/"
+
+            chmod -R u+w "$work"
+            patchShebangs "$work"
+
+            bash "$work/tests/gpu-pin-policy.sh"
             touch "$out"
           '';
 
