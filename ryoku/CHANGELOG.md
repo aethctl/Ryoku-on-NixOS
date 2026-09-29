@@ -3,6 +3,113 @@
 ## Unreleased
 
 ### Added
+- **The Cursor motion plugin says what it costs on NVIDIA.** Realistic
+  cursor motion forces software cursor rendering, which reports say stutters
+  when the pointer crosses monitors; the plugin's own card now carries that
+  caveat whenever an NVIDIA driver is active, so the lag has a named suspect
+  before a user hunts for it (issues #257, #259).
+- **niri handles both laptop-lid edges natively.** The niri tree gained
+  `niri/lid.kdl`: `lid-close` and `lid-open` switch events feed the shared
+  clamshell owner, so an open can cancel a close still waiting on dock or power
+  state. Verified docked mode remains awake and every other close goes through
+  the fail-closed suspend transaction; niri retains its native panel topology
+  (`niri/lid.kdl`, `niri/config.kdl`).
+- **Focus follows the cursor by default on both desktops.** The neutral
+  store's input default moves to followMouse 1 ("Focus under pointer"), which
+  the Hyprland base module and the niri provider both ship, and niri caps the
+  scroll jump at 0% the way the iNiR reference config does, so a pointer
+  crossing onto a half-visible window never yanks the view. Boxes carrying the
+  retired detached default get healed once by ryoku doctor, and a deliberate
+  "Click to focus" pick afterwards sticks (`wm/hyprland`, `wm/niri`,
+  `hyprland/modules/input.lua`).
+- **One keybind catalogue for both compositors.** `wm/binds.go` names every
+  shipped shortcut once (id, label, hint, category, default chord), and each
+  provider's `binds` verb reports the full effective legend: what it bound,
+  what the user rebound, and what it cannot do with a reason. New shortcuts on
+  both desktops: Page Up/Down and Shift for workspace navigation and sending
+  windows, Super+Alt+arrows to focus a screen and Shift/Ctrl variants to send a
+  window or a whole workspace there, Alt+Tab for the last window, Super+T for
+  a tabbed column or group, Super+D to maximise, Super+C to centre, Super+[ ]
+  to merge a window into its neighbour, and the number pad for workspaces 1 to
+  10 with NumLock on or off. niri also gains reorder-workspace (Super+Ctrl+Page
+  Up/Down), first and last column, preset window heights and a shortcut
+  inhibit toggle; Hyprland reports those as not available instead of hiding
+  them (`wm/niri/config_binds.go`, `wm/hyprland/legend.go`).
+- **The niri border follows the wallpaper palette, like Hyprland's.** The
+  provider recolours the border from the live palette on every wallpaper or
+  scheme change through a shared `paletteBorder` capability, and a new
+  `Follow the wallpaper` switch on the Hub's Borders tab pins the fixed colours
+  instead on either compositor (`wm/niri/act.go`, `wm/hyprland/act.go`,
+  `shell/ipc/matugen.go`, `hub/quickshell/schema/WindowSettings.js`).
+- **The niri provider models what niri 26.04 can do.** Blur (global passes and
+  noise, per-window and per-app background effects), a border or focus ring
+  choice with gradients, the workspace background, tabbed columns, preset
+  window heights, the overview backdrop colour and workspace shadow, nine
+  per-animation springs and curves, layer rules, the `columnwidth`, `minsize`,
+  `maxsize`, `scrollfactor`, `tiledstate`, `babaisfloat`, `noshadow`, `blur`,
+  `xray` and `blockout` window-rule actions, and the warp-to-focus, scroll
+  cap, auto back-and-forth, mod key, power key and drag-edge input knobs, each
+  a store key with a Hub row. The emitter is one concern per file and the
+  unhonored reasons name what niri really lacks (`wm/niri/config_*.go`,
+  `wm/niri/schema_*.json`, `wm/niri/apply.go`).
+- **Seam actions for what used to be Hyprland-only scripts.** `nightlight.on`
+  and `nightlight.off` with a `nightLight` capability, `input.touchpad` with
+  `touchpadToggle`, `output.cycle` and `output.enable`, `window.summon` and
+  `decoration.gameMode`; providers also publish the window-rule actions they
+  honour (`wm/caps.go`, `wm/action.go`, `wm/hyprland/act.go`, `wm/niri/act.go`).
+
+### Fixed
+- **Rashin's Hermes setup passes only the installer flags that build supports.**
+  Setup hardcoded `--non-interactive --skip-browser --skip-computer-use`, but
+  the official installer exits 1 on any option it does not recognize, so the
+  day upstream dropped `--skip-computer-use` every "Set up Hermes agent" failed
+  with `unknown option: --skip-computer-use` (issue #279). Setup now downloads
+  the script and passes `--non-interactive` (the guard against the hidden tty
+  prompt) plus each optional flag only when the downloaded script names it, so
+  upstream growing or dropping an option can no longer break the one-click flow
+  (`rashin/backend/setup.go`).
+- **Suspend fails closed, wake recovery starts immediately, and fast user
+  switching no longer exposes or blocks a session.** The foreground shell owns
+  login1's delay inhibitor and long-lived hard block. Before that singleton
+  moves, it confirms a session-and-generation-scoped qylock on the outgoing
+  login; every other online same-user session is directly locked and observed
+  for foreground activation. Package updates with only inactive sessions
+  secure all of them without starting services against an SSH or stale display
+  environment. The daemon reconnects to replaced login1 owners or signal
+  streams without dropping valid protection. Resume starts output and lighting
+  recovery immediately, puts a deadline on each compositor-provider attempt,
+  and keeps retrying through the panel retrain window. Generated hypridle policy
+  is idle-only. Login, deployment, and package updates replace power owners as
+  one guarded transaction; doctor stages a complete qylock repair for the next
+  managed shell activation. A failed live cutover stays protected until retry
+  or reboot (`shell/ipc/sleepwake.go`,
+  `system/hardware/power/ryoku-idle`,
+  `system/hardware/power/ryoku-clamshell`, `hyprland/modules/misc.lua`).
+- **A crashed lock client can no longer lock out later locks.** The wrapper's
+  launch guard and generation lease were open fds that quickshell inherited
+  into its coprocess tree; a watcher surviving a killed client kept holding the
+  flock, and every later lock then exited silently without a screen. The
+  client tree starts with both guard fds closed, so a stuck lock self-heals on
+  the next request on either compositor (`qylock/quickshell-lockscreen/lock.sh`,
+  `tests/qylock-lock-fd.sh`).
+- **niri draws the window border the user sized.** niri 26.04 keeps its border
+  off unless the block carries an explicit `on`, so the sized border never drew
+  and the thickness slider did nothing; per-app overrides resolve the same way
+  (`wm/niri/config_layout.go`).
+- **A packaged niri box gets every helper the shell calls.** The neutral leaf
+  scripts ship with the shell, hypridle and hyprpicker are base dependencies,
+  idle management renders its own config from the Hub policy, and the dev
+  deploy lays only the live provider's scripts so a checkout no longer masks
+  what a package is missing (`release/packages/*/PKGBUILD`, `shell/deploy.sh`,
+  `system/hardware/power/ryoku-idle`).
+- Settings rejects null desktop save and preview requests before they can
+  replace saved preferences. Empty JSON stores containing `null` now recover
+  as an editable empty store instead of crashing the next edit.
+- Saved window animation overrides using `snap` no longer report a missing
+  bezier after switching presets. The base loader supplies the Minimal curve;
+  active presets and custom curves can still override it.
+
+### Added
 - **`CardColumns`: a page body of blocks, laid into balanced columns.** It takes
   the children a page already declares, measures them at the column width, and
   splits them so the columns end level, with a `fullWidth: true` child taking a
@@ -250,9 +357,10 @@
 - **Device lighting is re-applied on resume from suspend.** Theme colours only
   reached the RGB devices on a palette change and at login, so after waking from
   suspend an OpenRGB motherboard/RAM/mouse (which reset on power loss) sat on its
-  firmware default and the keyboard could hold a stale colour. hypridle's
-  `after_sleep_cmd` now also runs `ryoku-hub lighting apply` (backgrounded, so it
-  never delays the screen coming back).
+  firmware default and the keyboard could hold a stale colour. The always-on
+  shell daemon re-applies it on the wake edge, beside restoring output power, so
+  the job no longer rides a hypridle `after_sleep_cmd` -- the generated idle
+  config carries no sleep hooks at all.
 - **Video decode no longer freezes on hybrid laptops.** The session forced the
   nvidia VA-API/GLX drivers whenever the nvidia driver merely existed, so on a
   hybrid where the Intel or AMD iGPU drives the panel, video froze. It now takes
@@ -509,12 +617,15 @@
   (`ryoku-i18n ensure`).
 - `hyprland` + `system/hardware/power`: **clamshell mode -- close the lid without
   sleeping when docked.** A new `modules/lid.lua` binds the laptop lid switch
-  (`bindl switch:Lid Switch`) to `ryoku-clamshell lid`, which blanks the internal
-  panel on close when an external display is attached and restores the layout on
-  open; autostart launches the `ryoku-clamshell` daemon that keeps the machine
-  awake on lid close while on AC power with an external display (macOS-style: both
-  are required, else it suspends). The suspend policy and the logind drop-in live
-  in `system/hardware/power/`.
+  (`bindl switch:Lid Switch`) to `ryoku-clamshell lid`, which runs the shared
+  lid-close policy (secure the lock when the close will suspend, then blank the
+  internal panel when an external display is attached) and restores the layout
+  on open. Autostart launches the `ryoku-clamshell` daemon that keeps the machine
+  awake on lid close while on AC power with an external display (macOS-style:
+  both are required, else it suspends); live docked mode treats the close as an
+  output handoff and leaves the external session active. niri runs the same
+  policy from its native `lid-close` switch event. The suspend policy and the
+  logind drop-in live in `system/hardware/power/`.
 - `hyprland` + `shell`: **`Super+Alt+D` opens the right (System) sidebar**, the
   mirror of `Super+D` for the left (Features) sidebar. The bind runs
   `ryoku-shell system`, a new IPC verb that toggles the System control centre;

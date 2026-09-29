@@ -113,12 +113,14 @@ func reconcilers() []reconciler {
 		{i18n.T("limine kernel boot images"), reconcileLimineKernelImages},
 		{i18n.T("boot menu dead entries"), reconcileLimineDeadEntries},
 		{i18n.T("boot partition headroom"), reconcileBootSpace},
+		{i18n.T("boot volume writability"), reconcileBootRW},
 		{i18n.T("initramfs GPU trim"), reconcileInitramfsGPUTrim},
 		{i18n.T("limine autoboot"), reconcileLimineAutoboot},
 		{i18n.T("limine snapshot sync"), reconcileLimineOSName},
 		{i18n.T("updatedb snapshot prune"), reconcileUpdatedbPrune},
 		{i18n.T("pacman database lock"), reconcilePacmanLock},
 		{i18n.T("pacman progress bar"), reconcilePacmanCandy},
+		{i18n.T("multilib repository"), reconcileMultilibRepo},
 		{i18n.T("conflicting Ryoku files"), reconcileConflictingRyokuFiles},
 		{i18n.T("stale update run-state"), reconcileStaleUpdateRun},
 		{i18n.T("stale install crypt mapper"), reconcileStaleCryptMapper},
@@ -187,6 +189,7 @@ func reconcilers() []reconciler {
 		{i18n.T("stale window-border pin"), reconcileBorderPin},
 		{i18n.T("orphaned theme.lua"), reconcileThemeLua},
 		{i18n.T("follow-mouse default"), reconcileFollowMouseDefault},
+		{i18n.T("follow-wallpaper default"), reconcileThemeFollowDefault},
 		{i18n.T("quickshell runtime"), reconcileQuickshell},
 		{i18n.T("compositor config tree"), reconcileConfigTree},
 		{i18n.T("desktop loads"), reconcileShellLoad},
@@ -204,6 +207,7 @@ func reconcilers() []reconciler {
 		{i18n.T("display backlight"), reconcileBacklight},
 		{i18n.T("discrete GPU idle drain"), reconcileDgpuPanel},
 		{i18n.T("stale GPU render pin"), reconcileGpuPin},
+		{i18n.T("render pin vs panel driver"), reconcileRenderPinPanel},
 		{i18n.T("power profiles vs AMD GPU"), reconcilePpdAmdgpu},
 		{i18n.T("display resolution"), reconcileDisplayModes},
 		{i18n.T("phantom Wayland output"), reconcilePhantomOutput},
@@ -2960,12 +2964,12 @@ func reconcileRyodecors(checkOnly bool) recResult {
 	return fixedRes(i18n.T("seeded %d decor art file(s) into %s"), len(missing), dst)
 }
 
-// ---- reconciler: retired follow-mouse default --------------------------------
+// ---- reconciler: follow-mouse default ---------------------------------------
 
 // followMouseMarker records that the one-time follow-mouse heal has run, so a
-// later deliberate "Normal" pick in Ryoku Settings is never quietly undone.
+// later deliberate "detached" pick in Ryoku Settings is never quietly undone.
 func followMouseMarker() string {
-	return filepath.Join(sys.Xdg("XDG_STATE_HOME", ".local/state"), "ryoku", "migrations", "follow-mouse-default")
+	return filepath.Join(sys.Xdg("XDG_STATE_HOME", ".local/state"), "ryoku", "migrations", "follow-mouse-cursor-default")
 }
 
 // hyprGetFollowMouse pulls desktop.input.followMouse out of the neutral store.
@@ -3008,10 +3012,11 @@ func hyprSetFollowMouse(raw string, v int) (string, error) {
 	return string(out), nil
 }
 
-// reconcileFollowMouseDefault: desktop.json files written before the follow-mouse
-// default moved from 1 to 2 keep the old 1 baked in, so keyboard focus chases
-// the cursor. Restore 2 once and drop a marker, so re-picking "Normal" (1) in
-// Settings afterwards sticks.
+// reconcileFollowMouseDefault: focus follows the cursor by default on every
+// compositor. Stores written while the detached experiment shipped keep its 2
+// baked in, so the pointer walks over a window without focusing it; restore 1
+// once and drop a marker, so re-picking "detached" (2) in Settings afterwards
+// sticks.
 func reconcileFollowMouseDefault(checkOnly bool) recResult {
 	marker := followMouseMarker()
 	if sys.Exists(marker) {
@@ -3026,20 +3031,20 @@ func reconcileFollowMouseDefault(checkOnly bool) recResult {
 	}
 	store := filepath.Join(sys.ConfigHome(), "ryoku", "desktop.json")
 	if !sys.Exists(store) {
-		mark() // nothing saved to migrate; the base module's follow_mouse = 2 stands.
+		mark() // nothing saved to migrate; the shipped base default (1) stands.
 		return okRes(i18n.T("no saved desktop input; follow-mouse uses the base default"))
 	}
 	raw := readFileSafe(store)
 	fm, ok := hyprGetFollowMouse(raw)
-	if !ok || fm != 1 {
+	if !ok || fm != 2 {
 		mark()
-		return okRes(i18n.T("follow-mouse is not on the retired default"))
+		return okRes(i18n.T("follow-mouse is not on the retired detached default"))
 	}
 	if checkOnly {
-		return wouldRes(i18n.T("follow-mouse is pinned to the retired default 1; keyboard focus follows the cursor")).
+		return wouldRes(i18n.T("follow-mouse is pinned to the retired detached default 2; focus should follow the cursor")).
 			withFix("ryoku doctor")
 	}
-	fixed, err := hyprSetFollowMouse(raw, 2)
+	fixed, err := hyprSetFollowMouse(raw, 1)
 	if err != nil {
 		return failRes(i18n.T("could not update desktop settings: %v"), err)
 	}
@@ -3048,7 +3053,7 @@ func reconcileFollowMouseDefault(checkOnly bool) recResult {
 	}
 	_, _ = wm.Open().Apply(store)
 	mark()
-	return fixedRes(i18n.T("restored follow-mouse to 2 (Loose); keyboard focus no longer follows the cursor"))
+	return fixedRes(i18n.T("restored follow-mouse to 1; keyboard focus follows the cursor"))
 }
 
 // ---- reconciler: ryoku shell daemon ------------------------------------------
@@ -3945,11 +3950,11 @@ func tailLines(s string, n int) string {
 // (bootloader.sh) and ryoku/shell deploy.sh also seed unowned: the privileged
 // helpers + their polkit rules (so a dev checkout's pkexec has a rule to match),
 // the ryoku-owned systemd units, the shipped boot configs under
-// /usr/share/ryoku/boot, and the Plymouth splash theme. On a packaged box an
-// unowned copy from an
-// earlier dev deploy, an older ISO, or `ryoku recovery` collides with the package
-// on `pacman -Syu` ("exists in filesystem") and aborts the whole atomic
-// transaction, so no update lands. `ryoku update` now passes --overwrite for these
+// /usr/share/ryoku/boot, the Plymouth splash theme, and the logind lid-switch
+// drop-in. On a packaged box an unowned copy from an earlier dev deploy, an
+// older ISO, or `ryoku recovery` collides with the package on `pacman -Syu`
+// ("exists in filesystem") and aborts the whole atomic transaction, so no update
+// lands. `ryoku update` now passes --overwrite for these
 // (updater.ryokuOverwriteGlob), but a box already wedged cannot reach that fixed
 // binary; clearing the copies here lets the next update adopt them.
 var ryokuSystemGlobs = []string{
@@ -3958,6 +3963,7 @@ var ryokuSystemGlobs = []string{
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules",
 	"/usr/share/plymouth/themes/ryoku/*",
 	"/usr/share/ryoku/boot/*",
+	"/etc/systemd/logind.conf.d/10-ryoku-lid.conf",
 }
 
 // pkgOwnsFile reports whether an installed package owns path. A var so tests stub

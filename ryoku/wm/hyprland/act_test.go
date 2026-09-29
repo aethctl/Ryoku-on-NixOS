@@ -43,10 +43,12 @@ func TestActEmitsLuaDialect(t *testing.T) {
 			[]string{"dispatch", `hl.dsp.workspace.toggle_special("sharebar")`}},
 		{"session exit", []string{"session.exit"},
 			[]string{"dispatch", `hl.dsp.exit()`}},
-		{"output power", []string{"output.power", "off", "eDP-2"},
-			[]string{"dispatch", `hl.dsp.dpms({ state = "off", monitor = "eDP-2" })`}},
+		{"output power on", []string{"output.power", "on"},
+			[]string{"dispatch", `hl.dsp.dpms({ action = "on" })`}},
+		{"output power off", []string{"output.power", "off", "eDP-2"},
+			[]string{"dispatch", `hl.dsp.dpms({ action = "off", monitor = "eDP-2" })`}},
 		{"output enable on", []string{"output.enable", "DP-1", "on"},
-			[]string{"eval", `hl.monitor({ output = "DP-1", mode = "preferred", position = "auto", scale = 1 })`}},
+			[]string{"eval", `hl.monitor({ output = "DP-1", disabled = false })`}},
 		{"output enable off", []string{"output.enable", "DP-1", "off"},
 			[]string{"eval", `hl.monitor({ output = "DP-1", disabled = true })`}},
 		{"submap enter", []string{"submap.enter", "resize"},
@@ -92,6 +94,82 @@ func TestActEmitsLuaDialect(t *testing.T) {
 				t.Errorf("argv mismatch\n got: %q\nwant: %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// An explicit on or off must be idempotent: repeating the same request emits the
+// same literal, never a toggle. The resume path can re-issue an enable while the
+// lock surface is still appearing, and a toggling dispatcher field would flip the
+// panel back off and flash the screen after wake (issues #264, #258, #277). The
+// dispatcher reads the field named `action`, so the request names its intent.
+// Adapted from @Sipper1236's PR #278.
+func TestActOutputPowerIsIdempotent(t *testing.T) {
+	cases := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"on", []string{"output.power", "on"}, `hl.dsp.dpms({ action = "on" })`},
+		{"off", []string{"output.power", "off"}, `hl.dsp.dpms({ action = "off" })`},
+		{"on with monitor", []string{"output.power", "on", "eDP-2"},
+			`hl.dsp.dpms({ action = "on", monitor = "eDP-2" })`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got []string
+			restore := stubCtl(t, func(args ...string) ([]byte, error) {
+				got = args
+				return nil, nil
+			})
+			defer restore()
+			if err := runAct(tc.args); err != nil {
+				t.Fatalf("runAct(%v): %v", tc.args, err)
+			}
+			want := []string{"dispatch", tc.want}
+			if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+				t.Errorf("argv mismatch\n got: %q\nwant: %q", got, want)
+			}
+			got = nil
+			if err := runAct(tc.args); err != nil {
+				t.Fatalf("repeat runAct(%v): %v", tc.args, err)
+			}
+			if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
+				t.Errorf("repeat argv mismatch\n got: %q\nwant: %q", got, want)
+			}
+		})
+	}
+}
+
+// Re-enabling a connector must not rewrite its layout. hl.monitor copies the
+// output's existing rule and reapplies only the fields it is handed, so an
+// enable that also named a mode, position or scale would snap the output back
+// to "preferred at auto" and throw away the arrangement the user set. The
+// enable-on payload therefore carries disabled alone -- the regression this
+// pins is a re-enable that clobbered the layout.
+func TestActOutputEnablePreservesLayout(t *testing.T) {
+	var evals []string
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		if len(args) == 2 && args[0] == "eval" {
+			evals = append(evals, args[1])
+		}
+		return nil, nil
+	})
+	defer restore()
+
+	if err := runAct([]string{"output.enable", "DP-1", "on"}); err != nil {
+		t.Fatalf("output.enable on: %v", err)
+	}
+	if len(evals) != 1 {
+		t.Fatalf("output.enable on evaluated %d calls, want 1: %q", len(evals), evals)
+	}
+	got := evals[0]
+	if !strings.Contains(got, `output = "DP-1"`) || !strings.Contains(got, "disabled = false") {
+		t.Errorf("enable-on payload = %q, want output DP-1 with disabled = false", got)
+	}
+	for _, field := range []string{"mode", "position", "scale"} {
+		if strings.Contains(got, field) {
+			t.Errorf("enable-on payload %q sets %q, which would reset the output's layout", got, field)
+		}
 	}
 }
 
@@ -320,5 +398,33 @@ func TestNightlightTempClamps(t *testing.T) {
 		if got := nightlightTemp(tc.args); got != tc.want {
 			t.Errorf("nightlightTemp(%q) = %d, want %d", tc.args, got, tc.want)
 		}
+	}
+}
+
+// A palette change recolors the cursor images but the running compositor keeps
+// the old theme cached; cursor.reassert must set the store's resolved theme
+// (DYNAMIC included) without a settings save.
+func TestCursorReassertUsesResolvedStoreTheme(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	store := filepath.Join(dir, "ryoku", "desktop.json")
+	if err := os.MkdirAll(filepath.Dir(store), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"desktop":{"cursor":{"theme":"DYNAMIC","size":18}}}`
+	if err := os.WriteFile(store, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	done := stubCtl(t, func(args ...string) ([]byte, error) {
+		got = args
+		return nil, nil
+	})
+	defer done()
+	if err := runAct([]string{"cursor.reassert"}); err != nil {
+		t.Fatalf("cursor.reassert: %v", err)
+	}
+	if len(got) < 3 || got[0] != "setcursor" || got[1] == "" || got[1] == "DYNAMIC" || got[2] != "18" {
+		t.Fatalf("setcursor args = %v, want a resolved theme at size 18", got)
 	}
 }

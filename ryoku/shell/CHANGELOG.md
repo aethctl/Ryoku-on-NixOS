@@ -2,7 +2,26 @@
 
 ## Unreleased
 
+### Fixed
+- **The picker's Matugen App Templates toggles respond again.** The row wrote
+  through `ryoku-hub hypr matugen set`, a command path that no longer exists:
+  the hub printed its usage and exited 0, and because the write was
+  `execDetached` the failure was invisible, so every toggle in the section
+  looked dead while the state file never changed. The row now uses the same
+  merge writer as the rest of the picker and the Hub
+  (`ryoku-hub desktop matugen set`), so the FileView reload flips the switch
+  the click moved (issue #276).
+
 ### Added
+- **The warm screen and the palette can follow the real sun.** The night
+  light grew a "Follow the sun" switch and an edge margin: it warms the screen
+  from sunset+margin until sunrise-margin using the sunrise/sunset the weather
+  poll already computes for your location, and a manual toggle is honoured
+  until the next edge instead of being fought every tick (`ipc/nightlight.go`,
+  `ipc/nightlight_schedule.go`, `ipc/sun.go`). The theme Mode grew a "Sun"
+  choice beside Dark/Light/Smart: light between sunrise and sunset, dark
+  outside, independent of what the wallpaper depicts -- a daytime video that
+  samples dark no longer forces a dark desktop at noon (issues #262, #263).
 
 - **Palette Bridge rides the wallpaper palette to your apps.** A small local
   event server publishes the current matugen palette over HTTP so Spicetify,
@@ -249,11 +268,29 @@
   config migrates (`ryogami/wall-ui/qml/Config.qml`).
 
 ### Fixed
-- **Waking from suspend no longer leaves a black screen.** The shell daemon
-  watches logind's PrepareForSleep and holds the panel lit for a window after
-  every wake, through the compositor seam, so a lid-close on a box with idle
-  timeouts off (or a DPMS-on that raced the driver's late panel re-train on a
-  MUX-discrete laptop) comes back to a live desktop (`ipc/sleepwake.go`).
+- **Suspend is fail-closed without deadlocking fast user switching.** Each
+  login1 `user`/`user-early` Wayland or X11 session holds the final delay
+  inhibitor so a global sleep waits for every qylock surface; greeter and lock
+  sessions can never become sleep owners. Only login1's active user session
+  holds the long-lived hard `sleep` block or accepts `ryoku-shell suspend`.
+  When a session becomes inactive, it retains or reacquires temporary hard
+  protection until its own qylock is compositor-secure; an inactive startup
+  follows the same rule. Lid, idle, and qylock power actions all use that
+  transaction. Marker presence alone is not accepted: the UID-scoped qylock
+  client must still be live, so another user's locker or a stale file can
+  neither suppress this session's lock nor bless it. Unlock first asks the
+  daemon to acquire hard protection, confirm the session is active and prove
+  login1 is not preparing to sleep; if that daemon is restarting, a stable
+  helper substitutes a durable login1 block until the replacement publishes
+  equivalent protection. Only then does qylock remove its marker and request
+  login1 unlock. A rejected suspend retries any failed block restoration.
+  On a lost D-Bus signal stream the daemon withdraws readiness, reconnects
+  in-process and overlaps valid old protection with its replacement; a login1
+  restart invalidates and reacquires both inhibitor types without consuming the
+  shell's service restart budget. Resume starts output and lighting recovery
+  immediately while bounded calls restore protection in order, and output-on is
+  reasserted across the GPU link's retrain window
+  (`ipc/sleepwake.go`, `ipc/daemon.go`).
 - **The bar's power profile is one owner's, not two.** The qsbar widget and
   panel polled and wrote power-profiles-daemon with raw `powerprofilesctl`,
   beside the daemon that banks the user's pick; a switch the daemon
@@ -3761,18 +3798,18 @@
   namespace, so a live wallpaper scale-popped in (the global `popin` layers
   animation) instead of fading over the still
   (`hyprland/modules/decoration.lua`).
-- **`ryoku-shell lock` blocks until the compositor confirms the lock, so
-  suspend can no longer race the lockscreen.** hypridle's `before_sleep_cmd`
-  holds logind's sleep delay-inhibitor only while the command runs, but
-  `lockSession` fire-and-forgot `lock.sh` and returned in milliseconds:
-  Quickshell was still loading QML when the machine suspended, and opening the
-  lid showed the desktop for a beat before the lock painted. The daemon now
-  waits (bounded at 3s, under logind's 5s `InhibitDelayMaxSec`) for the
+- **`ryoku-shell lock` blocks until the compositor confirms the lock, so the
+  lockscreen can no longer race suspend.** `lockSession` fire-and-forgot
+  `lock.sh` and returned in milliseconds: Quickshell was still loading QML when
+  the machine suspended, and opening the lid showed the desktop for a beat
+  before the lock painted. The daemon now waits for the
   `$XDG_RUNTIME_DIR/qylock.locked` marker qylock touches once
   `WlSessionLock.secure` flips true, clearing a stale marker from a killed
-  locker first; a qylock predating the marker just rides out the wait, so
-  suspend is delayed, never blocked (`ipc/actions.go`, covered by
-  `TestLockSessionWaitsForMarker` and `TestLockSessionClearsStaleMarker`).
+  locker first, bounded by the live logind deadline it holds, and a wait that
+  runs out reports a failed lock rather than a false one; a qylock predating the
+  marker just rides out the wait, so suspend is delayed, never blocked
+  (`ipc/actions.go`, covered by `TestLockSessionWaitsForMarker` and
+  `TestLockSessionClearsStaleMarker`).
 - `ipc/actions.go`: the lock no longer leaks one zombie per lock/unlock cycle.
   `lockSession` released the `lock.sh` process handle instead of reaping it, so
   every unlock left a defunct entry in the daemon's process table for the rest

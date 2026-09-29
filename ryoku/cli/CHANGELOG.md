@@ -2,7 +2,86 @@
 
 ## Unreleased
 
+### Added
+- **`ryoku doctor` names the reverse-PRIME first-commit hazard.** On a laptop
+  whose connected panel is driven by the iGPU while the render pin puts NVIDIA
+  first, the session's very first cross-GPU commit fails once on some kernels
+  and the panel stays black until reboot (#270). The pin is deliberate Ryoku
+  policy, so this is a note, never a change: it names the combination and both
+  ways out (`ryoku-gpu disable` clears the pin, `ryoku-gpu persist` restores
+  it), so a black-panel report carries its own suspect
+  (`internal/doctor/reconcile_gpu_pin_panel.go`).
+- **`ryoku wm caps` prints the active provider's capabilities as JSON**, the
+  same payload the daemon and the Hub gate on, so a script can read the night
+  light backend or a capability without spelling a compositor. `ryoku wm act`
+  now forwards the provider's stdout, which is how `input.touchpad status`
+  answers (`wm.go`).
+- **`ryoku update` re-authors the compositor settings.** The generated config
+  is a pure function of the store and the provider that wrote it, so after the
+  new config tree lands the live provider applies the store again; a provider
+  fix that changes what it emits (niri's border needing an explicit on) reaches
+  a box on the update instead of waiting for the next Hub edit
+  (`internal/updater/update.go`).
+- **`ryoku doctor` repairs a read-only boot volume.** /boot, and /efi on an
+  alongside install, are FAT volumes, and one the firmware or a neighbouring OS
+  left dirty can come up read-only: every boot-path write then fails in ways
+  that look unrelated (mkinitcpio copies nothing, limine-update writes nothing,
+  an update ends in "rollback now"). The new reconciler remounts it read-write,
+  and if the kernel refuses, unmounts, runs `fsck.fat -a` and mounts again; a
+  busy mount is left alone with the exact manual command instead of being
+  forced. The btrfs root's read-only flip stays `reconcileBtrfsHealth`'s
+  (`internal/doctor/reconcile_boot_rw.go`).
+
+### Fixed
+- **`ryoku update` no longer dies where taking a sleep inhibitor is denied.**
+  The transaction runs under `systemd-inhibit --mode=block`, which is
+  polkit-gated in sessions with no agent (SSH, a headless run): there it exits
+  "Access denied" BEFORE the wrapped command starts, so pacman never ran and
+  the update reported a failure that had nothing to do with packages. The
+  inhibitor is now probed once per run and dropped on a denial, keeping the
+  lid-close guard wherever the session allows it (`internal/updater/upgradelog.go`).
+- **The update view is curated for pipes, not only terminals.** The Hub's
+  update island and `ryoku update > log` read stdout through a pipe, which used
+  to get the raw pacman firehose: database chatter, per-file progress redraws
+  and long conflict lists that read as a broken install. A piped run now gets
+  the same collapsed view a terminal sees (phase, one-line package summary,
+  warnings, errors), animated only on a TTY; the full firehose still lands in
+  `~/.local/state/ryoku/update-log.txt` and `--verbose` keeps the raw passthrough
+  (`internal/updater/upgradelog.go`).
+- **A switched-to desktop no longer boots without its generated config.**
+  niri's config.kdl hard-includes settings.kdl and rebinds.kdl, and a missing
+  include is a hard niri config error, yet the packages ship only the static
+  seeds and every apply followed the ACTIVE provider: nothing between
+  `ryoku wm use niri` and the first niri login rendered the target's generated
+  half, so the switch laid a tree niri refuses to parse. Materialize, the one
+  call the login bootstrap, the switch and the update all share, now completes
+  every laid-down tree from the neutral store through the seam; a missing
+  user_edits mirror or a missing store triggers nothing, and an absent
+  provider binary notes instead of failing (`internal/updater/materialize.go`).
+- **Colours follow the wallpaper again on boxes the mono era left behind.**
+  A theme.json with followWallpaper false and no locked palette is incoherent
+  legacy state (the desktop sits on a static ramp while every surface claims
+  to follow the wallpaper), most visible on niri where no Hyprland decoration
+  regen masks it. A one-time reconciler restores the follow default; a locked
+  palette, or follow turned off afterwards, is a choice and stands
+  (`internal/doctor/reconcile_theme_follow.go`).
+
 ### Changed
+- **`ryoku update` adopts the sleep policy as a guarded transaction.** Stage
+  two takes a durable login1 sleep block, activates logind's sessionless
+  fallback, and refuses to quiesce the shell unless the old `ryoku-idle` and
+  `ryoku-clamshell` services are verifiably stopped. The canonical
+  `ryoku-power-cutover` helper binds the replacement target to the exact active
+  login1 session, reloads the compositor's power bindings, waits for the new
+  shell's inhibitor state, and verifies both service owners before protection
+  is released; Ryogami is then restarted onto the installed binary. Any earlier
+  failure leaves the durable block active until retry or reboot. Package hooks
+  use the same all-session helper for every logged-in Ryoku user, while later
+  managed updates hand their already-protected active session to it instead of
+  racing a second transaction. Stale compositor variables in a lingering user
+  manager no longer make an SSH/TTY update own desktop power policy. The stop
+  path also adopts releases that had no daemon PID state
+  (`internal/updater/update.go`).
 - **`ryoku doctor` keeps your login shell honest.** Changing your shell in the
   Hub writes it in two places: your account shell, and a session override the
   compositor exports so everything it launches agrees. Nothing noticed when the
