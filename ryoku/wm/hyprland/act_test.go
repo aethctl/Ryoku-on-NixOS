@@ -429,3 +429,28 @@ func TestCursorReassertUsesResolvedStoreTheme(t *testing.T) {
 		t.Fatalf("setcursor args = %v, want a resolved theme at size 18", got)
 	}
 }
+
+func TestTouchpadNotificationsOnlyOnChange(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	previous := touchpadNotify
+	count := 0
+	touchpadNotify = func(string, string) { count++ }
+	defer func() { touchpadNotify = previous }()
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		if len(args) == 2 && args[0] == "devices" {
+			return []byte(`{"mice":[{"name":"test-touchpad"}]}`), nil
+		}
+		return nil, nil
+	})
+	defer restore()
+	for _, mode := range []string{"on", "off", "off", "restore", "on", "on"} {
+		if err := runAct([]string{"input.touchpad", mode}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 2 {
+		t.Fatalf("got %d notifications for two state changes", count)
+	}
+}

@@ -447,3 +447,24 @@ func TestActBorderPaletteNoOpWhenFixed(t *testing.T) {
 		t.Error("a fixed border must not write the palette file")
 	}
 }
+
+func TestTouchpadNotificationsOnlyOnChange(t *testing.T) {
+	restore := stubRequest(t, func(any) (json.RawMessage, error) { return nil, nil })
+	defer restore()
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	previous := touchpadNotify
+	count := 0
+	touchpadNotify = func(string, string) { count++ }
+	defer func() { touchpadNotify = previous }()
+
+	for _, mode := range []string{"on", "off", "off", "restore", "on", "on"} {
+		if err := runAct([]string{"input.touchpad", mode}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count != 2 {
+		t.Fatalf("got %d notifications for two state changes", count)
+	}
+}

@@ -255,6 +255,7 @@ func touchpadAct(args []string) error {
 		mode = args[0]
 	}
 	off := touchpadDisabled()
+	wasOff := off
 	switch mode {
 	case "status":
 		if off {
@@ -295,7 +296,7 @@ func touchpadAct(args []string) error {
 	if err := writeOverlayKdl("settings.kdl", genSettings(loadStore(storePath()))); err != nil {
 		return err
 	}
-	if mode != "restore" {
+	if mode != "restore" && off != wasOff {
 		if off {
 			touchpadNotify("Touchpad", "Off")
 		} else {
