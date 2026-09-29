@@ -102,6 +102,12 @@ def compile_theme(flags, body, primary, watch):
     for sub in ("src", "svg", "config"):
         shutil.copytree(SRC / sub, work / sub)
     render = work / "config/render.json"
+
+    # shutil.copytree preserves the source modes. On NixOS the bundled Bibata
+    # source comes from the immutable store, so render.json may still be 0444
+    # even though its temporary copy is owned by the user.
+    render.chmod(render.stat().st_mode | 0o200)
+
     d = json.loads(render.read_text())
     t = "Bibata-Modern-Classic"
     d[t]["colors"][0]["replace"] = body
