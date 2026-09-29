@@ -92,7 +92,7 @@ let
       src
       livewall
       waifu2x
-      paletteBridge
+      qmlRoot
       ;
   };
 

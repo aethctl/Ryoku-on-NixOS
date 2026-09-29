@@ -1592,10 +1592,10 @@ in
         QT_FFMPEG_DECODING_HW_DEVICE_TYPES = ",";
 
         QML_IMPORT_PATH =
-          "${qmlRoot}:${qtQmlPath}";
+          "${ryokuRyogami}/lib/qt-6/qml:${qmlRoot}:${qtQmlPath}";
 
         QML2_IMPORT_PATH =
-          "${qmlRoot}:${qtQmlPath}";
+          "${ryokuRyogami}/lib/qt-6/qml:${qmlRoot}:${qtQmlPath}";
       };
 
       unitConfig = {
