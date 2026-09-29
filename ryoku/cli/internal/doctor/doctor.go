@@ -1968,6 +1968,9 @@ func portalFrontendCheck() (fix string, pkgs []string) {
 }
 
 func reconcileSessionComponents(_ bool) recResult {
+	if sys.NixBackend() {
+		return okRes("desktop session components are managed declaratively by the Ryoku NixOS module")
+	}
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
 	}
@@ -2148,6 +2151,8 @@ const defaultCursorTheme = "Bibata-Modern-Ice"
 func cursorSearchDirs() []string {
 	return []string{
 		"/usr/share/icons",
+		"/run/current-system/sw/share/icons",
+		filepath.Join(sys.Home(), ".nix-profile", "share", "icons"),
 		filepath.Join(sys.Home(), ".local", "share", "icons"),
 		filepath.Join(sys.Home(), ".icons"),
 	}

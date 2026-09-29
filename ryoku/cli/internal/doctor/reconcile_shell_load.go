@@ -111,7 +111,21 @@ func probeConfig() string {
 	if _, err := exec.LookPath("qs"); err != nil {
 		return ""
 	}
-	out, _ := exec.Command("qs", "-c", "shell").CombinedOutput()
+	cmd := exec.Command("qs", "-c", "shell")
+
+	// The real ryoku-shell daemon prepends ~/.config/quickshell so imports such
+	// as `shell.services` resolve. Doctor's standalone probe must mirror that
+	// environment or it diagnoses its own incomplete launch as a broken desktop.
+	qmlRoot := filepath.Join(sys.ConfigHome(), "quickshell")
+	for _, name := range []string{"QML_IMPORT_PATH", "QML2_IMPORT_PATH"} {
+		value := qmlRoot
+		if current := os.Getenv(name); current != "" {
+			value += string(os.PathListSeparator) + current
+		}
+		cmd.Env = append(cmd.Environ(), name+"="+value)
+	}
+
+	out, _ := cmd.CombinedOutput()
 	if isLoadFailure(string(out)) {
 		return string(out)
 	}

@@ -341,6 +341,7 @@ EOF
     ryokuNixpkgs.qt6.qt5compat
     ryokuNixpkgs.qt6.qtsvg
     ryokuNixpkgs.qt6.qtimageformats
+    ryokuNixpkgs.kdePackages.kirigami.unwrapped
   ];
 
 
@@ -418,6 +419,7 @@ EOF
 
     bash
     coreutils
+    getent
     findutils
     gnugrep
     gnused
@@ -466,6 +468,7 @@ EOF
     ryokuNixpkgs.qt6.qtimageformats
     ryokuNixpkgs.qt6Packages.qt6ct
     ryokuNixpkgs.kdePackages.syntax-highlighting
+    ryokuNixpkgs.kdePackages.kirigami.unwrapped
 
     # ─────────────────────────────────────────────────────────
     # Session / portals / secrets

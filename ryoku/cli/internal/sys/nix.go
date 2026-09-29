@@ -13,8 +13,20 @@ import (
 // can still exercise the Arch behaviour even when they happen to run on a
 // NixOS development machine.
 func NixBackend() bool {
-	return strings.EqualFold(
+	backend := strings.ToLower(
 		strings.TrimSpace(os.Getenv("RYOKU_UPDATE_BACKEND")),
-		"nix",
 	)
+
+	switch backend {
+	case "nix":
+		return true
+	case "pacman", "arch":
+		return false
+	}
+
+	// The NixOS module installs this marker declaratively. It covers direct
+	// invocations that bypass the packaged wrapper or sessions whose imported
+	// environment predates RYOKU_UPDATE_BACKEND.
+	_, err := os.Stat("/etc/ryoku/nix-system-package-count")
+	return err == nil
 }

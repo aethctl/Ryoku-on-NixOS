@@ -117,6 +117,19 @@ Singleton {
         return null;
     }
 
+    // Window residue uses the compositor workspace id while ext-workspace-v1
+    // exposes the human-facing workspace name. Hyprland normally makes those
+    // identical; niri does not. Consumers need one stable comparison key.
+    function workspaceKey(workspace) {
+        if (!workspace)
+            return "";
+        if (workspace.id !== undefined
+                && workspace.id !== null
+                && String(workspace.id) !== "")
+            return String(workspace.id);
+        return String(workspace.name || "");
+    }
+
     // The workspace shown on the focused output.
     readonly property var focusedWorkspace: {
         const list = root.workspaces;
