@@ -1364,7 +1364,6 @@ in
       ];
 
       after = [
-        "ryoku-session.target"
         "wireplumber.service"
       ];
 
@@ -1576,7 +1575,6 @@ in
       ];
 
       after = [
-        "ryoku-session.target"
         "ryoku-materialize.service"
       ];
 
@@ -1634,7 +1632,6 @@ in
       ];
 
       after = [
-        "ryoku-session.target"
         "ryoku-materialize.service"
       ];
 
