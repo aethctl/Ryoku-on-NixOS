@@ -2,11 +2,19 @@
   description = "Nix packaging for the Ryoku desktop";
 
   inputs = {
+    # Compatibility input for existing consumers which follow their host
+    # nixpkgs. Ryoku-owned packages deliberately do not build from this input.
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+
+    # Fixed package universe for Ryoku itself. Keeping this independent of the
+    # host prevents fetchPnpmDeps and other fixed-output builders from changing
+    # underneath a Ryoku release when the host updates nixos-unstable.
+    ryokuPackagesNixpkgs.url =
+      "github:NixOS/nixpkgs/56c02bc00adcf003215cc4bd996d6efaf4cff188";
 
     glazepkg = {
       url = "github:neur0map/glazepkg";
-      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nixpkgs.follows = "ryokuPackagesNixpkgs";
     };
 
     hermesAgent = {
@@ -36,7 +44,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
+  outputs = { self, nixpkgs, ryokuPackagesNixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
     let
       version =
         builtins.replaceStrings
@@ -57,7 +65,7 @@
         });
       };
 
-      pkgs = import nixpkgs {
+      pkgs = import ryokuPackagesNixpkgs {
         inherit system;
         overlays = [
           quickshellScreencopyFixOverlay

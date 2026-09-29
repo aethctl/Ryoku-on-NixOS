@@ -25,7 +25,7 @@ pkgs.rustPlatform.buildRustPackage rec {
 
     fetcherVersion = 4;
 
-    hash = "sha256-nPUzWf9uGodhRSWX4hXon8uJrL9hAyJPzaZYyoQHfos=";
+    hash = "sha256-L0HRYhFO5A0qqwdiYzN+h28kV7vAqB3up+Zu4ShYnBo=";
   };
 
   pnpmRoot = "ui";

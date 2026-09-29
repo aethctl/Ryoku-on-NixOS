@@ -107,11 +107,14 @@ Add the NixOS port as an input:
 
     ryoku = {
       url = "github:aethctl/Ryoku-on-NixOS";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 }
 ```
+
+Ryoku keeps its own runtime package set pinned independently from the host.
+Do not override that package pin: host `nixpkgs` updates must not change
+Ryoku's fixed-output dependency derivations.
 
 Then import the module in the target NixOS configuration:
 
