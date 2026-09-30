@@ -46,12 +46,32 @@ jobs:
         with:
           determinate: false
 
-      - name: Evaluate packages
+      - name: Validate Ryotunes packages
+        shell: bash
         run: |
-          nix eval --raw .#ryotunes-unwrapped.version
-          nix eval --raw .#ryotunes-unwrapped.drvPath
-          nix eval --raw .#ryoku-ryotunes.drvPath
-          nix flake check --no-build
+          set -euo pipefail
+
+          version="$(nix eval --raw .#ryotunes-unwrapped.version)"
+          test "$version" = "1.1.6"
+
+          unwrapped="$(nix eval --raw .#ryotunes-unwrapped.drvPath)"
+          wrapped="$(nix eval --raw .#ryoku-ryotunes.drvPath)"
+          qml="$(nix eval --raw .#ryoku-qml.drvPath)"
+
+          unwrapped_deps="$(nix-store -qR "$unwrapped")"
+          wrapped_deps="$(nix-store -qR "$wrapped")"
+
+          if grep -Fxq "$qml" <<< "$unwrapped_deps"; then
+            printf 'Rust application unexpectedly depends on Ryoku QML.\\n' >&2
+            exit 1
+          fi
+
+          if ! grep -Fxq "$qml" <<< "$wrapped_deps"; then
+            printf 'Desktop wrapper is missing Ryoku QML.\\n' >&2
+            exit 1
+          fi
+
+          nix build --dry-run --no-link .#ryoku-ryotunes
 
   publish:
     name: Build and cache Ryotunes
