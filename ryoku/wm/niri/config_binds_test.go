@@ -424,3 +424,41 @@ func TestTouchpadBindsDoNotRepeat(t *testing.T) {
 		t.Fatalf("got %d touchpad binds", count)
 	}
 }
+
+func TestNiriScreenshotQmlRunner(t *testing.T) {
+	cases := []struct {
+		id      string
+		monitor bool
+	}{
+		{"shell.screenshot", false},
+		{"shell.screenshotPrint", false},
+		{"shell.screenshotMonitor", true},
+	}
+
+	binds := defaultBinds()
+
+	for _, tc := range cases {
+		t.Run(tc.id, func(t *testing.T) {
+			action := binds[tc.id].action
+
+			for _, expected := range []string{
+				"command -v ryoku-qs",
+				"ryoku-qs -c ryoshot",
+				"qs -c ryoshot",
+				".local/lib/qt6/qml",
+			} {
+				if !strings.Contains(action, expected) {
+					t.Errorf("missing %q in %s", expected, action)
+				}
+			}
+
+			if got := strings.Contains(action, "RYOSHOT_MODE=monitor"); got != tc.monitor {
+				t.Errorf("monitor mode = %v, want %v", got, tc.monitor)
+			}
+
+			if got := strings.Count(action, "flock -n -o /tmp/ryoshot.lock"); got != 2 {
+				t.Errorf("expected both launch paths to retain locking, got %d", got)
+			}
+		})
+	}
+}

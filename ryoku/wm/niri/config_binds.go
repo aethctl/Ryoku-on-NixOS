@@ -52,6 +52,19 @@ const irisCloseCheck = `jq -e '(.barStyle // "iris") == "iris" and .inir.closeCo
 
 const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
 
+// NixOS supplies ryoku-qs with the packaged QML imports. Other
+// distributions retain the existing checkout import path.
+func screenshotLaunchCommand(mode string) string {
+	command := "flock -n -o /tmp/ryoshot.lock "
+	if mode == "monitor" {
+		command += "env RYOSHOT_MODE=monitor "
+	}
+
+	return "if command -v ryoku-qs >/dev/null 2>&1; then " +
+		command + "ryoku-qs -c ryoshot; else " +
+		qmlEnv + " " + command + "qs -c ryoshot; fi"
+}
+
 // defaultBinds maps each catalogue id to niri's expression of it. Compositor
 // behaviours become niri actions; app and shell launches spawn the same commands
 // (shell surfaces go through ryoku-shell, whose openSurface bus is compositor
@@ -164,12 +177,12 @@ func defaultBinds() map[string]niriBind {
 		"shell.voice":             {action: spawnArgs("ryoku-shell", "voice")},
 		"shell.settings":          {action: spawnArgs("ryoku-shell", "hub", "open")},
 		"shell.stash":             {action: spawnArgs("ryoku-shell", "stash")},
-		"shell.screenshot":        {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
+		"shell.screenshot":        {action: spawnSh(screenshotLaunchCommand(""))},
 		// Hyprland gives ryoshot three entry points, so niri gets the same three:
 		// without Print the key a user reaches for does nothing, and monitor mode
 		// would otherwise only be reachable by cycling inside the tool.
-		"shell.screenshotPrint":   {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot")},
-		"shell.screenshotMonitor": {action: spawnSh(qmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot")},
+		"shell.screenshotPrint":   {action: spawnSh(screenshotLaunchCommand(""))},
+		"shell.screenshotMonitor": {action: spawnSh(screenshotLaunchCommand("monitor"))},
 		"shell.colorPicker":       {action: spawnArgs("hyprpicker", "-a")},
 		"shell.restartAudio":      {action: spawnArgs("ryoku-restart-audio")},
 		"shell.inhibitShortcuts":  {action: "toggle-keyboard-shortcuts-inhibit"},
