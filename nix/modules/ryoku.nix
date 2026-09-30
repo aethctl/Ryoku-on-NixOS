@@ -734,6 +734,16 @@ in
   options.programs.ryoku = {
     enable = lib.mkEnableOption "Ryoku desktop";
 
+    binaryCache.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+
+      description = ''
+        Use Ryoku's public Ryotunes binary cache to avoid
+        compiling the music application locally.
+      '';
+    };
+
     shell = lib.mkOption {
       type = lib.types.enum [
         "fish"
@@ -773,6 +783,18 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Public binary cache for independently compiled Ryotunes releases.
+    # Never distribute the private Cachix authentication token.
+    nix.settings = lib.mkIf cfg.binaryCache.enable {
+      substituters = lib.mkAfter [
+        "https://ryotunes.cachix.org"
+      ];
+
+      trusted-public-keys = lib.mkAfter [
+        "ryotunes.cachix.org-1:QNocajCsVm/IAMb8LPOWJi72XwqiexW9ec0UqeXLpGs="
+      ];
+    };
+
     # apple-cursor is part of Ryoku's cursor catalogue and is unfree in nixpkgs.
     nixpkgs.config.allowUnfreePredicate = lib.mkDefault (
       pkg: lib.getName pkg == "apple_cursor"

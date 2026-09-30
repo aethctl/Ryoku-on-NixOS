@@ -22,6 +22,16 @@ pkgs.writeShellApplication {
     assume_yes=0
     dry_run=0
 
+    # Bootstrap the public cache before the new NixOS generation
+    # activates its declarative substituter configuration.
+    cache_url="https://ryotunes.cachix.org"
+    cache_key="ryotunes.cachix.org-1:QNocajCsVm/IAMb8LPOWJi72XwqiexW9ec0UqeXLpGs="
+
+    bootstrap_cache=(
+      --option extra-substituters "$cache_url"
+      --option extra-trusted-public-keys "$cache_key"
+    )
+
     trusted_root_path="${pkgs.lib.makeBinPath [
       pkgs.coreutils
       pkgs.git
@@ -277,7 +287,8 @@ EOF
     printf '\nBuilding NixOS generation...\n'
 
     if ! run_root "$nixos_rebuild" build \
-      --flake "path:$flake_root#$host"
+      --flake "path:$flake_root#$host" \
+      "''${bootstrap_cache[@]}"
     then
       rollback
       echo "ryoku-install: build failed; files restored" >&2
@@ -287,7 +298,8 @@ EOF
     printf '\nSwitching generation...\n'
 
     if ! run_root "$nixos_rebuild" switch \
-      --flake "path:$flake_root#$host"
+      --flake "path:$flake_root#$host" \
+      "''${bootstrap_cache[@]}"
     then
       rollback
       echo "ryoku-install: switch failed; configuration files restored" >&2

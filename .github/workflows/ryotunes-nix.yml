@@ -11,6 +11,8 @@ on:
       - nix/packages/ryotunes-unwrapped.nix
       - nix/packages/ryoku-ryotunes.nix
       - nix/packages/default.nix
+      - nix/modules/ryoku.nix
+      - nix/apps/ryoku-install.nix
       - .github/workflows/ryotunes-nix.yml
 
   pull_request:
@@ -20,6 +22,8 @@ on:
       - nix/packages/ryotunes-unwrapped.nix
       - nix/packages/ryoku-ryotunes.nix
       - nix/packages/default.nix
+      - nix/modules/ryoku.nix
+      - nix/apps/ryoku-install.nix
       - .github/workflows/ryotunes-nix.yml
 
   workflow_dispatch:
