@@ -1,8 +1,21 @@
 {
   pkgs,
   ryotunesSrc,
+  ryokuQml,
 }:
 
+let
+  qmlImports = pkgs.lib.makeSearchPath "lib/qt-6/qml" [
+    ryokuQml
+    pkgs.qt6.qtdeclarative
+    pkgs.qt6.qtmultimedia
+    pkgs.qt6.qtwayland
+    pkgs.qt6.qt5compat
+    pkgs.qt6.qtsvg
+    pkgs.qt6.qtimageformats
+    pkgs.kdePackages.kirigami.unwrapped
+  ];
+in
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "ryoku-ryotunes";
   version = "1.0.6";
@@ -32,6 +45,7 @@ pkgs.rustPlatform.buildRustPackage rec {
 
   nativeBuildInputs = [
     pkgs.pkg-config
+    pkgs.makeWrapper
 
     pkgs.nodejs
     pkgs.pnpm
@@ -172,17 +186,11 @@ pkgs.rustPlatform.buildRustPackage rec {
       matugen/ryotunes.json \
       "$out/share/ryotunes/matugen/ryotunes.json"
 
-    # Do not preserve upstream's /usr/share launcher path.
-    # The client lives inside this immutable Nix derivation.
-    cat > "$out/bin/ryotunes-qml" <<EOF
-#!${pkgs.runtimeShell}
-exec ${pkgs.quickshell}/bin/qs \
-  -p "$out/share/ryotunes/client" \
-  "\$@"
-EOF
-
-    chmod 755 \
-      "$out/bin/ryotunes-qml"
+    # Give both desktop and daemon launches the packaged QML environment.
+    makeWrapper ${pkgs.quickshell}/bin/qs "$out/bin/ryotunes-qml" \
+      --add-flags "-p $out/share/ryotunes/client" \
+      --prefix QML_IMPORT_PATH : "${qmlImports}" \
+      --prefix QML2_IMPORT_PATH : "${qmlImports}"
 
     install -Dm644 \
       packaging/linux/ryotunes.desktop \
