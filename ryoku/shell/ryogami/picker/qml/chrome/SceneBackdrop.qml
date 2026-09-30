@@ -28,7 +28,7 @@ Item {
         if (!root.key)
             return ""
         var e = Library.entry("wallpapers", root.key)
-        return e && e.thumb ? "file://" + e.thumb : ""
+        return e && e.thumb ? Library.fileUrl(e.thumb) : ""
     }
 
     // Blurred small and scaled up: the blur hides the upscale and costs a fraction of a fullscreen pass.

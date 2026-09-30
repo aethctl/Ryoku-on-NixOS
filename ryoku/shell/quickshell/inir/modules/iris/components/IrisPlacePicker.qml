@@ -71,7 +71,7 @@ Rectangle {
             color: islandMark.selected ? IrisStyle.accent
                 : !islandMark.enabled ? IrisStyle.fillHover
                 : islandMark.containsMouse || islandMark.activeFocus ? IrisStyle.text : IrisStyle.textTertiary
-            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
         }
     }
 
@@ -102,7 +102,7 @@ Rectangle {
                 radius: width / 2
                 color: marker.selected ? IrisStyle.accent : marker.containsMouse || marker.activeFocus ? IrisStyle.text : IrisStyle.textTertiary
                 Behavior on width { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
-                Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
             }
         }
     }

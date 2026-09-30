@@ -14,13 +14,17 @@ Item {
     property bool muted: false
     property bool vertical: false
     property color fillColor: IrisStyle.fillStrong
+    property bool readout: false
+    property real cornerCap: IrisStyle.radiusSheet
     signal moved(real value)
     signal iconClicked()
 
     property real dragValue: -1
-    readonly property real shownValue: Math.max(0, Math.min(1, root.dragValue >= 0 ? root.dragValue : root.value))
+    readonly property real shownValue: Math.max(0, Math.min(1, root.dragValue >= 0 ? root.dragValue : (Number.isFinite(root.value) ? root.value : 0)))
     readonly property real thickness: root.vertical ? root.width : root.height
     readonly property real span: root.vertical ? root.height : root.width
+    readonly property real corner: Math.min(root.thickness / 2, root.cornerCap)
+    readonly property real pocket: Math.min(root.thickness, Math.round(52 * IrisStyle.density))
 
     implicitWidth: root.vertical ? Math.round(46 * IrisStyle.density) : 260
     implicitHeight: root.vertical ? 120 : Math.round(44 * IrisStyle.density)
@@ -29,11 +33,12 @@ Item {
     Rectangle {
         id: track
         anchors.fill: parent
-        radius: root.thickness / 2
+        radius: root.corner
         color: IrisStyle.fill
         scale: pointer.pressed ? 1.015 : 1
         Behavior on scale { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
 
+        Readout { ink: IrisStyle.textSecondary }
         Item {
             id: fillClip
             property real length: root.span * root.shownValue
@@ -46,24 +51,25 @@ Item {
             height: root.vertical ? fillClip.length : track.height
             clip: true
             Rectangle {
+                id: fillFace
                 y: -fillClip.y
                 width: track.width
                 height: track.height
-                radius: root.thickness / 2
+                radius: root.corner
                 color: root.muted ? IrisStyle.textTertiary : root.fillColor
+                Readout { ink: IrisStyle.surface }
             }
         }
 
         MaterialSymbol {
-            readonly property real pocket: (root.thickness - iconSize) / 2
-            x: pocket
-            y: root.vertical ? track.height - root.thickness + pocket : pocket
+            x: root.vertical ? (track.width - width) / 2 : (root.pocket - width) / 2
+            y: root.vertical ? track.height - root.pocket + (root.pocket - height) / 2 : (track.height - height) / 2
             text: root.icon
             fill: 1
             iconSize: Math.round((root.vertical ? 19 : 20) * IrisStyle.density)
-            readonly property bool overFill: !root.muted && fillClip.length >= root.thickness * 0.72
+            readonly property bool overFill: !root.muted && fillClip.length >= root.pocket * 0.72
             color: overFill ? IrisStyle.surface : IrisStyle.text
-            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
         }
     }
 
@@ -80,7 +86,7 @@ Item {
             return Math.max(0, Math.min(1, root.vertical ? 1 - mouse.y / Math.max(1, height) : mouse.x / Math.max(1, width)))
         }
         function inPocket(mouse): bool {
-            return root.vertical ? mouse.y > height - root.thickness : mouse.x < root.thickness
+            return root.vertical ? mouse.y > height - root.pocket : mouse.x < root.pocket
         }
         onPressed: mouse => {
             if (inPocket(mouse)) return
@@ -109,5 +115,19 @@ Item {
             pointer.wheelAccumulator -= steps * 120
             root.moved(Math.max(0, Math.min(1, root.value + steps * 0.05)))
         }
+    }
+
+    component Readout: IrisText {
+        property color ink: IrisStyle.text
+        readonly property real inset: Math.round(14 * IrisStyle.density)
+        visible: root.readout && (root.vertical || pointer.containsMouse || root.dragValue >= 0)
+        x: root.vertical ? (track.width - width) / 2 : track.width - width - inset
+        y: root.vertical ? inset : (track.height - height) / 2
+        text: Math.round(root.shownValue * 100)
+        color: ink
+        font.family: IrisStyle.fontNumbers
+        font.features: ({ "tnum": 1 })
+        font.weight: IrisStyle.weight(Font.DemiBold)
+        font.pixelSize: IrisStyle.typeMeta
     }
 }

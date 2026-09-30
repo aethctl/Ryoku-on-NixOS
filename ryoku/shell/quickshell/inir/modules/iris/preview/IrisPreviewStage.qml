@@ -5,18 +5,17 @@ import Quickshell.Widgets
 import inir
 import inir.services
 import inir.modules.iris.style
+import inir.modules.iris.components
 
 ClippingRectangle {
     id: root
     radius: IrisStyle.radiusCard
     color: IrisStyle.fillQuiet
-    Image {
+    IrisWallpaperView {
+        live: false
         anchors.fill: parent
-        source: WallpaperListener.wallpaperUrlForScreen(GlobalStates.focusedScreen)
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        cache: true
-        sourceSize.width: Math.round(Math.max(1, root.width) * 1.2)
-        opacity: status === Image.Ready ? 1 : 0
+        screen: GlobalStates.focusedScreen
+        decodeSize: Qt.size(Math.round(Math.max(1, root.width) * 1.2), 0)
+        opacity: ready ? 1 : 0
     }
 }

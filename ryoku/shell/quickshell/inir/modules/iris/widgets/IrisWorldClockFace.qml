@@ -19,6 +19,18 @@ IrisWidgetFace {
         return delta === 0 ? dayWord : dayWord + ", " + (delta > 0 ? "+" : "−") + hours + " h"
     }
 
+    // The dial fills what the count leaves: one city is the face, four share it.
+    readonly property real contentHeight: root.height - root.padding * 2
+    function dialFor(count: int): real {
+        const text = root.dp(root.widget.showNames ? 22 : 0) + root.dp(root.widget.showOffsets ? 18 : 0)
+        if (root.small)
+            return count === 1 ? Math.round(Math.min(root.contentWidth, root.contentHeight - text) * 0.92)
+                : count === 2 ? Math.round(Math.min(root.contentWidth / 2 - root.dp(8), root.contentHeight - text - root.dp(8)) * 0.9)
+                : root.dp(44)
+        return Math.round(Math.min((root.contentWidth - root.dp(18) * (Math.min(4, count) - 1)) / Math.min(4, Math.max(1, count)),
+            root.contentHeight - text) * (count <= 2 ? 0.86 : 1))
+    }
+
     component City: ColumnLayout {
         id: city
         required property var modelData
@@ -48,7 +60,8 @@ IrisWidgetFace {
         FaceText {
             face: root
             Layout.alignment: Qt.AlignHCenter
-            visible: root.widget.showOffsets && !root.small
+            Layout.maximumWidth: Math.max(city.diameter * 1.35, root.contentWidth)
+            visible: root.widget.showOffsets && (!root.small || root.cities.length === 1)
             text: root.shift(city.index)
             color: root.inkTertiary
             size: 11
@@ -67,12 +80,12 @@ IrisWidgetFace {
     GridLayout {
         visible: !root.large
         anchors.centerIn: parent
-        columns: root.small ? 2 : 4
+        columns: root.small ? Math.min(2, Math.max(1, root.cities.length)) : Math.min(4, Math.max(1, root.cities.length))
         columnSpacing: root.small ? root.dp(14) : root.dp(18)
         rowSpacing: root.dp(6)
         Repeater {
             model: root.large ? [] : root.cities
-            City { diameter: root.small ? root.dp(44) : root.dp(58) }
+            City { diameter: root.dialFor(root.cities.length) }
         }
     }
 
@@ -93,7 +106,7 @@ IrisWidgetFace {
                     visible: row.index > 0
                     Layout.fillWidth: true
                     Layout.preferredHeight: 1
-                    color: IrisStyle.hairline
+                    color: root.hairline
                 }
                 RowLayout {
                     Layout.fillWidth: true

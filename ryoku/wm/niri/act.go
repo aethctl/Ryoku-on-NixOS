@@ -192,10 +192,13 @@ func runAct(args []string) error {
 		return perform(action("ToggleOverview", map[string]any{}))
 
 	case wm.ActionNightLightOn:
-		return nightlightStart("gammastep", "-m", "wayland", "-O", strconv.Itoa(nightlightTemp(rest)))
+		// -T must sit strictly above -t or wlsunset refuses the config; the
+		// fixed high keeps the run pinned at the user's temperature (see
+		// nightlightStart).
+		return nightlightStart("wlsunset", "-t", strconv.Itoa(nightlightTemp(rest)), "-T", "30000")
 
 	case wm.ActionNightLightOff:
-		nightlightStop("gammastep")
+		nightlightStop("wlsunset")
 		return nil
 
 	case wm.ActionInputTouchpad:
@@ -255,7 +258,6 @@ func touchpadAct(args []string) error {
 		mode = args[0]
 	}
 	off := touchpadDisabled()
-	wasOff := off
 	switch mode {
 	case "status":
 		if off {
@@ -296,7 +298,7 @@ func touchpadAct(args []string) error {
 	if err := writeOverlayKdl("settings.kdl", genSettings(loadStore(storePath()))); err != nil {
 		return err
 	}
-	if mode != "restore" && off != wasOff {
+	if mode != "restore" {
 		if off {
 			touchpadNotify("Touchpad", "Off")
 		} else {
@@ -653,10 +655,12 @@ func nightlightTemp(args []string) int {
 }
 
 // nightlightStart replaces any running backend with a fresh one warmed to the
-// temperature. gammastep -m wayland -O sets the temperature over
-// wlr-gamma-control and pauses until killed, so it is detached (its own session,
-// stdio to /dev/null, released) to outlive this short-lived invocation; niri
-// restores the gamma when it goes away.
+// temperature. wlsunset with no location computes a polar-night trajectory and
+// sits at its low temperature (-t) until killed, so the night light is exactly
+// as warm as the user set, day or night; the fixed high (-T) only satisfies
+// the validation that high must exceed low. The backend is detached (its own
+// session, stdio to /dev/null, released) to outlive this short-lived
+// invocation; niri restores the gamma when it goes away.
 func nightlightStart(argv ...string) error {
 	nightlightStop(argv[0])
 	null, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
@@ -676,39 +680,21 @@ func nightlightStart(argv ...string) error {
 // nightlightStop signals every process of this uid whose comm is name, which is
 // how nightlight.off stops the backend without a pkill fork. comm truncates at
 // 15 characters; the backend name fits, so an exact compare is right.
-
-func nightlightProcessMatches(pid, name string) bool {
-	b, err := os.ReadFile("/proc/" + pid + "/comm")
-	if err == nil && strings.TrimSpace(string(b)) == name {
-		return true
-	}
-
-	// NixOS commonly wraps executables. The kernel comm then names the hidden
-	// wrapped binary (for example .gammastep-wrap), while argv[0] still names
-	// the public command that Ryoku launched. Accept that public executable name
-	// as the process identity too.
-	raw, err := os.ReadFile("/proc/" + pid + "/cmdline")
-	if err != nil || len(raw) == 0 {
-		return false
-	}
-
-	argv0 := strings.SplitN(string(raw), "\x00", 2)[0]
-	return filepath.Base(argv0) == name
-}
-
 func nightlightStop(name string) {
 	ents, err := os.ReadDir("/proc")
 	if err != nil {
 		return
 	}
-
 	for _, e := range ents {
 		pid, err := strconv.Atoi(e.Name())
 		if err != nil {
 			continue
 		}
-
-		if nightlightProcessMatches(e.Name(), name) {
+		b, err := os.ReadFile("/proc/" + e.Name() + "/comm")
+		if err != nil {
+			continue
+		}
+		if strings.TrimSpace(string(b)) == name {
 			_ = syscall.Kill(pid, syscall.SIGTERM)
 		}
 	}

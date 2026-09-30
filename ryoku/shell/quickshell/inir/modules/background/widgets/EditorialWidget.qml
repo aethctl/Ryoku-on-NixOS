@@ -126,44 +126,46 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 8
-            RowLayout {
-                Repeater {
-                    model: [ { value: "poster", label: Translation.tr("Poster") },
-                        { value: "quote", label: Translation.tr("Quote") },
-                        { value: "label", label: Translation.tr("Label") } ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        buttonText: modelData.label
-                        toggled: root.composition === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Composition")
+                WidgetQuickChoices {
+                    current: root.composition
+                    model: [
+                        { value: "poster", icon: "view_quilt", label: Translation.tr("Poster") },
+                        { value: "quote", icon: "format_quote", label: Translation.tr("Quote") },
+                        { value: "label", icon: "label", label: Translation.tr("Label") }
+                    ]
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-            MaterialTextField {
-                Layout.fillWidth: true
-                placeholderText: Translation.tr("Title")
-                text: String(root._readConfigKey("title") ?? "Make room for wonder.")
-                onEditingFinished: root._setOutputValue("title", text)
+            WidgetQuickSection {
+                title: Translation.tr("Words")
+                MaterialTextField {
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Title")
+                    text: String(root._readConfigKey("title") ?? "Make room for wonder.")
+                    onEditingFinished: root._setOutputValue("title", text)
+                }
+                MaterialTextField {
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Caption")
+                    text: String(root._readConfigKey("caption") ?? "A LITTLE EVERY DAY")
+                    onEditingFinished: root._setOutputValue("caption", text)
+                }
+                MaterialTextField {
+                    Layout.fillWidth: true
+                    placeholderText: Translation.tr("Footer")
+                    text: String(root._readConfigKey("footer") ?? "YOUR OWN PERSPECTIVE")
+                    onEditingFinished: root._setOutputValue("footer", text)
+                }
             }
-            MaterialTextField {
+            WidgetQuickToggle {
                 Layout.fillWidth: true
-                placeholderText: Translation.tr("Caption")
-                text: String(root._readConfigKey("caption") ?? "A LITTLE EVERY DAY")
-                onEditingFinished: root._setOutputValue("caption", text)
-            }
-            MaterialTextField {
-                Layout.fillWidth: true
-                placeholderText: Translation.tr("Footer")
-                text: String(root._readConfigKey("footer") ?? "YOUR OWN PERSPECTIVE")
-                onEditingFinished: root._setOutputValue("footer", text)
-            }
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                buttonText: Translation.tr("Decorative accents")
-                toggled: root.showAccent
-                onClicked: root._setOutputValue("showAccent", !root.showAccent)
+                iconName: "auto_awesome"
+                label: Translation.tr("Decorative accents")
+                checked: root.showAccent
+                onToggled: root._setOutputValue("showAccent", !root.showAccent)
             }
         }
     }

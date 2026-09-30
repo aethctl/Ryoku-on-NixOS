@@ -7,20 +7,20 @@ import inir.modules.iris.style
 Item {
     id: root
     property string source: ""
-    property bool circular: true
-    property real radius: circular ? width / 2 : 12 * IrisStyle.density
+    property bool circular: false
+    property real radius: circular ? width / 2 : Math.min(IrisStyle.iconRadius(width), IrisStyle.radiusTile)
     property real decodeSize: 0
     implicitWidth: 64 * IrisStyle.density
     implicitHeight: implicitWidth
-    Image {
+    IrisImage {
         id: cover
         anchors.fill: parent
         source: root.source
-        sourceSize: root.decodeSize > 0 ? Qt.size(Math.ceil(root.decodeSize), Math.ceil(root.decodeSize))
-            : Qt.size(Math.ceil(root.width * 2), Math.ceil(root.height * 2))
-        asynchronous: true
-        fillMode: Image.PreserveAspectCrop
+        decodeWidth: root.decodeSize > 0 ? root.decodeSize : root.width
+        decodeHeight: root.decodeSize > 0 ? root.decodeSize : root.height
         visible: false
+        // An effect samples this texture without mipmaps; a mipmapped one makes Qt rebuild its filtering.
+        mipmap: false
     }
     Item {
         id: roundMask
@@ -44,7 +44,7 @@ Item {
     }
     MaterialSymbol {
         anchors.centerIn: parent
-        visible: cover.status !== Image.Ready
+        visible: root.source.length === 0 || cover.status === Image.Error || cover.status === Image.Null
         text: "music_note"
         iconSize: root.width * 0.55
         color: IrisStyle.subtext

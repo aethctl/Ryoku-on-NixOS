@@ -50,10 +50,15 @@ func (d *daemon) dispatchRequest(req *request) response {
 		return ok(req.ID, map[string]interface{}{"count": len(rows), "wallpapers": rows})
 
 	case "wall.apply":
-		wpType := strParam(p, "type", "static")
+		// A caller that only has a file (a fresh download) leaves the type to its extension.
+		path := strParam(p, "path", "")
+		wpType := strParam(p, "type", "")
+		if wpType == "" {
+			wpType = typeOf(path)
+		}
 		switch wpType {
 		case "static", "video":
-			if err := d.applyWallpaper(wpType, strParam(p, "path", ""), "set", strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
+			if err := d.applyWallpaper(wpType, path, "set", strsParam(p, "outputs"), muteParam(p), volumeParam(p)); err != nil {
 				return errResp(req.ID, 4, err.Error())
 			}
 		case "we":

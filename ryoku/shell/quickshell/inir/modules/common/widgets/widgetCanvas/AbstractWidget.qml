@@ -14,6 +14,9 @@ Item {
     property bool draggable: true
     property real dragThreshold: 6
     property bool dragAboveContent: false
+    // An open hand everywhere reads as "this is a handle" even over the widget's own controls. Hosts
+    // that have an edit mode show it only there; the drag itself still works with the arrow.
+    property bool grabCursor: true
     property bool dragMoved: false
     // MouseArea releases its pressed/drag flags before emitting released.
     // Keep placement bindings suspended until the consumer commits the drop.
@@ -43,7 +46,8 @@ Item {
         enabled: root.draggable
         drag.target: root.draggable ? root : undefined
         drag.threshold: root.dragThreshold
-        cursorShape: (root.draggable && pressed) ? Qt.ClosedHandCursor : root.draggable ? Qt.OpenHandCursor : Qt.ArrowCursor
+        cursorShape: root.draggable && drag.active ? Qt.ClosedHandCursor
+            : root.draggable && root.grabCursor ? Qt.OpenHandCursor : Qt.ArrowCursor
         onPressed: {
             root._dragSessionActive = true
             startX = root.x

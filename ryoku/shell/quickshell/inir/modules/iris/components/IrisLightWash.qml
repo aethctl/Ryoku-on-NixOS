@@ -10,10 +10,12 @@ Rectangle {
     property color light: "transparent"
     property string from: "top"
     property real presence: 1
+    // Inside a clip the wash takes no corner of its own: rounding it again under the clip dims it a pixel early on every curve and leaves a dark rim.
+    property real shapeRadius: root.radius
     readonly property bool across: root.from === "left" || root.from === "right"
     readonly property bool reversed: root.from === "bottom" || root.from === "right"
     readonly property real extent: Math.max(1, root.across ? root.width : root.height)
-    readonly property real fall: Math.min(0.7, Math.max(0.12, Math.max(IrisStyle.lightReach, 1.5 * root.radius) / root.extent))
+    readonly property real fall: Math.min(0.7, Math.max(0.12, Math.max(IrisStyle.lightReach, 1.5 * root.shapeRadius) / root.extent))
     function at(position: real): real { return root.reversed ? 1 - position : position }
 
     visible: IrisStyle.auraStrength > 0 && root.light.a > 0

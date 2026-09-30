@@ -57,8 +57,87 @@ Singleton {
         const frame = root.videoFirstFrames[clean]
         if (frame)
             return frame.startsWith("file://") ? frame : "file://" + frame
-        root.ensureVideoFirstFrame(clean)
+        // Caching writes videoFirstFrames, which the calling binding just read: deferred, or it loops.
+        Qt.callLater(root.ensureVideoFirstFrame, clean)
         return ""
+    }
+
+    // ── Scaled playback ────────────────────────────────────────────────────
+    // A live wallpaper is decoded no larger than it is drawn: a 4K file behind
+    // a 1080p output plays from a cached copy at that height. The copy script
+    // symlinks the original when it is already small enough.
+    readonly property string _videoPlaybackDir: (Quickshell.env("XDG_CACHE_HOME")
+        || (Quickshell.env("HOME") + "/.cache")) + "/ryoku/inir/video_playback"
+    readonly property var _videoPlaybackHeights: [360, 540, 720, 1080, 1440, 2160]
+    readonly property string _videoPlaybackScript: `${FileUtils.trimFileProtocol(Directories.scriptPath)}/videos/video-playback-copy.sh`
+    // key -> "" while checking, "building" while the copy is made, the path to play, or "original"
+    property var videoPlaybackCopies: ({})
+    property var _videoPlaybackQueue: []
+
+    function videoPlaybackPath(path: string, height: int): string {
+        const clean = FileUtils.trimFileProtocol(String(path ?? ""))
+        if (!clean || !root.isVideoFile(clean) || height <= 0)
+            return clean
+        const tier = root._videoPlaybackHeights.find(h => h >= height) ?? 0
+        if (!tier)
+            return clean
+        const key = clean + "@" + tier
+        const state = root.videoPlaybackCopies[key]
+        if (state === undefined) {
+            // Recording the request writes the map the calling binding just read.
+            Qt.callLater(root._requestVideoPlaybackCopy, clean, tier)
+            return ""
+        }
+        if (state === "") return ""
+        if (state === "building" || state === "original") return clean
+        return state
+    }
+
+    function _setVideoPlaybackState(key: string, state: string): void {
+        const copy = Object.assign({}, root.videoPlaybackCopies)
+        copy[key] = state
+        root.videoPlaybackCopies = copy
+    }
+
+    function _requestVideoPlaybackCopy(path: string, tier: int): void {
+        const key = path + "@" + tier
+        if (root.videoPlaybackCopies[key] !== undefined)
+            return
+        root._setVideoPlaybackState(key, "")
+        root._videoPlaybackQueue = root._videoPlaybackQueue.concat([{ key: key, path: path, tier: tier,
+            fps: tier <= 540 ? 30 : 0,
+            output: root._videoPlaybackDir + "/" + Qt.md5(path) + "-" + tier + (tier <= 540 ? "-30" : "") + ".mp4",
+            check: true }])
+        root._runVideoPlaybackQueue()
+    }
+
+    function _runVideoPlaybackQueue(): void {
+        if (_videoPlaybackProc.running || root._videoPlaybackQueue.length === 0)
+            return
+        // Checks jump the queue: a cached copy should never wait behind a transcode.
+        const queue = root._videoPlaybackQueue
+        const at = queue.findIndex(job => job.check)
+        const job = queue[at >= 0 ? at : 0]
+        root._videoPlaybackQueue = queue.filter((_, i) => i !== (at >= 0 ? at : 0))
+        _videoPlaybackProc.job = job
+        _videoPlaybackProc.command = [root._videoPlaybackScript].concat(job.check ? ["--check"] : [])
+            .concat([job.path, job.output, String(job.tier), String(job.fps)])
+        _videoPlaybackProc.running = true
+    }
+
+    Process {
+        id: _videoPlaybackProc
+        property var job: null
+        onExited: exitCode => {
+            const job = _videoPlaybackProc.job
+            if (job?.check && exitCode === 1) {
+                root._setVideoPlaybackState(job.key, "building")
+                root._videoPlaybackQueue = root._videoPlaybackQueue.concat([Object.assign({}, job, { check: false })])
+            } else if (job) {
+                root._setVideoPlaybackState(job.key, exitCode === 0 ? job.output : "original")
+            }
+            root._runVideoPlaybackQueue()
+        }
     }
 
     function internalPreviewFor(monitorName: string, fallbackPath: string): string {
@@ -281,6 +360,16 @@ Singleton {
         const clean = FileUtils.trimFileProtocol(String(path ?? ""))
         return clean.length > 0 && clean === root.effectiveWallpaperPath
     }
+    // The frame's shuffle: a random file from the browsed folder, applied through
+    // the same daemon path as the picker's Apply.
+    function randomFromCurrentFolder(darkMode = false, monitorName = "", target = ""): void {
+        if (folderModelImpl.count === 0)
+            return
+        const filePath = folderModelImpl.get(Math.floor(Math.random() * folderModelImpl.count), "filePath")
+        if (filePath)
+            root.applySelectionTarget(String(filePath), target, monitorName)
+    }
+
     function applySelectionTarget(path: string, target: string, monitorName: string): void {
         const clean = FileUtils.trimFileProtocol(String(path ?? ""))
         if (!clean)

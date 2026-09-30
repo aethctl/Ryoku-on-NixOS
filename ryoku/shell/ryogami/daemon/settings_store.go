@@ -135,8 +135,31 @@ func userRyogami(key string) (interface{}, bool) {
 		}
 		return v, true
 	}
+	// A map read must see queued writes to its children too: they reach the file only on flush.
+	var queued map[string]interface{}
+	for k, v := range settingsPending {
+		if strings.HasPrefix(k, key+".") {
+			if queued == nil {
+				queued = map[string]interface{}{}
+			}
+			queued[k] = v
+		}
+	}
 	settingsMu.Unlock()
-	return lookupDotted(loadRyogamiTree(), key)
+	tree := loadRyogamiTree()
+	if len(queued) > 0 {
+		if tree == nil {
+			tree = map[string]interface{}{}
+		}
+		for k, v := range queued {
+			if isTombstone(v) {
+				deleteDotted(tree, k)
+			} else {
+				setDotted(tree, k, v)
+			}
+		}
+	}
+	return lookupDotted(tree, key)
 }
 
 func (d *daemon) setting(key string) interface{} { return settingValue(key) }

@@ -2,17 +2,29 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Layouts
+import inir
 import inir.modules.common
 import inir.modules.common.widgets
+import inir.modules.iris.style
+import inir.modules.iris.components
 import inir.services
 
+// The quick-controls sheet of a widget drawn by the ii family (or a Material-design widget under
+// iRiS): the widget's name and a close button, then its pages. Its width comes from its content,
+// bounded by the screen.
 ColumnLayout {
     id: root
 
     required property real availableWidth
     required property real availableHeight
     property string title: Translation.tr("Quick controls")
+    property string glyph: "widgets"
+    property color tint: IrisStyle.accent
     property real regularWidth: 360
+    signal closeRequested()
+
+    readonly property bool iris: (Config.options?.panelFamily ?? "ii") === "iris"
+    readonly property real d: root.iris ? IrisStyle.density : 1
     readonly property bool dense: availableHeight < 760
     readonly property bool wideDense: dense && availableWidth >= 480
     readonly property int optionColumns: wideDense ? 4 : 3
@@ -20,42 +32,46 @@ ColumnLayout {
     readonly property real contentNaturalWidth: contentColumn.implicitWidth
     readonly property real resolvedWidth: {
         const safeWidth = Math.max(0, root.availableWidth)
-        const natural = Math.max(244, root.regularWidth,
-            root.contentNaturalWidth)
-        const responsive = root.dense ? Math.max(480, natural) : natural
-        return Math.min(safeWidth, root.dense ? Math.min(620, responsive) : responsive)
+        const natural = Math.max(Math.round(300 * root.d), root.regularWidth, root.contentNaturalWidth)
+        return Math.min(safeWidth, Math.min(Math.round(440 * root.d), natural))
     }
 
     default property alias contentData: contentColumn.data
 
     implicitWidth: resolvedWidth
     width: resolvedWidth
-    spacing: dense ? 8 : 12
+    spacing: Math.round(12 * root.d)
 
     RowLayout {
         Layout.fillWidth: true
-        spacing: 5
+        spacing: Math.round(8 * root.d)
 
-        MaterialSymbol {
-            text: "tune"
-            iconSize: 18
-            color: Appearance.colors.colSubtext
+        WidgetIdentityMark {
+            glyph: root.glyph
+            tint: root.tint
         }
         StyledText {
-            text: root.title
-            color: Appearance.colors.colOnLayer2
             Layout.fillWidth: true
+            text: root.title
             elide: Text.ElideRight
-            font.pixelSize: Appearance.font.pixelSize.normal
-            font.weight: Font.DemiBold
-            font.capitalization: Font.Capitalize
+            color: root.iris ? IrisStyle.text : Appearance.colors.colOnLayer2
+            font.family: root.iris ? IrisStyle.fontTitle : Appearance.font.family.title
+            font.pixelSize: root.iris ? IrisStyle.typeTitle : Appearance.font.pixelSize.normal
+            font.weight: root.iris ? IrisStyle.weight(Font.DemiBold) : Font.DemiBold
         }
-        Item { Layout.fillWidth: true }
+        WidgetEditAction {
+            iconName: "close"
+            label: Translation.tr("Close")
+            compact: true
+            implicitHeight: Math.round(28 * root.d)
+            iconSize: Math.round(16 * root.d)
+            onClicked: root.closeRequested()
+        }
     }
 
     ColumnLayout {
         id: contentColumn
         Layout.fillWidth: true
-        spacing: root.dense ? 6 : 8
+        spacing: Math.round(14 * root.d)
     }
 }

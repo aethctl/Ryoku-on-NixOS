@@ -20,10 +20,7 @@ func restoreDaemon(t *testing.T) (*daemon, string) {
 	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
 	d := &daemon{surface: newWallSurface()}
 	d.cfg.Paths.Cache = cache
-	if err := os.MkdirAll(d.config().stateDir(), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return d, d.config().stateDir()
+	return d, cache
 }
 
 // A stored static choice whose file is not present yet must be reported as

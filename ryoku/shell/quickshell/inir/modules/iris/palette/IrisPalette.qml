@@ -4,7 +4,6 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Wayland
 import inir
 import inir.services
 import inir.services.deferred
@@ -16,28 +15,115 @@ import inir.modules.iris.frame
 import inir.modules.iris.style
 import inir.modules.iris.components
 import inir.modules.iris.pieces
-import inir.modules.iris.field as Field
+import inir.modules.iris.settings
 
-PanelWindow {
+// Spotlight lives in the chassis window of its output, so its body, its content and the Island it grows
+// from are one surface: drawn and moved in the same frame.
+Item {
     id: root
+
+    property var screen: null
+    readonly property bool here: (root.screen?.name ?? "") === (GlobalStates.focusedScreen?.name ?? "")
+    readonly property bool present: root.here && (GlobalStates.searchOpen || (content.item?.progress ?? 0) > 0)
+    readonly property bool armed: root.here && GlobalStates.searchOpen && (content.item?.armed ?? false)
 
     readonly property var options: Config.options?.iris?.palette ?? ({})
     readonly property int configuredResultLimit: Math.max(3, Math.min(14, Number(root.options?.maxResults ?? 8)))
     readonly property int heightResultLimit: Math.max(3, Math.floor(
         Math.max(180, ((root.screen?.height ?? 1080) * 0.72) - (120 * IrisStyle.density))
         / Math.max(42, 50 * IrisStyle.density)))
-    readonly property int resultLimit: Math.min(root.configuredResultLimit, root.heightResultLimit)
+    readonly property int clipboardResultLimit: Math.max(3, Math.min(20, Number(root.options?.clipboardResults ?? 8)))
+    readonly property int clipboardHeightLimit: Math.max(3, Math.floor(
+        Math.max(180, ((root.screen?.height ?? 1080) * 0.72) - (120 * IrisStyle.density))
+        / Math.max(48, 52 * IrisStyle.density)))
+    readonly property int resultLimit: root.clipboardMode
+        ? Math.min(root.clipboardResultLimit, root.clipboardHeightLimit)
+        : Math.min(root.configuredResultLimit, root.heightResultLimit)
     function edgeClear(edge: string): real {
         let held = IrisFrame.inset(edge)
         if ((Config.options?.iris?.dock?.enable ?? true) && IrisFrame.dockEdge === edge)
             held = Math.max(held, IrisFrame.band + IrisFrame.dockBand + IrisFrame.dockMargin)
-        return held - IrisFrame.band + Math.round(12 * IrisStyle.density)
+        return held - IrisFrame.band + IrisFrame.musicReach(edge) + Math.round(12 * IrisStyle.density)
     }
     readonly property bool mathQuery: /[0-9]/.test(LauncherSearch.query)
-    readonly property var searchResults: (LauncherSearch.results ?? [])
+    readonly property var launcherResults: (LauncherSearch.results ?? [])
         .filter(entry => String(entry?.name ?? "").length > 0
             && (root.mathQuery || entry?.type !== Translation.tr("Math")))
-        .slice(0, root.resultLimit)
+    // A plain query also reaches iRiS's switches, actions and options (IrisSearch): a strong one leads when no
+    // app name starts with what was typed, the rest follow the apps; the calculator, command and web come last.
+    readonly property bool plainQuery: {
+        const prefix = Config.options?.search?.prefix ?? ({})
+        const q = LauncherSearch.query
+        return q.trim().length > 0 && ![prefix.clipboard ?? ";", prefix.emojis ?? ":", prefix.math ?? "=", prefix.shellCommand ?? "$",
+            prefix.webSearch ?? "?", prefix.action ?? "/", prefix.app ?? ">"].some(key => String(key).length > 0 && q.startsWith(key))
+    }
+    function rowOf(entry: var): var {
+        const opens = entry.kind === "setting" || entry.kind === "section"
+        const widget = entry.kind === "widget"
+        return { name: entry.name, comment: entry.detail, iconName: entry.icon, tint: entry.tint, area: entry.areaName, areaTint: entry.tint,
+            iconType: LauncherSearchResult.IconType.Material,
+            type: opens ? Translation.tr("Settings") : widget ? Translation.tr("Widget") : Translation.tr("Action"),
+            verb: opens ? Translation.tr("Open") : widget ? (entry.on ? Translation.tr("Show") : Translation.tr("Add"))
+                : entry.kind === "switch" ? Translation.tr("Switch") : entry.pick ? Translation.tr("Apply") : Translation.tr("Run"),
+            isOn: typeof entry.isOn === "function" ? entry.isOn : null, pick: entry.pick, keepOpen: entry.keepOpen, execute: entry.run, fuzzy: true }
+    }
+    readonly property var blendedResults: {
+        if (!root.plainQuery) return root.launcherResults
+        const hits = IrisSearch.search(LauncherSearch.query).filter(hit => hit.score >= 0.7)
+        const acts = hits.filter(hit => hit.entry.kind !== "setting" && hit.entry.kind !== "section").slice(0, 4)
+        const opens = hits.filter(hit => hit.entry.kind === "setting" || hit.entry.kind === "section").slice(0, 3)
+        // Apps keep the lead, but three of them are enough to leave room for what the query also names.
+        const allApps = root.launcherResults.filter(entry => entry?.type === Translation.tr("App"))
+        const apps = hits.length > 0 ? allApps.slice(0, 3) : allApps
+        const rest = root.launcherResults.filter(entry => entry?.type !== Translation.tr("App"))
+        const typed = IrisSearch.fold(LauncherSearch.query).trim()
+        const appLeads = apps.length > 0 && IrisSearch.fold(apps[0].name).startsWith(typed)
+        const best = acts.concat(opens).sort((a, b) => b.score - a.score)[0] ?? null
+        if (best && best.score >= 0.9 && !appLeads) {
+            const others = acts.concat(opens).filter(hit => hit !== best)
+            return [root.rowOf(best.entry)].concat(apps, others.filter(hit => acts.includes(hit)).map(hit => root.rowOf(hit.entry)),
+                others.filter(hit => opens.includes(hit)).map(hit => root.rowOf(hit.entry)), allApps.slice(apps.length), rest)
+        }
+        return apps.concat(acts.map(hit => root.rowOf(hit.entry)), opens.map(hit => root.rowOf(hit.entry)), allApps.slice(apps.length), rest)
+    }
+    // "/" is a list to browse and scrolls; a plain query stays a short answer.
+    readonly property var searchResults: root.actionMode ? root.actionResults.slice(0, 120)
+        : root.blendedResults.slice(0, root.resultLimit + (root.clipboardMode ? root.clipboardExtra : 0))
+    // The clipboard opens on a first page (Settings › Spotlight › Entries shown) and keeps going as you
+    // scroll or step past its end, through the whole history.
+    property int clipboardExtra: 0
+    readonly property int clipboardTotal: root.clipboardMode ? root.launcherResults.length : 0
+    function loadMoreClipboard(): void {
+        if (root.clipboardMode && root.searchResults.length < root.clipboardTotal) root.clipboardExtra += root.resultLimit
+    }
+
+    // "/" lists what iRiS can flip, apply or run from here, grouped by area; typed words narrow it the forgiving
+    // way IrisSearch matches. A switch stays open to show its new state; the rest run and close.
+    readonly property string actionPrefix: Config.options?.search?.prefix?.action ?? "/"
+    readonly property bool actionMode: LauncherSearch.query.startsWith(root.actionPrefix)
+    // One header per area: areas follow their best row, rows keep their rank inside the area.
+    function byArea(entries: var): var {
+        const order = [], groups = ({})
+        for (const entry of entries) {
+            const key = String(entry.areaName ?? "")
+            if (!groups[key]) { groups[key] = []; order.push(key) }
+            groups[key].push(entry)
+        }
+        return order.reduce((out, key) => out.concat(groups[key]), [])
+    }
+    readonly property var actionResults: {
+        if (!root.actionMode) return []
+        const query = LauncherSearch.query.slice(root.actionPrefix.length).trim()
+        if (query.length > 0) return root.byArea(IrisSearch.search(query).map(hit => hit.entry)).map(entry => root.rowOf(entry))
+        // Nothing typed: the everyday switches first, then everything else by area. While widgets are being
+        // arranged, the widgets lead: that is what "/" was asked for there.
+        const doable = IrisSearch.entries().filter(entry => entry.kind !== "setting" && entry.kind !== "section")
+        const arranging = GlobalStates.widgetEditMode ? doable.filter(entry => entry.kind === "widget") : []
+        const everyday = doable.filter(entry => entry.priority < 50).sort((a, b) => a.priority - b.priority)
+        return arranging.map(entry => root.rowOf(entry))
+            .concat(everyday.map(entry => Object.assign(root.rowOf(entry), { area: Translation.tr("Suggested"), areaTint: null })))
+            .concat(root.byArea(doable.filter(entry => entry.priority >= 50 && !(GlobalStates.widgetEditMode && entry.kind === "widget"))).map(entry => root.rowOf(entry)))
+    }
 
     readonly property var island: GlobalStates.irisIslandGeometry?.[root.screen?.name ?? ""] ?? null
     readonly property bool fromIsland: String(root.options?.opens ?? "floating") === "island"
@@ -45,6 +131,7 @@ PanelWindow {
     readonly property bool islandBottom: root.island?.bottomEdge ?? false
     readonly property string islandSide: root.island?.vertical ? String(root.island.edge) : ""
     readonly property bool joinsEdge: root.fromIsland && IrisFrame.notch
+    readonly property bool joinsFrame: root.joinsEdge && IrisFrame.framed
 
     readonly property bool browsing: LauncherSearch.query.length === 0
     readonly property var suggestions: {
@@ -95,36 +182,7 @@ PanelWindow {
         return root.pointerSelectionArmed
     }
 
-    visible: GlobalStates.searchOpen || (content.item?.progress ?? 0) > 0
-    IrisOutputHold {
-        id: outputHold
-        wanted: GlobalStates.focusedScreen
-        live: root.visible
-    }
-    screen: outputHold.output
-    color: "transparent"
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.namespace: "quickshell:iris-palette"
-    WlrLayershell.keyboardFocus: GlobalStates.searchOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-    anchors { top: true; bottom: true; left: true; right: true }
-    margins {
-        left: IrisFrame.band
-        right: IrisFrame.band
-        top: IrisFrame.band
-        bottom: IrisFrame.band
-    }
-    mask: GlobalStates.searchOpen && (content.item?.armed ?? false)
-        ? (GlobalStates.irisStudioRect ? studioMask : null) : capsuleRegion
-    IrisStudioMask {
-        id: studioMask
-        canvasWidth: root.width
-        canvasHeight: root.height
-        originX: IrisFrame.band
-        originY: IrisFrame.band
-        screenName: root.screen?.name ?? ""
-    }
-    Region { id: capsuleRegion; item: content.item?.surfaceItem ?? null }
+    visible: root.present
 
     function focusInput(): void {
         Qt.callLater(() => content.item?.focusInput())
@@ -135,12 +193,12 @@ PanelWindow {
         LauncherSearch.query = GlobalStates.irisSpotlightQuery
         GlobalStates.irisSpotlightQuery = ""
     }
-    Component.onCompleted: if (GlobalStates.searchOpen) { root.takeRequestedQuery(); root.focusInput() }
+    Component.onCompleted: if (root.here && GlobalStates.searchOpen) { root.takeRequestedQuery(); root.focusInput() }
 
     Connections {
         target: GlobalStates
         function onSearchOpenChanged(): void {
-            if (!GlobalStates.searchOpen) return
+            if (!GlobalStates.searchOpen || !root.here) return
             root.selectedIndex = 0
             root.disarmPointerSelection(true)
             root.takeRequestedQuery()
@@ -154,6 +212,7 @@ PanelWindow {
         target: LauncherSearch
         function onQueryChanged(): void {
             root.selectedIndex = 0
+            root.clipboardExtra = 0
             root.disarmPointerSelection()
         }
     }
@@ -162,13 +221,14 @@ PanelWindow {
         const entry = root.visibleResults[root.selectedIndex]
         if (!entry || typeof entry.execute !== "function") return
         entry.execute()
-        GlobalStates.searchOpen = false
+        if (!entry.keepOpen) GlobalStates.searchOpen = false
     }
 
     function moveSelection(step: int): void {
         const count = root.visibleResults.length
         if (count === 0) return
-        root.selectedIndex = Math.max(0, Math.min(count - 1, root.selectedIndex + step))
+        if (step > 0 && root.selectedIndex + step >= count - 2) root.loadMoreClipboard()
+        root.selectedIndex = Math.max(0, Math.min(root.visibleResults.length - 1, root.selectedIndex + step))
     }
 
     function handleKey(event): void {
@@ -197,7 +257,7 @@ PanelWindow {
 
     Shortcut {
         sequence: "Escape"
-        enabled: GlobalStates.searchOpen
+        enabled: root.here && GlobalStates.searchOpen
         onActivated: {
             if (LauncherSearch.query.length > 0) LauncherSearch.query = ""
             else GlobalStates.searchOpen = false
@@ -206,6 +266,8 @@ PanelWindow {
 
     MouseArea {
         anchors.fill: parent
+        anchors.margins: -IrisFrame.band
+        enabled: root.armed
         onClicked: GlobalStates.searchOpen = false
     }
 
@@ -225,7 +287,14 @@ PanelWindow {
             readonly property alias armed: surface.armed
             readonly property Item surfaceItem: surface
             readonly property real d: IrisStyle.density
+            property bool confirmWipe: false
             function focusInput(): void { input.forceActiveFocus() }
+
+            Timer {
+                id: wipeDisarm
+                interval: 3000
+                onTriggered: stage.confirmWipe = false
+            }
 
             function escapeHtml(value: string): string {
                 return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -241,17 +310,32 @@ PanelWindow {
             }
 
             function sectionOf(entry): string {
+                if (root.actionMode && entry?.fuzzy) return String(entry.area ?? "")
                 const type = String(entry?.type ?? "")
                 if (type === Translation.tr("App")) return Translation.tr("Applications")
                 if (type === Translation.tr("Action")) return Translation.tr("Actions")
+                if (type === Translation.tr("Settings")) return Translation.tr("Settings")
                 if (type === Translation.tr("Math")) return Translation.tr("Calculator")
                 if (type === Translation.tr("Command")) return Translation.tr("Run command")
                 if (type === Translation.tr("Web")) return Translation.tr("Search the web")
                 return type.length > 0 ? type : Translation.tr("Other")
             }
             function sectionAt(index: int): string {
-                if (root.clipboardMode) return Translation.tr("Clipboard history")
+                if (root.clipboardMode) return Translation.tr("Clipboard history · %1").arg(root.clipboardTotal)
                 return index === 0 ? Translation.tr("Top hit") : stage.sectionOf(root.visibleResults[index])
+            }
+            function kindTint(type: string): color {
+                if (type === Translation.tr("Command")) return IrisStyle.identity.gray
+                if (type === Translation.tr("Web")) return IrisStyle.identity.blue
+                if (type === Translation.tr("Math")) return IrisStyle.identity.orange
+                if (type === Translation.tr("Action")) return IrisStyle.identity.purple
+                if (type === Translation.tr("Emoji")) return IrisStyle.identity.pink
+                return IrisStyle.identity.teal
+            }
+            function clipMark(value: string): var {
+                if (/^(https?|ftp):\/\//i.test(value)) return { glyph: "link", tint: IrisStyle.identity.blue }
+                if (/^(\/|~\/)[^\s]/.test(value)) return { glyph: "folder_open", tint: IrisStyle.identity.gray }
+                return { glyph: "subject", tint: IrisStyle.identity.teal }
             }
 
             RectangularShadow {
@@ -266,28 +350,23 @@ PanelWindow {
                 visible: !root.fromIsland
                 opacity: IrisStyle.shadowAt(surface.progress)
             }
-            Field.IrisField {
-                anchors.fill: parent
-                visible: root.joinsEdge
-                framed: false
-                opacity: surface.dissolve
-                shapes: {
-                    if (!root.joinsEdge || surface.progress <= 0) return []
-                    const b = surface.bodyRect
-                    const deep = Math.max(8, IrisStyle.fuseEdge)
-                    return [
-                        { x: -IrisStyle.fuseEdge, y: root.islandBottom ? stage.height + 1 : -deep - 1,
-                            width: stage.width + 2 * IrisStyle.fuseEdge, height: deep, radius: 0, paints: true, fuse: 0, id: "edge" },
-                        { x: b.x, y: root.islandBottom ? b.y : b.y - b.radius, width: b.width, height: b.height + b.radius,
-                            radius: b.radius, paints: true, fuse: IrisStyle.fuseEdge, id: "spotlight", joins: "edge" }
-                    ]
-                }
-            }
             IrisMorphSurface {
                 id: surface
-                open: GlobalStates.searchOpen
+                compositorBlurred: true
+                open: root.here && GlobalStates.searchOpen
+                settles: true
                 motionSurface: "spotlight"
-                windowOffset: Qt.point(IrisFrame.band, IrisFrame.band)
+                fieldBacked: true
+                chassisKey: "spotlight"
+                chassisJoin: {
+                    if (!root.joinsEdge) return {}
+                    const grow = root.islandBottom ? "bottom" : "top"
+                    if (root.joinsFrame) return { id: "spotlight", joins: "frame", fuse: IrisStyle.fuseEdge, grow: grow }
+                    const k = IrisStyle.fuseEdge, deep = Math.max(8, k)
+                    return { id: "spotlight", joins: "spotlightEdge", fuse: k, grow: grow,
+                        edge: { x: -2 * k, y: root.islandBottom ? root.height + 1 : -deep - 1, width: root.width + 4 * k, height: deep,
+                            radius: 0, paints: true, fuse: 0, id: "spotlightEdge", glass: IrisStyle.surfaceGlass("spotlight") } }
+                }
                 readonly property real dissolve: root.fromIsland ? IrisStyle.ramp(surface.progress, 0, 0.14) : 1
                 origin: root.fromIsland ? ({ x: root.island.x - IrisFrame.band, y: root.island.y - IrisFrame.band,
                     width: root.island.width, height: root.island.height, radius: Math.min(root.island.width, root.island.height) / 2 }) : null
@@ -317,16 +396,6 @@ PanelWindow {
                 height: Math.min(body.implicitHeight, Math.max(Math.round(160 * stage.d), surface.room))
                 onClosed: LauncherSearch.query = ""
                 onSettledChanged: if (surface.settled && surface.open) stage.focusInput()
-                Rectangle {
-                    z: 100
-                    visible: !root.joinsEdge
-                    opacity: Math.max(0, (surface.progress - 0.85) / 0.15)
-                    anchors.fill: parent
-                    radius: surface.radius
-                    color: "transparent"
-                    border.width: 1
-                    border.color: IrisStyle.border
-                }
                 Behavior on height {
                     enabled: surface.settled
                     NumberAnimation { duration: IrisStyle.duration(150); easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve }
@@ -358,7 +427,7 @@ PanelWindow {
                             text: "search"
                             iconSize: Math.round(22 * stage.d)
                             color: input.text.length > 0 ? IrisStyle.accent : IrisStyle.subtext
-                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                         }
                         Rectangle {
                             id: modeToken
@@ -397,8 +466,8 @@ PanelWindow {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: modeToken.mode?.label ?? ""
                                     color: IrisStyle.accent
-                                    font.pixelSize: 12 * IrisStyle.typeScale
-                                    font.weight: Font.DemiBold
+                                    font.pixelSize: IrisStyle.typeMeta
+                                    font.weight: IrisStyle.weight(Font.DemiBold)
                                 }
                             }
                         }
@@ -412,9 +481,9 @@ PanelWindow {
                             text: LauncherSearch.query
                             color: IrisStyle.text
                             selectionColor: IrisStyle.accentContainer
-                            selectedTextColor: IrisStyle.onAccentContainer
+                            selectedTextColor: IrisStyle.inkOnAccentContainer
                             font.family: IrisStyle.fontMain
-                            font.pixelSize: Math.round(21 * IrisStyle.typeScale)
+                            font.pixelSize: IrisStyle.typeTitleLarge
                             clip: true
                             focus: true
                             onTextChanged: if (LauncherSearch.query !== text) LauncherSearch.query = text
@@ -423,10 +492,10 @@ PanelWindow {
                             IrisText {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: input.text.length === 0
-                                text: Translation.tr("Spotlight Search")
+                                text: Translation.tr("Apps, settings, actions… / lists them all")
                                 color: IrisStyle.muted
                                 font.pixelSize: input.font.pixelSize
-                                font.weight: Font.Normal
+                                font.weight: IrisStyle.weight(Font.Normal)
                             }
                         }
                     }
@@ -454,8 +523,8 @@ PanelWindow {
                             Layout.topMargin: 16 * stage.d
                             text: Translation.tr("Suggestions")
                             color: IrisStyle.muted
-                            font.pixelSize: 11.5 * IrisStyle.typeScale
-                            font.weight: Font.DemiBold
+                            font.pixelSize: IrisStyle.typeMeta
+                            font.weight: IrisStyle.weight(Font.DemiBold)
                         }
 
                         Item {
@@ -516,7 +585,7 @@ PanelWindow {
                                             fallback: "application-x-executable"
                                             iconSize: Math.round(46 * stage.d)
                                             scale: tile.pressed ? IrisStyle.pressScale(0.92) : 1
-                                            Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration } }
+                                            Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
                                         }
                                         Rectangle {
                                             anchors.horizontalCenter: parent.horizontalCenter
@@ -538,7 +607,7 @@ PanelWindow {
                                             horizontalAlignment: Text.AlignHCenter
                                             text: tile.modelData.name
                                             elide: Text.ElideRight
-                                            font.pixelSize: 11 * IrisStyle.typeScale
+                                            font.pixelSize: IrisStyle.typeFootnote
                                             color: root.selectedIndex === tile.index ? IrisStyle.text : IrisStyle.subtext
                                         }
                                     }
@@ -603,15 +672,15 @@ PanelWindow {
                                             Layout.preferredHeight: Math.round(20 * stage.d)
                                             radius: IrisStyle.radiusMicro
                                             color: hint.buttonHovered ? IrisStyle.tintFillHover(IrisStyle.accent) : IrisStyle.fill
-                                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+                                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                                             IrisText {
                                                 id: keyText
                                                 anchors.centerIn: parent
                                                 text: hint.modelData.key
                                                 color: hint.buttonHovered ? IrisStyle.accent : IrisStyle.subtext
                                                 font.family: Appearance.font.family.monospace
-                                                font.pixelSize: 11.5 * IrisStyle.typeScale
-                                                font.weight: Font.Bold
+                                                font.pixelSize: IrisStyle.typeMeta
+                                                font.weight: IrisStyle.weight(Font.Bold)
                                             }
                                         }
                                         IrisText {
@@ -620,8 +689,8 @@ PanelWindow {
                                             elide: Text.ElideRight
                                             text: hint.modelData.label
                                             color: hint.buttonHovered ? IrisStyle.text : IrisStyle.subtext
-                                            font.pixelSize: 12 * IrisStyle.typeScale
-                                            font.weight: Font.Medium
+                                            font.pixelSize: IrisStyle.typeMeta
+                                            font.weight: IrisStyle.weight(Font.Medium)
                                         }
                                     }
                                 }
@@ -663,6 +732,7 @@ PanelWindow {
                             clip: true
                             interactive: contentHeight > height + 1
                             boundsBehavior: Flickable.StopAtBounds
+                            onContentYChanged: if (contentY + height > contentHeight - 120 * stage.d) root.loadMoreClipboard()
 
                             Rectangle {
                                 id: highlight
@@ -689,7 +759,8 @@ PanelWindow {
                                     visible: root.visibleResults.length === 0
                                     IrisText {
                                         anchors.centerIn: parent
-                                        text: Translation.tr("No results")
+                                        text: root.actionMode ? Translation.tr("Nothing by that name. Fewer letters find more.")
+                                            : Translation.tr("No results. Try fewer letters, or / for every action.")
                                         color: IrisStyle.muted
                                     }
                                 }
@@ -706,30 +777,60 @@ PanelWindow {
                                         readonly property bool clipImage: root.clipboardMode
                                             && Cliphist.entryIsImage(String(result.modelData?.rawValue ?? ""))
                                         readonly property bool selected: root.selectedIndex === result.index
+                                        readonly property var mark: root.clipboardMode
+                                            ? stage.clipMark(String(result.modelData?.name ?? ""))
+                                            : ({ glyph: "", tint: result.modelData?.tint ?? stage.kindTint(String(result.modelData?.type ?? "")) })
                                         readonly property bool showHeader: result.index === 0
                                             || stage.sectionAt(result.index) !== stage.sectionAt(result.index - 1)
                                         readonly property real rowY: row.y
                                         readonly property real rowHeight: row.height
                                         width: resultColumn.width
 
-                                        IrisText {
+                                        Item {
                                             visible: result.showHeader
-                                            x: 20 * stage.d
+                                            width: parent.width
                                             height: Math.round((result.index === 0 ? 24 : 30) * stage.d)
-                                            verticalAlignment: Text.AlignBottom
-                                            bottomPadding: 5 * stage.d
-                                            text: stage.sectionAt(result.index)
-                                            color: IrisStyle.muted
-                                            font.pixelSize: 11.5 * IrisStyle.typeScale
-                                            font.weight: Font.DemiBold
+                                            IrisText {
+                                                x: 20 * stage.d
+                                                height: parent.height
+                                                verticalAlignment: Text.AlignBottom
+                                                bottomPadding: 5 * stage.d
+                                                text: stage.sectionAt(result.index)
+                                                // In "/" a header names an area and wears its colour; elsewhere headers stay quiet.
+                                                color: root.actionMode && result.index > 0 && result.modelData?.areaTint
+                                                    ? result.modelData.areaTint : IrisStyle.muted
+                                                font.pixelSize: IrisStyle.typeMeta
+                                                font.weight: IrisStyle.weight(Font.DemiBold)
+                                            }
+                                            IrisButton {
+                                                visible: root.clipboardMode && result.index === 0
+                                                anchors.right: parent.right
+                                                anchors.rightMargin: 12 * stage.d
+                                                anchors.bottom: parent.bottom
+                                                anchors.bottomMargin: 2 * stage.d
+                                                implicitHeight: Math.round(22 * stage.d)
+                                                quiet: !stage.confirmWipe
+                                                danger: stage.confirmWipe
+                                                text: stage.confirmWipe ? Translation.tr("Clear everything?") : Translation.tr("Clear all")
+                                                onClicked: {
+                                                    if (!stage.confirmWipe) {
+                                                        stage.confirmWipe = true
+                                                        wipeDisarm.restart()
+                                                        return
+                                                    }
+                                                    stage.confirmWipe = false
+                                                    Cliphist.wipe()
+                                                    root.selectedIndex = 0
+                                                }
+                                            }
                                         }
 
                                         MouseArea {
                                             id: row
                                             x: 8 * stage.d
                                             width: parent.width - 16 * stage.d
-                                            height: result.clipImage ? Math.max(40 * stage.d, thumbLoader.height + 14 * stage.d)
-                                                : Math.round((result.mathHit ? 66 : result.topHit ? 58 : 40) * stage.d)
+                                            height: root.clipboardMode ? Math.round(52 * stage.d)
+                                                : Math.round((result.mathHit ? 66 : result.topHit ? 58 : root.actionMode || result.modelData?.fuzzy ? 48 : 40) * stage.d)
                                             hoverEnabled: true
                                             cursorShape: root.pointerSelectionArmed ? Qt.PointingHandCursor : Qt.BlankCursor
                                             Accessible.role: Accessible.Button
@@ -750,53 +851,78 @@ PanelWindow {
                                                 anchors.rightMargin: 14 * stage.d
                                                 spacing: 12 * stage.d
 
-                                                Loader {
-                                                    id: thumbLoader
-                                                    active: result.clipImage
-                                                    visible: active
-                                                    Layout.preferredWidth: item?.implicitWidth ?? 0
-                                                    Layout.preferredHeight: item?.implicitHeight ?? 0
-                                                    sourceComponent: CliphistImage {
-                                                        entry: String(result.modelData?.rawValue ?? "")
-                                                        maxWidth: Math.round(220 * stage.d)
-                                                        maxHeight: Math.round(120 * stage.d)
-                                                        color: IrisStyle.fillQuiet
-                                                        radius: IrisStyle.radiusRow
-                                                    }
-                                                }
                                                 Item {
-                                                    visible: !result.clipImage
-                                                    readonly property real size: Math.round((result.topHit ? 38 : 24) * stage.d)
-                                                    Layout.preferredWidth: size
-                                                    Layout.preferredHeight: size
-                                                    Loader {
-                                                        anchors.fill: parent
-                                                        active: result.modelData?.iconType === LauncherSearchResult.IconType.System
-                                                        sourceComponent: SmartAppIcon {
-                                                            icon: result.modelData?.iconName ?? "application-x-executable"
-                                                            fallback: "application-x-executable"
-                                                            iconSize: parent?.width ?? 24
-                                                        }
-                                                    }
-                                                    Loader {
-                                                        anchors.centerIn: parent
-                                                        active: result.modelData?.iconType === LauncherSearchResult.IconType.Text
-                                                        sourceComponent: IrisText {
-                                                            text: result.modelData?.iconName ?? ""
-                                                            font.pixelSize: Math.round((result.topHit ? 30 : 19) * IrisStyle.typeScale)
-                                                        }
-                                                    }
+                                                    id: lead
+                                                    readonly property real size: Math.round((result.topHit ? 34 : 26) * stage.d)
+                                                    Layout.alignment: Qt.AlignVCenter
+                                                    Layout.preferredWidth: root.clipboardMode ? Math.round(64 * stage.d) : Math.round(34 * stage.d)
+                                                    Layout.preferredHeight: root.clipboardMode ? Math.round(40 * stage.d) : lead.size
+
                                                     Rectangle {
                                                         anchors.fill: parent
-                                                        visible: result.modelData?.iconType !== LauncherSearchResult.IconType.System
-                                                            && result.modelData?.iconType !== LauncherSearchResult.IconType.Text
-                                                        radius: width / 2
-                                                        color: IrisStyle.fill
+                                                        visible: root.clipboardMode
+                                                        radius: IrisStyle.radiusRow
+                                                        color: IrisStyle.fillQuiet
+                                                        Loader {
+                                                            id: thumbLoader
+                                                            anchors.centerIn: parent
+                                                            active: result.clipImage
+                                                            sourceComponent: CliphistImage {
+                                                                entry: String(result.modelData?.rawValue ?? "")
+                                                                maxWidth: lead.width - Math.round(4 * stage.d)
+                                                                maxHeight: lead.height - Math.round(4 * stage.d)
+                                                                color: "transparent"
+                                                                radius: IrisStyle.radiusChip
+                                                            }
+                                                        }
                                                         MaterialSymbol {
                                                             anchors.centerIn: parent
-                                                            text: result.modelData?.iconName || "search"
-                                                            iconSize: Math.round(parent.width * 0.56)
-                                                            color: IrisStyle.text
+                                                            visible: !result.clipImage
+                                                            text: result.mark.glyph
+                                                            iconSize: Math.round(19 * stage.d)
+                                                            color: result.mark.tint
+                                                        }
+                                                    }
+
+                                                    Item {
+                                                        visible: !root.clipboardMode
+                                                        anchors.left: parent.left
+                                                        anchors.verticalCenter: parent.verticalCenter
+                                                        width: lead.size
+                                                        height: lead.size
+                                                        Loader {
+                                                            anchors.fill: parent
+                                                            active: result.modelData?.iconType === LauncherSearchResult.IconType.System
+                                                            sourceComponent: SmartAppIcon {
+                                                                icon: result.modelData?.iconName ?? "application-x-executable"
+                                                                fallback: "application-x-executable"
+                                                                iconSize: lead.size
+                                                            }
+                                                        }
+                                                        Loader {
+                                                            anchors.centerIn: parent
+                                                            active: result.modelData?.iconType === LauncherSearchResult.IconType.Text
+                                                            sourceComponent: IrisText {
+                                                                text: result.modelData?.iconName ?? ""
+                                                                font.pixelSize: Math.round((result.topHit ? 26 : 19) * IrisStyle.typeScale)
+                                                            }
+                                                        }
+                                                        Rectangle {
+                                                            anchors.fill: parent
+                                                            visible: result.modelData?.iconType !== LauncherSearchResult.IconType.System
+                                                                && result.modelData?.iconType !== LauncherSearchResult.IconType.Text
+                                                            radius: IrisStyle.iconRadius(width)
+                                                            gradient: Gradient {
+                                                                GradientStop { position: 0; color: Qt.lighter(result.mark.tint, 1.18) }
+                                                                GradientStop { position: 1; color: result.mark.tint }
+                                                            }
+                                                            MaterialSymbol {
+                                                                anchors.centerIn: parent
+                                                                text: result.modelData?.iconName || "search"
+                                                                fill: 1
+                                                                iconSize: Math.round(parent.width * 0.58)
+                                                                color: IrisStyle.onTint
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -808,10 +934,8 @@ PanelWindow {
                                                         Layout.fillWidth: true
                                                         readonly property bool emphasise: !root.clipboardMode && !result.mathHit
                                                             && result.modelData?.fontType !== LauncherSearchResult.FontType.Monospace
-                                                        textFormat: emphasise || result.mathHit || result.clipImage ? Text.StyledText : Text.PlainText
-                                                        text: result.clipImage
-                                                            ? "<b>" + Translation.tr("Image") + "</b>" + (thumbLoader.item
-                                                                ? "  <font color='" + IrisStyle.muted + "'>" + thumbLoader.item.imageWidth + " × " + thumbLoader.item.imageHeight + "</font>" : "")
+                                                        textFormat: emphasise || result.mathHit ? Text.StyledText : Text.PlainText
+                                                        text: result.clipImage ? Translation.tr("Image")
                                                             : result.mathHit
                                                                 ? "<font color='" + IrisStyle.secondaryAccent + "'>=</font> " + stage.escapeHtml(String(result.modelData?.name ?? ""))
                                                             : emphasise ? stage.emphasised(String(result.modelData?.name ?? ""))
@@ -822,25 +946,60 @@ PanelWindow {
                                                         font.features: result.mathHit ? ({ "tnum": 1 }) : ({})
                                                         font.pixelSize: Math.round((result.mathHit ? 28 : result.topHit ? 16 : 13.5) * IrisStyle.typeScale)
                                                         font.weight: result.mathHit ? Font.Bold : result.topHit ? Font.DemiBold : Font.Normal
-                                                        font.letterSpacing: result.mathHit ? -0.5 : 0
+                                                        font.letterSpacing: result.mathHit ? -1 : 0
                                                         elide: Text.ElideRight
                                                     }
                                                     IrisText {
                                                         Layout.fillWidth: true
-                                                        visible: result.topHit && text.length > 0
+                                                        visible: (result.topHit || root.actionMode || Boolean(result.modelData?.fuzzy)) && text.length > 0
                                                         text: result.mathHit ? LauncherSearch.query
                                                             : result.modelData?.comment || result.modelData?.genericName || result.modelData?.type || ""
                                                         color: IrisStyle.subtext
-                                                        font.pixelSize: 12 * IrisStyle.typeScale
+                                                        font.pixelSize: IrisStyle.typeMeta
                                                         elide: Text.ElideRight
                                                     }
                                                 }
 
                                                 IrisText {
-                                                    visible: result.selected && text.length > 0
+                                                    visible: text.length > 0
+                                                    text: result.clipImage && thumbLoader.item
+                                                        ? thumbLoader.item.imageWidth + " × " + thumbLoader.item.imageHeight : ""
+                                                    color: IrisStyle.textTertiary
+                                                    font.pixelSize: IrisStyle.typeMeta
+                                                    font.features: { "tnum": 1 }
+                                                }
+                                                IrisIconButton {
+                                                    visible: root.clipboardMode && (result.selected || row.containsMouse)
+                                                    Layout.preferredWidth: Math.round(26 * stage.d)
+                                                    Layout.preferredHeight: Math.round(26 * stage.d)
+                                                    materialIcon: "delete"
+                                                    iconSize: Math.round(16 * stage.d)
+                                                    Accessible.name: Translation.tr("Delete from history")
+                                                    onClicked: {
+                                                        Cliphist.deleteEntry(String(result.modelData?.rawValue ?? ""))
+                                                        root.selectedIndex = Math.max(0, Math.min(root.selectedIndex, root.visibleResults.length - 2))
+                                                    }
+                                                }
+                                                MaterialSymbol {
+                                                    visible: Boolean(result.modelData?.pick) && result.modelData.isOn()
+                                                    text: "check"
+                                                    iconSize: Math.round(18 * stage.d)
+                                                    color: IrisStyle.accent
+                                                }
+                                                IrisSwitch {
+                                                    visible: typeof result.modelData?.isOn === "function" && !result.modelData?.pick
+                                                    on: visible && result.modelData.isOn()
+                                                    name: String(result.modelData?.name ?? "")
+                                                    onToggled: {
+                                                        root.selectedIndex = result.index
+                                                        root.executeSelected()
+                                                    }
+                                                }
+                                                IrisText {
+                                                    visible: result.selected && text.length > 0 && typeof result.modelData?.isOn !== "function"
                                                     text: String(result.modelData?.verb ?? "")
                                                     color: IrisStyle.subtext
-                                                    font.pixelSize: 12 * IrisStyle.typeScale
+                                                    font.pixelSize: IrisStyle.typeMeta
                                                 }
                                                 Rectangle {
                                                     visible: result.selected

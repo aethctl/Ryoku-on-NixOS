@@ -41,8 +41,8 @@ Item {
         id: thumbs
         collection: "wallpapers"
     }
-    readonly property string _thumbA: thumbs.count > 0 ? String(thumbs.get(0).thumb || thumbs.get(0).path || "") : ""
-    readonly property string _thumbB: thumbs.count > 1 ? String(thumbs.get(1).thumb || thumbs.get(1).path || "") : row._thumbA
+    readonly property url _thumbA: thumbs.count > 0 ? Library.fileUrl(thumbs.get(0).thumb || thumbs.get(0).path || "") : ""
+    readonly property url _thumbB: thumbs.count > 1 ? Library.fileUrl(thumbs.get(1).thumb || thumbs.get(1).path || "") : row._thumbA
 
     Timer {
         interval: Math.round(1000 / row._fps)

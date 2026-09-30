@@ -15,42 +15,43 @@ Item {
     property bool active: visible
     property bool showBackground: true
     property real headerReserve: 0
-    property color tint: IrisStyle.text
+    // On a veil over imagery (the lock), which stays dark in every scheme: media ink instead of the scheme's.
+    property bool overMedia: false
+    readonly property color ink: root.overMedia ? IrisStyle.onMedia : IrisStyle.text
+    readonly property color inkMeta: root.overMedia ? IrisStyle.onMediaSecondary : IrisStyle.subtext
+    readonly property color inkSecondary: root.overMedia ? IrisStyle.onMediaSecondary : IrisStyle.textSecondary
+    readonly property color inkTertiary: root.overMedia ? IrisStyle.onMediaTertiary : IrisStyle.textTertiary
+    property color tint: root.ink
     readonly property bool hasPlayer: root.player !== null && root.player !== undefined
+    // A stream is live when it has no length, cannot seek while playing, or its end keeps running
+    // away from a playhead that sits at it. Every sign is re-read, never latched: a browser that
+    // sends a track's title before its length, or a seek that republishes metadata, must not leave
+    // a normal video reading "Live" for the rest of the track.
+    readonly property string trackKey: (root.player?.dbusName ?? "") + "\n" + media.effectiveTitle
     property real seenLength: 0
-    property string seenTrack: ""
-    property bool lengthGrew: false
+    property int grewSamples: 0
     property int atEndSamples: 0
+    onTrackKeyChanged: { root.seenLength = 0; root.grewSamples = 0; root.atEndSamples = 0 }
     Timer {
         interval: 2000
         repeat: true
-        running: root.active && root.hasPlayer && media.effectiveIsPlaying && !root.liveStream
+        running: root.active && root.hasPlayer && media.effectiveIsPlaying
         onTriggered: {
             const len = media.effectiveLength
-            if (len > 0 && media.effectivePosition >= len - 1) root.atEndSamples++
-            else root.atEndSamples = 0
+            const pos = media.effectivePosition
+            const atEdge = len > 0 && pos >= len - 1
+            root.atEndSamples = atEdge ? root.atEndSamples + 1 : 0
+            const grew = root.seenLength > 0 && len > root.seenLength + 1 && pos >= root.seenLength - 3
+            root.grewSamples = grew ? root.grewSamples + 1 : 0
+            if (len > 0) root.seenLength = len
         }
     }
     readonly property bool liveStream: root.hasPlayer
         && (media.effectiveLength <= 0
             || (media.effectiveIsPlaying && !media.effectiveCanSeek)
-            || root.lengthGrew
+            || root.grewSamples >= 2
             || root.atEndSamples >= 2)
     readonly property bool hasTimeline: root.hasPlayer && !root.liveStream && media.effectiveLength > 0
-    Connections {
-        target: media
-        function onEffectiveTitleChanged(): void {
-            root.seenTrack = media.effectiveTitle
-            root.seenLength = media.effectiveLength
-            root.lengthGrew = false
-            root.atEndSamples = 0
-        }
-        function onEffectiveLengthChanged(): void {
-            const now = media.effectiveLength
-            if (root.seenLength > 0 && now > root.seenLength + 2) root.lengthGrew = true
-            root.seenLength = now
-        }
-    }
     implicitHeight: (root.compact ? compactBody.implicitHeight : body.implicitHeight) + 28 * IrisStyle.density
     implicitWidth: 360 * IrisStyle.density
     PlayerBase { id: media; player: root.player; positionUpdatesActive: root.active }
@@ -80,15 +81,15 @@ Item {
             spacing: 14 * IrisStyle.density
             IrisArtwork {
                 source: media.displayedArtFilePath
-                circular: Config.options?.iris?.player?.roundCover ?? true
+                circular: Config.options?.iris?.player?.roundCover ?? false
                 Layout.preferredWidth: 68 * IrisStyle.density
                 Layout.preferredHeight: 68 * IrisStyle.density
             }
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 3
-                IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveTitle : Translation.tr("Nothing playing"); font.weight: Font.DemiBold; elide: Text.ElideRight }
-                IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveArtist : Translation.tr("Your music appears here"); role: IrisText.Meta; elide: Text.ElideRight }
+                IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveTitle : Translation.tr("Nothing playing"); color: root.ink; font.weight: IrisStyle.weight(Font.DemiBold); elide: Text.ElideRight }
+                IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveArtist : Translation.tr("Your music appears here"); role: IrisText.Meta; color: root.inkMeta; elide: Text.ElideRight }
             }
         }
         IrisScrubber {
@@ -107,16 +108,16 @@ Item {
             visible: root.hasTimeline
             IrisText {
                 text: StringUtils.friendlyTimeForSeconds(media.effectivePosition)
-                color: IrisStyle.textTertiary
-                font.pixelSize: 11 * IrisStyle.typeScale
+                color: root.inkTertiary
+                font.pixelSize: IrisStyle.typeFootnote
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
             }
             Item { Layout.fillWidth: true }
             IrisText {
                 text: StringUtils.friendlyTimeForSeconds(media.effectiveLength)
-                color: IrisStyle.textTertiary
-                font.pixelSize: 11 * IrisStyle.typeScale
+                color: root.inkTertiary
+                font.pixelSize: IrisStyle.typeFootnote
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
             }
@@ -129,26 +130,22 @@ Item {
                 implicitWidth: Math.round(7 * IrisStyle.density)
                 implicitHeight: implicitWidth
                 radius: width / 2
-                color: IrisStyle.danger
-                SequentialAnimation on opacity {
-                    running: media.effectiveIsPlaying && root.active
-                    loops: Animation.Infinite
-                    NumberAnimation { to: 0.35; duration: 900; easing.type: Easing.InOutSine }
-                    NumberAnimation { to: 1; duration: 900; easing.type: Easing.InOutSine }
-                }
+                color: root.overMedia ? IrisStyle.dangerOnMedia : IrisStyle.danger
+                // Still: a pulse held its whole window at the display rate for as long as a stream played.
+                opacity: media.effectiveIsPlaying ? 1 : 0.5
             }
             IrisText {
                 text: Translation.tr("Live")
-                color: IrisStyle.textSecondary
-                font.pixelSize: 11.5 * IrisStyle.typeScale
-                font.weight: Font.DemiBold
+                color: root.inkSecondary
+                font.pixelSize: IrisStyle.typeMeta
+                font.weight: IrisStyle.weight(Font.DemiBold)
             }
             Item { Layout.fillWidth: true }
             IrisText {
                 visible: media.effectivePosition > 0
                 text: StringUtils.friendlyTimeForSeconds(media.effectivePosition)
-                color: IrisStyle.textTertiary
-                font.pixelSize: 11 * IrisStyle.typeScale
+                color: root.inkTertiary
+                font.pixelSize: IrisStyle.typeFootnote
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
             }
@@ -158,9 +155,9 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             spacing: 4 * IrisStyle.density
             Item { Layout.fillWidth: true }
-            IrisIconButton { materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
-            IrisIconButton { materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 28 }
-            IrisIconButton { materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
+            IrisIconButton { foreground: root.ink; materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
+            IrisIconButton { foreground: root.ink; materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 28 }
+            IrisIconButton { foreground: root.ink; materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
             Item { Layout.fillWidth: true }
         }
     }
@@ -175,22 +172,22 @@ Item {
         spacing: 12 * IrisStyle.density
         IrisArtwork {
             source: media.displayedArtFilePath
-            circular: Config.options?.iris?.player?.roundCover ?? true
+            circular: Config.options?.iris?.player?.roundCover ?? false
             Layout.preferredWidth: 46 * IrisStyle.density
             Layout.preferredHeight: 46 * IrisStyle.density
         }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveTitle : Translation.tr("Nothing playing"); font.weight: Font.DemiBold; elide: Text.ElideRight }
-            IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveArtist : Translation.tr("Your music appears here"); role: IrisText.Meta; elide: Text.ElideRight }
+            IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveTitle : Translation.tr("Nothing playing"); color: root.ink; font.weight: IrisStyle.weight(Font.DemiBold); elide: Text.ElideRight }
+            IrisText { Layout.fillWidth: true; text: root.hasPlayer ? media.effectiveArtist : Translation.tr("Your music appears here"); role: IrisText.Meta; color: root.inkMeta; elide: Text.ElideRight }
             Rectangle {
                 Layout.fillWidth: true
                 Layout.topMargin: 5 * IrisStyle.density
                 visible: root.hasTimeline
                 implicitHeight: Math.max(2, Math.round(3 * IrisStyle.density))
                 radius: height / 2
-                color: IrisStyle.fill
+                color: root.overMedia ? IrisStyle.onMediaFill : IrisStyle.fill
                 Rectangle {
                     height: parent.height
                     radius: parent.radius
@@ -199,8 +196,8 @@ Item {
                 }
             }
         }
-        IrisIconButton { materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
-        IrisIconButton { materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 24 }
-        IrisIconButton { materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
+        IrisIconButton { foreground: root.ink; materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
+        IrisIconButton { foreground: root.ink; materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 24 }
+        IrisIconButton { foreground: root.ink; materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
     }
 }

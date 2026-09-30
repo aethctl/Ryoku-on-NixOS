@@ -21,7 +21,6 @@ Item {
     SheetSlot { sheetName: "settings"; sourceComponent: cSettings }
     SheetSlot { sheetName: "playlists"; sourceComponent: cPlaylists }
     SheetSlot { sheetName: "schedule"; sourceComponent: cSchedule }
-    SheetSlot { sheetName: "displays"; sourceComponent: cDisplays }
     SheetSlot { sheetName: "effects"; sourceComponent: cEffects }
     SheetSlot { sheetName: "audio"; sourceComponent: cAudio }
     SheetSlot { sheetName: "sceneProperties"; sourceComponent: cSceneProps }
@@ -50,15 +49,6 @@ Item {
     Component {
         id: cSchedule
         ScheduleSheet {
-            anchors.fill: parent
-            state: host.state
-            args: host.state.sheetArgs
-            onCloseRequested: host.state.closeSheet()
-        }
-    }
-    Component {
-        id: cDisplays
-        DisplaysSheet {
             anchors.fill: parent
             state: host.state
             args: host.state.sheetArgs

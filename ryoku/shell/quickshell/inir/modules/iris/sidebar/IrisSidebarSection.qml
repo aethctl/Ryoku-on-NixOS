@@ -42,7 +42,7 @@ Loader {
         Layout.fillWidth: true
         color: IrisStyle.muted
         wrapMode: Text.WordWrap
-        font.pixelSize: 12 * IrisStyle.typeScale
+        font.pixelSize: IrisStyle.typeMeta
     }
 
     component Section: Rectangle {
@@ -103,8 +103,8 @@ Loader {
                     Layout.minimumWidth: 0
                     text: section.title
                     color: section.ink
-                    font.weight: Font.DemiBold
-                    font.pixelSize: 14 * IrisStyle.typeScale
+                    font.weight: IrisStyle.weight(Font.DemiBold)
+                    font.pixelSize: IrisStyle.typeBody
                     elide: Text.ElideRight
                 }
                 IrisText {
@@ -112,7 +112,7 @@ Loader {
                     text: section.detail
                     color: IrisStyle.secondaryOf(section.ink)
                     font.family: IrisStyle.fontNumbers
-                    font.pixelSize: 12 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                 }
                 RowLayout {
                     id: actionRow
@@ -183,12 +183,12 @@ Loader {
                 IrisNotificationIcon {
                     size: Math.round(22 * root.d)
                     showImage: false
-                    appName: String(notice.notification.appName ?? "")
-                    appIcon: String(notice.notification.appIcon ?? "")
-                    summary: String(notice.notification.summary ?? "")
-                    critical: String(notice.notification.urgency ?? "") === "critical"
+                    appName: String(notice.notification?.appName ?? "")
+                    appIcon: String(notice.notification?.appIcon ?? "")
+                    summary: String(notice.notification?.summary ?? "")
+                    critical: String(notice.notification?.urgency ?? "") === "critical"
                 }
-                IrisText { Layout.fillWidth: true; text: notice.notification.appName; role: IrisText.Meta; elide: Text.ElideRight }
+                IrisText { Layout.fillWidth: true; text: String(notice.notification?.appName ?? ""); role: IrisText.Meta; elide: Text.ElideRight }
                 Rectangle {
                     visible: notice.hidden > 0
                     implicitHeight: Math.round(20 * root.d)
@@ -200,8 +200,8 @@ Loader {
                         anchors.centerIn: parent
                         text: "+" + notice.hidden
                         font.family: IrisStyle.fontNumbers
-                        font.pixelSize: 11.5 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeMeta
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                     }
                 }
                 IrisIconButton {
@@ -211,14 +211,14 @@ Loader {
                     onClicked: Notifications.discardNotification(notice.notification.notificationId)
                 }
             }
-            IrisText { Layout.fillWidth: true; text: notice.notification.summary; textFormat: Text.PlainText; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; font.weight: Font.DemiBold }
-            IrisText { Layout.fillWidth: true; visible: text.length > 0; text: notice.notification.body ?? ""; textFormat: Text.PlainText; wrapMode: Text.Wrap; maximumLineCount: 4; elide: Text.ElideRight; role: IrisText.Meta }
+            IrisText { Layout.fillWidth: true; text: String(notice.notification?.summary ?? ""); textFormat: Text.PlainText; wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight; font.weight: IrisStyle.weight(Font.DemiBold) }
+            IrisText { Layout.fillWidth: true; visible: text.length > 0; text: String(notice.notification?.body ?? ""); textFormat: Text.PlainText; wrapMode: Text.Wrap; maximumLineCount: 4; elide: Text.ElideRight; role: IrisText.Meta }
             Flow {
                 Layout.fillWidth: true
-                visible: (notice.notification.actions ?? []).length > 0
+                visible: (notice.notification?.actions ?? []).length > 0
                 spacing: 4 * root.d
                 Repeater {
-                    model: notice.notification.actions ?? []
+                    model: notice.notification?.actions ?? []
                     IrisButton {
                         required property var modelData
                         text: modelData.identifier === "default" ? Translation.tr("Open") : modelData.text
@@ -245,7 +245,7 @@ Loader {
             Layout.fillWidth: true
             Layout.leftMargin: 4 * root.d
             spacing: 4 * root.d
-            IrisText { Layout.fillWidth: true; text: stack.appName; font.weight: Font.DemiBold; font.pixelSize: 13 * IrisStyle.typeScale; elide: Text.ElideRight }
+            IrisText { Layout.fillWidth: true; text: stack.appName; font.weight: IrisStyle.weight(Font.DemiBold); font.pixelSize: IrisStyle.typeLabel; elide: Text.ElideRight }
             IrisButton {
                 text: Translation.tr("Show less")
                 quiet: true
@@ -271,12 +271,14 @@ Loader {
             }
         }
 
+        // Only what shows below the card is drawn: under a translucent material a plate tucked behind
+        // the card reads through it and the stack looks mixed into the card.
         Item {
             visible: stack.folded
-            z: -1
+            clip: true
             Layout.fillWidth: true
-            Layout.topMargin: -Math.round(6 * root.d) - IrisStyle.radiusRow
-            implicitHeight: IrisStyle.radiusRow + Math.round((stack.count > 2 ? 12 : 6) * root.d)
+            Layout.topMargin: -stack.spacing
+            implicitHeight: Math.round((stack.count > 2 ? 12 : 6) * root.d)
             Rectangle {
                 visible: stack.count > 2
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -401,7 +403,7 @@ Loader {
                             border.width: Math.max(1, Math.round(1.5 * root.d))
                             border.color: IrisStyle.identity.orange
                         }
-                        IrisText { Layout.fillWidth: true; text: pendingRow.modelData.task.content; textFormat: Text.PlainText; elide: Text.ElideRight; font.pixelSize: 13 * IrisStyle.typeScale }
+                        IrisText { Layout.fillWidth: true; text: pendingRow.modelData.task.content; textFormat: Text.PlainText; elide: Text.ElideRight; font.pixelSize: IrisStyle.typeLabel }
                     }
                 }
             ]
@@ -415,7 +417,7 @@ Loader {
                     bottomPadding: 8 * root.d
                     verticalAlignment: TextInput.AlignVCenter
                     placeholderText: Translation.tr("Add a task…")
-                    font.pixelSize: 13 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeLabel
                     onAccepted: { if (text.trim()) { Todo.addTask(text.trim()); clear() } }
                 }
                 IrisIconButton {
@@ -447,7 +449,7 @@ Loader {
                         text: taskRow.modelData.task.content
                         textFormat: Text.PlainText
                         wrapMode: Text.Wrap
-                        font.pixelSize: 13 * IrisStyle.typeScale
+                        font.pixelSize: IrisStyle.typeLabel
                         font.strikeout: taskRow.modelData.task.done
                         color: taskRow.modelData.task.done ? IrisStyle.muted : IrisStyle.text
                     }
@@ -486,8 +488,8 @@ Loader {
                 IrisText {
                     Layout.fillWidth: true
                     text: Notepad.tabs[Notepad.currentTab]?.title || Translation.tr("Untitled")
-                    font.weight: Font.DemiBold
-                    font.pixelSize: 13 * IrisStyle.typeScale
+                    font.weight: IrisStyle.weight(Font.DemiBold)
+                    font.pixelSize: IrisStyle.typeLabel
                     elide: Text.ElideRight
                 },
                 IrisText {
@@ -498,7 +500,7 @@ Loader {
                     maximumLineCount: 2
                     wrapMode: Text.WordWrap
                     elide: Text.ElideRight
-                    font.pixelSize: 12 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                 }
             ]
             Flickable {
@@ -545,10 +547,10 @@ Loader {
                         Layout.bottomMargin: 8 * root.d
                         color: IrisStyle.text
                         selectionColor: IrisStyle.accentContainer
-                        selectedTextColor: IrisStyle.onAccentContainer
+                        selectedTextColor: IrisStyle.inkOnAccentContainer
                         font.family: IrisStyle.fontMain
-                        font.pixelSize: 14 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeBody
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                         clip: true
                         Accessible.name: Translation.tr("Note title")
                         onEditingFinished: if (text.trim()) Notepad.setTabTitle(Notepad.currentTab, text.trim())
@@ -575,9 +577,9 @@ Loader {
                             placeholderTextColor: IrisStyle.muted
                             color: IrisStyle.text
                             selectionColor: IrisStyle.accentContainer
-                            selectedTextColor: IrisStyle.onAccentContainer
+                            selectedTextColor: IrisStyle.inkOnAccentContainer
                             font.family: IrisStyle.fontMain
-                            font.pixelSize: 13 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeLabel
                             wrapMode: TextEdit.Wrap
                             textFormat: TextEdit.PlainText
                             leftPadding: 12 * root.d
@@ -650,7 +652,7 @@ Loader {
                                 anchors.horizontalCenter: parent.horizontalCenter
                                 text: Qt.locale().dayName(stripDay.date.getDay(), Locale.ShortFormat).slice(0, 2)
                                 color: stripDay.today ? IrisStyle.identity.red : IrisStyle.muted
-                                font.pixelSize: 10.5 * IrisStyle.typeScale
+                                font.pixelSize: IrisStyle.typeFootnote
                                 font.weight: stripDay.today ? Font.DemiBold : Font.Normal
                             }
                             Rectangle {
@@ -664,7 +666,7 @@ Loader {
                                     text: String(stripDay.date.getDate())
                                     color: stripDay.today ? IrisStyle.onTint : IrisStyle.text
                                     font.family: IrisStyle.fontNumbers
-                                    font.pixelSize: 13 * IrisStyle.typeScale
+                                    font.pixelSize: IrisStyle.typeLabel
                                     font.weight: stripDay.today ? Font.Bold : Font.Medium
                                 }
                             }
@@ -683,7 +685,7 @@ Loader {
                     text: calendar.todayEntries.length === 0 ? Translation.tr("Nothing scheduled today")
                         : calendar.timeOf(calendar.todayEntries[0]) + "  ·  " + (calendar.todayEntries[0].title ?? "")
                     color: calendar.todayEntries.length === 0 ? IrisStyle.muted : IrisStyle.subtext
-                    font.pixelSize: 12 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
             ]
@@ -707,7 +709,7 @@ Loader {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: Qt.locale().dayName((calendar.weekStart + weekday.index) % 7, Locale.ShortFormat).slice(0, 2)
                             color: IrisStyle.muted
-                            font.pixelSize: 10.5 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeFootnote
                         }
                     }
                 }
@@ -737,7 +739,7 @@ Loader {
                             color: day.today ? IrisStyle.identity.red
                                 : day.chosen ? IrisStyle.tintFillHover(IrisStyle.accent)
                                 : day.containsMouse ? IrisStyle.fillHover : "transparent"
-                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                         }
                         IrisText {
                             anchors.centerIn: parent
@@ -745,7 +747,7 @@ Loader {
                             color: day.today ? IrisStyle.onTint : day.chosen ? IrisStyle.accent : IrisStyle.text
                             opacity: day.inMonth ? 1 : 0.32
                             font.family: IrisStyle.fontNumbers
-                            font.pixelSize: 13 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeLabel
                             font.weight: day.today || day.chosen ? Font.Bold : Font.Medium
                         }
                         Rectangle {
@@ -768,11 +770,15 @@ Loader {
                 IrisText {
                     Layout.fillWidth: true
                     text: Qt.locale().toString(calendar.selectedDate, "dddd d MMMM")
-                    font.weight: Font.DemiBold
-                    font.pixelSize: 13 * IrisStyle.typeScale
+                    font.weight: IrisStyle.weight(Font.DemiBold)
+                    font.pixelSize: IrisStyle.typeLabel
                     elide: Text.ElideRight
                 }
-                IrisText { visible: CalendarSync.fetching; text: Translation.tr("Syncing…"); role: IrisText.Meta }
+                IrisText {
+                    visible: CalendarSync.fetching || (CalendarSync.enabled && CalendarSync.sources.length > 0 && !Network.online)
+                    text: CalendarSync.fetching ? Translation.tr("Syncing…") : Translation.tr("Offline")
+                    role: IrisText.Meta
+                }
                 IrisButton {
                     visible: !calendar.composing
                     text: Translation.tr("New event")
@@ -796,11 +802,11 @@ Loader {
                         text: calendar.timeOf(entryRow.modelData)
                         color: IrisStyle.subtext
                         font.family: IrisStyle.fontNumbers
-                        font.pixelSize: 12 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeMeta
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                     }
                     Rectangle { implicitWidth: 3 * root.d; implicitHeight: Math.round(20 * root.d); radius: width / 2; color: entryRow.modelData.color || IrisStyle.secondaryAccent }
-                    IrisText { Layout.fillWidth: true; text: entryRow.modelData.title ?? ""; elide: Text.ElideRight; font.weight: Font.Medium }
+                    IrisText { Layout.fillWidth: true; text: entryRow.modelData.title ?? ""; elide: Text.ElideRight; font.weight: IrisStyle.weight(Font.Medium) }
                     IrisIconButton {
                         visible: entryRow.local
                         materialIcon: "close"
@@ -848,14 +854,14 @@ Loader {
                     implicitHeight: Math.round(40 * root.d)
                     horizontalAlignment: TextInput.AlignHCenter
                     verticalAlignment: TextInput.AlignVCenter
-                    font.pixelSize: 14 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeBody
                     onAccepted: eventSheet.add()
                     IrisText {
                         anchors.centerIn: parent
                         visible: eventTitle.text.length === 0
                         text: Translation.tr("Event name")
                         color: IrisStyle.muted
-                        font.pixelSize: 14 * IrisStyle.typeScale
+                        font.pixelSize: IrisStyle.typeBody
                     }
                 }
 
@@ -939,7 +945,7 @@ Loader {
                     : weather.hasData ? Weather.data.description + "  ·  " + Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike)
                     : Translation.tr("Fetching your forecast…")
                 color: IrisStyle.strongOf(weather.ink)
-                font.pixelSize: 12.5 * IrisStyle.typeScale
+                font.pixelSize: IrisStyle.typeLabel
                 elide: Text.ElideRight
             }
             RowLayout {
@@ -948,18 +954,18 @@ Loader {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 0
-                    IrisText { text: Weather.data.temp; color: IrisStyle.text; font.family: IrisStyle.fontNumbers; font.pixelSize: 44 * IrisStyle.typeScale; font.weight: Font.Light }
-                    IrisText { Layout.fillWidth: true; text: Weather.data.description; color: IrisStyle.textSecondary; font.pixelSize: 13 * IrisStyle.typeScale; wrapMode: Text.WordWrap }
+                    IrisText { text: Weather.data.temp; color: IrisStyle.text; font.family: IrisStyle.fontNumbers; font.pixelSize: 44 * IrisStyle.typeScale; font.weight: IrisStyle.weight(Font.Light) }
+                    IrisText { Layout.fillWidth: true; text: Weather.data.description; color: IrisStyle.textSecondary; font.pixelSize: IrisStyle.typeLabel; wrapMode: Text.WordWrap }
                 }
                 MaterialSymbol { text: Icons.getWeatherIcon(Weather.data.wCode, Weather.isNightNow()) ?? "cloud"; fill: 1; iconSize: 46 * root.d; color: weather.night ? IrisStyle.identity.lavender : IrisStyle.secondaryAccent }
             }
             RowLayout {
                 visible: Weather.enabled && weather.hasData
                 Layout.fillWidth: true
-                IrisText { text: Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike); color: IrisStyle.textSecondary; font.pixelSize: 12 * IrisStyle.typeScale }
+                IrisText { text: Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike); color: IrisStyle.textSecondary; font.pixelSize: IrisStyle.typeMeta }
                 Item { Layout.fillWidth: true }
                 MaterialSymbol { text: "humidity_percentage"; fill: 1; iconSize: 14 * root.d; color: IrisStyle.textTertiary }
-                IrisText { text: Weather.data.humidity; color: IrisStyle.textSecondary; font.pixelSize: 12 * IrisStyle.typeScale }
+                IrisText { text: Weather.data.humidity; color: IrisStyle.textSecondary; font.pixelSize: IrisStyle.typeMeta }
             }
             EmptyLabel { visible: !Weather.enabled; text: Translation.tr("Enable weather in Settings to see your forecast.") }
             EmptyLabel {
@@ -1010,8 +1016,8 @@ Loader {
                         Layout.fillWidth: true
                         text: String(notifications.latest?.summary ?? "")
                         textFormat: Text.PlainText
-                        font.weight: Font.Medium
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
+                        font.weight: IrisStyle.weight(Font.Medium)
+                        font.pixelSize: IrisStyle.typeLabel
                         elide: Text.ElideRight
                     }
                 }
@@ -1064,9 +1070,9 @@ Loader {
                     color: focusTimer.ticking ? focusTimer.phaseTint : IrisStyle.text
                     font.family: IrisStyle.fontNumbers
                     font.pixelSize: 20 * IrisStyle.typeScale
-                    font.weight: Font.Bold
+                    font.weight: IrisStyle.weight(Font.Bold)
                 }
-                IrisText { Layout.fillWidth: true; text: focusTimer.phase; color: IrisStyle.muted; font.pixelSize: 12 * IrisStyle.typeScale }
+                IrisText { Layout.fillWidth: true; text: focusTimer.phase; color: IrisStyle.muted; font.pixelSize: IrisStyle.typeMeta }
                 IrisIconButton {
                     materialIcon: focusTimer.ticking ? "pause" : "play_arrow"
                     Accessible.name: focusTimer.ticking ? Translation.tr("Pause") : Translation.tr("Start")
@@ -1091,9 +1097,9 @@ Loader {
                         text: focusTimer.clock
                         font.family: IrisStyle.fontNumbers
                         font.pixelSize: 28 * IrisStyle.typeScale
-                        font.weight: Font.Bold
+                        font.weight: IrisStyle.weight(Font.Bold)
                     }
-                    IrisText { anchors.horizontalCenter: parent.horizontalCenter; text: focusTimer.phase; color: focusTimer.phaseTint; font.pixelSize: 11.5 * IrisStyle.typeScale; font.weight: Font.DemiBold }
+                    IrisText { anchors.horizontalCenter: parent.horizontalCenter; text: focusTimer.phase; color: focusTimer.phaseTint; font.pixelSize: IrisStyle.typeMeta; font.weight: IrisStyle.weight(Font.DemiBold) }
                 }
             }
             Row {
@@ -1150,11 +1156,10 @@ Loader {
                     spacing: 6 * root.d
                     Repeater {
                         model: mixer.streams.slice(0, 8)
-                        Image {
+                        IrisImage {
                             required property var modelData
                             width: Math.round(22 * root.d)
                             height: width
-                            sourceSize: Qt.size(width * 2, height * 2)
                             source: Quickshell.iconPath(MprisController.streamIconName(modelData), "audio-x-generic")
                         }
                     }
@@ -1169,10 +1174,9 @@ Loader {
                     readonly property bool muted: stream.modelData?.audio?.muted ?? false
                     Layout.fillWidth: true
                     spacing: 10 * root.d
-                    Image {
+                    IrisImage {
                         Layout.preferredWidth: Math.round(26 * root.d)
                         Layout.preferredHeight: Layout.preferredWidth
-                        sourceSize: Qt.size(Math.round(52 * root.d), Math.round(52 * root.d))
                         source: Quickshell.iconPath(MprisController.streamIconName(stream.modelData), "audio-x-generic")
                         opacity: stream.muted ? 0.45 : 1
                     }
@@ -1182,8 +1186,8 @@ Loader {
                         IrisText {
                             Layout.fillWidth: true
                             text: Audio.appNodeDisplayName(stream.modelData)
-                            font.pixelSize: 12 * IrisStyle.typeScale
-                            font.weight: Font.Medium
+                            font.pixelSize: IrisStyle.typeMeta
+                            font.weight: IrisStyle.weight(Font.Medium)
                             elide: Text.ElideRight
                         }
                         IrisScrubber {
@@ -1251,11 +1255,11 @@ Loader {
                                 anchors.centerIn: parent
                                 text: gauge.modelData.value
                                 font.family: IrisStyle.fontNumbers
-                                font.pixelSize: 13 * IrisStyle.typeScale
-                                font.weight: Font.Bold
+                                font.pixelSize: IrisStyle.typeLabel
+                                font.weight: IrisStyle.weight(Font.Bold)
                             }
                         }
-                        IrisText { Layout.alignment: Qt.AlignHCenter; text: gauge.modelData.label; color: IrisStyle.muted; font.pixelSize: 10.5 * IrisStyle.typeScale }
+                        IrisText { Layout.alignment: Qt.AlignHCenter; text: gauge.modelData.label; color: IrisStyle.muted; font.pixelSize: IrisStyle.typeFootnote }
                     }
                 }
             }

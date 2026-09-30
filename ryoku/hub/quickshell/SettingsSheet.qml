@@ -274,12 +274,12 @@ Item {
     function listClear(r) { sheet.edited(r.key, []); }
 
     // inline vs band, and how wide, decided once from the control kind. A
-    // control that needs room (chips, a gallery, a segmented bar of 3+, a demo)
+    // control that needs room (chips, a segmented bar of 3+, a demo)
     // gets a band whose height is its own; a picker or field gets a fixed foot
     // band; everything else sits inline at the row's right.
     function ctlBlock(r) {
         var c = r.ctl, n = sheet.optsFor(r).length;
-        if (c === "chips" || c === "multi" || c === "gallery" || c === "layoutdemo" || c === "reload-cover" || c === "list") return true;
+        if (c === "chips" || c === "multi" || c === "layoutdemo" || c === "reload-cover" || c === "list") return true;
         if (c === "seg" && n >= 3) return true;
         return false;
     }
@@ -472,7 +472,6 @@ Item {
                                             case "multi": return multiC;
                                             case "list": return listC;
                                             case "pick": return pickC;
-                                            case "gallery": return galleryC;
                                             case "reload-cover": return reloadCoverC;
                                             case "image": return imageC;
                                             case "app": return appC;
@@ -495,10 +494,6 @@ Item {
                                                 if (srow.r.key === "i18nGenerate")
                                                     Spawn.run(["kitty", "--class", "ryoku-i18n", "-e", "sh", "-c",
                                                         "ryoku-i18n llm " + I18n.lang + "; echo; read -n1 -rsp 'Done. Press any key to close…'; echo"]);
-                                                // hands the shell its placement mode: the look becomes draggable
-                                                // on the desktop, which no slider in here can be.
-                                                else if (srow.r.key === "vizPlace")
-                                                    Spawn.run(["qs", "-c", "shell", "ipc", "call", "visualizer", "place"]);
                                             }
                                         }
                                     }
@@ -804,22 +799,6 @@ Item {
                                                     }
                                                 }
                                             }
-                                        }
-                                    }
-                                    Component {
-                                        id: galleryC
-                                        Gallery {
-                                            // `set: "viz"` draws from the visualiser
-                                            // look catalogue, which paints its own tiles;
-                                            // an unset row keeps the bar-skin gallery.
-                                            readonly property bool viz: srow.r.set === "viz"
-                                            anchors.fill: parent
-                                            painter: viz ? VizStyles : null
-                                            options: viz
-                                                ? VizStyles.styles.map((s) => ({ key: s.key, origin: s.kind, draw: s.key }))
-                                                : Silhouette.skins.filter((skin) => !srow.r.opts || srow.r.opts.indexOf(skin.key) >= 0)
-                                            current: String(sheet.val(srow.r))
-                                            onChose: (k) => sheet.edited(srow.r.key, k)
                                         }
                                     }
                                     Component {

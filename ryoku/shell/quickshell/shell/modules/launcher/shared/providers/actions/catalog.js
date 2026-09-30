@@ -2,7 +2,9 @@
 // wired to a real Ryoku helper (ryoku-shell, ryoku-cmd-*). Data only,
 // so the set is validated in a node test and the provider stays a thin mapper.
 // `exec` is an argv array run with execDetached. Categories group the action-mode
-// tabs (System / Appearance / Tools / Media / Settings).
+// tabs (System / Appearance / Tools / Media / Settings). An optional `caps` names
+// a window-manager capability the action needs; the provider hides the entry on a
+// compositor that lacks it (a tool that is not even installed there).
 
 var CATALOG = [
     { id: "lock-screen",      name: "Lock Screen",        category: "System",     icon: "lock",        exec: ["ryoku-shell", "lock"] },
@@ -10,7 +12,7 @@ var CATALOG = [
     { id: "open-sysinfo",     name: "System Info",        category: "System",     icon: "info",        exec: ["ryoku-shell", "menu", "quick-settings"] },
     { id: "open-toolkit",     name: "Control Deck",       category: "System",     icon: "grid",        exec: ["ryoku-shell", "menu", "quick-settings"] },
     { id: "toggle-caffeine",  name: "Keep Awake",         category: "System",     icon: "coffee",      exec: ["ryoku-cmd-caffeine"] },
-    { id: "toggle-game-mode", name: "Game Mode",          category: "System",     icon: "gamepad",     exec: ["ryoku-cmd-game-mode"] },
+    { id: "toggle-game-mode", name: "Game Mode",          category: "System",     icon: "gamepad",     exec: ["ryoku-cmd-game-mode"], caps: "liveConfigEval" },
     { id: "mirror-displays",  name: "Mirror Displays",    category: "System",     icon: "monitor",     exec: ["ryoku-monitor", "toggle"], caps: "outputMirror" },
 
     { id: "next-wallpaper",   name: "Next Wallpaper",     category: "Appearance", icon: "image",       exec: ["ryogami", "wallpaper", "next"] },

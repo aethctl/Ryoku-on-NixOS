@@ -70,8 +70,10 @@ Scope {
             id: win
             required property var modelData
             // cap the monitor-derived scale so a tall display doesn't balloon the
-            // palette; 1.0 at 1080p, at most 1.2 on bigger screens, times fontScale.
-            readonly property real s: Math.min(1.2, (modelData ? modelData.height / 1080 : 1)) * Math.max(0.8, Math.min(1.4, Config.fontScale)) * Tokens.uiScaleFor(modelData ? modelData.name : "")
+            // palette; 1.0 at 1080p PHYSICAL, at most 1.2 on bigger screens,
+            // times fontScale. Physical: Quickshell's height is logical, and a
+            // logical-only term shrinks the palette as the display scale rises.
+            readonly property real s: Screens.monitorScale(modelData, Wm.outputScale(modelData ? modelData.name : ""), 1.2) * Math.max(0.8, Math.min(1.4, Config.fontScale)) * Tokens.uiScaleFor(modelData ? modelData.name : "")
             readonly property bool shown: root.openMon === modelData.name
 
             screen: modelData

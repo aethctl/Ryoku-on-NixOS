@@ -132,9 +132,10 @@ Item {
         anchors.centerIn: parent
         spacing: 6 * Theme.scale
 
+        // Follows the fill under the label, not the target state, so it never reads dark on dark mid-wipe.
         readonly property color textColor: !btn.enabled
             ? Theme.withAlpha(Theme.surfaceText, 0.3)
-            : btn.hot
+            : btn.wipeProgress > 0.5
                 ? (btn.destructive ? Theme.background : Theme.primaryText)
                 : Theme.surfaceText
 

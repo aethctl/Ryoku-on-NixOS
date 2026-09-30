@@ -28,7 +28,7 @@ Item {
         handleColor: IrisStyle.accent
         trackColor: IrisStyle.accentContainer
         dotColor: IrisStyle.subtext
-        dotColorHighlighted: IrisStyle.onAccentContainer
+        dotColorHighlighted: IrisStyle.inkOnAccentContainer
         scrollable: true
         onMoved: root.moved(slider.value)
     }

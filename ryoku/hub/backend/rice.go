@@ -77,22 +77,41 @@ func visualizerStorePath() string { return filepath.Join(ryokuConfigDir(), "visu
 func decorStorePath() string      { return filepath.Join(ryokuConfigDir(), "decor.json") }
 func brandStorePath() string      { return filepath.Join(ryokuConfigDir(), "brand.json") }
 func ryogamiStorePath() string    { return filepath.Join(ryokuConfigDir(), "ryogami.json") }
+func pluginsStorePath() string    { return filepath.Join(ryokuConfigDir(), "plugins.json") }
+func stageStorePath() string      { return filepath.Join(ryokuConfigDir(), "stage.json") }
+func matugenStorePath() string    { return filepath.Join(ryokuConfigDir(), "matugen.json") }
 func ricePath(slug string) string {
 	return filepath.Join(ricesDir(), slug, "rice.json")
 }
 
-// A rice captures the whole desktop look. hypr.json splits at the top level:
-// the look sections travel always, the behavior sections are opt-in layers
-// ("all" opts into every one). shell.json and launcher.json capture whole
-// except a small denylist of regional / personal / per-machine keys, so a new
-// look key travels automatically and a snapshot never silently drops what it
-// cannot name. widgets/visualizer/decor hold nothing personal and travel whole;
-// brand is identity and travels as an opt-in layer.
-var riceHyprLook = []string{"appearance", "cursor", "anim", "plugins", "dwindle", "master"}
+// A rice captures the whole desktop look. The window store splits at the top
+// level: the look sections travel always, the behavior sections are opt-in
+// layers ("all" opts into every one). shell.json and launcher.json capture
+// whole except a small denylist of regional / personal / per-machine keys, so
+// a new look key travels automatically and a snapshot never silently drops
+// what it cannot name. widgets/visualizer/decor/plugins/stage/matugen hold
+// nothing personal and travel whole; brand is identity and travels as an
+// opt-in layer. The list spans both providers' look keys: the shared
+// appearance/cursor/anim plus the layout twins and the niri frame, gradient,
+// backdrop and overview-shadow knobs.
+var riceWindowLook = []string{
+	"appearance", "cursor", "anim", "plugins", "dwindle", "master", "windows",
+	"frame", "borderGradient", "gradientFrom", "gradientTo", "gradientAngle", "gradientRelativeTo",
+	"urgentColor", "backgroundColor", "backdropColor",
+	"workspaceShadow", "workspaceShadowSoftness", "workspaceShadowSpread", "workspaceShadowOffsetY", "workspaceShadowColor",
+	"tabIndicatorWidth", "tabIndicatorHideSingle", "overviewZoom", "animationSlowdown",
+}
 var riceHyprLayers = []string{"input", "windowRules", "layerRules", "appOverrides", "keybinds", "autostart", "env", "apps"}
 
 // layers that live outside hypr.json; routed to their own store on apply.
 var riceExtraLayers = []string{"brand"}
+
+// the picker's whole-look sections: everything visual about the wallpaper
+// surface, its transitions and its palette engine. Held back: monitor (the
+// author's per-output clip state), performance and gpuDevice (hardware),
+// integrations (external accounts), general.uiScale (follows the recipient's
+// display), and the current clip itself (the wallpaper travels as an asset).
+var riceRyogamiLook = []string{"components", "display", "effects", "features", "filterBar", "launch", "matugen", "motion", "overviewBackdrop", "transition", "wallpaperMute", "weRender"}
 
 // riceShellOmit / riceLauncherOmit are the keys held back from the whole-store
 // shell / launcher capture: the author's weather city and unit, locale, UI
@@ -444,14 +463,24 @@ func captureRice(name string, layers []string) (Rice, error) {
 		Author:      currentUser(),
 		CreatedWith: ryokuVersion(),
 		Look: map[string]map[string]any{
-			"hypr":       pick(hy, riceHyprLook),
+			"hypr":       pick(hy, riceWindowLook),
 			"shell":      omit(readJSONMap(shellStorePath()), riceShellOmit),
 			"launcher":   omit(readJSONMap(launcherStorePath()), riceLauncherOmit),
 			"widgets":    extractStore(widgetsStorePath(), nil),
 			"visualizer": extractStore(visualizerStorePath(), nil),
 			"decor":      extractStore(decorStorePath(), nil),
 			"theme":      readJSONMap(themeStatePath()),
-			"ryogami":    pick(readJSONMap(ryogamiStorePath()), []string{"matugen"}),
+			"ryogami":    pick(readJSONMap(ryogamiStorePath()), riceRyogamiLook),
+			// the desktop-plugin roster: each placement, its per-widget
+			// settings and its enable flag. The plugin binaries themselves
+			// install through RyoStore; the rice carries how they are set.
+			"plugins": extractStore(pluginsStorePath(), nil),
+			// the widget stage (edge, shadow, motion, layer order) and the
+			// palette engine (scheme, contrast, per-app templates).
+			"stage":   extractStore(stageStorePath(), nil),
+			"matugen": extractStore(matugenStorePath(), nil),
+			// the Profile plate's decor: hero kind, art, focal point, zoom.
+			"profile": extractStore(profileConfigPath(), nil),
 		},
 	}
 	if len(layers) == 1 && layers[0] == "all" {
@@ -522,6 +551,26 @@ func captureRice(name string, layers []string) (Rice, error) {
 		}
 	}
 	bundleDecorAssets(dir, r.Look["decor"])
+	// profile hero: the plate's decor image travels as an asset when it is a
+	// custom bake in the profile store; shipped art names resolve against
+	// ~/Pictures/ryodecors on every box, so they need no bundle. The stored
+	// source becomes the bare asset name, which apply copies into profile/.
+	if prof, ok := r.Look["profile"]; ok {
+		if hero, ok := prof["hero"].(map[string]any); ok {
+			kind, _ := hero["kind"].(string)
+			src, _ := hero["source"].(string)
+			if kind == "custom" && src != "" {
+				p := filepath.Join(profileHeroDir(), filepath.Base(src))
+				if isFile(p) {
+					asset := "profilehero" + filepath.Ext(p)
+					if copyFile(p, filepath.Join(dir, asset)) == nil {
+						hero["source"] = asset
+						prof["hero"] = hero
+					}
+				}
+			}
+		}
+	}
 	if raw, ok := r.Layers["brand"]; ok {
 		var bm map[string]any
 		if json.Unmarshal(raw, &bm) == nil {
@@ -613,12 +662,13 @@ func readPalette(path string) map[string]string {
 	return p
 }
 
-// the reserved backup slots snapshot the four stores verbatim, so a restore is
+// the reserved backup slots snapshot the stores verbatim, so a restore is
 // a byte-for-byte revert (not an allowlisted merge). that is what makes
 // "restore my original setup" trustworthy.
 var backupStores = []string{
 	"desktop.json", "shell.json", "launcher.json", "theme.json", "ryogami.json",
 	"widgets.json", "visualizer.json", "decor.json", "brand.json", "profile.json",
+	"plugins.json", "stage.json", "matugen.json",
 }
 
 func snapshotStores(slot string) error {
@@ -704,7 +754,7 @@ func applyRice(slug string, layers []string) error {
 	// a store write failing (disk full, bad perms) must surface: silently
 	// applying half a rice reports success over mixed state. .previous (above)
 	// is the one-click way back either way.
-	if err := overlayHyprSections(r.Look["hypr"], riceHyprLook); err != nil {
+	if err := overlayHyprSections(r.Look["hypr"], riceWindowLook); err != nil {
 		return fmt.Errorf("apply hypr look: %w", err)
 	}
 	// "all" restores every captured layer, so applying a snapshot brings back the
@@ -770,7 +820,25 @@ func applyRice(slug string, layers []string) error {
 			return fmt.Errorf("apply ryogami look: %w", err)
 		}
 	}
-
+	// The plugin roster lands whole: placements and per-widget settings for
+	// desktop widgets and bar plugins alike. A plugin that is not installed on
+	// the recipient's box stays inert in the file (the registry only renders
+	// what discover.sh finds), so carrying the roster never breaks a lean box.
+	if len(r.Look["plugins"]) > 0 {
+		if err := overlayStore(pluginsStorePath(), r.Look["plugins"], nil); err != nil {
+			return fmt.Errorf("apply plugins look: %w", err)
+		}
+	}
+	if len(r.Look["stage"]) > 0 {
+		if err := overlayStore(stageStorePath(), r.Look["stage"], nil); err != nil {
+			return fmt.Errorf("apply stage look: %w", err)
+		}
+	}
+	if len(r.Look["matugen"]) > 0 {
+		if err := overlayStore(matugenStorePath(), r.Look["matugen"], nil); err != nil {
+			return fmt.Errorf("apply matugen look: %w", err)
+		}
+	}
 	// a rice built after the toggle carries its app-theming choice; apply it so
 	// a shared full-system look reaches (or spares) the recipient's apps the same
 	// way it did the author's. an older rice (nil) leaves the recipient's setting.
@@ -1008,12 +1076,17 @@ func riceTouches(r Rice, dir string) []riceTouch {
 	cfg := ryokuConfigDir()
 	touches := []riceTouch{
 		{homeRel(filepath.Join(cfg, "hypr.json")), "config", "window", "Windows: decoration and motion", len(r.Look["hypr"]) > 0},
-		{homeRel(filepath.Join(cfg, "shell.json")), "config", "widgets", "Shell: bar skin and modules", len(r.Look["shell"]) > 0},
+		{homeRel(filepath.Join(cfg, "shell.json")), "config", "widgets", "Shell: every bar style and its widgets", len(r.Look["shell"]) > 0},
 		{homeRel(filepath.Join(cfg, "theme.json")), "config", "palette", "Colours: palette master", r.Color.Mode != "" || len(r.Look["theme"]) > 0},
 		{homeRel(filepath.Join(cfg, "launcher.json")), "config", "rocket", "Launcher: hero and card", len(r.Look["launcher"]) > 0 || r.Assets.Hero != ""},
-		{homeRel(filepath.Join(cfg, "widgets.json")), "config", "widgets", "Desktop widgets: clock and calendar", len(r.Look["widgets"]) > 0},
+		{homeRel(filepath.Join(cfg, "widgets.json")), "config", "widgets", "Desktop widgets: look and placement", len(r.Look["widgets"]) > 0},
+		{homeRel(filepath.Join(cfg, "plugins.json")), "config", "widgets", "Plugin widgets: placement and settings", len(r.Look["plugins"]) > 0},
+		{homeRel(filepath.Join(cfg, "stage.json")), "config", "widgets", "Widget stage: depth and motion", len(r.Look["stage"]) > 0},
 		{homeRel(filepath.Join(cfg, "visualizer.json")), "config", "widgets", "Audio visualiser", len(r.Look["visualizer"]) > 0},
+		{homeRel(filepath.Join(cfg, "matugen.json")), "config", "palette", "Palette engine: scheme and apps", len(r.Look["matugen"]) > 0},
 		{homeRel(filepath.Join(cfg, "decor.json")), "config", "image", "Desktop decors (pictures bundled)", len(r.Look["decor"]) > 0},
+		{homeRel(filepath.Join(cfg, "profile.json")), "config", "image", "Profile plate: hero decor", len(r.Look["profile"]) > 0},
+		{homeRel(filepath.Join(cfg, "ryogami.json")), "config", "wallpaper", "Wallpaper surface: transitions and modes", len(r.Look["ryogami"]) > 0},
 		{homeRel(filepath.Join(hyprConfigDir(), "settings.lua")), "output", "refresh", "Hyprland settings (regenerated)", true},
 	}
 	if r.Color.Mode == "fixed" {
@@ -1082,9 +1155,31 @@ func riceFiles(slug string) error {
 	})
 }
 
+// expandUserDest resolves what the Hub's free-text folder field can hold: a
+// leading ~ (with or without a slash) is the user's home, a bare relative name
+// is taken under it, and an absolute path is kept. An empty field exports to
+// ~/Rices, the folder the picker's placeholder names.
+func expandUserDest(dest string) string {
+	dest = strings.TrimSpace(dest)
+	dest = strings.TrimPrefix(dest, "file://")
+	home := os.Getenv("HOME")
+	switch {
+	case dest == "" || dest == "~":
+		return filepath.Join(home, "Rices")
+	case strings.HasPrefix(dest, "~/"):
+		return filepath.Join(home, dest[2:])
+	case filepath.IsAbs(dest):
+		return dest
+	default:
+		return filepath.Join(home, dest)
+	}
+}
+
 // exportRice extracts a rice into dest/<slug>/: its manifest and assets, a
 // readable configs/ breakout of the per-store look, and a short README, so the
-// whole setup travels as a plain, inspectable folder.
+// whole setup travels as a plain, inspectable folder. A destination that does
+// not exist yet is created: the folder field is free text, and refusing to
+// make a folder people clearly meant was the top export failure.
 func exportRice(slug, dest string) (string, error) {
 	if !validRiceSlug(slug) {
 		return "", fmt.Errorf("bad rice slug %q", slug)
@@ -1093,8 +1188,9 @@ func exportRice(slug, dest string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if fi, err := os.Stat(dest); err != nil || !fi.IsDir() {
-		return "", fmt.Errorf("not a folder: %s", dest)
+	dest = expandUserDest(dest)
+	if err := os.MkdirAll(dest, 0o755); err != nil {
+		return "", fmt.Errorf("cannot use folder %s: %w", dest, err)
 	}
 	out := filepath.Join(dest, slug)
 	if err := os.MkdirAll(out, 0o755); err != nil {
@@ -1212,6 +1308,7 @@ func saveRiceJSON(s string) error {
 // trusted as a path; configs/ and README are the export's reading matter and
 // stay behind.
 func importRice(src string) (Rice, error) {
+	src = expandUserDest(src)
 	b, err := os.ReadFile(filepath.Join(src, "rice.json"))
 	if err != nil {
 		return Rice{}, fmt.Errorf("not a rice folder (no rice.json): %s", src)
@@ -1299,7 +1396,11 @@ func preflightData() map[string]any {
 		"live":       isVideo(wall),
 		"decors":     decors,
 		"widgets":    len(readJSONMap(widgetsStorePath())) > 0,
+		"plugins":    len(readJSONMap(pluginsStorePath())) > 0,
+		"stage":      len(readJSONMap(stageStorePath())) > 0,
+		"matugen":    len(readJSONMap(matugenStorePath())) > 0,
 		"visualizer": len(readJSONMap(visualizerStorePath())) > 0,
+		"profile":    len(readJSONMap(profileConfigPath())) > 0,
 		"fastfetch":  isFile(fastfetchConfigPath()),
 		"lock":       readLockPref(qylockThemePref()) != "",
 		"layers":     layers,

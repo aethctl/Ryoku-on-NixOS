@@ -19,7 +19,7 @@ Item {
     readonly property real r: Math.min(width, height) / 2
     readonly property real cx: width / 2
     readonly property real cy: height / 2
-    readonly property color ink: root.disc && root.daylight ? IrisStyle.onAccent : root.face.ink
+    readonly property color ink: root.disc && root.daylight ? IrisStyle.inkOnAccent : root.face.ink
     readonly property color inkQuiet: IrisStyle.tertiaryOf(root.ink)
     readonly property color hand: root.face.highlight
     readonly property real hours: (root.time.getHours() % 12) + root.time.getMinutes() / 60
@@ -53,7 +53,7 @@ Item {
         width: root.r * 2
         height: width
         radius: width / 2
-        color: root.daylight ? IrisStyle.text : IrisStyle.fill
+        color: root.daylight ? IrisStyle.text : root.face.fill
     }
 
     Shape {
@@ -82,13 +82,13 @@ Item {
             required property int index
             readonly property int hour: index === 0 ? 12 : index
             readonly property point at: root.point(index * 30, root.r * 0.68)
-            x: at.x - width / 2
-            y: at.y - height / 2
+            x: Math.round(at.x - width / 2)
+            y: Math.round(at.y - height / 2)
             text: hour
             color: index % 3 === 0 ? root.ink : IrisStyle.secondaryOf(root.ink)
             font.family: root.face.fontNumbers
             font.pixelSize: Math.max(8, Math.round(root.r * 0.2))
-            font.weight: Font.DemiBold
+            font.weight: IrisStyle.weight(Font.DemiBold)
             font.features: ({ "tnum": 1 })
             renderType: Text.NativeRendering
         }
@@ -97,12 +97,12 @@ Item {
     Text {
         visible: root.caption.length > 0
         anchors.horizontalCenter: parent.horizontalCenter
-        y: root.cy + root.r * 0.3
+        y: Math.round(root.cy + root.r * 0.3)
         text: root.caption
         color: IrisStyle.secondaryOf(root.ink)
         font.family: root.face.fontMain
         font.pixelSize: Math.max(8, Math.round(root.r * 0.16))
-        font.weight: Font.DemiBold
+        font.weight: IrisStyle.weight(Font.DemiBold)
         renderType: Text.NativeRendering
     }
 

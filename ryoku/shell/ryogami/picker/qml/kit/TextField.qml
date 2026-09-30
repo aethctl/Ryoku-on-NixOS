@@ -1,7 +1,8 @@
 import QtQuick
 
 // variant: "workbench" (default), "field" or "ghost"; committed fires on Enter or focus-out.
-Item {
+// A focus scope, so forceActiveFocus() on the field lands in the text input.
+FocusScope {
     id: field
 
     property alias text: input.text
@@ -59,6 +60,7 @@ Item {
 
     TextInput {
         id: input
+        focus: true
         anchors.fill: parent
         anchors.leftMargin: (field.glyph.length > 0 ? 26 : 7) * Theme.scale
         anchors.rightMargin: 7 * Theme.scale

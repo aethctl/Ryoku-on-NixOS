@@ -268,15 +268,6 @@ Scope {
                                     id: placeholderLayout
                                     anchors.centerIn: parent
 
-                                    MascotImage {
-                                        Layout.alignment: Qt.AlignHCenter
-                                        Layout.preferredWidth: 112
-                                        Layout.preferredHeight: 132
-                                        surface: "mediaControls"
-                                        fallbackSurface: "emptyStates"
-                                        pose: "headphone-groove-full-loop"
-                                    }
-
                                     StyledText {
                                         text: Translation.tr("No active player")
                                         font.pixelSize: Appearance.font.pixelSize.large

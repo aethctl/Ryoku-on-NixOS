@@ -36,7 +36,7 @@ Singleton {
             ? root.legacyAudioSource : configured
     }
     readonly property string effectiveAudioMode: isRecording && hasAudioMetadata ? activeAudioMode : configuredAudioMode
-    readonly property string recorderStatusPath: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/inir/recorder-status.json"
+    readonly property string recorderStatusPath: (Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")) + "/ryoku/recorder-status.json"
     // Timestamp (ms since epoch) when recording started, 0 when not recording
     property real recordingStartTime: 0
     // Elapsed seconds since recording started, updated every second
@@ -217,10 +217,11 @@ Singleton {
             try {
                 const payload = JSON.parse(metadataCollector.text)
                 const payloadPid = Number(payload.recorderPid ?? 0)
-                if (!root.isRecording || payloadPid <= 0 || payloadPid !== root.recorderPid) {
+                if (!root.isRecording || payloadPid <= 0) {
                     root.resetAudioMetadata()
                     return
                 }
+                root.recorderPid = payloadPid
                 root.requestedAudioMode = root.normalizeAudioMode(String(payload.requestedAudioMode ?? "system"))
                 root.activeAudioMode = root.normalizeAudioMode(String(payload.activeAudioMode ?? "none"))
                 root.audioFallback = payload.audioFallback === true
@@ -231,18 +232,15 @@ Singleton {
         }
     }
 
+    // Detection rides GSR's IPC socket, the Ryoku-scoped liveness check (a foreign
+    // gpu-screen-recorder is invisible to it). The recorder pid comes from the
+    // status file the backend writes, adopted when the metadata loads.
     Process {
         id: checkProcess
-        command: ["/usr/bin/pgrep", "-xo", "wf-recorder"]
-        stdout: StdioCollector {
-            id: recorderPidCollector
-        }
+        command: ["/usr/bin/gsr-cli", "-ipc", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-gsr.sock", "status"]
         onExited: (exitCode, exitStatus) => {
-            const previousPid = root.recorderPid
-            const parsedPid = parseInt(recorderPidCollector.text.trim(), 10)
-            root.recorderPid = exitCode === 0 && !isNaN(parsedPid) ? parsedPid : 0
-            root.isRecording = root.recorderPid > 0
-            if (root.isRecording && (!root.hasAudioMetadata || root.recorderPid !== previousPid))
+            root.isRecording = exitCode === 0
+            if (root.isRecording && !root.hasAudioMetadata)
                 root.loadAudioMetadata()
         }
     }

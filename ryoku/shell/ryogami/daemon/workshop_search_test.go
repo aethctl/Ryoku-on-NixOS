@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -114,5 +116,44 @@ func TestCommunityBrowseURL(t *testing.T) {
 		if !strings.Contains(u, want) {
 			t.Fatalf("url %q missing %q", u, want)
 		}
+	}
+}
+
+// TestWorkshopResultsShareTheSourceShape: the picker parses every source's
+// results with one reader, so a Workshop result must name each field it has in
+// common with the other sources exactly as they do. Snake-case keys here once
+// left every Workshop card without its thumbnail path, full image or size.
+func TestWorkshopResultsShareTheSourceShape(t *testing.T) {
+	shared := map[string]string{}
+	st := reflect.TypeOf(sourceItem{})
+	for i := 0; i < st.NumField(); i++ {
+		f := st.Field(i)
+		shared[f.Name] = strings.Split(f.Tag.Get("json"), ",")[0]
+	}
+	wt := reflect.TypeOf(wsItem{})
+	checked := 0
+	for i := 0; i < wt.NumField(); i++ {
+		f := wt.Field(i)
+		want, ok := shared[f.Name]
+		if !ok {
+			continue
+		}
+		checked++
+		if got := strings.Split(f.Tag.Get("json"), ",")[0]; got != want {
+			t.Errorf("wsItem.%s is sent as %q; every other source sends %q", f.Name, got, want)
+		}
+	}
+	if checked < 6 {
+		t.Fatalf("only %d fields compared; the item structs no longer line up", checked)
+	}
+
+	b, err := json.Marshal(wsItem{ID: "1", ThumbPath: "/t.jpg", FullURL: "https://x/full"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]interface{}
+	_ = json.Unmarshal(b, &m)
+	if m["thumbPath"] != "/t.jpg" || m["fullUrl"] != "https://x/full" {
+		t.Fatalf("encoded Workshop result = %s", b)
 	}
 }

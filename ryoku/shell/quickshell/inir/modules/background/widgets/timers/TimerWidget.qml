@@ -70,69 +70,45 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.instrument ? "instrument" : "cards"
                     model: [
                         { label: Translation.tr("Cards"), icon: "dashboard_2", value: "cards" },
                         { label: Translation.tr("Instrument"), icon: "timer", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.instrument === (modelData.value === "instrument")
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
+            WidgetQuickSection {
+                title: Translation.tr("Layout")
+                WidgetQuickChoices {
+                    current: root.vertical
+                    model: [
+                        { label: Translation.tr("Horizontal"), icon: "view_week", value: false },
+                        { label: Translation.tr("Vertical"), icon: "view_agenda", value: true }
+                    ]
+                    onPicked: value => root._setOutputValue("vertical", value)
+                }
+            }
+            WidgetQuickSection {
                 visible: root.instrument
-
+                title: Translation.tr("Show")
                 Repeater {
                     model: [
                         { label: Translation.tr("Progress"), icon: "linear_scale", key: "showProgress", fallback: true },
                         { label: Translation.tr("Details"), icon: "label", key: "showState", fallback: true },
                         { label: Translation.tr("Hundredths"), icon: "timer_10_alt_1", key: "showHundredths", fallback: true }
                     ]
-                    WidgetChoiceButton {
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
-                    }
-                }
-            }
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-
-                Repeater {
-                    model: [
-                        { label: "Horizontal", icon: "view_week", value: false },
-                        { label: "Vertical", icon: "view_agenda", value: true }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: Translation.tr(modelData.label)
-                        toggled: root.vertical === modelData.value
-                        onClicked: root._setOutputValue("vertical", modelData.value)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
             }
@@ -215,7 +191,18 @@ AbstractBackgroundWidget {
                     color: timerCard.signal
                 }
 
+                InstrumentLabel {
+                    visible: timerCard.instrumentMode
+                    Layout.fillWidth: true
+                    text: timerCard.label
+                    color: timerCard.mutedInk
+                    scaleFactor: root.scaleFactor
+                    size: 10
+                    strong: true
+                }
+
                 StyledText {
+                    visible: !timerCard.instrumentMode
                     Layout.fillWidth: true
                     text: timerCard.label
                     color: timerCard.mutedInk
@@ -229,15 +216,13 @@ AbstractBackgroundWidget {
                     elide: Text.ElideRight
                 }
 
-                StyledText {
+                InstrumentLabel {
                     visible: timerCard.instrumentMode && root.showState && timerCard.paused
                     text: Translation.tr("Paused")
                     color: timerCard.signal
-                    font.family: root.widgetBodyFamily
-                    font.pixelSize: Math.max(7, Math.round(8 * root.scaleFactor))
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: root.widgetMetadataTracking
-                    font.capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
+                    scaleFactor: root.scaleFactor
+                    size: 8
+                    strong: true
                 }
 
                 RippleButton {
@@ -279,7 +264,7 @@ AbstractBackgroundWidget {
                     : Font.Bold
                 font.family: root.widgetNumbersFamily
                 font.features: ({ "tnum": 1 })
-                font.letterSpacing: timerCard.instrumentMode ? -0.45 : 0
+                font.letterSpacing: timerCard.instrumentMode ? -1 : 0
             }
 
             Item {

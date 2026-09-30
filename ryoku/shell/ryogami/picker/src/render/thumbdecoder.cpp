@@ -33,6 +33,20 @@ QSize fitted(QSize source, QSize box)
                  std::max(1, int(std::lround(source.height() * scale))));
 }
 
+// Animated previews often open on a black frame, which would stand in for the whole item.
+bool blankFrame(const QImage &image)
+{
+    const int stepX = std::max(1, image.width() / 8);
+    const int stepY = std::max(1, image.height() / 8);
+    for (int y = stepY / 2; y < image.height(); y += stepY) {
+        for (int x = stepX / 2; x < image.width(); x += stepX) {
+            if (qGray(image.pixel(x, y)) > 12)
+                return false;
+        }
+    }
+    return true;
+}
+
 QImage decodeScaled(const QString &path, QSize box, QSize &sourceOut)
 {
     QImageReader reader(path);
@@ -40,6 +54,12 @@ QImage decodeScaled(const QString &path, QSize box, QSize &sourceOut)
     const QSize source = reader.size();
     reader.setScaledSize(fitted(source, box));
     QImage image = reader.read();
+    for (int skipped = 0; skipped < 8 && !image.isNull() && reader.supportsAnimation() && blankFrame(image); ++skipped) {
+        QImage next = reader.read();
+        if (next.isNull())
+            break;
+        image = std::move(next);
+    }
     if (image.isNull())
         return QImage();
     if (image.width() > box.width() || image.height() > box.height())

@@ -69,13 +69,12 @@ AbstractBackgroundWidget {
     // ── Popover: mode + resource toggles ──
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-            GridLayout {
-                columns: 2
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            spacing: 14
+
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.displayMode
                     model: [
                         { label: Translation.tr("Bars"), icon: "bar_chart", value: "bars" },
                         { label: Translation.tr("Graph"), icon: "show_chart", value: "graph" },
@@ -84,50 +83,47 @@ AbstractBackgroundWidget {
                         { label: Translation.tr("Tiles"), icon: "grid_view", value: "tiles" },
                         { label: Translation.tr("Instrument"), icon: "equalizer", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.displayMode === modelData.value
-                        onClicked: root._setOutputValue("displayMode", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("displayMode", value)
                 }
             }
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
-                    model: [
-                        { label: Translation.tr("CPU"), icon: "memory", key: "showCpu", fallback: true },
-                        { label: Translation.tr("RAM"), icon: "storage", key: "showMemory", fallback: true },
-                        { label: Translation.tr("GPU"), icon: "developer_board", key: "showGpu", fallback: true },
-                        { label: Translation.tr("CPU temp"), icon: "thermostat", key: "showTemp", fallback: false },
-                        { label: Translation.tr("GPU temp"), icon: "device_thermostat", key: "showGpuTemp", fallback: false },
-                        { label: Translation.tr("Disk"), icon: "hard_drive", key: "showDisk", fallback: false }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
-                        enabled: !toggled || root._resourceModel.length > 1
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+
+            WidgetQuickSection {
+                title: Translation.tr("Metrics")
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 2
+                    columnSpacing: 4
+                    rowSpacing: 4
+                    Repeater {
+                        model: [
+                            { label: Translation.tr("CPU"), icon: "memory", key: "showCpu", fallback: true },
+                            { label: Translation.tr("RAM"), icon: "storage", key: "showMemory", fallback: true },
+                            { label: Translation.tr("GPU"), icon: "developer_board", key: "showGpu", fallback: true },
+                            { label: Translation.tr("Disk"), icon: "hard_drive", key: "showDisk", fallback: false },
+                            { label: Translation.tr("CPU temp"), icon: "thermostat", key: "showTemp", fallback: false },
+                            { label: Translation.tr("GPU temp"), icon: "device_thermostat", key: "showGpuTemp", fallback: false }
+                        ]
+                        WidgetQuickToggle {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.maximumWidth: Number.POSITIVE_INFINITY
+                            implicitWidth: 150
+                            iconName: modelData.icon
+                            label: modelData.label
+                            checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                            enabled: !checked || root._resourceModel.length > 1
+                            onToggled: root._setOutputValue(modelData.key, !checked)
+                        }
                     }
                 }
-            }
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                leftmost: true; rightmost: true
-                buttonIcon: "label"
-                buttonText: Translation.tr("Labels")
-                toggled: root.showLabels
-                onClicked: root._setOutputValue("showLabels", !root.showLabels)
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "label"
+                    label: Translation.tr("Labels")
+                    checked: root.showLabels
+                    onToggled: root._setOutputValue("showLabels", !root.showLabels)
+                }
             }
         }
     }
@@ -211,7 +207,9 @@ AbstractBackgroundWidget {
     function _tileRole(key: string): var {
         const role = key === "mem" ? root.widgetSecondaryRole
             : key === "gpu" ? root.widgetTertiaryRole
-            : key === "temp" || key === "gpuTemp" ? root.widgetSignalRole
+            // Heat is only a signal when it is one: a cool reading in the alarm colour reads as a fault.
+            : key === "temp" || key === "gpuTemp" ? (root._metricSeverity(key) >= 2 ? root.widgetSignalRole
+                : root._metricSeverity(key) === 1 ? "warning" : root.widgetSurfaceRole)
             : key === "disk" ? root.widgetSurfaceRole
             : root.widgetPrimaryRole;
         const set = root.widgetSemanticSet(role);
@@ -258,10 +256,8 @@ AbstractBackgroundWidget {
     // backdrop polarity; do not saturate or re-hue either token. This keeps the
     // labels consistent with the shell's text hierarchy while the metric arc owns
     // the accent color.
-    readonly property color _metricLightInk: Appearance.m3colors.darkmode
-        ? Appearance.colors.colOnLayer0 : Appearance.m3colors.m3inverseOnSurface
-    readonly property color _metricDarkInk: Appearance.m3colors.darkmode
-        ? Appearance.m3colors.m3inverseOnSurface : Appearance.colors.colOnLayer0
+    readonly property color _metricLightInk: root._inkLight
+    readonly property color _metricDarkInk: root._inkDark
     readonly property color _metricText: root.forceLightInk ? root._metricLightInk
         : root.forceDarkInk ? root._metricDarkInk
         : root.widgetHasSurface
@@ -321,6 +317,8 @@ AbstractBackgroundWidget {
 
     // Animation duration for smooth value transitions
     readonly property int _animDuration: Appearance.animation.elementMove.duration
+    // Values tick every second: easing them behind windows repaints the desktop for nothing.
+    readonly property bool animatesValues: Appearance.animationsEnabled && root.motionActive
 
     property bool _holdingResourceUsage: false
     function _syncResourceUsage(): void {
@@ -526,7 +524,7 @@ AbstractBackgroundWidget {
                         opacity: root.fillOpacity
 
                         Behavior on width {
-                            enabled: Appearance.animationsEnabled
+                            enabled: root.animatesValues
                             NumberAnimation { duration: root._animDuration; easing.type: Easing.OutCubic }
                         }
                     }
@@ -693,7 +691,7 @@ AbstractBackgroundWidget {
                 // Smoothly interpolated value for display
                 property real _animatedValue: _liveValue
                 Behavior on _animatedValue {
-                    enabled: Appearance.animationsEnabled
+                    enabled: root.animatesValues
                     NumberAnimation { duration: root._animDuration; easing.type: Easing.OutCubic }
                 }
 

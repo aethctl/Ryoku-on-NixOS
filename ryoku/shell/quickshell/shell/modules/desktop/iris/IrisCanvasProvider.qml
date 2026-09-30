@@ -6,7 +6,7 @@ import inir.modules.background.widgets.japaneseTypography
 import inir.modules.background.widgets.visualizer
 
 // Visible host for one vendored iRiS CANVAS widget (the ones with no irisFace:
-// customImage, editorial, imageConverter, mascot, japaneseTypography,
+// customImage, editorial, imageConverter, japaneseTypography,
 // visualizer). Unlike the faces, the whole upstream widget is rendered here,
 // unmodified, at the slot's origin -- Ryoku's WidgetSlot owns placement, lock,
 // persistence and (in Ryoku style) the backing and geometry around it. The

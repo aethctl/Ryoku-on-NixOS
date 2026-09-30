@@ -101,8 +101,8 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 text: Ryoku.Polkit.message.length > 0
                     ? Ryoku.Polkit.message : Translation.tr("Authentication required")
-                font.pixelSize: 15 * IrisStyle.typeScale
-                font.weight: Font.DemiBold
+                font.pixelSize: IrisStyle.typeHeadline
+                font.weight: IrisStyle.weight(Font.DemiBold)
                 wrapMode: Text.Wrap
             }
             IrisText {
@@ -112,7 +112,7 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 text: Ryoku.Polkit.info
                 color: IrisStyle.subtext
-                font.pixelSize: 12 * IrisStyle.typeScale
+                font.pixelSize: IrisStyle.typeMeta
                 wrapMode: Text.Wrap
                 maximumLineCount: 4
                 elide: Text.ElideRight
@@ -127,14 +127,14 @@ Item {
                 enabled: root.interactionAvailable
                 echoMode: root.usePasswordChars ? TextInput.Password : TextInput.Normal
                 placeholderText: root.fieldLabel
-                font.pixelSize: 14 * IrisStyle.typeScale
+                font.pixelSize: IrisStyle.typeBody
                 onAccepted: root.submit()
                 background: Rectangle {
                     radius: height / 2
                     color: (input.activeFocus ? IrisStyle.fill : IrisStyle.fillQuiet)
                     border.width: input.activeFocus ? Math.max(1, Math.round(1.5 * root.d)) : 0
                     border.color: IrisStyle.tintBorder(IrisStyle.accent)
-                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                 }
             }
 

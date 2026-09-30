@@ -21,9 +21,9 @@ Column {
         var defs = chips.sources.sections(chips.provider)
         var out = []
         for (var i = 0; i < defs.length; ++i) {
-            var built = defs[i].build(chips.state, ctx)
-            if (built && built.length > 0)
-                out.push({ n: defs[i].n, group: defs[i].group, chips: built })
+            var built = defs[i].build(chips.state, ctx) || []
+            if (built.length > 0 || defs[i].input)
+                out.push({ n: defs[i].n, group: defs[i].group, chips: built, input: defs[i].input || null })
         }
         return out
     }
@@ -31,6 +31,8 @@ Column {
     function _copy() { return JSON.parse(JSON.stringify(chips.state)) }
 
     function _isActive(chip) {
+        if (chip.kind === "action")
+            return false
         if (chip.kind === "bool")
             return chips.state[chip.key] === true
         if (chip.kind === "swatch")
@@ -45,6 +47,12 @@ Column {
     }
 
     function _tap(chip) {
+        if (chip.kind === "action") {
+            var after = chips.sources.act(chips.provider, chip, chips._copy())
+            if (after)
+                chips.changed(after)
+            return
+        }
         var s = chips._copy()
         if (chip.kind === "bool") {
             s[chip.key] = !s[chip.key]
@@ -66,9 +74,15 @@ Column {
         chips.changed(s)
     }
 
+    // The source validates the text and returns the next state, or null to refuse it.
+    function _submit(input, text) {
+        return chips.sources.submit(chips.provider, input, text, chips._copy())
+    }
+
     Repeater {
         model: chips.model
         delegate: Column {
+            id: section
             required property var modelData
             width: chips.width
             spacing: 5 * Theme.scale
@@ -111,6 +125,27 @@ Column {
                             ? chips.sources.swatchColor(modelData.index, true) : "white"
                         active: chips._isActive(modelData)
                         onClicked: chips._tap(modelData)
+                    }
+                }
+            }
+
+            Loader {
+                width: parent.width
+                active: !!section.modelData.input
+                visible: active
+                sourceComponent: BrowserChipField {
+                    width: parent ? parent.width : 0
+                    placeholder: section.modelData.input.placeholder || ""
+                    glyph: section.modelData.input.glyph || ""
+                    // The new state rebuilds this section, so the field clears before it is emitted.
+                    onCommitted: function(text) {
+                        var next = chips._submit(section.modelData.input, text)
+                        if (!next) {
+                            reject()
+                            return
+                        }
+                        clear()
+                        chips.changed(next)
                     }
                 }
             }

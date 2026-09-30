@@ -49,8 +49,8 @@ Item {
         Rectangle {
             anchors.fill: parent
             gradient: Gradient {
-                GradientStop { position: 0; color: IrisStyle.veil }
-                GradientStop { position: 1; color: IrisStyle.veilHeavy }
+                GradientStop { position: 0; color: IrisStyle.artVeil }
+                GradientStop { position: 1; color: IrisStyle.artVeilHeavy }
             }
         }
         Rectangle {

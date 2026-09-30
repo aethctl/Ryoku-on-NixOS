@@ -55,8 +55,7 @@ Item {
         obstacle: root.plate
     })
     readonly property var placement: ({ sideways: true, towardsLeft: true, towardsUp: false })
-    readonly property real cardAir: (Config.options?.iris?.appearance?.surfaces?.cards?.joinOrigin ?? true)
-        ? -IrisStyle.weld : IrisFrame.bodyAir
+    readonly property real cardAir: IrisStyle.cardJoins ? -IrisStyle.weld : Math.max(IrisFrame.bodyAir, IrisStyle.cardGap)
 
     IrisSpring {
         id: islandSpring
@@ -110,7 +109,7 @@ Item {
                 radius: root.plate.width / 2, id: "plate" }]
             const body = card.bodyRect
             if (card.progress > 0 && body.width > 1) {
-                const joinOrigin = Config.options?.iris?.appearance?.surfaces?.cards?.joinOrigin ?? true
+                const joinOrigin = IrisStyle.cardJoins
                 const joinRise = joinOrigin ? IrisStyle.ramp(card.progress, 0.08, 0.3) : 0
                 out.push({ x: body.x, y: body.y, width: body.width, height: body.height, radius: body.radius,
                     paints: true, fuse: Math.round(IrisStyle.fuseDeep * joinRise), id: "card",
@@ -179,7 +178,7 @@ Item {
             opacity: 1 - IrisStyle.ramp(root.p, 0, IrisStyle.contentFall)
             text: "22:43"
             font.family: IrisStyle.fontNumbers
-            font.weight: Font.Bold
+            font.weight: IrisStyle.weight(Font.Bold)
             font.pixelSize: Math.round(13 * root.d)
         }
         Column {
@@ -188,7 +187,7 @@ Item {
             width: parent.width - 2 * Math.round(14 * root.d)
             spacing: Math.round(9 * root.d)
             opacity: IrisStyle.contentAt(root.p)
-            IrisText { text: "22:43"; font.family: IrisStyle.fontNumbers; font.weight: Font.Bold; font.pixelSize: Math.round(26 * root.d) }
+            IrisText { text: "22:43"; font.family: IrisStyle.fontNumbers; font.weight: IrisStyle.weight(Font.Bold); font.pixelSize: Math.round(26 * root.d) }
             Rectangle { width: parent.width * 0.7; height: Math.round(7 * root.d); radius: height / 2; color: IrisStyle.fill }
             Rectangle { width: parent.width * 0.5; height: Math.round(7 * root.d); radius: height / 2; color: IrisStyle.fillQuiet }
         }

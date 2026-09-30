@@ -484,6 +484,7 @@ Singleton {
     FileView {
         id: todayFileView
         path: ""
+        preload: false
     }
 
     Process {

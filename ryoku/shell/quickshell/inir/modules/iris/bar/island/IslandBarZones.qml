@@ -4,6 +4,7 @@ import QtQuick
 import inir
 import inir.services
 import inir.modules.common
+import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.iris.style
 import inir.modules.iris.components
@@ -16,6 +17,9 @@ Item {
     property bool vertical: false
     property real thickness: 42
     property real heartLength: 0
+    // The band the zones sit in across the bar: all of it, or a menu bar's strip.
+    property real laneTop: 0
+    property real lane: zones.height
     property var start: []
     property var center: []
     property var end: []
@@ -24,19 +28,32 @@ Item {
     property string clockStyle: "dateTime"
     property real clockScale: 1
     property color clockAccent: IrisStyle.frameAccent
+    // A clear menu bar leaves its items on the wallpaper: each group reads what is under it (Lume) and takes
+    // dark ink over a light one, as macOS does.
+    property bool clear: false
+    property bool bottomEdge: false
+    // How far the lane's centre moves toward the screen edge, so it sits in the middle of the body the eye sees.
+    property real lift: 0
+    readonly property real liftY: zones.bottomEdge ? zones.lift : -zones.lift
 
     readonly property real d: IrisStyle.density
-    readonly property real pieceSize: Math.round(zones.thickness - 10 * zones.d)
-    readonly property real endInset: Math.round((zones.thickness - zones.pieceSize) / 2)
+    // The rail changes depth, but the controls keep the full bar's touch and glyph scale.
+    readonly property bool strip: zones.lane < zones.height - 0.5
+    readonly property real pieceSize: Math.round(zones.thickness)
+    readonly property real faceBox: Math.min(zones.pieceSize, Math.round(32 * zones.d))
+    readonly property real endInset: Math.round(10 * zones.d)
     readonly property real gap: Math.round(6 * zones.d)
     readonly property real length: zones.vertical ? zones.height : zones.width
+    // The tray remains one usable piece when its individual apps would squeeze the live heart.
+    readonly property bool trayApps: String(Config.options?.iris?.tray?.face ?? "apps") === "apps"
+        && zones.length >= 1100 * zones.d
 
     function taken(kind: string): bool {
         if (zones.absorbed.includes(kind)) return false
-        return Config.options?.iris?.bubbles?.extras?.[kind]?.enable ?? false
+        return IrisPieces.floats(Config.options?.iris?.bubbles, kind)
     }
     function usable(kind: string): bool {
-        if (kind === "island" || kind === "window" || kind === "time") return true
+        if (kind === "island" || kind === "window" || kind === "time" || kind === "|") return true
         if (kind === "workspaces") return CompositorService.nativeOverview && !zones.taken(kind)
         return IrisPieces.extraIds.includes(kind) && IrisPieces.available(kind) && !zones.taken(kind)
     }
@@ -44,10 +61,11 @@ Item {
         const seen = []
         const out = [zones.start, zones.center, zones.end].map(list => Array.from(list ?? []).filter(kind => {
             const id = String(kind)
+            if (id === "|") return true
             if (seen.includes(id) || !zones.usable(id)) return false
             seen.push(id)
             return true
-        }))
+        }).filter((kind, i, list) => kind !== "|" || (i > 0 && i < list.length - 1 && list[i - 1] !== "|")))
         if (!seen.includes("island")) out[1].unshift("island")
         return out
     }
@@ -67,26 +85,51 @@ Item {
     function alongOf(group: Item): real { return zones.vertical ? group.height : group.width }
     readonly property real startEnd: zones.endInset + zones.alongOf(startGroup)
     readonly property real endStart: zones.length - zones.endInset - zones.alongOf(endGroup)
+    readonly property rect startArea: Qt.rect(startGroup.x, startGroup.y, startGroup.width, startGroup.height)
+    readonly property rect endArea: Qt.rect(endGroup.x, endGroup.y, endGroup.width, endGroup.height)
 
     component Group: Grid {
+        id: group
         property var kinds: []
+        property bool light: false
+        readonly property var backdrop: {
+            void (zones.x + zones.y + group.x + group.y + group.width + (zones.parent?.x ?? 0) + (zones.parent?.y ?? 0))
+            if (!zones.clear || zones.vertical || group.width < 1) return null
+            const at = group.mapToItem(null, 0, 0)
+            return Lume.read(zones.screenName, at.x, zones.bottomEdge ? at.y + group.height - zones.lane : at.y, group.width, zones.lane)
+        }
+        onBackdropChanged: group.light = group.backdrop ? Lume.lightAfter(group.backdrop.luminance, group.light, 0.30, 0.21) : false
         columns: zones.vertical ? 1 : Math.max(1, kinds.length)
         flow: zones.vertical ? Grid.TopToBottom : Grid.LeftToRight
         spacing: zones.gap
         verticalItemAlignment: Grid.AlignVCenter
         horizontalItemAlignment: Grid.AlignHCenter
         x: zones.vertical ? Math.round((zones.width - width) / 2) : 0
-        y: zones.vertical ? 0 : Math.round((zones.height - height) / 2)
+        y: zones.vertical ? 0 : Math.round(zones.laneTop + (zones.lane - height) / 2 + zones.liftY)
         Repeater {
             model: parent.kinds
             delegate: Loader {
                 id: entry
                 required property string modelData
                 visible: (item?.implicitWidth ?? 0) > 0.5 && (item?.implicitHeight ?? 0) > 0.5
-                sourceComponent: entry.modelData === "island" ? heartSlot
+                sourceComponent: entry.modelData === "|" ? breathEntry
+                    : entry.modelData === "island" ? heartSlot
                     : entry.modelData === "workspaces" ? workspacesEntry
                     : entry.modelData === "window" ? windowEntry
-                    : entry.modelData === "time" ? timeEntry : pieceEntry
+                    : entry.modelData === "time" ? timeEntry
+                    : entry.modelData === "tray" && zones.trayApps ? trayEntry : pieceEntry
+                Binding {
+                    when: entry.item !== null && entry.item.light !== undefined
+                    target: entry.item
+                    property: "light"
+                    value: group.light
+                }
+                Binding {
+                    when: entry.item !== null && entry.item.backdrop !== undefined
+                    target: entry.item
+                    property: "backdrop"
+                    value: group.backdrop
+                }
                 onLoaded: {
                     entry.item.kind = entry.modelData
                     if (entry.modelData === "island") zones.heartItem = entry
@@ -110,13 +153,13 @@ Item {
         id: startGroup
         kinds: zones.entries[0]
         x: zones.vertical ? Math.round((zones.width - width) / 2) : zones.endInset
-        y: zones.vertical ? zones.endInset : Math.round((zones.height - height) / 2)
+        y: zones.vertical ? zones.endInset : Math.round(zones.laneTop + (zones.lane - height) / 2 + zones.liftY)
     }
     Group {
         id: endGroup
         kinds: zones.entries[2]
         x: zones.vertical ? Math.round((zones.width - width) / 2) : Math.round(zones.width - zones.endInset - width)
-        y: zones.vertical ? Math.round(zones.height - zones.endInset - height) : Math.round((zones.height - height) / 2)
+        y: zones.vertical ? Math.round(zones.height - zones.endInset - height) : Math.round(zones.laneTop + (zones.lane - height) / 2 + zones.liftY)
     }
     Group {
         id: centerGroup
@@ -125,16 +168,27 @@ Item {
         readonly property real along: Math.round(Math.max(zones.startEnd + 2 * zones.gap,
             Math.min(zones.endStart - 2 * zones.gap - size, (zones.length - size) / 2)))
         x: zones.vertical ? Math.round((zones.width - width) / 2) : centerGroup.along
-        y: zones.vertical ? centerGroup.along : Math.round((zones.height - height) / 2)
+        y: zones.vertical ? centerGroup.along : Math.round(zones.laneTop + (zones.lane - height) / 2 + zones.liftY)
     }
 
     component Platter: Rectangle {
         property bool lit: false
         anchors.fill: parent
         radius: Math.min(width, height) / 2
-        color: IrisStyle.fillHover
+        property bool light: false
+        color: IrisStyle.fillHoverOf(light ? IrisStyle.inkOnLight : IrisStyle.text)
         opacity: lit ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
+    }
+
+    // Air between what the bar carries and the pieces it took in: grouped by space, never by a box.
+    Component {
+        id: breathEntry
+        Item {
+            property string kind: ""
+            implicitWidth: zones.vertical ? 1 : zones.gap * 2
+            implicitHeight: zones.vertical ? zones.gap * 2 : 1
+        }
     }
 
     Component {
@@ -151,13 +205,21 @@ Item {
         Item {
             id: piece
             property string kind: ""
-            implicitWidth: zones.pieceSize
+            property bool light: false
+            property var backdrop: null
+            implicitWidth: zones.vertical ? zones.pieceSize : face.laneWidth
             implicitHeight: zones.pieceSize
             IrisBubbleFace {
+                id: face
                 anchors.fill: parent
                 screenName: zones.screenName
                 kind: piece.kind
                 plated: true
+                lane: !zones.vertical
+                contentInset: Math.round((zones.pieceSize - zones.faceBox) / 2)
+                lightBackdrop: piece.light
+                backdrop: piece.backdrop
+                open: zones.island.pieceOpen(piece.kind, piece)
                 hovered: pieceHover.hovered
                 pressed: pieceTap.pressed
             }
@@ -189,10 +251,31 @@ Item {
     }
 
     Component {
+        id: trayEntry
+        Item {
+            property string kind: ""
+            property bool light: false
+            property var backdrop: null
+            implicitWidth: strip.width
+            implicitHeight: strip.height
+            IrisTrayStrip {
+                id: strip
+                cellSize: zones.pieceSize
+                vertical: zones.vertical
+                screenName: zones.screenName
+                menuToward: zones.island.trayMenuToward
+            }
+        }
+    }
+
+    Component {
         id: workspacesEntry
         Item {
             id: strip
             property string kind: ""
+            property bool light: false
+            property var backdrop: null
+            readonly property color ink: strip.light ? IrisStyle.inkOnLight : IrisStyle.text
             readonly property var list: {
                 const all = (WorkspaceService.allWorkspaces ?? []).filter(ws => ws.output === zones.screenName)
                     .sort((a, b) => a.idx - b.idx)
@@ -240,15 +323,16 @@ Item {
                         Behavior on height { enabled: zones.vertical; NumberAnimation { duration: IrisStyle.moveDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.moveCurve } }
                         Rectangle {
                             anchors.centerIn: parent
-                            readonly property real long: space.modelData.active ? space.extent - strip.slot + strip.dot : strip.dot
-                            width: zones.vertical ? strip.dot : long
-                            height: zones.vertical ? long : strip.dot
+                            readonly property real along: space.modelData.active ? space.extent - strip.slot + strip.dot : strip.dot
+                            width: zones.vertical ? strip.dot : along
+                            height: zones.vertical ? along : strip.dot
                             radius: strip.dot / 2
-                            color: space.modelData.active ? IrisStyle.accent
-                                : space.modelData.urgent ? IrisStyle.secondaryAccent
-                                : spaceHover.hovered ? IrisStyle.text
-                                : space.modelData.used ? IrisStyle.textSecondary : IrisStyle.textTertiary
-                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(140) } }
+                            color: space.modelData.active ? IrisStyle.markOn(IrisStyle.accent, strip.backdrop, strip.light, 3)
+                                : space.modelData.urgent ? IrisStyle.markOn(IrisStyle.secondaryAccent, strip.backdrop, strip.light, 3)
+                                : spaceHover.hovered ? strip.ink
+                                : space.modelData.used ? (strip.light ? IrisStyle.inkOnLightMuted : IrisStyle.textSecondary)
+                                : strip.light ? IrisStyle.inkOnLightFaint : IrisStyle.textTertiary
+                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(140); easing.type: IrisStyle.feedbackEasing } }
                         }
                         HoverHandler { id: spaceHover; cursorShape: Qt.PointingHandCursor }
                         TapHandler { onTapped: if (!space.modelData.active) WorkspaceService.switchToWorkspaceById(space.modelData.id) }
@@ -265,6 +349,8 @@ Item {
         Item {
             id: current
             property string kind: ""
+            property bool light: false
+            property var backdrop: null
             readonly property var window: {
                 const ws = (WorkspaceService.allWorkspaces ?? []).find(w => w.output === zones.screenName && w.is_active)
                 if (!ws) return null
@@ -294,8 +380,9 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(current.maxTitle, implicitWidth)
                 text: current.title
-                font.pixelSize: 12.5 * IrisStyle.typeScale
-                font.weight: Font.Medium
+                color: current.light ? IrisStyle.inkOnLight : IrisStyle.text
+                font.pixelSize: IrisStyle.typeLabel
+                font.weight: IrisStyle.weight(Font.Medium)
                 elide: Text.ElideRight
             }
             Accessible.role: Accessible.StaticText
@@ -308,10 +395,12 @@ Item {
         Item {
             id: time
             property string kind: ""
+            property bool light: false
+            property var backdrop: null
             readonly property real pad: Math.round(10 * zones.d)
             implicitWidth: zones.vertical ? zones.pieceSize : row.implicitWidth + 2 * time.pad
             implicitHeight: zones.vertical ? column.implicitHeight + 2 * time.pad : zones.pieceSize
-            Platter { lit: timeHover.hovered }
+            Platter { lit: timeHover.hovered; light: time.light }
             Row {
                 id: row
                 visible: !zones.vertical
@@ -321,12 +410,14 @@ Item {
                     visible: zones.clockStyle === "dateTime"
                     anchors.verticalCenter: parent.verticalCenter
                     pixelSize: 12 * IrisStyle.typeScale * zones.clockScale
-                    dayColor: zones.clockAccent
+                    dayColor: IrisStyle.markOn(zones.clockAccent, time.backdrop, time.light, 4.5)
+                    inkColor: time.light ? IrisStyle.inkOnLightMuted : IrisStyle.muted
                 }
                 IrisClock {
                     anchors.verticalCenter: parent.verticalCenter
                     pixelSize: 14 * IrisStyle.typeScale * zones.clockScale
-                    separatorColor: zones.clockAccent
+                    color: time.light ? IrisStyle.inkOnLight : IrisStyle.text
+                    separatorColor: IrisStyle.markOn(zones.clockAccent, time.backdrop, time.light, 3)
                 }
             }
             IslandStackedClock {

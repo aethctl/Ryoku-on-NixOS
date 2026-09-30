@@ -35,8 +35,15 @@ IrisWidgetFace {
     }
 
     function tint(device: var): color {
-        return device.low && !device.charging ? IrisStyle.danger : IrisStyle.identity.green
+        return device.low && !device.charging ? root.danger
+            : device.charging ? root.warm : root.accent
     }
+
+    readonly property int columns: root.small ? Math.min(2, root.devices.length) : root.devices.length
+    readonly property int rows: Math.ceil(root.devices.length / Math.max(1, root.columns))
+    readonly property real cellWidth: (root.contentWidth - root.dp(12) * (root.columns - 1)) / Math.max(1, root.columns)
+    readonly property real diameter: Math.min(root.dp(root.small ? 78 : 94), root.cellWidth,
+        (root.height - root.padding * 2 - root.dp(10) * (root.rows - 1)) / Math.max(1, root.rows) - root.dp(21))
 
     component Gauge: ColumnLayout {
         id: gauge
@@ -53,22 +60,42 @@ IrisWidgetFace {
                 tint: root.tint(gauge.device)
                 stroke: Math.max(3, gauge.diameter * 0.1)
             }
-            MaterialSymbol {
+            Row {
                 anchors.centerIn: parent
-                text: gauge.device.charging ? "bolt" : gauge.device.glyph
-                fill: 1
-                iconSize: gauge.diameter * 0.4
-                color: gauge.device.charging ? IrisStyle.identity.green : root.ink
+                spacing: root.dp(1)
+                FaceFigure {
+                    id: percentage
+                    face: root
+                    text: Math.round(gauge.device.level * 100)
+                    size: gauge.diameter / root.k * 0.29
+                }
+                FaceText {
+                    face: root
+                    anchors.baseline: percentage.baseline
+                    text: "%"
+                    size: Math.max(8, gauge.diameter / root.k * 0.14)
+                    color: root.inkSecondary
+                }
             }
         }
-        FaceText {
-            face: root
+        RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            text: Math.round(gauge.device.level * 100) + "%"
-            size: 13
-            weight: Font.DemiBold
-            font.family: root.fontNumbers
-            font.features: ({ "tnum": 1 })
+            Layout.maximumWidth: root.cellWidth
+            spacing: root.dp(4)
+            MaterialSymbol {
+                text: gauge.device.charging ? "bolt" : gauge.device.glyph
+                fill: 1
+                iconSize: root.px(14)
+                color: gauge.device.charging ? root.tint(gauge.device) : root.inkSecondary
+            }
+            FaceText {
+                face: root
+                visible: !root.small
+                Layout.fillWidth: true
+                text: gauge.device.name
+                size: 10.5
+                color: root.inkSecondary
+            }
         }
     }
 
@@ -82,7 +109,7 @@ IrisWidgetFace {
             text: "power"
             fill: 1
             iconSize: root.px(30)
-            color: IrisStyle.identity.green
+            color: root.accent
         }
         FaceText {
             face: root
@@ -114,10 +141,21 @@ IrisWidgetFace {
             tint: root.inkSecondary
         }
         Item { Layout.fillHeight: true }
-        FaceFigure {
-            face: root
-            text: Math.round((root.devices[0]?.level ?? 0) * 100) + "%"
-            size: 40
+        Row {
+            spacing: root.dp(2)
+            FaceFigure {
+                id: charge
+                face: root
+                text: Math.round((root.devices[0]?.level ?? 0) * 100)
+                size: 48
+            }
+            FaceText {
+                face: root
+                anchors.baseline: charge.baseline
+                text: "%"
+                size: 22
+                color: root.inkSecondary
+            }
         }
         FaceText {
             face: root
@@ -130,11 +168,11 @@ IrisWidgetFace {
         Rectangle {
             Layout.fillWidth: true
             Layout.topMargin: root.dp(8)
-            Layout.preferredHeight: root.dp(6)
+            Layout.preferredHeight: root.dp(9)
             radius: height / 2
-            color: IrisStyle.fill
+            color: root.fill
             Rectangle {
-                width: Math.max(parent.height, parent.width * (root.devices[0]?.level ?? 0))
+                width: parent.width * (root.devices[0]?.level ?? 0)
                 height: parent.height
                 radius: height / 2
                 color: root.devices.length > 0 ? root.tint(root.devices[0]) : "transparent"
@@ -142,18 +180,26 @@ IrisWidgetFace {
         }
     }
 
-    GridLayout {
+    ColumnLayout {
         visible: root.devices.length > 1 || (root.devices.length === 1 && !root.small)
         anchors.centerIn: parent
-        columns: root.small ? 2 : 4
-        columnSpacing: root.small ? root.dp(14) : root.dp(22)
-        rowSpacing: root.dp(6)
+        spacing: root.dp(10)
         Repeater {
-            model: root.devices
-            Gauge {
-                required property var modelData
-                device: modelData
-                diameter: root.small ? root.dp(40) : root.dp(62)
+            model: root.rows
+            RowLayout {
+                id: row
+                required property int index
+                Layout.alignment: Qt.AlignHCenter
+                spacing: root.dp(12)
+                Repeater {
+                    model: root.devices.slice(row.index * root.columns, (row.index + 1) * root.columns)
+                    Gauge {
+                        required property var modelData
+                        device: modelData
+                        diameter: root.diameter
+                        Layout.preferredWidth: root.cellWidth
+                    }
+                }
             }
         }
     }

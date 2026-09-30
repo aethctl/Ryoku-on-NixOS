@@ -140,7 +140,7 @@ Scope {
         const irisFaces = IrisRoster.faces;
         for (var k = 0; k < irisFaces.length; k++) {
             const f = irisFaces[k];
-            out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: Config[f.prefix + "Enabled"] === true, group: "iRiS widgets" });
+            out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: Config[f.prefix + "Enabled"] === true, group: "Shima widgets" });
         }
         for (var g = 0; g < order.length; g++) {
             const rows = byGroup[order[g]];

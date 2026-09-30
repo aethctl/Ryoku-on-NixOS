@@ -52,7 +52,7 @@ func (d *daemon) generateBugReport() (string, error) {
 		}
 	}
 
-	for _, label := range []string{"picker", "video"} {
+	for _, label := range []string{"picker", "video", "paper"} {
 		if lp := managedLogPath(label); lp != "" {
 			if data, err := os.ReadFile(lp); err == nil {
 				add("logs/"+label+".log", data)

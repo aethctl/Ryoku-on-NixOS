@@ -105,8 +105,9 @@ func runCatalog(w io.Writer, provs []Provider, args []string) error {
 		// cache, so this never does worse than serving the snapshot. A snapshot
 		// built under another window manager is stale the same way: it answers
 		// which products run here, and after a compositor switch that answer is
-		// the old one.
-		if data, err := os.ReadFile(snapshot); err == nil && len(data) > 0 && !snapshotOffline(data) && !snapshotForeignWindowManager(data) {
+		// the old one. One whose built-in styles read differently predates this
+		// binary.
+		if data, err := os.ReadFile(snapshot); err == nil && len(data) > 0 && !snapshotOffline(data) && !snapshotForeignWindowManager(data) && !snapshotStaleBuiltins(data) {
 			_, err := w.Write(data)
 			return err
 		}

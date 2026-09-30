@@ -169,7 +169,6 @@ func Apps() []App {
 		{"neovim", "the shipped editor"},
 		{"nautilus", "the graphical file manager"},
 		{"nautilus-python", "the Ryoku stash actions in Nautilus' right-click menu"},
-		{"ryomotion", "the screen-demo recorder and editor"},
 		{"waifu2x-ncnn-vulkan", "AI upscale behind ryoshot Beautify HD and ryowalls Enhance"},
 		{"pavucontrol", "the GUI mixer the bar's Open audio button launches"},
 		{"songrec", "Recognize Music in the launcher"},

@@ -136,7 +136,7 @@ Item {
         MenuRow {
             visible: menu.isIris
             label: I18n.tr("Style")
-            value: menu.isRyokuStyle ? "Ryoku" : "iNiR"
+            value: menu.isRyokuStyle ? "Ryoku" : "Original"
             on: menu.isRyokuStyle
             closeOnTrigger: false
             onTriggered: Config.set(menu.scope + "Style", menu.isRyokuStyle ? "inir" : "ryoku")

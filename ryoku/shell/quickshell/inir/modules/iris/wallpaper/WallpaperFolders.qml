@@ -41,53 +41,26 @@ ColumnLayout {
     }
 
     Strip {
+        rowHeight: Math.round((root.picker.libraryFolders.length > 0 ? 44 : 30) * root.d)
         Repeater {
             model: root.picker.places
-            MouseArea {
+            IrisChip {
                 id: place
                 required property var modelData
-                readonly property bool here: root.picker.folderPath === place.modelData.path
-                width: placeRow.implicitWidth + Math.round(22 * root.d)
-                height: Math.round(30 * root.d)
-                hoverEnabled: true
-                cursorShape: place.here ? Qt.ArrowCursor : Qt.PointingHandCursor
-                Accessible.role: Accessible.Button
-                Accessible.name: place.modelData.label
+                y: Math.round(((parent?.height ?? height) - height) / 2)
+                glyph: place.modelData.glyph
+                label: place.modelData.label
+                selected: root.picker.folderPath === place.modelData.path
                 onClicked: root.picker.openFolder(place.modelData.path)
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                    color: place.here ? IrisStyle.tintFill(IrisStyle.accent)
-                        : place.pressed ? IrisStyle.fillActive
-                        : place.containsMouse ? IrisStyle.fillHover : IrisStyle.fillQuiet
-                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
-                }
-                Row {
-                    id: placeRow
-                    anchors.centerIn: parent
-                    spacing: Math.round(6 * root.d)
-                    MaterialSymbol {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: place.modelData.glyph
-                        fill: 1
-                        iconSize: Math.round(16 * root.d)
-                        color: place.here || place.modelData.pinned ? IrisStyle.accent : IrisStyle.subtext
-                    }
-                    IrisText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: place.modelData.label
-                        color: place.here ? IrisStyle.accent : IrisStyle.text
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                        font.weight: place.here ? Font.DemiBold : Font.Medium
-                    }
-                }
             }
         }
-    }
-
-    Strip {
-        visible: root.picker.libraryFolders.length > 0
-        rowHeight: Math.round(44 * root.d)
+        Rectangle {
+            visible: root.picker.libraryFolders.length > 0 && root.picker.places.length > 0
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1
+            height: Math.round(20 * root.d)
+            color: IrisStyle.hairline
+        }
         Repeater {
             model: root.picker.libraryFolders
             MouseArea {
@@ -108,7 +81,7 @@ ColumnLayout {
                     radius: IrisStyle.radiusTile
                     color: folder.pressed ? IrisStyle.fillActive : folder.containsMouse ? IrisStyle.fillHover : IrisStyle.fillQuiet
                     scale: folder.pressed ? IrisStyle.pressScale(0.97) : 1
-                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                     Behavior on scale { NumberAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                 }
                 Row {
@@ -141,6 +114,7 @@ ColumnLayout {
                                 thumbnailSizeName: "normal"
                                 fillMode: Image.PreserveAspectCrop
                                 sourceSize.width: Math.round(width * 2)
+                                mipmap: true
                                 sourceSize.height: Math.round(height * 2)
                             }
                         }
@@ -148,8 +122,10 @@ ColumnLayout {
                     IrisText {
                         anchors.verticalCenter: parent.verticalCenter
                         text: folder.modelData.name
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                        font.weight: Font.Medium
+                        width: Math.min(implicitWidth, Math.round(200 * root.d))
+                        elide: Text.ElideRight
+                        font.pixelSize: IrisStyle.typeLabel
+                        font.weight: IrisStyle.weight(Font.Medium)
                     }
                     IrisText {
                         anchors.verticalCenter: parent.verticalCenter
@@ -158,8 +134,8 @@ ColumnLayout {
                         color: IrisStyle.secondaryAccent
                         font.family: IrisStyle.fontNumbers
                         font.features: ({ "tnum": 1 })
-                        font.pixelSize: 11.5 * IrisStyle.typeScale
-                        font.weight: Font.Bold
+                        font.pixelSize: IrisStyle.typeMeta
+                        font.weight: IrisStyle.weight(Font.Bold)
                     }
                 }
             }

@@ -33,7 +33,7 @@ if (( n == 0 )); then
   echo "provider still coming up" >&2
   exit 1
 fi
-printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"gammastep"}'
+printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"wlsunset"}'
 `)
 	if err := os.WriteFile(prov, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ printf '%s' '{"name":"testwm","supports":["nightLight"],"nightLightProcess":"gam
 	if err != nil {
 		t.Fatalf("second caps probe should succeed once the provider answers: %v", err)
 	}
-	if caps.NightLightProcess != "gammastep" {
+	if caps.NightLightProcess != "wlsunset" {
 		t.Fatalf("reprobe did not pick up the real caps: %+v", caps)
 	}
 	if !c.Can(CapNightLight) {

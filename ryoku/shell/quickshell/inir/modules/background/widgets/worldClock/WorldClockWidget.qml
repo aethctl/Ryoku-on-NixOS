@@ -7,6 +7,7 @@ import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.background.widgets
+import inir.modules.background.widgets.instrument
 import inir.modules.iris.widgets
 
 AbstractBackgroundWidget {
@@ -99,148 +100,102 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            property var availableTimezones: WorldClock.comboModel.filter(
+            id: worldQuickRoot
+            readonly property var availableTimezones: WorldClock.comboModel.filter(
                 entry => !WorldClock.timezones.includes(entry.tz))
-            spacing: 6
+            spacing: 14
 
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-
-                Repeater {
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.instrument ? "instrument" : "cards"
                     model: [
                         { label: Translation.tr("List"), icon: "view_list", value: "cards" },
                         { label: Translation.tr("Instrument"), icon: "avg_pace", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.instrument === (modelData.value === "instrument")
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
-            }
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.instrument
-
-                Repeater {
+                WidgetQuickChoices {
+                    visible: root.instrument
+                    current: root.instrumentLayout
                     model: [
                         { label: Translation.tr("Atlas"), icon: "travel_explore", value: "grid" },
                         { label: Translation.tr("Strip"), icon: "view_agenda", value: "rows" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.instrumentLayout === modelData.value
-                        onClicked: root._setOutputValue("instrumentLayout", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("instrumentLayout", value)
                 }
             }
 
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
+            WidgetQuickSection {
                 visible: root.instrument
-
+                title: Translation.tr("Show")
                 Repeater {
                     model: [
                         { label: Translation.tr("Offsets"), icon: "schedule", key: "showOffsets", fallback: true },
                         { label: Translation.tr("Date"), icon: "calendar_today", key: "showDate", fallback: true },
-                        { label: Translation.tr("Day/Night"), icon: "routine", key: "showDayState", fallback: true }
+                        { label: Translation.tr("Day and night"), icon: "routine", key: "showDayState", fallback: true }
                     ]
-                    WidgetChoiceButton {
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
             }
 
-            Repeater {
-                model: WorldClock.timezones.length
-                delegate: RowLayout {
-                    required property int index
+            WidgetQuickSection {
+                title: Translation.tr("Cities")
+                detail: WorldClock.timezones.length + " / " + WorldClock.maxTimezones
+
+                Repeater {
+                    model: WorldClock.timezones.length
+                    delegate: RowLayout {
+                        required property int index
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        StyledComboBox {
+                            Layout.fillWidth: true
+                            model: WorldClock.comboModel
+                            textRole: "label"
+                            currentIndex: Math.max(0, WorldClock.comboModel.findIndex(o => o.tz === WorldClock.timezones[index]))
+                            onActivated: idx => WorldClock.setTimezone(index, WorldClock.comboModel[idx].tz)
+                        }
+                        WidgetQuickChoice {
+                            enabled: WorldClock.timezones.length > 1
+                            opacity: enabled ? 1 : 0.35
+                            iconName: "close"
+                            tooltip: Translation.tr("Remove city")
+                            onClicked: WorldClock.removeTimezone(index)
+                        }
+                    }
+                }
+
+                RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
-
-                    StyledText {
-                        text: Translation.tr("City %1").arg(index + 1)
-                        font.pixelSize: Appearance.font.pixelSize.smaller
-                    }
+                    visible: WorldClock.timezones.length < WorldClock.maxTimezones
+                        && worldQuickRoot.availableTimezones.length > 0
 
                     StyledComboBox {
+                        id: addTimezoneCombo
                         Layout.fillWidth: true
-                        model: WorldClock.comboModel
+                        model: worldQuickRoot.availableTimezones
                         textRole: "label"
-                        currentIndex: Math.max(0, WorldClock.comboModel.findIndex(o => o.tz === WorldClock.timezones[index]))
-                        onActivated: idx => WorldClock.setTimezone(index, WorldClock.comboModel[idx].tz)
                     }
-
-                    RippleButton {
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 30
-                        enabled: WorldClock.timezones.length > 1
-                        opacity: enabled ? 1 : 0.32
-                        buttonRadius: root.widgetControlRadius
-                        colBackground: "transparent"
-                        colBackgroundHover: ColorUtils.applyAlpha(root.widgetInk, 0.10)
-                        colRipple: ColorUtils.applyAlpha(root.widgetInk, 0.16)
-                        releaseAction: () => WorldClock.removeTimezone(index)
-                        contentItem: MaterialSymbol {
-                            anchors.centerIn: parent
-                            text: "close"
-                            color: root.widgetInkMuted
-                            iconSize: 16
+                    WidgetQuickChoice {
+                        iconName: "add"
+                        selected: true
+                        tooltip: Translation.tr("Add city")
+                        onClicked: {
+                            const entry = worldQuickRoot.availableTimezones[addTimezoneCombo.currentIndex]
+                            if (entry)
+                                WorldClock.addTimezone(entry.tz)
                         }
-                        StyledToolTip { text: Translation.tr("Remove city") }
                     }
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
-                visible: WorldClock.timezones.length < WorldClock.maxTimezones
-                    && parent.availableTimezones.length > 0
-
-                StyledComboBox {
-                    id: addTimezoneCombo
-                    Layout.fillWidth: true
-                    model: parent.parent.availableTimezones
-                    textRole: "label"
-                }
-                RippleButton {
-                    Layout.preferredWidth: 32
-                    Layout.preferredHeight: 30
-                    buttonRadius: root.widgetControlRadius
-                    colBackground: ColorUtils.applyAlpha(root.widgetAccentVisible, 0.12)
-                    colBackgroundHover: ColorUtils.applyAlpha(root.widgetAccentVisible, 0.20)
-                    colRipple: ColorUtils.applyAlpha(root.widgetAccentVisible, 0.28)
-                    releaseAction: () => {
-                        const entry = parent.parent.availableTimezones[addTimezoneCombo.currentIndex]
-                        if (entry)
-                            WorldClock.addTimezone(entry.tz)
-                    }
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent
-                        text: "add"
-                        color: root.widgetAccentVisible
-                        iconSize: 17
-                    }
-                    StyledToolTip { text: Translation.tr("Add city") }
                 }
             }
         }
@@ -287,24 +242,13 @@ AbstractBackgroundWidget {
             Layout.preferredHeight: Math.max(20, Math.round(24 * root.scaleFactor))
             spacing: Math.round(7 * root.scaleFactor)
 
-            StyledText {
+            InstrumentLabel {
                 Layout.fillWidth: true
-                text: Translation.tr("World time")
-                color: root.widgetInk
-                font.family: root.widgetTitleFamily
-                font.pixelSize: Math.max(15, Math.round(17 * root.widgetTitleScale * root.scaleFactor))
-                font.weight: root.widgetTitleWeight
-                font.letterSpacing: root.widgetTitleTracking
-            }
-            StyledText {
-                visible: root.cities.length > 1
-                text: Translation.tr("%1 zones").arg(root.cities.length)
-                color: root.widgetInkMuted
-                font.family: root.widgetBodyFamily
-                font.pixelSize: Math.max(10, Math.round(10 * root.scaleFactor))
-                font.weight: Font.Medium
-                font.letterSpacing: root.widgetMetadataTracking
-                font.capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
+                text: root.cities.length > 1 ? Translation.tr("Chronometer / %1 zones").arg(root.cities.length)
+                    : Translation.tr("Chronometer / Zone")
+                color: root.widgetAccentVisible
+                scaleFactor: root.scaleFactor
+                strong: true
             }
         }
 
@@ -342,17 +286,13 @@ AbstractBackgroundWidget {
                             radius: height / 2
                             color: referenceZone.accent
                         }
-                        StyledText {
+                        InstrumentLabel {
                             Layout.fillWidth: true
                             visible: referenceZone.modelData
-                            text: referenceZone.modelData ? root.widgetCase(String(referenceZone.modelData.name)) : ""
+                            text: referenceZone.modelData ? String(referenceZone.modelData.name) : ""
                             color: root.widgetInkMuted
-                            elide: Text.ElideRight
-                            font.family: root.widgetBodyFamily
-                            font.pixelSize: Math.max(9, Math.round(10 * root.scaleFactor))
-                            font.weight: root.widgetLabelWeight
-                            font.letterSpacing: root.widgetMetadataTracking
-                            font.capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
+                            scaleFactor: root.scaleFactor
+                            size: 10
                         }
                         StyledText {
                             visible: root.showOffsets && referenceZone.modelData
@@ -399,16 +339,12 @@ AbstractBackgroundWidget {
                             font.pixelSize: Math.max(8, Math.round(9 * root.scaleFactor))
                             font.weight: Font.Bold
                         }
-                        StyledText {
+                        InstrumentLabel {
                             Layout.fillWidth: true
                             visible: root.showDate
                             text: root.cityDateText(0)
                             color: root.widgetInkMuted
-                            font.family: root.widgetBodyFamily
-                            font.pixelSize: Math.max(8, Math.round(9 * root.scaleFactor))
-                            font.weight: Font.Medium
-                            font.letterSpacing: root.widgetMetadataTracking
-                            font.capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
+                            scaleFactor: root.scaleFactor
                         }
                     }
                 }
@@ -505,7 +441,7 @@ AbstractBackgroundWidget {
                                 font.pixelSize: Math.max(20, Math.round(24 * root.scaleFactor))
                                 font.weight: root.widgetEditorial ? Appearance.editorial.titleWeight : Font.DemiBold
                                 font.features: ({ "tnum": 1 })
-                                font.letterSpacing: -0.6
+                                font.letterSpacing: -1
                             }
                         }
                     }

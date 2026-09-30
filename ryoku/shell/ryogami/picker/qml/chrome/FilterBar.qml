@@ -41,6 +41,16 @@ Item {
     readonly property real gap: 8 * Theme.scale
     readonly property real offX: Number(root.val("filterBar.offsetX", 0))
     readonly property real offY: Number(root.val("filterBar.offsetY", 0))
+    readonly property bool muted: root.val("wallpaperMute", true) === true
+    readonly property bool audioActive: {
+        var outs = Library.outputs || []
+        for (var i = 0; i < outs.length; ++i) {
+            var t = outs[i].current ? outs[i].current.type : ""
+            if (t === "video" || t === "we")
+                return true
+        }
+        return false
+    }
 
     readonly property bool revealed: (root.state ? root.state.filterBarShown : false)
         && !(root.field && root.field.flippedIndex >= 0)
@@ -150,17 +160,19 @@ Item {
         }, function () {})
     }
 
+    // The library filters on wide/tall; the remote browser's landscape/portrait belong to a
+    // different view and never matched, so the Shape button relabelled without filtering.
     function cycleShape() {
         if (!root.view) return
         var o = root.view.orientation
-        root.view.orientation = (o === "" || o === undefined) ? "landscape"
-                              : (o === "landscape") ? "portrait" : ""
+        root.view.orientation = (o === "" || o === undefined) ? "wide"
+                              : (o === "wide") ? "tall" : ""
     }
     function shapeLabel() {
         if (!root.view) return I18n.tr("Shape")
         var o = root.view.orientation
-        return (o === "landscape") ? I18n.tr("Wide")
-             : (o === "portrait") ? I18n.tr("Tall") : I18n.tr("Shape")
+        return (o === "wide") ? I18n.tr("Wide")
+             : (o === "tall") ? I18n.tr("Tall") : I18n.tr("Shape")
     }
 
     property int resIndex: -1
@@ -184,8 +196,8 @@ Item {
         root.view.minHeight = Number(p.minHeight) || 0
         root.view.maxWidth = Number(p.maxWidth) || 0
         root.view.maxHeight = Number(p.maxHeight) || 0
-        if (p.orientation === "wide") root.view.orientation = "landscape"
-        else if (p.orientation === "tall") root.view.orientation = "portrait"
+        if (p.orientation === "wide") root.view.orientation = "wide"
+        else if (p.orientation === "tall") root.view.orientation = "tall"
     }
     function resLabel() {
         var presets = root.resPresets()
@@ -442,6 +454,26 @@ Item {
             onTriggered: if (root.state) root.state.openSheet("playlists", undefined)
         }
 
+        // Shown while a display plays a video or scene, the only wallpapers with sound.
+        BarButton {
+            visible: root.audioActive
+            barStyle: root.barStyle
+            railWidth: root.rail
+            glyph: root.muted ? "\u{f075f}" : "\u{f057e}"
+            tooltip: root.muted ? I18n.tr("Unmute wallpapers") : I18n.tr("Mute wallpapers")
+            active: !root.muted
+            onTriggered: Settings.set("wallpaperMute", !root.muted)
+        }
+        BarButton {
+            visible: root.audioActive
+            barStyle: root.barStyle
+            railWidth: root.rail
+            glyph: "\u{f062e}"
+            tooltip: I18n.tr("Audio mixer")
+            active: root.state && root.state.sheet === "audio"
+            onTriggered: if (root.state) root.state.openSheet("audio", undefined)
+        }
+
         DownloadMenu {
             visible: root.show("filterBar.show.download")
             state: root.state
@@ -457,6 +489,16 @@ Item {
             tooltip: I18n.tr("Settings")
             active: root.state && root.state.sheet === "settings"
             onTriggered: if (root.state) root.state.openSheet("settings", undefined)
+        }
+
+        Repeater {
+            model: Tasks.bar
+            delegate: TaskChip {
+                required property var modelData
+                task: modelData
+                barStyle: root.barStyle
+                railWidth: root.rail
+            }
         }
     }
 }

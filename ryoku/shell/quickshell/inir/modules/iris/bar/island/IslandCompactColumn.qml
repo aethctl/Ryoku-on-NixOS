@@ -23,7 +23,8 @@ Item {
     readonly property Item current: ({ idle: clockStack, clock: clockStack, media: mediaStack, record: recordStack,
         timer: timerStack, task: taskStack, edit: editStack })[column.mode] ?? clockStack
     implicitWidth: column.thickness
-    implicitHeight: column.current.implicitHeight
+    implicitHeight: column.current.implicitHeight + (column.island.zoned ? Math.round(16 * column.d) : 0)
+
 
     component Stack: Column {
         property string modes: ""
@@ -68,14 +69,21 @@ Item {
             width: Math.round(24 * column.d)
             height: width
             source: MediaArtwork.displaySource
-            circular: Config.options?.iris?.player?.roundCover ?? true
+            circular: Config.options?.iris?.player?.roundCover ?? false
             radius: circular ? width / 2 : 6 * column.d
         }
-        Waveform {
+        IrisVisualizer {
             anchors.horizontalCenter: parent.horizontalCenter
             running: column.island.playing && column.mode === "media" && !column.island.visualExpanded
-            tint: column.island.artTint
+            tint: IrisStyle.visualizerTint(column.island.artTint)
             barHeight: 13 * column.d
+        }
+        // On its side there is room for the time under what plays.
+        IslandStackedClock {
+            anchors.horizontalCenter: parent.horizontalCenter
+            pixelSize: 13 * IrisStyle.typeScale * column.clockScale
+            accent: column.clockAccent
+            showDay: false
         }
     }
 
@@ -152,7 +160,7 @@ Item {
                 anchors.centerIn: parent
                 text: "check"
                 iconSize: 16 * column.d
-                color: IrisStyle.onAccent
+                color: IrisStyle.inkOnAccent
             }
         }
     }

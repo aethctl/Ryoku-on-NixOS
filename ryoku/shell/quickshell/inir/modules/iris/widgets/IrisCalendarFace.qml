@@ -92,7 +92,7 @@ IrisWidgetFace {
                         anchors.centerIn: parent
                         visible: cell.modelData.currentMonth || root.adjacent
                         text: cell.modelData.day
-                        color: cell.modelData.isToday ? IrisStyle.onTintFor(root.highlight)
+                        color: cell.modelData.isToday ? root.onFill(root.highlight)
                             : cell.modelData.currentMonth ? root.ink : root.inkTertiary
                         size: grid.cellText
                         weight: cell.modelData.isToday ? Font.Bold : Font.Medium
@@ -235,7 +235,7 @@ IrisWidgetFace {
                     Layout.preferredWidth: root.dp(28)
                     Layout.preferredHeight: root.dp(28)
                     radius: width / 2
-                    color: navHover.hovered ? IrisStyle.fillHover : IrisStyle.fillQuiet
+                    color: navHover.hovered ? root.fillHover : root.fillQuiet
                     MaterialSymbol {
                         anchors.centerIn: parent
                         text: navButton.modelData.glyph
@@ -262,7 +262,7 @@ IrisWidgetFace {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: IrisStyle.hairline
+            color: root.hairline
         }
         EventLine {
             Layout.fillWidth: true

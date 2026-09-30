@@ -31,6 +31,8 @@ Q_SIGNALS:
 
 private:
     void ensurePipeline();
+    // Frames arrive queued from the decoder thread; a new generation drops the last clip's.
+    void listen();
     void onFrame(const QVideoFrame &frame);
 
     QMediaPlayer *m_player = nullptr;
@@ -41,4 +43,6 @@ private:
     QVideoFrame m_latest;
     bool m_hasFrame = false;
     bool m_active = false;
+    quint64 m_generation = 0;
+    QMetaObject::Connection m_frameConnection;
 };

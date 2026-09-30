@@ -2,7 +2,10 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import QtQuick.Shapes
+import Quickshell
 import inir.services
+import inir.services.deferred
+import Quickshell.Widgets
 import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.common.widgets
@@ -14,14 +17,41 @@ Item {
 
     property string kind: ""
     property string appId: ""
+    property var trayItem: null
     property string screenName: ""
     readonly property real d: IrisStyle.density
 
     readonly property var player: MprisController.activePlayer
     property bool playing: root.player?.isPlaying ?? false
-    property real mediaProgress: (root.player?.length ?? 0) > 0
-        ? Math.max(0, Math.min(1, (root.player?.position ?? 0) / root.player.length)) : 0
-    property color tint: IrisStyle.text
+    property real mediaProgress: MprisController.lengthOf(root.player) > 0
+        ? Math.max(0, Math.min(1, MprisController.positionOf(root.player) / MprisController.lengthOf(root.player))) : 0
+    // Bare on the wallpaper (a clear menu bar), `backdrop` is Lume's reading under the face: the ink flips with
+    // `lightBackdrop`, identity turns to ink as a template glyph does, and state colours keep their hue at a legible depth.
+    property bool lightBackdrop: false
+    property var backdrop: null
+    readonly property bool bare: root.backdrop !== null
+    readonly property color ink: root.lightBackdrop ? IrisStyle.inkOnLight : IrisStyle.text
+    readonly property color inkMuted: root.lightBackdrop ? IrisStyle.inkOnLightMuted : IrisStyle.muted
+    readonly property color inkFaint: root.lightBackdrop ? IrisStyle.inkOnLightFaint : IrisStyle.textTertiary
+    readonly property color inkSoft: root.lightBackdrop ? IrisStyle.inkOnLightSoft : IrisStyle.subtext
+    function legible(seed: color, contrast: real): color {
+        return root.bare ? IrisStyle.markOn(seed, root.backdrop, root.lightBackdrop, contrast) : seed
+    }
+    function identityInk(seed: color): color { return root.bare ? root.ink : seed }
+    readonly property color faceAccent: root.legible(IrisStyle.accent, 3)
+    readonly property color highlight: root.legible(IrisStyle.secondaryAccent, 3)
+    readonly property color alertInk: root.legible(IrisStyle.badgeInk, 4.5)
+    readonly property color dangerInk: root.legible(IrisStyle.danger, 3)
+    readonly property bool radialVisualizer: IrisStyle.visualizerStyle === "ring"
+    // In a bar's lane a face with a figure reads on one line, glyph then figure, and sizes from both.
+    property bool lane: false
+    // A bar cell is its touch target; what it draws keeps the size of the bar's other marks.
+    property real contentInset: 0
+    readonly property bool inline: root.lane && ["notifications", "weather", "calendar", "updates"].includes(root.kind)
+    readonly property real laneWidth: root.inline ? Math.max(root.height, inlineFace.implicitWidth + 2 * Math.round(8 * root.d)) : root.height
+    // What this piece opened (its card, its page, the Control Center) is showing: the plate stays lit, as a menu bar item does.
+    property bool open: false
+    property color tint: root.ink
     property bool coverHidden: false
     readonly property alias artwork: cover
 
@@ -37,11 +67,15 @@ Item {
     readonly property string timerGlyph: root.timerKind === "pomodoro" && TimerService.pomodoroBreak ? "coffee"
         : root.timerKind === "stopwatch" ? "timer" : "hourglass_top"
 
-    property int trayCount: SystemTray.items.values.filter(item => item && item.id
-        && (!(Config.options?.iris?.tray?.hidePassive ?? false) || item.status !== Status.passive)).length
+    readonly property var trayItems: SystemTray.items.values.filter(item => item && item.id
+        && (!(Config.options?.iris?.tray?.hidePassive ?? false) || item.status !== Status.passive))
+    property int trayCount: root.trayItems.length
+    readonly property bool trayShowsApps: String(Config.options?.iris?.tray?.face ?? "apps") === "apps"
+        && root.trayItems.length > 0
 
     property bool pressed: false
     property bool hovered: false
+    readonly property bool scaled: root.hovered || root.pressed
     property bool plated: false
     property bool bodyless: false
     property real absorb: root.plated ? 1 : 0
@@ -49,12 +83,17 @@ Item {
 
     component Glyph: MaterialSymbol {
         fill: 1
-        color: IrisStyle.text
+        color: root.ink
+    }
+    // Native glyphs smear under the hover/press scale; curve-rendered ones rasterize at the scaled size.
+    component FaceText: IrisText {
+        color: root.ink
+        renderType: root.scaled ? Text.CurveRendering : Text.NativeRendering
     }
     component Ring: Shape {
         id: ring
         property real progress: 0
-        property color tint: IrisStyle.text
+        property color tint: root.ink
         property real stroke: Math.max(2, 2.5 * root.d)
         preferredRendererType: Shape.CurveRenderer
         ShapePath {
@@ -84,11 +123,11 @@ Item {
     Rectangle {
         visible: root.plated || root.bodyless
         anchors.fill: parent
-        radius: IrisStyle.pieceRadius(width)
-        color: root.pressed ? IrisStyle.fillActive
-            : root.hovered ? IrisStyle.fillHover
-            : ColorUtils.applyAlpha(IrisStyle.text, 0)
-        Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+        radius: root.inline ? height / 2 : IrisStyle.pieceRadius(width)
+        color: root.pressed || root.open ? IrisStyle.fillActiveOf(root.ink)
+            : root.hovered ? IrisStyle.fillHoverOf(root.ink)
+            : ColorUtils.applyAlpha(root.ink, 0)
+        Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
     }
     Rectangle {
         anchors.fill: parent
@@ -101,6 +140,7 @@ Item {
 
     Item {
         anchors.fill: parent
+        anchors.margins: root.contentInset
         scale: root.pressed ? IrisStyle.pressScale(0.88) : root.hovered ? 1.06 : 1
         Behavior on scale { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
 
@@ -125,6 +165,7 @@ Item {
                 anchors.centerIn: parent
                 text: "pause"
                 iconSize: 15 * root.d
+                color: IrisStyle.onMedia
             }
         }
         Ring {
@@ -133,7 +174,7 @@ Item {
             anchors.margins: 2 * root.d + root.platedInset
             opacity: root.coverHidden ? 0 : 1
             Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
-            tint: root.kind === "media" ? root.tint : IrisStyle.secondaryAccent
+            tint: root.kind === "media" ? root.tint : root.highlight
             progress: root.kind === "media" ? root.mediaProgress : root.timerProgress
         }
         Glyph {
@@ -141,7 +182,7 @@ Item {
             anchors.centerIn: parent
             text: root.timerPaused ? "pause" : root.timerGlyph
             iconSize: 16 * root.d
-            color: IrisStyle.secondaryAccent
+            color: root.highlight
         }
         Ring {
             readonly property var task: LiveActivities.latest
@@ -157,23 +198,30 @@ Item {
             anchors.centerIn: parent
             text: String(task?.glyph ?? "bolt")
             iconSize: 16 * root.d
-            color: IrisStyle.identityColor(String(task?.tint ?? "lavender"))
+            color: root.legible(IrisStyle.identityColor(String(task?.tint ?? "lavender")), 3)
         }
-        Rectangle {
-            id: recordDot
+        IrisPulse {
             visible: root.kind === "record"
             anchors.centerIn: parent
             width: 12 * root.d
             height: width
-            radius: width / 2
-            color: IrisStyle.danger
-            SequentialAnimation on opacity {
-                running: recordDot.visible && IrisStyle.motionEnabled
-                loops: Animation.Infinite
-                NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
-                NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
-                onRunningChanged: if (!running) recordDot.opacity = 1
-            }
+            color: root.dangerInk
+        }
+        IrisTrayIcon {
+            visible: root.kind === "trayApp"
+            anchors.centerIn: parent
+            implicitSize: Math.min(parent.width - 2 * root.platedInset, Math.max(Math.round(16 * root.d), Math.round((parent.width - 2 * root.platedInset) * 0.52)))
+            source: root.trayItem ? TrayService.getSafeIcon(root.trayItem) : ""
+        }
+        Rectangle {
+            visible: root.kind === "trayApp" && root.trayItem?.status === Status.NeedsAttention
+            readonly property real dot: Math.max(6, Math.round(parent.width * 0.16 / 2) * 2)
+            width: dot
+            height: dot
+            radius: dot / 2
+            x: Math.round(parent.width * 0.72 - dot / 2)
+            y: Math.round(parent.height * 0.18 - dot / 2)
+            color: root.dangerInk
         }
         SmartAppIcon {
             visible: root.kind === "app"
@@ -185,7 +233,7 @@ Item {
         Glyph {
             visible: root.kind === "controls"
             anchors.centerIn: parent
-            text: Network.wifiEnabled ? "wifi" : "tune"
+            text: IrisPieces.glyphOf("controls", "")
             fill: 0
             iconSize: 19 * root.d
         }
@@ -195,42 +243,75 @@ Item {
             visible: root.kind === "tools" && parent.toolsMinutesLeft >= 0
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
-            tint: IrisStyle.secondaryAccent
+            tint: root.highlight
             progress: root.timerProgress
         }
         Glyph {
             visible: root.kind === "tools" && parent.toolsMinutesLeft < 0
             anchors.centerIn: parent
-            text: "timer"
+            text: IrisPieces.glyphOf("tools", "")
             iconSize: 19 * root.d
-            color: IrisStyle.secondaryAccent
+            color: root.highlight
         }
-        IrisText {
+        FaceText {
             visible: root.kind === "tools" && parent.toolsMinutesLeft >= 0
             anchors.centerIn: parent
             text: parent.toolsMinutesLeft
             font.family: IrisStyle.fontNumbers
             font.features: ({ "tnum": 1 })
-            font.pixelSize: 13 * IrisStyle.typeScale
-            font.weight: Font.Bold
-            color: IrisStyle.secondaryAccent
+            font.pixelSize: IrisStyle.typeLabel
+            font.weight: IrisStyle.weight(Font.Bold)
+            color: root.highlight
         }
-        IrisText {
-            visible: root.kind === "tray"
+        Grid {
+            id: trayApps
+            visible: root.kind === "tray" && root.trayShowsApps
+            readonly property int total: root.trayItems.length
+            readonly property bool overflow: trayApps.total > 4
+            readonly property real inner: parent.width - 2 * root.platedInset
+            readonly property real cell: Math.round(trayApps.total <= 1 ? trayApps.inner * 0.52 : trayApps.inner * 0.3)
+            anchors.centerIn: parent
+            columns: trayApps.total <= 2 ? Math.max(1, trayApps.total) : 2
+            spacing: Math.round(trayApps.inner * 0.05)
+            Repeater {
+                model: trayApps.overflow ? root.trayItems.slice(0, 3) : root.trayItems.slice(0, 4)
+                IrisTrayIcon {
+                    required property var modelData
+                    implicitSize: trayApps.cell
+                    source: modelData ? TrayService.getSafeIcon(modelData) : ""
+                }
+            }
+            Item {
+                visible: trayApps.overflow
+                width: trayApps.cell
+                height: trayApps.cell
+                FaceText {
+                    anchors.centerIn: parent
+                    text: "+" + (trayApps.total - 3)
+                    font.family: IrisStyle.fontNumbers
+                    font.features: ({ "tnum": 1 })
+                    font.pixelSize: Math.max(8, Math.round(trayApps.cell * 0.72))
+                    font.weight: IrisStyle.weight(Font.Bold)
+                    color: root.faceAccent
+                }
+            }
+        }
+        FaceText {
+            visible: root.kind === "tray" && !root.trayShowsApps
             anchors.centerIn: parent
             text: root.trayCount
             font.family: IrisStyle.fontNumbers
             font.features: ({ "tnum": 1 })
             font.pixelSize: 16 * IrisStyle.typeScale
-            font.weight: Font.Bold
-            color: IrisStyle.accent
+            font.weight: IrisStyle.weight(Font.Bold)
+            color: root.faceAccent
         }
         Ring {
             visible: root.kind === "sound" || root.kind === "mic"
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
             readonly property bool muted: root.kind === "mic" ? Audio.micMuted : (Audio.sink?.audio?.muted ?? false)
-            tint: muted ? (root.kind === "mic" ? IrisStyle.danger : IrisStyle.muted) : IrisStyle.text
+            tint: muted ? (root.kind === "mic" ? root.dangerInk : root.inkMuted) : root.ink
             progress: muted ? 0 : Math.min(1, root.kind === "mic" ? (Audio.micVolume ?? 0) : (Audio.value ?? 0))
             Behavior on progress { NumberAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
         }
@@ -240,7 +321,7 @@ Item {
             text: root.kind === "mic" ? (Audio.micMuted ? "mic_off" : "mic")
                 : (Audio.sink?.audio?.muted ?? false) ? "volume_off" : "volume_up"
             iconSize: 15 * root.d
-            color: root.kind === "mic" && Audio.micMuted ? IrisStyle.danger : IrisStyle.text
+            color: root.kind === "mic" && Audio.micMuted ? root.dangerInk : root.ink
         }
         Column {
             id: weatherFace
@@ -250,7 +331,7 @@ Item {
                 const value = parseFloat(weatherFace.raw)
                 return isNaN(value) ? "" : Math.round(value) + "°"
             }
-            visible: root.kind === "weather"
+            visible: root.kind === "weather" && !root.inline
             anchors.centerIn: parent
             anchors.verticalCenterOffset: weatherFace.ready ? root.d : 0
             spacing: -Math.round(2 * root.d)
@@ -259,35 +340,35 @@ Item {
                 text: Icons.getWeatherIcon(Weather.data?.wCode, Weather.isNightNow()) ?? "cloud"
                 iconSize: (weatherFace.ready ? 13 : 19) * root.d
             }
-            IrisText {
+            FaceText {
                 visible: weatherFace.ready
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: weatherFace.degrees
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
-                font.pixelSize: 11.5 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.pixelSize: IrisStyle.typeMeta
+                font.weight: IrisStyle.weight(Font.Bold)
             }
         }
         Column {
             id: calendarFace
-            visible: root.kind === "calendar"
+            visible: root.kind === "calendar" && !root.inline
             anchors.centerIn: parent
             spacing: -Math.round(3 * root.d)
-            IrisText {
+            FaceText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: Qt.locale().toString(DateTime.clock.date, "ddd")
                 color: IrisStyle.identity.red
                 font.pixelSize: 8.5 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.weight: IrisStyle.weight(Font.Bold)
             }
-            IrisText {
+            FaceText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: DateTime.clock.date.getDate()
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
                 font.pixelSize: 16 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.weight: IrisStyle.weight(Font.Bold)
             }
         }
         Item {
@@ -309,7 +390,7 @@ Item {
                     width: Math.max(1, (major ? 1.6 : 1) * root.d)
                     height: (major ? 3 : 2) * root.d
                     radius: width / 2
-                    color: major ? IrisStyle.text : IrisStyle.textTertiary
+                    color: major ? root.ink : root.inkFaint
                     transform: Rotation { origin.x: width / 2; origin.y: clockFace.height / 2; angle: index * 30 }
                 }
             }
@@ -317,7 +398,7 @@ Item {
                 anchors.fill: parent
                 preferredRendererType: Shape.CurveRenderer
                 ShapePath {
-                    strokeColor: IrisStyle.text
+                    strokeColor: root.ink
                     strokeWidth: Math.max(2, 2.2 * root.d)
                     capStyle: ShapePath.RoundCap
                     fillColor: "transparent"
@@ -328,7 +409,7 @@ Item {
                     }
                 }
                 ShapePath {
-                    strokeColor: IrisStyle.text
+                    strokeColor: root.ink
                     strokeWidth: Math.max(1.5, 1.6 * root.d)
                     capStyle: ShapePath.RoundCap
                     fillColor: "transparent"
@@ -344,7 +425,7 @@ Item {
                 width: 3.5 * root.d
                 height: width
                 radius: width / 2
-                color: IrisStyle.identity.orange
+                color: root.legible(IrisStyle.identity.orange, 3)
             }
         }
         Ring {
@@ -353,9 +434,9 @@ Item {
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
             readonly property real level: Math.max(0, Math.min(1, Battery.percentage))
-            tint: Battery.isCharging ? IrisStyle.identity.green
-                : Battery.isCritical ? IrisStyle.danger
-                : Battery.isLow ? IrisStyle.secondaryAccent : IrisStyle.text
+            tint: Battery.isCharging ? root.legible(IrisStyle.identity.green, 3)
+                : Battery.isCritical ? root.dangerInk
+                : Battery.isLow ? root.highlight : root.ink
             progress: batteryRing.level
             Behavior on progress { NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
         }
@@ -369,15 +450,15 @@ Item {
                 text: "bolt"
                 fill: 1
                 iconSize: 11 * root.d
-                color: IrisStyle.identity.green
+                color: root.legible(IrisStyle.identity.green, 3)
             }
-            IrisText {
+            FaceText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: Math.round(batteryRing.level * 100)
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
                 font.pixelSize: (Battery.isCharging ? 10.5 : 12.5) * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.weight: IrisStyle.weight(Font.Bold)
                 color: batteryRing.tint
             }
         }
@@ -387,13 +468,13 @@ Item {
             anchors.margins: 3 * root.d + root.platedInset
             radius: Math.min(width / 2, Math.max(0, IrisStyle.pieceRadius(root.width) - anchors.margins))
             color: Notifications.silent ? IrisStyle.identity.indigo : "transparent"
-            Behavior on color { ColorAnimation { duration: IrisStyle.duration(180) } }
+            Behavior on color { ColorAnimation { duration: IrisStyle.duration(180); easing.type: IrisStyle.feedbackEasing } }
             Glyph {
                 anchors.centerIn: parent
-                text: "bedtime"
+                text: IrisPieces.glyphOf("focus", "")
                 fill: Notifications.silent ? 1 : 0
                 iconSize: 17 * root.d
-                color: Notifications.silent ? IrisStyle.onTint : IrisStyle.text
+                color: Notifications.silent ? IrisStyle.onTint : root.ink
             }
         }
         Item {
@@ -406,7 +487,7 @@ Item {
                 anchors.centerIn: parent
                 text: networkFace.wired ? "lan" : !Network.wifiEnabled ? "wifi_off" : Network.materialSymbol
                 iconSize: 18 * root.d
-                color: networkFace.linked ? IrisStyle.text : IrisStyle.muted
+                color: networkFace.linked ? root.ink : root.inkMuted
             }
         }
         Item {
@@ -418,21 +499,21 @@ Item {
                 spacing: -Math.round(2 * root.d)
                 Glyph {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: !BluetoothStatus.enabled ? "bluetooth_disabled"
-                        : BluetoothStatus.activeDeviceCount > 0 ? "bluetooth_connected" : "bluetooth"
+                    text: IrisPieces.glyphOf("bluetooth", !BluetoothStatus.enabled ? "bluetooth_disabled"
+                        : BluetoothStatus.activeDeviceCount > 0 ? "bluetooth_connected" : "")
                     iconSize: (BluetoothStatus.activeDeviceCount > 0 ? 13 : 18) * root.d
-                    color: !BluetoothStatus.enabled ? IrisStyle.muted
-                        : BluetoothStatus.activeDeviceCount > 0 ? IrisStyle.accent : IrisStyle.text
+                    color: !BluetoothStatus.enabled ? root.inkMuted
+                        : BluetoothStatus.activeDeviceCount > 0 ? root.faceAccent : root.ink
                 }
-                IrisText {
+                FaceText {
                     visible: BluetoothStatus.activeDeviceCount > 0
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: BluetoothStatus.activeDeviceCount
-                    color: IrisStyle.accent
+                    color: root.faceAccent
                     font.family: IrisStyle.fontNumbers
                     font.features: ({ "tnum": 1 })
-                    font.pixelSize: 11.5 * IrisStyle.typeScale
-                    font.weight: Font.Bold
+                    font.pixelSize: IrisStyle.typeMeta
+                    font.weight: IrisStyle.weight(Font.Bold)
                 }
             }
         }
@@ -442,20 +523,20 @@ Item {
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
             readonly property real load: Math.max(0, Math.min(1, ResourceUsage.cpuUsage))
-            tint: vitalsRing.load > 0.85 ? IrisStyle.danger
-                : vitalsRing.load > 0.6 ? IrisStyle.secondaryAccent : IrisStyle.identity.teal
+            tint: vitalsRing.load > 0.85 ? root.dangerInk
+                : vitalsRing.load > 0.6 ? root.highlight : root.legible(IrisStyle.identity.teal, 3)
             progress: vitalsRing.load
             Behavior on progress { NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
         }
-        IrisText {
+        FaceText {
             visible: root.kind === "vitals"
             anchors.centerIn: parent
             text: Math.round(vitalsRing.load * 100)
             color: vitalsRing.tint
             font.family: IrisStyle.fontNumbers
             font.features: ({ "tnum": 1 })
-            font.pixelSize: 12.5 * IrisStyle.typeScale
-            font.weight: Font.Bold
+            font.pixelSize: IrisStyle.typeLabel
+            font.weight: IrisStyle.weight(Font.Bold)
         }
         Column {
             id: workspacesFace
@@ -464,13 +545,13 @@ Item {
             spacing: Math.round(2 * root.d)
             readonly property var list: (WorkspaceService.allWorkspaces ?? []).filter(ws => ws.output === root.screenName)
             readonly property var active: workspacesFace.list.find(ws => ws.is_active) ?? null
-            IrisText {
+            FaceText {
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: workspacesFace.active ? workspacesFace.active.idx : "–"
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
-                font.pixelSize: 14 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.pixelSize: IrisStyle.typeBody
+                font.weight: IrisStyle.weight(Font.Bold)
             }
             Row {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -483,33 +564,33 @@ Item {
                         width: Math.max(2, 3 * root.d)
                         height: width
                         radius: width / 2
-                        color: entry?.is_active ? IrisStyle.accent : IrisStyle.textTertiary
+                        color: entry?.is_active ? root.faceAccent : root.inkFaint
                     }
                 }
             }
         }
         Column {
             id: updatesFace
-            visible: root.kind === "updates"
+            visible: root.kind === "updates" && !root.inline
             anchors.centerIn: parent
             spacing: Math.round(1.5 * root.d)
             readonly property int count: Updates.count
             Glyph {
                 visible: updatesFace.count <= 0
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: "task_alt"
+                text: IrisPieces.glyphOf("updates", "")
                 iconSize: 18 * root.d
-                color: IrisStyle.identity.green
+                color: root.identityInk(IrisStyle.identity.green)
             }
-            IrisText {
+            FaceText {
                 visible: updatesFace.count > 0
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: updatesFace.count > 99 ? "99+" : updatesFace.count
-                color: IrisStyle.secondaryAccent
+                color: root.highlight
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
-                font.pixelSize: 15 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.pixelSize: IrisStyle.typeHeadline
+                font.weight: IrisStyle.weight(Font.Bold)
             }
             Rectangle {
                 visible: updatesFace.count > 0
@@ -517,30 +598,225 @@ Item {
                 width: Math.max(3, 3.5 * root.d)
                 height: width
                 radius: width / 2
-                color: IrisStyle.secondaryAccent
+                color: root.highlight
+            }
+        }
+        Loader {
+            anchors.fill: parent
+            active: root.kind === "visualizer"
+            sourceComponent: Item {
+                ColorQuantizer {
+                    id: vizArt
+                    source: IrisStyle.visualizerColour === "art" ? MediaArtwork.displaySource : ""
+                    depth: 2
+                    rescaleSize: 48
+                }
+                IrisVisualizer {
+                    anchors.centerIn: parent
+                    running: root.playing
+                    // A ring fills the round face; a row sits in it at the height of the other marks.
+                    barHeight: Math.round((root.radialVisualizer ? root.width - (8 + 4 * root.absorb) * root.d : 16 * root.d))
+                    tint: root.legible(IrisStyle.visualizerTint(IrisStyle.artTintOf(vizArt.colors)), 3)
+                    opacity: root.playing ? 1 : 0.55
+                }
+            }
+        }
+        Loader {
+            anchors.fill: parent
+            active: root.kind === "vpn"
+            sourceComponent: Item {
+                Component.onCompleted: Vpn.keepAlive()
+                Component.onDestruction: Vpn.releaseKeepAlive()
+                Glyph {
+                    anchors.centerIn: parent
+                    text: Vpn.connected ? "vpn_lock" : "vpn_key_off"
+                    fill: Vpn.connected ? 1 : 0
+                    iconSize: 18 * root.d
+                    color: Vpn.connected ? root.legible(IrisStyle.identity.green, 3) : root.inkMuted
+                }
+            }
+        }
+        Item {
+            id: shellUpdateFace
+            visible: root.kind === "shellUpdate"
+            anchors.fill: parent
+            IrisMark {
+                id: updateMark
+                anchors.centerIn: parent
+                implicitSize: Math.round(parent.width - (10 + 4 * root.absorb) * root.d)
+                color: root.highlight
+                orbiting: shellUpdateFace.visible
+                SequentialAnimation on anchors.verticalCenterOffset {
+                    running: shellUpdateFace.visible && IrisStyle.motionEnabled
+                    loops: Animation.Infinite
+                    NumberAnimation { to: -root.d; duration: 1900; easing.type: Easing.InOutSine }
+                    NumberAnimation { to: root.d; duration: 1900; easing.type: Easing.InOutSine }
+                    onRunningChanged: if (!running) updateMark.anchors.verticalCenterOffset = 0
+                }
+            }
+        }
+        Loader {
+            anchors.fill: parent
+            active: root.kind === "anime"
+            sourceComponent: Item {
+                id: animeFace
+                anchors.fill: parent
+                readonly property var show: IrisPieces.animeNext
+                readonly property string cover: String(animeFace.show?.imageSmall ?? animeFace.show?.image ?? "")
+                readonly property real approach: animeFace.show ? IrisPieces.animeApproach(animeFace.show.airingAt) : 0
+                Component.onCompleted: AnimeService.fetchTopAiring()
+                Ring {
+                    visible: animeFace.cover.length > 0
+                    anchors.fill: parent
+                    anchors.margins: 2 * root.d + root.platedInset
+                    tint: root.legible(IrisStyle.identity.pink, 3)
+                    progress: animeFace.approach
+                }
+                ClippingRectangle {
+                    anchors.centerIn: parent
+                    width: Math.round(parent.width - (14 + 4 * root.absorb) * root.d)
+                    height: width
+                    radius: IrisStyle.iconRadius(width)
+                    color: IrisStyle.fillQuiet
+                    visible: animeFace.cover.length > 0
+                    IrisImage {
+                        anchors.fill: parent
+                        source: animeFace.cover
+                    }
+                }
+                Glyph {
+                    visible: animeFace.cover.length === 0
+                    anchors.centerIn: parent
+                    text: "live_tv"
+                    iconSize: 18 * root.d
+                    color: root.inkSoft
+                }
+            }
+        }
+        Loader {
+            anchors.fill: parent
+            active: root.kind === "watching"
+            sourceComponent: Item {
+                id: watchingFace
+                readonly property var entry: AnimeWatch.current
+                readonly property var state: AnimeWatch.stateOf(watchingFace.entry)
+                readonly property string episode: AnimeWatch.busy
+                    ? AnimeWatch.busyEpisode : watchingFace.state.episode
+                readonly property real watched: AnimeWatch.busy ? 0 : watchingFace.state.progress
+                Component.onCompleted: AnimeWatch.reload()
+                Ring {
+                    visible: watchingFace.watched > 0
+                    anchors.fill: parent
+                    anchors.margins: 2 * root.d + root.platedInset
+                    tint: root.legible(IrisStyle.identity.pink, 3)
+                    progress: watchingFace.watched
+                }
+                Ring {
+                    id: watchingSpinner
+                    visible: AnimeWatch.busy
+                    anchors.fill: parent
+                    anchors.margins: 2 * root.d + root.platedInset
+                    tint: root.legible(IrisStyle.identity.pink, 3)
+                    progress: AnimeWatch.phase === "playing" ? 1 : 0.28
+                    RotationAnimation on rotation {
+                        running: watchingSpinner.visible && (AnimeWatch.phase === "launching" || (AnimeWatch.phase === "searching" && !AnimeWatch.choosing))
+                        from: 0; to: 360
+                        duration: IrisStyle.duration(1100)
+                        loops: Animation.Infinite
+                        onStopped: watchingSpinner.rotation = 0
+                    }
+                }
+                FaceText {
+                    id: watchingNumber
+                    anchors.centerIn: parent
+                    anchors.horizontalCenterOffset: Math.round(1 * root.d)
+                    anchors.verticalCenterOffset: Math.round(1 * root.d)
+                    visible: watchingFace.episode.length > 0
+                    text: watchingFace.episode
+                    font.family: IrisStyle.fontNumbers
+                    font.features: ({ "tnum": 1 })
+                    font.pixelSize: (watchingFace.episode.length > 2 ? 13 : 18) * IrisStyle.typeScale
+                    font.weight: IrisStyle.weight(Font.Bold)
+                }
+                FaceText {
+                    x: watchingNumber.x - width * 0.55
+                    y: watchingNumber.y - height * 0.2
+                    visible: watchingNumber.visible
+                    text: Translation.tr("EP")
+                    color: root.legible(IrisStyle.identity.pink, 3)
+                    style: Text.Outline
+                    styleColor: IrisStyle.bodySurface
+                    font.pixelSize: 8 * IrisStyle.typeScale
+                    font.weight: IrisStyle.weight(Font.Black)
+                }
+                Glyph {
+                    anchors.centerIn: parent
+                    visible: watchingFace.episode.length === 0
+                    text: IrisPieces.glyphOf("watching", "")
+                    iconSize: 18 * root.d
+                    color: root.inkSoft
+                }
             }
         }
         Column {
             id: notificationFace
             readonly property int count: Notifications.list?.length ?? 0
-            visible: root.kind === "notifications"
+            visible: root.kind === "notifications" && !root.inline
             anchors.centerIn: parent
             anchors.verticalCenterOffset: notificationFace.count > 0 ? root.d : 0
             spacing: -Math.round(2 * root.d)
             Glyph {
                 anchors.horizontalCenter: parent.horizontalCenter
-                text: notificationFace.count > 0 ? "notifications_active" : "notifications"
+                text: IrisPieces.glyphOf("notifications", notificationFace.count > 0 ? "notifications_active" : "")
                 iconSize: (notificationFace.count > 0 ? 13 : 18) * root.d
             }
-            IrisText {
+            FaceText {
                 visible: notificationFace.count > 0
                 anchors.horizontalCenter: parent.horizontalCenter
                 text: notificationFace.count > 99 ? "99+" : notificationFace.count
-                color: IrisStyle.badgeInk
+                color: root.alertInk
                 font.family: IrisStyle.fontNumbers
                 font.features: ({ "tnum": 1 })
-                font.pixelSize: 11.5 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.pixelSize: IrisStyle.typeMeta
+                font.weight: IrisStyle.weight(Font.Bold)
+            }
+        }
+        Row {
+            id: inlineFace
+            visible: root.inline
+            anchors.centerIn: parent
+            spacing: Math.round(6 * root.d)
+            readonly property int count: root.kind === "notifications" ? notificationFace.count
+                : root.kind === "updates" ? updatesFace.count : 0
+            Glyph {
+                visible: root.kind !== "calendar"
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.kind === "notifications" ? IrisPieces.glyphOf("notifications", inlineFace.count > 0 ? "notifications_active" : "")
+                    : root.kind === "weather" ? (Icons.getWeatherIcon(Weather.data?.wCode, Weather.isNightNow()) ?? "cloud")
+                    : IrisPieces.glyphOf("updates", "")
+                fill: root.kind === "notifications" && inlineFace.count === 0 ? 0 : 1
+                iconSize: 17 * root.d
+            }
+            FaceText {
+                visible: root.kind === "calendar"
+                anchors.verticalCenter: parent.verticalCenter
+                text: Qt.locale().toString(DateTime.clock.date, "ddd").replace(/\.$/, "")
+                color: root.inkMuted
+                font.pixelSize: IrisStyle.typeLabel
+                font.weight: IrisStyle.weight(Font.Medium)
+            }
+            FaceText {
+                readonly property string figure: root.kind === "weather" ? weatherFace.degrees
+                    : root.kind === "calendar" ? String(DateTime.clock.date.getDate())
+                    : inlineFace.count > 99 ? "99+" : inlineFace.count > 0 ? String(inlineFace.count) : ""
+                visible: figure.length > 0
+                anchors.verticalCenter: parent.verticalCenter
+                text: figure
+                color: root.kind === "notifications" ? root.alertInk : root.kind === "calendar" ? root.highlight : root.ink
+                font.family: IrisStyle.fontNumbers
+                font.features: ({ "tnum": 1 })
+                font.pixelSize: IrisStyle.typeLabel
+                font.weight: IrisStyle.weight(Font.Bold)
             }
         }
     }
@@ -551,6 +827,7 @@ Item {
     Accessible.name: root.kind === "controls" ? Translation.tr("Quick controls")
         : root.kind === "notifications" ? Translation.tr("Notifications")
         : root.kind === "tray" ? Translation.tr("Tray")
+        : root.kind === "trayApp" ? String(root.trayItem?.tooltipTitle || root.trayItem?.title || root.trayItem?.id || "")
         : root.kind === "calendar" ? Translation.tr("Calendar")
         : root.kind === "clock" ? Translation.tr("Clock")
         : root.kind === "battery" ? Translation.tr("Battery")
@@ -558,6 +835,7 @@ Item {
         : root.kind === "tools" ? Translation.tr("Timers")
         : root.kind === "weather" ? Translation.tr("Weather")
         : root.kind === "media" ? Translation.tr("Now playing")
+        : root.kind === "visualizer" ? Translation.tr("Visualizer")
         : root.kind === "sound" ? Translation.tr("Sound")
         : root.kind === "mic" ? Translation.tr("Microphone")
         : root.kind === "network" ? Translation.tr("Network")
@@ -565,5 +843,9 @@ Item {
         : root.kind === "vitals" ? Translation.tr("Vitals")
         : root.kind === "workspaces" ? Translation.tr("Workspaces")
         : root.kind === "updates" ? Translation.tr("Updates")
+        : root.kind === "anime" ? Translation.tr("Airing")
+        : root.kind === "watching" ? Translation.tr("Continue")
+        : root.kind === "shellUpdate" ? Translation.tr("New update")
+        : root.kind === "vpn" ? Translation.tr("VPN")
         : root.kind === "record" ? Translation.tr("Screen recording") : Translation.tr("Timer")
 }

@@ -918,3 +918,158 @@ func TestRehydrateReloadCoverAsset(t *testing.T) {
 		t.Fatalf("resolvable absolute cover not kept: %v", bm)
 	}
 }
+
+// A rice is the whole visual desktop: the plugin roster (per-widget settings
+// and placements), the widget stage, the palette engine, and the Profile
+// plate's decor all travel, and the picker's look sections arrive as a
+// allowlist that holds back the author's hardware (gpuDevice, per-monitor
+// clip state) and accounts.
+func TestRiceCaptureCarriesEveryVisualStore(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "ryoku"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(p, body string) {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeDesktopStore(t, `{"appearance":{"rounding":2}}`)
+	write(shellStorePath(), `{}`)
+	write(launcherStorePath(), `{}`)
+	write(themeStatePath(), `{"followWallpaper":true}`)
+	write(pluginsStorePath(), `{"mjw-calc":{"enabled":true,"host":"desktopWidget","placement":{"desktopWidget":{"x":120,"y":80}},"settings":{"digits":6}}}`)
+	write(stageStorePath(), `{"edge":0.15,"quality":"fine"}`)
+	write(matugenStorePath(), `{"schemeType":"scheme-vibrant","themeRyokuApps":true}`)
+	write(ryogamiStorePath(), `{"transition":{"shader":"morph"},"performance":{"gpuDevice":"uuid:deadbeef"},"monitor":"eDP-1","integrations":[{"name":"wallhaven"}]}`)
+
+	r, err := captureRice("Whole", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plugins := r.Look["plugins"]
+	calc, _ := plugins["mjw-calc"].(map[string]any)
+	if calc == nil {
+		t.Fatalf("plugin roster not captured: %v", plugins)
+	}
+	if s, _ := calc["settings"].(map[string]any); s["digits"] != float64(6) {
+		t.Fatalf("per-widget plugin settings lost: %v", calc["settings"])
+	}
+	if r.Look["stage"]["quality"] != "fine" {
+		t.Fatalf("stage look not captured: %v", r.Look["stage"])
+	}
+	if r.Look["matugen"]["schemeType"] != "scheme-vibrant" {
+		t.Fatalf("palette engine not captured: %v", r.Look["matugen"])
+	}
+	ryog := r.Look["ryogami"]
+	if ryog["transition"] == nil {
+		t.Fatalf("picker transition not captured: %v", ryog)
+	}
+	if _, ok := ryog["performance"]; ok {
+		t.Fatal("the author's gpuDevice must not travel")
+	}
+	if _, ok := ryog["monitor"]; ok {
+		t.Fatal("the author's per-monitor clip state must not travel")
+	}
+	if _, ok := ryog["integrations"]; ok {
+		t.Fatal("external accounts must not travel")
+	}
+}
+
+// The profile plate's custom hero travels as a bundled asset and lands on the
+// recipient's profile store; the shipped-art case needs no bundle because the
+// name resolves against ~/Pictures/ryodecors on every box.
+func TestRiceProfileHeroRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	origRun, origReload := riceRun, riceReload
+	riceRun = func(string, ...string) error { return nil }
+	riceReload = func() {}
+	t.Cleanup(func() { riceRun, riceReload = origRun, origReload })
+
+	if err := os.MkdirAll(profileHeroDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(profileHeroDir(), "myface.png"), []byte("img"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeDesktopStore(t, `{"appearance":{"rounding":2}}`)
+	if err := os.WriteFile(profileConfigPath(), []byte(`{"hero":{"kind":"custom","source":"myface.png","zoom":1.4}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := captureRice("Face", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hero, _ := r.Look["profile"]["hero"].(map[string]any)
+	if hero["source"] != "profilehero.png" {
+		t.Fatalf("custom hero not rebundled as an asset: %v", hero)
+	}
+	if !isFile(filepath.Join(ricesDir(), "face", "profilehero.png")) {
+		t.Fatal("hero image not bundled into the rice")
+	}
+
+	// a recipient applies it: the image lands in their profile store and the
+	// manifest points at the copy.
+	if err := os.Remove(profileConfigPath()); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyRice("face", nil); err != nil {
+		t.Fatal(err)
+	}
+	got := readJSONMap(profileConfigPath())
+	gh, _ := got["hero"].(map[string]any)
+	if gh["kind"] != "custom" || gh["source"] != "rice-face.png" {
+		t.Fatalf("apply did not land the hero: %v", gh)
+	}
+	if !isFile(filepath.Join(profileHeroDir(), "rice-face.png")) {
+		t.Fatal("applied hero image missing from the profile store")
+	}
+}
+
+// The folder field is free text: a leading ~ is the home, a bare name sits
+// under it, and a folder that does not exist yet is created. Refusing all
+// three was the top export failure people reported.
+func TestExpandUserDest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	cases := []struct{ in, want string }{
+		{"~/rice-out", filepath.Join(home, "rice-out")},
+		{"~", filepath.Join(home, "Rices")},
+		{"", filepath.Join(home, "Rices")},
+		{"rice-out", filepath.Join(home, "rice-out")},
+		{"/abs/path", "/abs/path"},
+		{"file://" + filepath.Join(home, "x"), filepath.Join(home, "x")},
+	}
+	for _, c := range cases {
+		if got := expandUserDest(c.in); got != c.want {
+			t.Errorf("expandUserDest(%q) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// exportRice creates a destination that does not exist yet and accepts the ~
+// form, so typing "~/rice-share" into the folder field works.
+func TestRiceExportCreatesMissingDest(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("HOME", dir)
+	r := Rice{Schema: riceSchema, Slug: "demo", Name: "Demo",
+		Look: map[string]map[string]any{"shell": {"frameBars": map[string]any{"style": "ryoku-frame"}}}}
+	if err := saveRice(r); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exportRice("demo", "~/rice-share")
+	if err != nil {
+		t.Fatalf("export to a missing ~ folder: %v", err)
+	}
+	if want := filepath.Join(dir, "rice-share", "demo"); out != want {
+		t.Fatalf("exported to %q, want %q", out, want)
+	}
+	if !isFile(filepath.Join(out, "rice.json")) {
+		t.Fatal("manifest missing from the export")
+	}
+}

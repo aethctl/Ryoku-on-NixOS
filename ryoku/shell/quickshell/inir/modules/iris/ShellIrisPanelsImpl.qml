@@ -5,17 +5,17 @@ import Quickshell
 import inir
 import inir.services
 import inir.modules.common
-import inir.modules.iris.palette
 import inir.modules.iris.notificationPopup
 import inir.modules.iris.onScreenDisplay
 import inir.modules.iris.session
 import inir.modules.iris.style
 import inir.modules.iris.pieces
+import inir.modules.iris.palette
 import inir.modules.iris.settings
-import inir.modules.iris.sidebar
 import inir.modules.iris.studio
 import inir.modules.iris.polkit
 import inir.modules.iris.wallpaper
+import inir.modules.iris.sidebar
 
 Item {
     id: root
@@ -86,7 +86,8 @@ Item {
         closeGraceMs: IrisStyle.settleDuration * 2 + 160
         extraCondition: (Config.options?.iris?.modules?.notificationPopup ?? true)
             && (!(Config.options?.enabledPanels ?? []).includes("irisBar")
-                || (CompositorService.nativeOverview && GameMode.hasFullscreenOnOutput(GlobalStates.focusedScreen?.name ?? "") && !CompositorService.overviewOpen))
+                || (CompositorService.nativeOverview && GameMode.hasFullscreenOnOutput(GlobalStates.focusedScreen?.name ?? "") && !CompositorService.overviewOpen
+                    && (Config.options?.iris?.notifications?.fullscreen ?? true)))
         component: IrisNotificationPopup {}
     }
 
@@ -132,13 +133,7 @@ Item {
         component: IrisPalette {}
     }
 
-    OnDemandPanelLoader {
-        identifier: "irisWallpaperSelector"
-        open: GlobalStates.wallpaperSelectorOpen
-        requireEnabledPanel: false
-        closeGraceMs: IrisStyle.settleDuration + 120
-        component: IrisWallpaperPicker {}
-    }
+
 
     // The daemon is the single PolicyKit agent; this only presents its prompt in
     // the iRiS look (see IrisPolkit).

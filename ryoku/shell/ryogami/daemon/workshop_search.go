@@ -37,12 +37,13 @@ type searchPage struct {
 	lastPage    int
 }
 
+// Keyed like every other source's results; the picker reads one shape for all of them.
 type wsItem struct {
 	ID            string `json:"id"`
-	FullURL       string `json:"full_url"`
-	ThumbURL      string `json:"thumb_url"`
-	ThumbPath     string `json:"thumb_path"`
-	FileSize      uint64 `json:"file_size"`
+	FullURL       string `json:"fullUrl"`
+	ThumbURL      string `json:"thumbUrl"`
+	ThumbPath     string `json:"thumbPath"`
+	FileSize      uint64 `json:"fileSize"`
 	Category      string `json:"category"`
 	Title         string `json:"title"`
 	Subscriptions uint64 `json:"subscriptions,omitempty"`

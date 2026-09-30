@@ -14,13 +14,23 @@ FolioTabData {
                   key: null,
                   kind: "static",
                   label: I18n.tr("Current power source"),
-                  help: I18n.tr("[dynamic] 'Battery (automatic limits are active)' | 'Battery (automatic limits are disabled)' | 'External power, desktop, or unavailable (automatic limits are inactive)'"),
-                  search: ["current", "power", "source", "static"] },
+                  help: "%1",
+                  args: ["state"],
+                  status: "power.status",
+                  format: function (s, err) {
+                      if (err || !s)
+                          return { state: I18n.tr("Power state unavailable.") }
+                      if (!s.onBattery)
+                          return { state: I18n.tr("External power, desktop, or unavailable (automatic limits are inactive)") }
+                      return { state: s.saverActive ? I18n.tr("Battery (automatic limits are active)")
+                                                    : I18n.tr("Battery (automatic limits are disabled)") }
+                  },
+                  search: ["current", "power", "source", "battery", "static"] },
                 { id: "performance.gpuDevice",
                   key: "performance.gpuDevice",
                   kind: "dropdown",
                   label: I18n.tr("Wallpaper GPU"),
-                  help: I18n.tr("Choose the GPU for skwd-paper wallpaper rendering. An unavailable card falls back to Automatic."),
+                  help: I18n.tr("Choose the GPU for scene rendering. An unavailable card falls back to Automatic."),
                   options: [{ value: "auto", label: I18n.tr("Automatic") }],
                   dynamic: "gpus",
                   search: ["performance.gpuDevice", "wallpaper", "gpu", "automatic", "dropdown"] },
@@ -78,29 +88,22 @@ FolioTabData {
                   search: ["general.maxFps", "max", "fps", "number"] },
                 { id: "performance.releaseAfterHideSeconds",
                   key: "performance.releaseAfterHideSeconds",
-                  kind: "number",
+                  kind: "chips",
                   label: I18n.tr("Keep loaded after closing"),
-                  help: I18n.tr("How long the closed picker stays in memory so it reopens instantly. Lower frees memory sooner; the next open then rebuilds the scene."),
-                  unit: I18n.tr("s"),
-                  search: ["performance.releaseAfterHideSeconds", "keep", "loaded", "memory", "release", "reopen", "number"] }
+                  help: I18n.tr("Always keeps the picker ready, so it opens at once. A time frees its memory after the picker has been closed that long; the next open then starts it again."),
+                  options: [{ value: 0, label: I18n.tr("Always") }, { value: 600, label: I18n.tr("10 minutes") }, { value: 3600, label: I18n.tr("1 hour") }, { value: 28800, label: I18n.tr("8 hours") }],
+                  search: ["performance.releaseAfterHideSeconds", "keep", "loaded", "memory", "release", "reopen", "chips"] }
             ]
         },
         {
             title: I18n.tr("Wallpaper efficiency"),
             subtitle: "",
-            visibleWhen: "paper.engine == skwd-paper || paper.videoEngine in {skwd-paper, tinier}",
             controls: [
-                { id: "paper.videoMultiProcess",
-                  key: "paper.videoMultiProcess",
-                  kind: "toggle",
-                  label: I18n.tr("Shared video process"),
-                  help: I18n.tr("Run all video wallpapers in one renderer and Vulkan device. Identical videos share decoding. Disable only for troubleshooting."),
-                  search: ["paper.videoMultiProcess", "shared", "video", "process", "toggle"] },
                 { id: "paper.performanceMode",
                   key: "paper.performanceMode",
                   kind: "toggle",
                   label: I18n.tr("Performance mode"),
-                  help: I18n.tr("Changes become hard cuts. Cover-fill video walls hand decoded NV12 frames straight to the compositor, saving roughly 45% of video VRAM. Fit and centre keep the standard renderer."),
+                  help: I18n.tr("For scene wallpapers: changes become hard cuts and native scenes run at a 30 fps, 2048 px limit. Less detail, much less work per frame."),
                   search: ["paper.performanceMode", "performance", "mode", "toggle"] },
                 { id: "resource_tier",
                   key: "resource_tier",

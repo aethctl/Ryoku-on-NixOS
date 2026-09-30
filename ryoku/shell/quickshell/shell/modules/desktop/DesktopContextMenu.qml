@@ -143,7 +143,7 @@ Item {
         // iRiS conveniences: Studio and Edit iRiS on the iris bar style only. On
         // every other style they hide, and the Column skips them with no gap.
         MenuRow { visible: menu.iris; icon: "palette"; label: I18n.tr("Studio"); onTriggered: menu.openIrisStudio() }
-        MenuRow { visible: menu.iris; icon: "edit"; label: I18n.tr("Edit iRiS"); onTriggered: menu.editIris() }
+        MenuRow { visible: menu.iris; icon: "edit"; label: I18n.tr("Edit Shima"); onTriggered: menu.editIris() }
 
         MenuSection {}
         MenuRow { icon: "settings"; label: I18n.tr("Settings"); accent: true; closeOnTrigger: false; onTriggered: menu.openSettings() }

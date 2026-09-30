@@ -534,7 +534,7 @@ func recoverProductJournal(journal productTransactionJournal) error {
 			return err
 		}
 		current, err := readStoreRevision()
-		if os.IsNotExist(err) || errors.Is(err, errLegacyStoreRevision) {
+		if os.IsNotExist(err) {
 			current = StoreRevision{}
 		} else if err != nil {
 			return err
@@ -800,7 +800,7 @@ func journalRevision(journal productTransactionJournal) StoreRevision {
 
 func currentStoreRevisionNumber() (uint64, error) {
 	current, err := readStoreRevision()
-	if os.IsNotExist(err) || errors.Is(err, errLegacyStoreRevision) {
+	if os.IsNotExist(err) {
 		return 0, nil
 	}
 	if err != nil {

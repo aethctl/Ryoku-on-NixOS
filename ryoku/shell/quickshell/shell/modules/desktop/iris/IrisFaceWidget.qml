@@ -9,7 +9,7 @@ import "../Singletons"
 //   kind "face"   — a hidden IrisFaceProvider builds the real inir widget as a
 //                   data source and only its own irisFace is rendered here.
 //   kind "canvas" — a visible IrisCanvasProvider renders the whole upstream
-//                   widget (customImage, editorial, mascot, …) at the origin.
+//                   widget (customImage, editorial, visualizer, …) at the origin.
 //
 // Style is per widget (widgets.json <prefix>Style), never the global
 // iris.appearance.frontend: "inir" draws upstream, "ryoku" adds the slot's

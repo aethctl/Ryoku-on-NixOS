@@ -115,7 +115,7 @@ QtObject {
                 return
             root.pendingSearch = null
             root.makeRequest(next.tags, next.nsfw, next.limit, next.page,
-                next.category, next.generation, next.provider, next.fitProfile)
+                next.category, next.generation, next.provider, next.fitProfile, next.sorting)
         }
     }
 
@@ -615,7 +615,7 @@ QtObject {
         responseFinished()
     }
 
-    function _buildSearchUrl(tags, nsfw, limit, page, category, fitProfile) {
+    function _buildSearchUrl(tags, nsfw, limit, page, category, fitProfile, sortingOverride) {
         var url = apiSearchEndpoint
         var params = []
 
@@ -654,16 +654,19 @@ QtObject {
         // Wallhaven's toplist+query only returns the week's hot posts for the tag
         // (tiny, unpageable sets). Tag searches use the API's default relevance
         // ordering; toplist applies to tagless browsing.
-        const hasTags = q.length > 0
-        var sorting = sortingMode
+        // Exclusions (`-tag`) narrow a toplist instead of turning it into a search.
+        const hasTags = q.split(/\s+/).some(term => term.length > 0 && !term.startsWith("-"))
+        const override = String(sortingOverride || "")
+        var sorting = override.length > 0 ? override.split(":")[0] : sortingMode
+        const range = override.includes(":") ? override.split(":")[1] : topRange
         if (hasTags && sorting === "toplist")
             sorting = "relevance"
         if (sorting !== "relevance")
             params.push("sorting=" + sorting)
         if (sorting === "toplist") {
             params.push("order=desc")
-            if (topRange.length > 0)
-                params.push("topRange=" + topRange)
+            if (range.length > 0)
+                params.push("topRange=" + range)
         }
 
         if (apiKey && apiKey.length > 0) {
@@ -745,7 +748,33 @@ QtObject {
         return images
     }
 
-    function makeRequest(tags, nsfw, limit, page, category, generation, providerId, fitProfile) {
+    // `sorting` (optional): `toplist[:range]` (range as Wallhaven's topRange: 1d, 1w, 1M, 1y…), `date_added` or
+    // `random`. On Konachan and yande.re it becomes `order:score` from that date on, or `order:random`.
+    function _booruSortTags(tags, sorting) {
+        const [kind, range] = String(sorting || "").split(":")
+        if (tags.some(tag => String(tag).startsWith("order:"))) return tags
+        if (kind === "random") return tags.concat(["order:random"])
+        if (kind !== "toplist") return tags
+        const out = tags.concat(["order:score"])
+        const m = String(range || "").match(/^(\d+)([dwMy])$/)
+        if (!m) return out
+        const days = Number(m[1]) * ({ d: 1, w: 7, M: 30, y: 365 })[m[2]]
+        const since = new Date(Date.now() - days * 86400000)
+        return out.concat(["date:>=" + since.toISOString().slice(0, 10)])
+    }
+    function providerName(providerId): string {
+        return ({ wallhaven: "Wallhaven", commons: "Wikimedia Commons", motionbgs: "MotionBGs" })[providerId]
+            ?? Booru.providers[providerId]?.name ?? String(providerId)
+    }
+
+    // No answer at all: the connection, or the source is down. Never "check your tags".
+    function unreachableMessage(providerId): string {
+        return Network.online
+            ? Translation.tr("%1 didn't answer. It may be down; try again in a while.").arg(root.providerName(providerId))
+            : Network.offlineReason
+    }
+
+    function makeRequest(tags, nsfw, limit, page, category, generation, providerId, fitProfile, sorting) {
         root.nowMs = Date.now()
         if (nsfw === undefined)
             nsfw = allowNsfw
@@ -774,7 +803,8 @@ QtObject {
                 category: requestedCategory,
                 generation: requestedGeneration,
                 provider: requestedProvider,
-                fitProfile: requestedFit
+                fitProfile: requestedFit,
+                sorting: sorting
             }
             // Without an in-flight response to trigger _processPendingSearch,
             // a throttled search would stay queued forever.
@@ -788,13 +818,14 @@ QtObject {
         const providerLimit = requestedProvider === "wallhaven"
             ? limit : Math.max(72, limit || 0)
         const url = requestedProvider === "wallhaven"
-            ? root._buildSearchUrl(requestedTags, nsfw, providerLimit, page, requestedCategory, requestedFit)
+            ? root._buildSearchUrl(requestedTags, nsfw, providerLimit, page, requestedCategory, requestedFit, sorting)
             : requestedProvider === "commons"
                 ? root._buildCommonsUrl(requestedTags, providerLimit, page)
             : requestedProvider === "motionbgs"
                 ? root._buildMotionBgsUrl(requestedTags, page)
                 : Booru.constructRequestUrlForProvider(requestedProvider,
-                    requestedTags, nsfw, providerLimit, page || 1)
+                    ["konachan", "yandere"].includes(requestedProvider) ? root._booruSortTags(requestedTags, sorting) : requestedTags,
+                    nsfw, providerLimit, page || 1)
         _log("[Wallhaven] Making", requestedProvider, "request to", url)
 
         var newResponse = wallhavenResponseComponent.createObject(null, {
@@ -866,7 +897,7 @@ QtObject {
 
         if (!text || text.length === 0) {
             _log("[Wallhaven] Request failed: empty response")
-            newResponse.message = failMessage
+            newResponse.message = root.unreachableMessage(root._currentSearchProvider)
             root._appendResponse(newResponse)
             root.responseFinished()
             if (root._currentSearchResponse === newResponse)

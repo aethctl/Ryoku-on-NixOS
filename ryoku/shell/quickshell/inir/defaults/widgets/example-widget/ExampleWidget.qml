@@ -1,17 +1,17 @@
 pragma ComponentBehavior: Bound
-// Quick Glance — example widget showing how to use iNiR's services and components.
-// Copy this to ~/.config/inir/widgets/example-widget/ to use it.
+// Quick Glance - example widget showing how to use the shell's services and
+// components. Copy this to ~/.config/ryoku/inir/widgets/example-widget/ to use it.
 // Full SDK docs: defaults/widgets/WIDGET-SDK.md
 
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import qs
-import qs.services
-import qs.modules.common
-import qs.modules.common.functions
-import qs.modules.common.widgets
-import qs.modules.background.widgets
+import inir
+import inir.services
+import inir.modules.common
+import inir.modules.common.functions
+import inir.modules.common.widgets
+import inir.modules.background.widgets
 
 AbstractBackgroundWidget {
     id: root

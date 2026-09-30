@@ -67,7 +67,12 @@ Scope {
     }
 
     function scaleForScreen(screen) {
-        return Math.min(1.2, (screen ? screen.height / 1080 : 1))
+        // The physical panel height, not the logical rectangle: Quickshell's
+        // height is logical, so dividing it by 1080 alone shrinks the launcher
+        // as the display scale rises (the compositor scales it back up, apps
+        // included, and the card ends up tiny next to everything else).
+        return Screens.monitorScale(screen,
+                screen && screen.name ? Ui.Wm.outputScale(String(screen.name)) : 1, 1.2)
             * Math.max(0.8, Math.min(1.4, Config.fontScale))
             * Ui.Tokens.uiScaleFor(screen && screen.name ? String(screen.name) : "");
     }

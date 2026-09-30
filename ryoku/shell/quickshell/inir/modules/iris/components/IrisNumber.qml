@@ -8,7 +8,7 @@ Item {
 
     property string text: ""
     property string family: IrisStyle.fontNumbers
-    property real pixelSize: 15 * IrisStyle.typeScale
+    property real pixelSize: IrisStyle.typeHeadline
     property int weight: Font.Normal
     property real letterSpacing: 0
     property color color: IrisStyle.text
@@ -17,8 +17,9 @@ Item {
 
     readonly property real inkPad: Math.ceil(root.pixelSize * 0.14)
     implicitWidth: Math.max(0, row.implicitWidth - root.inkPad * 2)
-    implicitHeight: probe.implicitHeight
+    implicitHeight: Math.ceil(probe.implicitHeight)
     baselineOffset: probe.baselineOffset
+    transform: Translate { x: Math.round(root.x) - root.x; y: Math.round(root.y) - root.y }
 
     Text {
         id: probe
@@ -31,6 +32,7 @@ Item {
     }
 
     component Glyph: Text {
+        width: Math.ceil(implicitWidth)
         font.family: root.family
         font.pixelSize: root.pixelSize
         font.weight: root.weight
@@ -52,8 +54,8 @@ Item {
                 readonly property string character: root.text.charAt(slot.index)
                 property real roll: 1
                 property string previous: ""
-                width: Math.max(current.implicitWidth, slot.roll < 1 ? leaving.implicitWidth : 0) + root.inkPad * 2
-                height: probe.implicitHeight
+                width: Math.ceil(Math.max(current.implicitWidth, slot.roll < 1 ? leaving.implicitWidth : 0)) + root.inkPad * 2
+                height: Math.ceil(probe.implicitHeight)
                 // Static structure: clipping chassis stop painting when their scene changes shape live.
                 clip: true
 

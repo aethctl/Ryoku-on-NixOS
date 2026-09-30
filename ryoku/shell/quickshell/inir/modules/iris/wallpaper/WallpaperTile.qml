@@ -50,7 +50,7 @@ MouseArea {
             border.width: Math.max(2, Math.round(2.5 * root.d))
             border.color: IrisStyle.accent
             opacity: root.selected ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120) } }
+            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
         }
 
         ClippingRectangle {
@@ -71,19 +71,15 @@ MouseArea {
                     fillMode: Image.PreserveAspectCrop
                     sourceSize.width: Math.round(tile.width * 1.25)
                     sourceSize.height: Math.round(tile.height * 1.25)
+                    mipmap: true
                 }
             }
-            Image {
+            IrisImage {
                 anchors.fill: parent
                 visible: root.imageUrl.length > 0
                 source: root.imageUrl
-                sourceSize.width: Math.round(tile.width * 1.25)
-                sourceSize.height: Math.round(tile.height * 1.25)
-                fillMode: Image.PreserveAspectCrop
-                asynchronous: true
-                cache: true
                 opacity: status === Image.Ready ? 1 : 0
-                Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(180) } }
+                Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(180); easing.type: IrisStyle.feedbackEasing } }
             }
             Loader {
                 anchors.fill: parent
@@ -128,8 +124,8 @@ MouseArea {
                     text: root.quality
                     color: IrisStyle.onMedia
                     font.family: IrisStyle.fontNumbers
-                    font.pixelSize: 10.5 * IrisStyle.typeScale
-                    font.weight: Font.Bold
+                    font.pixelSize: IrisStyle.typeFootnote
+                    font.weight: IrisStyle.weight(Font.Bold)
                 }
             }
         }
@@ -146,7 +142,7 @@ MouseArea {
                 anchors.centerIn: parent
                 text: root.busy ? "downloading" : "check"
                 iconSize: Math.round(14 * root.d)
-                color: root.busy ? IrisStyle.accent : IrisStyle.onAccent
+                color: root.busy ? IrisStyle.accent : IrisStyle.inkOnAccent
             }
         }
     }

@@ -19,7 +19,6 @@ GlassBackground 1.0 GlassBackground.qml
 Graph 1.0 Graph.qml
 GroupButton 1.0 GroupButton.qml
 IconToolbarButton 1.0 IconToolbarButton.qml
-MascotImage 1.0 MascotImage.qml
 MaterialCookie 1.0 MaterialCookie.qml
 MaterialLoadingIndicator 1.0 MaterialLoadingIndicator.qml
 MaterialShape 1.0 MaterialShape.qml
@@ -85,3 +84,5 @@ ZzzTechFrame 1.0 ZzzTechFrame.qml
 singleton MediaArtwork 1.0 MediaArtwork.qml
 singleton SettingsMaterialPreset 1.0 SettingsMaterialPreset.qml
 singleton SettingsSearchRegistry 1.0 SettingsSearchRegistry.qml
+singleton OrganicIdleClock 1.0 OrganicIdleClock.qml
+LiveLayer 1.0 LiveLayer.qml

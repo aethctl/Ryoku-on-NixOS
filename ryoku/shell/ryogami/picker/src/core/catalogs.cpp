@@ -14,6 +14,7 @@
 #include <QStandardPaths>
 #include <QThreadPool>
 #include <QTimer>
+#include <QUrl>
 
 namespace {
 constexpr int kThemeDebounceMs = 600;
@@ -263,7 +264,10 @@ void Catalogs::parseRices(const QByteArray &json)
         r.compat = o.value(QStringLiteral("compat")).toString();
         r.active = o.value(QStringLiteral("active")).toBool();
         r.live = o.value(QStringLiteral("live")).toBool();
-        r.preview = o.value(QStringLiteral("preview")).toString();
+        // The Hub lists previews as file:// URLs; the card decoder reads plain paths.
+        const QString preview = o.value(QStringLiteral("preview")).toString();
+        const QUrl previewUrl(preview);
+        r.preview = previewUrl.isLocalFile() ? previewUrl.toLocalFile() : preview;
         if (!r.slug.isEmpty())
             rices.append(r);
     }

@@ -2,10 +2,11 @@
 
 # Post-save hook: fires the honest "Recording saved" notification once the clip
 # is really on disk, so the size and duration in the toast are real rather than a
-# promise made before wf-recorder finalised the file. ryoku-cmd-record calls this
-# after wf-recorder exits, passing the saved file path ($1) and a type ($2, one of
-# regular|replay|screenshot). Kept a separate helper so the notification (with its
-# Open / Show in folder / Copy path actions) has one home for every capture path.
+# promise made before the recorder finalised the file. ryoku-cmd-record calls this
+# after gpu-screen-recorder exits, passing the saved file path ($1) and a type
+# ($2, one of regular|replay|screenshot). Kept a separate helper so the
+# notification (with its Open / Show in folder / Copy path actions) has one home
+# for every capture path.
 
 set -euo pipefail
 

@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
 // Ducking mutes the wallpaper's own streams: the daemon does not own the mixer.
 
 var wallpaperAudioBins = []string{
-	"ryogami-live", "skwd-paper-v2", "skwd-wall-vk", "paper-vk", "awww-daemon",
+	"ryogami-live", "skwd-paper-v2", "skwd-wall-vk", "paper-vk",
 }
 
 var duckState struct {
@@ -115,7 +116,7 @@ func (d *daemon) evaluateDuck() {
 
 func (d *daemon) restoreDuckedAudio() {
 	state := map[string]map[string]interface{}{}
-	loadJSON(filepath.Join(d.config().stateDir(), "outputs.json"), &state)
+	loadJSON(filepath.Join(d.config().cacheDir(), "outputs.json"), &state)
 	def := wallAudioDefaults()
 	if len(state) == 0 {
 		m, vol := def.mute, def.volume
@@ -142,6 +143,8 @@ func (d *daemon) watchOtherAudio() {
 	d.evaluateDuck()
 	for {
 		cmd := exec.Command(pactlBin(), "subscribe")
+		// The unit stops only the daemon, so the watcher must end with it rather than outlive it.
+		cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
 		stdout, err := cmd.StdoutPipe()
 		if err != nil || cmd.Start() != nil {
 			time.Sleep(2 * time.Second)

@@ -89,6 +89,7 @@ AbstractBackgroundWidget {
         textEdit.cursorPosition = textEdit.positionAt(mapped.x, mapped.y)
     }
 
+    readonly property bool editing: textEdit.activeFocus && !GlobalStates.widgetEditMode
     function _finishEditing(): void {
         root._commitText()
         noteFocusSink.forceActiveFocus()
@@ -122,90 +123,52 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 8
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.noteStyle
                     model: [
-                        { label: Translation.tr("Card"), value: "card" },
-                        { label: Translation.tr("Instrument"), value: "instrument" }
+                        { label: Translation.tr("Card"), icon: "sticky_note_2", value: "card" },
+                        { label: Translation.tr("Instrument"), icon: "avg_pace", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: modelData.label
-                        toggled: root.noteStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            WidgetQuickSection {
+                title: Translation.tr("Text")
+                WidgetQuickChoices {
+                    current: root.fontFamily
                     model: [
-                        { label: Translation.tr("Sans"), value: "sans" },
-                        { label: Translation.tr("Mono"), value: "mono" }
+                        { label: Translation.tr("Sans"), icon: "text_fields", value: "sans" },
+                        { label: Translation.tr("Mono"), icon: "code", value: "mono" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: modelData.label
-                        toggled: root.fontFamily === modelData.value
-                        onClicked: root._setOutputValue("fontFamily", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("fontFamily", value)
                 }
-            }
-
-            RowLayout {
-                spacing: 6
-                Layout.alignment: Qt.AlignHCenter
-
-                StyledText {
-                    text: Translation.tr("Text size")
-                    color: Appearance.colors.colOnLayer2
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                }
-
-                StyledSpinBox {
-                    from: 10
-                    to: 48
-                    stepSize: 1
-                    value: Number(root._readConfigKey("fontSize") ?? 14)
-                    onValueModified: root._setOutputValue("fontSize", value)
-                }
-            }
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+                WidgetQuickChoices {
+                    current: root.textAlign
                     model: [
-                        { icon: "format_align_left", value: "left" },
-                        { icon: "format_align_center", value: "center" },
-                        { icon: "format_align_right", value: "right" }
+                        { icon: "format_align_left", value: "left", tooltip: Translation.tr("Align left") },
+                        { icon: "format_align_center", value: "center", tooltip: Translation.tr("Center") },
+                        { icon: "format_align_right", value: "right", tooltip: Translation.tr("Align right") }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        toggled: root.textAlign === modelData.value
-                        onClicked: root._setOutputValue("textAlign", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("textAlign", value)
+                }
+                WidgetQuickToggle {
+                    visible: root.instrument
+                    Layout.fillWidth: true
+                    iconName: "horizontal_rule"
+                    label: Translation.tr("Writing guides")
+                    checked: root.showRules
+                    onToggled: root._setOutputValue("showRules", !root.showRules)
                 }
             }
-
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.instrument
-                leftmost: true; rightmost: true
-                buttonIcon: "horizontal_rule"
-                buttonText: Translation.tr("Writing guides")
-                toggled: root.showRules
-                onClicked: root._setOutputValue("showRules", !root.showRules)
+            WidgetQuickSlider {
+                title: Translation.tr("Text size")
+                from: 10; to: 48; stepSize: 1; unit: " px"
+                value: Number(root._readConfigKey("fontSize") ?? 14)
+                onMoved: v => root.previewIrisValue("fontSize", v)
+                onCommitted: v => root.commitIrisValue("fontSize", v)
             }
         }
     }
@@ -291,11 +254,28 @@ AbstractBackgroundWidget {
             font.weight: Font.DemiBold
         }
         Rectangle {
-            visible: !root.instrument
+            visible: !root.instrument && !root.editing
             Layout.preferredWidth: 24 * root.scaleFactor
             Layout.preferredHeight: 3 * root.scaleFactor
             radius: height / 2
             color: root.widgetAccentVisible
+        }
+        // Notes save as you type; "Done" only lets go of the keyboard, where the title already is.
+        StyledText {
+            visible: root.editing
+            text: Translation.tr("Done")
+            color: doneArea.containsMouse ? root.widgetInk : root.widgetAccentVisible
+            font.family: root.widgetTitleFamily
+            font.pixelSize: Appearance.font.pixelSize.smaller * root.scaleFactor
+            font.weight: Font.DemiBold
+            MouseArea {
+                id: doneArea
+                anchors.fill: parent
+                anchors.margins: -Math.round(6 * root.scaleFactor)
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root._finishEditing()
+            }
         }
     }
 
@@ -432,11 +412,11 @@ AbstractBackgroundWidget {
         z: 5
         width: Math.round(30 * root.scaleFactor)
         height: width
-        visible: textEdit.activeFocus && !GlobalStates.widgetEditMode
+        visible: root.editing && !noteHeading.visible
         buttonRadius: Appearance.rounding.full
-        colBackground: ColorUtils.applyAlpha(root.widgetAccent, 0.12)
-        colBackgroundHover: ColorUtils.applyAlpha(root.widgetAccent, 0.22)
-        colRipple: ColorUtils.applyAlpha(root.widgetAccent, 0.28)
+        colBackground: "transparent"
+        colBackgroundHover: ColorUtils.applyAlpha(root.widgetInk, 0.1)
+        colRipple: ColorUtils.applyAlpha(root.widgetInk, 0.16)
         downAction: root._finishEditing
 
         contentItem: MaterialSymbol {

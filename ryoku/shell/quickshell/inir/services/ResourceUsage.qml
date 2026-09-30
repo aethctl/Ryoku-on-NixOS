@@ -56,6 +56,7 @@ Singleton {
     property list<real> cpuUsageHistory: []
     property list<real> gpuUsageHistory: []
     property list<real> gpuTempHistory: []
+    property list<real> cpuTempHistory: []
     property list<real> memoryUsageHistory: []
     property list<real> swapUsageHistory: []
 
@@ -166,12 +167,18 @@ Singleton {
         if (next.length > historyLength) next.shift();
         gpuTempHistory = next;
     }
+    function updateCpuTempHistory() {
+        const next = [...cpuTempHistory, Math.max(0, Math.min(1, cpuTemp / 100))];
+        if (next.length > historyLength) next.shift();
+        cpuTempHistory = next;
+    }
     function updateHistories() {
         updateMemoryUsageHistory();
         updateSwapUsageHistory();
         updateCpuUsageHistory();
         updateGpuUsageHistory();
         updateGpuTempHistory();
+        updateCpuTempHistory();
     }
 
     function clampPercentToUnit(value: real): real {

@@ -72,9 +72,11 @@ IrisWidgetFace {
         FaceText {
             face: root
             Layout.fillWidth: true
-            visible: root.range.length > 0
-            text: root.range
-            color: root.inkSecondary
+            visible: root.range.length > 0 || Weather.stale
+            text: !Weather.stale ? root.range
+                : !Network.online ? Translation.tr("Offline · %1").arg(Weather.updatedLabel)
+                : Translation.tr("Updated %1").arg(Weather.updatedLabel)
+            color: Weather.stale ? root.inkTertiary : root.inkSecondary
             size: 12
         }
     }
@@ -136,7 +138,9 @@ IrisWidgetFace {
             face: root
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: Weather.enabled ? Translation.tr("Looking for the sky…") : Translation.tr("Weather is off")
+            text: !Weather.enabled ? Translation.tr("Weather is off")
+                : !Network.online ? Network.offlineReason
+                : Translation.tr("Looking for the sky…")
             color: root.inkSecondary
             size: 12.5
             wrapMode: Text.WordWrap
@@ -188,7 +192,7 @@ IrisWidgetFace {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: IrisStyle.hairline
+            color: root.hairline
         }
         Repeater {
             model: root.days
@@ -228,7 +232,7 @@ IrisWidgetFace {
                     Layout.fillWidth: true
                     Layout.preferredHeight: root.dp(5)
                     radius: height / 2
-                    color: IrisStyle.fill
+                    color: root.fill
                     Rectangle {
                         x: parent.width * (Number(day.modelData.loVal) - root.weekLow) / day.span
                         width: Math.max(parent.height, parent.width * (Number(day.modelData.hiVal) - Number(day.modelData.loVal)) / day.span)

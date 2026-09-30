@@ -392,7 +392,7 @@ void main()
     if ((v_misc.w & SHADOW) != 0u) {
         float blur = max(borderW, 1.0);
         vec2 he = max(v_half - vec2(blur * 0.8), vec2(1.0));
-        float ds = sdShearedRoundedBox(v_local, he, v_radii, 0.0, 0.0);
+        float ds = sdShearedRoundedBox(v_local, he, v_radii, skew, v_shape.x);
         float sa = v_fill.a * pow(clamp(1.0 - (ds + blur * 0.2) / blur, 0.0, 1.0), 1.7) * cardOpacity;
         fragColor = vec4(v_fill.rgb * sa * vf, sa * vf);
         return;

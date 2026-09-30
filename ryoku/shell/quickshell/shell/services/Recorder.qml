@@ -4,13 +4,13 @@ import Quickshell
 import Quickshell.Io
 import "lib/screens.js" as Screens
 
-// Screen recording state + control, ported from iNiR's RecorderStatus. The live
-// process is the truth: it polls wf-recorder (the backend ryoku-cmd-record drives)
-// so a failed launch or an external stop can never strand the island, and reads
-// the recorder-status.json the backend writes for the live audio mode. Control
-// goes through the one command API -- `ryoku-shell record start|stop`, handled by
-// the daemon -- so nothing here builds a recorder invocation of its own. The
-// capture card and the floating record island share this single source of truth.
+// Screen recording state + control for GPU Screen Recorder. The live process is
+// the truth: it polls the GSR IPC socket (the backend ryoku-cmd-record drives) so
+// a failed launch or an external stop can never strand the island, and reads the
+// recorder-status.json the backend writes for the live audio mode. Control goes
+// through the one command API -- `ryoku-shell record start|stop|pause|resume` and
+// `record settings` -- so nothing here builds a recorder invocation of its own.
+// The capture card and the floating record island share this single source of truth.
 Singleton {
     id: root
 
@@ -20,19 +20,21 @@ Singleton {
     property int elapsedSec: 0
     readonly property string elapsedText: fmt(elapsedSec)
 
-    // studio capture records through ryoku-cmd-studiorecord (same wf-recorder +
-    // strongest-GPU encode as Quick, plus a cursor sidecar) and opens the clip in
-    // the ryomotion editor at stop. Tracked so the island's stop routes to the
-    // wrapper; anyActive keeps the island up through the brief arm before wf shows.
-    property bool studioActive: false
-    readonly property bool anyActive: root.active || root.studioActive
+    // The record island and capture card watch anyActive and its changed signal;
+    // with the standalone editor gone it tracks the one live capture directly.
+    readonly property bool anyActive: root.active
+
+    // Pause toggle the daemon relays to GSR's IPC socket. The status file carries
+    // no paused flag, so the poll cannot reconcile it: the flip is optimistic and
+    // reset the moment a capture ends.
+    property bool paused: false
 
     // live audio mode from the backend's status file: none|system|microphone|both,
     // and whether a system+mic mix fell back to a single source.
     property string activeAudioMode: "none"
     property bool audioFallback: false
 
-    // region capture: the box drawn as "WxH+X+Y" (global logical), set when a
+    // region capture: the box drawn as "WxH+X+Y" (global physical), set when a
     // region recording starts so RegionOverlay can draw the live boundary; ""
     // means a full monitor. A remembered box is valid only for the monitor layout
     // it was drawn in, so it is stamped with a cheap layout signature and dropped
@@ -57,17 +59,14 @@ Singleton {
     onRegionGeomChanged: if (root.regionGeom === "") root.regionLayoutSig = "";
 
     // Remembered capture options the record card reads, persisted to record.json:
-    // the desktop-audio / mic toggles. Shape mirrors Flags: watch for outside
-    // edits, write back on change, seed once. A first recording captures the
-    // application being demonstrated (desktop audio), not the user's voice --
-    // recording a microphone by default is a privacy surprise.
+    // the desktop-audio / mic toggles and the Discord quick-compress flag. Shape
+    // mirrors Flags: watch for outside edits, write back on change, seed once. A
+    // first recording captures the application being demonstrated (desktop audio),
+    // not the user's voice -- recording a microphone by default is a privacy surprise.
     property alias optDesktopAudio: recPrefs.desktopAudio
     property alias optMic: recPrefs.mic
-    // "edit after" opens a finished Quick clip in ryomotion; "studio" captures with
-    // a cursor sidecar for the editor's auto-zoom; "discord" makes a Discord-sized
-    // copy of a finished Quick clip. All persisted with the audio toggles.
-    property alias editMode: recPrefs.edit
-    property alias studioMode: recPrefs.studio
+    // "discord" makes a Discord-sized copy of a finished clip once the backend
+    // finalises it; persisted alongside the audio toggles.
     property alias discordMode: recPrefs.discord
     FileView {
         id: recPrefsFile
@@ -82,8 +81,6 @@ Singleton {
             id: recPrefs
             property bool desktopAudio: true
             property bool mic: false
-            property bool edit: false
-            property bool studio: false
             property bool discord: false
         }
     }
@@ -91,6 +88,43 @@ Singleton {
         if (!recPrefsFile.text())
             recPrefsFile.writeAdapter();
         Qt.callLater(root.refreshStatus);
+    }
+
+    // Read-only mirror of the daemon-owned recording settings. The daemon is the
+    // sole writer (ryoku-shell record settings); the capture card shows these and
+    // edits them through setSetting(), never by writing the file here. watchChanges
+    // picks up the daemon's writes so the chips stay in sync. Defaults match the
+    // daemon's so a missing file still reads sensibly.
+    property int recFps: 60
+    property string recQuality: "very_high"
+    property string recBitrateMode: "quality"
+    property string recCodec: "h264"
+    property string recContainer: "mp4"
+    property bool recCursor: true
+    FileView {
+        id: recSettingsFile
+        path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/ryoku/recording.json"
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const s = JSON.parse(recSettingsFile.text() || "{}");
+                root.recFps = Number(s.fps ?? 60);
+                root.recQuality = String(s.quality ?? "very_high");
+                root.recBitrateMode = String(s.bitrateMode ?? "quality");
+                root.recCodec = String(s.codec ?? "h264");
+                root.recContainer = String(s.container ?? "mp4");
+                root.recCursor = s.cursor !== false;
+            } catch (e) {
+            }
+        }
+    }
+    // Route one setting change through the daemon, which validates it and rewrites
+    // the whole merged file; the mirror above then reloads from the watch.
+    function setSetting(key, value) {
+        Quickshell.execDetached(["ryoku-shell", "record", "settings", key, String(value)]);
     }
 
     // desktop-audio + mic flags -> ryoku-shell record args, shared by the card and
@@ -170,9 +204,6 @@ Singleton {
         // record writes the <name>.discord.mp4 copy once the capture is finalised.
         if (root.discordMode)
             a.push("--discord");
-        // edit-after is a Quick-only post-action; latch it so a mid-capture toggle
-        // can't retarget the just-finished clip. Studio has its own editor hand-off.
-        root.pendingEdit = root.editMode;
         // A region capture carries "--region --geometry WxH+X+Y"; stamp the box so
         // RegionOverlay draws the live boundary and it drops on a layout change.
         var isRegion = false, geom = "";
@@ -190,90 +221,37 @@ Singleton {
         }
         Quickshell.execDetached(["ryoku-shell", "record", "start"].concat(a));
         root.active = true;
+        root.paused = false;
         root.startedAt = Math.floor(Date.now() / 1000);
         root.elapsedSec = 0;
         root.writeSession(String(root.startedAt));
         confirm.restart();
     }
 
+    // Pause/resume the live capture through the daemon (which relays to GSR's IPC
+    // socket). Optimistic: flipped here, and the poll resets it when a capture ends.
+    function togglePause() {
+        Quickshell.execDetached(["ryoku-shell", "record", root.paused ? "resume" : "pause"]);
+        root.paused = !root.paused;
+    }
+
     function stop() {
         // a stop during the pre-record countdown just cancels it: nothing launched,
-        // so there is nothing to --stop.
+        // so there is nothing to stop.
         if (root.countingDown) {
             root.cancelCountdown();
             return;
         }
-        // studio routes through its wrapper's SIGTERM so the sidecar is written and
-        // the editor opens; a Quick capture stops through the daemon.
-        if (root.studioActive) {
-            root.stopStudio();
-            return;
-        }
         Quickshell.execDetached(["ryoku-shell", "record", "stop"]);
         root.active = false;
-        root.regionGeom = "";
-        root.writeSession("");
-        // edit-after: hand the just-finished Quick clip to ryomotion.
-        if (root.pendingEdit) {
-            Quickshell.execDetached([root.editScript]);
-            root.pendingEdit = false;
-        }
-    }
-
-    // studio: record with a cursor sidecar (ryoku-cmd-studiorecord wraps ryoku-cmd-
-    // record, so the GPU/encoder path matches Quick), then open the clip in ryomotion
-    // at stop. The wrapper is a managed Process so stop can SIGTERM it -- that is what
-    // finalises the clip, writes the sidecar and launches the editor.
-    readonly property string studioScript: "ryoku-cmd-studiorecord"
-    readonly property string editScript: "ryoku-cmd-edit-recording"
-    property bool pendingEdit: false
-    function startStudio(desktopAudio, mic, regionGeom) {
-        var args = [root.studioScript];
-        if (regionGeom)
-            args.push("--region", "--geometry", regionGeom);
-        if (desktopAudio)
-            args.push("--with-desktop-audio");
-        if (mic)
-            args.push("--with-microphone-audio");
-        if (regionGeom && /^\d+x\d+\+\d+\+\d+$/.test(regionGeom)) {
-            root.regionGeom = regionGeom;
-            root.regionLayoutSig = root.layoutSig;
-        } else {
-            root.regionGeom = "";
-        }
-        studioProc.command = args;
-        studioProc.running = true;
-        root.studioActive = true;
-        root.startedAt = Math.floor(Date.now() / 1000);
-        root.elapsedSec = 0;
-        root.writeSession(String(root.startedAt));
-    }
-    function stopStudio() {
-        if (studioProc.running && studioProc.processId > 0)
-            Quickshell.execDetached(["kill", "-TERM", String(studioProc.processId)]);
-        root.studioActive = false;
-        root.startedAt = 0;
-        root.elapsedSec = 0;
+        root.paused = false;
         root.regionGeom = "";
         root.writeSession("");
     }
-    Process {
-        id: studioProc
-        onRunningChanged: {
-            // the wrapper exited on its own (finished + opened the editor, or failed
-            // to start): don't strand the island counting up.
-            if (!studioProc.running && root.studioActive) {
-                root.studioActive = false;
-                root.startedAt = 0;
-                root.elapsedSec = 0;
-                root.writeSession("");
-            }
-        }
-    }
 
-    // ── reconcile against the live process. Detection is wf-recorder's pid; the
-    // status file adds the live audio mode. A poll that finds a capture the shell
-    // didn't start (reload, or an external launch) restores the clock from the
+    // ── reconcile against the live process. Detection is GSR's IPC status; the
+    // status file adds the live audio mode and pid. A poll that finds a capture the
+    // shell didn't start (reload, or an external launch) restores the clock from the
     // session stamp so it keeps counting rather than resetting.
     function refreshStatus() {
         if (!poll.running)
@@ -282,52 +260,56 @@ Singleton {
 
     Process {
         id: poll
-        command: ["pgrep", "-xo", "wf-recorder"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                var pid = parseInt(text.trim(), 10);
-                var nowActive = isFinite(pid) && pid > 0;
-                if (nowActive && !root.active) {
-                    const persisted = root.readSessionStart();
-                    if (persisted > 0) {
-                        root.startedAt = persisted;
-                        root.elapsedSec = Math.max(0, Math.floor(Date.now() / 1000) - persisted);
-                    } else {
-                        root.startedAt = Math.floor(Date.now() / 1000);
-                        root.elapsedSec = 0;
-                        root.writeSession(String(root.startedAt));
-                    }
-                }
-                if (!nowActive && !root.studioActive) {
-                    root.startedAt = 0;
+        command: ["gsr-cli", "-ipc", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-gsr.sock", "status"]
+        onExited: (exitCode) => {
+            var nowActive = exitCode === 0;
+            if (nowActive && !root.active) {
+                const persisted = root.readSessionStart();
+                if (persisted > 0) {
+                    root.startedAt = persisted;
+                    root.elapsedSec = Math.max(0, Math.floor(Date.now() / 1000) - persisted);
+                } else {
+                    root.startedAt = Math.floor(Date.now() / 1000);
                     root.elapsedSec = 0;
-                    root.regionGeom = "";
-                    root.activeAudioMode = "none";
-                    root.audioFallback = false;
-                    root.writeSession("");
+                    root.writeSession(String(root.startedAt));
                 }
-                root.active = nowActive;
-                root.recorderPid = nowActive ? pid : 0;
-                if (nowActive)
-                    statusView.reload();
             }
+            if (!nowActive) {
+                root.startedAt = 0;
+                root.elapsedSec = 0;
+                root.regionGeom = "";
+                root.activeAudioMode = "none";
+                root.audioFallback = false;
+                root.paused = false;
+                root.recorderPid = 0;
+                root.writeSession("");
+            }
+            root.active = nowActive;
+            if (nowActive)
+                statusView.reload();
         }
     }
 
-    // audio metadata the backend writes alongside the capture.
+    // audio metadata + recorder pid the backend writes alongside the capture.
     FileView {
         id: statusView
         path: (Quickshell.env("RYOKU_STATE_PATH") || (Quickshell.env("HOME") + "/.local/state/ryoku")) + "/recorder-status.json"
         blockLoading: true
         printErrors: false
         onLoaded: {
+            if (!root.active) {
+                root.recorderPid = 0;
+                root.activeAudioMode = "none";
+                root.audioFallback = false;
+                return;
+            }
             try {
                 const p = JSON.parse(statusView.text() || "{}");
-                if (Number(p.recorderPid ?? 0) === root.recorderPid && root.recorderPid > 0) {
-                    root.activeAudioMode = String(p.activeAudioMode ?? "none");
-                    root.audioFallback = p.audioFallback === true;
-                }
+                root.recorderPid = Number(p.recorderPid ?? 0);
+                root.activeAudioMode = String(p.activeAudioMode ?? "none");
+                root.audioFallback = p.audioFallback === true;
             } catch (e) {
+                root.recorderPid = 0;
                 root.activeAudioMode = "none";
                 root.audioFallback = false;
             }
@@ -336,7 +318,7 @@ Singleton {
 
     // poll hard (1s) while a capture is live -- elapsed tick + external-stop
     // detection -- and slowly (5s) idle, enough to catch a capture started outside
-    // the shell without a pgrep every second around the clock.
+    // the shell without a status probe every second around the clock.
     Timer {
         interval: root.anyActive ? 1000 : 5000
         running: true

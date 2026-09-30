@@ -17,6 +17,7 @@ import inir.modules.mediaControls.components
  */
 Item {
     id: root
+    property bool motion: true
     property MprisPlayer player: null
     property list<real> visualizerPoints: []
     property real radius: Appearance.zzzEverywhere ? Appearance.zzz.panelRadius
@@ -169,6 +170,7 @@ Item {
 
                 // Progress bar
                 PlayerProgress {
+                    motion: root.motion
                     Layout.fillWidth: true
                     Layout.topMargin: 2
                     implicitHeight: 14

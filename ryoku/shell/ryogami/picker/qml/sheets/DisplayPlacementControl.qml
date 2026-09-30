@@ -5,8 +5,6 @@ Item {
     id: root
 
     property string current: ""
-    // Span is a paper-engine placement; a sheet can grey it out where unsupported.
-    property bool spanEnabled: true
 
     signal picked(string mode)
 
@@ -22,8 +20,7 @@ Item {
             { value: "fit", label: I18n.tr("Fit") },
             { value: "stretch", label: I18n.tr("Stretch") },
             { value: "center", label: I18n.tr("Centre") },
-            { value: "tile", label: I18n.tr("Tile") },
-            { value: "span", label: I18n.tr("Span"), enabled: root.spanEnabled }
+            { value: "tile", label: I18n.tr("Tile") }
         ]
         onSelected: (v) => root.picked(v)
     }

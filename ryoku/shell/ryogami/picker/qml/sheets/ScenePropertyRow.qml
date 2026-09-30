@@ -19,6 +19,10 @@ Item {
     readonly property bool _isCombo: root._kind === "combo"
     readonly property bool _isColour: root._kind === "color"
     readonly property bool stacked: root.available > 0 && root.available < 590 * Theme.scale
+    // Wallpaper Engine names its stock colour property by an untranslated UI key.
+    readonly property string _caption: !root.row ? ""
+        : root.row.label === "ui_browse_properties_scheme_color" ? I18n.tr("Scheme colour")
+        : String(root.row.label || root.row.name || "")
 
     property bool localBool: false
     property var localChoice: undefined
@@ -32,6 +36,8 @@ Item {
     implicitHeight: layout.implicitHeight
 
     onRowChanged: root._seed()
+    property int seedRevision: 0
+    onSeedRevisionChanged: root._seed()
     Component.onCompleted: root._seed()
 
     function _seed() {
@@ -121,7 +127,7 @@ Item {
             bottomPadding: 10 * Theme.scale
             leftPadding: 8 * Theme.scale
             rightPadding: 8 * Theme.scale
-            text: root.row ? root.row.label : ""
+            text: root._caption
             font.family: Theme.ui
             font.weight: Theme.uiWeight
             font.pixelSize: Theme.fontBody
@@ -153,7 +159,7 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: root.row ? root.row.label : ""
+                    text: root._caption
                     font.family: Theme.ui
                     font.weight: Theme.uiWeight
                     font.pixelSize: Theme.fontLabel

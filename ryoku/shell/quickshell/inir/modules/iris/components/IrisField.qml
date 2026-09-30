@@ -13,11 +13,14 @@ MaterialTextField {
     color: IrisStyle.text
     placeholderTextColor: "transparent"
     selectionColor: IrisStyle.accentContainer
-    selectedTextColor: IrisStyle.onAccentContainer
+    selectedTextColor: IrisStyle.inkOnAccentContainer
     font.family: IrisStyle.fontTitle
-    font.pixelSize: 15 * IrisStyle.typeScale
+    font.pixelSize: IrisStyle.typeHeadline
     leftPadding: 14 * IrisStyle.density
     rightPadding: 14 * IrisStyle.density
+    // Material insets the background for a floating label iRiS never shows, which drops the box below its text.
+    topInset: 0
+    bottomInset: 0
 
     IrisText {
         anchors.left: parent.left
@@ -33,22 +36,10 @@ MaterialTextField {
         elide: Text.ElideRight
     }
 
-    background: PanelSurface {
-        surfaceDialect: "inir"
-        elevation: root.activeFocus ? 2 : 1
-        opaqueSurface: true
-        radiusOverride: IrisStyle.radiusSmall
-        cardStyle: false
-        outlined: false
-        borderless: true
-        borderWidthOverride: root.activeFocus ? 1.5 : 1
-
-        Rectangle {
-            anchors.fill: parent
-            radius: IrisStyle.radiusSmall
-            color: IrisStyle.field
-            border.width: root.activeFocus ? 1 : 0
-            border.color: IrisStyle.hairlineStrong
-        }
+    background: Rectangle {
+        radius: IrisStyle.radiusSmall
+        color: IrisStyle.field
+        border.width: root.activeFocus ? 1 : 0
+        border.color: IrisStyle.hairlineStrong
     }
 }

@@ -59,6 +59,13 @@ Singleton {
         fetchSeasonalAnime()
     }
     
+    function invalidateTopCache(): void {
+        const timestamps = _cacheTimestamps
+        delete timestamps["top_airing"]
+        _cacheTimestamps = timestamps
+        topAiring = []
+    }
+
     function invalidateSeasonalCache(): void {
         const timestamps = _cacheTimestamps
         delete timestamps["seasonal"]
@@ -106,7 +113,8 @@ Singleton {
                     }
                 } else if (xhr.status === 429) {
                     root.lastError = "Rate limited, retrying..."
-                    Qt.callLater(() => root._graphql(query, variables, callback), 1000)
+                    root._retryQueue.push(() => root._graphql(query, variables, callback))
+                    retryTimer.restart()
                 } else {
                     const apiError = response?.errors?.[0]?.message ?? response?.message ?? ""
                     callback(null, apiError.length > 0 ? apiError : "HTTP " + xhr.status)
@@ -119,6 +127,43 @@ Singleton {
         xhr.send(JSON.stringify({ query, variables }))
     }
     
+    property var _retryQueue: []
+    Timer {
+        id: retryTimer
+        interval: 2000
+        onTriggered: {
+            const queue = root._retryQueue
+            root._retryQueue = []
+            queue.forEach(fn => fn())
+        }
+    }
+
+    // What was asked while offline, fetched again once the connection is back.
+    property var _pendingOffline: ({})
+    function _deferIfOffline(kind, arg): bool {
+        if (Network.online) return false
+        const pending = root._pendingOffline
+        pending[kind] = arg ?? true
+        root._pendingOffline = pending
+        return true
+    }
+    Connections {
+        target: Network
+        function onOnlineChanged() {
+            if (!Network.online) return
+            const pending = root._pendingOffline
+            root._pendingOffline = {}
+            if (pending.schedule !== undefined) root.fetchSchedule(pending.schedule)
+            if (pending.seasonal) root.fetchSeasonalAnime()
+            if (pending.top) root.fetchTopAiring()
+        }
+    }
+
+    function findCover(title: string, callback): void {
+        const query = "query ($search: String) { Media(search: $search, type: ANIME) { coverImage { large } } }"
+        root._graphql(query, { search: title }, (data, error) => callback(error ? "" : String(data?.Media?.coverImage?.large ?? "")))
+    }
+
     function _isCacheValid(key) {
         const timestamp = root._cacheTimestamps[key]
         return timestamp && (Date.now() - timestamp) < root.cacheValidityMs
@@ -136,6 +181,10 @@ Singleton {
         
         if (root._isCacheValid(cacheKey) && root._scheduleCache[targetDay]) {
             root.schedule = root._scheduleCache[targetDay]
+            return
+        }
+        if (root._deferIfOffline("schedule", day)) {
+            if (root._scheduleCache[targetDay]) root.schedule = root._scheduleCache[targetDay]
             return
         }
         
@@ -224,6 +273,7 @@ Singleton {
     function fetchSeasonalAnime() {
         const cacheKey = "seasonal_" + selectedSeason + "_" + selectedYear
         if (root._isCacheValid(cacheKey) && root.seasonalAnime.length > 0) return
+        if (root._deferIfOffline("seasonal")) return
         
         root.loadingSeasonal = true
         root.lastError = ""
@@ -270,6 +320,7 @@ Singleton {
     function fetchTopAiring() {
         const cacheKey = "top_airing"
         if (root._isCacheValid(cacheKey) && root.topAiring.length > 0) return
+        if (root._deferIfOffline("top")) return
         
         root.loadingTop = true
         root.lastError = ""
@@ -338,6 +389,8 @@ Singleton {
             season: anime.season ?? "",
             year: anime.seasonYear ?? "",
             broadcast,
+            airingAt: Number(nextEp?.airingAt ?? 0),
+            nextEpisode: Number(nextEp?.episode ?? 0),
             url: anime.siteUrl ?? ("https://anilist.co/anime/" + anime.id)
         }
     }

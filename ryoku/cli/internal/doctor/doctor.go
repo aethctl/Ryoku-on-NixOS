@@ -156,6 +156,7 @@ func reconcilers() []reconciler {
 		{i18n.T("dock config store"), reconcileDockStore},
 		{i18n.T("retired shell menus"), reconcileRetiredMenus},
 		{i18n.T("retired wallpaper keys"), reconcileRetiredWallpaperKeys},
+		{i18n.T("retired wallpaper-engine keys"), reconcileRetiredPaperKeys},
 		{i18n.T("window width cycle"), reconcileWidthCycle},
 		{i18n.T("ryogami wallpaper daemon"), reconcileRyogamiWallpaper},
 		{i18n.T("ryowalls app leftovers"), reconcileRyowallsRemoval},
@@ -166,6 +167,8 @@ func reconcilers() []reconciler {
 		{i18n.T("retired system sidebar"), reconcileLegacySystemSidebar},
 		{i18n.T("stash features sidebar anchor"), reconcileStashSidebar},
 		{i18n.T("shipped app packages"), reconcileShippedApps},
+		{i18n.T("retired app packages"), reconcileRetiredApps},
+		{i18n.T("release control manifest"), reconcileManifest},
 		{i18n.T("ghostty theme include"), reconcileGhostty},
 		{i18n.T("obsidian palette snippet"), reconcileObsidianSnippet},
 		{i18n.T("flatpak app channel"), reconcileFlatpakRemote},
@@ -1971,6 +1974,7 @@ func reconcileSessionComponents(_ bool) recResult {
 	if sys.NixBackend() {
 		return okRes("desktop session components are managed declaratively by the Ryoku NixOS module")
 	}
+
 	if wm.Detect().Name == "" {
 		return okRes(i18n.T("no window manager provider"))
 	}
@@ -2001,13 +2005,28 @@ func reconcileSessionComponents(_ bool) recResult {
 
 // ---- reconciler: desktop portal routing ----------------------------------------
 
+// portalDesktopToken is the name xdg-desktop-portal prefixes its desktop
+// config with: the first XDG_CURRENT_DESKTOP entry, lowercased (portals.conf(5)
+// reads <desktop>-portals.conf). Outside a session that variable is empty, so
+// fall back to the detected provider name, which matches what the next login
+// will carry. An empty token means no desktop-specific file to look for.
+func portalDesktopToken(desktopEnv, provider string) string {
+	if v := strings.TrimSpace(desktopEnv); v != "" {
+		if i := strings.IndexByte(v, ':'); i >= 0 {
+			v = v[:i]
+		}
+		return strings.ToLower(strings.TrimSpace(v))
+	}
+	return strings.ToLower(strings.TrimSpace(provider))
+}
+
 // portalConfigCandidates lists every file xdg-desktop-portal consults on a
-// Hyprland session, highest precedence first (portals.conf(5)): user config,
+// <desktop> session, highest precedence first (portals.conf(5)): user config,
 // XDG_CONFIG_DIRS, /etc, user data, XDG_DATA_DIRS. in each location the
 // desktop-specific name is read before the generic one, and the first file
 // that exists wins outright, nothing merges. that order is the trap: a
-// user-level generic portals.conf beats the packaged hyprland-portals.conf.
-func portalConfigCandidates(home string) []string {
+// user-level generic portals.conf beats the packaged <desktop>-portals.conf.
+func portalConfigCandidates(home, desktop string) []string {
 	var dirs []string
 	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
 		dirs = append(dirs, v)
@@ -2038,9 +2057,10 @@ func portalConfigCandidates(home string) []string {
 			continue
 		}
 		seen[d] = true
-		out = append(out,
-			filepath.Join(d, "xdg-desktop-portal", "hyprland-portals.conf"),
-			filepath.Join(d, "xdg-desktop-portal", "portals.conf"))
+		if desktop != "" {
+			out = append(out, filepath.Join(d, "xdg-desktop-portal", desktop+"-portals.conf"))
+		}
+		out = append(out, filepath.Join(d, "xdg-desktop-portal", "portals.conf"))
 	}
 	return out
 }
@@ -2089,11 +2109,15 @@ func reconcilePortalRouting(checkOnly bool) recResult {
 		// no provider, or a compositor that declares no preferred portal backend.
 		return okRes(i18n.T("no preferred portal backend to enforce"))
 	}
-	// the first existing candidate is the one the portal loads, so every
-	// misrouted file ahead of a healthy one has to move aside.
+	// the portal reads <desktop>-portals.conf for the running desktop, so that
+	// is the file to look for; the provider name is the fallback when the
+	// session has not exported XDG_CURRENT_DESKTOP yet. the first existing
+	// candidate is the one the portal loads, so every misrouted file ahead of a
+	// healthy one has to move aside.
+	desktop := portalDesktopToken(os.Getenv("XDG_CURRENT_DESKTOP"), caps.Name)
 	var offenders []string
 	healthy := ""
-	for _, p := range portalConfigCandidates(sys.Home()) {
+	for _, p := range portalConfigCandidates(sys.Home(), desktop) {
 		b, err := os.ReadFile(p)
 		if err != nil {
 			continue
@@ -2151,8 +2175,6 @@ const defaultCursorTheme = "Bibata-Modern-Ice"
 func cursorSearchDirs() []string {
 	return []string{
 		"/usr/share/icons",
-		"/run/current-system/sw/share/icons",
-		filepath.Join(sys.Home(), ".nix-profile", "share", "icons"),
 		filepath.Join(sys.Home(), ".local", "share", "icons"),
 		filepath.Join(sys.Home(), ".icons"),
 	}

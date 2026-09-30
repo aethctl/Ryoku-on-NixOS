@@ -47,8 +47,8 @@ Singleton {
     property alias obi: adapter.obi
     property alias nacre: adapter.nacre
     property alias qsbar: adapter.qsbar
-    property alias chroma: adapter.chroma
     property alias kairos: adapter.kairos
+    property alias chroma: adapter.chroma
     property alias displays: adapter.displays
 
     // dock: the first-class app dock surface (modules/dock). A top-level store,
@@ -106,6 +106,10 @@ Singleton {
 
     function barStyleFor(outputName) {
         return DisplayBar.styleFor(root.displays || ({}), outputName, root.barStyle);
+    }
+
+    function hasBarStyle(screens, style) {
+        return DisplayBar.hasStyle(root.displays || ({}), screens, root.barStyle, style);
     }
 
     function barEdgeFor(outputName) {
@@ -253,13 +257,13 @@ Singleton {
             property string formatLocale: ""
             property string screenShader: ""
             property var frameBars: FrameBars.defaultConfig()
-            property string barStyle: "iris"
+            property string barStyle: "qsbar"
             property string launcherTarget: "studio"
             property var obi: ({})
             property var nacre: NacreConfig.defaultConfig()
             property var qsbar: ({})
-            property var chroma: ({})
             property var kairos: ({})
+            property var chroma: ({})
             property var displays: ({})
             property var dock: ({
                 "enabled": false,

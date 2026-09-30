@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"path/filepath"
+	wm "ryoku-wm"
 	"testing"
 	"time"
 )
@@ -94,7 +95,7 @@ func TestNightlightScheduleRoundTrip(t *testing.T) {
 		t.Fatalf("default mode = %q, want off", got)
 	}
 	margin := 30
-	if err := n.setSchedule(nlSchedSun, &margin); err != nil {
+	if err := n.setSchedule(nlSchedSun, &margin, nil, nil); err != nil {
 		t.Fatalf("setSchedule: %v", err)
 	}
 	if got := n.scheduleMode(); got != nlSchedSun {
@@ -106,7 +107,7 @@ func TestNightlightScheduleRoundTrip(t *testing.T) {
 	if m.scheduleMode() != nlSchedSun || m.schedMarginMin != 30 {
 		t.Fatalf("reloaded schedule = %q/%d, want sun/30", m.scheduleMode(), m.schedMarginMin)
 	}
-	if err := n.setSchedule("eclipse", nil); err != errNightlightSchedule {
+	if err := n.setSchedule("eclipse", nil, nil, nil); err != errNightlightSchedule {
 		t.Fatalf("unknown mode error = %v, want the named refusal", err)
 	}
 }
@@ -159,5 +160,129 @@ func TestNightlightScheduleFrameShape(t *testing.T) {
 	}
 	if !got.On || got.Schedule != "sun" || got.MarginMin != 45 {
 		t.Fatalf("frame = %+v, want on/sun/45", got)
+	}
+}
+
+func TestInClockWindow(t *testing.T) {
+	now := time.Now()
+	at := func(h, m int) (int, int) { return h*60 + m, h*60 + m }
+	_ = at
+	cur := now.Hour()*60 + now.Minute()
+	// A window that contains the current minute, built around now so the
+	// test does not depend on when it runs.
+	inStart := (cur - 120 + 24*60) % (24 * 60)
+	inStop := (cur + 120) % (24 * 60)
+	if !inClockWindow(now, inStart, inStop) {
+		t.Fatalf("now must sit inside the window built around it: %d..%d", inStart, inStop)
+	}
+	// The complementary window excludes now: start after it, stop before it.
+	outStart := (cur + 1) % (24 * 60)
+	outStop := (cur - 1 + 24*60) % (24 * 60)
+	if inClockWindow(now, outStart, outStop) {
+		t.Fatal("now must sit outside the complementary window")
+	}
+	// Equal bounds mean all day.
+	if !inClockWindow(now, cur, cur) {
+		t.Fatal("equal bounds must mean the light is wanted all day")
+	}
+	// Half-open edges: the start minute is in, the stop minute is out.
+	if !inClockWindow(time.Date(2026, 1, 1, 22, 0, 0, 0, time.Local), 22*60, 7*60) {
+		t.Fatal("the start minute belongs to the window")
+	}
+	if inClockWindow(time.Date(2026, 1, 1, 7, 0, 0, 0, time.Local), 22*60, 7*60) {
+		t.Fatal("the stop minute ends the window")
+	}
+}
+
+func TestNightlightClockScheduleRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	n := &nightlightState{
+		stateDir:       dir,
+		schedFile:      filepath.Join(dir, "ryoku-nightlight-schedule.json"),
+		schedMode:      nlSchedOff,
+		schedMarginMin: nlDefaultMarginMin,
+		schedStartMin:  nlDefaultClockStart,
+		schedStopMin:   nlDefaultClockStop,
+	}
+	start, stop := 21*60+30, 6*60+45
+	if err := n.setSchedule(nlSchedClock, nil, &start, &stop); err != nil {
+		t.Fatalf("setSchedule clock: %v", err)
+	}
+	m := &nightlightState{schedFile: n.schedFile, schedMode: nlSchedOff, schedStartMin: nlDefaultClockStart, schedStopMin: nlDefaultClockStop}
+	m.loadSchedule()
+	if m.scheduleMode() != nlSchedClock || m.schedStartMin != start || m.schedStopMin != stop {
+		t.Fatalf("reloaded clock = %q/%d/%d, want clock/%d/%d", m.scheduleMode(), m.schedStartMin, m.schedStopMin, start, stop)
+	}
+	// A wild bound clamps into the day instead of wrapping it.
+	wild := 9999
+	if err := n.setSchedule(nlSchedClock, nil, &wild, nil); err != nil {
+		t.Fatalf("setSchedule wild: %v", err)
+	}
+	if got := n.schedStartMin; got != 23*60+59 {
+		t.Fatalf("wild start clamped to %d, want 23:59", got)
+	}
+}
+
+// The clock window needs no weather: an all-day window turns the light on at
+// the next tick, and moving the window away from now turns it off. This is
+// the whole feature's edge loop driven through the real intent path.
+func TestNightlightClockTickEdges(t *testing.T) {
+	f := buildNlFake(t, "nlfakeclock", false)
+	topic := newStateTopic()
+	sub := topic.subscribe()
+	defer topic.unsubscribe(sub)
+	n := &nightlightState{
+		topic: topic, wmc: wm.OpenNamed("testwm"),
+		stateDir: f.state, tempFile: f.temp,
+		schedFile:      filepath.Join(f.state, "ryoku-nightlight-schedule.json"),
+		schedMode:      nlSchedOff,
+		schedMarginMin: nlDefaultMarginMin,
+		schedStartMin:  nlDefaultClockStart,
+		schedStopMin:   nlDefaultClockStop,
+	}
+
+	now := time.Now()
+	cur := now.Hour()*60 + now.Minute()
+	all := cur
+	if err := n.setSchedule(nlSchedClock, nil, &all, &all); err != nil {
+		t.Fatalf("setSchedule all-day: %v", err)
+	}
+	n.tickSchedule()
+	if got := waitForFrame(t, sub, func(fr nlFrame) bool { return fr.On }, "on:true"); !got.On {
+		t.Fatalf("all-day window must turn the light on: %s", got.Raw)
+	}
+
+	outStart := (cur + 1) % (24 * 60)
+	outStop := (cur - 1 + 24*60) % (24 * 60)
+	if err := n.setSchedule(nlSchedClock, nil, &outStart, &outStop); err != nil {
+		t.Fatalf("setSchedule away: %v", err)
+	}
+	n.tickSchedule()
+	if got := waitForFrame(t, sub, func(fr nlFrame) bool { return !fr.On }, "on:false"); got.On {
+		t.Fatalf("a window away from now must turn the light off: %s", got.Raw)
+	}
+}
+
+func TestNightlightScheduleFrameCarriesClock(t *testing.T) {
+	dir := t.TempDir()
+	topic := newStateTopic()
+	sub := topic.subscribe()
+	defer topic.unsubscribe(sub)
+	n := &nightlightState{
+		topic: topic, tempFile: filepath.Join(dir, "ryoku-nightlight"),
+		schedFile: filepath.Join(dir, "ryoku-nightlight-schedule.json"),
+		schedMode: nlSchedClock, schedStartMin: 21*60 + 15, schedStopMin: 6*60 + 30,
+	}
+	n.publish(false)
+	var got struct {
+		Schedule string `json:"schedule"`
+		StartAt  int    `json:"startAt"`
+		StopAt   int    `json:"stopAt"`
+	}
+	if err := json.Unmarshal(<-sub.frames, &got); err != nil {
+		t.Fatalf("frame not json: %v", err)
+	}
+	if got.Schedule != "clock" || got.StartAt != 21*60+15 || got.StopAt != 6*60+30 {
+		t.Fatalf("frame = %+v, want clock/1275/390", got)
 	}
 }

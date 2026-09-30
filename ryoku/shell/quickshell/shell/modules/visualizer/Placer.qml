@@ -236,12 +236,17 @@ PanelWindow {
                 editBar.closeTray();
             else if (editBar.colorOpen)
                 editBar.closeColor();
+            else if (editBar.settingsOpen)
+                editBar.closeSettings();
             else
                 win.done();
         }
         Keys.onReturnPressed: win.done()
         Keys.onPressed: (e) => {
-            if (e.key === Qt.Key_F) {
+            if (e.key === Qt.Key_S) {
+                editBar.toggleSettings();
+                e.accepted = true;
+            } else if (e.key === Qt.Key_F) {
                 Config.flip();
                 e.accepted = true;
             } else if (e.key === Qt.Key_M) {

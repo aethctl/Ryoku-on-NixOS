@@ -153,6 +153,24 @@ type downloadEvent struct {
 
 func (s *sources) emitDownload(ev downloadEvent) {
 	s.d.broadcast(evDownload, ev)
+	id := "download:" + ev.ID
+	switch ev.Status {
+	case dlQueued, dlDownloading:
+		if ev.Progress != nil {
+			s.d.tasks.progress(id, int(*ev.Progress*100), 100, "")
+		}
+	case dlDone:
+		s.d.tasks.finish(id, taskCompleted, 0, "")
+	case dlError:
+		state, detail := taskFailed, ""
+		if ev.Error != nil {
+			detail = *ev.Error
+		}
+		if detail == "cancelled" {
+			state = taskCancelled
+		}
+		s.d.tasks.finish(id, state, 0, detail)
+	}
 }
 
 type sourceResult struct {
@@ -333,6 +351,7 @@ func (s *sources) startDownload(reqID int64, id string, g *gate, inflightKey str
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	s.registerCancel(id, cancel)
+	s.d.tasks.start("download:"+id, "download", "Download", 100, cancel)
 	go func() {
 		defer s.endInflight(inflightKey)
 		defer s.clearCancel(id)
@@ -344,6 +363,12 @@ func (s *sources) startDownload(reqID int64, id string, g *gate, inflightKey str
 		})
 		defer slot.release()
 		work(ctx, slot)
+		// A worker that returned without reporting an outcome must not leave its chip running.
+		if ctx.Err() != nil {
+			s.d.tasks.finish("download:"+id, taskCancelled, 0, "")
+		} else {
+			s.d.tasks.finish("download:"+id, taskFailed, 0, "")
+		}
 	}()
 	return ok(reqID, map[string]interface{}{"id": id, "status": "started"})
 }

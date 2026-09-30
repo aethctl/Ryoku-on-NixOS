@@ -548,9 +548,21 @@ func (d *daemon) emitWorkshopDownload(id, status string, progress float64, messa
 		data["path"] = path
 	}
 	d.broadcast("ryogami.workshop.download", data)
+	// Steam and steamcmd own the transfer, so the chip reports it but cannot stop it.
+	task := "download:we-" + id
+	switch status {
+	case "downloading":
+		d.tasks.startOnce(task, "download", "Download", 100)
+		d.tasks.progress(task, int(progress*100), 100, message)
+	case "done":
+		d.tasks.finish(task, taskCompleted, 0, "")
+	default:
+		d.tasks.finish(task, taskFailed, 0, message)
+	}
 }
 
-// open_in_steam hands the user a steam:// URL when no backend can fetch the item.
+// With no backend to fetch the item, open_in_steam hands over a steam:// URL; without
+// Steam at all, no_steam points at the item's Workshop page instead.
 func (w *workshopLib) download(id string) (status, openURL string) {
 	d := w.d
 	dir := w.workshopDir()
@@ -570,9 +582,26 @@ func (w *workshopLib) download(id string) (status, openURL string) {
 	case steamcmdInstalled():
 		go w.runDownload(id, true)
 		return "started", ""
+	case !steamInstalled():
+		return "no_steam", "https://steamcommunity.com/sharedfiles/filedetails/?id=" + id
 	default:
 		return "open_in_steam", "steam://url/CommunityFilePage/" + id
 	}
+}
+
+var flatpakSystemApps = "/var/lib/flatpak/app"
+
+// A native or Snap Steam puts steam on PATH; a Flatpak one only leaves its app directory.
+func steamInstalled() bool {
+	if _, err := exec.LookPath("steam"); err == nil {
+		return true
+	}
+	for _, apps := range []string{flatpakSystemApps, filepath.Join(home(), ".local", "share", "flatpak", "app")} {
+		if dirExists(filepath.Join(apps, "com.valvesoftware.Steam")) {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *workshopLib) runDownload(id string, useSteamcmd bool) {

@@ -104,13 +104,13 @@ Singleton {
 
     Process {
         id: getUsername
-        command: ["id", "-un"]
+        command: ["/usr/bin/id", "-un"]
         stdout: StdioCollector {
             id: usernameCollector
             onStreamFinished: {
                 const name = usernameCollector.text.trim() || Quickshell.env("USER") || root.username
                 root.username = name
-                getDisplayName.command = ["getent", "passwd", name]
+                getDisplayName.command = ["/usr/bin/getent", "passwd", name]
                 getDisplayName.running = true
             }
         }
@@ -119,7 +119,7 @@ Singleton {
     Process {
         id: getDisplayName
         running: false
-        command: ["getent", "passwd", root.username]
+        command: ["/usr/bin/getent", "passwd", root.username]
         stdout: StdioCollector {
             id: displayNameCollector
             onStreamFinished: {

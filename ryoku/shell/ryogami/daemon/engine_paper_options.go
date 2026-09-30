@@ -1,26 +1,8 @@
 package main
 
 import (
-	"os/exec"
 	"strings"
 )
-
-type paperTransition struct {
-	Fps        *uint32 `json:"fps,omitempty"`
-	From       string  `json:"from,omitempty"`
-	Effect     string  `json:"effect,omitempty"`
-	DurationMs uint64  `json:"duration_ms,omitempty"`
-}
-
-type paperAssign struct {
-	Outputs    []string         `json:"outputs"`
-	Source     paperSource      `json:"source"`
-	FillMode   string           `json:"fill_mode,omitempty"`
-	Mute       bool             `json:"mute"`
-	Volume     int              `json:"volume"`
-	Layer      string           `json:"layer,omitempty"`
-	Transition *paperTransition `json:"transition,omitempty"`
-}
 
 type paperSandPolicy struct {
 	Quality string  `json:"quality,omitempty"`
@@ -44,21 +26,6 @@ type paperRendererPolicy struct {
 	TransitionFps      *uint16               `json:"transition_fps,omitempty"`
 	Sand               *paperSandPolicy      `json:"sand,omitempty"`
 	Scene              *paperScenePolicyFull `json:"scene,omitempty"`
-}
-
-type paperApplyFull struct {
-	Assignments []paperAssign        `json:"assignments"`
-	ReplaceAll  bool                 `json:"replace_all,omitempty"`
-	Policy      *paperRendererPolicy `json:"policy,omitempty"`
-}
-
-// Static images stay on the background layer: the renderer refuses any other.
-func (d *daemon) paperLayer() string {
-	switch d.settingString("paper.wallpaperLayer") {
-	case "background", "bottom", "top", "overlay":
-		return d.settingString("paper.wallpaperLayer")
-	}
-	return "bottom"
 }
 
 func paperFill(fit string) string {
@@ -221,20 +188,4 @@ func isHexDigits(s string) bool {
 		}
 	}
 	return len(s) > 0
-}
-
-func (d *daemon) skwdPaperInstalled() bool {
-	bin := "skwd-paper-v2"
-	if p := d.settingString("paths.paperBin"); p != "" {
-		bin = resolvePath(p)
-	}
-	if strings.ContainsRune(bin, '/') {
-		return fileExists(bin)
-	}
-	_, err := exec.LookPath(bin)
-	return err == nil
-}
-
-func init() {
-	registerAvailability("skwdPaper", func(d *daemon) bool { return d.skwdPaperInstalled() })
 }

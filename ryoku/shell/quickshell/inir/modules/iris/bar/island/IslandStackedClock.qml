@@ -8,7 +8,7 @@ import inir.modules.iris.components
 Column {
     id: root
 
-    property real pixelSize: 14 * IrisStyle.typeScale
+    property real pixelSize: IrisStyle.typeBody
     property color color: IrisStyle.text
     property color accent: IrisStyle.frameAccent
     property bool showDay: false
@@ -31,7 +31,7 @@ Column {
         color: root.accent
         font.pixelSize: Math.round(root.pixelSize * 0.8)
         font.family: IrisStyle.fontNumbers
-        font.weight: Font.Bold
+        font.weight: IrisStyle.weight(Font.Bold)
         font.features: ({ "tnum": 1 })
     }
     IrisNumber {

@@ -105,7 +105,6 @@ Item {
                 model: Config.count
                 delegate: VisualizerView {
                     id: vizView
-                    required property int index
                     anchors.fill: parent
                     cfg: VizItem { data: Config.dataAt(vizView.index) }
                     // The first read of activeView happens while the Repeater is

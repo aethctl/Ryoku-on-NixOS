@@ -86,6 +86,60 @@ IrisWidgetFace {
         maximumLineCount: 2
     }
 
+    // An empty agenda still answers "what week is it": the week with today lit, then the words.
+    readonly property var week: {
+        const first = new Date(root.today)
+        first.setHours(0, 0, 0, 0)
+        const lead = (first.getDay() - Qt.locale().firstDayOfWeek + 7) % 7
+        first.setDate(first.getDate() - lead)
+        const days = []
+        for (let i = 0; i < 7; ++i) {
+            const day = new Date(first)
+            day.setDate(first.getDate() + i)
+            days.push(day)
+        }
+        return days
+    }
+    component WeekStrip: RowLayout {
+        spacing: 0
+        Repeater {
+            model: root.week
+            ColumnLayout {
+                id: day
+                required property var modelData
+                readonly property bool current: day.modelData.getDate() === root.today.getDate()
+                    && day.modelData.getMonth() === root.today.getMonth()
+                Layout.fillWidth: true
+                spacing: root.dp(4)
+                FaceText {
+                    face: root
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Qt.locale().toString(day.modelData, "ddd").charAt(0).toUpperCase()
+                    color: day.current ? root.accent : root.inkTertiary
+                    size: 11
+                    weight: Font.DemiBold
+                }
+                Rectangle {
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: root.dp(26)
+                    implicitHeight: implicitWidth
+                    radius: width / 2
+                    color: day.current ? root.accent : "transparent"
+                    FaceText {
+                        face: root
+                        anchors.centerIn: parent
+                        text: day.modelData.getDate()
+                        color: day.current ? root.onFill(root.accent) : root.inkSecondary
+                        font.family: root.fontNumbers
+                        font.features: ({ "tnum": 1 })
+                        size: 13
+                        weight: day.current ? Font.Bold : Font.Medium
+                    }
+                }
+            }
+        }
+    }
+
     ColumnLayout {
         visible: root.small
         anchors.fill: parent
@@ -121,8 +175,10 @@ IrisWidgetFace {
                     event: modelData
                 }
             }
+            WeekStrip { visible: root.shown.length === 0; Layout.fillWidth: true }
+            Item { Layout.fillHeight: true; visible: root.shown.length === 0 }
             Empty { visible: root.shown.length === 0; Layout.fillWidth: true }
-            Item { Layout.fillHeight: true }
+            Item { Layout.fillHeight: true; visible: root.shown.length > 0 }
         }
     }
 
@@ -134,7 +190,7 @@ IrisWidgetFace {
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
-            color: IrisStyle.hairline
+            color: root.hairline
         }
         Repeater {
             model: root.large ? root.shown : []
@@ -162,7 +218,8 @@ IrisWidgetFace {
                 }
             }
         }
-        Empty { visible: root.shown.length === 0; Layout.fillWidth: true }
+        WeekStrip { visible: root.shown.length === 0; Layout.fillWidth: true; Layout.topMargin: root.dp(4) }
+        Empty { visible: root.shown.length === 0; Layout.fillWidth: true; Layout.topMargin: root.dp(6) }
         Item { Layout.fillHeight: true }
     }
 }

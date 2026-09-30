@@ -200,19 +200,38 @@ func (pc *paperClient) connect(spawn bool) (net.Conn, error) {
 }
 
 func (pc *paperClient) launch(sock string) error {
-	_ = os.MkdirAll(filepath.Dir(sock), 0o755)
+	if err := preparePaperRuntime(filepath.Dir(sock)); err != nil {
+		return err
+	}
 	cmd := exec.Command(pc.binary(), "serve")
 	cmd.Env = append(os.Environ(), "SKWD_PAPER_V2_SOCKET="+sock)
 	cmd.Env = append(cmd.Env, pc.d.paperServeEnv()...)
 	cmd.Stdin = nil
-	cmd.Stdout = nil
-	cmd.Stderr = nil
+	if log := managedLogPath("paper"); log != "" {
+		if f, err := os.OpenFile(log, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644); err == nil {
+			cmd.Stdout = f
+			cmd.Stderr = f
+			defer f.Close()
+		}
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start skwd-paper: %w", err)
 	}
 	// Reap the controller so a short-lived spawn does not linger as a zombie.
 	go func() { _ = cmd.Wait() }()
+	return nil
+}
+
+// skwd-paper refuses to bind in a directory group or other can open. Earlier
+// daemons created it 0755, so an existing one is tightened as well.
+func preparePaperRuntime(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create %s: %w", dir, err)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		return fmt.Errorf("secure %s: %w", dir, err)
+	}
 	return nil
 }
 

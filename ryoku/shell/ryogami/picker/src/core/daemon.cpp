@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QJSEngine>
+#include <QPointer>
 #include <QJsonDocument>
 #include <QLocalSocket>
 #include <QProcessEnvironment>
@@ -164,7 +165,9 @@ int Daemon::call(const QString &method, const QVariantMap &params, const QJSValu
     Handler handler;
     if (callback.isCallable()) {
         QJSValue cb = callback;
-        QJSEngine *engine = m_jsEngine;
+        // A raw engine pointer survives the engine: a reply landing during
+        // teardown would call into freed memory. QPointer goes null with it.
+        const QPointer<QJSEngine> engine = m_jsEngine;
         handler = [cb, engine](const QJsonValue &result, const QJsonObject &error) mutable {
             if (!engine)
                 return;

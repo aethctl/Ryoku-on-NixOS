@@ -21,7 +21,7 @@ const (
 const PointerBlock = pointerBegin + "\n" +
 	"## Ryoku Rashin system vault\n" +
 	"\n" +
-	"This machine runs the Ryoku desktop. A maintained map of the\n" +
+	"This machine runs Ryoku (Arch Linux, Hyprland desktop). A maintained map of the\n" +
 	"system lives at `~/.local/share/ryoku/rashin/`. Before exploring the machine or\n" +
 	"guessing paths, read `AGENTS.md` there: it says where every config lives, which\n" +
 	"binary owns it, and how to reload it. Write durable notes to `memory/` and\n" +
@@ -396,12 +396,18 @@ func agentSkillWired(d agentDef) bool {
 }
 
 // symlinkForce points link at target with `ln -sfn` semantics: an existing
-// symlink is replaced, a correct one is left alone, and a real file or dir is
-// never clobbered. It reports whether a link now points at target.
+// symlink is replaced, a correct one is left alone, and a real file or foreign
+// skill dir is never clobbered. Hermes keeps skills in category folders
+// (skills/<category>/<name>), so a real directory without a SKILL.md of its
+// own is treated as a category and the link is laid inside it as <dir>/ryoku.
+// It reports whether a link now points at target.
 func symlinkForce(link, target string) (bool, error) {
 	if fi, err := os.Lstat(link); err == nil {
 		if fi.Mode()&os.ModeSymlink == 0 {
-			return false, nil // a real file or dir sits here; keep the user's data
+			if fi.IsDir() && !fileExists(filepath.Join(link, "SKILL.md")) {
+				return symlinkForce(filepath.Join(link, "ryoku"), target)
+			}
+			return false, nil // a real file or foreign skill dir; keep the user's data
 		}
 		if dest, _ := os.Readlink(link); filepath.Clean(dest) == filepath.Clean(target) {
 			return true, nil
@@ -424,8 +430,16 @@ func symlinkForce(link, target string) (bool, error) {
 // still remove it. A foreign `ryoku` skill without that marker is never ours.
 func isOurSkillLink(link string) bool {
 	fi, err := os.Lstat(link)
-	if err != nil || fi.Mode()&os.ModeSymlink == 0 {
+	if err != nil {
 		return false
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		// A category folder (a real dir with no SKILL.md of its own) holds the
+		// skill as <dir>/ryoku; that nested link is what hermes loads.
+		if !fi.IsDir() || fileExists(filepath.Join(link, "SKILL.md")) {
+			return false
+		}
+		return isOurSkillLink(filepath.Join(link, "ryoku"))
 	}
 	dest, err := os.Readlink(link)
 	if err != nil {
@@ -460,6 +474,10 @@ func skillDirIsOurs(dir string) bool {
 
 // removeSkillLinkIfOurs deletes link only when it is one of our skill symlinks.
 func removeSkillLinkIfOurs(link string) {
+	if fi, err := os.Lstat(link); err == nil && fi.IsDir() && fi.Mode()&os.ModeSymlink == 0 &&
+		!fileExists(filepath.Join(link, "SKILL.md")) {
+		link = filepath.Join(link, "ryoku") // the category layout keeps the link inside
+	}
 	if isOurSkillLink(link) {
 		_ = os.Remove(link)
 	}

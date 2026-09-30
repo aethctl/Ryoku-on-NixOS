@@ -73,6 +73,8 @@ public:
 
     Q_INVOKABLE void search();
     Q_INVOKABLE void nextPage();
+    // Drops the rows and any search in flight, for a tab with nothing to search yet.
+    Q_INVOKABLE void clear();
     // opts.clip = {start, dur} in seconds; the item's own trackUrl is forwarded automatically.
     Q_INVOKABLE void download(int row, const QVariantMap &opts = {});
     // Workshop transfers run in Steam or steamcmd, which the daemon cannot stop midway.
@@ -87,7 +89,7 @@ public:
     QSizeF cardImageSize(int row) const override;
     QColor cardFill(int row) const override;
     unsigned cardBadges(int row) const override;
-    QString cardPreviewVideo(int) const override { return {}; }
+    QString cardPreviewVideo(int row) const override;
     int rowOfKey(const QString &key) const override { return m_idIndex.value(key, -1); }
     quint64 cardGeneration() const override { return m_cardGen; }
     CardSourceNotifier *cardNotifier() const override { return m_notifier; }
@@ -102,7 +104,10 @@ Q_SIGNALS:
     void lastPageChanged();
     void countChanged();
     void previewReady(const QString &id, const QString &path);
-    void openInSteam(const QString &id, const QString &url);
+    // steamInstalled false means url is the item's Workshop web page, not a steam:// link.
+    void openInSteam(const QString &id, const QString &url, bool steamInstalled);
+    // A result's thumbnail finished downloading; the path is unchanged, so a view that loaded early must retry.
+    void thumbArrived(int row);
 
 private:
     struct Row {

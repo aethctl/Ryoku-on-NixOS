@@ -22,10 +22,10 @@ Rectangle {
         anchors.centerIn: parent
         anchors.verticalCenterOffset: Math.round(root.size * 0.03)
         text: root.count > 99 ? "99+" : root.count
-        color: IrisStyle.onBadge
+        color: IrisStyle.inkOnBadge
         font.family: IrisStyle.fontNumbers
         font.features: ({ "tnum": 1 })
         font.pixelSize: root.size * 0.62
-        font.weight: Font.Bold
+        font.weight: IrisStyle.weight(Font.Bold)
     }
 }

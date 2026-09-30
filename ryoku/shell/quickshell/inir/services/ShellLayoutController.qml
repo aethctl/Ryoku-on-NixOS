@@ -5,6 +5,7 @@ import QtQuick
 import Quickshell
 import inir
 import inir.modules.common
+import Ryoku.Ui.Singletons
 
 Singleton {
     id: root
@@ -250,7 +251,10 @@ Singleton {
             if (appearanceStyle === "pill" && !barVertical) {
                 const screen = Quickshell.screens.find(item => (item?.name ?? "") === outputName)
                     ?? Quickshell.screens[0]
+                // Physical short edge: Quickshell's rectangle is logical, so a
+                // logical-only term shrinks the pill as the display scale rises.
                 const shortEdge = Math.min(screen?.width ?? 1920, screen?.height ?? 1080)
+                    * Wm.outputScale(outputName)
                 const resolutionScale = Math.max(0.78, Math.min(1.6, shortEdge / 1080))
                 const scale = resolutionScale * 1.1 * (Config.options?.bar?.pill?.scale ?? 1)
                 const restHeight = (Config.options?.bar?.pill?.barMode ?? false)

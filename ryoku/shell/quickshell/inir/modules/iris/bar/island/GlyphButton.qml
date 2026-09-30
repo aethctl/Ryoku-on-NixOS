@@ -11,7 +11,7 @@ IrisButton {
     id: glyphButton
     property string glyph: ""
     property real glyphSize: 22 * IrisStyle.density
-    property color glyphColor: glyphButton.emphasized && glyphButton.danger ? IrisStyle.onDanger : IrisStyle.text
+    property color glyphColor: glyphButton.emphasized && glyphButton.danger ? IrisStyle.inkOnDanger : IrisStyle.text
     quiet: !glyphButton.emphasized
     implicitWidth: Math.round(38 * IrisStyle.density)
     implicitHeight: implicitWidth

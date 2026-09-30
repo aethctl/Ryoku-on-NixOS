@@ -197,3 +197,39 @@ func TestValidWeID(t *testing.T) {
 		}
 	}
 }
+
+// With nothing able to fetch an item, a machine without Steam gets the item's web page
+// rather than a steam:// link nothing on it can open.
+func TestWorkshopDownloadWithoutAFetcher(t *testing.T) {
+	d := newSettingsDaemon(t)
+	w := &workshopLib{d: d}
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	saved := flatpakSystemApps
+	flatpakSystemApps = filepath.Join(t.TempDir(), "app")
+	t.Cleanup(func() { flatpakSystemApps = saved })
+
+	status, url := w.download("3100000002")
+	if status != "no_steam" || url != "https://steamcommunity.com/sharedfiles/filedetails/?id=3100000002" {
+		t.Fatalf("no Steam: got %q %q", status, url)
+	}
+
+	if err := os.MkdirAll(filepath.Join(home, ".local", "share", "flatpak", "app", "com.valvesoftware.Steam"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if status, url := w.download("3100000002"); status != "open_in_steam" || url != "steam://url/CommunityFilePage/3100000002" {
+		t.Fatalf("Flatpak Steam: got %q %q", status, url)
+	}
+
+	if err := os.RemoveAll(filepath.Join(home, ".local", "share", "flatpak")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bin, "steam"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if status, _ := w.download("3100000002"); status != "open_in_steam" {
+		t.Fatalf("native Steam: got %q", status)
+	}
+}

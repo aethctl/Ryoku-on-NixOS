@@ -150,10 +150,7 @@ Item {
                                 Image {
                                     anchors.fill: parent
                                     visible: tile.entry && tile.entry.preview && status === Image.Ready
-                                    source: {
-                                        var p = (tile.entry && tile.entry.preview) ? tile.entry.preview : ""
-                                        return p && p.indexOf("://") < 0 ? "file://" + p : p
-                                    }
+                                    source: Library.fileUrl(tile.entry && tile.entry.preview ? tile.entry.preview : "")
                                     fillMode: Image.PreserveAspectCrop
                                     asynchronous: true
                                     cache: false

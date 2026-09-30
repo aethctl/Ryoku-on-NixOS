@@ -241,6 +241,11 @@ func copyBounded(reader io.Reader, writer io.Writer, max uint64) (uint64, error)
 	}
 }
 
+// httpStatusError keeps the status so a source can say why a request was refused.
+type httpStatusError struct{ code int }
+
+func (e httpStatusError) Error() string { return fmt.Sprintf("request failed: HTTP %d", e.code) }
+
 // Trusted provider endpoints only, so no SSRF allowlist here.
 func (s *sources) getBytes(ctx context.Context, method, rawURL string, header http.Header, body io.Reader, sizeCap int64) ([]byte, error) {
 	if sizeCap <= 0 {
@@ -262,7 +267,7 @@ func (s *sources) getBytes(ctx context.Context, method, rawURL string, header ht
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("request failed: HTTP %d", resp.StatusCode)
+		return nil, httpStatusError{resp.StatusCode}
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, sizeCap))
 }

@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -85,6 +87,33 @@ func TestWeFillMode(t *testing.T) {
 	for _, m := range []string{"fill", "fit", "stretch", "center", "tile", "span"} {
 		if weFillMode(m) != m {
 			t.Fatalf("fit %q not passed through", m)
+		}
+	}
+}
+
+// TestPaperRuntimeIsPrivate: skwd-paper will not bind a socket in a directory
+// group or other can open, so a missing one is created private and one an
+// earlier daemon left at 0755 is tightened before the renderer starts.
+func TestPaperRuntimeIsPrivate(t *testing.T) {
+	root := t.TempDir()
+	fresh := filepath.Join(root, "fresh", "skwd-paper-v2")
+	stale := filepath.Join(root, "stale")
+	if err := os.Mkdir(stale, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(stale, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{fresh, stale} {
+		if err := preparePaperRuntime(dir); err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
+		info, err := os.Stat(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mode := info.Mode().Perm(); mode&0o077 != 0 {
+			t.Fatalf("%s mode = %o, want no group or other access", dir, mode)
 		}
 	}
 }

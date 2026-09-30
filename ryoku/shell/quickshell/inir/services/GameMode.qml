@@ -189,6 +189,8 @@ Singleton {
     FileView {
         id: stateReader
         path: root._stateFile
+        // No state file on first run is the normal case, not an error.
+        printErrors: false
 
         onLoaded: {
             const content = stateReader.text()

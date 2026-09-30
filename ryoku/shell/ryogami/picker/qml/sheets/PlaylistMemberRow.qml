@@ -16,14 +16,8 @@ Item {
     readonly property bool _canUp: member.ordinal > 1
     readonly property bool _canDown: member.ordinal < member.total
     readonly property string _kind: (member.entry && member.entry.kind) ? String(member.entry.kind) : ""
-    readonly property string _art: {
-        if (!member.entry)
-            return ""
-        var p = member.entry.thumb_sm || member.entry.thumb || member.entry.preview || ""
-        if (!p || p.length === 0)
-            return ""
-        return p.indexOf("://") >= 0 ? p : "file://" + p
-    }
+    readonly property string _art: member.entry
+        ? String(member.entry.thumb_sm || member.entry.thumb || member.entry.preview || "") : ""
 
     implicitHeight: body.implicitHeight
 
@@ -120,7 +114,7 @@ Item {
                     Image {
                         anchors.fill: parent
                         visible: member._art.length > 0
-                        source: member._art
+                        source: Library.fileUrl(member._art)
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true

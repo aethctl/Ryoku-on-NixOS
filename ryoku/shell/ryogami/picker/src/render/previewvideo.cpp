@@ -32,7 +32,16 @@ void PreviewVideo::ensurePipeline()
     m_player->setVideoSink(m_sink);
     m_player->setAudioOutput(m_audio);
     m_player->setLoops(QMediaPlayer::Infinite);
-    connect(m_sink, &QVideoSink::videoFrameChanged, this, &PreviewVideo::onFrame);
+}
+
+void PreviewVideo::listen()
+{
+    QObject::disconnect(m_frameConnection);
+    const quint64 generation = ++m_generation;
+    m_frameConnection = connect(m_sink, &QVideoSink::videoFrameChanged, this, [this, generation](const QVideoFrame &frame) {
+        if (generation == m_generation)
+            onFrame(frame);
+    });
 }
 
 void PreviewVideo::prewarm()
@@ -42,13 +51,13 @@ void PreviewVideo::prewarm()
 
 void PreviewVideo::play(const QString &path, bool muted, double volume)
 {
-    if (path.isEmpty()) {
-        stop();
+    stop();
+    if (path.isEmpty())
         return;
-    }
     ensurePipeline();
     m_audio->setMuted(muted);
     m_audio->setVolume(float(std::clamp(volume, 0.0, 1.0)));
+    listen();
     m_active = true;
     const QUrl url = path.contains(QStringLiteral("://")) ? QUrl(path) : QUrl::fromLocalFile(path);
     m_player->setSource(url);
@@ -58,6 +67,8 @@ void PreviewVideo::play(const QString &path, bool muted, double volume)
 void PreviewVideo::stop()
 {
     m_active = false;
+    ++m_generation;
+    QObject::disconnect(m_frameConnection);
     if (m_player) {
         m_player->stop();
         m_player->setSource(QUrl());

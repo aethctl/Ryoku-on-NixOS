@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	wm "ryoku-wm"
 	"slices"
 	"strings"
 	"testing"
@@ -810,7 +811,7 @@ esac`
 			fmt.Sprintf(`{"engine":"matugen","mode":%q,"prefer":%q,"contrast":%v,"themeRyokuApps":true}`,
 				c.mode, c.prefer, c.contrast))
 
-		if err := (&daemon{}).matugenApply(c.img); err != nil {
+		if err := (&daemon{wmc: wm.OpenNamed("does-not-exist")}).matugenApply(c.img); err != nil {
 			t.Fatalf("%s: matugenApply: %v", c.name, err)
 		}
 
@@ -925,7 +926,7 @@ func TestMatugenIsolatedDrive(t *testing.T) {
 		themeRoles[i] = kv[1]
 	}
 
-	if err := (&daemon{}).matugenApply(img); err != nil {
+	if err := (&daemon{wmc: wm.OpenNamed("does-not-exist")}).matugenApply(img); err != nil {
 		t.Fatalf("matugenApply: %v", err)
 	}
 
@@ -1281,7 +1282,7 @@ func TestMatugenApplyNeutralizesAchromaticWallpaper(t *testing.T) {
 	}
 
 	// Achromatic: colors.json and tones.json are stripped to gray.
-	if err := (&daemon{}).matugenApply(gray); err != nil {
+	if err := (&daemon{wmc: wm.OpenNamed("does-not-exist")}).matugenApply(gray); err != nil {
 		t.Fatalf("matugenApply(gray): %v", err)
 	}
 	if p := readPalette()["primary"]; !isGray(p) {
@@ -1300,7 +1301,7 @@ func TestMatugenApplyNeutralizesAchromaticWallpaper(t *testing.T) {
 	}
 
 	// Chromatic: the generated colour survives untouched.
-	if err := (&daemon{}).matugenApply(colour); err != nil {
+	if err := (&daemon{wmc: wm.OpenNamed("does-not-exist")}).matugenApply(colour); err != nil {
 		t.Fatalf("matugenApply(colour): %v", err)
 	}
 	if p := readPalette()["primary"]; isGray(p) {

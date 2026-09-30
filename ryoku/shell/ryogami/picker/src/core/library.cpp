@@ -16,21 +16,6 @@ const QString kWorkshop = QStringLiteral("workshop");
 const QString kThemes = QStringLiteral("themes");
 const QString kRices = QStringLiteral("rices");
 
-Entry workshopEntry(const QJsonObject &o)
-{
-    Entry e;
-    e.weId = o.value(QStringLiteral("id")).toString();
-    e.key = QStringLiteral("we:") + e.weId;
-    e.name = o.value(QStringLiteral("title")).toString();
-    e.title = e.name;
-    e.type = QStringLiteral("we");
-    e.weType = o.value(QStringLiteral("type")).toString();
-    e.preview = o.value(QStringLiteral("preview")).toString();
-    e.thumb = e.preview;
-    e.tags = Entry::stringList(o.value(QStringLiteral("tags")));
-    return e;
-}
-
 QJsonArray asArray(const QJsonValue &result)
 {
     if (result.isArray())
@@ -54,7 +39,7 @@ Library::Library(QObject *parent)
 {
     m_cachedFlush->setSingleShot(true);
     m_cachedFlush->setInterval(kCachedFlushMs);
-    connect(m_cachedFlush, &QTimer::timeout, this, [this]() { Q_EMIT changed(kWallpapers); });
+    connect(m_cachedFlush, &QTimer::timeout, this, &Library::flushCached);
     connect(m_catalogs, &Catalogs::themesChanged, this, [this]() { Q_EMIT changed(kThemes); });
     connect(m_catalogs, &Catalogs::ricesChanged, this, [this]() { Q_EMIT changed(kRices); });
 }
@@ -95,6 +80,16 @@ QVariantMap Library::entry(const QString &collection, const QString &key) const
             return r->toVariantMap();
     }
     return {};
+}
+
+// fromLocalFile escapes names a bare "file://" prefix would break, such as '#' or '?'.
+QUrl Library::fileUrl(const QString &path)
+{
+    if (path.isEmpty())
+        return {};
+    if (path.contains(QLatin1String("://")))
+        return QUrl(path);
+    return QUrl::fromLocalFile(path);
 }
 
 QStringList Library::folders(const QString &collection) const
@@ -148,20 +143,28 @@ void Library::onReconnected()
 void Library::onEvent(const QString &name, const QVariantMap &data)
 {
     if (name == QLatin1String("ryogami.wall.cached")) {
-        upsertWallpaper(Entry::fromJson(QJsonObject::fromVariantMap(data)));
+        const Entry entry = Entry::fromJson(QJsonObject::fromVariantMap(data));
+        upsertWallpaper(entry);
+        // Scenes show in the Workshop collection too; a new still must reach it.
+        if (entry.type == QLatin1String("we")) {
+            for (Entry &w : m_workshop) {
+                if (w.key == entry.key) {
+                    w = entry;
+                    m_workshopDirty = true;
+                    break;
+                }
+            }
+        }
         if (!m_cachedFlush->isActive())
             m_cachedFlush->start();
     } else if (name == QLatin1String("ryogami.wall.file_removed")) {
         removeWallpaper(data.value(QStringLiteral("name")).toString(),
                         data.value(QStringLiteral("type")).toString());
     } else if (name == QLatin1String("ryogami.wall.scan_done")) {
-        m_cachedFlush->stop();
-        Q_EMIT changed(kWallpapers);
+        flushCached();
     } else if (name == QLatin1String("ryogami.wall.cache")) {
-        if (data.value(QStringLiteral("status")).toString() == QLatin1String("ready")) {
-            m_cachedFlush->stop();
-            Q_EMIT changed(kWallpapers);
-        }
+        if (data.value(QStringLiteral("status")).toString() == QLatin1String("ready"))
+            flushCached();
     } else if (name == QLatin1String("ryogami.workshop.changed")) {
         fetchWorkshop();
     } else if (name == QLatin1String("ryogami.wall.applied")) {
@@ -170,6 +173,16 @@ void Library::onEvent(const QString &name, const QVariantMap &data)
             m_appliedKeys.insert(key);
         refreshOutputs();
         Q_EMIT currentChanged();
+    }
+}
+
+void Library::flushCached()
+{
+    m_cachedFlush->stop();
+    Q_EMIT changed(kWallpapers);
+    if (m_workshopDirty) {
+        m_workshopDirty = false;
+        Q_EMIT changed(kWorkshop);
     }
 }
 
@@ -204,7 +217,7 @@ void Library::fetchWorkshop()
         QVector<Entry> workshop;
         workshop.reserve(rows.size());
         for (const QJsonValue &v : rows)
-            workshop.append(workshopEntry(v.toObject()));
+            workshop.append(Entry::fromJson(v.toObject()));
         m_workshop = std::move(workshop);
         Q_EMIT changed(kWorkshop);
     });

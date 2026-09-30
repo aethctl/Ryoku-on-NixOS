@@ -73,6 +73,9 @@ func (m *managedProcess) launch(extraEnv ...string) {
 		return
 	}
 	m.clearLeftover()
+	// The picker watches the shell's palette file; a directory that does not exist yet
+	// cannot be watched, and on a first login the shell may not have created it.
+	_ = os.MkdirAll(filepath.Dir(themeColorsPath()), 0o755)
 	cmd := exec.Command("quickshell", "-p", m.qml)
 	var gpu []string
 	if m.gpuEnv != nil {

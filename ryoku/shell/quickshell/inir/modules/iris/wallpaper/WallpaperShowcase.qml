@@ -25,6 +25,27 @@ ClippingRectangle {
     onKeyChanged: settle.restart()
     Timer { id: settle; interval: String(root.entry?.filePath ?? "").length > 0 ? 90 : 280; onTriggered: root.settledKey = root.key }
 
+    // The last entry that finished arriving stays underneath, so a new selection fades in over it
+    // instead of dropping to the empty stage first.
+    property var heldEntry: null
+    Timer { id: adopt; interval: IrisStyle.duration(260); onTriggered: root.heldEntry = root.entry }
+    onEntryChanged: if (root.entry === null) root.heldEntry = null
+    Loader {
+        anchors.fill: parent
+        active: root.entry !== null && String(root.heldEntry?.filePath ?? "").length > 0 && root.heldEntry?.key !== root.key
+        sourceComponent: ThumbnailImage {
+            generateThumbnail: true
+            cleanVideoStill: true
+            sourcePath: String(root.heldEntry?.filePath ?? "")
+            thumbnailSizeName: "large"
+            fillMode: Image.PreserveAspectCrop
+        }
+    }
+    IrisImage {
+        anchors.fill: parent
+        visible: root.entry !== null && String(root.heldEntry?.imageUrl ?? "").length > 0 && root.heldEntry?.key !== root.key
+        source: root.heldEntry?.imageUrl ?? ""
+    }
     Loader {
         anchors.fill: parent
         active: String(root.entry?.filePath ?? "").length > 0
@@ -34,30 +55,28 @@ ClippingRectangle {
             sourcePath: String(root.entry?.filePath ?? "")
             thumbnailSizeName: "large"
             fillMode: Image.PreserveAspectCrop
+            onStatusChanged: if (status === Image.Ready) adopt.restart()
         }
     }
-    Image {
+    IrisImage {
         anchors.fill: parent
         visible: String(root.entry?.imageUrl ?? "").length > 0
         source: root.entry?.imageUrl ?? ""
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
+        opacity: status === Image.Ready ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
+        onStatusChanged: if (status === Image.Ready) adopt.restart()
     }
-    Image {
+    IrisImage {
         id: sharp
         anchors.fill: parent
-        source: root.settled ? String(root.entry?.fullUrl ?? "") : ""
-        sourceSize.width: Math.round(root.width * 1.25)
-        sourceSize.height: Math.round(root.height * 1.25)
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
+        source: root.settled && root.picker.opened ? String(root.entry?.fullUrl ?? "") : ""
         opacity: status === Image.Ready ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(260); easing.type: IrisStyle.feedbackEasing } }
     }
     Loader {
         id: motionLoader
         anchors.fill: parent
-        active: root.settled && root.picker.playMotion && String(root.entry?.motionSource ?? "").length > 0
+        active: root.settled && root.picker.opened && root.picker.playMotion && String(root.entry?.motionSource ?? "").length > 0
         sourceComponent: Video {
             id: motion
             property bool shown: false
@@ -100,8 +119,8 @@ ClippingRectangle {
             text: String(root.entry?.eyebrow ?? "")
             color: IrisStyle.onMedia
             font.family: IrisStyle.fontTitle
-            font.pixelSize: 15 * IrisStyle.typeScale
-            font.weight: Font.DemiBold
+            font.pixelSize: IrisStyle.typeHeadline
+            font.weight: IrisStyle.weight(Font.DemiBold)
             elide: Text.ElideRight
         }
         Row {
@@ -130,11 +149,13 @@ ClippingRectangle {
                         IrisText {
                             anchors.verticalCenter: parent.verticalCenter
                             text: String(fact.modelData.label ?? "")
+                            width: Math.min(implicitWidth, Math.round(220 * root.d))
+                            elide: Text.ElideMiddle
                             color: IrisStyle.onMedia
                             font.family: fact.modelData.figure ? IrisStyle.fontNumbers : IrisStyle.fontMain
                             font.features: ({ "tnum": 1 })
-                            font.pixelSize: 11.5 * IrisStyle.typeScale
-                            font.weight: Font.DemiBold
+                            font.pixelSize: IrisStyle.typeMeta
+                            font.weight: IrisStyle.weight(Font.DemiBold)
                         }
                     }
                 }
@@ -159,14 +180,14 @@ ClippingRectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "check"
                 iconSize: Math.round(14 * root.d)
-                color: IrisStyle.onAccent
+                color: IrisStyle.inkOnAccent
             }
             IrisText {
                 anchors.verticalCenter: parent.verticalCenter
                 text: Translation.tr("In use")
-                color: IrisStyle.onAccent
-                font.pixelSize: 11.5 * IrisStyle.typeScale
-                font.weight: Font.DemiBold
+                color: IrisStyle.inkOnAccent
+                font.pixelSize: IrisStyle.typeMeta
+                font.weight: IrisStyle.weight(Font.DemiBold)
             }
         }
     }

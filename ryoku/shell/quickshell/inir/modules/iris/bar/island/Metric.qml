@@ -11,7 +11,7 @@ Row {
     id: metric
     property string value: ""
     property string unit: ""
-    property real pixelSize: 15 * IrisStyle.typeScale
+    property real pixelSize: IrisStyle.typeHeadline
     property int weight: Font.DemiBold
     property color color: IrisStyle.text
     IrisText {
@@ -22,7 +22,7 @@ Row {
         font.family: IrisStyle.fontNumbers
         font.weight: metric.weight
         font.features: ({ "tnum": 1 })
-        font.letterSpacing: -metric.pixelSize * 0.015
+        font.letterSpacing: Math.round(-metric.pixelSize * 0.015)
     }
     IrisText {
         visible: metric.unit.length > 0
@@ -31,6 +31,6 @@ Row {
         text: metric.unit
         color: IrisStyle.secondaryOf(metric.color)
         font.pixelSize: Math.max(9, metric.pixelSize * 0.6)
-        font.weight: Font.DemiBold
+        font.weight: IrisStyle.weight(Font.DemiBold)
     }
 }

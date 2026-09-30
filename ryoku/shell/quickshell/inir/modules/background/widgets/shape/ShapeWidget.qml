@@ -50,49 +50,42 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 8
-            WidgetShapePicker {
-                Layout.fillWidth: true
-                selectedShape: root.shapeName
-                onShapeSelected: name => root._setOutputValue("shape", name)
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                WidgetChoiceButton {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Shape")
+                WidgetShapePicker {
                     Layout.fillWidth: true
-                    buttonText: Translation.tr("Filled")
-                    toggled: !root.outline
-                    onClicked: root._setOutputValue("outline", false)
-                }
-                WidgetChoiceButton {
-                    Layout.fillWidth: true
-                    buttonText: Translation.tr("Outline")
-                    toggled: root.outline
-                    onClicked: root._setOutputValue("outline", true)
+                    selectedShape: root.shapeName
+                    onShapeSelected: name => root._setOutputValue("shape", name)
                 }
             }
-            RowLayout {
-                Layout.fillWidth: true
-                enabled: !root.outline
-                Repeater {
-                    model: [{value: "flat", label: Translation.tr("Solid")},
-                        {value: "inset", label: Translation.tr("Inset")},
-                        {value: "duotone", label: Translation.tr("Duotone")}]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        buttonText: modelData.label
-                        toggled: root.treatment === modelData.value
-                        onClicked: Config.setNestedValue("background.widgets.shape.treatment", modelData.value)
-                    }
+            WidgetQuickSection {
+                title: Translation.tr("Fill")
+                WidgetQuickChoices {
+                    current: root.outline
+                    model: [
+                        { value: false, icon: "circle", label: Translation.tr("Filled") },
+                        { value: true, icon: "radio_button_unchecked", label: Translation.tr("Outline") }
+                    ]
+                    onPicked: value => root._setOutputValue("outline", value)
+                }
+                WidgetQuickChoices {
+                    visible: !root.outline
+                    current: root.treatment
+                    model: [
+                        { value: "flat", label: Translation.tr("Solid") },
+                        { value: "inset", label: Translation.tr("Inset") },
+                        { value: "duotone", label: Translation.tr("Duotone") }
+                    ]
+                    onPicked: value => Config.setNestedValue("background.widgets.shape.treatment", value)
                 }
             }
-            StyledText { text: Translation.tr("Rotation") }
-            StyledSlider {
-                Layout.fillWidth: true
-                from: 0; to: 360; stepSize: 15
+            WidgetQuickSlider {
+                title: Translation.tr("Rotation")
+                from: 0; to: 360; stepSize: 15; unit: "°"
                 value: root.angle
-                onMoved: root._setOutputValue("angle", value)
+                onMoved: v => root.previewIrisValue("angle", v)
+                onCommitted: v => root.commitIrisValue("angle", v)
             }
         }
     }

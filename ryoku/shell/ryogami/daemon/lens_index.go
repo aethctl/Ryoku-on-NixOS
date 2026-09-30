@@ -216,6 +216,7 @@ func (m *lensManager) build(paths semanticPaths, req buildRequest) {
 		_ = os.MkdirAll(dir, 0o755)
 	}
 	m.publishStatus()
+	m.d.tasks.start("semantic-index", "semantic", "Index", len(req.Entries), cancel)
 
 	// nice keeps the encode at idle priority so it never contends with the desktop.
 	cmd := exec.CommandContext(ctx, "nice", "-n", "19", paths.helper,
@@ -236,15 +237,18 @@ func (m *lensManager) build(paths semanticPaths, req buildRequest) {
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		m.d.tasks.finish("semantic-index", taskFailed, 0, err.Error())
 		fmt.Fprintf(os.Stderr, "ryogami: semantic index: %v\n", err)
 		return
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		m.d.tasks.finish("semantic-index", taskFailed, 0, err.Error())
 		fmt.Fprintf(os.Stderr, "ryogami: semantic index: %v\n", err)
 		return
 	}
 	if err := cmd.Start(); err != nil {
+		m.d.tasks.finish("semantic-index", taskFailed, 0, err.Error())
 		fmt.Fprintf(os.Stderr, "ryogami: semantic index: %v\n", err)
 		return
 	}
@@ -264,10 +268,18 @@ func (m *lensManager) build(paths semanticPaths, req buildRequest) {
 		}
 		if json.Unmarshal(sc.Bytes(), &p) == nil {
 			m.publishBuildProgress(p.Detail, p.Progress, p.Total)
+			m.d.tasks.progress("semantic-index", p.Progress, p.Total, p.Detail)
 		}
 	}
-	if err := cmd.Wait(); err != nil && ctx.Err() == nil {
+	err = cmd.Wait()
+	switch {
+	case ctx.Err() != nil:
+		m.d.tasks.finish("semantic-index", taskCancelled, 0, "")
+	case err != nil:
+		m.d.tasks.finish("semantic-index", taskFailed, 0, err.Error())
 		fmt.Fprintf(os.Stderr, "ryogami: semantic index build failed: %v\n", err)
+	default:
+		m.d.tasks.finish("semantic-index", taskCompleted, 0, "")
 	}
 }
 

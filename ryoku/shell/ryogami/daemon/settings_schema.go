@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"strings"
 )
 
 type settingSpec struct {
@@ -33,8 +34,16 @@ func buildSchemaIndex() map[string]*settingSpec {
 }
 
 func specFor(key string) (*settingSpec, bool) {
-	s, ok := schemaIndex[key]
-	return s, ok
+	if s, ok := schemaIndex[key]; ok {
+		return s, true
+	}
+	// A per-output key such as display.fillModes.DP-1 takes its "<output>" pattern's spec.
+	if i := strings.LastIndexByte(key, '.'); i > 0 && i < len(key)-1 {
+		if s, ok := schemaIndex[key[:i+1]+"<output>"]; ok {
+			return s, true
+		}
+	}
+	return nil, false
 }
 
 var settingsRevision = schemaRevision()

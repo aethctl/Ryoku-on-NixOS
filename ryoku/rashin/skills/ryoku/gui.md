@@ -32,9 +32,9 @@ them (see below), never as dead settings.
 | Rail name | `hub open` key | Page | What it owns |
 |---|---|---|---|
 | Profile | `profile` | ProfilePage.qml | the user profile, avatar, and hero |
-| General | `global` | GlobalPage.qml | Hub-wide preferences |
+| General | `global` | GlobalPage.qml | language, regional formats, time zone and units, the system font and its size |
 | Updates | `updates` | UpdatesPage.qml | system updates and the release channel |
-| Displays | `displays` | DisplaysPage.qml | monitors, resolution, arrangement (gated: `monitorConfig`) |
+| Displays | `displays` | DisplaysPage.qml | monitors, resolution, arrangement, night light (gated: `monitorConfig`) |
 | Connections | `connections` | ConnectionsPage.qml | wifi and bluetooth |
 | Input | `input` | InputPage.qml | keyboard, mouse, and touchpad |
 | Graphics & Power | `gpu` | GpuPage.qml | GPU mode, power profile, and the idle/lock timers |

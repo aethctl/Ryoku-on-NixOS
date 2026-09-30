@@ -27,6 +27,7 @@ ColumnLayout {
     property int titleSize: Appearance.font.pixelSize.large
     property int artistSize: Appearance.font.pixelSize.small
     property int titleWeight: Font.Medium
+    property int titleLines: 1
     property bool cleanTitle: true
     property bool animateTitle: true
     property int slideDirection: 1
@@ -44,6 +45,8 @@ ColumnLayout {
         font.italic: Appearance.zzzEverywhere
         color: root.titleColor
         elide: Text.ElideRight
+        wrapMode: root.titleLines > 1 ? Text.Wrap : Text.NoWrap
+        maximumLineCount: root.titleLines
         animateChange: root.animateTitle
         animationDistanceX: root.slideDirection * 8
         animationDistanceY: 0

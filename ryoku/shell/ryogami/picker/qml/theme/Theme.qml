@@ -9,7 +9,8 @@ QtObject {
 
     property var wall: ({})
     property FileView colorFile: FileView {
-        path: Quickshell.env("HOME") + "/.cache/ryoku/colors.json"
+        // The daemon creates this directory before starting the picker: a missing parent cannot be watched.
+        path: (Quickshell.env("XDG_CACHE_HOME") || (Quickshell.env("HOME") + "/.cache")) + "/ryoku/colors.json"
         watchChanges: true
         onFileChanged: reload()
         onLoaded: theme._parseWall()
@@ -163,8 +164,7 @@ QtObject {
     readonly property real spaceXl: space(20)
     readonly property real spaceXxl: space(28)
 
-    // Chrome is square: corners come from a horizontal skew, never a radius.
-    readonly property real radius: 0
+    readonly property real radius: 6 * theme.scale
     readonly property real panelSkew: 14 * theme.scale
 
     // Folio sheet geometry (base px; components clamp to the viewport).

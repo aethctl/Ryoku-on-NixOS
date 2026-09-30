@@ -46,17 +46,28 @@ IrisWidgetFace {
                 width: Math.min(parent.width, parent.height)
                 height: width
                 progress: root.fraction
-                tint: root.highlight
-                stroke: Math.max(4, root.dp(7))
+                tint: root.warm
+                stroke: Math.max(4, root.dp(9))
             }
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: -root.dp(2)
-                FaceFigure {
-                    face: root
+                Row {
                     Layout.alignment: Qt.AlignHCenter
-                    text: root.percent + "%"
-                    size: 26
+                    spacing: root.dp(1)
+                    FaceFigure {
+                        id: compactPercent
+                        face: root
+                        text: root.percent
+                        size: 32
+                    }
+                    FaceText {
+                        face: root
+                        anchors.baseline: compactPercent.baseline
+                        text: "%"
+                        color: root.inkSecondary
+                        size: 14
+                    }
                 }
                 FaceText {
                     face: root
@@ -86,15 +97,26 @@ IrisWidgetFace {
             Layout.fillWidth: true
             glyph: root.widget.isDaytime ? "light_mode" : "bedtime"
             text: IrisFaceData.capitalized(Qt.locale().toString(DateTime.clock.date, "dddd d"))
-            tint: root.highlight
+            tint: root.warm
         }
         RowLayout {
             Layout.fillWidth: true
             spacing: root.dp(10)
-            FaceFigure {
-                face: root
-                text: root.percent + "%"
-                size: 40
+            Row {
+                spacing: root.dp(2)
+                FaceFigure {
+                    id: dayPercent
+                    face: root
+                    text: root.percent
+                    size: 48
+                }
+                FaceText {
+                    face: root
+                    anchors.baseline: dayPercent.baseline
+                    text: "%"
+                    color: root.inkSecondary
+                    size: 22
+                }
             }
             FaceText {
                 face: root
@@ -117,19 +139,12 @@ IrisWidgetFace {
                 anchors.verticalCenter: parent.verticalCenter
                 height: root.dp(8)
                 radius: height / 2
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0; color: IrisStyle.tintFill(IrisStyle.identity.indigo) }
-                    GradientStop { position: root.sunrise; color: IrisStyle.tintFill(IrisStyle.identity.orange) }
-                    GradientStop { position: (root.sunrise + root.sunset) / 2; color: IrisStyle.tintFill(IrisStyle.identity.sky) }
-                    GradientStop { position: root.sunset; color: IrisStyle.tintFill(IrisStyle.identity.orange) }
-                    GradientStop { position: 1; color: IrisStyle.tintFill(IrisStyle.identity.indigo) }
-                }
+                color: root.fill
                 Rectangle {
-                    width: Math.max(parent.height, parent.width * root.fraction)
+                    width: parent.width * root.fraction
                     height: parent.height
                     radius: height / 2
-                    color: root.highlight
+                    color: root.warm
                 }
             }
             Repeater {
@@ -141,7 +156,7 @@ IrisWidgetFace {
                     text: modelData.glyph
                     fill: 1
                     iconSize: root.px(13)
-                    color: IrisStyle.identity.orange
+                    color: root.warm
                 }
             }
             Rectangle {

@@ -49,7 +49,7 @@ Item {
                     color: IrisStyle.secondaryAccent
                     font.family: IrisStyle.fontNumbers
                     font.pixelSize: root.figureSize
-                    font.weight: Font.Bold
+                    font.weight: IrisStyle.weight(Font.Bold)
                 }
 
                 Tumbler {
@@ -111,8 +111,8 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: String(column.modelData.unit ?? "")
                     color: IrisStyle.textSecondary
-                    font.pixelSize: 12.5 * IrisStyle.typeScale
-                    font.weight: Font.DemiBold
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.DemiBold)
                 }
             }
         }

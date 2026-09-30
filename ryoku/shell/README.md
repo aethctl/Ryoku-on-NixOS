@@ -73,7 +73,8 @@ idle/dim), `upower` (battery state), `wireplumber` (`wpctl`), `pipewire-pulse`
 `jq`, `glib2` (`gio`), `curl` (weather and LocalSend), and `python`/`openssl`/
 `libnotify`/`xdg-utils` (the LocalSend file stash and opening stashed files).
 The frame-surface tools use `grim`/`slurp`, `hyprpicker`, `curl`/`jq`, `mpv`,
-`tesseract`, `zbar`, `gpu-screen-recorder`/`wf-recorder`, and `hyprsunset`.
+`tesseract`, `zbar`, `gpu-screen-recorder`, and the night-light backend
+(`hyprsunset` on Hyprland, `wlsunset` on niri, reached through the wm seam).
 The ``Super+` `` voice dictation drives `voxtype` (optional, from `voxtype-bin`)
 for the transcription and `wtype` to type it into the focused app; pick the
 engine and model in Ryoku Settings' Dictation page.

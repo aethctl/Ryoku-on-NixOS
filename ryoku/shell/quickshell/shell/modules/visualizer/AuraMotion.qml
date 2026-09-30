@@ -71,6 +71,10 @@ Item {
         running: motion.active && Config.enabled && motion.animating
         repeat: true
         property real last: 0
+        // A stop leaves `last` stale: the first tick after a freeze (Power Saver,
+        // idle, suspend) would otherwise clock the whole frozen span as one frame
+        // and spike the governor. Reseed so that first tick measures one interval.
+        onRunningChanged: if (!ticker.running) ticker.last = 0;
         onTriggered: {
             var now = Date.now();
             var raw = ticker.last > 0 ? (now - ticker.last) / 1000 : ticker.interval / 1000;
@@ -84,6 +88,10 @@ Item {
     // Climb and descend tiers on a slow average of the overrun, with a dwell, so
     // a single hitch never trips a change and the tier cannot oscillate.
     function governor(raw, asked) {
+        // A gap far past the asked interval is a resume, not sustained overrun:
+        // counting it would trip a tier the instant animation restarts.
+        if (raw > asked * 4)
+            return;
         var ratio = Math.min(3, asked > 0 ? raw / asked : 1);
         motion.govOverrun += (ratio - motion.govOverrun) * 0.1;
         var now = Date.now();
@@ -164,5 +172,12 @@ Item {
         motion.onset = 0;
         motion.peaks = [];
         motion.held = [];
+    }
+
+    // Turning the governor off must not leave a stale cap latched: re-enabling
+    // adaptive quality starts clean at the full frame rate.
+    onGovOnChanged: if (!motion.govOn) {
+        motion.govTier = 0;
+        motion.govOverrun = 1;
     }
 }

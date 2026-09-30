@@ -46,6 +46,7 @@ Item {
     property var applyItem: null
     property var applyingId: undefined
     property string steamUrl: ""
+    property bool steamInstalled: true
     property bool steamPromptOpen: false
 
     property bool previewOpen: false
@@ -91,7 +92,7 @@ Item {
     function _artOf(row) {
         if (row < 0 || !remote || row >= remote.count) return ""
         var it = remote.get(row)
-        return it && it.thumb ? it.thumb : ""
+        return Library.fileUrl(it ? it.thumb : "")
     }
     property string atmosphereArt: ""
     property string heroArt: ""
@@ -148,7 +149,17 @@ Item {
         if (panel.args && panel.args.query !== undefined)
             panel.query = String(panel.args.query)
         panel.refreshProviders()
-        panel.switchTo(p, true)
+        panel.switchTo(panel._firstAvailable(p), true)
+    }
+
+    // Like skwd's tabs, a source that is switched off is never the one shown.
+    function _firstAvailable(preferred) {
+        if (panel._tabEnabled(preferred))
+            return preferred
+        for (var i = 0; i < panel.providerTabs.length; ++i)
+            if (panel.providerTabs[i].enabled === true)
+                return panel.providerTabs[i].id
+        return preferred
     }
 
     function switchTo(id, doSearch) {
@@ -174,11 +185,18 @@ Item {
         })
     }
 
+    // Repos has nothing to search until one is added; its empty state says how.
+    readonly property bool needsRepo: panel.provider === "repos" && !(panel.chipState && panel.chipState.repo)
+
     function runSearch() {
         if (!Daemon.connected)
             return
         remote.provider = panel.provider
         remote.query = panel.query
+        if (panel.needsRepo) {
+            remote.clear()
+            return
+        }
         remote.filters = sourceData.buildFilters(panel.provider, panel.chipState, Settings)
         remote.search()
     }
@@ -218,13 +236,14 @@ Item {
         panel.pendingApply = true
         panel.saveRow(row)
     }
+    // Search results carry no wallpaper type: Workshop items apply as scenes, and every
+    // other download is a file whose extension tells the daemon still from video.
     function performApply(it, path) {
-        var kind = it.type || "static"
         var outs = (Settings.value("general.applyOnPickerMonitor") === true && panel.state.monitor)
             ? [panel.state.monitor] : []
         var params = { outputs: outs }
-        if (kind === "we") { params.type = "we"; params.we_id = it.id }
-        else { params.type = (kind === "video") ? "video" : "static"; params.path = path || "" }
+        if (panel.provider === "steam") { params.type = "we"; params.we_id = it.id }
+        else params.path = path || ""
         Daemon.call("wall.apply", params, function(result, error) {
             if (error) {
                 panel.state.toast(error.message || I18n.tr("This wallpaper could not be applied."), "error")
@@ -297,8 +316,9 @@ Item {
             if (panel.previewOpen && panel.previewRow >= topLeft.row && panel.previewRow <= bottomRight.row)
                 panel.previewItem = remote.get(panel.previewRow)
         }
-        function onOpenInSteam(id, url) {
+        function onOpenInSteam(id, url, steamInstalled) {
             panel.steamUrl = url
+            panel.steamInstalled = steamInstalled
             panel.steamPromptOpen = true
             if (panel.applyingId !== undefined && String(panel.applyingId) === String(id)) {
                 panel.pendingApply = false
@@ -308,6 +328,20 @@ Item {
         function onPreviewReady(id, path) {
             if (panel.previewItem && String(panel.previewItem.id) === String(id))
                 panel.previewFull = path
+        }
+        // The header asks for a thumbnail before it has downloaded; one that failed loads again once it lands.
+        function onThumbArrived(row) {
+            if (row === 0 && atmosphere.status === Image.Error) {
+                var a = panel.atmosphereArt
+                panel.atmosphereArt = ""
+                panel.atmosphereArt = a
+            }
+            var heroRow = results.field ? Math.max(results.field.currentIndex, 0) : 0
+            if (row === heroRow && heroBand.artFailed) {
+                var h = panel.heroArt
+                panel.heroArt = ""
+                panel.heroArt = h
+            }
         }
         function onCountChanged() {
             panel._refreshArt()
@@ -369,6 +403,7 @@ Item {
             border.color: Theme.withAlpha(Theme.outline, 0.58 * panel.ease)
 
             Image {
+                id: atmosphere
                 anchors.fill: parent
                 visible: panel.atmosphereArt.length > 0
                 source: panel.atmosphereArt
@@ -418,6 +453,7 @@ Item {
                         spacing: 14 * panel._s
 
                         BrowserHero {
+                            id: heroBand
                             width: parent.width
                             reveal: panel.ease
                             sourceLabel: panel.providerLabel
@@ -466,6 +502,9 @@ Item {
                                 pendingApply: panel.pendingApply
                                 applyItem: panel.applyItem
                                 applyingId: panel.applyingId
+                                emptyText: panel.needsRepo
+                                    ? I18n.tr("Add a GitHub repository in the panel on the left to browse its wallpapers.")
+                                    : I18n.tr("No remote wallpapers found")
                                 onPreviewRequested: function(row) { panel.openPreview(row) }
                                 onDownloadRequested: function(row) { panel.saveRow(row) }
                                 onApplyRequested: function(row) { panel.applyRow(row) }
@@ -526,7 +565,7 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: I18n.tr("This item downloads through Steam")
+                    text: panel.steamInstalled ? I18n.tr("This item downloads through Steam") : I18n.tr("Steam is not installed")
                     font.family: Theme.ui; font.weight: Theme.uiWeight
                     font.pixelSize: Theme.fontHead
                     color: Theme.surfaceText
@@ -535,7 +574,9 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.WordWrap
-                    text: I18n.tr("Steam will subscribe and download it. It appears in your library automatically once Steam finishes.")
+                    text: panel.steamInstalled
+                        ? I18n.tr("Steam will subscribe and download it. It appears in your library automatically once Steam finishes.")
+                        : I18n.tr("Workshop items download through Steam. Install Steam and sign in with an account that owns Wallpaper Engine; items you subscribe to then appear in the Workshop tab by themselves.")
                     font.family: Theme.ui; font.weight: Theme.uiWeight
                     font.pixelSize: Theme.fontBody
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
@@ -549,7 +590,7 @@ Item {
                         onTriggered: panel.steamPromptOpen = false
                     }
                     FolioAction {
-                        label: I18n.tr("Open in Steam")
+                        label: panel.steamInstalled ? I18n.tr("Open in Steam") : I18n.tr("Open Workshop page")
                         active: true
                         enabled: panel.steamUrl.length > 0
                         onTriggered: {
@@ -572,9 +613,10 @@ Item {
             if (panel.previewOpen) { panel.closePreview(); event.accepted = true; return }
             panel.closeRequested()
             event.accepted = true
-        } else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_6
+        } else if (event.key >= Qt.Key_0 && event.key <= Qt.Key_9
                    && !(event.modifiers & Qt.ControlModifier)) {
-            var idx = event.key - Qt.Key_1
+            // 1-9 then 0, left to right along the tabs.
+            var idx = event.key === Qt.Key_0 ? 9 : event.key - Qt.Key_1
             if (idx < sourceData.providers.length) {
                 var id = sourceData.providers[idx].id
                 if (panel._tabEnabled(id) && id !== panel.provider)

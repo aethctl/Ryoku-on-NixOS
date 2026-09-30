@@ -336,6 +336,40 @@ def get_dominant_color(image_path, x, y, w, h, screen_width=None, screen_height=
     # Reverse from BGR to RGB
     return [int(x) for x in reversed(dominant)]
 
+def luma_grid(image_path, cell, screen_width, screen_height, screen_mode="fill"):
+    """Per-cell mean luma, mean squared luma and mean colour of the wallpaper as the screen shows it.
+
+    One run serves every widget on that screen: a widget sums the cells under its rect, so its
+    brightness, spread and mean colour are exact for any position without another process.
+    """
+    img = load_screen_image(image_path, screen_width, screen_height, screen_mode)
+    if img is None:
+        raise FileNotFoundError(f"Image not found: {image_path}")
+    h, w = img.shape[:2]
+    cols = max(1, -(-w // cell))
+    rows = max(1, -(-h // cell))
+    pad_w = cols * cell - w
+    pad_h = rows * cell - h
+    if pad_w or pad_h:
+        img = cv2.copyMakeBorder(img, 0, pad_h, 0, pad_w, cv2.BORDER_REPLICATE)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    shape = (rows, cell, cols, cell)
+    mean = gray.reshape(shape).mean(axis=(1, 3))
+    sq = (gray * gray).reshape(shape).mean(axis=(1, 3))
+    bgr = img.astype(np.float32).reshape(rows, cell, cols, cell, 3).mean(axis=(1, 3))
+    return {
+        "cols": int(cols),
+        "rows": int(rows),
+        "cell": int(cell),
+        "width": int(w),
+        "height": int(h),
+        "mean": [int(round(v)) for v in mean.flatten()],
+        "sq": [int(round(v)) for v in sq.flatten()],
+        "r": [int(round(v)) for v in bgr[..., 2].flatten()],
+        "g": [int(round(v)) for v in bgr[..., 1].flatten()],
+        "b": [int(round(v)) for v in bgr[..., 0].flatten()],
+    }
+
 def main():
     parser = argparse.ArgumentParser(description="Find least busy region in an image and output a JSON. Made for determining a suitable position for a wallpaper widget.")
     parser.add_argument("image_path", help="Path to the input image")
@@ -356,7 +390,12 @@ def main():
     parser.add_argument("--color-only", action="store_true", help="Skip region search; analyze color/brightness at a specific position")
     parser.add_argument("--position-x", type=int, default=0, help="Widget X position for --color-only mode")
     parser.add_argument("--position-y", type=int, default=0, help="Widget Y position for --color-only mode")
+    parser.add_argument("--luma-grid", type=int, default=0, metavar="CELL", help="Print per-cell luma and colour of the whole screen in CELL-pixel cells")
     args = parser.parse_args()
+
+    if args.luma_grid > 0:
+        print(json.dumps(luma_grid(args.image_path, args.luma_grid, args.screen_width, args.screen_height, args.screen_mode), separators=(",", ":")))
+        return
 
     # Color-only mode: analyze the region at the widget's actual position
     if args.color_only:

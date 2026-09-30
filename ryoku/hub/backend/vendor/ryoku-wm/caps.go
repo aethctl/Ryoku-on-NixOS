@@ -56,8 +56,9 @@ const (
 	// CapNightLight is set when the provider can warm the screen to a colour
 	// temperature and restore it, through the nightlight.on and nightlight.off
 	// actions. The warm gamma is held by a detached backend the provider owns
-	// (hyprsunset on Hyprland, gammastep on niri); NightLightProcess below names
-	// it so a consumer can tell the light is on without knowing the compositor.
+	// (hyprsunset over Hyprland's CTM, wlsunset over wlr-gamma-control on
+	// niri); NightLightProcess below names it so a consumer can tell the light
+	// is on without knowing the compositor.
 	CapNightLight Capability = "nightLight"
 	// CapTouchpadToggle is set when the provider can lock the touchpad the FN
 	// touchpad key asks for, through the input.touchpad action. One compositor

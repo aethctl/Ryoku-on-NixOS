@@ -158,7 +158,7 @@ Item {
                 Image {
                     anchors.fill: parent
                     visible: root.preview !== "" && status === Image.Ready
-                    source: root.preview !== "" && root.preview.indexOf("://") < 0 ? "file://" + root.preview : root.preview
+                    source: Library.fileUrl(root.preview)
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
                     cache: false

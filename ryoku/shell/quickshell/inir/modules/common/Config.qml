@@ -37,11 +37,9 @@ Singleton {
     readonly property var sharedKeys: ["theme.matugen.mode"]
 
     // Parallel data buckets the reference keeps outside its adapter (desktop
-    // custom widgets, extra mascot instances); stored in the same tree.
+    // custom widgets); stored in the same tree.
     readonly property var customWidgetData: options?.background?.customWidgetData ?? ({})
     property bool customWidgetDataSynced: true
-    readonly property var mascotInstances: options?.mascotInstances ?? ({})
-    property bool mascotInstancesSynced: true
 
     signal configChanged
 
@@ -106,20 +104,6 @@ Singleton {
             root.options = (Object.assign({}, root.options));
         root.bump();
         writeTimer.restart();
-    }
-
-    function addMascotInstance(data) {
-        const id = String(data?.id ?? Qt.formatDateTime(new Date(), "yyyyMMddhhmmsszzz"));
-        const next = Object.assign({}, root.mascotInstances);
-        next[id] = Object.assign({}, data, { id: id });
-        root.setNestedValue("mascotInstances", next);
-        return id;
-    }
-
-    function removeMascotInstance(id) {
-        const next = Object.assign({}, root.mascotInstances);
-        delete next[id];
-        root.setNestedValue("mascotInstances", next);
     }
 
     function flushWrites() {
@@ -212,10 +196,16 @@ Singleton {
         path: root.sockPath
         connected: true
         function flushQueued() {
-            // Never drop a queued write on a socket that is not up yet: the
-            // seed patch lands during startup, before this connection opens.
-            if (queued.length === 0 || !connected)
+            // Never drop a queued write on a socket that is not up: the seed
+            // patch lands before this connection first opens, and the daemon
+            // closes an idle call connection, so reopen it and let the
+            // connection change flush what is waiting.
+            if (queued.length === 0)
                 return;
+            if (!connected) {
+                connected = true;
+                return;
+            }
             write(queued);
             flush();
             queued = "";

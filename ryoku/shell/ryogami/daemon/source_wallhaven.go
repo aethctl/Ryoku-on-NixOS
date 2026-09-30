@@ -306,7 +306,7 @@ func importPreview(preview, dest string) error {
 	return nil
 }
 
-func (s *sources) wallhavenFetch(ctx context.Context, fullURL, wallpaperDir, id string) (string, error) {
+func (s *sources) wallhavenFetch(ctx context.Context, fullURL, wallpaperDir, id string, onProgress func(float64)) (string, error) {
 	if err := requireSource("wallhaven", fullURL); err != nil {
 		return "", err
 	}
@@ -316,7 +316,7 @@ func (s *sources) wallhavenFetch(ctx context.Context, fullURL, wallpaperDir, id 
 		return dest, nil
 	}
 	policy := func(u string) error { return requireSource("wallhaven", u) }
-	if err := s.fetchToFile(ctx, fullURL, dest, sniffImage, maxDownloadBytes, policy, nil); err != nil {
+	if err := s.fetchToFile(ctx, fullURL, dest, sniffImage, maxDownloadBytes, policy, onProgress); err != nil {
 		return "", err
 	}
 	return dest, nil
@@ -333,8 +333,14 @@ func (s *sources) wallhavenDownload(reqID int64, p map[string]interface{}) respo
 		return s.respondExists(reqID, id, existing)
 	}
 	return s.startDownload(reqID, id, s.images, "wallhaven:"+id, func(ctx context.Context, _ *gateSlot) {
-		s.emitDownload(downloadEvent{ID: id, Status: dlDownloading})
-		path, err := s.wallhavenFetch(ctx, fullURL, wdir, id)
+		msg := "fetching"
+		zero := 0.0
+		s.emitDownload(downloadEvent{ID: id, Status: dlDownloading, Progress: &zero, Message: &msg})
+		onProgress := func(pct float64) {
+			p := pct
+			s.emitDownload(downloadEvent{ID: id, Status: dlDownloading, Progress: &p, Message: &msg})
+		}
+		path, err := s.wallhavenFetch(ctx, fullURL, wdir, id, onProgress)
 		s.finishDownload(id, path, err)
 	})
 }

@@ -12,6 +12,50 @@ QtObject {
     readonly property var surround: Config.options?.iris?.surround ?? ({})
     readonly property real d: IrisStyle.density
 
+    // Bodies of Places that meet the frame, keyed by owner ({ screen, shapes }): the chassis of that
+    // output draws them in its field, so the join, the shadow and the compositor blur are the frame's own.
+    property var placeBodies: ({})
+    function publishPlace(key: string, screen: string, shapes: var): void {
+        if (!key) return
+        if (shapes.length === 0 && !root.placeBodies[key]) return
+        const next = Object.assign({}, root.placeBodies)
+        if (shapes.length > 0 && screen) next[key] = { screen: screen, shapes: shapes }
+        else delete next[key]
+        root.placeBodies = next
+    }
+    function placeShapesOn(screen: string): var {
+        const out = []
+        for (const key in root.placeBodies) {
+            const entry = root.placeBodies[key]
+            if (entry.screen === screen) for (const shape of entry.shapes) out.push(shape)
+        }
+        return out
+    }
+    readonly property bool musicActive: {
+        Config.revision
+        return root.framed && Boolean(Config.options?.background?.edgeWidgets?.organic?.enable ?? false)
+            && String(root.surround?.music ?? "widget") === "frame"
+    }
+    function musicReach(edge: string): real {
+        Config.revision
+        if (!root.musicActive) return 0
+        const mode = String(root.surround?.musicEdges ?? "sides")
+        if (mode === "sides" && (edge === "top" || edge === "bottom")) return 0
+        if (mode === "horizontal" && (edge === "left" || edge === "right")) return 0
+        return 18 * root.d * Math.max(0.5, Math.min(3, Number(root.surround?.musicStrength ?? 160) / 100))
+    }
+    function safeInset(edge: string): real { return root.inset(edge) + root.musicReach(edge) }
+    function safeClear(edge: string): real { return root.clear(edge) + root.musicReach(edge) }
+    readonly property int musicAppearanceCode: ({ sculpted: 0, etched: 1, satin: 2 })[String(root.surround?.musicAppearance ?? "etched")] ?? 1
+    readonly property color musicInk: {
+        const colour = String(root.surround?.musicColour ?? "pearl")
+        return colour === "accent" ? IrisStyle.accent
+            : colour === "highlight" ? IrisStyle.secondaryAccent
+            : colour === "wallpaper" ? IrisStyle.wallpaperLight : IrisStyle.text
+    }
+    readonly property real musicLight: Math.max(0, Math.min(1, Number(root.surround?.musicLight ?? 35) / 100))
+    readonly property real musicLightWidth: Math.max(1, Math.min(18, Number(root.surround?.musicLightWidth ?? 5))) * root.d
+
     readonly property bool framed: Boolean(root.surround?.enable ?? false)
     readonly property real band: root.framed
         ? Math.max(1, Math.round(Number(root.surround?.thickness ?? 10) * root.d)) : 0
@@ -49,10 +93,15 @@ QtObject {
         Qt.callLater(() => { root.settledIsland = root.islandEdge; root.settledDock = root.dockEdge })
     }
     readonly property bool notch: Boolean(root.bar?.notch ?? false)
-    readonly property real islandBand: Math.max(32, Math.round(Number(root.bar?.height ?? 42) * root.d))
+    readonly property real islandFullBand: Math.max(32, Math.round(Number(root.bar?.height ?? 42) * root.d))
+    // A menu bar gives windows back all but its strip: the notch hangs over them.
+    readonly property bool islandMenubar: String(root.bar?.layout ?? "island") === "menubar" && !root.vertical(root.islandEdge)
+    readonly property real islandBand: root.islandMenubar
+        ? Math.max(Math.round(24 * root.d), Math.round(root.islandFullBand * 0.72)) : root.islandFullBand
     readonly property real islandMargin: root.notch ? 0 : Math.max(0, Math.round(Number(root.bar?.margin ?? 8) * root.d))
-    readonly property real islandVisualDepth: root.islandBand + root.islandMargin
-    readonly property real islandDepth: (root.bar?.reserveSpace ?? true)
+    readonly property bool islandAutoHide: Boolean(root.bar?.autoHide ?? false)
+    readonly property real islandVisualDepth: root.islandAutoHide ? 0 : root.islandBand + root.islandMargin
+    readonly property real islandDepth: (root.bar?.reserveSpace ?? true) && !root.islandAutoHide
         ? root.islandVisualDepth : 0
     readonly property real dockIcon: Math.max(28, Math.min(64, Number(root.dock?.iconSize ?? 40))) * root.d
     readonly property real dockBand: root.dockIcon + 18 * root.d
@@ -77,6 +126,22 @@ QtObject {
     readonly property real pieceScale: Math.max(0.6, Math.min(1.4, Number(root.bubbles?.scale ?? 100) / 100))
     readonly property real pieceBand: Math.round(root.islandBand * root.pieceScale)
     readonly property real pieceDepth: root.pieceGap + root.pieceSeat + root.pieceBand
+    // How pieces meet a given edge. On the Island's own edge they meet it the way the Island does: melted with it,
+    // or floating at its margin when it floats (two grammars on one edge read as parts from different kits). A corner
+    // plate takes its edge's join on both walls (IrisStage.zones): floating, it keeps that margin from the frame's side
+    // too, never floating off one wall and welded to the other (2026-09-28).
+    readonly property bool islandSpans: String(root.bar?.layout ?? "island") === "full" || root.islandMenubar
+    function joinOn(side: string): string {
+        if (!root.piecesAttached) return "float"
+        if (side === root.islandEdge && !root.notch && !root.islandSpans && root.pieceJoin !== "gap") return "gap"
+        return root.pieceJoin
+    }
+    function meltsOn(side: string): bool { const join = root.joinOn(side); return join === "notch" || join === "weld" }
+    function pieceGapOn(side: string): real {
+        return root.joinOn(side) === "gap" ? Math.max(root.islandMargin, Math.round(Number(root.bar?.margin ?? 8) * root.d), Math.round(8 * root.d)) : 0
+    }
+    function pieceInsetOn(side: string): real { return root.band + root.pieceGapOn(side) }
+    function pieceDepthOn(side: string): real { return root.pieceGapOn(side) + root.pieceBand }
     function edgeOf(place: string): string {
         if (place.startsWith("edge:")) return ["top", "bottom", "left", "right"].includes(place.slice(5)) ? place.slice(5) : ""
         if (place === "top-left" || place === "top-right") return "top"
@@ -102,7 +167,7 @@ QtObject {
         let inner = 0
         if (edge === root.islandEdge) inner = Math.max(inner, root.islandVisualDepth)
         if (root.piecesAttached && root.pieceEdges.includes(edge))
-            inner = Math.max(inner, root.pieceDepth)
+            inner = Math.max(inner, root.pieceDepthOn(edge))
         if (edge === root.dockEdge) inner = Math.max(inner, root.dockVisualDepth)
         return Math.round(root.band + inner)
     }
@@ -117,10 +182,10 @@ QtObject {
         const ob = origin.obstacle ?? origin
         const cx = origin.x + origin.width / 2
         const cy = origin.y + origin.height / 2
-        let left = root.bodyMargin + root.band
-        let right = screenWidth - width - root.bodyMargin - root.band
-        let top = root.bodyMargin + root.band
-        let bottom = screenHeight - height - root.bodyMargin - root.band
+        let left = root.bodyMargin + root.band + root.musicReach("left")
+        let right = screenWidth - width - root.bodyMargin - root.band - root.musicReach("right")
+        let top = root.bodyMargin + root.band + root.musicReach("top")
+        let bottom = screenHeight - height - root.bodyMargin - root.band - root.musicReach("bottom")
         for (const b of (avoid ?? [])) {
             if (!b || b.width <= 0 || b.height <= 0) continue
             const fullHeight = b.y <= root.bodyMargin + 1
@@ -180,7 +245,7 @@ QtObject {
         let inner = 0
         if (chassisPresent && edge === root.islandEdge) inner = Math.max(inner, root.islandDepth)
         if (chassisPresent && root.piecesReserve && root.pieceEdges.includes(edge))
-            inner = Math.max(inner, root.pieceDepth)
+            inner = Math.max(inner, root.pieceDepthOn(edge))
         if (edge === root.dockEdge) inner = Math.max(inner, root.dockDepth)
         return Math.round(root.band + inner)
     }
@@ -188,7 +253,7 @@ QtObject {
         let inner = 0
         if (edge === root.islandEdge) inner = Math.max(inner, root.islandVisualDepth)
         if (root.piecesAttached && root.pieceEdges.includes(edge))
-            inner = Math.max(inner, root.pieceDepth)
+            inner = Math.max(inner, root.pieceDepthOn(edge))
         if (edge === root.dockEdge) inner = Math.max(inner, root.dockVisualDepth)
         return Math.round(root.band + inner)
     }

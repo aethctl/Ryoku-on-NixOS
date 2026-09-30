@@ -168,44 +168,6 @@ func reconcileRashinDaemon(checkOnly bool) recResult {
 	return fixedRes(i18n.T("converged the rashin daemon: ") + strings.Join(did, " and "))
 }
 
-func reconcileRashinDaemonNixOS(checkOnly bool) recResult {
-	if !rashinUnitEnabled() {
-		return warnRes("rashin is declared by NixOS but is not enabled in the active generation").
-			withFix("rebuild the NixOS configuration with Ryoku enabled")
-	}
-
-	failed := rashinUnitFailed()
-	wireSkill := rashinSkillLinksMissing()
-
-	if !failed && !wireSkill {
-		return okRes("rashin runtime is healthy")
-	}
-
-	if checkOnly {
-		if failed {
-			return wouldRes("the declarative rashin service is in a failed state").
-				withFix("ryoku doctor restarts the service")
-		}
-		return wouldRes("the ryoku agent skill is not wired into every agent").
-			withFix("ryoku doctor runs `ryoku-rashin wire`")
-	}
-
-	var repaired []string
-
-	if failed {
-		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
-		_ = exec.Command("systemctl", "--user", "restart", rashinUserUnit).Run()
-		repaired = append(repaired, "restarted rashin")
-	}
-
-	if wireSkill {
-		_ = exec.Command("ryoku-rashin", "wire").Run()
-		repaired = append(repaired, "wired the ryoku agent skill")
-	}
-
-	return fixedRes("repaired rashin runtime: " + strings.Join(repaired, " and "))
-}
-
 // reconcileAiUsageTimer keeps the bar AI pill fed: the usage-collector timer
 // should run whenever the user has not opted out of the AI. Enabling a user
 // timer is per-user, so the package cannot do it; doctor (in the session) can.
@@ -234,7 +196,7 @@ func reconcileAiUsageTimer(checkOnly bool) recResult {
 	return fixedRes(i18n.T("enabled the AI usage collector timer"))
 }
 
-// reconcileProwlAgent surfaces a rashin box that lost its prowl binary.
+// reconcileProwlAgent surfaces a rashin box that lost the prowl binary.
 // ryoku-rashin now depends on prowl (its `index` builds the vault code map
 // and its `wire` installs prowl's agent skills), so a box that enabled rashin
 // before that dependency shipped can run without it. `pacman -Syu` delivers it
@@ -242,18 +204,15 @@ func reconcileAiUsageTimer(checkOnly bool) recResult {
 // never auto-run: installing a package is the user's call.
 func reconcileProwlAgent(checkOnly bool) recResult {
 	enabled := rashinUnitEnabled()
-
-	// The CLI was renamed prowl-agent -> prowl. Accept the old binary during
-	// the transition so existing installations keep working.
+	// The CLI was renamed prowl-agent -> prowl; upstream still ships the old
+	// binary name during the transition, so accept either one on PATH.
 	present := sys.Has("prowl") || sys.Has("prowl-agent")
-
 	if !prowlAgentNeeded(enabled, present) {
 		if !enabled {
 			return okRes(i18n.T("rashin daemon is opt-in and not enabled"))
 		}
 		return okRes(i18n.T("prowl is present for the rashin agent index"))
 	}
-
 	if sys.NixBackend() {
 		return warnRes(i18n.T("rashin is enabled but prowl is missing from the active NixOS generation; the vault code index and agent skills will not refresh")).
 			withFix(i18n.T("rebuild the NixOS configuration with Ryoku enabled"))
@@ -307,4 +266,42 @@ func rashinSkillLinksMissing() bool {
 		}
 	}
 	return false
+}
+
+func reconcileRashinDaemonNixOS(checkOnly bool) recResult {
+	if !rashinUnitEnabled() {
+		return warnRes("rashin is declared by NixOS but is not enabled in the active generation").
+			withFix("rebuild the NixOS configuration with Ryoku enabled")
+	}
+
+	failed := rashinUnitFailed()
+	wireSkill := rashinSkillLinksMissing()
+
+	if !failed && !wireSkill {
+		return okRes("rashin runtime is healthy")
+	}
+
+	if checkOnly {
+		if failed {
+			return wouldRes("the declarative rashin service is in a failed state").
+				withFix("ryoku doctor restarts the service")
+		}
+		return wouldRes("the ryoku agent skill is not wired into every agent").
+			withFix("ryoku doctor runs `ryoku-rashin wire`")
+	}
+
+	var repaired []string
+
+	if failed {
+		_ = exec.Command("systemctl", "--user", "reset-failed", rashinUserUnit).Run()
+		_ = exec.Command("systemctl", "--user", "restart", rashinUserUnit).Run()
+		repaired = append(repaired, "restarted rashin")
+	}
+
+	if wireSkill {
+		_ = exec.Command("ryoku-rashin", "wire").Run()
+		repaired = append(repaired, "wired the ryoku agent skill")
+	}
+
+	return fixedRes("repaired rashin runtime: " + strings.Join(repaired, " and "))
 }

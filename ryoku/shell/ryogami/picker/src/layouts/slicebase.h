@@ -24,6 +24,8 @@ struct SliceParams {
     std::array<float, 4> corners{{0, 0, 0, 0}};
     bool wobble = false;
     float wobbleStrength = 1.0f;
+    float shadowStrength = 1.0f;
+    float shadowDistance = 1.0f;
 
     float layoutWidth(float width) const { return geom::sliceMidlineWidth(width, skew); }
     float sliceStride() const { return layoutWidth(sliceW) + spacing; }
@@ -38,6 +40,7 @@ public:
     void configure(const LayoutContext &ctx, bool animate) override;
     int hitTest(QPointF point) const override;
     QRectF cardRect(int row) const override;
+    QPointF cardShear(int row) const override;
     QRectF stageRect(const LayoutContext &ctx) const override;
     bool flipsInPlace() const override { return true; }
     // Left/right step the row; up/down are inert in both slice modes.

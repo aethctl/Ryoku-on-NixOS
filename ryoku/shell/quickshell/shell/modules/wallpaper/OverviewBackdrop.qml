@@ -26,6 +26,7 @@ Item {
     required property var screen
     // The active compositor can host a surface inside its overview backdrop.
     property bool available: false
+    // The compositor's native overview is open, so the backdrop is on screen.
     property bool overviewOpen: false
     // The live wallpaper source the desktop paints (file url + revision), reused
     // so a wallpaper change carries straight into the backdrop with no second
@@ -33,6 +34,9 @@ Item {
     property string wallpaperUrl: ""
 
     readonly property bool shown: root.available && OverviewBackdropConfig.enabled
+    // The gaussian pass runs only while the overview is open: that is the only
+    // moment the compositor shows this surface, and a full-screen blur every
+    // frame otherwise taxes recording and gaming for pixels nobody sees.
     readonly property bool blurWanted: root.overviewOpen && OverviewBackdropConfig.blurEnabled
 
     // Follow the live wallpaper, or paint a per-card backdrop image the user
@@ -82,28 +86,31 @@ Item {
                 // screen-sized decode is plenty.
                 sourceSize.width: win.screen ? win.screen.width : 0
                 sourceSize.height: win.screen ? win.screen.height : 0
-                // Hidden whenever the blur is drawing; shown as the sharp
-                // backdrop when the user turned blur off (or before it decodes).
+                // The sharp copy shows only while the blur is off (overview
+                // closed, or the user turned blur off); the blurred copy rides
+                // above it once the pass engages.
                 visible: !blurFx.visible
             }
 
+            // The gaussian pass engages only while the overview is open: that is
+            // the only moment the compositor shows this surface, and a full-screen
+            // blur every frame otherwise taxes recording and gaming for pixels
+            // nobody sees. The node stays mounted so opening the overview eases
+            // the blur in through niri's own animation instead of popping a fresh
+            // render target at the worst instant.
             MultiEffect {
                 id: blurFx
                 anchors.fill: img
                 source: img
-                blurEnabled: true
+                // Keep the pass alive through the fade-out so blur eases to zero
+                // rather than snapping when the overview closes.
                 blur: root.blurWanted ? Math.min(1, OverviewBackdropConfig.blur / 100) : 0.0
                 blurMax: 64
-                visible: img.status === Image.Ready
-                    && OverviewBackdropConfig.blurEnabled
-                    && (root.blurWanted || blur > 0.001)
+                visible: img.status === Image.Ready && blurFx.blurEnabled
 
                 Behavior on blur {
                     enabled: !Motion.reduce
-                    NumberAnimation {
-                        duration: Motion.wallpaperFade
-                        easing.type: Easing.OutCubic
-                    }
+                    NumberAnimation { duration: Motion.wallpaperFade; easing.type: Easing.OutCubic }
                 }
             }
 

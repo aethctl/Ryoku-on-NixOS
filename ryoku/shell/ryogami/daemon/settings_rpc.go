@@ -118,7 +118,8 @@ func (d *daemon) collectValues(keys []string) map[string]interface{} {
 		}
 	}
 	for k, v := range flattenSettings(tree) {
-		if _, isSchema := specFor(k); !isSchema {
+		// Only literal schema keys were covered above; per-output keys come from the tree.
+		if _, isSchema := schemaIndex[k]; !isSchema {
 			out[k] = v
 		}
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -376,6 +377,20 @@ func dirOf(p string) string {
 	return p
 }
 
+// A typo and GitHub's unauthenticated rate limit are the usual reasons a repository will not list.
+func reposFetchError(err error) error {
+	var status httpStatusError
+	if errors.As(err, &status) {
+		switch status.code {
+		case http.StatusNotFound:
+			return fmt.Errorf("repository not found; check the owner/repo name")
+		case http.StatusForbidden, http.StatusTooManyRequests:
+			return fmt.Errorf("GitHub is limiting requests; try again later or set GITHUB_TOKEN")
+		}
+	}
+	return fmt.Errorf("search failed")
+}
+
 func (s *sources) reposSearch(ctx context.Context, query string, page int, p map[string]interface{}) (sourcePage, error) {
 	repo := strParam(p, "repo", "")
 	branch := strParam(p, "branch", "")
@@ -401,7 +416,7 @@ func (s *sources) reposSearch(ctx context.Context, query string, page int, p map
 	}
 	treeBody, err := s.getBytes(ctx, http.MethodGet, "https://api.github.com/repos/"+repo+"/git/trees/"+branch+"?recursive=1", header, nil, maxTextBytes)
 	if err != nil {
-		return sourcePage{}, fmt.Errorf("search failed")
+		return sourcePage{}, reposFetchError(err)
 	}
 	var tree ghTree
 	if json.Unmarshal(treeBody, &tree) != nil {

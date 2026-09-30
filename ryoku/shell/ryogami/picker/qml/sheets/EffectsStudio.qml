@@ -19,12 +19,6 @@ Item {
 
     readonly property string _mode: (root.args && root.args.mode) ? String(root.args.mode) : "studio"
 
-    function _url(p) {
-        if (!p)
-            return ""
-        var s = String(p)
-        return (s.indexOf("://") >= 0) ? s : ("file://" + s)
-    }
     function _focused() {
         if (!root.state || !root.state.view || !root.state.field)
             return null
@@ -364,7 +358,7 @@ Item {
     readonly property var _incoming: root._focused()
     readonly property string _incType: root._incoming ? String(root._incoming.type || "static") : "static"
     readonly property string _incPath: root._incoming ? String(root._incoming.path || "") : ""
-    readonly property string _incThumb: root._incoming ? root._url(root._incoming.fullImage || root._incoming.thumb || "") : ""
+    readonly property string _incThumb: root._incoming ? Library.fileUrl(root._incoming.fullImage || root._incoming.thumb || "") : ""
     readonly property string _incName: root._incoming ? String(root._incoming.name || root._incoming.key || "") : ""
 
     function _settingStr(key, def) {
@@ -400,9 +394,9 @@ Item {
         var c = out.current
         if (c.key && typeof Library !== "undefined") {
             var e = Library.entry("wallpapers", c.key)
-            if (e && e.thumb) return root._url(e.thumb)
+            if (e && e.thumb) return Library.fileUrl(e.thumb)
         }
-        if (c.path) return root._url(c.path)
+        if (c.path) return Library.fileUrl(c.path)
         return ""
     }
     function _outFit(out) {
@@ -509,7 +503,7 @@ Item {
                 return
             }
             root._studioInput = String(e.path || "")
-            root._studioBase = root._url(e.fullImage || e.path || "")
+            root._studioBase = Library.fileUrl(e.fullImage || e.path || "")
             root._loadEffects()
         } else {
             if (typeof Library !== "undefined") Library.refreshOutputs()
@@ -558,7 +552,7 @@ Item {
                 asynchronous: true
                 cache: false
                 source: (root._selKind === "effect" || root._selKind === "grade")
-                    ? (root._previewOut.length > 0 ? root._url(root._previewOut) : root._studioBase)
+                    ? (root._previewOut.length > 0 ? Library.fileUrl(root._previewOut) : root._studioBase)
                     : root._studioBase
             }
             Text {

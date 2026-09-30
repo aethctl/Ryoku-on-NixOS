@@ -27,18 +27,20 @@ Item {
         : Appearance.colors.colSecondaryContainer
     property bool enableWavy: true
     property bool scrollable: true
+    // False where nobody can see it move (a covered desktop): the wave and the glide hold still.
+    property bool motion: true
     
     // Signals
     signal seekRequested(real seconds)
     
     readonly property real progressValue: length > 0
         ? Math.max(0, Math.min(1, position / length)) : 0
-    readonly property bool waveAnimationActive: root.enableWavy && root.isPlaying
+    readonly property bool waveAnimationActive: root.motion && root.enableWavy && root.isPlaying
         && root.visible && Appearance.animationsEnabled
     property real displayedProgress: progressValue
 
     Behavior on displayedProgress {
-        enabled: Appearance.animationsEnabled && root.isPlaying
+        enabled: Appearance.animationsEnabled && root.isPlaying && root.motion
         NumberAnimation { duration: 250; easing.type: Easing.Linear }
     }
 

@@ -406,7 +406,6 @@ Singleton {
 
     Connections {
         target: XkbLayout
-
         function onCurrentLayoutNameChanged() {
             if (!root.currentLayoutName.length)
                 return;

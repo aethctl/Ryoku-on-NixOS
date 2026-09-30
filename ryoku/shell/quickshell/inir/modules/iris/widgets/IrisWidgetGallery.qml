@@ -7,6 +7,7 @@ import inir
 import inir.services
 import inir.modules.common
 import inir.modules.common.widgets
+import inir.modules.background.widgets
 import inir.modules.iris.style
 import inir.modules.iris.components
 
@@ -15,26 +16,11 @@ ColumnLayout {
 
     readonly property real d: IrisStyle.density
     readonly property string outputName: GlobalStates.focusedScreen?.name ?? ""
-    readonly property var entries: [
-        { key: "clock", glyph: "schedule", label: Translation.tr("Clock"), tint: IrisStyle.identity.orange },
-        { key: "weather", glyph: "partly_cloudy_day", label: Translation.tr("Weather"), tint: IrisStyle.identity.blue },
-        { key: "mediaControls", glyph: "music_note", label: Translation.tr("Now Playing"), tint: IrisStyle.identity.pink },
-        { key: "controls", glyph: "toggle_on", label: Translation.tr("Controls"), tint: IrisStyle.identity.blue },
-        { key: "monthCalendar", glyph: "calendar_month", label: Translation.tr("Calendar"), tint: IrisStyle.identity.red },
-        { key: "calendarUpcoming", glyph: "event_upcoming", label: Translation.tr("Up next"), tint: IrisStyle.identity.red },
-        { key: "todo", glyph: "checklist", label: Translation.tr("Tasks"), tint: IrisStyle.identity.orange },
-        { key: "notes", glyph: "sticky_note_2", label: Translation.tr("Notes"), tint: IrisStyle.identity.yellow },
-        { key: "timers", glyph: "timer", label: Translation.tr("Timers"), tint: IrisStyle.identity.orange },
-        { key: "screenTime", glyph: "hourglass_bottom", label: Translation.tr("Screen Time"), tint: IrisStyle.identity.indigo },
-        { key: "systemMonitor", glyph: "monitor_heart", label: Translation.tr("Vitals"), tint: IrisStyle.identity.green },
-        { key: "battery", glyph: "battery_full", label: Translation.tr("Batteries"), tint: IrisStyle.identity.green },
-        { key: "worldClock", glyph: "public", label: Translation.tr("World clock"), tint: IrisStyle.identity.orange },
-        { key: "dayProgress", glyph: "wb_twilight", label: Translation.tr("Day"), tint: IrisStyle.identity.orange },
-        { key: "dateBadge", glyph: "today", label: Translation.tr("Date"), tint: IrisStyle.identity.red },
-        { key: "userCard", glyph: "account_circle", label: Translation.tr("Profile"), tint: IrisStyle.identity.blue },
-        { key: "uptime", glyph: "timelapse", label: Translation.tr("Uptime"), tint: IrisStyle.identity.indigo },
-        { key: "newsTicker", glyph: "newspaper", label: Translation.tr("News"), tint: IrisStyle.identity.teal }
-    ]
+    // Widgets without an iRiS face that are on this screen anyway, listed after the set so they count and can be taken away.
+    readonly property var entries: {
+        Config.revision
+        return IrisFaceData.galleryEntries.concat(IrisFaceData.otherEntries.filter(entry => root.isOn(entry.key)))
+    }
     readonly property int placed: {
         Config.revision
         return root.entries.filter(entry => root.isOn(entry.key)).length
@@ -97,8 +83,8 @@ ColumnLayout {
                             anchors.centerIn: parent
                             text: entry.on ? "remove" : "add"
                             iconSize: Math.round(13 * root.d)
-                            font.weight: Font.Bold
-                            color: entry.on ? IrisStyle.text : IrisStyle.onAccent
+                            font.weight: IrisStyle.weight(Font.Bold)
+                            color: entry.on ? IrisStyle.text : IrisStyle.inkOnAccent
                         }
                     }
                 }
@@ -110,7 +96,7 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignHCenter
                     text: entry.modelData.label
                     color: entry.on ? IrisStyle.text : IrisStyle.subtext
-                    font.pixelSize: 11.5 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
                 HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
@@ -130,7 +116,7 @@ ColumnLayout {
             Layout.fillWidth: true
             text: root.placed === 1 ? Translation.tr("1 widget on this screen") : Translation.tr("%1 widgets on this screen").arg(root.placed)
             color: IrisStyle.muted
-            font.pixelSize: 11.5 * IrisStyle.typeScale
+            font.pixelSize: IrisStyle.typeMeta
         }
         IrisButton {
             implicitHeight: Math.round(30 * root.d)
@@ -147,7 +133,7 @@ ColumnLayout {
                 anchors.centerIn: parent
                 spacing: Math.round(6 * root.d)
                 MaterialSymbol { text: "open_with"; iconSize: Math.round(15 * root.d); color: IrisStyle.text }
-                IrisText { text: Translation.tr("Arrange on the desktop"); font.pixelSize: 12.5 * IrisStyle.typeScale; font.weight: Font.DemiBold }
+                IrisText { text: Translation.tr("Arrange on the desktop"); font.pixelSize: IrisStyle.typeLabel; font.weight: IrisStyle.weight(Font.DemiBold) }
             }
         }
     }

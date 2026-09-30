@@ -1506,12 +1506,12 @@ func Status(args []string) error {
 	fmt.Printf(i18n.T("installed:     %s\n"), orDash(r.Installed))
 	if r.Backend == "nix" {
 		if r.Available {
-			fmt.Printf(i18n.T("available:     %s\n"), orDash(r.Latest))
-			fmt.Printf(i18n.T("behind:        %d commit(s)\n"), r.Behind)
+			fmt.Printf("available:     %s\n", orDash(r.Latest))
+			fmt.Printf("behind:        %d commit(s)\n", r.Behind)
 		} else {
-			fmt.Println(i18n.T("behind:        up to date"))
+			fmt.Println("behind:        up to date")
 		}
-		fmt.Printf("backend:       NixOS\n")
+		fmt.Println("backend:       NixOS")
 		if r.Source != "" {
 			fmt.Printf("source:        %s\n", r.Source)
 		}

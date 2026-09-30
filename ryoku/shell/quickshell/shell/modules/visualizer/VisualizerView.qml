@@ -17,6 +17,9 @@ Item {
     // one draw path serves the primary and each extra visualiser alike.
     required property VizItem cfg
 
+    // Which instance this is in Config.list, injected by the Repeater delegate.
+    required property int index
+
     readonly property string style: root.cfg.styleId
     readonly property bool aura: root.style === "aura"
     readonly property bool polar: field.polar
@@ -39,6 +42,25 @@ Item {
         cfg: root.cfg
         style: root.style
         active: root.visible && Config.enabled && !root.aura
+    }
+
+    // The active instance owns the settings-popup "capped" readout: publish the
+    // driving motion's governor tier into Config, cleared when this view is not
+    // the active one, is not running, or adaptive quality is off. One publisher
+    // per view (the live family, aura or bars) keeps the two motions from racing.
+    readonly property int govTier: root.aura ? auraMotion.govTier : motion.govTier
+    readonly property bool govDriving: root.aura ? auraMotion.active : motion.active
+    function publishGovTier() {
+        if (root.index === Config.active)
+            Config.activeGovTier = (root.govDriving && Config.adaptive) ? root.govTier : 0;
+    }
+    onGovTierChanged: root.publishGovTier()
+    onGovDrivingChanged: root.publishGovTier()
+    Component.onCompleted: root.publishGovTier()
+    Connections {
+        target: Config
+        function onActiveChanged() { root.publishGovTier(); }
+        function onAdaptiveChanged() { root.publishGovTier(); }
     }
 
     // Normalised for the wallpaper luminance map: a turned look sits on a different

@@ -1,6 +1,11 @@
 package main
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestMergePropertiesPrecedenceAndKinds(t *testing.T) {
 	declared := map[string]interface{}{
@@ -69,5 +74,64 @@ func TestWePropStoreRoundTrip(t *testing.T) {
 	}
 	if fps, ok := s.fpsOverride("100"); !ok || fps != 120 {
 		t.Fatalf("fps lost after reset: %d %v", fps, ok)
+	}
+}
+
+// TestSceneFpsFollowsGlobalUntilPinned: the panel shows "Default" only while a
+// scene has no rate of its own, so fps is null until pinned, a null write
+// unpins it, and Restore defaults clears the pin along with every property.
+func TestSceneFpsFollowsGlobalUntilPinned(t *testing.T) {
+	d := newSettingsDaemon(t)
+	cache := t.TempDir()
+	d.cfg.Paths.Cache = cache
+	d.store = openStore(cache)
+	d.workshop = newWorkshopLib(d)
+	workshopRoot := t.TempDir()
+	if err := d.persistSetting("paths.steamWorkshop", workshopRoot); err != nil {
+		t.Fatal(err)
+	}
+	const id = "3100000001"
+	dir := filepath.Join(workshopRoot, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	project := `{"type":"scene","title":"Harbour","general":{"properties":{
+		"rain":{"order":1,"text":"Rain","type":"slider","min":0,"max":100,"value":40}}}}`
+	if err := os.WriteFile(filepath.Join(dir, "project.json"), []byte(project), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	call := func(method, params string) map[string]interface{} {
+		t.Helper()
+		req := &request{Method: method, ID: 1, Params: json.RawMessage(params)}
+		resp, _ := d.dispatchWorkshop(req, req.params())
+		if resp.Error != nil {
+			t.Fatalf("%s %s: %+v", method, params, resp.Error)
+		}
+		return resp.Result.(map[string]interface{})
+	}
+	fpsOf := func() interface{} { return call("workshop.properties", `{"weId":"`+id+`"}`)["fps"] }
+
+	if got := fpsOf(); got != nil {
+		t.Fatalf("fps before any pin = %v, want null so the panel shows Default", got)
+	}
+	call("workshop.setProperty", `{"weId":"`+id+`","fps":60}`)
+	if got := fpsOf(); got != 60 {
+		t.Fatalf("fps after pinning 60 = %v", got)
+	}
+	call("workshop.setProperty", `{"weId":"`+id+`","fps":null}`)
+	if got := fpsOf(); got != nil {
+		t.Fatalf("fps after a null write = %v, want null", got)
+	}
+
+	call("workshop.setProperty", `{"weId":"`+id+`","fps":24}`)
+	call("workshop.setProperty", `{"weId":"`+id+`","name":"rain","value":90}`)
+	res := call("workshop.setProperty", `{"weId":"`+id+`","reset":true}`)
+	if res["fps"] != nil {
+		t.Fatalf("fps after Restore defaults = %v, want null", res["fps"])
+	}
+	rows := res["properties"].([]weProperty)
+	if len(rows) != 1 || rows[0].Overridden {
+		t.Fatalf("rows after Restore defaults = %+v, want rain back at its default", rows)
 	}
 }

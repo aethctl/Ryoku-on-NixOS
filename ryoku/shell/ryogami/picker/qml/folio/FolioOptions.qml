@@ -8,9 +8,10 @@ Item {
     // Bumped whenever any provider's source changes, so option bindings re-run.
     property int revision: 0
 
-    // Folder enumeration is lazy and cached by library generation.
-    property var _folderCache: []
-    property int _folderGen: -1
+    // Folder enumeration is lazy and cached by library generation. The cache lives in a
+    // plain object: folders() runs inside option bindings, and writing a notifying
+    // property there would re-trigger the binding that is reading it.
+    readonly property var _folderMemo: ({ gen: -1, list: [] })
 
     Connections {
         target: Library
@@ -79,7 +80,8 @@ Item {
     }
 
     function folders() {
-        if (folderScan.generation !== opts._folderGen) {
+        var memo = opts._folderMemo;
+        if (folderScan.generation !== memo.gen) {
             var seen = ({});
             var acc = [];
             var n = folderScan.count;
@@ -89,12 +91,12 @@ Item {
                 if (f.length > 0 && !seen[f]) { seen[f] = true; acc.push(f); }
             }
             acc.sort();
-            opts._folderCache = acc;
-            opts._folderGen = folderScan.generation;
+            memo.list = acc;
+            memo.gen = folderScan.generation;
         }
         var out = [];
-        for (var i = 0; i < opts._folderCache.length; i++)
-            out.push({ value: opts._folderCache[i], label: opts._folderCache[i] });
+        for (var i = 0; i < memo.list.length; i++)
+            out.push({ value: memo.list[i], label: memo.list[i] });
         return out;
     }
 

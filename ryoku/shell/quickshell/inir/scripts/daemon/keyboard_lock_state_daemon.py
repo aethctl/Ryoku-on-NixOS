@@ -3,6 +3,7 @@
 import argparse
 import asyncio
 import json
+import os
 import sys
 
 from evdev import InputDevice, ecodes, list_devices
@@ -132,8 +133,15 @@ class KeyboardLockMonitor:
 
         await self.emit_state(force=True)
 
+        # The monitor exists to feed one shell. Quickshell does not reap
+        # detached children when it dies, so watch for reparenting: if our
+        # parent is gone, exit instead of orphaning a reader on every reload.
+        parent = os.getppid()
+
         while True:
             await asyncio.sleep(5)
+            if os.getppid() != parent:
+                return 0
             await self.refresh_devices()
             if self.devices:
                 await self.emit_state()

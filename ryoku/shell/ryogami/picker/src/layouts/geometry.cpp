@@ -96,15 +96,24 @@ bool pointInQuad(const std::array<QPointF, 4> &quad, float px, float py)
 }
 
 float sliceOpacity(float itemCenterX, float viewCenterX, float halfView,
-                   float expandedLayoutW, float sliceStride)
+                   float expandedLayoutW, float sliceStride, float edgeDist, float halfWidth)
 {
     if (halfView <= 0.0f)
         return 1.0f;
     const float fullZone = std::min(0.6f, (expandedLayoutW / 2.0f + 2.0f * sliceStride) / halfView);
-    const float normDist = std::abs(itemCenterX - viewCenterX) / halfView;
-    if (normDist <= fullZone)
+    // The fade must finish before a card's outer edge reaches the viewport
+    // edge, or the screen slices the card off at partial opacity.
+    const float fit = edgeDist - halfWidth;
+    float zeroAt = 1.2f * halfView;
+    if (fit > 0.0f)
+        zeroAt = std::min(zeroAt, fit);
+    const float dist = std::abs(itemCenterX - viewCenterX);
+    const float start = std::min(fullZone * halfView, zeroAt);
+    if (dist <= start)
         return 1.0f;
-    const float o = 1.0f - (normDist - fullZone) / (1.2f - fullZone);
+    if (dist >= zeroAt)
+        return 0.0f;
+    const float o = 1.0f - (dist - start) / (zeroAt - start);
     return o < 0.0f ? 0.0f : o;
 }
 

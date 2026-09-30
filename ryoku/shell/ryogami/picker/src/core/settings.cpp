@@ -5,6 +5,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QJSValue>
 #include <QQmlEngine>
 #include <QTimer>
 
@@ -67,6 +68,18 @@ QVariant Settings::value(const QString &key) const
     const auto it = m_user.constFind(key);
     if (it != m_user.constEnd())
         return it.value();
+    return effectiveDefault(key);
+}
+
+// A reset made elsewhere arrives as the default value, which is no override.
+bool Settings::isDefault(const QString &key) const
+{
+    const auto it = m_user.constFind(key);
+    return it == m_user.constEnd() || it.value() == effectiveDefault(key);
+}
+
+QVariant Settings::effectiveDefault(const QString &key) const
+{
     const auto spec = m_schema.constFind(key);
     if (spec == m_schema.constEnd())
         return QVariant();
@@ -88,8 +101,12 @@ QVariant Settings::defaultOf(const QString &key) const
     return m_schema.value(key).value(QStringLiteral("default"));
 }
 
-void Settings::set(const QString &key, const QVariant &value)
+void Settings::set(const QString &key, const QVariant &raw)
 {
+    // Arrays and objects from QML arrive wrapped as QJSValue, which JSON drops; the daemon needs plain lists and maps.
+    const QVariant value = raw.metaType() == QMetaType::fromType<QJSValue>()
+        ? raw.value<QJSValue>().toVariant(QJSValue::ConvertJSObjects)
+        : raw;
     if (m_user.value(key) == value && m_user.contains(key))
         return;
     m_user.insert(key, value);
@@ -117,10 +134,40 @@ void Settings::flush()
     m_flush->stop();
     if (m_pending.isEmpty() || !m_daemon)
         return;
-    const QJsonObject values = QJsonObject::fromVariantMap(m_pending);
+    const QVariantMap sent = m_pending;
     m_pending.clear();
     m_daemon->call(QStringLiteral("settings.set"),
-                   QJsonObject{{QStringLiteral("values"), values}}, nullptr);
+                   QJsonObject{{QStringLiteral("values"), QJsonObject::fromVariantMap(sent)}},
+                   [this, keys = sent.keys()](const QJsonValue &, const QJsonObject &error) {
+        if (error.isEmpty())
+            return;
+        qWarning("ryogami: settings not saved: %s",
+                 qPrintable(error.value(QStringLiteral("message")).toString()));
+        resync(keys);
+    });
+}
+
+// A rejected batch saved nothing, so its keys return to what the daemon holds.
+void Settings::resync(const QStringList &keys)
+{
+    QJsonArray asked;
+    for (const QString &k : keys)
+        asked.append(k);
+    m_daemon->call(QStringLiteral("settings.get"), QJsonObject{{QStringLiteral("keys"), asked}},
+                   [this, keys](const QJsonValue &result, const QJsonObject &error) {
+        if (!error.isEmpty())
+            return;
+        const QVariantMap held = result.toObject().value(QStringLiteral("values")).toObject().toVariantMap();
+        for (const QString &k : keys) {
+            // A newer edit is already queued for this key; it wins.
+            if (m_pending.contains(k))
+                continue;
+            if (held.contains(k))
+                applyIncoming({{k, held.value(k)}});
+            else if (m_user.remove(k) > 0)
+                Q_EMIT changed(k, value(k));
+        }
+    });
 }
 
 void Settings::onReconnected()

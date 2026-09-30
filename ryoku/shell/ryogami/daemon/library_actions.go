@@ -16,7 +16,6 @@ func init() {
 	registerAction("RecomputeColors", actionRecomputeColors)
 	registerAction("CaptureWeThumbnails", actionCaptureWeThumbnails)
 	registerAction("ConvertVideos", actionConvertVideos)
-	registerAvailability("skwdPaper", func(d *daemon) bool { return skwdStillBinary() != "" })
 }
 
 func actionClearCache(d *daemon, _ map[string]interface{}) (interface{}, error) {
@@ -71,11 +70,16 @@ func actionCaptureWeThumbnails(d *daemon, _ map[string]interface{}) (interface{}
 
 func (d *daemon) captureWeThumbnails(bin string) {
 	cacheDir := d.config().cacheDir()
-	var captured, skipped, failed int
+	var scenes []Entry
 	for _, e := range d.store.snapshotEntries() {
-		if e.Type != "we" || e.WeID == "" {
-			continue
+		if e.Type == "we" && e.WeID != "" {
+			scenes = append(scenes, e)
 		}
+	}
+	d.tasks.start("we-thumbnails", "capture", "Scene thumbnails", len(scenes), nil)
+	var captured, skipped, failed int
+	for i, e := range scenes {
+		d.tasks.progress("we-thumbnails", i, len(scenes), e.Name)
 		src := weStillSource(e)
 		if src == "" {
 			skipped++
@@ -106,6 +110,11 @@ func (d *daemon) captureWeThumbnails(bin string) {
 		}
 		captured++
 	}
+	state := taskCompleted
+	if failed > 0 && captured == 0 {
+		state = taskFailed
+	}
+	d.tasks.finish("we-thumbnails", state, len(scenes), "")
 	d.broadcast("ryogami.wall.we_capture.complete", map[string]interface{}{
 		"captured": captured, "skipped": skipped, "failed": failed,
 	})

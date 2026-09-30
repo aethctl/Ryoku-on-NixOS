@@ -42,6 +42,8 @@ Item {
                 readonly property bool selected: strip.current === modelData.id
                 readonly property bool available: modelData.enabled === true
                 readonly property bool hovered: tabHover.containsMouse
+                // A disabled tab has no fill, so its text must stay on the surface colour even when selected.
+                readonly property bool onFill: tab.selected && tab.available
 
                 Rectangle {
                     anchors.fill: parent
@@ -73,8 +75,8 @@ Item {
                         font.family: Theme.ui
                         font.weight: Theme.uiWeight
                         font.pixelSize: Theme.fontBase
-                        color: tab.selected
-                            ? Theme.withAlpha(Theme.primaryText, tab.available ? 0.96 : 0.34)
+                        color: tab.onFill
+                            ? Theme.withAlpha(Theme.primaryText, 0.96)
                             : Theme.withAlpha(Theme.surfaceText, tab.available ? 0.96 : 0.34)
                         renderType: Text.NativeRendering
                     }
@@ -86,8 +88,8 @@ Item {
                         font.family: Theme.ui
                         font.weight: Theme.uiWeight
                         font.pixelSize: Theme.fontMicro
-                        color: tab.selected
-                            ? Theme.withAlpha(Theme.primaryText, tab.available ? 0.58 : 0.28)
+                        color: tab.onFill
+                            ? Theme.withAlpha(Theme.primaryText, 0.58)
                             : Theme.withAlpha(Theme.surfaceText, tab.available ? 0.58 : 0.28)
                         renderType: Text.NativeRendering
                     }

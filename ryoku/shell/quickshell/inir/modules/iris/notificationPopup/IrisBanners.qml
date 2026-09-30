@@ -19,7 +19,9 @@ Item {
     property var screenData: null
     readonly property string screenName: root.screenData?.name ?? ""
     readonly property bool fullscreenHere: CompositorService.nativeOverview && GameMode.hasFullscreenOnOutput(root.screenName) && !WorkspaceService.inOverview
+    // Customize owns the Island's surroundings while it is open: banners wait, and still land in Today.
     readonly property bool present: root.screenName === (GlobalStates.focusedScreen?.name ?? "") && !root.fullscreenHere
+        && !GlobalStates.irisEdit
         && (root.popups.length > 0 || exitLinger.running)
     readonly property var hitRect: root.present && popupColumn.contentHeight > 0
         ? { x: popupColumn.x, y: popupColumn.y, width: popupColumn.width, height: popupColumn.height } : null
@@ -28,7 +30,7 @@ Item {
     readonly property string islandEdge: IrisFrame.islandEdge
     readonly property bool barTop: root.islandEdge !== "bottom"
     readonly property bool islandSide: root.islandEdge === "left" || root.islandEdge === "right"
-    readonly property real sideGap: IrisFrame.clear(root.islandEdge) + Math.round(12 * root.d)
+    readonly property real sideGap: IrisFrame.safeClear(root.islandEdge) + Math.round(12 * root.d)
     readonly property var popups: (Notifications.popupList ?? []).slice(-3).reverse()
     readonly property real d: IrisStyle.density
     readonly property real edgeOffset: (Number(root.barOptions?.height ?? 42)
@@ -41,6 +43,28 @@ Item {
         Math.max(340, Number(root.options?.width ?? 380) * root.d) + 16)
     readonly property var island: GlobalStates.irisIslandGeometry?.[root.screenName] ?? null
     readonly property real bubbleSize: Math.round(44 * root.d)
+
+    // Each banner is a body of the chassis field, so its material (solid, glass, compositor blur) and
+    // its edge are the family's, and it grows out of the Island as one shape before letting go.
+    property var bodies: ({})
+    readonly property var fieldShapes: root.present ? Object.values(root.bodies) : []
+    function publish(key: string, shape: var): void {
+        const next = Object.assign({}, root.bodies)
+        if (shape) next[key] = shape
+        else delete next[key]
+        root.bodies = next
+    }
+    // The Island's live bodies (its chassis and page, not its satellites), from the chassis field.
+    property var islandShapes: []
+    // Below whatever the Island takes up now, expanded included and while it moves, never over it.
+    readonly property real islandClear: {
+        if (root.islandSide) return 0
+        const bodies = (root.islandShapes ?? []).filter(shape => shape.id !== "edge" && !shape.satellite)
+        if (bodies.length === 0) return 0
+        const gap = Math.round(10 * root.d)
+        return root.barTop ? Math.max(...bodies.map(shape => shape.y + shape.height)) + gap
+            : root.height - Math.min(...bodies.map(shape => shape.y)) + gap
+    }
 
     property real now: Date.now()
     Timer { interval: 30000; repeat: true; running: root.visible; onTriggered: root.now = Date.now() }
@@ -64,9 +88,9 @@ Item {
         id: popupColumn
         x: Math.round(root.islandEdge === "left" ? root.sideGap
             : root.islandEdge === "right" ? parent.width - width - root.sideGap : (parent.width - width) / 2)
-        y: Math.round(root.islandSide ? IrisFrame.inset("top") + Math.round(12 * root.d)
-            : root.barTop ? root.edgeOffset + IrisFrame.band
-            : parent.height - height - root.edgeOffset - IrisFrame.band)
+        y: Math.round(root.islandSide ? IrisFrame.safeInset("top") + Math.round(12 * root.d)
+            : root.barTop ? Math.max(root.edgeOffset + IrisFrame.band, root.islandClear)
+            : parent.height - height - Math.max(root.edgeOffset + IrisFrame.band, root.islandClear))
         verticalLayoutDirection: root.barTop ? ListView.TopToBottom : ListView.BottomToTop
         width: Math.min(root.popupWidth - 16, parent.width - 16)
         height: Math.max(1, popupColumn.contentHeight)
@@ -108,32 +132,65 @@ Item {
             onHoveredChanged: if (banner.hovered) Notifications.cancelTimeout(banner.notification.notificationId)
             HoverHandler { id: bannerHover }
 
+            // Frozen: a discarded notification is destroyed before its banner leaves, orphaning a live key.
+            property string bodyKey: ""
             property real appear: 0
-            Component.onCompleted: banner.appear = 1
+            Component.onCompleted: {
+                banner.bodyKey = String(banner.notification?.notificationId ?? "")
+                banner.appear = 1
+            }
             Behavior on appear { NumberAnimation { duration: IrisStyle.emergeDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.emergeCurve } }
             property real leave: 0
             readonly property bool swiped: Math.abs(banner.swipe) > 1
             readonly property real bloom: Math.min(banner.appear, banner.swiped ? 1 : 1 - banner.leave)
             readonly property bool meltsIntoIsland: root.island !== null && !root.islandSide
-            readonly property real fullHeight: content.implicitHeight + 24 * root.d
+            // Measured a tick later: wrapped text re-measures inside the layout while the plate's height is read.
+            readonly property real measuredHeight: content.implicitHeight + 24 * root.d
+            property real fullHeight: banner.measuredHeight
+            onMeasuredHeightChanged: fullSync.restart()
+            Timer { id: fullSync; interval: 0; onTriggered: banner.fullHeight = banner.measuredHeight }
 
             property real swipe: 0
             Behavior on swipe {
                 enabled: !swipeDrag.active
                 NumberAnimation { duration: IrisStyle.duration(180); easing.type: IrisStyle.feedbackEasing }
             }
-
-            RectangularShadow {
-                x: plate.x
-                y: plate.y + 4 * root.d
-                width: plate.width
-                height: plate.height
-                radius: plate.radius
-                blur: 18 * root.d
-                spread: -3 * root.d
-                color: IrisStyle.shadow
-                opacity: plate.opacity * IrisStyle.shadowAt(banner.bloom)
+            // On the delegate, which never moves: inside the plate the handler would measure its
+            // translation in coordinates that slide with the swipe. Nothing may take the grab mid-swipe,
+            // and every end (release, cancel, a lost grab) settles the banner: gone or back home.
+            function settleSwipe(): void {
+                if (Math.abs(banner.swipe) > banner.width * 0.3) {
+                    banner.swipe = banner.swipe > 0 ? banner.width : -banner.width
+                    dismissLater.restart()
+                } else {
+                    banner.swipe = 0
+                }
             }
+            DragHandler {
+                id: swipeDrag
+                target: null
+                xAxis.enabled: true
+                yAxis.enabled: false
+                grabPermissions: PointerHandler.CanTakeOverFromAnything
+                onTranslationChanged: if (active) banner.swipe = translation.x
+                onActiveChanged: if (!active) banner.settleSwipe()
+                onCanceled: banner.settleSwipe()
+            }
+
+            readonly property real fade: 1 - Math.min(1, Math.abs(banner.swipe) / (banner.width * 0.6))
+            readonly property var body: {
+                void (banner.y + popupColumn.y + popupColumn.contentY + plate.x + plate.y)
+                if (banner.bloom <= 0.01 || banner.fade <= 0.01) return null
+                const at = plate.mapToItem(root, 0, 0)
+                // Swiped away it shrinks about its centre as it slides, instead of fading.
+                const w = plate.width * banner.fade
+                const h = plate.height * banner.fade
+                return { x: at.x + (plate.width - w) / 2, y: at.y + (plate.height - h) / 2, width: w, height: h,
+                    radius: Math.min(h / 2, plate.radius), paints: false, id: "banner:" + banner.bodyKey,
+                    joins: banner.meltsIntoIsland ? "island" : "", fuse: IrisStyle.fuseDeep * (1 - banner.bloom) }
+            }
+            onBodyChanged: if (banner.bodyKey) root.publish(banner.bodyKey, banner.body)
+            Component.onDestruction: if (banner.bodyKey) root.publish(banner.bodyKey, null)
             Rectangle {
                 id: plate
                 width: Math.round(root.bubbleSize + (banner.width - root.bubbleSize) * banner.bloom)
@@ -147,34 +204,16 @@ Item {
                     return (root.island.y + root.island.height / 2) - (at.y + root.bubbleSize / 2)
                 }
                 y: Math.round(plate.islandLift * (1 - banner.bloom))
-                opacity: Math.min(1, banner.bloom * 3)
-                    * (1 - Math.min(1, Math.abs(banner.swipe) / (banner.width * 0.6)))
+                opacity: Math.min(1, banner.bloom * 3) * banner.fade
                 radius: Math.min(height / 2, root.bubbleSize / 2 + (Math.round(22 * root.d) - root.bubbleSize / 2) * banner.bloom)
-                color: IrisStyle.bodySurface
-                border.width: 1
-                border.color: banner.critical ? IrisStyle.tintBorder(IrisStyle.danger)
-                    : ColorUtils.applyAlpha(IrisStyle.border, IrisStyle.border.a * banner.bloom)
+                color: "transparent"
+                border.width: banner.critical ? 1 : 0
+                border.color: IrisStyle.tintBorder(IrisStyle.danger)
 
-                DragHandler {
-                    id: swipeDrag
-                    target: null
-                    xAxis.enabled: true
-                    yAxis.enabled: false
-                    onTranslationChanged: banner.swipe = translation.x
-                    onActiveChanged: {
-                        if (active) return
-                        if (Math.abs(banner.swipe) > banner.width * 0.3) {
-                            banner.swipe = banner.swipe > 0 ? banner.width : -banner.width
-                            dismissLater.restart()
-                        } else {
-                            banner.swipe = 0
-                        }
-                    }
-                }
                 Timer {
                     id: dismissLater
                     interval: IrisStyle.duration(180)
-                    onTriggered: Notifications.timeoutNotification(banner.notification.notificationId)
+                    onTriggered: if (banner.notification) Notifications.timeoutNotification(banner.notification.notificationId)
                 }
                 TapHandler {
                     onTapped: root.activate(banner.notification)
@@ -213,8 +252,8 @@ Item {
                             IrisText {
                                 Layout.fillWidth: true
                                 text: String(banner.notification?.summary || banner.notification?.appName || "")
-                                font.pixelSize: 13.5 * IrisStyle.typeScale
-                                font.weight: Font.DemiBold
+                                font.pixelSize: IrisStyle.typeLabel
+                                font.weight: IrisStyle.weight(Font.DemiBold)
                                 elide: Text.ElideRight
                             }
                             IrisText {
@@ -226,7 +265,7 @@ Item {
                                         : Translation.tr("%1h").arg(Math.floor(seconds / 3600))
                                 }
                                 color: IrisStyle.muted
-                                font.pixelSize: 11.5 * IrisStyle.typeScale
+                                font.pixelSize: IrisStyle.typeMeta
                             }
                         }
                         IrisText {
@@ -234,7 +273,7 @@ Item {
                             visible: text.length > 0
                             text: String(banner.notification?.body ?? "").replace(/<[^>]*>/g, "")
                             color: IrisStyle.subtext
-                            font.pixelSize: 12.5 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeLabel
                             wrapMode: Text.Wrap
                             maximumLineCount: banner.hovered ? 8 : 2
                             elide: Text.ElideRight
@@ -244,7 +283,7 @@ Item {
                             visible: text.length > 0 && text !== String(banner.notification?.summary ?? "")
                             text: String(banner.notification?.appName ?? "")
                             color: IrisStyle.muted
-                            font.pixelSize: 11 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeFootnote
                             elide: Text.ElideRight
                         }
 
@@ -270,8 +309,8 @@ Item {
                                         id: actionLabel
                                         anchors.centerIn: parent
                                         text: String(actionButton.modelData.text ?? "")
-                                        font.pixelSize: 12 * IrisStyle.typeScale
-                                        font.weight: Font.Medium
+                                        font.pixelSize: IrisStyle.typeMeta
+                                        font.weight: IrisStyle.weight(Font.Medium)
                                     }
                                 }
                             }
@@ -290,7 +329,7 @@ Item {
                     border.color: IrisStyle.hairlineStrong
                     opacity: banner.hovered ? 1 : 0
                     visible: opacity > 0
-                    Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120) } }
+                    Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                     MaterialSymbol {
                         anchors.centerIn: parent
                         text: "close"

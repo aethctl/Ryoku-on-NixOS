@@ -32,6 +32,8 @@ void SliceParams::morphToward(const SliceParams &t, float amt)
     visibleCount = t.visibleCount;
     wobble = t.wobble;
     wobbleStrength = geom::lerp(wobbleStrength, t.wobbleStrength, amt);
+    shadowStrength = geom::lerp(shadowStrength, t.shadowStrength, amt);
+    shadowDistance = geom::lerp(shadowDistance, t.shadowDistance, amt);
     for (int i = 0; i < 4; ++i)
         corners[size_t(i)] = geom::lerp(corners[size_t(i)], t.corners[size_t(i)], amt);
 }
@@ -43,7 +45,9 @@ bool SliceParams::settledTo(const SliceParams &t) const
         && geom::feq(expandedW, t.expandedW) && geom::feq(sliceH, t.sliceH)
         && geom::feq(spacing, t.spacing) && geom::feq(skew, t.skew)
         && geom::feq(edgeTilt, t.edgeTilt) && visibleCount == t.visibleCount && wobble == t.wobble
-        && geom::feq(wobbleStrength, t.wobbleStrength) && geom::feq(corners[0], t.corners[0])
+        && geom::feq(wobbleStrength, t.wobbleStrength)
+        && geom::feq(shadowStrength, t.shadowStrength) && geom::feq(shadowDistance, t.shadowDistance)
+        && geom::feq(corners[0], t.corners[0])
         && geom::feq(corners[1], t.corners[1]) && geom::feq(corners[2], t.corners[2])
         && geom::feq(corners[3], t.corners[3]);
 }
@@ -137,6 +141,15 @@ QRectF SliceBase::cardRect(int row) const
     return QRectF();
 }
 
+QPointF SliceBase::cardShear(int row) const
+{
+    for (const HitRec &h : m_hits) {
+        if (h.row == row)
+            return QPointF(h.skew, h.edgeTilt);
+    }
+    return QPointF();
+}
+
 QRectF SliceBase::stageRect(const LayoutContext &ctx) const
 {
     const double vh = ctx.viewport.height();
@@ -162,9 +175,9 @@ void SliceBase::emitCard(const LayoutContext &ctx, std::vector<CardVisual> &out,
         CardVisual sh;
         sh.row = row;
         sh.texture = CardVisual::TextureNone;
-        const float shX = isCurrent ? 4.0f : 2.0f;
-        const float shY = isCurrent ? 10.0f : 5.0f;
-        const float shA = isCurrent ? 0.5f : 0.3f;
+        const float shX = (isCurrent ? 4.0f : 2.0f) * sp.shadowDistance;
+        const float shY = (isCurrent ? 10.0f : 5.0f) * sp.shadowDistance;
+        const float shA = (isCurrent ? 0.5f : 0.3f) * sp.shadowStrength;
         setVec4(sh.inst.rect, itemCx + shX, itemCy + shY, hw, hh);
         for (int i = 0; i < 4; ++i)
             sh.inst.radii[i] = radii[size_t(i)];

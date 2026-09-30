@@ -264,6 +264,13 @@ PanelWindow {
             Grip { anchors.verticalCenter: parent.verticalCenter }
             Dot { anchors.verticalCenter: parent.verticalCenter }
             Clock { anchors.verticalCenter: parent.verticalCenter }
+            IslandButton {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: Recorder.active
+                glyph: Recorder.paused ? "play" : "pause"
+                Accessible.name: Recorder.paused ? I18n.tr("Resume recording") : I18n.tr("Pause recording")
+                onTapped: Recorder.togglePause()
+            }
             AudioState { anchors.verticalCenter: parent.verticalCenter }
             IslandButton {
                 anchors.verticalCenter: parent.verticalCenter
@@ -282,6 +289,13 @@ PanelWindow {
             Grip { anchors.horizontalCenter: parent.horizontalCenter }
             Dot { anchors.horizontalCenter: parent.horizontalCenter }
             Clock { anchors.horizontalCenter: parent.horizontalCenter }
+            IslandButton {
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: Recorder.active
+                glyph: Recorder.paused ? "play" : "pause"
+                Accessible.name: Recorder.paused ? I18n.tr("Resume recording") : I18n.tr("Pause recording")
+                onTapped: Recorder.togglePause()
+            }
             AudioState { anchors.horizontalCenter: parent.horizontalCenter }
             IslandButton {
                 anchors.horizontalCenter: parent.horizontalCenter

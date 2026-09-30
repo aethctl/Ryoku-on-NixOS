@@ -7,7 +7,6 @@ import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Widgets
-import Quickshell.Wayland
 import inir
 import inir.services
 import inir.services.deferred
@@ -18,11 +17,22 @@ import inir.modules.iris.frame
 import inir.modules.iris.style
 import inir.modules.iris.components
 
-PanelWindow {
+// The gallery lives in the chassis window of its output, so its body, its content and the Island it grows
+// from are one surface: drawn and moved in the same frame.
+Item {
     id: root
 
+    property var screen: null
+    readonly property var targetScreen: {
+        const name = GlobalStates.wallpaperSelectorTargetMonitor
+        return (name ? Quickshell.screens.find(s => s.name === name) : null) ?? GlobalStates.focusedScreen
+    }
+    readonly property bool here: (root.screen?.name ?? "") === (root.targetScreen?.name ?? "")
+    readonly property bool present: root.here && (root.morphOpen || surface.progress > 0)
+    readonly property bool armed: root.morphOpen && surface.armed
+
     readonly property real d: IrisStyle.density
-    readonly property bool morphOpen: GlobalStates.wallpaperSelectorOpen
+    readonly property bool morphOpen: root.here && GlobalStates.wallpaperSelectorOpen
     readonly property bool multiMonitor: Config.options?.background?.multiMonitor?.enable ?? false
     readonly property bool onlineEnabled: Config.options?.sidebar?.wallhaven?.enable ?? true
     readonly property var barOptions: Config.options?.iris?.bar ?? ({})
@@ -32,6 +42,8 @@ PanelWindow {
         ? String(root.options?.layout ?? "showcase") : "showcase"
     readonly property bool showcase: root.layoutName === "showcase"
     readonly property bool playMotion: (root.options?.motion ?? true) && root.morphOpen
+    // Full-size images and video wait for the open to finish: decoded mid-motion they cost it 4-7 frames.
+    readonly property bool opened: root.morphOpen && surface.settled
     property string targetMonitor: ""
     readonly property string selectionTarget: Wallpapers.currentSelectionTarget()
     readonly property bool overviewTargetable: (Config.options?.background?.backdrop?.enable ?? true)
@@ -46,12 +58,29 @@ PanelWindow {
 
     property string source: "library"
     readonly property bool online: root.source !== "library" && root.onlineEnabled
-    readonly property string provider: root.source === "live" ? "motionbgs" : "wallhaven"
-    readonly property var sources: [
-        { id: "library", label: Translation.tr("Library"), glyph: "photo_library" },
-        { id: "wallhaven", label: "Wallhaven", glyph: "travel_explore" },
-        { id: "live", label: Translation.tr("Live"), glyph: "motion_photos_on" }
-    ]
+    readonly property string provider: root.source === "live" ? "motionbgs" : root.source
+    readonly property var sourceCatalog: ({
+        wallhaven: { id: "wallhaven", label: "Wallhaven", glyph: "travel_explore" },
+        konachan: { id: "konachan", label: "Konachan", glyph: "landscape" },
+        yandere: { id: "yandere", label: "yande.re", glyph: "landscape" },
+        live: { id: "live", label: Translation.tr("Live"), glyph: "motion_photos_on" }
+    })
+    readonly property var onlineSources: !root.onlineEnabled ? []
+        : Array.from(root.options?.sources ?? ["wallhaven", "live"]).map(id => root.sourceCatalog[String(id)]).filter(Boolean)
+    readonly property var sources: [{ id: "library", label: Translation.tr("Library"), glyph: "photo_library" }].concat(root.onlineSources)
+    function offered(id: string): bool { return root.sources.some(entry => entry.id === id) }
+    onSourcesChanged: if (!root.offered(root.source)) root.setSource("library", "")
+
+    // Off, online results keep to what anyone can have on screen: explicit art never shows (every source
+    // asks for safe ratings), and fan service rated safe is filtered by its tags or title here.
+    readonly property bool suggestive: root.options?.suggestive ?? false
+    readonly property var wallhavenExclusions: ["-bikini", "-swimwear", "-lingerie", "-underwear", "-cleavage", "-ecchi",
+        "-panties", "-ass", "-boobs", "-nude"]
+    readonly property var suggestivePattern: /(^|[\s_,.-])(bikinis?|swimsuits?|swimwear|lingerie|panties|pantsu|underwear|bra|cleavage|breasts?|boobs?|nipples?|nude|naked|topless|bottomless|ecchi|thong|sideboob|underboob|see[_-]through|bunny[_ ]girl|undressing|towel|onsen|bathing|ass|butt|sexy|seductive|lewd|erotic|sensual)([\s_,.-]|$)/i
+    function suggestiveImage(image): bool {
+        return root.suggestivePattern.test(String(image?.tags ?? "") + " " + String(image?.title ?? "") + " " + String(image?.slug ?? ""))
+    }
+    onSuggestiveChanged: if (root.morphOpen && root.online) root.searchOnline(1, true)
     property int selectedIndex: 0
     readonly property string query: search.text.trim()
 
@@ -66,7 +95,9 @@ PanelWindow {
         const folders = []
         const files = []
         for (let i = 0; i < model.count; i++) {
-            const entry = { path: String(model.get(i, "filePath") ?? ""), name: String(model.get(i, "fileName") ?? "") }
+            const modified = model.get(i, "fileModified")
+            const entry = { path: String(model.get(i, "filePath") ?? ""), name: String(model.get(i, "fileName") ?? ""),
+                time: modified ? Number(modified.getTime()) || 0 : 0 }
             if (entry.path.length === 0) continue
             if (model.get(i, "fileIsDir")) folders.push(entry)
             else files.push(entry)
@@ -88,8 +119,44 @@ PanelWindow {
         function onFolderModelReadyChanged(): void { folderRead.restart() }
     }
     Timer { id: folderRead; interval: 40; onTriggered: root.readFolder() }
-    readonly property int libraryCount: root.libraryFiles.length
-    readonly property string libraryPath: !root.online ? String(root.libraryFiles[root.selectedIndex]?.path ?? "") : ""
+    // What the folder actually holds, so the filter only appears when there is
+    // something to choose between.
+    property string kind: "all"
+    function kindOf(path: string): string {
+        if (Wallpapers.isVideoFile(path)) return "live"
+        return String(path).toLowerCase().endsWith(".gif") ? "gif" : "still"
+    }
+    readonly property var kindsPresent: {
+        const found = root.libraryFiles.reduce((set, entry) => set.add(root.kindOf(entry.path)), new Set())
+        const known = [{ id: "still", glyph: "image", label: "Stills" },
+            { id: "live", glyph: "movie", label: "Live" },
+            { id: "gif", glyph: "gif", label: "GIF" }]
+        const present = known.filter(entry => found.has(entry.id))
+        return present.length > 1 ? [{ id: "all", glyph: "grid_view", label: "Everything" }].concat(present) : []
+    }
+    readonly property string sortOrder: ["newest", "oldest", "name"].includes(String(root.options?.sort ?? "newest"))
+        ? String(root.options?.sort ?? "newest") : "newest"
+    readonly property string onlineOrder: ["top", "newest", "random"].includes(String(root.options?.onlineSort ?? "top"))
+        ? String(root.options?.onlineSort ?? "top") : "top"
+    readonly property string topRange: ["1d", "1w", "1M", "1y"].includes(String(root.options?.topRange ?? "1w"))
+        ? String(root.options?.topRange ?? "1w") : "1w"
+    readonly property string onlineSorting: root.onlineOrder === "top" ? "toplist:" + root.topRange
+        : root.onlineOrder === "random" ? "random" : "date_added"
+    readonly property bool onlineSortable: root.online && root.provider !== "motionbgs"
+    function setOrder(value: string): void {
+        Config.setNestedValue(root.online ? "iris.wallpaper.onlineSort" : "iris.wallpaper.sort", value)
+    }
+    readonly property var visibleFiles: {
+        const list = root.kind === "all" ? root.libraryFiles.slice()
+            : root.libraryFiles.filter(entry => root.kindOf(entry.path) === root.kind)
+        if (root.sortOrder === "name") list.sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()))
+        else list.sort((a, b) => root.sortOrder === "oldest" ? a.time - b.time : b.time - a.time)
+        return list
+    }
+    onSortOrderChanged: if (root.morphOpen && !root.online) { root.selectedIndex = 0; grid.contentX = 0; root.selectCurrent() }
+    onOnlineSortingChanged: if (root.morphOpen && root.onlineSortable) root.searchOnline(1, true)
+    readonly property int libraryCount: (root.visibleFiles ?? []).length
+    readonly property string libraryPath: !root.online ? String((root.visibleFiles ?? [])[root.selectedIndex]?.path ?? "") : ""
 
     readonly property string folderPath: Wallpapers.effectiveDirectory.replace(/\/+$/, "") || "/"
     readonly property string homePath: String(Quickshell.env("HOME") ?? "").replace(/\/+$/, "")
@@ -110,7 +177,9 @@ PanelWindow {
     readonly property bool canGoBack: (Wallpapers.folderModel?.currentFolderHistoryIndex ?? 0) > 0
     readonly property bool canGoForward: (Wallpapers.folderModel?.currentFolderHistoryIndex ?? 0) < (Wallpapers.folderModel?.folderHistory?.length ?? 0) - 1
     readonly property bool atWallpapersHome: root.folderPath === root.wallpapersHome
+    onLibraryFilesChanged: if (!root.kindsPresent.some(entry => entry.id === root.kind)) root.kind = "all"
     function openFolder(path: string): void {
+        root.kind = "all"
         if (!path || path === root.folderPath) return
         root.selectedIndex = 0
         grid.contentX = 0
@@ -182,9 +251,10 @@ PanelWindow {
 
     readonly property var onlineImages: (Wallhaven.responses ?? [])
         .filter(response => response && response.provider === root.provider)
-        .reduce((all, response) => all.concat(response.images ?? []), [])
+        .reduce((all, response) => all.concat((response.images ?? []).filter(image => image && !image.is_nsfw && image.file_url
+            && (root.suggestive || !root.suggestiveImage(image)))), [])
     readonly property string onlineMessage: {
-        const messages = (Wallhaven.responses ?? []).filter(response => response && response.message)
+        const messages = (Wallhaven.responses ?? []).filter(response => response && response.provider === root.provider && response.message)
         return messages.length > 0 ? String(messages[messages.length - 1].message) : ""
     }
     readonly property int onlinePage: {
@@ -198,7 +268,6 @@ PanelWindow {
     readonly property var wallhavenDiscoveries: [
         { label: Translation.tr("Anime"), tags: [], category: "010" },
         { label: Translation.tr("Anime scenery"), tags: ["landscape"], category: "010" },
-        { label: Translation.tr("Top"), tags: [], category: "111" },
         { label: Translation.tr("Ricing"), tags: ["linux"], category: "111" },
         { label: Translation.tr("Pixel art"), tags: ["pixel art"], category: "111" },
         { label: Translation.tr("Cyberpunk"), tags: ["cyberpunk"], category: "111" },
@@ -207,6 +276,17 @@ PanelWindow {
         { label: Translation.tr("Nature"), tags: ["nature"], category: "100" },
         { label: Translation.tr("Space"), tags: ["space"], category: "100" },
         { label: Translation.tr("Abstract"), tags: ["abstract"], category: "111" }
+    ]
+    readonly property var konachanDiscoveries: [
+        { label: Translation.tr("Anime"), tags: [] },
+        { label: Translation.tr("Landscape"), tags: ["landscape"] },
+        { label: Translation.tr("Sky"), tags: ["sky"] },
+        { label: Translation.tr("City"), tags: ["city"] },
+        { label: Translation.tr("Night"), tags: ["night"] }
+    ]
+    readonly property var yandereDiscoveries: [
+        { label: Translation.tr("Landscape"), tags: ["landscape"] },
+        { label: Translation.tr("Anime"), tags: [] }
     ]
     readonly property var liveDiscoveries: [
         { label: Translation.tr("Anime"), tags: ["tag:anime"] },
@@ -230,13 +310,21 @@ PanelWindow {
         { label: Translation.tr("Sakura"), tags: ["tag:sakura"] },
         { label: Translation.tr("Night"), tags: ["tag:night"] }
     ]
-    readonly property var discoveries: root.source === "live" ? root.liveDiscoveries : root.wallhavenDiscoveries
+    readonly property var discoveries: root.source === "live" ? root.liveDiscoveries
+        : root.source === "wallhaven" ? root.wallhavenDiscoveries
+        : root.source === "yandere" ? root.yandereDiscoveries : root.konachanDiscoveries
     property int wallhavenDiscovery: 0
+    property int konachanDiscovery: 0
+    property int yandereDiscovery: 0
     property int liveDiscovery: 0
-    readonly property int discovery: root.source === "live" ? root.liveDiscovery : root.wallhavenDiscovery
+    readonly property int discovery: root.source === "live" ? root.liveDiscovery
+        : root.source === "wallhaven" ? root.wallhavenDiscovery
+        : root.source === "yandere" ? root.yandereDiscovery : root.konachanDiscovery
     function pickDiscovery(index: int): void {
         if (root.source === "live") root.liveDiscovery = index
-        else root.wallhavenDiscovery = index
+        else if (root.source === "wallhaven") root.wallhavenDiscovery = index
+        else if (root.source === "yandere") root.yandereDiscovery = index
+        else root.konachanDiscovery = index
         root.series = null
         search.text = ""
         onlineSearchDelay.stop()
@@ -259,8 +347,11 @@ PanelWindow {
         const english = root.seriesLabel(anime)
         const romaji = root.seriesLabel({ title: anime.titleRomaji ?? "" })
         const slug = english.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")
+        const booru = root.source === "konachan" || root.source === "yandere"
         const queries = root.source === "live"
-            ? [["tag:" + slug], [english], [romaji]] : [[english], [romaji]]
+            ? [["tag:" + slug], [english], [romaji]]
+            : booru ? [[slug.replace(/-/g, "_")], [romaji.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")]]
+            : [[english], [romaji]]
         root.series = anime
         root.seriesQueries = queries.filter((entry, i) => String(entry[0]).replace(/^tag:/, "").length > 0
             && queries.findIndex(other => other[0] === entry[0]) === i)
@@ -288,9 +379,10 @@ PanelWindow {
             if (!image) return null
             const live = image.is_video === true
             const eyebrow = root.series ? String(root.series.titleJapanese || root.series.title || "") : ""
-            const facts = live ? [{ glyph: "motion_photos_on", label: Translation.tr("Live") }, { label: String(image.quality ?? "HD"), figure: true }]
+            const light = live && String(Config.options?.iris?.wallpaper?.liveQuality ?? "best") === "light"
+            const facts = live ? [{ glyph: "motion_photos_on", label: Translation.tr("Live") }, { label: light ? "HD" : String(image.quality ?? "HD"), figure: true }]
                 : [{ glyph: "image", label: Translation.tr("Picture") }]
-            facts.push({ label: image.width + " × " + image.height, figure: true })
+            facts.push({ label: light ? "1920 × 1080" : image.width + " × " + image.height, figure: true })
             return {
                 key: String(image.id),
                 imageUrl: String(image.preview_url ?? ""),
@@ -302,7 +394,7 @@ PanelWindow {
                 current: false
             }
         }
-        const file = root.libraryFiles[index]
+        const file = (root.visibleFiles ?? [])[index]
         if (!file) return null
         const video = Wallpapers.isVideoFile(file.path)
         const extension = String(file.name.split(".").pop() ?? "").toUpperCase()
@@ -314,12 +406,13 @@ PanelWindow {
             video: video,
             eyebrow: "",
             facts: [video ? { glyph: "motion_photos_on", label: Translation.tr("Live") } : { glyph: "image", label: Translation.tr("Picture") },
-                { label: extension, figure: true }],
+                { label: extension, figure: true }].concat(file.time > 0
+                ? [{ glyph: "calendar_today", label: Qt.locale().toString(new Date(file.time), "d MMM yyyy") }] : []),
             current: Wallpapers.isCurrentWallpaperPath(file.path, root.selectionTarget, root.targetMonitor)
         }
     }
     readonly property var selectedEntry: {
-        void (root.onlineImages.length + root.libraryFiles.length + root.currentPath)
+        void (root.onlineImages.length + root.visibleFiles.length + root.currentPath)
         return root.entryFor(root.selectedIndex)
     }
     readonly property bool searching: root.online && Wallhaven.runningRequests > 0
@@ -327,7 +420,8 @@ PanelWindow {
         : root.pathMode ? "drive_file_move"
         : search.text.length > 0 ? "search_off"
         : root.libraryFolders.length > 0 ? "folder_open" : "hide_image"
-    readonly property string emptyText: root.online
+    readonly property string emptyText: root.online && !Network.online ? Network.offlineReason
+        : root.online
         ? (root.searching ? Translation.tr("Looking for wallpapers…") : (root.onlineMessage || Translation.tr("Nothing found")))
         : root.pathMode ? Translation.tr("Press Enter to open %1").arg(root.query)
         : search.text.length > 0 ? Translation.tr("No matches")
@@ -349,30 +443,7 @@ PanelWindow {
         else if (root.hoverKey === key) root.hoverKey = ""
     }
 
-    visible: root.morphOpen || surface.progress > 0
-    IrisOutputHold {
-        id: outputHold
-        wanted: {
-            const name = GlobalStates.wallpaperSelectorTargetMonitor
-            return (name ? Quickshell.screens.find(s => s.name === name) : null) ?? GlobalStates.focusedScreen
-        }
-        live: root.visible
-    }
-    screen: outputHold.output
-    color: "transparent"
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.namespace: "quickshell:iris-wallpaper"
-    WlrLayershell.keyboardFocus: root.morphOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-    anchors { left: true; right: true; top: true; bottom: true }
-    margins {
-        left: IrisFrame.band
-        right: IrisFrame.band
-        top: IrisFrame.band
-        bottom: IrisFrame.band
-    }
-    mask: root.morphOpen && surface.armed ? null : surfaceRegion
-    Region { id: surfaceRegion; item: surface }
+    visible: root.present
 
     property bool prepared: false
     function prepare(): void {
@@ -402,7 +473,7 @@ PanelWindow {
     }
     function selectCurrent(): void {
         const current = FileUtils.trimFileProtocol(String(root.currentPath ?? ""))
-        const index = root.libraryFiles.findIndex(entry => entry.path === current)
+        const index = (root.visibleFiles ?? []).findIndex(entry => entry.path === current)
         if (index >= 0) {
             root.selectedIndex = index
             Qt.callLater(() => grid.positionViewAtIndex(index, GridView.Contain))
@@ -433,7 +504,7 @@ PanelWindow {
         grid.contentX = 0
         if (root.online) {
             AnimeService.fetchTopAiring()
-            if (wanted.length > 0 || root.onlineImages.length === 0) root.searchOnline(1, true)
+            root.searchOnline(1, true)
         }
     }
     function takeRequest(): void {
@@ -442,31 +513,54 @@ PanelWindow {
         if (requested.length === 0) return
         GlobalStates.wallpaperSelectorSource = ""
         GlobalStates.wallpaperSelectorQuery = ""
-        const next = requested !== "library" && !root.onlineEnabled ? "library" : requested
+        const next = requested !== "library" && !root.offered(requested) ? "library" : requested
+        const wantedSeries = GlobalStates.wallpaperSelectorSeries
+        if (wantedSeries !== null) {
+            GlobalStates.wallpaperSelectorSeries = null
+            if (next !== "library") { root.setSource(next, ""); root.pickSeries(wantedSeries); return }
+        }
         if (next === "library" && /^[~\/]/.test(text)) { root.setSource(next, ""); root.jumpTo(text); return }
         root.setSource(next, text)
     }
     Connections {
         target: GlobalStates
         function onWallpaperSelectorSourceChanged(): void { if (root.morphOpen) root.takeRequest() }
+        function onWallpaperSelectorKindChanged(): void {
+            const wanted = GlobalStates.wallpaperSelectorKind
+            if (wanted.length === 0) return
+            GlobalStates.wallpaperSelectorKind = ""
+            root.kind = wanted
+            root.selectedIndex = 0
+        }
     }
+    onKindChanged: GlobalStates.wallpaperSelectorKindActive = root.kind
     function cycleSource(step: int): void {
-        const ids = root.sources.map(entry => entry.id).filter(id => id === "library" || root.onlineEnabled)
+        const ids = root.sources.map(entry => entry.id)
         const at = Math.max(0, ids.indexOf(root.source))
         root.setSource(ids[(at + step + ids.length) % ids.length], "")
     }
     function searchOnline(page: int, replace: bool): void {
+        if (!Network.online) return
         const option = root.discoveries[root.discovery] ?? root.discoveries[0]
         const live = root.provider === "motionbgs"
+        const booru = root.provider === "konachan" || root.provider === "yandere"
         const tags = root.series !== null ? (root.seriesQueries[root.seriesAttempt] ?? [])
-            : root.query.length > 0 ? (live ? [root.query] : root.query.split(/\s+/))
+            : root.query.length > 0 ? (live ? [root.query] : booru ? root.query.toLowerCase().split(/\s+/).filter(Boolean) : root.query.split(/\s+/))
             : option.tags
+        const asked = root.provider === "wallhaven" && !root.suggestive ? tags.concat(root.wallhavenExclusions) : tags
         if (replace) { Wallhaven.beginSearch(); root.selectedIndex = 0; grid.contentX = 0 }
         const screen = root.screen
-        Wallhaven.makeRequest(tags, false, live ? 36 : (Config.options?.sidebar?.wallhaven?.limit ?? 24), page,
+        Wallhaven.makeRequest(asked, false, live ? 36 : (Config.options?.sidebar?.wallhaven?.limit ?? 24), page,
             live ? "111" : option.category, undefined, root.provider,
             live ? { mode: "any" }
-                : { mode: "auto", width: screen?.width ?? 1920, height: screen?.height ?? 1080, ratioCode: "", aspect: (screen?.width ?? 16) / Math.max(1, screen?.height ?? 9) })
+                : { mode: "auto", width: screen?.width ?? 1920, height: screen?.height ?? 1080, ratioCode: "", aspect: (screen?.width ?? 16) / Math.max(1, screen?.height ?? 9) },
+            live ? undefined : root.onlineSorting)
+    }
+    Connections {
+        target: Network
+        function onOnlineChanged(): void {
+            if (Network.online && root.morphOpen && root.online && root.onlineImages.length === 0) root.searchOnline(1, true)
+        }
     }
     Timer { id: onlineSearchDelay; interval: 450; onTriggered: { root.series = null; root.searchOnline(1, true) } }
 
@@ -521,9 +615,10 @@ PanelWindow {
         if (!image || !image.file_url || download.running) return
         const folder = Directories.booruDownloads
         const live = image.is_video === true
-        const sharp = live && String(image.file_url_4k ?? "").length > 0 && (root.screen?.width ?? 1920) > 1920
-        const name = live ? "motionbgs-" + String(image.slug ?? image.id) + ".mp4"
-            : "wallhaven-" + image.id + (image.file_ext ? "." + image.file_ext : "")
+        const sharp = live && String(image.file_url_4k ?? "").length > 0
+            && String(Config.options?.iris?.wallpaper?.liveQuality ?? "best") !== "light"
+        const name = live ? "motionbgs-" + String(image.slug ?? image.id) + (sharp ? "-4k" : "") + ".mp4"
+            : root.provider + "-" + image.id + (image.file_ext ? "." + image.file_ext : "")
         download.localPath = folder + "/" + name
         root.downloadingId = String(image.id)
         download.total = 0
@@ -569,7 +664,12 @@ PanelWindow {
         grid.positionViewAtIndex(root.selectedIndex, GridView.Contain)
     }
 
-    MouseArea { anchors.fill: parent; onClicked: GlobalStates.wallpaperSelectorOpen = false }
+    MouseArea {
+        anchors.fill: parent
+        anchors.margins: -IrisFrame.band
+        enabled: root.armed
+        onClicked: GlobalStates.wallpaperSelectorOpen = false
+    }
     Shortcut {
         sequence: "Escape"
         enabled: root.morphOpen
@@ -582,40 +682,6 @@ PanelWindow {
     Shortcut { sequence: "Alt+Right"; enabled: root.morphOpen && !root.online && root.canGoForward; onActivated: Wallpapers.navigateForward() }
     Shortcut { sequence: "Alt+Up"; enabled: root.morphOpen && !root.online; onActivated: Wallpapers.navigateUp() }
 
-    component GlyphButton: IrisButton {
-        id: glyphButton
-        property string glyph: ""
-        quiet: true
-        implicitWidth: Math.round(34 * root.d)
-        implicitHeight: implicitWidth
-        buttonRadius: height / 2
-        buttonRadiusPressed: height / 2
-        colBackground: IrisStyle.fillQuiet
-        colBackgroundHover: IrisStyle.fillHover
-        MaterialSymbol {
-            anchors.centerIn: parent
-            text: glyphButton.glyph
-            fill: 1
-            iconSize: Math.round(17 * root.d)
-            color: !glyphButton.enabled ? IrisStyle.muted : glyphButton.selected ? IrisStyle.accent : IrisStyle.text
-        }
-    }
-
-    component KeyCap: Rectangle {
-        property string label: ""
-        implicitWidth: Math.max(implicitHeight, capText.implicitWidth + 10 * root.d)
-        implicitHeight: Math.round(18 * root.d)
-        radius: IrisStyle.radiusChip
-        color: IrisStyle.fill
-        IrisText {
-            id: capText
-            anchors.centerIn: parent
-            text: parent.label
-            color: IrisStyle.subtext
-            font.pixelSize: 10.5 * IrisStyle.typeScale
-            font.weight: Font.DemiBold
-        }
-    }
 
     RectangularShadow {
         x: surface.x + surface.lerp(surface.from.x, 0)
@@ -631,8 +697,11 @@ PanelWindow {
 
     IrisMorphSurface {
         motionSurface: "gallery"
-        windowOffset: Qt.point(IrisFrame.band, IrisFrame.band)
+        settles: true
+        fieldBacked: true
+        chassisKey: "gallery"
         id: surface
+        compositorBlurred: true
         open: root.morphOpen
         radius: IrisStyle.surfaceRadius("gallery", IrisStyle.radiusPanel)
         light: IrisStyle.surfaceLight("gallery", IrisStyle.wallpaperLight)
@@ -643,19 +712,10 @@ PanelWindow {
         width: Math.min(root.width - 48, Math.round(Math.max(640, Math.min(1400, root.options?.width ?? 960)) * root.d))
         height: layout.implicitHeight + 2 * surface.pad
         x: Math.round((root.width - width) / 2)
-        y: root.barBottom ? root.height - height - edgeGap : edgeGap
+        y: root.barBottom ? root.height - height - edgeGap - IrisFrame.musicReach("bottom")
+            : edgeGap + IrisFrame.musicReach("top")
         onClosed: { Wallpapers.searchQuery = ""; search.text = ""; root.motionKey = "" }
         onSettledChanged: if (surface.settled && surface.open) search.forceActiveFocus()
-
-        Rectangle {
-            z: 100
-            opacity: Math.max(0, (surface.progress - 0.85) / 0.15)
-            anchors.fill: parent
-            radius: surface.radius
-            color: "transparent"
-            border.width: 1
-            border.color: IrisStyle.border
-        }
 
         MouseArea { anchors.fill: parent }
 
@@ -671,14 +731,14 @@ PanelWindow {
                 Layout.fillWidth: true
                 spacing: Math.round(6 * root.d)
 
-                GlyphButton {
+                WallpaperGlyphButton {
                     visible: !root.online
                     glyph: "chevron_left"
                     enabled: root.canGoBack
                     Accessible.name: Translation.tr("Back")
                     onClicked: Wallpapers.navigateBack()
                 }
-                GlyphButton {
+                WallpaperGlyphButton {
                     visible: !root.online
                     glyph: "chevron_right"
                     enabled: root.canGoForward
@@ -730,7 +790,7 @@ PanelWindow {
                                         anchors.fill: parent
                                         radius: height / 2
                                         color: (crumb.last ? IrisStyle.fill : crumbArea.containsMouse ? IrisStyle.fillQuiet : ColorUtils.applyAlpha(IrisStyle.text, 0))
-                                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+                                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                                     }
                                     Row {
                                         id: crumbContent
@@ -747,9 +807,11 @@ PanelWindow {
                                         IrisText {
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: crumb.modelData.label
+                                            width: Math.min(implicitWidth, Math.round((crumb.last ? 240 : 140) * root.d))
+                                            elide: Text.ElideMiddle
                                             color: crumb.last ? IrisStyle.text : IrisStyle.subtext
-                                            font.pixelSize: (crumb.last ? 13.5 : 12.5) * IrisStyle.typeScale
-                                            font.weight: crumb.last ? Font.DemiBold : Font.Medium
+                                            font.pixelSize: crumb.last ? IrisStyle.typeLabel : IrisStyle.typeMeta
+                                            font.weight: IrisStyle.weight(crumb.last ? Font.DemiBold : Font.Medium)
                                         }
                                         IrisText {
                                             visible: crumb.last
@@ -758,8 +820,8 @@ PanelWindow {
                                             color: IrisStyle.secondaryAccent
                                             font.family: IrisStyle.fontNumbers
                                             font.features: ({ "tnum": 1 })
-                                            font.pixelSize: 12 * IrisStyle.typeScale
-                                            font.weight: Font.Bold
+                                            font.pixelSize: IrisStyle.typeMeta
+                                            font.weight: IrisStyle.weight(Font.Bold)
                                         }
                                     }
                                 }
@@ -771,12 +833,13 @@ PanelWindow {
                     visible: root.online
                     Layout.fillWidth: true
                     Layout.leftMargin: Math.round(4 * root.d)
-                    text: root.source === "live" ? Translation.tr("Live wallpapers") : Translation.tr("Discover on Wallhaven")
-                    font.pixelSize: 13.5 * IrisStyle.typeScale
-                    font.weight: Font.DemiBold
+                    text: root.source === "live" ? Translation.tr("Live wallpapers")
+                        : Translation.tr("Discover on %1").arg(root.sources.find(entry => entry.id === root.source)?.label ?? "Wallhaven")
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.DemiBold)
                     elide: Text.ElideRight
                 }
-                GlyphButton {
+                WallpaperGlyphButton {
                     visible: !root.online
                     glyph: "push_pin"
                     selected: root.pinned
@@ -784,61 +847,15 @@ PanelWindow {
                     onClicked: root.togglePin()
                 }
 
-                Rectangle {
+                IrisSegmented {
                     id: sourceSwitch
-                    visible: root.onlineEnabled
-                    readonly property int at: Math.max(0, root.sources.findIndex(entry => entry.id === root.source))
-                    readonly property real slot: (width - 6) / root.sources.length
-                    Layout.preferredWidth: Math.round(318 * root.d)
+                    visible: root.sources.length > 1
+                    Layout.preferredWidth: Math.round(84 * root.d) * root.sources.length + 2 * sourceSwitch.inset
                     Layout.preferredHeight: Math.round(34 * root.d)
-                    radius: height / 2
-                    color: IrisStyle.fillQuiet
-                    Rectangle {
-                        x: 3 + sourceSwitch.at * sourceSwitch.slot
-                        y: 3
-                        width: sourceSwitch.slot
-                        height: parent.height - 6
-                        radius: height / 2
-                        color: IrisStyle.fillHover
-                        Behavior on x { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
-                    }
-                    Row {
-                        x: 3
-                        height: parent.height
-                        Repeater {
-                            model: root.sources
-                            MouseArea {
-                                id: sourceOption
-                                required property var modelData
-                                readonly property bool active: sourceOption.modelData.id === root.source
-                                width: sourceSwitch.slot
-                                height: sourceSwitch.height
-                                cursorShape: Qt.PointingHandCursor
-                                Accessible.role: Accessible.RadioButton
-                                Accessible.name: sourceOption.modelData.label
-                                Accessible.checked: sourceOption.active
-                                onClicked: root.setSource(sourceOption.modelData.id, "")
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 5 * root.d
-                                    MaterialSymbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: sourceOption.modelData.glyph
-                                        fill: sourceOption.active ? 1 : 0
-                                        iconSize: Math.round(15 * root.d)
-                                        color: sourceOption.active ? IrisStyle.accent : IrisStyle.subtext
-                                    }
-                                    IrisText {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: sourceOption.modelData.label
-                                        color: sourceOption.active ? IrisStyle.text : IrisStyle.subtext
-                                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                                        font.weight: sourceOption.active ? Font.DemiBold : Font.Medium
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    accessibleName: Translation.tr("Source")
+                    options: root.sources.map(entry => ({ value: entry.id, label: entry.label }))
+                    current: root.source
+                    onPicked: value => root.setSource(value, "")
                 }
             }
 
@@ -851,7 +868,7 @@ PanelWindow {
                     Layout.preferredHeight: Math.round(34 * root.d)
                     radius: height / 2
                     color: (search.activeFocus ? IrisStyle.fill : IrisStyle.fillQuiet)
-                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                     MaterialSymbol {
                         id: searchGlyph
                         anchors.left: parent.left
@@ -870,9 +887,9 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         color: IrisStyle.text
                         selectionColor: IrisStyle.accentContainer
-                        selectedTextColor: IrisStyle.onAccentContainer
+                        selectedTextColor: IrisStyle.inkOnAccentContainer
                         font.family: IrisStyle.fontMain
-                        font.pixelSize: 13 * IrisStyle.typeScale
+                        font.pixelSize: IrisStyle.typeLabel
                         clip: true
                         focus: true
                         onTextChanged: {
@@ -905,7 +922,7 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             visible: search.text.length === 0
                             text: root.source === "live" ? Translation.tr("Search live wallpapers")
-                                : root.online ? Translation.tr("Search Wallhaven")
+                                : root.online ? Translation.tr("Search %1").arg(root.sources.find(entry => entry.id === root.source)?.label ?? "Wallhaven")
                                 : Translation.tr("Search in %1, or type a path").arg(root.crumbs[root.crumbs.length - 1]?.label ?? "")
                             color: IrisStyle.muted
                             font.pixelSize: search.font.pixelSize
@@ -920,29 +937,52 @@ PanelWindow {
                         text: Wallhaven.runningRequests > 0 && root.online ? Translation.tr("Loading…") : String(root.count)
                         color: IrisStyle.secondaryAccent
                         font.family: IrisStyle.fontNumbers
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                        font.weight: Font.Bold
+                        font.pixelSize: IrisStyle.typeLabel
+                        font.weight: IrisStyle.weight(Font.Bold)
                     }
                 }
 
-                GlyphButton {
-                    visible: !root.online
-                    glyph: root.livePreview ? "visibility" : "visibility_off"
-                    selected: root.livePreview
-                    Accessible.name: Translation.tr("Preview on the desktop")
-                    onClicked: Config.setNestedValue("iris.wallpaper.livePreview", !root.livePreview)
+                WallpaperKinds {
+                    id: kindFilter
+                    visible: !root.online && kindFilter.wanted
+                    picker: root
                 }
-                GlyphButton {
+                IrisSegmented {
+                    visible: !root.online || root.onlineSortable
+                    glyphOnly: true
+                    implicitHeight: Math.round(34 * root.d)
+                    accessibleName: Translation.tr("Order")
+                    options: root.online
+                        ? [{ value: "top", label: Translation.tr("Top"), glyph: "trending_up" },
+                            { value: "newest", label: Translation.tr("Newest"), glyph: "schedule" },
+                            { value: "random", label: Translation.tr("Random"), glyph: "shuffle" }]
+                        : [{ value: "newest", label: Translation.tr("Newest"), glyph: "schedule" },
+                            { value: "oldest", label: Translation.tr("Oldest"), glyph: "history" },
+                            { value: "name", label: Translation.tr("Name"), glyph: "sort_by_alpha" }]
+                    current: root.online ? root.onlineOrder : root.sortOrder
+                    onPicked: value => root.setOrder(value)
+                }
+                IrisSegmented {
+                    visible: root.onlineSortable && root.onlineOrder === "top"
+                    Layout.preferredWidth: Math.round(58 * root.d) * 4 + 2 * inset
+                    Layout.preferredHeight: Math.round(34 * root.d)
+                    accessibleName: Translation.tr("Top of the")
+                    options: [{ value: "1d", label: Translation.tr("Day") }, { value: "1w", label: Translation.tr("Week") },
+                        { value: "1M", label: Translation.tr("Month") }, { value: "1y", label: Translation.tr("Year") }]
+                    current: root.topRange
+                    onPicked: value => Config.setNestedValue("iris.wallpaper.topRange", value)
+                }
+                WallpaperGlyphButton {
                     visible: !root.online
                     glyph: "shuffle"
                     enabled: root.libraryCount > 0
                     Accessible.name: Translation.tr("Random wallpaper")
                     onClicked: {
-                        const pick = root.libraryFiles[Math.floor(Math.random() * root.libraryFiles.length)]
+                        const pick = root.visibleFiles[Math.floor(Math.random() * root.visibleFiles.length)]
                         if (pick) root.apply(pick.path, false)
                     }
                 }
-                GlyphButton {
+                WallpaperGlyphButton {
                     visible: root.online
                     glyph: "refresh"
                     Accessible.name: Translation.tr("Refresh")
@@ -980,7 +1020,7 @@ PanelWindow {
             ScriptModel {
                 id: libraryModel
                 objectProp: "path"
-                values: root.libraryFiles
+                values: root.visibleFiles
             }
             GridView {
                 id: grid
@@ -1029,7 +1069,8 @@ PanelWindow {
                     imageUrl: root.online ? String(slot.image?.preview_url ?? "") : ""
                     video: root.online ? slot.liveImage : Wallpapers.isVideoFile(slot.path)
                     motionSource: !slot.video ? "" : root.online ? String(slot.image?.motion_url ?? "") : slot.path
-                    quality: slot.liveImage ? String(slot.image?.quality ?? "") : ""
+                    quality: !slot.liveImage ? ""
+                        : String(Config.options?.iris?.wallpaper?.liveQuality ?? "best") === "light" ? "HD" : String(slot.image?.quality ?? "")
                     label: root.online
                         ? (slot.liveImage ? String(slot.image?.title ?? "") : (slot.image ? slot.image.width + " × " + slot.image.height : ""))
                         : String(slot.modelData?.name ?? "").replace(/\.[^.]+$/, "")
@@ -1047,12 +1088,6 @@ PanelWindow {
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 1
-                color: IrisStyle.hairline
-            }
-
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10 * root.d
@@ -1064,92 +1099,32 @@ PanelWindow {
                         visible: root.downloadingId.length > 0
                         text: download.progress > 0 ? Translation.tr("Downloading… %1%").arg(Math.round(download.progress * 100))
                             : Translation.tr("Downloading…")
-                        font.pixelSize: 13.5 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeLabel
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                     }
                     IrisText {
                         Layout.fillWidth: true
                         text: root.online ? (root.selectedImage ? (root.selectedImage.is_video === true
                                 ? Translation.tr("Plays on your desktop · saved to your wallpapers")
-                                : root.selectedImage.width + " × " + root.selectedImage.height + " · " + Translation.tr("saved to your wallpapers")) : "")
+                                : Translation.tr("Saved to your wallpapers")) : "")
                             : root.pathMode ? Translation.tr("Press Enter to open %1").arg(root.query)
                             : root.targetsOverview ? Translation.tr("Sets the wallpaper behind the overview")
                             : Wallpapers.thumbnailGenerationRunning ? Translation.tr("Preparing previews…")
                             : root.livePreview && root.previewArmed && !(root.selectedEntry?.video ?? false) ? Translation.tr("Previewing on the desktop")
-                            : Translation.tr("Double-click or press Enter to apply")
+                            : ""
                         color: root.downloadingId.length === 0 ? IrisStyle.subtext : IrisStyle.muted
-                        font.pixelSize: 12 * IrisStyle.typeScale
+                        font.pixelSize: IrisStyle.typeMeta
                         elide: Text.ElideRight
                     }
                 }
-                Rectangle {
-                    id: targetSwitch
+                IrisSegmented {
                     visible: root.overviewTargetable
-                    readonly property real slot: Math.max(desktopMetrics.advanceWidth, overviewMetrics.advanceWidth)
-                        + Math.round((14 + 5 + 24) * root.d)
-                    implicitHeight: Math.round(30 * root.d)
-                    implicitWidth: targetSwitch.slot * 2 + 6
-                    radius: height / 2
-                    color: IrisStyle.fillQuiet
-                    Rectangle {
-                        x: 3 + (root.targetsOverview ? targetSwitch.slot : 0)
-                        y: 3
-                        width: targetSwitch.slot
-                        height: parent.height - 6
-                        radius: height / 2
-                        color: IrisStyle.fillHover
-                        Behavior on x { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
-                    }
-                    Repeater {
-                        model: [
-                            { overview: false, label: Translation.tr("Desktop"), glyph: "wallpaper" },
-                            { overview: true, label: Translation.tr("Overview"), glyph: "grid_view" }
-                        ]
-                        MouseArea {
-                            id: targetOption
-                            required property var modelData
-                            required property int index
-                            readonly property bool active: targetOption.modelData.overview === root.targetsOverview
-                            x: 3 + targetOption.index * targetSwitch.slot
-                            width: targetSwitch.slot
-                            height: targetSwitch.height
-                            cursorShape: Qt.PointingHandCursor
-                            Accessible.role: Accessible.RadioButton
-                            Accessible.name: targetOption.modelData.label
-                            Accessible.checked: targetOption.active
-                            onClicked: root.targetOverview(targetOption.modelData.overview)
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: Math.round(5 * root.d)
-                                MaterialSymbol {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: targetOption.modelData.glyph
-                                    fill: targetOption.active ? 1 : 0
-                                    iconSize: Math.round(14 * root.d)
-                                    color: targetOption.active ? IrisStyle.accent : IrisStyle.subtext
-                                }
-                                IrisText {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    text: targetOption.modelData.label
-                                    color: targetOption.active ? IrisStyle.text : IrisStyle.subtext
-                                    font.pixelSize: 11.5 * IrisStyle.typeScale
-                                    font.weight: targetOption.active ? Font.DemiBold : Font.Medium
-                                }
-                            }
-                        }
-                    }
-                    TextMetrics {
-                        id: desktopMetrics
-                        font.family: IrisStyle.fontMain
-                        font.pixelSize: 11.5 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
-                        text: Translation.tr("Desktop")
-                    }
-                    TextMetrics {
-                        id: overviewMetrics
-                        font: desktopMetrics.font
-                        text: Translation.tr("Overview")
-                    }
+                    Layout.preferredWidth: Math.round(96 * root.d) * 2 + 2 * inset
+                    Layout.preferredHeight: Math.round(32 * root.d)
+                    accessibleName: Translation.tr("Apply to")
+                    options: [{ value: "main", label: Translation.tr("Desktop") }, { value: "backdrop", label: Translation.tr("Overview") }]
+                    current: root.targetsOverview ? "backdrop" : "main"
+                    onPicked: value => root.targetOverview(value === "backdrop")
                 }
                 Rectangle {
                     visible: root.multiMonitor
@@ -1171,11 +1146,10 @@ PanelWindow {
                             anchors.verticalCenter: parent.verticalCenter
                             text: root.targetMonitor || Translation.tr("All displays")
                             color: IrisStyle.subtext
-                            font.pixelSize: 11.5 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeMeta
                         }
                     }
                 }
-                KeyCap { label: "Esc"; Layout.leftMargin: 2 * root.d }
                 IrisButton {
                     implicitHeight: Math.round(36 * root.d)
                     implicitWidth: Math.round(88 * root.d)

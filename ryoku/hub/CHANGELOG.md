@@ -2,6 +2,30 @@
 
 
 ### Added
+- **A rice now saves everything visual.** The capture grew the stores the
+  desktop gained since rices were written: the plugin roster (every plugin
+  widget's placement and per-widget settings), the widget stage (depth,
+  shadow, motion), the matugen palette engine, the Profile plate's decor (a
+  custom hero travels as a bundled image), and the picker's whole look
+  (transitions, overview backdrop, launch animation, filter style) instead of
+  only its matugen scheme. The window look allowlist now spans both
+  compositors' keys, so a niri box's frame, border gradient, backdrop and
+  overview shadow travel the way Hyprland's rounding and gaps always did.
+  Export no longer refuses a destination that does not exist yet, or a path
+  typed with a leading `~` (`backend/rice.go`).
+- **Recording settings follow GPU Screen Recorder.** The Recording page now
+  writes through the shell daemon (`ryoku-shell record settings`) instead of
+  owning the file, and carries the recorder's full surface: bitrate mode and
+  target, container, audio codec and bitrate, color range, keyframe interval,
+  and an output resolution cap. The under-the-hood readout names GPU Screen
+  Recorder with its version; the dead pick-each-time switch is gone
+  (`quickshell/pages/RecordingPage.qml`, `quickshell/schema/RecordingPage.js`).
+- **The Displays page saves resolution presets.** A hand-typed custom
+  resolution is typed once: SAVE stores the selected display's mode and
+  scale under a name, and the Resolution list offers it as a first-class
+  pick alongside the advertised modes. Picking one stages mode and scale
+  into the draft; Apply stays the only path that touches the displays
+  (`quickshell/pages/DisplaysPage.qml`, `backend/outputs.go`).
 - **Bar Studio switches iRiS between its Ryoku and iNiR looks.** The iRiS
   card has a Look control that flips the live frame (`pages/BarStudioPage.qml`).
 - **The Visualizer tab edits the new edge field.** The Desktop page's
@@ -87,6 +111,14 @@
   `pages/PerformancePage.qml`).
 
 ### Changed
+- **Desktop > Visualizer is gone.** The subtab's last three rows (enable, the
+  look gallery, Place on the desktop) only duplicated controls the desktop
+  already carries, so the tab is removed. The visualiser is configured in one
+  place now: the gear drawer in the desktop's placement bar, where the look is
+  visible while you tune it. The Hub no longer reads or writes `visualizer.json`;
+  the shell owns that file (`quickshell/schema/DesktopPage.js`,
+  `quickshell/Hub.qml`, `quickshell/pages/DesktopPage.qml`; removed
+  `quickshell/VizPreview.qml`).
 - **Ryoku Settings is a full-page window.** It opens at 99% of the screen (the
   Hyprland rule floats it at the same 99% and centres it; niri sizes the column),
   so the settings get the room the layout is designed for instead of a 1200px
@@ -113,11 +145,6 @@
   `docs/ui-ux.md`, "The retired poster layer").
 
 ### Added
-- **Displays can choose their own bar style and Chroma modules.** The connector
-  card follows the global Bar Studio choice by default, can select any installed
-  style, and exposes Chroma's module switches when that style is active. Bar
-  Studio now also tunes Chroma's edge, gap, radius, opacity, workspace labels
-  and clock (`quickshell/pages/{Displays,BarStudio}Page.qml`).
 - **"Bar drifts when silent" on the Performance page.** Opts the bar's gap
   stream into drifting on Balanced and Saver when nothing plays, not only on the
   Performance profile. Off by default (`quickshell/pages/PerformancePage.qml`).

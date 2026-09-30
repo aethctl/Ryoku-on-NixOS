@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,16 +27,28 @@ import (
 // toggle from the keybind, the script, the Hub, or a kill all reach QML without
 // anything polling. Toggling from QML rides the same script: an intent is a user
 // action, not a poll, and the script stays the single writer of the temp file.
+// The marker is the user's declared intent, so a hotplug that quietly takes the
+// warm gamma away from the running backend (dock/undock, lid, VT resume: the
+// compositor forgets which client owns each output's colour, and the client is
+// never told) is healed without asking the user: the daemon re-runs the on
+// intent, whose kill-then-spawn claims every present output again
+// (rearmOnOutputs).
 
 const nlDefaultTemp = 4000
+
+// nlRearmGrace is how long the connector set must hold still before the
+// hotplug re-claim fires: a docking sequence renegotiates outputs repeatedly,
+// and each move pushes the re-claim back so only the settled set is claimed.
+// A var so the hotplug tests shorten the wait instead of sitting through it.
+var nlRearmGrace = 4 * time.Second
 
 // errNightlightUnavailable is what the intents return when the active compositor
 // has no night-light capability, so the caller reports the absence by name.
 var errNightlightUnavailable = errors.New("night light is not available on this desktop")
 
 // errNightlightSchedule rejects an unknown schedule mode by name so a UI bug
-// cannot silently disable the follow-the-sun window.
-var errNightlightSchedule = errors.New("night light schedule mode must be off or sun")
+// cannot silently disable the schedule the user picked.
+var errNightlightSchedule = errors.New("night light schedule mode must be off, sun or clock")
 
 type nightlightState struct {
 	topic    *stateTopic
@@ -49,15 +62,31 @@ type nightlightState struct {
 	mu      sync.Mutex
 	process string
 
-	// schedMu guards the schedule: mode ("off" | "sun") and the margin in
-	// minutes applied around each sunrise/sunset edge. schedLastDesire is the
-	// last state the schedule asked for, so a manual toggle is honoured until
-	// the next edge instead of being fought every tick.
+	// schedMu guards the schedule: mode ("off" | "sun" | "clock"), the margin
+	// in minutes applied around each sunrise/sunset edge, and the clock
+	// window's start/stop minutes from midnight (used only by the clock mode).
+	// schedLastDesire is the last state the schedule asked for, so a manual
+	// toggle is honoured until the next edge instead of being fought every
+	// tick.
 	schedMu         sync.Mutex
 	schedMode       string
 	schedMarginMin  int
+	schedStartMin   int
+	schedStopMin    int
 	schedFile       string
 	schedLastDesire bool
+
+	// rearmMu guards the hotplug bookkeeping: outputsSeen says the wm watcher
+	// has reported a connector set at least once (the first set only primes, it
+	// is not a hotplug), outputsSig is that set (the enabled output names, so
+	// docking moves it while focus and workspace frames leave it alone), and
+	// healTimer is the single pending re-claim: a docking sequence keeps moving
+	// the set and keeps pushing the re-claim back, so only a settled set is
+	// claimed.
+	rearmMu     sync.Mutex
+	outputsSeen bool
+	outputsSig  string
+	healTimer   *time.Timer
 }
 
 // nightlightPaths derives the script's state files from XDG_STATE_HOME. The
@@ -89,7 +118,10 @@ func (d *daemon) startNightlight() {
 		schedFile:      filepath.Join(dir, "ryoku-nightlight-schedule.json"),
 		schedMode:      nlSchedOff,
 		schedMarginMin: nlDefaultMarginMin,
+		schedStartMin:  nlDefaultClockStart,
+		schedStopMin:   nlDefaultClockStop,
 	}
+	d.nightlight = n
 	n.loadSchedule()
 
 	d.registerCall("nightlight.toggle", func(json.RawMessage) (any, error) {
@@ -101,15 +133,24 @@ func (d *daemon) startNightlight() {
 			Temperature int     `json:"temperature"`
 			Schedule    *string `json:"schedule"`
 			MarginMin   *int    `json:"marginMin"`
+			StartAt     *int    `json:"startAt"`
+			StopAt      *int    `json:"stopAt"`
 		}
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, err
 		}
 		// The schedule and the manual toggle are independent writes: a UI that
 		// only flips on/off never sends schedule fields, and setting the
-		// schedule never overrides the user's current on/off choice.
-		if a.Schedule != nil {
-			if err := n.setSchedule(*a.Schedule, a.MarginMin); err != nil {
+		// schedule never overrides the user's current on/off choice. The
+		// schedule field may ride along with a time edit (the Hub sends the
+		// live mode with every clock change) or be absent (a plain margin
+		// update), so the bounds are applied through the same call.
+		if a.Schedule != nil || a.StartAt != nil || a.StopAt != nil {
+			mode := n.scheduleMode()
+			if a.Schedule != nil {
+				mode = *a.Schedule
+			}
+			if err := n.setSchedule(mode, a.MarginMin, a.StartAt, a.StopAt); err != nil {
 				return nil, err
 			}
 			n.tickSchedule()
@@ -190,6 +231,63 @@ func (n *nightlightState) run(args ...string) error {
 		log.Printf("ryoku-shell: nightlight %v: %v: %s", args, err, strings.TrimSpace(string(out)))
 	}
 	return err
+}
+
+// rearmOnOutputs is the hotplug hook the daemon's wm frame pump calls for
+// every output frame. The marker is the user's declared intent: while it is
+// set, a connector set that MOVES (dock, undock, lid, a VT resume that
+// re-enumerates) re-claims the gamma, because a compositor that reprograms
+// its outputs during hotplug drops the running backend's claim on them
+// without telling it, and the client cannot know to re-assert. A settled
+// set that never moved is untouched, so normal frames (focus, workspace,
+// activity) never churn the backend. The re-claim is debounced on the set
+// holding still for nlRearmGrace: docking renegotiates repeatedly, and only
+// the settled sequence pays one respawn. The script restarts the backend
+// (kill-then-spawn), which binds a control for every output present now;
+// outputs wlsunset sees without an event also re-bind on their own.
+func (n *nightlightState) rearmOnOutputs(outputs []wm.Output) {
+	sig := outputSetSig(outputs)
+	n.rearmMu.Lock()
+	changed := n.outputsSeen && sig != n.outputsSig
+	n.outputsSeen, n.outputsSig = true, sig
+	n.rearmMu.Unlock()
+	if !changed || !n.markerEnabled() {
+		return
+	}
+	log.Printf("ryoku-shell: night light: connector set changed, re-claiming the warm gamma")
+	n.rearmMu.Lock()
+	if n.healTimer != nil {
+		n.healTimer.Stop()
+	}
+	n.healTimer = time.AfterFunc(nlRearmGrace, n.healNow)
+	n.rearmMu.Unlock()
+}
+
+// healNow is the debounced re-claim: re-run the on intent if the user's
+// marker is still set. The intent is idempotent by design: the script writes
+// the same files and the provider replaces the backend, so a heal is
+// indistinguishable from the user pressing the same toggle on.
+func (n *nightlightState) healNow() {
+	if !n.markerEnabled() {
+		return
+	}
+	if err := n.intent("on"); err != nil && !errors.Is(err, errNightlightUnavailable) {
+		log.Printf("ryoku-shell: night light: hotplug re-claim failed: %v", err)
+	}
+}
+
+// outputSetSig names the enabled connector set: one token per enabled output
+// name. Names only: mode, scale, position and focus churn constantly and prove
+// nothing about which client owns the gamma.
+func outputSetSig(outputs []wm.Output) string {
+	names := make([]string, 0, len(outputs))
+	for _, o := range outputs {
+		if !o.Disabled {
+			names = append(names, o.Name)
+		}
+	}
+	sort.Strings(names)
+	return strings.Join(names, ",")
 }
 
 // watch publishes the current state once, then blocks in poll(2) on an inotify
@@ -296,13 +394,15 @@ func (n *nightlightState) publish(on bool) {
 		return
 	}
 	n.schedMu.Lock()
-	margin := n.schedMarginMin
+	margin, start, stop := n.schedMarginMin, n.schedStartMin, n.schedStopMin
 	n.schedMu.Unlock()
 	frame, err := json.Marshal(map[string]any{
 		"on":          on,
 		"temperature": n.savedTemp(),
 		"schedule":    n.scheduleMode(),
 		"marginMin":   margin,
+		"startAt":     start,
+		"stopAt":      stop,
 	})
 	if err != nil {
 		return
@@ -349,25 +449,13 @@ func (n *nightlightState) running() bool {
 // is not a numeric process directory, so the caller can hand it every /proc
 // entry. comm truncates at 15 characters; hyprsunset fits, so an exact compare
 // is right.
-
 func procCommIs(pid, name string) bool {
 	if _, err := strconv.Atoi(pid); err != nil {
 		return false
 	}
-
 	b, err := os.ReadFile("/proc/" + pid + "/comm")
-	if err == nil && strings.TrimSpace(string(b)) == name {
-		return true
-	}
-
-	// Nix wrappers can change comm to the hidden wrapped executable while
-	// preserving the public command in argv[0]. Treat either identity as the
-	// backend so state remains truthful on NixOS.
-	raw, err := os.ReadFile("/proc/" + pid + "/cmdline")
-	if err != nil || len(raw) == 0 {
+	if err != nil {
 		return false
 	}
-
-	argv0 := strings.SplitN(string(raw), "\x00", 2)[0]
-	return filepath.Base(argv0) == name
+	return strings.TrimSpace(string(b)) == name
 }

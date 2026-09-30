@@ -290,53 +290,42 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 8
-            GridLayout {
-                columns: 2
-                columnSpacing: 4
-                rowSpacing: 4
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.badgeStyle
                     model: [
-                        { value: "ticket", label: Translation.tr("Ticket") },
-                        { value: "stacked", label: Translation.tr("Stacked") },
-                        { value: "seal", label: Translation.tr("Seal") },
-                        { value: "instrument", label: Translation.tr("Instrument") }
+                        { value: "ticket", icon: "confirmation_number", label: Translation.tr("Ticket") },
+                        { value: "stacked", icon: "view_day", label: Translation.tr("Stacked") },
+                        { value: "seal", icon: "verified", label: Translation.tr("Seal") },
+                        { value: "instrument", icon: "avg_pace", label: Translation.tr("Instrument") }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        buttonText: modelData.label
-                        toggled: root.badgeStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                buttonText: Translation.tr("Show year")
-                toggled: root.showYear
-                onClicked: root._setOutputValue("showYear", !root.showYear)
-            }
-            GridLayout {
-                visible: root.instrument
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.fillWidth: true
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "event"
+                    label: Translation.tr("Year")
+                    checked: root.showYear
+                    onToggled: root._setOutputValue("showYear", !root.showYear)
+                }
                 Repeater {
-                    model: [
+                    model: root.instrument ? [
                         { label: Translation.tr("Weekday"), icon: "calendar_view_week", key: "showWeekday", fallback: true },
-                        { label: Translation.tr("Ordinal"), icon: "tag", key: "showOrdinal", fallback: true },
+                        { label: Translation.tr("Day of the year"), icon: "tag", key: "showOrdinal", fallback: true },
                         { label: Translation.tr("Marks"), icon: "crop_free", key: "instrumentMarks", fallback: true }
-                    ]
-                    WidgetChoiceButton {
+                    ] : []
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
             }

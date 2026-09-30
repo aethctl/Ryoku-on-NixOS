@@ -48,7 +48,7 @@ IrisWidgetFace {
                 Layout.fillWidth: true
                 Layout.preferredHeight: root.dp(4)
                 radius: height / 2
-                color: IrisStyle.fill
+                color: root.fill
                 Rectangle {
                     width: Math.max(parent.height, parent.width * root.yearShare)
                     height: parent.height

@@ -13,8 +13,8 @@ RippleButton {
     property bool quiet: false
     property bool emphasized: false
     property bool danger: false
-    readonly property color foreground: root.danger && root.emphasized ? IrisStyle.onDanger
-        : root.emphasized ? IrisStyle.onAccent
+    property color foreground: root.danger && root.emphasized ? IrisStyle.inkOnDanger
+        : root.emphasized ? IrisStyle.inkOnAccent
         : root.danger ? IrisStyle.danger
         : root.selected ? IrisStyle.accent : IrisStyle.text
 
@@ -35,16 +35,17 @@ RippleButton {
     colBackground: root.danger && root.emphasized ? IrisStyle.danger
         : root.emphasized ? IrisStyle.accent
         : root.quiet ? ColorUtils.applyAlpha(IrisStyle.surfaceHigh, 0)
-        : IrisStyle.surfaceHighOpaque
+        // The raised step of whatever the family is made of: solid on solid, a lit layer on glass.
+        : IrisStyle.surfaceHigh
     colBackgroundHover: root.danger && root.emphasized
-        ? ColorUtils.mix(IrisStyle.danger, IrisStyle.onDanger, 0.90)
+        ? ColorUtils.mix(IrisStyle.danger, IrisStyle.inkOnDanger, 0.90)
         : root.danger
             ? IrisStyle.tintFill(IrisStyle.danger)
         : root.emphasized
-            ? ColorUtils.mix(IrisStyle.accent, IrisStyle.onAccent, 0.90)
+            ? ColorUtils.mix(IrisStyle.accent, IrisStyle.inkOnAccent, 0.90)
             : root.quiet
                 ? IrisStyle.fillHover
-            : IrisStyle.surfaceHighestOpaque
+            : IrisStyle.surfaceHighest
     colBackgroundToggled: IrisStyle.tintFill(IrisStyle.accent)
     colBackgroundToggledHover: IrisStyle.tintFillHover(IrisStyle.accent)
     colRipple: IrisStyle.tintFill((root.danger ? IrisStyle.danger : IrisStyle.accent))
@@ -77,7 +78,7 @@ RippleButton {
             visible: root.text.length > 0
             text: root.text
             color: root.foreground
-            font.pixelSize: 13 * IrisStyle.typeScale
+            font.pixelSize: IrisStyle.typeLabel
             font.weight: root.emphasized || root.selected ? Font.DemiBold : Font.Medium
             horizontalAlignment: Text.AlignHCenter
         }

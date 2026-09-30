@@ -328,7 +328,6 @@ Item {
         })
     }
 
-    function _img(p) { return p ? (p.charAt(0) === "/" ? "file://" + p : p) : "" }
     function _refreshWallpaper() {
         Library.refreshOutputs()
         var outs = Library.outputs || []
@@ -891,7 +890,7 @@ Item {
                                     clip: true
                                     asynchronous: true
                                     cache: true
-                                    source: root._img(root._wpEntry ? root._wpEntry.thumb : "")
+                                    source: Library.fileUrl(root._wpEntry ? root._wpEntry.thumb : "")
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true

@@ -587,12 +587,16 @@ ShellRoot {
         });
     }
 
-    // Hand the region to the shell's recorder in logical compositor pixels
-    // (WxH+X+Y); the daemon owns wf-recorder and the floating island.
+    // Hand the region to the shell's recorder. GSR's -region takes physical global
+    // pixels; globalSel is in logical compositor coordinates, so scale it up by the
+    // anchor output's factor so this path agrees with the capture card. The daemon
+    // owns gpu-screen-recorder and the floating island.
     function doRecordRegion() {
         if (!globalSel) { Qt.quit(); return; }
         var g = globalSel;
-        var geo = Math.round(g.w) + "x" + Math.round(g.h) + "+" + Math.round(g.x) + "+" + Math.round(g.y);
+        var w = anchorOverlay();
+        var sc = (w && w.modelData && w.modelData.name) ? Wm.outputScale(w.modelData.name) : 1;
+        var geo = Math.round(g.w * sc) + "x" + Math.round(g.h * sc) + "+" + Math.round(g.x * sc) + "+" + Math.round(g.y * sc);
         var args = ["ryoku-shell", "record", "start", "--region", "--geometry", geo];
         if (root.recordAudio) args.push("--with-desktop-audio");
         root.exported = true;

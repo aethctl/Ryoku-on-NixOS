@@ -88,20 +88,23 @@ func (d *daemon) workshopSetProperty(req *request, p map[string]interface{}) res
 		return errResp(req.ID, 1, "invalid workshop id")
 	}
 	w := d.workshop
-	if v, has := p["fps"]; has {
+	name := strParam(p, "name", "")
+	switch v, hasFps := p["fps"]; {
+	case hasFps:
+		// A number pins this scene's rate; null returns it to the global rate.
 		if f, ok := v.(float64); ok {
 			w.props.setFps(weID, clampFps(int(f)))
-		}
-	} else {
-		name := strParam(p, "name", "")
-		if name == "" {
-			return errResp(req.ID, 1, "missing 'name' parameter")
-		}
-		if boolParam(p, "reset", false) {
-			w.props.resetValue(weID, name)
 		} else {
-			w.props.setValue(weID, name, p["value"])
+			w.props.setFps(weID, 0)
 		}
+	case boolParam(p, "reset", false) && name == "":
+		w.props.resetAll(weID)
+	case name == "":
+		return errResp(req.ID, 1, "missing 'name' parameter")
+	case boolParam(p, "reset", false):
+		w.props.resetValue(weID, name)
+	default:
+		w.props.setValue(weID, name, p["value"])
 	}
 	reapplied := w.reapplyIfCurrent(weID)
 	props, fps, globalFps := w.properties(weID)

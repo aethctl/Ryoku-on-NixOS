@@ -135,16 +135,16 @@ Variants {
                     event.accepted = true
                 }
 
-                Image {
+                IrisWallpaperView {
                     id: backdropImage
                     anchors.fill: parent
                     anchors.margins: -Math.round(64 * stage.d)
-                    visible: false
-                    source: WallpaperListener.wallpaperUrlForScreen(window.modelData)
-                    sourceSize: Qt.size(Math.max(1, Math.round(stage.width / 4)), Math.max(1, Math.round(stage.height / 4)))
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    cache: true
+                    // Hidden by opacity: a hidden subtree never renders a live wallpaper's frames into the texture.
+                    opacity: 0
+                    screen: window.modelData
+                    live: window.presentationShown
+                    provideTexture: true
+                    decodeSize: Qt.size(Math.max(1, Math.round(stage.width / 4)), Math.max(1, Math.round(stage.height / 4)))
                 }
                 Item {
                     anchors.fill: parent
@@ -154,8 +154,8 @@ Variants {
                     MultiEffect {
                         anchors.fill: parent
                         anchors.margins: -Math.round(64 * stage.d)
-                        visible: backdropImage.status === Image.Ready
-                        source: backdropImage
+                        visible: backdropImage.ready
+                        source: backdropImage.textureItem
                         blurEnabled: true
                         blur: 1
                         blurMax: 48
@@ -163,7 +163,7 @@ Variants {
                     }
                     Rectangle {
                         anchors.fill: parent
-                        color: backdropImage.status === Image.Ready ? IrisStyle.veil : IrisStyle.veilHeavy
+                        color: backdropImage.ready ? IrisStyle.veil : IrisStyle.veilHeavy
                     }
                 }
                 MouseArea {
@@ -190,7 +190,7 @@ Variants {
                         Layout.alignment: Qt.AlignHCenter
                         text: Qt.locale().toString(DateTime.clock.date, "dddd, d MMMM")
                         color: IrisStyle.textSecondary
-                        font.pixelSize: Math.round(15 * IrisStyle.typeScale)
+                        font.pixelSize: IrisStyle.typeHeadline
                     }
 
                     Row {
@@ -219,7 +219,7 @@ Variants {
                                         : pointer.containsMouse || action.focused ? IrisStyle.fillActive
                                         : IrisStyle.fill
                                     scale: pointer.pressed ? IrisStyle.pressScale(0.93) : 1
-                                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                                     Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
 
                                     Rectangle {
@@ -248,8 +248,8 @@ Variants {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     text: action.armed ? Translation.tr("Confirm") : action.modelData.label
                                     color: action.armed ? IrisStyle.danger : IrisStyle.text
-                                    font.pixelSize: Math.round(13 * IrisStyle.typeScale)
-                                    font.weight: Font.Medium
+                                    font.pixelSize: IrisStyle.typeLabel
+                                    font.weight: IrisStyle.weight(Font.Medium)
                                 }
                                 MouseArea {
                                     id: pointer
@@ -272,7 +272,7 @@ Variants {
                             ? Translation.tr("Press %1 again to continue").arg(stage.pendingAction.label)
                             : Translation.tr("Up %1").arg(DateTime.uptime)
                         color: stage.pendingAction ? IrisStyle.text : IrisStyle.textTertiary
-                        font.pixelSize: Math.round(12.5 * IrisStyle.typeScale)
+                        font.pixelSize: IrisStyle.typeLabel
                     }
                 }
             }

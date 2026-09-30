@@ -30,9 +30,9 @@ Singleton {
     }
 
     // ---- night light (reactive off the daemon nightlight topic) --------------
-    // The daemon watches hyprsunset and the state files, so the tile reflects a
-    // toggle from the keybind, the Hub, or the script itself. The intent rides
-    // the same daemon call, which runs the shipped script once.
+    // The daemon watches the provider's backend and the state files, so the
+    // tile reflects a toggle from the keybind, the Hub, or the script itself.
+    // The intent rides the same daemon call, which runs the shipped script once.
     readonly property bool nightOn: Nightlight.on
     function toggleNight() { Nightlight.toggle(); }
 

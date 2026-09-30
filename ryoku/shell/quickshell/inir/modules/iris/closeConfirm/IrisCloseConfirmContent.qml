@@ -75,8 +75,8 @@ Item {
                 Layout.topMargin: 14 * IrisStyle.density
                 horizontalAlignment: Text.AlignHCenter
                 text: Translation.tr("Close “%1”?").arg(root.appName)
-                font.pixelSize: 15 * IrisStyle.typeScale
-                font.weight: Font.DemiBold
+                font.pixelSize: IrisStyle.typeHeadline
+                font.weight: IrisStyle.weight(Font.DemiBold)
                 wrapMode: Text.Wrap
             }
             IrisText {
@@ -87,7 +87,7 @@ Item {
                     ? Translation.tr("“%1” will close. Unsaved changes may be lost.").arg(root.titleText)
                     : Translation.tr("Unsaved changes may be lost.")
                 color: IrisStyle.subtext
-                font.pixelSize: 12 * IrisStyle.typeScale
+                font.pixelSize: IrisStyle.typeMeta
                 wrapMode: Text.Wrap
                 maximumLineCount: 3
                 elide: Text.ElideRight

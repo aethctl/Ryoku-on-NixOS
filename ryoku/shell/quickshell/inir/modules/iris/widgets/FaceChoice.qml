@@ -40,7 +40,7 @@ Rectangle {
             text: root.label
             color: root.selected ? IrisStyle.text : IrisStyle.textSecondary
             font.family: IrisStyle.fontMain
-            font.pixelSize: 12.5 * IrisStyle.typeScale
+            font.pixelSize: IrisStyle.typeLabel
             font.weight: root.selected ? Font.DemiBold : Font.Medium
         }
     }

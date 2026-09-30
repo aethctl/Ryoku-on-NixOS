@@ -102,7 +102,7 @@ ColumnLayout {
                 color: IrisStyle.secondaryAccent
                 font.family: IrisStyle.fontNumbers
                 font.pixelSize: 19 * IrisStyle.typeScale
-                font.weight: Font.Bold
+                font.weight: IrisStyle.weight(Font.Bold)
                 font.features: ({ "tnum": 1 })
             }
             MaterialSymbol {
@@ -159,8 +159,8 @@ ColumnLayout {
             anchors.bottom: parent.bottom
             text: dial.caption
             color: IrisStyle.textSecondary
-            font.pixelSize: 11 * IrisStyle.typeScale
-            font.weight: Font.Medium
+            font.pixelSize: IrisStyle.typeFootnote
+            font.weight: IrisStyle.weight(Font.Medium)
         }
     }
 
@@ -259,7 +259,7 @@ ColumnLayout {
             clip: true
             opacity: custom.open ? 1 : 0
             Behavior on implicitHeight { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
-            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(140) } }
+            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(140); easing.type: IrisStyle.feedbackEasing } }
             IrisWheelPicker {
                 id: picker
                 anchors.horizontalCenter: parent.horizontalCenter

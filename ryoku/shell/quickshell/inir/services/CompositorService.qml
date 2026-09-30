@@ -21,6 +21,9 @@ Singleton {
     readonly property bool nativeOverview: true
     readonly property bool compositorBlur: false
     readonly property bool windowWorkspaceMap: false
+    // The running window manager's own name, for display (About); behaviour
+    // asks the capability flags, never this.
+    readonly property string provider: Wm.provider
     readonly property bool overviewOpen: Wm.overviewOpen
     // True when a native overview covers fullscreen windows (the compositor
     // raises the overview above them); the frame hides its bar while a

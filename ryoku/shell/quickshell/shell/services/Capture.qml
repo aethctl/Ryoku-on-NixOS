@@ -13,14 +13,13 @@ import Ryoku.Ui.Singletons
 // daemon that reads this singleton.
 //
 // Screen RECORDING is deliberately NOT owned here. The card's record zone drives
-// the existing Recorder singleton (gpu-screen-recorder with a wf-recorder
-// fallback, the record island, Studio, Discord, camera). The only recording
-// thing this file does is hand a picked target (monitor, window or region) to
-// Recorder.start.
+// the existing Recorder singleton (GPU Screen Recorder, the record island,
+// Discord, camera). The only recording thing this file does is hand a picked
+// target (monitor, window or region) to Recorder.start.
 //
 // Divergence: the capture backend shells out to grim + wl-copy rather than a
 // bespoke zwlr_screencopy_v1 client -- grim speaks exactly that protocol, and
-// Ryoku already shells out to wl-copy / wf-recorder for the same reasons.
+// Ryoku already shells out to wl-copy / gpu-screen-recorder for the same reasons.
 Singleton {
     id: root
 
@@ -42,7 +41,6 @@ Singleton {
     property bool _beautify: false         // beautify choice latched for the pending shot
     property string _outPath: ""           // resolved PNG path ("" = clipboard-only stream)
     property var _recordAudio: []          // extra Recorder args for a targeted record
-    property bool _recordStudio: false     // the pending targeted record is a Studio capture
     property var _pending: null            // { flag, val } grim target for the pending shot
 
     // Ryoku owns its screenshot location; the filename pattern is the reference
@@ -92,10 +90,9 @@ Singleton {
     // screenshot uses for this family, then hand the picked target to the
     // existing Recorder (no capture of our own). mode: "monitor" | "window" |
     // "region"; a window and a region both record their plain rect.
-    function recordTarget(mode, audioArgs, studio) {
+    function recordTarget(mode, audioArgs) {
         root._purpose = "record";
         root._recordAudio = audioArgs || [];
-        root._recordStudio = studio === true;
         root.selecting = mode;
     }
 
@@ -105,16 +102,13 @@ Singleton {
     function commit(result) {
         root.selecting = "";
         if (root._purpose === "record") {
-            var rgx = Math.round(result.monX + result.x);
-            var rgy = Math.round(result.monY + result.y);
-            var geom = Math.round(result.w) + "x" + Math.round(result.h) + "+" + rgx + "+" + rgy;
-            // Studio records the picked rect through the wrapper (cursor sidecar +
-            // Ryoku Motion); a Quick capture records a monitor by name (or the rect
-            // for window/region) and just saves.
-            if (root._recordStudio) {
-                Recorder.startStudio(Recorder.optDesktopAudio, Recorder.optMic, geom);
-                return;
-            }
+            // GSR's -region takes physical global pixels; the overlay reports the
+            // selection in logical compositor coordinates, so scale it up by the
+            // picked output's factor before handing it off.
+            var sc = Wm.outputScale(result.output);
+            var rgx = Math.round((result.monX + result.x) * sc);
+            var rgy = Math.round((result.monY + result.y) * sc);
+            var geom = Math.round(result.w * sc) + "x" + Math.round(result.h * sc) + "+" + rgx + "+" + rgy;
             var args = result.mode === "monitor"
                 ? ["--monitor", result.output, "--geometry", geom]
                 : ["--region", "--geometry", geom];

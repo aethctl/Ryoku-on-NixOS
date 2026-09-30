@@ -8,52 +8,32 @@ import (
 	"strings"
 	"time"
 
+	"ryoku-cli/internal/ryokumanifest"
 	"ryoku-cli/internal/sys"
 
 	i18n "ryoku-i18n"
 )
 
-// ---- reconciler: the apps Ryoku ships, and the user's right to delete them --
-//
-// The user-facing applications left ryoku-desktop's depends: pacman re-satisfies
-// a dependency list on every upgrade of that package, so a hard depend put back
-// apps people had deleted on purpose. They arrive here instead -- installed once
-// per box, ledgered, and never pushed back after a removal. The ISO still
-// pacstraps them from system/packages/base.packages.
-//
-// Present apps are also marked explicitly installed: outside depends they are
-// orphan candidates, and one `pacman -Qtdq | pacman -Rns -` would take them.
-
+// shippedApp is one deliver-once package: installed once, then left alone if
+// the user removes it. Membership rule: a standalone application whose absence
+// costs only itself. Tools the shell calls by name (grim, playerctl, matugen,
+// cava, mpv for the launcher's radio, the pill's OCR/capture backends) stay hard
+// depends, because losing them breaks a Ryoku surface the user never touched.
+// Ryotunes has its own official-release install/reconciliation path.
 type shippedApp struct {
 	pkg  string
 	what string
 }
 
-// Membership rule: a standalone application whose absence costs only itself.
-// Tools the shell calls by name (grim, playerctl, matugen, cava, mpv for the
-// launcher's radio, the pill's OCR/capture backends) stay hard depends, because
-// losing them breaks a Ryoku surface the user never touched.
-// Ryotunes has its own official-release install/reconciliation path.
+// shippedApps is the deliver-once table. It lives in the manifest package so the
+// release's control manifest and this reconciler read one list, never two.
 func shippedApps() []shippedApp {
-	return []shippedApp{
-		{"kitty", "the default terminal (Settings > App Overrides repoints the terminal role)"},
-		{"fish", "the optional interactive shell"},
-		{"blesh", "Bash line editor"},
-		{"starship", "the shell prompt"},
-		{"fastfetch", "system summary (launcher, RyoStore covers)"},
-		{"yazi", "terminal file manager"},
-		{"neovim", "the shipped editor"},
-		{"nautilus", "the graphical file manager"},
-		{"nautilus-python", "the Ryoku stash actions in Nautilus' right-click menu"},
-		{"ryomotion", "the screen-demo recorder and editor"},
-		{"waifu2x-ncnn-vulkan", "AI upscale behind ryoshot Beautify HD and ryowalls Enhance"},
-		{"pavucontrol", "the GUI mixer the bar's Open audio button launches"},
-		{"songrec", "Recognize Music in the launcher"},
-		{"openrgb", "keyboard and mouse lighting (Settings > Appearance > Lighting)"},
-		{"gamescope", "the nested gaming micro-compositor"},
-		{"gamemode", "the gaming performance governor Steam invokes"},
-		{"mangohud", "the in-game FPS and frametime overlay"},
+	apps := ryokumanifest.Apps()
+	out := make([]shippedApp, 0, len(apps))
+	for _, a := range apps {
+		out = append(out, shippedApp{pkg: a.Pkg, what: a.What})
 	}
+	return out
 }
 
 type appPlan struct {

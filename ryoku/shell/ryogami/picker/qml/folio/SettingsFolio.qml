@@ -14,8 +14,26 @@ FocusScope {
     anchors.fill: parent
     focus: folio.shown
     onShownChanged: if (folio.shown) { folio._applyArgs(); folio.forceActiveFocus(); }
+    // A request for another tab can arrive while the folio is already open.
+    onArgsChanged: if (folio.shown) folio._applyArgs()
 
-    Keys.onEscapePressed: (e) => { folio.closeRequested(); e.accepted = true; }
+    // Escape leaves an open search before it closes the sheet.
+    Keys.onEscapePressed: (e) => {
+        if (folio.searchOpen) {
+            folio.searchOpen = false
+            folio.query = ""
+            folio.forceActiveFocus()
+        } else {
+            folio.closeRequested()
+        }
+        e.accepted = true
+    }
+    Keys.onPressed: (e) => {
+        if (e.key === Qt.Key_F && (e.modifiers & Qt.ControlModifier)) {
+            folio.searchOpen = true
+            e.accepted = true
+        }
+    }
 
     // Pure data, so all thirteen tabs can live at once.
     PickerTab { id: tPicker }
@@ -132,12 +150,21 @@ FocusScope {
     Behavior on reveal { NumberAnimation { duration: Theme.standard; easing.type: Theme.revealEasing } }
     visible: folio.reveal > 0.001
 
+    // One glyph per settings tab, painted faint behind the page.
+    readonly property var _glyphs: ({
+        picker: "\u9078", filter: "\u6fff", position: "\u4f4d", displays: "\u5e55",
+        motion: "\u52d5", playback: "\u653e", performance: "\u901f", library: "\u5eab",
+        sources: "\u6e90", automation: "\u81ea", theme: "\u8272", integrations: "\u7d50",
+        language: "\u8a00"
+    })
+
     FolioSheet {
         id: sheet
         reveal: folio.reveal
         showMasthead: false
         pageOpacity: folio.isDesign ? 0.14 : 0.965
         scrimAlpha: folio.isDesign ? 0.2 : 0.68
+        watermark: folio.activeTab ? (folio._glyphs[folio.activeTab.tabKey] || "") : ""
         onDismissed: folio.closeRequested()
 
         FolioIndex {
@@ -187,6 +214,7 @@ FocusScope {
             host: folio
             condCtx: folio.condCtx
             rev: folio.rev
+            jumpControlId: folio.jumpControlId
             onCloseRequested: folio.closeRequested()
         }
     }

@@ -54,6 +54,7 @@ Singleton {
     property string screenshotsPath: `${root.picturesPath}/Screenshots`
     property string persistentStatesPath: `${root.stateUserPath}/states.json`
     property string eventsPath: `${root.stateUserPath}/events.json`
+    property string weatherCachePath: `${root.stateUserPath}/weather-cache.json`
     property string screenTimePath: `${root.stateUserPath}/screentime`
     property string favicons: `${root.cachePath}/ryoku/inir/media/favicons`
     // User avatar paths
@@ -71,6 +72,8 @@ Singleton {
     FileView {
         path: root.userAvatarPathAccountsService
         watchChanges: true
+        // Most accounts never set an avatar; a missing file is the common case.
+        printErrors: false
         onFileChanged: root.userAvatarRevision++
     }
     property string coverArt: `${root.cachePath}/ryoku/inir/media/coverart`
@@ -95,7 +98,6 @@ Singleton {
     property string screenshotTemp: "/tmp/ryoku-inir/media/screenshot"
     // Ryoku-owned surfaces; the family routes through its services, not scripts.
     property string wallpaperSwitchScriptPath: ""
-    property string recordScriptPath: ""
     property string userActions: FileUtils.trimFileProtocol(`${root.shellConfig}/actions`)
 
     function shortHomePath(path: string): string {

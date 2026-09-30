@@ -14,6 +14,7 @@ import inir.modules.common.widgets
 import inir.modules.iris.components
 import inir.modules.iris.frame
 import inir.modules.iris.style
+import inir.modules.iris.field as Field
 
 PanelWindow {
     id: root
@@ -89,17 +90,18 @@ PanelWindow {
     anchors { left: true; right: true; top: true; bottom: true }
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "quickshell:iris-sidebar-" + root.side
+    Field.IrisBlurRegion {
+        id: placeBlur
+        window: root
+        shapes: frame.blurShapes
+        windowWidth: root.width
+        windowHeight: root.height
+    }
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: !root.open ? WlrKeyboardFocus.None
         : root.pinned || root.peek ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
-    mask: root.open && frame.armed && !root.pinned && !root.peek && GlobalStates.irisStudioRect ? studioMask : ownMask
+    mask: ownMask
     Region { id: ownMask; item: !root.open || !frame.armed ? frame : root.pinned || root.peek ? peekZone : dismiss }
-    IrisStudioMask {
-        id: studioMask
-        canvasWidth: root.width
-        canvasHeight: root.height
-        screenName: root.screen?.name ?? ""
-    }
     MouseArea { id: dismiss; anchors.fill: parent; enabled: !root.pinned && !root.peek; onClicked: root.close() }
 
     Item {
@@ -155,13 +157,28 @@ PanelWindow {
     readonly property real edgeGap: (root.notch ? 0 : 12 * root.d) + IrisFrame.band + root.edgeHeld
     readonly property real verticalGap: 12 * root.d
     readonly property real notchOverflow: root.notch ? frame.radius : 0
-    readonly property real topInset: root.verticalGap + IrisFrame.inset("top")
-    readonly property real bottomInset: root.verticalGap + IrisFrame.inset("bottom")
+    readonly property real topInset: root.verticalGap + IrisFrame.safeInset("top")
+    readonly property real bottomInset: root.verticalGap + IrisFrame.safeInset("bottom")
     readonly property real availableHeight: Math.max(1, root.height - root.topInset - root.bottomInset)
 
     IrisMorphSurface {
         motionSurface: "panels"
+        // Out of its own edge, never faded: nothing sits between it and that edge to hide behind.
+        behindOrigin: false
         id: frame
+        compositorBlurred: true
+        ownField: !root.notch
+        fieldBacked: root.notch
+        chassisKey: "sidebar-" + root.side
+        chassisJoin: {
+            const id = "panel:" + root.side
+            if (IrisFrame.framed) return { id: id, joins: "frame", fuse: IrisStyle.fuseEdge }
+            const deep = Math.max(8, IrisStyle.fuseEdge)
+            return { id: id, joins: "panelEdge:" + root.side, fuse: IrisStyle.fuseEdge,
+                edge: { x: root.left ? -deep - 1 : root.width + 1, y: -2 * IrisStyle.fuseEdge, width: deep,
+                    height: root.height + 4 * IrisStyle.fuseEdge, radius: 0, paints: true, fuse: 0, id: "panelEdge:" + root.side,
+                    glass: IrisStyle.surfaceGlass("panels") } }
+        }
         open: root.open
         light: IrisStyle.surfaceLight("panels", IrisStyle.wallpaperLight)
         lightFrom: root.left ? "left" : "right"
@@ -187,8 +204,8 @@ PanelWindow {
             enabled: frame.settled && root.sectionMorphs === 0
             NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve }
         }
-        origin: ({ x: root.left ? -frame.width - root.edgeGap : root.width + root.edgeGap, y: frame.y,
-            width: frame.width, height: frame.height, radius: frame.radius })
+        origin: ({ x: root.left ? 0 : root.width - Math.max(2, IrisFrame.band), y: frame.y,
+            width: Math.max(2, IrisFrame.band), height: frame.height, radius: Math.max(1, IrisFrame.band / 2) })
         MouseArea { anchors.fill: parent }
         HoverHandler { id: frameHover; onHoveredChanged: if (hovered) root.engaged = true }
         PointHandler { onActiveChanged: if (active && root.peek) GlobalStates.irisSidebarPeek = "" }
@@ -209,7 +226,7 @@ PanelWindow {
                     color: IrisStyle.identity.red
                     font.family: IrisStyle.fontNumbers
                     font.pixelSize: 40 * IrisStyle.typeScale
-                    font.weight: Font.Light
+                    font.weight: IrisStyle.weight(Font.Light)
                     font.features: ({ "tnum": 1 })
                     Layout.alignment: Qt.AlignVCenter
                     Layout.rightMargin: 6 * root.d
@@ -223,13 +240,10 @@ PanelWindow {
                     Layout.rightMargin: 8 * root.d
                     radius: width / 2
                     color: IrisStyle.fill
-                    Image {
+                    IrisImage {
                         id: headerAvatarImage
                         anchors.fill: parent
                         source: Directories.avatarSourceAt(headerAvatar.sourceIndex)
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        sourceSize: Qt.size(headerAvatar.width * 2, headerAvatar.height * 2)
                         onStatusChanged: if (status === Image.Error && headerAvatar.sourceIndex + 1 < Directories.userAvatarPaths.length)
                             Qt.callLater(() => headerAvatar.sourceIndex++)
                     }
@@ -237,8 +251,8 @@ PanelWindow {
                         anchors.centerIn: parent
                         visible: headerAvatarImage.status !== Image.Ready
                         text: (SystemInfo.displayName || SystemInfo.username || "?").charAt(0).toUpperCase()
-                        font.pixelSize: 17 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeTitle
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                     }
                 }
                 ColumnLayout {
@@ -253,8 +267,8 @@ PanelWindow {
                                 : parent.hour < 12 ? Translation.tr("Good morning")
                                 : parent.hour < 19 ? Translation.tr("Good afternoon") : Translation.tr("Good evening"))
                             : Qt.locale().toString(DateTime.clock.date, "dddd")
-                        font.pixelSize: 18 * IrisStyle.typeScale
-                        font.weight: Font.Bold
+                        font.pixelSize: IrisStyle.typeTitle
+                        font.weight: IrisStyle.weight(Font.Bold)
                         elide: Text.ElideRight
                     }
                     IrisText {
@@ -289,7 +303,7 @@ PanelWindow {
                 contentHeight: content.implicitHeight
                 boundsBehavior: Flickable.StopAtBounds
                 clip: true
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: IrisScrollBar {}
                 onWidthChanged: contentX = 0
                 ColumnLayout {
                     id: content
@@ -342,23 +356,6 @@ PanelWindow {
                     }
                 }
             }
-        }
-    }
-
-    Repeater {
-        model: root.notch ? 2 : 0
-        RoundCorner {
-            required property int index
-            readonly property bool above: index === 0
-            implicitSize: Math.round(16 * root.d)
-            color: IrisStyle.surface
-            opacity: Math.max(0, Math.min(1, (frame.progress - 0.55) / 0.45))
-            visible: opacity > 0
-            x: root.left ? 0 : root.width - implicitSize
-            y: above ? frame.y - implicitSize : frame.y + frame.height
-            corner: root.left
-                ? (above ? RoundCorner.CornerEnum.BottomLeft : RoundCorner.CornerEnum.TopLeft)
-                : (above ? RoundCorner.CornerEnum.BottomRight : RoundCorner.CornerEnum.TopRight)
         }
     }
 }

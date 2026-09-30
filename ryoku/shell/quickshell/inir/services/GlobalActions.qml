@@ -1,12 +1,14 @@
 pragma Singleton
 
 import QtQuick
+import Qt.labs.folderlistmodel
 import Quickshell
 import Quickshell.Bluetooth
 import Quickshell.Io
 import shell.services as Ryoku
 import inir
 import inir.modules.common
+import inir.modules.common.functions
 import inir.services
 
 /**
@@ -25,14 +27,19 @@ Singleton {
         const cats = []
         if (Config.options?.globalActions?.enableSystem ?? true)
             cats.push(_systemActions)
-        if (Config.options?.globalActions?.enableAppearance ?? true)
+        if (Config.options?.globalActions?.enableAppearance ?? true) {
             cats.push(_appearanceActions)
+            if (Config.options?.panelFamily === "iris")
+                cats.push(_irisActions)
+        }
         if (Config.options?.globalActions?.enableTools ?? true)
             cats.push(_toolsActions)
         if (Config.options?.globalActions?.enableMedia ?? true)
             cats.push(_mediaActions)
         if (Config.options?.globalActions?.enableSettings ?? true)
             cats.push(_settingsActions)
+        if (Config.options?.globalActions?.enableCustom ?? true)
+            cats.push(_userScriptActions)
         return [].concat(...cats)
     }
 
@@ -46,6 +53,25 @@ Singleton {
         keywords: a.keywords,
         execute: a.execute
     }))
+
+    function irisMusicOn(mode: string): bool {
+        const edge = Config.options?.background?.edgeWidgets?.organic ?? ({})
+        const surround = Config.options?.iris?.surround ?? ({})
+        return Boolean(edge.enable) && String(surround.music ?? "widget") === mode
+    }
+
+    function toggleIrisMusic(mode: string): void {
+        if (root.irisMusicOn(mode)) {
+            Config.setNestedValue("background.edgeWidgets.organic.enable", false)
+            return
+        }
+        const updates = {
+            "iris.surround.music": mode,
+            "background.edgeWidgets.organic.enable": true
+        }
+        if (mode === "frame") updates["iris.surround.enable"] = true
+        Config.setNestedValues(updates)
+    }
 
     function fuzzyQuery(query: string): list<var> {
         if (!query || query.trim() === "") return allActions
@@ -291,7 +317,7 @@ Singleton {
         },
         {
             id: "style-inir",
-            name: Translation.tr("Style: iRiS"),
+            name: Translation.tr("Style: Shima"),
             description: Translation.tr("The family's own look"),
             icon: "lens_blur",
             category: "appearance",
@@ -354,7 +380,30 @@ Singleton {
         }
     ]
 
-    // ── TOOLS ────────────────────────────────────────────────────────────
+    readonly property var _irisActions: [
+        {
+            id: "frame-music",
+            name: Translation.tr("Frame Music"),
+            description: Translation.tr("Toggle music on the Shima frame"),
+            icon: "graphic_eq",
+            category: "appearance",
+            keywords: ["iris", "frame", "chassis", "music", "visualizer"],
+            isOn: () => root.irisMusicOn("frame"),
+            execute: () => root.toggleIrisMusic("frame")
+        },
+        {
+            id: "edge-music",
+            name: Translation.tr("Edge Music"),
+            description: Translation.tr("Toggle the Organic Edge music wave"),
+            icon: "waves",
+            category: "appearance",
+            keywords: ["iris", "edge", "music", "wave", "visualizer"],
+            isOn: () => root.irisMusicOn("widget"),
+            execute: () => root.toggleIrisMusic("widget")
+        }
+    ]
+
+        // ── TOOLS ────────────────────────────────────────────────────────────
     readonly property var _toolsActions: [
         {
             id: "screenshot",
@@ -577,4 +626,39 @@ Singleton {
             execute: () => { GlobalStates.screenZoom = Math.max(GlobalStates.screenZoom - 0.4, 1.0) }
         }
     ]
+
+    // ── User Script Provider ────────────────────────────────────────────
+    property var _userScriptActions: {
+        const actions = []
+        for (let i = 0; i < userActionsFolder.count; i++) {
+            const fileName = userActionsFolder.get(i, "fileName")
+            const filePath = userActionsFolder.get(i, "filePath")
+            if (fileName && filePath) {
+                const actionName = fileName.replace(/\.[^/.]+$/, "")
+                const resolvedPath = FileUtils.trimFileProtocol(filePath.toString())
+                actions.push({
+                    id: `custom-${actionName}`,
+                    name: actionName,
+                    description: Translation.tr("User script: %1").arg(fileName),
+                    icon: "code",
+                    category: "custom",
+                    keywords: ["custom", "script", "user", actionName],
+                    execute: ((path, label) => (args) => {
+                        ShellExec.execDetachedArgs([path, ...(args ? args.split(" ") : [])], `Run ${label}`)
+                    })(resolvedPath, actionName)
+                })
+            }
+        }
+        return actions
+    }
+
+    FolderListModel {
+        id: userActionsFolder
+        folder: Qt.resolvedUrl(Directories.userActions)
+        showDirs: false
+        showHidden: false
+        sortField: FolderListModel.Name
+    }
+
+
 }

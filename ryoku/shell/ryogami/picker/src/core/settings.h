@@ -43,7 +43,7 @@ public:
     Q_INVOKABLE void reset(const QString &key);
     Q_INVOKABLE QVariantMap spec(const QString &key) const;
     Q_INVOKABLE QVariant defaultOf(const QString &key) const;
-    Q_INVOKABLE bool isDefault(const QString &key) const { return !m_user.contains(key); }
+    Q_INVOKABLE bool isDefault(const QString &key) const;
     // Send any pending coalesced writes now (called when the picker hides).
     Q_INVOKABLE void flush();
 
@@ -67,6 +67,8 @@ private:
     void fetchValues();
     void onEvent(const QString &name, const QVariantMap &data);
     void applyIncoming(const QVariantMap &values);
+    void resync(const QStringList &keys);
+    QVariant effectiveDefault(const QString &key) const;
     void maybeReady();
 
     Daemon *m_daemon = nullptr;

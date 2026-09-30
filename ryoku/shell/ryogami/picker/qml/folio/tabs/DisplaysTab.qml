@@ -8,7 +8,7 @@ FolioTabData {
     sections: [
         {
             title: I18n.tr("Wallpapers and displays"),
-            subtitle: I18n.tr("One StackBar per detected output (name, logical size, current wallpaper preview). Empty-state static row when no outputs."),
+            subtitle: I18n.tr("These are the wallpapers currently reported by the wallpaper service. Changes made here apply to one display at a time."),
             controls: [
                 { id: "display.fillModes.<output>",
                   key: "display.fillModes.<output>",

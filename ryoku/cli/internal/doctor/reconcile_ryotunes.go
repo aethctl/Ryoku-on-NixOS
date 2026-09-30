@@ -45,15 +45,18 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		problems = append(problems, i18n.Tf("%s in ~/.local/bin shadows the packaged app", stale))
 		fixes = append(fixes, "rm -f ~/.local/bin/ryotunes ~/.local/share/applications/ryotunes.desktop")
 	}
-	if sys.NixBackend() {
-		return reconcileRyotunesNixOS(checkOnly, bin, stale, problems, fixes)
-	}
 	// A box that runs the Ryoku desktop is expected to have Ryotunes: a dev
 	// checkout (all Ryoku managed by `ryoku deploy`, so ryoku-desktop is not a
 	// pacman package) or a packaged install (ryoku-desktop present). Either way,
 	// if the app is absent the reconcile installs the current official build --
 	// unless the user deleted it: ryotunes is a deliver-once app like the rest
 	// of the shipped set, so the provisioned ledger is honoured here too.
+	if sys.NixBackend() {
+		return reconcileRyotunesNixOS(
+			checkOnly, bin, stale, problems, fixes,
+		)
+	}
+
 	managedDesktop := sys.ResolveRepo() != "" || sys.PkgInstalled("ryoku-desktop")
 	desktopMissingRyotunes := managedDesktop && !sys.PkgInstalled("ryotunes") && !removedByUser("ryotunes")
 	if desktopMissingRyotunes {
@@ -116,6 +119,50 @@ func reconcileRyotunes(checkOnly bool) recResult {
 		}
 	}
 	return fixedRes(i18n.T("ryotunes opens the packaged app (%s)"), strings.Join(problems, "; "))
+}
+
+// Release availability is advisory: doctor checks but never installs. A lookup
+// failure remains visible in check/report modes without failing desktop health.
+func ryotunesUpdateNote() (recResult, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	st, err := ryotunesrelease.Check(ctx)
+	if err != nil {
+		return noteRes(i18n.T("could not check Ryotunes releases: %v"), err), true
+	}
+	if !st.Available {
+		return recResult{}, false
+	}
+	return noteRes(i18n.T("a newer Ryotunes (%s) is available; `ryoku update` installs it"), st.Latest).
+		withFix("ryoku update"), true
+}
+
+func ryotunesSocketEnabled() bool {
+	out, _ := exec.Command("systemctl", "--user", "is-enabled", ryotunesSocketUnit).Output()
+	return strings.TrimSpace(string(out)) == "enabled"
+}
+
+// staleUserRyotunes names what ~/.local/bin/ryotunes is when it is not the
+// user's own program: the Chromium wrapper (a script that opens
+// music.youtube.com) or a build the dev deploy recorded a commit for.
+func staleUserRyotunes(bin string) string {
+	st, err := os.Stat(bin)
+	if err != nil || st.IsDir() {
+		return ""
+	}
+	head := make([]byte, 4096)
+	if f, err := os.Open(bin); err == nil {
+		n, _ := f.Read(head)
+		f.Close()
+		head = head[:n]
+	}
+	if strings.HasPrefix(string(head), "#!") && strings.Contains(string(head), "music.youtube.com") {
+		return "the Chromium YouTube Music wrapper"
+	}
+	if sys.Exists(filepath.Join(sys.Xdg("XDG_DATA_HOME", ".local/share"), "ryoku", "ryotunes.commit")) {
+		return "a locally built ryotunes"
+	}
+	return ""
 }
 
 func reconcileRyotunesNixOS(
@@ -182,48 +229,4 @@ func removeStaleUserRyotunes(bin string) {
 	for _, path := range icons {
 		_ = os.Remove(path)
 	}
-}
-
-// Release availability is advisory: doctor checks but never installs. A lookup
-// failure remains visible in check/report modes without failing desktop health.
-func ryotunesUpdateNote() (recResult, bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	st, err := ryotunesrelease.Check(ctx)
-	if err != nil {
-		return noteRes(i18n.T("could not check Ryotunes releases: %v"), err), true
-	}
-	if !st.Available {
-		return recResult{}, false
-	}
-	return noteRes(i18n.T("a newer Ryotunes (%s) is available; `ryoku update` installs it"), st.Latest).
-		withFix("ryoku update"), true
-}
-
-func ryotunesSocketEnabled() bool {
-	out, _ := exec.Command("systemctl", "--user", "is-enabled", ryotunesSocketUnit).Output()
-	return strings.TrimSpace(string(out)) == "enabled"
-}
-
-// staleUserRyotunes names what ~/.local/bin/ryotunes is when it is not the
-// user's own program: the Chromium wrapper (a script that opens
-// music.youtube.com) or a build the dev deploy recorded a commit for.
-func staleUserRyotunes(bin string) string {
-	st, err := os.Stat(bin)
-	if err != nil || st.IsDir() {
-		return ""
-	}
-	head := make([]byte, 4096)
-	if f, err := os.Open(bin); err == nil {
-		n, _ := f.Read(head)
-		f.Close()
-		head = head[:n]
-	}
-	if strings.HasPrefix(string(head), "#!") && strings.Contains(string(head), "music.youtube.com") {
-		return "the Chromium YouTube Music wrapper"
-	}
-	if sys.Exists(filepath.Join(sys.Xdg("XDG_DATA_HOME", ".local/share"), "ryoku", "ryotunes.commit")) {
-		return "a locally built ryotunes"
-	}
-	return ""
 }

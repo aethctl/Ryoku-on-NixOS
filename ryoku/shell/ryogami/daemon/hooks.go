@@ -75,17 +75,41 @@ func (d *daemon) runAfterApply(ev applyEvent) {
 	}()
 }
 
-var settingNotifyMu sync.Mutex
+type settingChange struct {
+	key   string
+	value interface{}
+}
 
-// notifySetting serialises watcher calls so a watcher never races itself.
+var (
+	settingNotifyMu      sync.Mutex
+	settingNotifyQueue   []settingChange
+	settingNotifyRunning bool
+)
+
+// notifySetting runs watchers one change at a time so a watcher never races itself.
+// A watcher may write further settings: those changes queue behind the current one
+// and the caller already running watchers drains them, instead of re-entering.
 func (d *daemon) notifySetting(key string, value interface{}) {
 	settingNotifyMu.Lock()
-	defer settingNotifyMu.Unlock()
-	for _, w := range settingWatchers {
-		if strings.HasPrefix(key, w.prefix) {
-			w.fn(d, key, value)
-		}
+	settingNotifyQueue = append(settingNotifyQueue, settingChange{key, value})
+	if settingNotifyRunning {
+		settingNotifyMu.Unlock()
+		return
 	}
+	settingNotifyRunning = true
+	for len(settingNotifyQueue) > 0 {
+		c := settingNotifyQueue[0]
+		settingNotifyQueue = settingNotifyQueue[1:]
+		settingNotifyMu.Unlock()
+		for _, w := range settingWatchers {
+			if strings.HasPrefix(c.key, w.prefix) {
+				w.fn(d, c.key, c.value)
+			}
+		}
+		settingNotifyMu.Lock()
+	}
+	settingNotifyRunning = false
+	settingNotifyMu.Unlock()
 }
 
 type actionFunc func(d *daemon, args map[string]interface{}) (interface{}, error)

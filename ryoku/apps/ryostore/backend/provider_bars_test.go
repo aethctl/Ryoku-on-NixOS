@@ -101,7 +101,7 @@ func TestBarProviderUsesRegistryReceiptsAndDerivedIndex(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(items) != 6 || items[0].ID != "sumi" || !items[0].Installed || !items[0].Active {
+	if len(items) != len(builtinBarStyles())+1 || items[0].ID != "sumi" || !items[0].Installed || !items[0].Active {
 		t.Fatalf("initial items = %+v", items)
 	}
 	if obi := barStyleByID(items, "obi"); obi == nil || obi.Installed || obi.Active {
@@ -196,7 +196,7 @@ func TestBarProviderKeepsReceiptOwnedStyleUsableOffline(t *testing.T) {
 	if !state.Offline {
 		t.Fatal("cold offline load was not marked offline")
 	}
-	if obi := barStyleByID(items, "obi"); len(items) != 6 || obi == nil || !obi.Installed || !obi.Active {
+	if obi := barStyleByID(items, "obi"); len(items) != len(builtinBarStyles())+1 || obi == nil || !obi.Installed || !obi.Active {
 		t.Fatalf("offline items = %+v", items)
 	}
 	if err := provider.Remove(context.Background(), "obi"); err != nil {
@@ -271,7 +271,7 @@ func TestBarProviderLoadRecoversInterruptedTransaction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if obi := barStyleByID(items, "obi"); len(items) != 6 || obi == nil || obi.Installed {
+	if obi := barStyleByID(items, "obi"); len(items) != len(builtinBarStyles())+1 || obi == nil || obi.Installed {
 		t.Fatalf("catalog after recovery = %+v", items)
 	}
 	destination, _, err := productDestination("barstyles", "obi")
@@ -456,6 +456,47 @@ func TestBarStyleViewRebuildsCorruptSnapshot(t *testing.T) {
 	}
 }
 
+// The catalogue snapshot is only rebuilt on demand, so a built-in style renamed
+// by an update must invalidate it or the store keeps the old name.
+func TestSnapshotStaleBuiltins(t *testing.T) {
+	encode := func(items []Item) []byte {
+		data, err := json.Marshal(Catalog{Items: items})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	current := builtinBarStyles()
+	if snapshotStaleBuiltins(encode(current)) {
+		t.Error("a snapshot of the shipped built-ins reads as stale")
+	}
+	withoutChroma := make([]Item, 0, len(current))
+	for _, item := range current {
+		if item.ID != "chroma" {
+			withoutChroma = append(withoutChroma, item)
+		}
+	}
+	if !snapshotStaleBuiltins(encode(withoutChroma)) {
+		t.Error("snapshot missing Chroma must be refreshed")
+	}
+	renamed := builtinBarStyles()
+	for i := range renamed {
+		if renamed[i].ID == "iris" {
+			renamed[i].Name = "iRiS"
+		}
+	}
+	if !snapshotStaleBuiltins(encode(renamed)) {
+		t.Error("a snapshot naming a built-in differently must be rebuilt")
+	}
+	store := []Item{{ID: "nacre", Category: "barstyles", Name: "Nacre"}}
+	if snapshotStaleBuiltins(encode(append(current, store...))) {
+		t.Error("store styles must not make a snapshot stale")
+	}
+	if snapshotStaleBuiltins([]byte(`not json`)) {
+		t.Error("an unreadable snapshot must not be treated as stale")
+	}
+}
+
 func TestBarCatalogBuiltinWinsRegistryCollision(t *testing.T) {
 	fixture := newBarProviderFixture(t)
 	fixture.server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -480,5 +521,54 @@ func TestBarCatalogBuiltinWinsRegistryCollision(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("Chroma rows: %d", count)
+	}
+}
+
+func TestChromaBuiltinProtection(t *testing.T) {
+	provider := barProvider{}
+
+	for _, action := range []struct {
+		name string
+		run  func(context.Context, string) error
+	}{
+		{"install", provider.Install},
+		{"remove", provider.Remove},
+	} {
+		t.Run(action.name, func(t *testing.T) {
+			if err := action.run(context.Background(), "chroma"); err == nil {
+				t.Fatal("Chroma must remain a protected built-in")
+			}
+		})
+	}
+}
+
+func TestSnapshotStaleBuiltinsIgnoresUnrelatedCatalogues(t *testing.T) {
+	catalog := Catalog{
+		Categories: []Category{{ID: "rices"}},
+		Items:      []Item{{ID: "nord", Category: "rices"}},
+	}
+
+	data, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if snapshotStaleBuiltins(data) {
+		t.Fatal("an unrelated catalogue must remain cacheable")
+	}
+}
+
+func TestSnapshotStaleBuiltinsRefreshesMissingBarStyles(t *testing.T) {
+	catalog := Catalog{
+		Categories: []Category{{ID: "barstyles"}},
+	}
+
+	data, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !snapshotStaleBuiltins(data) {
+		t.Fatal("a bar-style catalogue missing built-ins must refresh")
 	}
 }

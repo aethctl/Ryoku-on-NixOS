@@ -81,7 +81,7 @@ IrisWidgetFace {
             radius: width / 2
             scale: dialTap.pressed ? IrisStyle.pressScale(0.92) : 1
             color: root.live(dial.timer) ? IrisStyle.tintFill(dial.timer.tint)
-                : dialHover.hovered ? IrisStyle.fillHover : IrisStyle.fill
+                : dialHover.hovered ? root.fillHover : root.fill
             Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
             MaterialSymbol {
                 anchors.centerIn: parent

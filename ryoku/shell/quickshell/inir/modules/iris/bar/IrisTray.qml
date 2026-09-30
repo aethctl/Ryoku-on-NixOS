@@ -22,10 +22,10 @@ ColumnLayout {
     RowLayout {
         visible: root.showHeader
         Layout.fillWidth: true
-        IrisText { text: Translation.tr("Tray"); font.pixelSize: 21 * IrisStyle.typeScale; font.weight: Font.Bold }
-        IrisText { text: root.items.length; color: IrisStyle.secondaryAccent; font.weight: Font.Bold }
+        IrisText { text: Translation.tr("Tray"); font.pixelSize: IrisStyle.typeTitleLarge; font.weight: IrisStyle.weight(Font.Bold) }
+        IrisText { text: root.items.length; color: IrisStyle.secondaryAccent; font.weight: IrisStyle.weight(Font.Bold) }
         Item { Layout.fillWidth: true }
-        IrisText { text: Translation.tr("Background apps"); color: IrisStyle.muted; font.pixelSize: 11.5 * IrisStyle.typeScale }
+        IrisText { text: Translation.tr("Background apps"); color: IrisStyle.muted; font.pixelSize: IrisStyle.typeMeta }
     }
     GridLayout {
         Layout.fillWidth: true
@@ -70,7 +70,7 @@ ColumnLayout {
                             event.accepted = true
                         }
                     }
-                    onVisibleChanged: if (!visible && menu.visible) menu.close()
+                    onVisibleChanged: if (!visible && menu.opened) menu.close()
                     onWheel: event => {
                         entry.modelData?.scroll(event.angleDelta.y || event.angleDelta.x, event.angleDelta.y === 0)
                         event.accepted = true
@@ -81,9 +81,9 @@ ColumnLayout {
                         border.width: button.activeFocus ? 2 : 0
                         border.color: IrisStyle.accent
                         color: (button.containsMouse ? IrisStyle.fillHover : IrisStyle.fillQuiet)
-                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
+                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
                     }
-                    IconImage {
+                    IrisTrayIcon {
                         anchors.centerIn: parent
                         implicitSize: 26 * root.d
                         source: entry.modelData ? TrayService.getSafeIcon(entry.modelData) : ""
@@ -94,12 +94,13 @@ ColumnLayout {
                         width: 8 * root.d; height: width; radius: width / 2
                         color: IrisStyle.danger
                     }
-                    QsMenuAnchor {
+                    IrisTrayMenu {
                         id: menu
-                        menu: entry.modelData?.menu ?? null
-                        anchor.item: button
-                        anchor.edges: root.bottomEdge ? Edges.Top : Edges.Bottom
-                        anchor.gravity: root.bottomEdge ? Edges.Top : Edges.Bottom
+                        handle: entry.modelData?.menu ?? null
+                        anchorItem: button
+                        opensToward: root.bottomEdge ? "up" : "down"
+                        title: String(entry.modelData?.tooltipTitle || entry.modelData?.title || entry.modelData?.id || "")
+                        icon: entry.modelData ? TrayService.getSafeIcon(entry.modelData) : ""
                     }
                 }
                 IrisText {
@@ -108,7 +109,7 @@ ColumnLayout {
                     text: entry.modelData?.tooltipTitle || entry.modelData?.title || entry.modelData?.id || ""
                     horizontalAlignment: Text.AlignHCenter
                     elide: Text.ElideRight
-                    font.pixelSize: 11 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeFootnote
                     color: IrisStyle.subtext
                 }
             }
@@ -128,7 +129,7 @@ ColumnLayout {
         visible: root.items.length > 0
         text: Translation.tr("Click to open · Right-click for app actions")
         color: IrisStyle.muted
-        font.pixelSize: 11 * IrisStyle.typeScale
+        font.pixelSize: IrisStyle.typeFootnote
         wrapMode: Text.WordWrap
     }
 }

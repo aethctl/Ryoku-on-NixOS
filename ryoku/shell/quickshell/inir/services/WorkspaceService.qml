@@ -63,6 +63,10 @@ Singleton {
         CompositorService.switchToWorkspaceIndex(index);
     }
 
+    function hasWindowsOnActiveWorkspace(outputName: string): bool {
+        return CompositorService.hasWindowsOnActiveWorkspace(outputName);
+    }
+
     function activeWorkspaceCovers(outputName) {
         return CompositorService.activeWorkspaceCovers(outputName);
     }

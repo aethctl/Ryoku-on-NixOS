@@ -80,6 +80,9 @@ void CollectionLayout::readParams(const ParamSource *src, Params &out) const
     out.tilt = clampf(float(num("collectionTilt", 52)), 0.0f, 75.0f);
     out.corners = clampf(float(num("collectionCorners", 2)), 0.0f, 100.0f);
     out.speed = clampf(float(num("collectionSpeed", 100)), 25.0f, 300.0f);
+    out.shadows = src->flag(kPrefix + QLatin1String("collectionShadows"), true);
+    out.shadowStrength = clampf(float(num("shadowStrength", 100)) / 100.0f, 0.0f, 2.0f);
+    out.shadowDistance = clampf(float(num("shadowDistance", 100)) / 100.0f, 0.0f, 2.0f);
 }
 
 double CollectionLayout::cameraMs(const LayoutContext &ctx) const
@@ -226,24 +229,27 @@ void CollectionLayout::build(const LayoutContext &ctx, std::vector<CardVisual> &
         body.cover = true;
         body.cropAspect = q.hh > 0.0f ? q.hw / q.hh : 0.0f;
 
-        CardVisual shadow = body;
-        shadow.row = -1;
-        shadow.texture = CardVisual::TextureNone;
-        shadow.wantNear = false;
-        shadow.cover = false;
-        shadow.cropAspect = 0.0f;
-        shadow.inst.misc[0] = 0;
-        shadow.inst.misc[1] = 0;
-        shadow.inst.misc[2] = 0;
-        shadow.inst.misc[3] = CardFlag::Projected;
-        setF4(shadow.inst.fill, 0.0f, 0.0f, 0.0f, 0.24f);
-        setF4(shadow.inst.border, 0.0f, 0.0f, 0.0f, 0.0f);
-        setF4(shadow.inst.tint, 0.0f, 0.0f, 0.0f, 0.0f);
-        shadow.inst.quadA[1] += 5.0f;
-        shadow.inst.quadA[3] += 5.0f;
-        shadow.inst.quadB[1] += 5.0f;
-        shadow.inst.quadB[3] += 5.0f;
-        out.push_back(std::move(shadow));
+        if (m_params.shadows) {
+            CardVisual shadow = body;
+            shadow.row = -1;
+            shadow.texture = CardVisual::TextureNone;
+            shadow.wantNear = false;
+            shadow.cover = false;
+            shadow.cropAspect = 0.0f;
+            shadow.inst.misc[0] = 0;
+            shadow.inst.misc[1] = 0;
+            shadow.inst.misc[2] = 0;
+            shadow.inst.misc[3] = CardFlag::Projected;
+            setF4(shadow.inst.fill, 0.0f, 0.0f, 0.0f, 0.24f * m_params.shadowStrength);
+            setF4(shadow.inst.border, 0.0f, 0.0f, 0.0f, 0.0f);
+            setF4(shadow.inst.tint, 0.0f, 0.0f, 0.0f, 0.0f);
+            const float shOff = 5.0f * m_params.shadowDistance;
+            shadow.inst.quadA[1] += shOff;
+            shadow.inst.quadA[3] += shOff;
+            shadow.inst.quadB[1] += shOff;
+            shadow.inst.quadB[3] += shOff;
+            out.push_back(std::move(shadow));
+        }
 
         if (idx == m_current)
             setF4(inst.border, float(prim.redF()), float(prim.greenF()), float(prim.blueF()), 0.85f * (1.0f - open));

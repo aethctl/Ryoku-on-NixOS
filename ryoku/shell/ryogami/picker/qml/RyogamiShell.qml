@@ -2,7 +2,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// The Picker unloads after performance.releaseAfterHideSeconds hidden; until then open and close only map and unmap.
+// The Picker stays built while closed, so opening only maps it. A nonzero
+// performance.releaseAfterHideSeconds ends the process once it has been closed
+// that long; the daemon starts a fresh one on the next open.
 Scope {
     id: shell
 
@@ -12,62 +14,35 @@ Scope {
     property SettingValue _releaseSetting: SettingValue { key: "performance.releaseAfterHideSeconds" }
     readonly property int _releaseSecs: {
         var v = Number(shell._releaseSetting.value)
-        return (isNaN(v) || v <= 0) ? 600 : Math.round(v)
+        return (isNaN(v) || v <= 0) ? 0 : Math.round(v)
     }
 
-    Loader {
-        id: pickerLoader
-        active: true
-        sourceComponent: Picker {}
-    }
+    Picker { id: picker }
 
-    function _ensure() {
-        if (!pickerLoader.active)
-            pickerLoader.active = true
-        return pickerLoader.item
-    }
-    function show() {
-        releaseTimer.stop()
-        var p = shell._ensure()
-        if (p)
-            p.show()
-    }
-    function hide() {
-        if (pickerLoader.item)
-            pickerLoader.item.hide()
-    }
+    function show() { picker.show() }
+    function hide() { picker.hide() }
     function toggle() {
-        var p = pickerLoader.item
-        if (p && p.shown) {
-            p.hide()
-        } else {
-            releaseTimer.stop()
-            p = shell._ensure()
-            if (p)
-                p.show()
-        }
+        if (picker.shown)
+            picker.hide()
+        else
+            picker.show()
     }
-    function settings(tab) {
-        releaseTimer.stop()
-        var p = shell._ensure()
-        if (p)
-            p.openSettings(tab)
-    }
+    function settings(tab) { picker.openSettings(tab) }
 
     Timer {
         id: releaseTimer
-        interval: shell._releaseSecs * 1000
-        onTriggered: if (pickerLoader.item && !pickerLoader.item.shown) pickerLoader.active = false
+        interval: Math.max(shell._releaseSecs, 1) * 1000
+        onTriggered: if (shell._releaseSecs > 0 && !picker.shown) Qt.quit()
     }
 
     Connections {
-        target: pickerLoader.item
-        ignoreUnknownSignals: true
+        target: picker
         function onShownChanged() {
-            if (pickerLoader.item && pickerLoader.item.shown) {
+            if (picker.shown) {
                 releaseTimer.stop()
             } else {
-                releaseTimer.restart()
+                if (shell._releaseSecs > 0)
+                    releaseTimer.restart()
                 // The daemon swaps in a fresh process while hidden when the GPU preference changed.
                 Daemon.call("picker.hidden")
             }
@@ -93,11 +68,9 @@ Scope {
     }
 
     Component.onCompleted: {
-        if (!pickerLoader.item)
-            return
         if (typeof shell._startSettings === "string")
             shell.settings(shell._startSettings)
         else if (shell._startVisible)
-            pickerLoader.item.show()
+            picker.show()
     }
 }

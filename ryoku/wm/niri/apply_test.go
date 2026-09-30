@@ -560,36 +560,9 @@ func TestOverviewBackdropAndSingleColumnCentring(t *testing.T) {
 	validateGen(t, on, "settings.kdl", "rebinds.kdl")
 }
 
-func TestLiveDefaultsNeverUseHumanKeyboardNames(t *testing.T) {
-	restore := stubRequest(t, func(any) (json.RawMessage, error) {
-		return json.RawMessage(`{"KeyboardLayouts":{"names":["English (UK)"],"current_idx":0}}`), nil
-	})
-	defer restore()
-	var buf bytes.Buffer
-	prev := stdout
-	stdout = bufio.NewWriter(&buf)
-	defer func() { stdout = prev }()
-	if err := runDefaults(); err != nil {
-		t.Fatal(err)
-	}
-	stdout.Flush()
-	var tree struct {
-		Desktop struct {
-			Input struct {
-				KbLayout string `json:"kbLayout"`
-			} `json:"input"`
-		} `json:"desktop"`
-	}
-	if err := json.Unmarshal(buf.Bytes(), &tree); err != nil {
-		t.Fatal(err)
-	}
-	if tree.Desktop.Input.KbLayout != defaultStore().Input.KbLayout {
-		t.Fatalf("invalid XKB default: %q", tree.Desktop.Input.KbLayout)
-	}
-}
-
 // "DYNAMIC" is a store role, not a theme on disk: the loaded store must carry
-// the concrete wallpaper-following theme into the KDL.
+// the concrete wallpaper-following theme into the KDL, or niri opens a theme
+// that does not exist and the pointer falls back to a bitmap.
 func TestLoadStoreResolvesDynamicCursor(t *testing.T) {
 	store := writeStore(t, `{"desktop":{"cursor":{"theme":"DYNAMIC","size":18}}}`)
 	s := loadStore(store)

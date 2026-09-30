@@ -56,6 +56,15 @@ Item {
                 readonly property string _name: outCard.modelData.name ? String(outCard.modelData.name) : ""
                 readonly property var _current: outCard.modelData.current ? outCard.modelData.current : ({})
                 readonly property bool _hasAudio: outCard._current && (outCard._current.type === "video" || outCard._current.type === "we")
+                // The catalogue thumbnail stands in for videos and scenes, which an Image cannot show.
+                readonly property string _preview: {
+                    var c = outCard._current
+                    if (!c || !c.path)
+                        return ""
+                    var e = c.key ? Library.entry(c.type === "we" ? "workshop" : "wallpapers", c.key) : null
+                    var p = (e && (e.thumb || e.thumbSm)) ? (e.thumb || e.thumbSm) : (c.type === "static" ? String(c.path) : "")
+                    return Library.fileUrl(p)
+                }
 
                 Column {
                     parent: outCard.body
@@ -73,7 +82,7 @@ Item {
                         clip: true
                         Image {
                             anchors.fill: parent
-                            source: outCard._current && outCard._current.path ? String(outCard._current.path) : ""
+                            source: outCard._preview
                             fillMode: Image.PreserveAspectCrop
                             asynchronous: true
                             cache: true
@@ -91,12 +100,19 @@ Item {
                         }
                     }
 
+                    // An unset display shows the global placement it inherits; a pick writes its own.
                     ChoiceRow {
                         width: parent.width
                         state: row.state
                         options: row.options
                         control: row._fillControl
                         keyOverride: "display.fillModes." + outCard._name
+                        bound: false
+                        property SettingValue ownFill: SettingValue { key: "display.fillModes." + outCard._name }
+                        property SettingValue globalFill: SettingValue { key: "display.fillMode" }
+                        boundValue: ["fill", "fit", "stretch", "center", "tile", "span"].indexOf(ownFill.value) >= 0
+                            ? ownFill.value : globalFill.value
+                        onEdited: (v) => ownFill.set(v)
                     }
 
                     ToggleRow {

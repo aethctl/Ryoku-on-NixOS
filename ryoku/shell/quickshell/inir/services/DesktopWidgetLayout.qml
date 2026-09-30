@@ -23,6 +23,15 @@ Singleton {
         return String(value ?? "").trim()
     }
 
+    // The lock screen keeps its own widget layout as a scope in the same store: "lock:<output>".
+    // It inherits every look and option from the desktop widget but not whether it is shown.
+    function isLockScope(value): bool {
+        return root._outputName(value).startsWith("lock:")
+    }
+    function lockScope(outputName): string {
+        return "lock:" + root._outputName(outputName)
+    }
+
     function _widgetKey(value): string {
         return String(value ?? "").trim()
     }
@@ -64,8 +73,14 @@ Singleton {
         return value && typeof value === "object" ? value : null
     }
 
+    // A widget in an iRiS stack shares its place and look with the stack: those values live in the
+    // stack's record, everything else in the widget's own.
+    function _holder(outputName, widgetKey, key): string {
+        return DesktopWidgetStacks.owner(root._outputName(outputName), root._widgetKey(widgetKey), String(key ?? ""))
+    }
+
     function hasValue(outputName, widgetKey, key): bool {
-        const override = root.widgetOverride(outputName, widgetKey)
+        const override = root.widgetOverride(outputName, root._holder(outputName, widgetKey, key))
         return override !== null
             && Object.prototype.hasOwnProperty.call(override, String(key ?? ""))
     }
@@ -80,7 +95,8 @@ Singleton {
 
     function value(outputName, widgetKey, key, fallback): var {
         const valueKey = String(key ?? "")
-        const override = root.widgetOverride(outputName, widgetKey)
+        const holder = root._holder(outputName, widgetKey, valueKey)
+        const override = root.widgetOverride(outputName, holder)
         if (override !== null
                 && Object.prototype.hasOwnProperty.call(override, valueKey))
             return override[valueKey]
@@ -92,6 +108,8 @@ Singleton {
         const name = root._outputName(outputName)
         if (!name)
             return false
+        if (root.isLockScope(name))
+            return true
         const rawConfigured = Config.options?.background?.widgets?.screenList ?? []
         const configured = []
         for (let i = 0; i < (rawConfigured?.length ?? 0); ++i) {
@@ -115,6 +133,8 @@ Singleton {
     }
 
     function enabled(outputName, widgetKey, fallback = false): bool {
+        if (root.isLockScope(outputName))
+            return Boolean(root.widgetOverride(outputName, widgetKey)?.enable ?? false)
         if (!root.outputAllowed(outputName))
             return false
         return Boolean(root.value(outputName, widgetKey, "enable", fallback))
@@ -164,17 +184,21 @@ Singleton {
             record = { output: output, widgets: ({}) }
             list.push(record)
         }
-        const next = Object.assign({}, record.widgets[widget] ?? {})
         let changed = false
+        const holders = ({})
         for (const key of keys) {
-            if (values[key] !== undefined && next[key] !== values[key]) {
-                next[key] = values[key]
+            const holder = root._holder(output, widget, key)
+            if (holders[holder] === undefined)
+                holders[holder] = Object.assign({}, record.widgets[holder] ?? {})
+            if (values[key] !== undefined && holders[holder][key] !== values[key]) {
+                holders[holder][key] = values[key]
                 changed = true
             }
         }
         if (!changed)
             return false
-        record.widgets[widget] = next
+        for (const holder of Object.keys(holders))
+            record.widgets[holder] = holders[holder]
         Config.setNestedValue("background.widgets.outputOverrides", list)
         return true
     }
@@ -210,8 +234,15 @@ Singleton {
             const values = widgetValues[widgetKey]
             if (!values || typeof values !== "object")
                 continue
-            record.widgets[widgetKey] = Object.assign(
-                {}, record.widgets[widgetKey] ?? {}, values)
+            const parts = ({})
+            for (const key of Object.keys(values)) {
+                const holder = root._holder(output, widgetKey, key)
+                if (parts[holder] === undefined)
+                    parts[holder] = ({})
+                parts[holder][key] = values[key]
+            }
+            for (const holder of Object.keys(parts))
+                record.widgets[holder] = Object.assign({}, record.widgets[holder] ?? {}, parts[holder])
         }
         record.layoutVersion = root.layoutVersion
         record.width = outputWidth
@@ -272,6 +303,8 @@ Singleton {
         const path = root._basePath(widgetKey)
         if (!path)
             return false
+        if (!enabled)
+            DesktopWidgetStacks.leave(root._widgetKey(widgetKey))
         Config.setNestedValue(path + ".enable", Boolean(enabled))
         root.clearEnableOverrides()
         return true
@@ -281,6 +314,8 @@ Singleton {
         const list = root._normalizedRecords()
         let changed = false
         for (let i = 0; i < list.length; ++i) {
+            if (root.isLockScope(list[i].output))
+                continue
             const widgets = list[i].widgets
             for (const widgetKey of Object.keys(widgets)) {
                 const override = widgets[widgetKey]
@@ -328,7 +363,7 @@ Singleton {
     }
 
     function savedOutputNames(): list<string> {
-        return root._normalizedRecords().map(record => record.output)
+        return root._normalizedRecords().map(record => record.output).filter(name => !root.isLockScope(name))
     }
 
     function diagnostics(): string {

@@ -75,6 +75,12 @@ public:
     // Row under an item-space point, from the last build, or -1.
     virtual int hitTest(QPointF point) const = 0;
     virtual QRectF cardRect(int row) const = 0;
+    // Skew and edge tilt (x, y) the row's card is drawn with; overlays use it to follow its shape.
+    virtual QPointF cardShear(int row) const
+    {
+        Q_UNUSED(row)
+        return {};
+    }
     // Row an arrow key leads to (dx, dy in -1..1); current row when inert.
     virtual int step(const LayoutContext &ctx, int dx, int dy) const = 0;
     virtual int page(const LayoutContext &ctx, int dir) const { return dir * 5; }

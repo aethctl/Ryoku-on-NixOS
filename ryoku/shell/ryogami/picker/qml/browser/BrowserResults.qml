@@ -14,6 +14,7 @@ Item {
     property var palette: ({})
     property real reveal: 1
     property bool cancellable: false
+    property string emptyText: ""
 
     property bool pendingApply: false
     property var applyItem: null
@@ -188,7 +189,7 @@ Item {
                 : true
             text: (results.source && results.source.error && results.source.error.length > 0)
                 ? results.source.error
-                : I18n.tr("No remote wallpapers found")
+                : results.emptyText
             font.family: Theme.ui
             font.weight: Theme.uiWeight
             font.pixelSize: Theme.fontLabel

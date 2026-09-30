@@ -18,8 +18,10 @@ Rectangle {
 
     function _pad2(n) { n = Math.max(0, Math.floor(n)); return n < 10 ? "0" + n : "" + n }
     readonly property real _bigScale: Math.max(0.9, Math.min(1.08, Theme.scale))
+    readonly property bool artFailed: art.status === Image.Error
 
     Image {
+        id: art
         anchors.fill: parent
         visible: hero.artSource.length > 0
         source: hero.artSource

@@ -32,7 +32,6 @@ import inir.modules.background.widgets.dayProgress
 import inir.modules.background.widgets.worldClock
 import inir.modules.background.widgets.userCard
 import inir.modules.background.widgets.newsTicker
-import inir.modules.background.widgets.mascot
 import inir.modules.background.widgets.japaneseTypography
 import inir.modules.iris.components
 import inir.modules.iris.style
@@ -164,7 +163,7 @@ Scope {
                 visualizer: false, systemMonitor: false, battery: false,
                 notes: false, calendarUpcoming: false, monthCalendar: false,
                 todo: false, timers: false, dayProgress: false, uptime: false, shape: false, dateBadge: false, editorial: false,
-                newsTicker: false, mascot: false, japaneseTypography: false,
+                newsTicker: false, japaneseTypography: false,
                 worldClock: false, userCard: false, controls: false, screenTime: false
             })
             let known = builtinDefaults[name] !== undefined
@@ -174,13 +173,7 @@ Scope {
                     builtinDefaults[name]))
                 : false
 
-            if (name.startsWith("mascotInstances.")) {
-                const instanceId = name.slice("mascotInstances.".length)
-                const instance = Config.getNestedValue(
-                    "background.widgets.mascotInstances." + instanceId, null)
-                known = instance !== null && typeof instance === "object"
-                baseEnabled = known && Boolean(instance.enable)
-            } else if (name.startsWith("custom.")) {
+            if (name.startsWith("custom.")) {
                 const customId = name.slice("custom.".length)
                 known = CustomWidgets.ready
                     && CustomWidgets.widgets.some(widget => widget.id === customId)
@@ -231,7 +224,7 @@ Scope {
             const knownWidgets = ["weather", "clock", "customImage", "imageConverter",
                 "mediaControls", "visualizer", "systemMonitor", "battery", "notes",
                 "calendarUpcoming", "monthCalendar", "todo", "timers", "dayProgress", "uptime", "shape", "dateBadge", "editorial",
-                "newsTicker", "mascot", "japaneseTypography",
+                "newsTicker", "japaneseTypography",
                 "worldClock", "userCard", "controls", "screenTime"];
             if (!knownWidgets.includes(widgetName))
                 return "unknown widget: " + widgetName;
@@ -432,7 +425,6 @@ Scope {
             { key: "dateBadge", defaultOn: false, icon: "today" },
             { key: "editorial", defaultOn: false, icon: "text_fields" },
             { key: "newsTicker",         defaultOn: false, icon: "newspaper" },
-            { key: "mascot",             defaultOn: false, icon: "pets" },
             { key: "japaneseTypography", defaultOn: false, icon: "translate" },
             { key: "worldClock",         defaultOn: false, icon: "public" },
             { key: "userCard",           defaultOn: false, icon: "account_circle" },
@@ -455,17 +447,6 @@ Scope {
                 const strat = bgRoot._widgetConfigValue(w.key, "placementStrategy", "free");
                 if (zones.indexOf(strat) >= 0)
                     occ[strat].push({ name: w.key, icon: w.icon, locked: Boolean(bgRoot._widgetConfigValue(w.key, "locked", false)) });
-            }
-            // Extra mascot instances
-            {
-                const extraMascots = Config.getNestedValue("background.widgets.mascotInstances", {}) ?? {};
-                for (const id of Object.keys(extraMascots)) {
-                    const prefix = "background.widgets.mascotInstances." + id;
-                    if (!Config.getNestedValue(prefix + ".enable", false)) continue;
-                    const strat = Config.getNestedValue(prefix + ".placementStrategy", "free");
-                    if (zones.indexOf(strat) >= 0)
-                        occ[strat].push({ name: "mascot #" + id, icon: "pets", locked: Boolean(Config.getNestedValue(prefix + ".locked", false)) });
-                }
             }
             // Custom widgets
             if (typeof CustomWidgets !== "undefined" && CustomWidgets.ready) {
@@ -502,6 +483,12 @@ Scope {
         // Keep it behind the lock surface; moving to Overlay can capture input.
         WlrLayershell.layer: WlrLayer.Bottom
         WlrLayershell.namespace: "quickshell:background"
+        // Host for LiveLayer (continuous motion in a widget moves to a small surface of its own instead of
+        // repainting this whole output every frame): nothing here covers or moves a still widget outside edit.
+        readonly property bool liveCalm: !GlobalStates.widgetEditMode && !GlobalStates.shellLayoutEditMode
+            && !GlobalStates.screenLocked
+        readonly property int liveLayer: WlrLayer.Bottom
+        readonly property int liveEpoch: 0
         // Map the desktop keyboard-inert during startup, then arm OnDemand after
         // the first-frame/deferred lifecycle has settled. A compositor can
         // temporarily focus a newly mapped OnDemand layer surface during shell
@@ -553,6 +540,18 @@ Scope {
                 width: 1; height: 1
             }
 
+            // The Island's desktop button asks for this screen's menu: the same
+            // open the pointer's right-click takes, anchored at the request point.
+            Connections {
+                target: GlobalStates
+                function onIrisDesktopMenuRequested(outputName: string, x: real, y: real): void {
+                    if (outputName !== bgRoot.screenName) return
+                    desktopMenuAnchor.x = x
+                    desktopMenuAnchor.y = y
+                    irisDesktopMenu.requestOpen()
+                }
+            }
+
             // iRiS desktop menu: the Island's material, quick-action tiles and
             // keyboard, growing out of the pointer.
             IrisDesktopMenu {
@@ -593,7 +592,7 @@ Scope {
                             action: () => { GlobalStates.searchOpen = true } }
                     ] },
                     { type: "separator" },
-                    { text: Translation.tr("Edit iRiS"), iconName: "edit",
+                    { text: Translation.tr("Edit Shima"), iconName: "edit",
                         action: () => { GlobalStates.irisEdit = true } },
                     { text: Translation.tr("Quick controls"), iconName: "tune",
                         action: () => { GlobalStates.controlPanelOpen = true } },
@@ -652,6 +651,38 @@ Scope {
                         widgets.push(item)
                     }
                     return widgets
+                }
+
+                // The widget lit as a drop target while another is carried over it (iRiS stacks).
+                property string stackHint: ""
+
+                function loadedWidget(instanceKey: string): var {
+                    return widgetCanvas._loadedDesktopWidgets().find(item => item.editInstanceKey === instanceKey) ?? null
+                }
+
+                // The stackable widget most covered by the one being carried, or "" when none is covered enough.
+                function stackDropCandidate(instanceKey: string): string {
+                    const widgets = widgetCanvas._loadedDesktopWidgets()
+                    const carried = widgets.find(item => item.editInstanceKey === instanceKey)
+                    if (!carried || !carried.stackable)
+                        return ""
+                    const area = Math.max(1, carried.width * carried.height)
+                    let best = ""
+                    let bestShare = 0.4
+                    for (const other of widgets) {
+                        if (other === carried || !other.stackable || (carried.stacked && other.stacked))
+                            continue
+                        const across = Math.min(carried.x + carried.width, other.x + other.width) - Math.max(carried.x, other.x)
+                        const down = Math.min(carried.y + carried.height, other.y + other.height) - Math.max(carried.y, other.y)
+                        if (across <= 0 || down <= 0)
+                            continue
+                        const share = across * down / Math.min(area, Math.max(1, other.width * other.height))
+                        if (share > bestShare) {
+                            bestShare = share
+                            best = other.editInstanceKey
+                        }
+                    }
+                    return best
                 }
 
                 function _rectOverlaps(a, b, gap): bool {
@@ -735,11 +766,12 @@ Scope {
                     let missingGeometry = false
                     for (const item of widgets) {
                         const strategy = String(item.placementStrategy ?? "free")
-                        if (strategy === "free"
+                        if (DesktopWidgetStacks.isSplit(item.configEntryName)
+                                || (strategy === "free"
                                 && (!DesktopWidgetLayout.hasValue(outputName,
                                         item.configEntryName, "x")
                                     || !DesktopWidgetLayout.hasValue(outputName,
-                                        item.configEntryName, "y"))) {
+                                        item.configEntryName, "y")))) {
                             missingGeometry = true
                             break
                         }
@@ -756,6 +788,10 @@ Scope {
                             outputName, b.configEntryName, "x") ? 1 : 0
                         if (!geometryChanged && aLocal !== bLocal)
                             return bLocal - aLocal
+                        // A widget that just left a stack is the one that moves aside.
+                        const aSplit = DesktopWidgetStacks.isSplit(a.configEntryName)
+                        if (aSplit !== DesktopWidgetStacks.isSplit(b.configEntryName))
+                            return aSplit ? 1 : -1
                         if (Boolean(a.locked) !== Boolean(b.locked))
                             return a.locked ? -1 : 1
                         return b.width * b.height - a.width * a.height
@@ -782,13 +818,13 @@ Scope {
                         let position = { x: Math.round(desiredX), y: Math.round(desiredY) }
                         const collides = !widgetCanvas._positionIsFree(
                             position.x, position.y, item.width, item.height, placed, 14)
-                        if (collides && !item.locked)
+                        if (collides && (!item.locked || DesktopWidgetStacks.isSplit(item.configEntryName)))
                             position = widgetCanvas._nearestFreePosition(
                                 item, desiredX, desiredY, placed, work)
 
                         const moved = Math.round(position.x) !== Math.round(item.x)
                             || Math.round(position.y) !== Math.round(item.y)
-                        if (needsLocal || moved || (collides && !item.locked)) {
+                        if (needsLocal || moved || (collides && (!item.locked || DesktopWidgetStacks.isSplit(item.configEntryName)))) {
                             updates[item.configEntryName] = {
                                 x: position.x,
                                 y: position.y,
@@ -806,13 +842,14 @@ Scope {
                     widgetCanvas._outputLayoutAttempts = 0
                     DesktopWidgetLayout.initializeOutputLayout(
                         outputName, outputWidth, outputHeight, updates)
+                    DesktopWidgetStacks.clearSplits()
                 }
 
                 property int _outputLayoutAttempts: 0
 
                 Timer {
                     id: outputLayoutTimer
-                    interval: 1400
+                    interval: DesktopWidgetStacks.splitPending ? 250 : 1400
                     repeat: false
                     onTriggered: widgetCanvas.initializeOutputWidgetLayout()
                 }
@@ -838,7 +875,9 @@ Scope {
                     const current = widgets.find(item => item.editInstanceKey === instanceKey)
                     if (!current || current.width <= 0 || current.height <= 0)
                         return []
+                    // The pages of one stack are one layer, not several piled up.
                     const matches = widgets.filter(item => item.width > 0 && item.height > 0
+                        && (item === current || !current.stacked || item.stack?.id !== current.stack.id)
                         && item.x < current.x + current.width
                         && item.x + item.width > current.x
                         && item.y < current.y + current.height
@@ -876,11 +915,11 @@ Scope {
                     return nextKey
                 }
 
-                function promoteDesktopWidget(instanceKey: string): string {
+                function promoteDesktopWidget(instanceKey: string, layerKey: string): string {
                     const key = String(instanceKey ?? "")
                     if (!key)
                         return ""
-                    backgroundScope.promoteDesktopWidgetKey(key)
+                    backgroundScope.promoteDesktopWidgetKey(String(layerKey ?? "") || key)
                     GlobalStates.selectDesktopWidget(key)
                     return key
                 }
@@ -1644,22 +1683,6 @@ Scope {
                 }
 
                 FadeLoader {
-                    shown: bgRoot._widgetEnabled("mascot", false)
-                    z: item?.desktopStackZ ?? 0
-                    containmentMask: GlobalStates.widgetEditMode ? _hitMask13 : null
-                    WidgetInputMask { id: _hitMask13; loader: parent }
-                    sourceComponent: MascotWidget {
-                        widgetIndex: 12
-                        outputName: bgRoot.screen?.name ?? ""
-                        screenWidth: bgRoot.screen.width
-                        screenHeight: bgRoot.screen.height
-                        scaledScreenWidth: bgRoot.screen.width
-                        scaledScreenHeight: bgRoot.screen.height
-                        wallpaperScale: 1
-                    }
-                }
-
-                FadeLoader {
                     shown: bgRoot._widgetEnabled("japaneseTypography", false)
                     z: item?.desktopStackZ ?? 0
                     containmentMask: GlobalStates.widgetEditMode ? _hitMask14 : null
@@ -1672,77 +1695,6 @@ Scope {
                         scaledScreenWidth: bgRoot.screen.width
                         scaledScreenHeight: bgRoot.screen.height
                         wallpaperScale: 1
-                    }
-                }
-
-                // Extra mascot instances (Settings › Widgets › Mascot › "+"),
-                // one MascotWidget per id under background.widgets.mascotInstances.
-                Repeater {
-                    model: {
-                        void Config.revision;
-                        const obj = Config.getNestedValue("background.widgets.mascotInstances", {});
-                        return Object.keys(obj ?? {}).sort();
-                    }
-
-                    Loader {
-                        id: mascotInstanceLoader
-                        required property string modelData
-                        required property int index
-                        z: item?.desktopStackZ ?? 0
-                        containmentMask: GlobalStates.widgetEditMode ? _hitMaskInst : null
-                        WidgetInputMask { id: _hitMaskInst; loader: parent }
-
-                        active: false
-
-                        function _configEnabled(): bool {
-                            return DesktopWidgetLayout.enabled(bgRoot.screenName,
-                                "mascotInstances." + modelData,
-                                Config.getNestedValue("background.widgets.mascotInstances." + modelData + ".enable", false));
-                        }
-                        function _load(): void {
-                            active = true;
-                            setSource("file://" + Directories.payloadPath("modules/background/widgets/mascot/MascotWidget.qml"), {
-                                configEntryName: "mascotInstances." + modelData,
-                                widgetIndex: 23 + index,
-                                outputName: bgRoot.screen?.name ?? "",
-                                screenWidth: bgRoot.screen.width,
-                                screenHeight: bgRoot.screen.height,
-                                scaledScreenWidth: bgRoot.screen.width,
-                                scaledScreenHeight: bgRoot.screen.height,
-                                wallpaperScale: 1
-                            });
-                        }
-                        function _unload(): void {
-                            active = false;
-                            source = "";
-                        }
-                        function _syncLoaded(): void {
-                            if (_configEnabled()) {
-                                if (!item) _load();
-                            } else if (item || active) {
-                                _unload();
-                            }
-                        }
-
-                        Component.onCompleted: Qt.callLater(_syncLoaded)
-
-                        Connections {
-                            target: Config
-                            function onConfigChanged() { Qt.callLater(mascotInstanceLoader._syncLoaded) }
-                        }
-                        Connections {
-                            target: bgRoot.screen
-                            function onWidthChanged() {
-                                if (!mascotInstanceLoader.item) return;
-                                mascotInstanceLoader.item.screenWidth = bgRoot.screen.width;
-                                mascotInstanceLoader.item.scaledScreenWidth = bgRoot.screen.width;
-                            }
-                            function onHeightChanged() {
-                                if (!mascotInstanceLoader.item) return;
-                                mascotInstanceLoader.item.screenHeight = bgRoot.screen.height;
-                                mascotInstanceLoader.item.scaledScreenHeight = bgRoot.screen.height;
-                            }
-                        }
                     }
                 }
 

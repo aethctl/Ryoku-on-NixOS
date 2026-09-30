@@ -10,6 +10,7 @@ import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.background.widgets
+import inir.modules.background.widgets.instrument
 import inir.modules.iris.widgets
 
 AbstractBackgroundWidget {
@@ -103,41 +104,40 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 7
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.cardStyle
                     model: [
-                        { label: Translation.tr("Card"), value: "card" },
-                        { label: Translation.tr("Instrument"), value: "instrument" }
+                        { label: Translation.tr("Card"), icon: "badge", value: "card" },
+                        { label: Translation.tr("Instrument"), icon: "avg_pace", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: modelData.label
-                        toggled: root.cardStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
-                    model: [
-                        { label: Translation.tr("Avatar"), icon: "person", key: "showAvatar", value: root.showAvatar },
-                        { label: Translation.tr("Weather"), icon: "cloud", key: "showWeather", value: root.showWeather },
-                        { label: Translation.tr("Host"), icon: "computer", key: "showHostname", value: root.showHostname }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: modelData.value
-                        onClicked: root._setOutputValue(modelData.key, !modelData.value)
-                    }
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "person"
+                    label: Translation.tr("Avatar")
+                    checked: root.showAvatar
+                    onToggled: root._setOutputValue("showAvatar", !root.showAvatar)
+                }
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "cloud"
+                    label: Translation.tr("Weather")
+                    checked: root.showWeather
+                    onToggled: root._setOutputValue("showWeather", !root.showWeather)
+                }
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "computer"
+                    label: Translation.tr("Host name")
+                    checked: root.showHostname
+                    onToggled: root._setOutputValue("showHostname", !root.showHostname)
                 }
             }
         }
@@ -431,10 +431,7 @@ AbstractBackgroundWidget {
                 layer.enabled: status === Image.Ready
                 layer.effect: GE.OpacityMask { maskSource: instrumentAvatarMask }
             }
-            Rectangle { width: Math.round(13 * root.scaleFactor); height: 2; color: root.widgetAccentVisible; anchors { left: parent.left; top: parent.top } }
-            Rectangle { width: 2; height: Math.round(13 * root.scaleFactor); color: root.widgetAccentVisible; anchors { left: parent.left; top: parent.top } }
-            Rectangle { width: Math.round(13 * root.scaleFactor); height: 2; color: root.widgetAccentVisible; anchors { right: parent.right; bottom: parent.bottom } }
-            Rectangle { width: 2; height: Math.round(13 * root.scaleFactor); color: root.widgetAccentVisible; anchors { right: parent.right; bottom: parent.bottom } }
+            InstrumentBrackets { anchors.fill: parent; color: root.widgetAccentVisible; length: Math.round(13 * root.scaleFactor) }
         }
 
         ColumnLayout {
@@ -442,13 +439,11 @@ AbstractBackgroundWidget {
             Layout.fillHeight: true
             spacing: Math.round(3 * root.scaleFactor)
 
-            StyledText {
-                text: "IDENTITY / SESSION"
+            InstrumentLabel {
+                text: Translation.tr("Identity / Session")
                 color: root.widgetAccentVisible
-                font.family: Appearance.font.family.monospace
-                font.pixelSize: Math.max(8, Math.round(9 * root.scaleFactor))
-                font.weight: Font.DemiBold
-                font.letterSpacing: Math.round(1 * root.scaleFactor)
+                scaleFactor: root.scaleFactor
+                strong: true
             }
             StyledText {
                 Layout.fillWidth: true
@@ -473,17 +468,26 @@ AbstractBackgroundWidget {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Math.round(10 * root.scaleFactor)
-                ColumnLayout {
-                    spacing: 0
-                    StyledText { text: "SESSION"; color: root.widgetInkMuted; font.family: Appearance.font.family.monospace; font.pixelSize: Math.max(7, Math.round(8 * root.scaleFactor)) }
-                    StyledText { text: DateTime.uptime || "--"; color: root.widgetInk; font.family: root.widgetNumbersFamily; font.pixelSize: Math.max(13, Math.round(15 * root.scaleFactor)); font.weight: Font.DemiBold }
+                InstrumentField {
+                    Layout.alignment: Qt.AlignTop
+                    scaleFactor: root.scaleFactor
+                    label: Translation.tr("Session")
+                    value: DateTime.uptime
+                    ink: root.widgetInk
+                    muted: root.widgetInkMuted
+                    family: root.widgetNumbersFamily
                 }
-                ColumnLayout {
+                InstrumentField {
                     visible: root.showWeather && root.weatherLine.text !== ""
                     Layout.fillWidth: true
-                    spacing: 0
-                    StyledText { text: "CONDITION"; color: root.widgetInkMuted; font.family: Appearance.font.family.monospace; font.pixelSize: Math.max(7, Math.round(8 * root.scaleFactor)) }
-                    StyledText { Layout.fillWidth: true; text: root.weatherLine.text; color: root.widgetInk; elide: Text.ElideRight; font.pixelSize: Math.max(11, Math.round(12 * root.scaleFactor)); font.weight: Font.Medium }
+                    Layout.alignment: Qt.AlignTop
+                    scaleFactor: root.scaleFactor
+                    label: Translation.tr("Condition")
+                    value: root.weatherLine.text
+                    ink: root.widgetInk
+                    muted: root.widgetInkMuted
+                    family: root.widgetBodyFamily
+                    valueSize: 12
                 }
             }
         }

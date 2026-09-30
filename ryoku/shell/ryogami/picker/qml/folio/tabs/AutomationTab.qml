@@ -158,6 +158,7 @@ FolioTabData {
                   key: "postProcessing.N.command",
                   kind: "text",
                   label: I18n.tr("Command %1"),
+                  searchTitle: I18n.tr("Post-apply command"),
                   help: "",
                   args: ["index"],
                   placeholder: I18n.tr("Shell command"),

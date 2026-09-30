@@ -8,6 +8,7 @@ import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.common.widgets.widgetCanvas
 import inir.modules.background.widgets
+import inir.modules.background.widgets.instrument
 import inir.modules.iris.widgets
 
 AbstractBackgroundWidget {
@@ -140,112 +141,86 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-            GridLayout {
-                columns: 4
-                columnSpacing: 4
-                rowSpacing: 4
-                Repeater {
+            spacing: 14
+
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    maxColumns: 2
+                    current: root.weatherStyle
                     model: [
                         { label: Translation.tr("Shape"), icon: "category", value: "pill" },
                         { label: Translation.tr("Card"), icon: "crop_landscape", value: "card" },
                         { label: Translation.tr("Detail"), icon: "dashboard", value: "detail" },
                         { label: Translation.tr("Instrument"), icon: "wb_twilight", value: "dial" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.weatherStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-            // Shape picker (visible only in pill/shape mode)
-            GridLayout {
-                visible: root.weatherStyle === "pill"
-                columns: 4
-                columnSpacing: 3
-                rowSpacing: 3
-                Repeater {
-                    model: root._shapeOptions
-                    Rectangle {
-                        required property var modelData
-                        property alias hovered: shapeMouseArea.containsMouse
-                        Layout.preferredWidth: 36
-                        Layout.preferredHeight: 36
-                        radius: Appearance.rounding.small
-                        color: root.weatherShape === modelData.value
-                            ? ColorUtils.applyAlpha(root.accentPrimary, 0.18)
-                            : "transparent"
-                        border.width: root.weatherShape === modelData.value ? 1.5 : 0
-                        border.color: root.accentPrimary
 
-                        MaterialShape {
-                            anchors.centerIn: parent
-                            implicitSize: 22
-                            shape: root._shapeMap[modelData.value] ?? MaterialShape.Shape.Pill
-                            color: root.weatherShape === modelData.value
-                                ? root.accentPrimary : root.accentOnPrimaryContainer
-                        }
-                        MouseArea {
-                            id: shapeMouseArea
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            hoverEnabled: true
+            WidgetQuickSection {
+                visible: root.weatherStyle === "pill"
+                title: Translation.tr("Shape")
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: 6
+                    columnSpacing: 4
+                    rowSpacing: 4
+                    Repeater {
+                        model: root._shapeOptions
+                        WidgetQuickChoice {
+                            id: shapeChoice
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.maximumWidth: Number.POSITIVE_INFINITY
+                            implicitHeight: 40
+                            selected: root.weatherShape === modelData.value
+                            tooltip: modelData.label
                             onClicked: root._setOutputValue("shape", modelData.value)
+                            MaterialShape {
+                                anchors.centerIn: parent
+                                implicitSize: 22
+                                shape: root._shapeMap[shapeChoice.modelData.value] ?? MaterialShape.Shape.Pill
+                                color: shapeChoice.ink
+                            }
                         }
-                        StyledToolTip { text: modelData.label }
                     }
                 }
             }
-            // Content toggles
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
+
+            WidgetQuickSection {
+                title: Translation.tr("Show")
                 Repeater {
                     model: [
-                        { label: Translation.tr("Temp"), icon: "thermostat", key: "showTemp" },
+                        { label: Translation.tr("Temperature"), icon: "thermostat", key: "showTemp" },
                         { label: Translation.tr("Icon"), icon: "cloud", key: "showIcon" },
-                        { label: Translation.tr("Text"), icon: "text_fields", key: "showCondition" }
+                        { label: Translation.tr("Condition"), icon: "text_fields", key: "showCondition" }
                     ]
-                    WidgetChoiceButton {
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key)
-                            ?? (modelData.key !== "showCondition"))
-                        enabled: !toggled || root.visibleContentCount > 1
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? (modelData.key !== "showCondition"))
+                        enabled: !checked || root.visibleContentCount > 1
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
-            }
-            GridLayout {
-                visible: root.weatherStyle === "dial"
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
                 Repeater {
-                    model: [
+                    model: root.weatherStyle === "dial" ? [
                         { label: Translation.tr("Sun path"), icon: "wb_twilight", key: "showSunPath", fallback: true },
-                        { label: Translation.tr("Sun times"), icon: "schedule", key: "showSunTimes", fallback: true },
+                        { label: Translation.tr("Sunrise and sunset"), icon: "schedule", key: "showSunTimes", fallback: true },
                         { label: Translation.tr("Location"), icon: "location_on", key: "showLocation", fallback: true }
-                    ]
-                    WidgetChoiceButton {
+                    ] : []
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
                         enabled: modelData.key !== "showSunTimes" || root.showSunPath
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
             }
@@ -549,19 +524,13 @@ AbstractBackgroundWidget {
                 Layout.fillHeight: true
                 spacing: Math.round(3 * root.scaleFactor)
 
-                StyledText {
+                InstrumentLabel {
                     Layout.fillWidth: true
-                    visible: root.showLocation && Weather.showVisibleCity
-                    text: root.widgetCase(String(Weather.visibleCity || ""))
-                    elide: Text.ElideRight
-                    color: root.widgetInkMuted
-                    font {
-                        family: root.widgetBodyFamily
-                        pixelSize: Math.max(9, Math.round(10 * root.scaleFactor))
-                        weight: Font.DemiBold
-                        letterSpacing: root.widgetIris ? 0 : Math.round(1.4 * root.scaleFactor)
-                        capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
-                    }
+                    text: root.showLocation && Weather.showVisibleCity && String(Weather.visibleCity || "").length > 0
+                        ? Translation.tr("Atmosphere / %1").arg(Weather.visibleCity) : Translation.tr("Atmosphere / Local")
+                    color: root.widgetAccentVisible
+                    scaleFactor: root.scaleFactor
+                    strong: true
                 }
 
                 RowLayout {
@@ -592,17 +561,38 @@ AbstractBackgroundWidget {
                     }
                 }
 
-                StyledText {
+                InstrumentLabel {
                     Layout.fillWidth: true
-                    visible: root.showCondition
+                    visible: root.showCondition && text.length > 0
                     text: Weather.data?.description ?? ""
-                    elide: Text.ElideRight
                     color: root.widgetInkMuted
-                    font.family: root.widgetBodyFamily
-                    font.pixelSize: Math.max(10, Math.round(instrumentArea.side * 0.055))
-                    font.weight: Font.DemiBold
-                    font.capitalization: root.widgetIris ? Font.MixedCase : Font.AllUppercase
-                    font.letterSpacing: root.widgetIris ? 0 : Math.round(1.1 * root.scaleFactor)
+                    scaleFactor: root.scaleFactor
+                    size: 10
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.topMargin: Math.round(4 * root.scaleFactor)
+                    visible: instrumentArea.side >= Math.round(140 * root.scaleFactor)
+                    spacing: Math.round(12 * root.scaleFactor)
+                    Repeater {
+                        model: [
+                            { label: Translation.tr("Feels"), value: String(Weather.data?.tempFeelsLike ?? "").replace(/[CF]$/, "") },
+                            { label: Translation.tr("Humidity"), value: String(Weather.data?.humidity ?? "") },
+                            { label: Translation.tr("Wind"), value: String(Weather.data?.wind ?? "").split(" ")[0] + " " + String(Weather.data?.windDir ?? "") }
+                        ]
+                        InstrumentField {
+                            required property var modelData
+                            Layout.alignment: Qt.AlignTop
+                            scaleFactor: root.scaleFactor
+                            label: modelData.label
+                            value: modelData.value
+                            ink: root.widgetInk
+                            muted: root.widgetInkMuted
+                            family: root.widgetNumbersFamily
+                            valueSize: 12
+                        }
+                    }
                 }
             }
 

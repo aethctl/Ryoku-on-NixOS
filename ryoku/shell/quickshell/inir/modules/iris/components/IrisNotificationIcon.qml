@@ -36,6 +36,7 @@ Item {
         }
         return ""
     }
+    readonly property bool iconFile: root.resolvedIcon.startsWith("/") || root.resolvedIcon.startsWith("file:")
     readonly property var semantic: {
         const text = (root.appName + " " + root.appIcon + " " + root.summary).toLowerCase()
         const rules = [
@@ -67,12 +68,9 @@ Item {
         visible: root.hasImage
         radius: IrisStyle.iconRadius(root.width)
         color: IrisStyle.surfaceHigh
-        Image {
+        IrisImage {
             anchors.fill: parent
             source: root.hasImage ? root.image : ""
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: true
-            sourceSize: Qt.size(root.width * 2, root.height * 2)
         }
     }
 
@@ -86,14 +84,20 @@ Item {
 
         SmartAppIcon {
             anchors.fill: parent
-            visible: root.resolvedIcon.length > 0
-            icon: root.resolvedIcon
-            fallback: "application-x-executable"
+            visible: root.resolvedIcon.length > 0 && !root.iconFile
+            icon: root.iconFile ? "" : root.resolvedIcon
             iconSize: identity.extent
+        }
+        IrisImage {
+            id: iconFileImage
+            anchors.fill: parent
+            visible: root.iconFile && status === Image.Ready
+            source: root.iconFile ? (root.resolvedIcon.startsWith("/") ? "file://" + root.resolvedIcon : root.resolvedIcon) : ""
+            fillMode: Image.PreserveAspectFit
         }
         Rectangle {
             anchors.fill: parent
-            visible: root.resolvedIcon.length === 0
+            visible: root.resolvedIcon.length === 0 || root.iconFile && iconFileImage.status !== Image.Ready
             id: tile
             radius: IrisStyle.iconRadius(width)
             readonly property bool insignia: root.fromShell && !root.critical

@@ -32,7 +32,7 @@ ColumnLayout {
                 Layout.topMargin: 4 * root.d
                 text: deviceGroup.modelData.title
                 role: IrisText.Meta
-                font.weight: Font.DemiBold
+                font.weight: IrisStyle.weight(Font.DemiBold)
             }
             Repeater {
                 model: deviceGroup.modelData.devices
@@ -64,7 +64,7 @@ ColumnLayout {
                             Layout.fillWidth: true
                             text: Audio.friendlyDeviceName(deviceRow.modelData)
                             elide: Text.ElideRight
-                            font.pixelSize: 12.5 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeLabel
                         }
                         MaterialSymbol {
                             visible: deviceRow.current

@@ -100,16 +100,16 @@ Singleton {
     readonly property string coverSourceUrl: {
         if (MprisController.isYtMusicActive && YtMusic.currentVideoId)
             return YtMusic.currentThumbnail ?? ""
-        return MprisController.activePlayer?.trackArtUrl ?? ""
+        return MprisController.artUrlOf(MprisController.activePlayer) ?? ""
     }
 
     readonly property string coverTitle: MprisController.isYtMusicActive && YtMusic.currentVideoId
         ? YtMusic.currentTitle
-        : (MprisController.activePlayer?.trackTitle ?? "")
+        : (MprisController.titleOf(MprisController.activePlayer) ?? "")
 
     readonly property string coverArtist: MprisController.isYtMusicActive && YtMusic.currentVideoId
         ? YtMusic.currentArtist
-        : (MprisController.activePlayer?.trackArtist ?? "")
+        : (MprisController.artistOf(MprisController.activePlayer) ?? "")
 
     readonly property string coverAlbum: MprisController.isYtMusicActive && YtMusic.currentVideoId
         ? ""

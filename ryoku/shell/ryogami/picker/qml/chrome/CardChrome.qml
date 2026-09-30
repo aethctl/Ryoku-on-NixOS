@@ -9,6 +9,12 @@ Item {
     readonly property CardField field: state.field
 
     readonly property rect cardRect: chrome.field ? chrome.field.currentRect : Qt.rect(0, 0, 0, 0)
+    // Half the card's skew and edge tilt: the same inner box and shear card.frag draws.
+    readonly property point shear: chrome.field ? chrome.field.currentShear : Qt.point(0, 0)
+    readonly property real sx: chrome.shear.x * 0.5
+    readonly property real ty: chrome.shear.y * 0.5
+    readonly property real innerW: Math.max(chrome.cardRect.width - 2 * Math.abs(chrome.sx), 2)
+    readonly property real innerH: Math.max(chrome.cardRect.height - 2 * Math.abs(chrome.ty), 2)
     readonly property int row: chrome.field ? chrome.field.currentIndex : -1
     // view.get() is a call QML cannot track, so any model change re-runs the lookup.
     property int _rev: 0
@@ -43,11 +49,17 @@ Item {
         && (chrome.entry.name || chrome.entry.key))
 
     Item {
-        x: chrome.cardRect.x
-        y: chrome.cardRect.y
-        width: chrome.cardRect.width
-        height: chrome.cardRect.height
+        x: chrome.cardRect.x + (chrome.cardRect.width - chrome.innerW) * 0.5
+        y: chrome.cardRect.y + (chrome.cardRect.height - chrome.innerH) * 0.5
+        width: chrome.innerW
+        height: chrome.innerH
         clip: true
+        transform: Matrix4x4 {
+            matrix: Qt.matrix4x4(1, -2 * chrome.sx / chrome.innerH, 0, chrome.sx,
+                                 -2 * chrome.ty / chrome.innerW, 1, 0, chrome.ty,
+                                 0, 0, 1, 0,
+                                 0, 0, 0, 1)
+        }
 
         Row {
             anchors.left: parent.left

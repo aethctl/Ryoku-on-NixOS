@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QQmlEngine>
+#include <QUrl>
 
 namespace {
 const QString kWorkshop = QStringLiteral("steam");
@@ -50,6 +51,12 @@ void RemoteResults::setProvider(const QString &value)
         return;
     m_provider = value;
     // Another provider's rows must not linger under this tab while its search runs.
+    clear();
+    Q_EMIT providerChanged();
+}
+
+void RemoteResults::clear()
+{
     ++m_searchGen;
     setLoading(false);
     setError(QString());
@@ -58,9 +65,15 @@ void RemoteResults::setProvider(const QString &value)
     endResetModel();
     rebuildIdIndex();
     ++m_cardGen;
+    // With the old paging kept, the empty grid's infinite scroll would fetch the next page.
+    m_page = 1;
+    Q_EMIT pageChanged();
+    if (m_lastPage != 1) {
+        m_lastPage = 1;
+        Q_EMIT lastPageChanged();
+    }
     Q_EMIT countChanged();
     Q_EMIT m_notifier->cardsChanged();
-    Q_EMIT providerChanged();
 }
 
 void RemoteResults::setQuery(const QString &value)
@@ -237,9 +250,10 @@ void RemoteResults::download(int row, const QVariantMap &opts)
         } else {
             const QJsonObject reply = result.toObject();
             const QString status = reply.value(QStringLiteral("status")).toString();
-            if (status == QLatin1String("open_in_steam")) {
+            if (status == QLatin1String("open_in_steam") || status == QLatin1String("no_steam")) {
                 m_rows[at].downloadStatus.clear();
-                Q_EMIT openInSteam(id, reply.value(QStringLiteral("url")).toString());
+                Q_EMIT openInSteam(id, reply.value(QStringLiteral("url")).toString(),
+                                   status == QLatin1String("open_in_steam"));
             } else if (!status.isEmpty() && status != QLatin1String("started")) {
                 m_rows[at].downloadStatus = status;
             }
@@ -259,7 +273,8 @@ void RemoteResults::cancelDownload(int row)
 
 void RemoteResults::preview(int row)
 {
-    if (row < 0 || row >= m_rows.size() || !m_daemon)
+    // A clip link plays in the preview itself; there is no still to fetch for it.
+    if (row < 0 || row >= m_rows.size() || !m_daemon || !cardPreviewVideo(row).isEmpty())
         return;
     const Row &r = m_rows[row];
     m_daemon->call(QStringLiteral("source.preview"),
@@ -298,6 +313,7 @@ void RemoteResults::onEvent(const QString &name, const QVariantMap &data)
         const QModelIndex idx = index(at);
         Q_EMIT dataChanged(idx, idx, {ThumbRole});
         Q_EMIT m_notifier->cardUpdated(at);
+        Q_EMIT thumbArrived(at);
     } else if (name == QLatin1String("ryogami.source.preview_ready")) {
         Q_EMIT previewReady(data.value(QStringLiteral("id")).toString(),
                             data.value(QStringLiteral("path")).toString());
@@ -393,6 +409,20 @@ QString RemoteResults::cardFullImage(int row) const
 {
     // Nothing local exists before download; the cached thumbnail is the sharpest resident source.
     return row >= 0 && row < m_rows.size() ? m_rows[row].thumb : QString();
+}
+
+// A result whose link is the clip itself plays in its card while focused, like a local video.
+QString RemoteResults::cardPreviewVideo(int row) const
+{
+    if (row < 0 || row >= m_rows.size())
+        return {};
+    const QString url = m_rows[row].fullUrl;
+    const QString path = QUrl(url).path().toLower();
+    for (const char *ext : {".webm", ".mp4", ".mkv", ".mov"}) {
+        if (path.endsWith(QLatin1String(ext)))
+            return url;
+    }
+    return {};
 }
 
 QSizeF RemoteResults::cardImageSize(int row) const

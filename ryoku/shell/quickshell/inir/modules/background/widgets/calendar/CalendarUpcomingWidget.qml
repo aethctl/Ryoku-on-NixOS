@@ -10,6 +10,7 @@ import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.common.widgets.widgetCanvas
 import inir.modules.background.widgets
+import inir.modules.background.widgets.instrument
 import inir.modules.iris.widgets
 
 AbstractBackgroundWidget {
@@ -126,79 +127,61 @@ AbstractBackgroundWidget {
     // ── Edit popover: max events + toggles ────────────────────
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.eventStyle
                     model: [
-                        { label: Translation.tr("Card"), value: "card" },
-                        { label: Translation.tr("Instrument"), value: "instrument" }
+                        { label: Translation.tr("Card"), icon: "crop_landscape", value: "card" },
+                        { label: Translation.tr("Instrument"), icon: "avg_pace", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: modelData.label
-                        toggled: root.eventStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-
-            // Max events spinner
-            Row {
-                spacing: 6
-                Layout.alignment: Qt.AlignHCenter
-                StyledText {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: Translation.tr("Show:")
-                    color: Appearance.colors.colOnLayer2
-                    font.pixelSize: Appearance.font.pixelSize.small
-                }
-                Repeater {
-                    model: [3, 5, 8, 12]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: String(modelData)
-                        toggled: root.maxEvents === modelData
-                        onClicked: root._setOutputValue("maxEvents", modelData)
-                    }
+            WidgetQuickSection {
+                title: Translation.tr("Events shown")
+                WidgetQuickChoices {
+                    maxColumns: 4
+                    current: root.maxEvents
+                    model: [
+                        { label: "3", value: 3 },
+                        { label: "5", value: 5 },
+                        { label: "8", value: 8 },
+                        { label: "12", value: 12 }
+                    ]
+                    onPicked: value => root._setOutputValue("maxEvents", value)
                 }
             }
-
-            // Toggles
-            Row {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                WidgetChoiceButton {
-                    leftmost: true; rightmost: true
-                    buttonIcon: "schedule"
-                    buttonText: Translation.tr("Time")
-                    toggled: root.showTime
-                    onClicked: root._setOutputValue("showTime", !root.showTime)
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "schedule"
+                    label: Translation.tr("Time")
+                    checked: root.showTime
+                    onToggled: root._setOutputValue("showTime", !root.showTime)
                 }
-                WidgetChoiceButton {
-                    leftmost: true; rightmost: true
-                    buttonIcon: "today"
-                    buttonText: Translation.tr("Date")
-                    toggled: root.showDate
-                    onClicked: root._setOutputValue("showDate", !root.showDate)
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "today"
+                    label: Translation.tr("Date")
+                    checked: root.showDate
+                    onToggled: root._setOutputValue("showDate", !root.showDate)
                 }
-                WidgetChoiceButton {
-                    leftmost: true; rightmost: true
-                    buttonIcon: "place"
-                    buttonText: Translation.tr("Location")
-                    toggled: root.showLocation
-                    onClicked: root._setOutputValue("showLocation", !root.showLocation)
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "place"
+                    label: Translation.tr("Location")
+                    checked: root.showLocation
+                    onToggled: root._setOutputValue("showLocation", !root.showLocation)
                 }
-                WidgetChoiceButton {
-                    leftmost: true; rightmost: true
-                    buttonIcon: "view_day"
-                    buttonText: Translation.tr("Group")
-                    toggled: root.groupByDay
-                    onClicked: root._setOutputValue("groupByDay", !root.groupByDay)
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "view_day"
+                    label: Translation.tr("Group by day")
+                    checked: root.groupByDay
+                    onToggled: root._setOutputValue("groupByDay", !root.groupByDay)
                 }
             }
         }
@@ -235,12 +218,20 @@ AbstractBackgroundWidget {
 
         // Header
         RowLayout {
-            visible: root.upcomingEvents.length > 0
+            visible: root.upcomingEvents.length > 0 || root.instrument
             Layout.fillWidth: true
             spacing: 6
 
+            InstrumentLabel {
+                visible: root.instrument
+                text: Translation.tr("Agenda / Upcoming")
+                color: root.widgetAccentVisible
+                scaleFactor: root.scaleFactor
+                strong: true
+            }
             StyledText {
-                text: root.instrument ? Translation.tr("AGENDA") : Translation.tr("Upcoming")
+                visible: !root.instrument
+                text: Translation.tr("Upcoming")
                 color: root.instrument ? root.widgetInk : (root.widgetEditorial ? root.widgetInk : root.widgetInkMuted)
                 font.family: root.instrument ? Appearance.font.family.monospace : root.widgetTitleFamily
                 font.pixelSize: Math.round((root.instrument ? Appearance.font.pixelSize.normal
@@ -349,8 +340,10 @@ AbstractBackgroundWidget {
             Layout.fillHeight: true
 
             Column {
-                anchors.centerIn: parent
-                width: Math.min(parent.width,
+                anchors.centerIn: root.instrument ? undefined : parent
+                anchors.left: root.instrument ? parent.left : undefined
+                anchors.verticalCenter: parent.verticalCenter
+                width: root.instrument ? parent.width : Math.min(parent.width,
                     Math.round(190 * root.scaleFactor))
                 spacing: Math.round(7 * root.scaleFactor)
 
@@ -371,31 +364,23 @@ AbstractBackgroundWidget {
 
                 StyledText {
                     width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
+                    horizontalAlignment: root.instrument ? Text.AlignLeft : Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
-                    text: root.instrument ? Translation.tr("CLEAR")
+                    text: root.instrument ? Translation.tr("All clear")
                         : Translation.tr("No upcoming events")
                     color: root.instrument ? root.widgetInk : root.widgetInkMuted
-                    font.family: root.instrument ? Appearance.font.family.monospace
-                        : root.widgetBodyFamily
-                    font.pixelSize: Math.round((root.instrument
-                        ? Appearance.font.pixelSize.large
-                        : Appearance.font.pixelSize.small) * root.scaleFactor)
+                    font.family: root.instrument ? root.widgetTitleFamily : root.widgetBodyFamily
+                    font.pixelSize: Math.round((root.instrument ? 22 : Appearance.font.pixelSize.small) * root.scaleFactor)
                     font.weight: root.instrument ? Font.Bold : Font.Normal
-                    font.letterSpacing: root.instrument ? Math.round(2 * root.scaleFactor) : 0
                     wrapMode: Text.WordWrap
                 }
 
-                StyledText {
+                InstrumentLabel {
                     visible: root.instrument
                     width: parent.width
-                    horizontalAlignment: Text.AlignHCenter
-                    text: Translation.tr("NO UPCOMING EVENTS")
-                    color: root.widgetAccentVisible
-                    font.family: Appearance.font.family.monospace
-                    font.pixelSize: Math.max(8, Math.round(9 * root.scaleFactor))
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: Math.round(1 * root.scaleFactor)
+                    text: Translation.tr("No events ahead")
+                    color: root.widgetInkMuted
+                    scaleFactor: root.scaleFactor
                 }
             }
         }

@@ -9,18 +9,20 @@ import inir.services
 import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.iris.style
+import inir.modules.background.widgets
 
 Singleton {
     id: root
 
     readonly property string folder: FileUtils.trimFileProtocol(`${Directories.shellConfig}/iris/themes`)
     readonly property var excludedPaths: ["iris.bar.position", "iris.dock.launcher", "iris.appearance.surfaces.cards.header",
-        "iris.appearance.surfaces.cards.devices", "iris.appearance.surfaces.cards.mixer", "iris.appearance.studioPreview",
-        "iris.dock.magnifySize", "iris.appearance.frontend"]
+        "iris.appearance.surfaces.cards.devices", "iris.appearance.surfaces.cards.mixer",
+        "iris.dock.magnifySize",
+        "iris.bubbles.extras.anime.enable", "iris.anime.shows"]
     readonly property var extraPaths: [
         { path: "iris.appearance.preset", fallback: "iris" },
         { path: "iris.bar.composition", fallback: "cluster" },
-        { path: "iris.appearance.motionDuration", fallback: 220 }
+        { path: "iris.appearance.motionDuration", fallback: 220 },
     ]
     readonly property var paths: {
         const seen = new Set()
@@ -58,8 +60,33 @@ Singleton {
     function apply(theme: var): void {
         if (!theme) return
         const updates = root.resolved(theme.values)
+        // The widget design goes through its owner so every widget follows the theme and the looks
+        // it replaces can be undone.
+        const design = String(updates["iris.widgets.design"] ?? "iris")
+        delete updates["iris.widgets.design"]
         updates["iris.appearance.themeId"] = String(theme.id ?? "")
         Config.setNestedValues(updates)
+        DesktopWidgetDesign.apply(design)
+    }
+    // A theme's palette alone: what it colours, never how anything is shaped, laid out or moves.
+    readonly property var colourPaths: ["iris.appearance.accent", "iris.appearance.highlight", "iris.appearance.theme.accentHue",
+        "iris.appearance.theme.highlightHue", "iris.appearance.theme.surface", "iris.appearance.theme.badge", "iris.appearance.aura",
+        "iris.appearance.theme.lightReach", "iris.appearance.theme.glow", "iris.appearance.tint", "iris.appearance.theme.rimTint",
+        "iris.appearance.glass.edgeColour", "iris.bar.clockAccent", "iris.controlCenter.accent", "iris.controlCenter.sliders",
+        "iris.appearance.anime.enabled", "iris.appearance.anime.palette", "iris.appearance.anime.strength",
+        "iris.appearance.anime.highlight", "iris.widgets.tint"]
+    function applyColours(theme: var): void {
+        if (!theme) return
+        const all = root.resolved(theme.values)
+        const updates = {}
+        for (const path of root.colourPaths) if (Object.prototype.hasOwnProperty.call(all, path)) updates[path] = all[path]
+        Config.setNestedValues(updates)
+    }
+    readonly property bool coloursOnly: Boolean(Config.options?.iris?.appearance?.themeColoursOnly ?? false)
+    // What choosing a theme does, as the person set it: the whole theme, or its colours.
+    function choose(theme: var): void {
+        if (root.coloursOnly) root.applyColours(theme)
+        else root.apply(theme)
     }
     function find(id: string): var {
         return root.all.find(theme => theme.id === id) ?? null
@@ -196,17 +223,16 @@ Singleton {
 
     readonly property var all: root.curated.concat(root.user)
 
-    function colourOf(choice: string, hue: var, table: var, fallback: color): color {
-        if (choice === "custom") return Qt.hsla(((Number(hue ?? 0) % 360) + 360) % 360 / 360, 0.75, 0.72, 1)
-        if (choice === "theme") return IrisStyle.themeAccent
-        if (choice === "wallpaper") return IrisStyle.wallpaperLight
-        return table[choice] ?? fallback
-    }
     function swatch(theme: var): var {
         const v = root.resolved(theme?.values ?? {})
-        const accent = root.colourOf(v["iris.appearance.accent"], v["iris.appearance.theme.accentHue"], IrisStyle.accents, IrisStyle.accents.blue)
-        const highlight = v["iris.appearance.highlight"] === "accent" ? accent
-            : root.colourOf(v["iris.appearance.highlight"], v["iris.appearance.theme.highlightHue"], IrisStyle.highlights, IrisStyle.highlights.orange)
+        const baseAccent = IrisStyle.accentFrom(String(v["iris.appearance.accent"] ?? "blue"), v["iris.appearance.theme.accentHue"])
+        const animeOn = Boolean(v["iris.appearance.anime.enabled"] ?? false)
+        const animePalette = String(v["iris.appearance.anime.palette"] ?? "sakura")
+        const animeStrength = Number(v["iris.appearance.anime.strength"] ?? 0) / 100
+        const accent = animeOn ? IrisStyle.animeAccent(baseAccent, animePalette, animeStrength) : baseAccent
+        const baseHighlight = IrisStyle.highlightFrom(String(v["iris.appearance.highlight"] ?? "orange"), v["iris.appearance.theme.highlightHue"], baseAccent)
+        const highlight = animeOn && Boolean(v["iris.appearance.anime.highlight"] ?? false)
+            ? IrisStyle.animeHighlight(baseHighlight, animePalette, animeStrength) : baseHighlight
         const preset = IrisStyle.presets[v["iris.appearance.preset"]] ?? IrisStyle.presets.iris
         return {
             surface: IrisStyle.materialSwatch(String(v["iris.appearance.theme.surface"])),
@@ -218,14 +244,15 @@ Singleton {
             pieceShape: String(v["iris.appearance.theme.pieceShape"]),
             lines: Number(v["iris.appearance.theme.lines"]) / 100,
             rim: Boolean(v["iris.appearance.theme.rim"]),
-            titleFont: String(v["iris.appearance.titleFontFamily"]) || "Readex Pro",
-            numbersFont: String(v["iris.appearance.numbersFontFamily"]) || "Rubik",
+            titleFont: IrisStyle.face("iris.appearance.titleFontFamily", v["iris.appearance.titleFontFamily"]),
+            numbersFont: IrisStyle.face("iris.appearance.numbersFontFamily", v["iris.appearance.numbersFontFamily"]),
             figureWeight: ({ light: Font.Light, regular: Font.Normal })[v["iris.appearance.figureWeight"]] ?? Font.Bold,
             framed: Boolean(v["iris.surround.enable"]),
             notch: Boolean(v["iris.bar.notch"]),
             dockNotch: Boolean(v["iris.dock.notch"]),
             dockPosition: String(v["iris.dock.position"] ?? "auto"),
             layout: String(v["iris.bar.layout"]),
+            clearStrip: String(v["iris.bar.strip"] ?? "clear") === "clear",
             clockAccent: String(v["iris.bar.clockAccent"])
         }
     }
@@ -241,22 +268,20 @@ Singleton {
         return out
     }
     readonly property var curated: [
-        { id: "iris", name: "iRiS", author: "iNiR", tags: ["dark", "direct"],
+        { id: "iris", name: "Shima", author: "iNiR", tags: ["dark", "direct"],
             description: "The signature: black objects that melt into the frame they grow from, direct motion, lit by what things are.",
             values: ({}) },
         { id: "liquid-glass", name: "Liquid Glass", author: "iNiR", tags: ["glass", "round", "springy"],
-            description: "Everything turns to glass over the wallpaper: round bubbles that melt into the Island, airy light figures and springy, liquid motion.",
-            values: root.values({ "glass.mode": "wallpaper", "glass.tint": 42, "glass.blur": 100, "theme.rim": false, "iris.appearance.preset": "round",
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "neutral", "glass.mode": "wallpaper", "glass.tint": 42, "glass.blur": 100, "theme.rim": false, "iris.appearance.preset": "round",
                 "theme.shape": 115, "theme.melt": 55, "theme.lines": 0, "theme.shadow": 110, "theme.glow": 20, "iris.appearance.aura": "vivid",
                 "theme.lightReach": 170, "iris.appearance.accent": "wallpaper", "iris.appearance.highlight": "wallpaper",
                 "iris.appearance.fontFamily": "Roboto Flex", "iris.appearance.numbersFontFamily": "Roboto Flex", "iris.appearance.figureWeight": "light",
                 "iris.appearance.morph": "liquid", "theme.bounce": 120, "iris.bar.notch": true, "iris.bar.height": 44, "iris.bar.satelliteGap": 8,
                 "iris.bubbles.scale": 108, "iris.surround.thickness": 8, "iris.surround.radius": 30, "iris.palette.opens": "island",
                 "iris.controlCenter.controls": "round", "iris.widgets.material": "glass", "iris.widgets.radius": 30, "iris.widgets.weight": "light",
-                "iris.dock.material": "inherit", "iris.dock.magnification": true, "iris.dock.iconSize": 44 }) },
+                "iris.dock.material": "inherit", "iris.dock.magnification": false, "iris.dock.iconSize": 44 }) },
         { id: "frost", name: "Frost", author: "iNiR", tags: ["glass", "bar", "calm"],
-            description: "A frosted graphite bar across the top: workspaces and the window on the left, the Island in the middle, your pieces on the right. Icy accents, gentle glides.",
-            values: root.values({ "glass.mode": "wallpaper", "glass.tint": 56, "glass.blur": 100, "theme.surface": "graphite", "theme.rim": false,
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "glass.mode": "wallpaper", "glass.tint": 56, "glass.blur": 100, "theme.surface": "graphite", "theme.rim": false,
                 "iris.appearance.preset": "soft", "theme.lines": 35, "theme.shadow": 80, "theme.melt": 15, "iris.appearance.accent": "custom",
                 "theme.accentHue": 196, "iris.appearance.highlight": "custom", "theme.highlightHue": 188, "iris.appearance.aura": "subtle",
                 "iris.appearance.morph": "glide", "theme.curve": "gentle", "theme.openTime": 115, "iris.appearance.figureWeight": "light",
@@ -266,10 +291,9 @@ Singleton {
                 "iris.widgets.weight": "light", "iris.dock.notch": false, "iris.dock.iconSize": 38, "iris.dock.magnification": false,
                 "iris.controlCenter.controls": "round" }) },
         { id: "obsidian", name: "Obsidian", author: "iNiR", tags: ["sharp", "technical"],
-            description: "Cut stone: an Island that rests at the start of the edge, square pieces welded to it, strong hairlines, deep shadows and snappy motion. No light.",
-            values: root.values({ "iris.appearance.preset": "angular", "theme.shape": 70, "theme.melt": 0, "theme.pieceShape": "square", "theme.surface": "black",
-                "theme.lines": 130, "theme.rim": false, "theme.shadow": 150, "theme.fill": 115, "iris.bar.notch": false, "iris.dock.notch": false,
-                "iris.bubbles.join": "weld", "iris.appearance.aura": "off", "iris.appearance.accent": "lilac", "iris.appearance.highlight": "accent",
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "neutral", "iris.appearance.preset": "angular", "theme.shape": 70, "theme.pieceShape": "squircle", "theme.surface": "black",
+                "theme.lines": 130, "theme.rim": false, "theme.shadow": 150, "theme.fill": 115, "iris.dock.notch": false,
+                "iris.appearance.aura": "off", "iris.appearance.accent": "lilac", "iris.appearance.highlight": "accent",
                 "theme.badge": "accent", "iris.appearance.morph": "snap", "theme.curve": "swift", "theme.openTime": 80, "theme.press": 60,
                 "iris.appearance.fontFamily": "Space Grotesk", "iris.appearance.titleFontFamily": "Space Grotesk", "iris.appearance.numbersFontFamily": "Space Grotesk",
                 "iris.appearance.figureWeight": "regular", "iris.surround.thickness": 14, "iris.surround.radius": 8, "iris.bar.layout": "left",
@@ -277,17 +301,15 @@ Singleton {
                 "iris.controlCenter.controls": "tiles", "iris.widgets.material": "solid", "iris.widgets.radius": 6, "iris.widgets.weight": "regular",
                 "iris.dock.material": "solid", "iris.dock.iconSize": 40 , "iris.appearance.expandedRadius": 16}) },
         { id: "aurora", name: "Aurora", author: "iNiR", tags: ["wallpaper", "vivid", "soft"],
-            description: "The wallpaper's own colour in every surface, light that pours deep into bodies, big light figures over the wallpaper and slow, soft glides.",
-            values: root.values({ "theme.surface": "wallpaper", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 44, "iris.appearance.tint": 60,
+            values: root.values({ "iris.controlCenter.accent": "colourful", "iris.controlCenter.sliders": "accent", "theme.surface": "wallpaper", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 44, "iris.appearance.tint": 60,
                 "iris.appearance.aura": "vivid", "theme.lightReach": 260, "theme.glow": 20, "iris.appearance.accent": "wallpaper",
                 "iris.appearance.highlight": "wallpaper", "iris.appearance.preset": "soft", "theme.shape": 125, "theme.melt": 60, "theme.lines": 0,
                 "iris.appearance.morph": "glide", "theme.curve": "gentle", "theme.openTime": 130, "iris.appearance.titleFontFamily": "Gabarito",
                 "iris.appearance.figureWeight": "light", "iris.bar.clockScale": 118, "iris.bar.height": 46, "iris.bar.desktopBanner": "wallpaper",
                 "iris.surround.thickness": 12, "iris.surround.radius": 34, "iris.widgets.material": "clear", "iris.widgets.weight": "light",
-                "iris.widgets.radius": 34, "iris.dock.magnification": true, "iris.palette.opens": "island" }) },
+                "iris.widgets.radius": 34, "iris.dock.magnification": false, "iris.palette.opens": "island" }) },
         { id: "terminal", name: "Terminal", author: "iNiR", tags: ["mono", "brutalist", "bar"],
-            description: "A full-width bar in monospace: workspaces on the left, the time dead centre, the tray on the right. Square everything, hard lines, phosphor green, instant.",
-            values: root.values({ "iris.appearance.fontFamily": "JetBrainsMono Nerd Font", "iris.appearance.titleFontFamily": "JetBrainsMono Nerd Font",
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "iris.appearance.fontFamily": "JetBrainsMono Nerd Font", "iris.appearance.titleFontFamily": "JetBrainsMono Nerd Font",
                 "iris.appearance.numbersFontFamily": "JetBrainsMono Nerd Font", "iris.appearance.figureWeight": "regular",
                 "iris.appearance.preset": "angular", "theme.shape": 35, "theme.melt": 0, "theme.pieceShape": "square", "theme.lines": 200,
                 "theme.fill": 70, "theme.shadow": 0, "theme.rim": false, "iris.bubbles.join": "weld", "iris.appearance.aura": "off",
@@ -299,19 +321,45 @@ Singleton {
                 "iris.widgets.material": "solid", "iris.widgets.weight": "regular", "iris.widgets.radius": 0, "iris.dock.material": "solid",
                 "iris.dock.notch": false, "iris.dock.iconSize": 34, "iris.controlCenter.controls": "tiles", "iris.palette.opens": "floating",
                 "iris.wallpaper.layout": "wall" , "iris.appearance.expandedRadius": 16}) },
-        { id: "neo-tokyo", name: "Neo Tokyo", author: "iNiR", tags: ["neon", "glass", "sci-fi"],
-            description: "Midnight glass lit in cyan and magenta: an Island resting at the far end of the edge, squircle pieces, neon glow, Oxanium figures and elastic arrivals.",
-            values: root.values({ "theme.surface": "midnight", "glass.mode": "wallpaper", "glass.tint": 58, "iris.appearance.preset": "crisp",
-                "theme.shape": 90, "theme.melt": 0, "theme.pieceShape": "squircle", "theme.lines": 120, "theme.shadow": 160, "theme.glow": 55,
+        { id: "neo-tokyo", name: "Neo Tokyo", author: "iNiR", tags: ["anime", "neon", "glass", "sci-fi"],
+            values: root.values({ "iris.controlCenter.accent": "colourful", "iris.controlCenter.sliders": "accent", "theme.surface": "midnight", "glass.mode": "wallpaper", "glass.tint": 58, "iris.appearance.preset": "crisp",
+                "theme.shape": 90, "theme.pieceShape": "squircle", "theme.lines": 120, "theme.shadow": 160, "theme.glow": 55,
                 "iris.appearance.accent": "custom", "theme.accentHue": 186, "iris.appearance.highlight": "custom", "theme.highlightHue": 312,
                 "iris.appearance.aura": "vivid", "theme.lightReach": 210, "theme.badge": "highlight", "iris.appearance.titleFontFamily": "Oxanium",
                 "iris.appearance.numbersFontFamily": "Oxanium", "iris.appearance.morph": "elastic", "theme.bounce": 80, "iris.bar.clockScale": 110,
-                "iris.bar.layout": "right", "iris.bar.margin": 12, "iris.surround.thickness": 12, "iris.surround.radius": 16,
-                "iris.widgets.material": "tinted", "iris.widgets.radius": 14, "iris.widgets.weight": "bold", "theme.rim": false, "iris.bar.notch": false,
-                "iris.dock.notch": false, "iris.dock.material": "glass", "iris.dock.magnification": true, "iris.bubbles.join": "weld" }) },
+                "iris.appearance.glass.edgeColour": "accent", "iris.appearance.glass.edgeLight": 70, "iris.appearance.glass.edgeLine": 22, "iris.surround.thickness": 12, "iris.surround.radius": 16,
+                "iris.widgets.material": "tinted", "iris.widgets.radius": 14, "iris.widgets.weight": "bold", "theme.rim": false,
+                "iris.dock.notch": false, "iris.dock.material": "glass", "iris.dock.magnification": false }) },
+        { id: "twilight", name: "Twilight", author: "iNiR", tags: ["anime", "dusk", "glass", "menu bar"],
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "theme.surface": "midnight", "glass.mode": "wallpaper", "glass.tint": 52, "glass.blur": 100, "theme.rim": false,
+                "iris.appearance.preset": "soft", "theme.shape": 115, "theme.melt": 70, "theme.lines": 25, "theme.shadow": 110, "theme.glow": 35,
+                "iris.appearance.accent": "custom", "theme.accentHue": 24, "iris.appearance.highlight": "custom", "theme.highlightHue": 262,
+                "iris.appearance.aura": "vivid", "theme.lightReach": 170, "iris.appearance.morph": "glide", "theme.curve": "gentle", "theme.openTime": 115,
+                "iris.appearance.figureWeight": "light", "iris.bar.layout": "menubar", "iris.bar.strip": "clear", "iris.bar.notch": true, "iris.bar.height": 40,
+                "iris.bar.composition": "unified", "iris.bar.clockAccent": "accent", "iris.surround.enable": false,
+                "iris.widgets.material": "glass", "iris.widgets.radius": 24, "iris.widgets.weight": "light",
+                "iris.dock.notch": false, "iris.dock.material": "glass", "iris.dock.iconSize": 42, "iris.dock.magnification": false,
+                "iris.controlCenter.controls": "round" }) },
+        { id: "daybreak", name: "Daybreak", author: "iNiR", tags: ["glass", "calm", "menu bar"],
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "theme.surface": "graphite", "glass.mode": "wallpaper", "glass.tint": 66, "glass.blur": 100, "theme.rim": false,
+                "iris.appearance.preset": "soft", "theme.lines": 20, "theme.shadow": 90, "theme.melt": 40, "iris.appearance.accent": "custom",
+                "theme.accentHue": 205, "iris.appearance.highlight": "custom", "theme.highlightHue": 38, "iris.appearance.aura": "subtle",
+                "iris.appearance.morph": "glide", "theme.curve": "gentle", "theme.openTime": 105, "iris.appearance.figureWeight": "regular",
+                "iris.bar.layout": "menubar", "iris.bar.strip": "clear", "iris.bar.notch": true, "iris.bar.height": 38, "iris.bar.composition": "unified",
+                "iris.bar.clockStyle": "dateTime", "iris.bar.clockAccent": "highlight", "iris.surround.enable": false,
+                "iris.widgets.material": "glass", "iris.widgets.radius": 22, "iris.widgets.weight": "regular",
+                "iris.dock.notch": false, "iris.dock.material": "glass", "iris.dock.iconSize": 44, "iris.dock.magnification": false,
+                "iris.controlCenter.controls": "round" }) },
+        { id: "horizon", name: "Horizon", author: "iNiR", tags: ["dark", "bar", "direct"],
+            values: root.values({ "iris.controlCenter.accent": "system", "iris.controlCenter.sliders": "neutral", "theme.surface": "black", "glass.mode": "off", "theme.rim": false,
+                "iris.appearance.preset": "iris", "iris.appearance.accent": "blue", "iris.appearance.highlight": "orange", "theme.badge": "alert", "iris.appearance.aura": "subtle",
+                "iris.bar.layout": "full", "iris.bar.notch": true, "iris.bar.height": 40, "iris.bar.composition": "unified",
+                "iris.bar.clockStyle": "dateTime", "iris.bar.clockAccent": "highlight", "iris.surround.enable": true, "iris.surround.thickness": 10,
+                "iris.surround.radius": 22, "iris.widgets.material": "solid", "iris.widgets.radius": 22, "iris.widgets.weight": "regular",
+                "iris.dock.notch": true, "iris.dock.material": "solid", "iris.dock.iconSize": 44, "iris.dock.magnification": false,
+                "iris.controlCenter.controls": "tiles" }) },
         { id: "monolith", name: "Monolith", author: "iNiR", tags: ["minimal", "quiet"],
-            description: "Nothing but the object: a slim Island melted into the edge, no frame, no lines, no light, one colour, a light clock and a long, calm glide.",
-            values: root.values({ "iris.surround.enable": false, "theme.melt": 0, "theme.lines": 0, "theme.rim": false, "theme.fill": 70,
+            values: root.values({ "iris.controlCenter.accent": "mono", "iris.controlCenter.sliders": "neutral", "iris.surround.enable": false, "theme.lines": 0, "theme.rim": false, "theme.fill": 70,
                 "theme.shadow": 60, "iris.appearance.aura": "off", "iris.appearance.accent": "custom", "theme.accentHue": 220,
                 "iris.appearance.highlight": "accent", "theme.badge": "neutral", "iris.bar.clockAccent": "plain",
                 "iris.bar.composition": "unified", "iris.bar.clockStyle": "time", "iris.appearance.figureWeight": "light",
@@ -320,51 +368,77 @@ Singleton {
                 "iris.bar.notch": true, "iris.bar.height": 36, "iris.bar.clockScale": 108, "iris.bar.satelliteScale": 90,
                 "iris.dock.notch": true, "iris.dock.iconSize": 36, "iris.dock.magnification": false,
                 "iris.widgets.material": "clear", "iris.widgets.weight": "light", "iris.widgets.radius": 0 }) },
-        { id: "sakura", name: "Sakura", author: "iNiR", tags: ["pink", "round", "playful"],
-            description: "Petal pink on soft graphite glass, generous curves, gooey joins, a pink halo under everything that floats and a bouncy, liquid feel.",
-            values: root.values({ "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 60,
+        { id: "sakura", name: "Sakura", author: "iNiR", tags: ["anime", "pink", "round", "playful"],
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 60,
                 "iris.appearance.preset": "round", "theme.shape": 140, "theme.melt": 90, "theme.lines": 30, "theme.glow": 45,
                 "iris.appearance.accent": "custom", "theme.accentHue": 334, "iris.appearance.highlight": "pink",
                 "iris.appearance.aura": "vivid", "theme.lightReach": 180, "iris.appearance.morph": "liquid", "theme.bounce": 150,
                 "iris.appearance.titleFontFamily": "Gabarito", "iris.bar.satelliteGap": 10, "iris.bubbles.scale": 112, "iris.bar.notch": true,
+                "iris.appearance.glass.edgeColour": "accent", "iris.appearance.glass.edgeLight": 50, "iris.appearance.glass.edgeLine": 14,
                 "iris.surround.thickness": 12, "iris.surround.radius": 36, "iris.widgets.material": "glass", "iris.widgets.radius": 32,
-                "iris.dock.magnification": true, "iris.dock.iconSize": 44, "iris.controlCenter.controls": "round" }) },
+                "iris.dock.magnification": false, "iris.dock.iconSize": 44, "iris.controlCenter.controls": "round" }) },
         { id: "meadow", name: "Meadow", author: "iNiR", tags: ["warm", "soft", "organic"],
-            description: "Meadow green and a warm sun on soft glass: the weather resting in the Island, pieces that melt together, tinted leafy widgets and a lazy sway.",
-            values: root.values({ "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 58,
+            values: root.values({ "iris.controlCenter.accent": "colourful", "iris.controlCenter.sliders": "accent", "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 58,
                 "iris.appearance.preset": "round", "theme.shape": 150, "theme.melt": 110, "iris.appearance.accent": "mint",
                 "iris.appearance.highlight": "custom", "theme.highlightHue": 40, "theme.lines": 35, "theme.contrast": 95,
                 "iris.appearance.aura": "subtle", "iris.appearance.morph": "liquid", "theme.bounce": 160, "theme.curve": "gentle",
                 "iris.appearance.titleFontFamily": "Gabarito", "iris.appearance.fontFamily": "Rubik", "iris.bubbles.scale": 115, "iris.bar.padding": 115,
                 "iris.bar.clockStyle": "weather", "iris.bar.height": 46, "iris.surround.thickness": 12, "iris.surround.radius": 32, "iris.widgets.material": "tinted", "iris.widgets.radius": 28,
-                "iris.widgets.tint": "system", "iris.dock.iconSize": 46, "iris.dock.magnification": true, "iris.controlCenter.controls": "round" }) },
-        { id: "unit-01", name: "Unit-01", author: "iNiR", tags: ["mecha", "hard", "violet"],
-            description: "Deep violet armour and warning green: a heavy frame, a tall Island with a green clock, Oxanium titles over monospace figures and sharp, instant cuts.",
-            values: root.values({ "theme.surface": "midnight", "iris.appearance.preset": "contrast", "theme.shape": 55, "theme.melt": 0,
-                "theme.pieceShape": "square", "iris.appearance.accent": "custom", "theme.accentHue": 275,
+                "iris.widgets.tint": "system", "iris.dock.iconSize": 46, "iris.dock.magnification": false, "iris.controlCenter.controls": "round" }) },
+        { id: "unit-01", name: "Unit-01", author: "iNiR", tags: ["anime", "mecha", "hard", "violet"],
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "theme.surface": "midnight", "iris.appearance.preset": "contrast", "theme.shape": 75,
+                "theme.pieceShape": "squircle", "iris.appearance.accent": "custom", "theme.accentHue": 275,
                 "iris.appearance.highlight": "custom", "theme.highlightHue": 95, "theme.badge": "highlight",
                 "theme.lines": 170, "theme.shadow": 150, "theme.glow": 30, "iris.appearance.titleFontFamily": "Oxanium",
                 "iris.appearance.numbersFontFamily": "JetBrainsMono Nerd Font", "iris.appearance.morph": "snap",
                 "theme.curve": "swift", "iris.bar.clockAccent": "highlight", "iris.bar.clockStyle": "time", "iris.bar.height": 44,
                 "iris.bar.clockScale": 112, "iris.surround.thickness": 18, "iris.surround.radius": 6, "iris.bar.notchCurve": 60,
                 "iris.widgets.material": "solid", "iris.widgets.radius": 4, "iris.widgets.weight": "bold", "iris.dock.material": "solid",
-                "iris.dock.iconSize": 42, "iris.controlCenter.controls": "tiles", "theme.rim": false, "iris.bar.notch": false,
-                "iris.dock.notch": false, "iris.bubbles.join": "weld" , "iris.appearance.expandedRadius": 16}) },
+                "iris.dock.iconSize": 42, "iris.controlCenter.controls": "tiles", "theme.rim": false,
+                "iris.dock.notch": false, "iris.appearance.expandedRadius": 16 }) },
+        { id: "magical-girl", name: "Magical Girl", author: "iNiR", tags: ["anime", "rose", "gold", "playful"],
+            values: root.values({ "iris.controlCenter.accent": "colourful", "iris.controlCenter.sliders": "accent", "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 58,
+                "iris.appearance.preset": "round", "theme.shape": 138, "theme.melt": 85, "theme.lines": 35, "theme.glow": 45,
+                "iris.appearance.accent": "custom", "theme.accentHue": 338, "iris.appearance.highlight": "custom", "theme.highlightHue": 44,
+                "iris.appearance.anime.enabled": true, "iris.appearance.anime.palette": "magical-girl", "iris.appearance.anime.strength": 100, "iris.appearance.anime.highlight": true,
+                "iris.appearance.aura": "vivid", "theme.lightReach": 185, "iris.appearance.morph": "liquid", "theme.bounce": 145,
+                "iris.appearance.titleFontFamily": "Gabarito", "iris.appearance.fontFamily": "Gabarito",
+                "iris.bubbles.scale": 112, "iris.bar.notch": true, "iris.bar.clockStyle": "dateTime", "iris.bar.clockAccent": "highlight",
+                "iris.appearance.glass.edgeColour": "accent", "iris.appearance.glass.edgeLight": 55, "iris.appearance.glass.edgeLine": 16,
+                "iris.surround.thickness": 12, "iris.surround.radius": 34, "iris.widgets.material": "glass", "iris.widgets.radius": 30,
+                "iris.dock.magnification": false, "iris.dock.iconSize": 44, "iris.controlCenter.controls": "round" }) },
+        { id: "spirit-forest", name: "Spirit Forest", author: "iNiR", tags: ["anime", "green", "amber", "organic"],
+            values: root.values({ "iris.controlCenter.accent": "colourful", "iris.controlCenter.sliders": "accent", "theme.surface": "graphite", "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 56,
+                "iris.appearance.preset": "round", "theme.shape": 145, "theme.melt": 105, "theme.lines": 30, "theme.glow": 30,
+                "iris.appearance.accent": "mint", "iris.appearance.highlight": "custom", "theme.highlightHue": 40,
+                "iris.appearance.anime.enabled": true, "iris.appearance.anime.palette": "spirit-forest", "iris.appearance.anime.strength": 100, "iris.appearance.anime.highlight": true,
+                "iris.appearance.aura": "subtle", "iris.appearance.morph": "glide", "theme.curve": "gentle", "theme.openTime": 120,
+                "iris.appearance.titleFontFamily": "Space Grotesk", "iris.appearance.fontFamily": "Rubik",
+                "iris.bubbles.scale": 114, "iris.bar.padding": 112, "iris.bar.clockStyle": "weather", "iris.bar.clockAccent": "highlight",
+                "iris.appearance.glass.edgeColour": "highlight", "iris.appearance.glass.edgeLight": 50, "iris.appearance.glass.edgeLine": 14,
+                "iris.bar.height": 46, "iris.surround.thickness": 12, "iris.surround.radius": 32, "iris.widgets.material": "tinted", "iris.widgets.radius": 28,
+                "iris.widgets.tint": "system", "iris.dock.iconSize": 46, "iris.dock.magnification": false, "iris.controlCenter.controls": "round" }) },
         { id: "signal", name: "Signal", author: "iNiR", tags: ["contrast", "legible"],
-            description: "Built to be read: a bigger Island and Dock, high contrast, larger text, firm fills and outlines, yellow on black, quick and exact.",
-            values: root.values({ "iris.appearance.preset": "contrast", "theme.melt": 0, "theme.fill": 130, "theme.text": 110, "theme.lines": 160,
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent", "iris.appearance.preset": "contrast", "theme.fill": 130, "theme.text": 110, "theme.lines": 160,
                 "theme.contrast": 130, "iris.appearance.aura": "off", "iris.appearance.highlight": "yellow",
                 "iris.appearance.accent": "custom", "theme.accentHue": 52, "iris.appearance.figureWeight": "bold",
                 "theme.openTime": 80, "iris.bar.height": 50, "iris.bar.clockScale": 122, "iris.dock.iconSize": 50,
                 "iris.dock.magnification": false, "iris.widgets.material": "solid", "iris.widgets.weight": "bold", "iris.widgets.radius": 16,
                 "iris.widgets.tint": "system" }) },
-        { id: "inir", name: "iNiR Theme", author: "iNiR", tags: ["system"],
-            description: "Follows the global iNiR theme: its preset or the wallpaper's Material You colours, with Material widgets on the desktop.",
+        { id: "inir", name: "Material Theme", author: "iNiR", tags: ["system"],
             values: root.values({ "theme.surface": "theme", "iris.appearance.accent": "theme", "iris.appearance.highlight": "theme",
                 "iris.widgets.design": "material", "iris.widgets.tint": "system", "iris.controlCenter.controls": "tiles" }) },
+        { id: "lume", name: "Lume", author: "iNiR", tags: ["wallpaper", "clear", "instrument", "menu bar"],
+            values: root.values({ "iris.controlCenter.accent": "accent", "iris.controlCenter.sliders": "accent",
+                "iris.appearance.adaptive": 60, "theme.surface": "wallpaper", "iris.appearance.accent": "wallpaper", "iris.appearance.highlight": "wallpaper",
+                "iris.appearance.aura": "subtle", "iris.appearance.tint": 20, "theme.rim": false, "theme.lines": 20, "glass.mode": "wallpaper", "glass.tint": 40, "glass.blur": 100,
+                "iris.appearance.preset": "soft", "iris.appearance.morph": "glide", "theme.curve": "gentle", "iris.appearance.figureWeight": "light",
+                "iris.bar.layout": "menubar", "iris.bar.strip": "clear", "iris.bar.notch": true, "iris.bar.height": 38, "iris.bar.composition": "unified",
+                "iris.bar.clockStyle": "dateTime", "iris.bar.clockAccent": "accent", "iris.surround.enable": false,
+                "iris.widgets.design": "instrument", "iris.widgets.tint": "wallpaper", "iris.widgets.material": "clear", "iris.widgets.weight": "light",
+                "iris.dock.notch": false, "iris.dock.material": "glass", "iris.dock.magnification": false, "iris.controlCenter.controls": "round" }) },
         { id: "adaptive", name: "Adaptive", author: "iNiR", tags: ["wallpaper", "automatic"],
-            description: "Shaped by the wallpaper: its colour, brightness and calm or busy mood decide the corners, lines and light, through clear glass.",
-            values: root.values({ "iris.appearance.adaptive": 80, "theme.surface": "wallpaper", "iris.appearance.accent": "wallpaper",
+            values: root.values({ "iris.controlCenter.accent": "system", "iris.controlCenter.sliders": "neutral", "iris.appearance.adaptive": 80, "theme.surface": "wallpaper", "iris.appearance.accent": "wallpaper",
                 "iris.appearance.highlight": "wallpaper", "iris.appearance.aura": "subtle", "iris.appearance.tint": 25,
                 "theme.rim": false, "glass.mode": "wallpaper", "glass.tint": 52, "iris.surround.thickness": 10, "iris.surround.radius": 28,
                 "iris.widgets.material": "clear", "iris.widgets.weight": "regular" }) }

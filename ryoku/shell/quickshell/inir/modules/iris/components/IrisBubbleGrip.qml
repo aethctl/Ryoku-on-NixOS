@@ -69,12 +69,19 @@ MouseArea {
             if (pulled > root.liftDistance) root.lift()
             return
         }
-        root.publish(false)
+        root.pending = true
+    }
+    // A 1000 Hz mouse sends a dozen moves per frame; the stage reflows once per frame, not per move.
+    property bool pending: false
+    FrameAnimation {
+        running: root.lifted
+        onTriggered: if (root.pending) { root.pending = false; root.publish(false) }
     }
     onReleased: {
         hold.stop()
         if (root.lifted) {
             root.lifted = false
+            root.pending = false
             root.publish(true)
         } else {
             root.tapped()
@@ -84,6 +91,7 @@ MouseArea {
         hold.stop()
         if (root.lifted) {
             root.lifted = false
+            root.pending = false
             root.publish(true)
         }
     }

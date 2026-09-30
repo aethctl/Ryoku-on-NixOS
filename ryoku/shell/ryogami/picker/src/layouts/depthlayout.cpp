@@ -33,6 +33,8 @@ void DepthLayout::readParams(const LayoutContext &ctx, SliceParams &out) const
     out.corners = {c, c, c, c};
     out.edgeTilt = 0.0f;
     out.shadows = p.flag(skey("depthShadows"), false);
+    out.shadowStrength = float(std::clamp(p.num(skey("shadowStrength"), 100.0) / 100.0, 0.0, 2.0));
+    out.shadowDistance = float(std::clamp(p.num(skey("shadowDistance"), 100.0) / 100.0, 0.0, 2.0));
     out.wobble = false;
     out.parallax = false;
     out.offsetX = 0.0f;

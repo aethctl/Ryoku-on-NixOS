@@ -40,6 +40,7 @@ Item {
     property var fpsPending: undefined
     property int fpsInflight: 0
     property string _loadedId: ""
+    property int seedRevision: 0
 
     property real _reveal: shown ? 1 : 0
     Behavior on _reveal { NumberAnimation { duration: Theme.standard; easing.type: Theme.revealEasing } }
@@ -87,7 +88,7 @@ Item {
             root.fpsValue = (result && typeof result.fps === "number") ? result.fps : null
         }
 
-        var incoming = (result && result.rows) ? result.rows.slice() : []
+        var incoming = (result && result.properties) ? result.properties.slice() : []
         incoming.sort(function(a, b) { return (a.order || 0) - (b.order || 0) })
         var keep = ({})
         for (var i = 0; i < incoming.length; i++) {
@@ -99,6 +100,9 @@ Item {
         }
         root.pending = keep
         root.rows = incoming
+        // The Repeater keeps delegates for value-equal rows, so a row whose local
+        // edit was reset on the daemon side must be told to re-read its value.
+        root.seedRevision++
     }
 
     function _writeProperty(name, value) {
@@ -366,6 +370,7 @@ Item {
                             required property var modelData
                             width: readingCol.width
                             row: modelData
+                            seedRevision: root.seedRevision
                             available: readingCol.width
                             onCommitted: (name, value) => root._writeProperty(name, value)
                         }

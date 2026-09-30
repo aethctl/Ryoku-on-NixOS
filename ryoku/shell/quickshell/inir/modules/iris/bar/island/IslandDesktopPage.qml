@@ -74,7 +74,7 @@ ColumnLayout {
             scale: block.carried ? 1.02 : 1
             Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(160); easing.type: IrisStyle.feedbackEasing } }
             Behavior on scale { NumberAnimation { duration: IrisStyle.duration(140); easing.type: IrisStyle.feedbackEasing } }
-            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
         }
         property real inset: page.island.studio ? Math.round(10 * IrisStyle.density) : 0
         Behavior on inset { NumberAnimation { duration: IrisStyle.moveDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.moveCurve } }
@@ -100,7 +100,7 @@ ColumnLayout {
                 Layout.fillWidth: true
                 text: page.island.desktopBlockLabel(block.kind) + " · " + Translation.tr("nothing to show right now")
                 color: IrisStyle.textTertiary
-                font.pixelSize: 12 * IrisStyle.typeScale
+                font.pixelSize: IrisStyle.typeMeta
                 elide: Text.ElideRight
             }
         }
@@ -125,7 +125,7 @@ ColumnLayout {
                 width: Math.round(9 * IrisStyle.density)
                 height: Math.max(2, Math.round(2 * IrisStyle.density))
                 radius: height / 2
-                color: IrisStyle.onDanger
+                color: IrisStyle.inkOnDanger
             }
         }
         Item {
@@ -227,21 +227,20 @@ ColumnLayout {
                 maskThresholdMin: 0.5
                 maskSpreadAtMin: 1
             }
-            opacity: heroImage.status === Image.Ready ? 1 : 0
+            opacity: heroImage.ready ? 1 : 0
             x: -page.island.padding
             y: -heroBleed.topBleed
             width: hero.width + page.island.padding * 2
             height: hero.height + heroBleed.topBleed + Math.round(12 * IrisStyle.density)
 
-            Image {
+            IrisWallpaperView {
                 id: heroImage
                 anchors.fill: parent
-                source: page.showBanner ? page.bannerSource : ""
-                fillMode: Image.PreserveAspectCrop
+                active: page.showBanner
+                screen: page.island.targetScreen
+                live: page.current && page.island.visualExpanded
                 asynchronous: page.island.heroPreloadItem.status !== Image.Ready
-                cache: true
-                smooth: true
-                sourceSize.width: page.island.heroDecodeWidth
+                decodeSize: Qt.size(page.island.heroDecodeWidth, 0)
             }
             Rectangle {
                 id: heroScrim
@@ -289,6 +288,7 @@ ColumnLayout {
             anchors.topMargin: -Math.round(6 * IrisStyle.density)
             glyph: page.island.studio ? "check" : "edit"
             glyphSize: 17 * IrisStyle.density
+            glyphColor: page.showBanner ? IrisStyle.onMedia : IrisStyle.text
             implicitWidth: Math.round(32 * IrisStyle.density)
             colBackground: page.showBanner ? IrisStyle.veil : IrisStyle.fillQuiet
             colBackgroundHover: page.showBanner ? IrisStyle.veilStrong : IrisStyle.fillHover
@@ -306,6 +306,7 @@ ColumnLayout {
             anchors.topMargin: -Math.round(6 * IrisStyle.density)
             glyph: "wallpaper"
             glyphSize: 17 * IrisStyle.density
+            glyphColor: IrisStyle.onMedia
             implicitWidth: Math.round(32 * IrisStyle.density)
             colBackground: IrisStyle.veil
             colBackgroundHover: IrisStyle.veilStrong
@@ -332,8 +333,8 @@ ColumnLayout {
                         + Qt.locale().toString(DateTime.clock.date, "dddd") + "</b></font> "
                         + Qt.locale().toString(DateTime.clock.date, "d MMMM")
                     color: (page.showBanner ? IrisStyle.textStrong : IrisStyle.textSecondary)
-                    font.pixelSize: 13 * IrisStyle.typeScale
-                    font.weight: Font.Medium
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.Medium)
                 }
                 IrisClock {
                     id: heroClock
@@ -366,7 +367,7 @@ ColumnLayout {
                     Layout.maximumWidth: 150 * IrisStyle.density
                     text: String(Weather.data?.description ?? "")
                     color: (page.showBanner ? IrisStyle.textStrong : IrisStyle.textSecondary)
-                    font.pixelSize: 12 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
             }
@@ -413,15 +414,10 @@ ColumnLayout {
                     scale: avatarHover.hovered ? 1.05 : 1
                     Behavior on scale { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
 
-                    Image {
+                    IrisImage {
                         id: avatarImage
                         anchors.fill: parent
                         source: Directories.avatarSourceAt(avatar.sourceIndex)
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        smooth: true
-                        sourceSize.width: avatar.width * 2
-                        sourceSize.height: avatar.height * 2
                         onStatusChanged: {
                             if (status === Image.Error && avatar.sourceIndex + 1 < Directories.userAvatarPaths.length)
                                 Qt.callLater(() => avatar.sourceIndex++)
@@ -431,19 +427,20 @@ ColumnLayout {
                         anchors.centerIn: parent
                         visible: avatarImage.status !== Image.Ready
                         text: (SystemInfo.displayName || SystemInfo.username || "?").charAt(0).toUpperCase()
-                        font.pixelSize: 17 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeTitle
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                     }
                     Rectangle {
                         anchors.fill: parent
                         color: (avatarHover.hovered ? IrisStyle.veil : ColorUtils.applyAlpha(IrisStyle.bodySurface, 0))
-                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                        Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                         Glyph {
                             anchors.centerIn: parent
                             text: "edit"
                             iconSize: 17 * IrisStyle.density
+                            color: IrisStyle.onMedia
                             opacity: avatarHover.hovered ? 1 : 0
-                            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120) } }
+                            Behavior on opacity { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                         }
                     }
                 }
@@ -455,8 +452,8 @@ ColumnLayout {
                 IrisText {
                     Layout.fillWidth: true
                     text: SystemInfo.displayName || SystemInfo.username || "user"
-                    font.pixelSize: 13.5 * IrisStyle.typeScale
-                    font.weight: Font.DemiBold
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.DemiBold)
                     elide: Text.ElideRight
                 }
                 IrisText {
@@ -466,7 +463,7 @@ ColumnLayout {
                         + (distro.length > 0 && distro !== "unknown" ? "@" + distro : "")
                         + " · " + Translation.tr("Up %1").arg(DateTime.uptime)
                     color: IrisStyle.textSecondary
-                    font.pixelSize: 11.5 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
             }
@@ -540,8 +537,8 @@ ColumnLayout {
                 IrisText {
                     Layout.fillWidth: true
                     text: page.focusedWindow ? String(page.focusedWindow.title ?? "") : contextRow.workspaceName
-                    font.pixelSize: 13 * IrisStyle.typeScale
-                    font.weight: Font.DemiBold
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.DemiBold)
                     elide: Text.ElideRight
                 }
                 IrisText {
@@ -551,7 +548,7 @@ ColumnLayout {
                         ? app + (contextRow.workspaceName.length > 0 ? " · " + contextRow.workspaceName : "")
                         : Translation.tr("No windows")
                     color: IrisStyle.textSecondary
-                    font.pixelSize: 11.5 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
             }
@@ -581,7 +578,7 @@ ColumnLayout {
                             color: dot.active ? IrisStyle.accent
                                 : (dot.containsMouse ? IrisStyle.textStrong : dot.occupied ? IrisStyle.textTertiary : IrisStyle.fillHover)
                             Behavior on width { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
-                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120) } }
+                            Behavior on color { ColorAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
                         }
                     }
                 }
@@ -614,7 +611,7 @@ ColumnLayout {
                     horizontalAlignment: Text.AlignHCenter
                     text: Translation.tr("No forecast yet")
                     color: IrisStyle.textTertiary
-                    font.pixelSize: 12 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                 }
                 Repeater {
                     model: page.hours
@@ -632,7 +629,7 @@ ColumnLayout {
                             Layout.alignment: Qt.AlignHCenter
                             text: hour.index === 0 ? Translation.tr("Now") : String(hour.modelData.label).slice(0, 2)
                             color: hour.index === 0 ? IrisStyle.text : IrisStyle.textTertiary
-                            font.pixelSize: 11 * IrisStyle.typeScale
+                            font.pixelSize: IrisStyle.typeFootnote
                             font.weight: hour.index === 0 ? Font.DemiBold : Font.Medium
                             font.features: { "tnum": 1 }
                         }
@@ -645,8 +642,8 @@ ColumnLayout {
                         IrisText {
                             Layout.alignment: Qt.AlignHCenter
                             text: String(hour.modelData.temp)
-                            font.pixelSize: 12.5 * IrisStyle.typeScale
-                            font.weight: Font.DemiBold
+                            font.pixelSize: IrisStyle.typeLabel
+                            font.weight: IrisStyle.weight(Font.DemiBold)
                             font.features: { "tnum": 1 }
                         }
                     }
@@ -698,13 +695,13 @@ ColumnLayout {
                         text: Qt.locale().toString(agenda.when, "ddd").toUpperCase()
                         color: IrisStyle.danger
                         font.pixelSize: 8.5 * IrisStyle.typeScale
-                        font.weight: Font.Bold
+                        font.weight: IrisStyle.weight(Font.Bold)
                     }
                     IrisText {
                         Layout.alignment: Qt.AlignHCenter
                         text: agenda.when.getDate()
-                        font.pixelSize: 17 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeTitle
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                         font.features: { "tnum": 1 }
                     }
                 }
@@ -716,15 +713,15 @@ ColumnLayout {
                     Layout.fillWidth: true
                     text: agenda.event ? String(agenda.event.title || Translation.tr("Event"))
                         : Translation.tr("Nothing scheduled")
-                    font.pixelSize: 13 * IrisStyle.typeScale
-                    font.weight: Font.DemiBold
+                    font.pixelSize: IrisStyle.typeLabel
+                    font.weight: IrisStyle.weight(Font.DemiBold)
                     elide: Text.ElideRight
                 }
                 IrisText {
                     Layout.fillWidth: true
                     text: agenda.event ? agenda.whenText : Translation.tr("This week is clear")
                     color: IrisStyle.textSecondary
-                    font.pixelSize: 11.5 * IrisStyle.typeScale
+                    font.pixelSize: IrisStyle.typeMeta
                     elide: Text.ElideRight
                 }
             }
@@ -747,8 +744,8 @@ ColumnLayout {
                     IrisText {
                         anchors.verticalCenter: parent.verticalCenter
                         text: page.pendingTasks
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                        font.weight: Font.DemiBold
+                        font.pixelSize: IrisStyle.typeLabel
+                        font.weight: IrisStyle.weight(Font.DemiBold)
                         font.features: { "tnum": 1 }
                     }
                 }
@@ -835,14 +832,14 @@ ColumnLayout {
                                 Layout.fillWidth: true
                                 text: vital.modelData.label
                                 color: IrisStyle.muted
-                                font.pixelSize: 9.5 * IrisStyle.typeScale
-                                font.weight: Font.Medium
+                                font.pixelSize: IrisStyle.typeCaption
+                                font.weight: IrisStyle.weight(Font.Medium)
                                 elide: Text.ElideRight
                             }
                             Metric {
                                 value: vital.modelData.value
                                 unit: vital.modelData.unit
-                                pixelSize: 12.5 * IrisStyle.typeScale
+                                pixelSize: IrisStyle.typeLabel
                                 weight: Font.Bold
                             }
                         }
@@ -885,14 +882,14 @@ ColumnLayout {
             spacing: 6 * IrisStyle.density
             Repeater {
                 model: page.island.desktopBlockKinds.filter(kind => !page.island.desktopBlocks.includes(kind))
-                StudioChip {
+                IrisChip {
                     required property string modelData
                     glyph: page.island.desktopBlockGlyph(modelData)
                     label: page.island.desktopBlockLabel(modelData)
                     onClicked: page.island.setDesktopBlock(modelData, true)
                 }
             }
-            StudioChip {
+            IrisChip {
                 glyph: "check"
                 label: Translation.tr("Done")
                 emphasized: true

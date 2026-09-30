@@ -24,6 +24,7 @@ Item {
     property real target: 0
     property var segments: []
     property real lastTime: 0
+    property real startedAt: 0
 
     property real clock: 0
     NumberAnimation on clock {
@@ -34,10 +35,24 @@ Item {
         loops: Animation.Infinite
     }
 
+    // Resolving a spring reads the surface's own style and speed out of Config, so it is done
+    // once per movement and not once per tick: the parameters cannot change mid-flight anyway.
+    property var resolved: null
     function params(intent: string): var {
-        const resolved = root.intent !== "auto" ? root.intent : intent
-        return IrisStyle.springFor(resolved, root.surface)
+        const wanted = root.intent !== "auto" ? root.intent : intent
+        const held = root.resolved
+        if (held && held[wanted]) return held[wanted]
+        const entry = IrisStyle.springFor(wanted, root.surface)
+        root.resolved = Object.assign({}, held ?? {}, { [wanted]: entry })
+        return entry
     }
+    function forget(): void { root.resolved = null }
+    readonly property var motionSignature: [IrisStyle.emergeSpring, IrisStyle.recedeSpring, IrisStyle.moveSpring,
+        String(IrisStyle.appearance?.surfaces?.[root.surface]?.morph ?? ""),
+        Number(IrisStyle.appearance?.surfaces?.[root.surface]?.speed ?? 100)]
+    onMotionSignatureChanged: root.forget()
+    onSurfaceChanged: root.forget()
+    onIntentChanged: root.forget()
     function jump(): void {
         root.running = false
         root.segments = []
@@ -45,15 +60,13 @@ Item {
         root.target = root.to
         root.value = root.to
     }
-    // Primed on the first tick, never at the kick: between a retarget and the
-    // frame that follows it the main thread may spend tens of milliseconds
-    // (laying a page out, reloading Config, swapping a composition), and that
-    // wait was charged to the motion. On an expo-out curve a single 34 ms step
-    // is half the distance, so every morph that started on a busy frame jumped
-    // to its middle and crawled from there — the motion never seen leaving.
+    // The first tick steps at most one frame from the kick: the main thread may spend tens of milliseconds
+    // between a retarget and its frame, and charged in full that wait made a morph start at its middle
+    // (DECISIONS 2026-09-17); a first tick that stepped nothing started every motion a frame late.
     function start(): void {
         if (root.running) return
         root.lastTime = 0
+        root.startedAt = Date.now()
         root.running = true
     }
     function kick(): void {
@@ -81,7 +94,7 @@ Item {
     onClockChanged: {
         if (!root.running) return
         const now = Date.now()
-        if (root.lastTime <= 0) { root.lastTime = now; return }
+        if (root.lastTime <= 0) root.lastTime = now - Math.min(16, now - root.startedAt)
         const dt = Math.min(0.034, Math.max(0, (now - root.lastTime) / 1000))
         root.lastTime = now
         if (dt <= 0) return

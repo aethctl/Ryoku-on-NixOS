@@ -14,6 +14,19 @@ Item {
     property var host
     property var condCtx
     property int rev: 0
+    property string jumpControlId: ""
+
+    function scrollToControl(id) {
+        for (var i = 0; i < bodyRepeater.count; i++) {
+            var d = bodyRepeater.itemAt(i);
+            if (d && d.cid === id) {
+                flick.contentY = Math.max(0, Math.min(d.y - 12 * Theme.scale,
+                    Math.max(0, flick.contentHeight - flick.height)));
+                return;
+            }
+        }
+    }
+    onJumpControlIdChanged: if (studio.jumpControlId.length > 0) Qt.callLater(function () { studio.scrollToControl(studio.jumpControlId); })
 
     signal closeRequested()
 
@@ -127,10 +140,12 @@ Item {
             y: (1 - studio._reveal) * 10 * Theme.scale
 
             Repeater {
+                id: bodyRepeater
                 model: studio.controls
 
                 delegate: FolioControl {
                     required property var modelData
+                    readonly property string cid: modelData && modelData.id ? String(modelData.id) : ""
                     width: body.width
                     state: studio.state; options: studio.options; host: studio.host
                     condCtx: studio.condCtx; rev: studio.rev; reveal: studio._reveal

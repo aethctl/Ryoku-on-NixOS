@@ -27,6 +27,7 @@ Singleton {
     property bool _ready: false
     property var _caps: ({})
     property string _workspaceModel: "fixed"
+    property string _provider: ""
     property var _configFiles: []
     property string _focusedOutput: ""
     property var _outputs: []
@@ -42,6 +43,9 @@ Singleton {
     // directly with no undefined guard.
     readonly property var caps: root._caps
     readonly property string workspaceModel: root._workspaceModel
+    // The running window manager as the provider names itself, for display
+    // only: behaviour asks caps, never this.
+    readonly property string provider: root._provider
 
     readonly property string focusedOutput: root._focusedOutput
     readonly property var outputs: root._outputs
@@ -67,6 +71,14 @@ Singleton {
             if (outs[i].name === name)
                 return outs[i];
         return null;
+    }
+
+    // The compositor's scale factor for an output, so a surface can convert
+    // its logical rectangle back to physical pixels. 1 until the daemon has
+    // reported that output.
+    function outputScale(name) {
+        const o = root.outputByName(name);
+        return o && typeof o.scale === "number" && o.scale > 0 ? o.scale : 1;
     }
 
     // ext-workspace-v1 windowsets joined with the daemon's occupancy residue by
@@ -115,19 +127,6 @@ Singleton {
             if (list[i].name === name)
                 return list[i];
         return null;
-    }
-
-    // Window residue uses the compositor workspace id while ext-workspace-v1
-    // exposes the human-facing workspace name. Hyprland normally makes those
-    // identical; niri does not. Consumers need one stable comparison key.
-    function workspaceKey(workspace) {
-        if (!workspace)
-            return "";
-        if (workspace.id !== undefined
-                && workspace.id !== null
-                && String(workspace.id) !== "")
-            return String(workspace.id);
-        return String(workspace.name || "");
     }
 
     // The workspace shown on the focused output.
@@ -251,7 +250,7 @@ Singleton {
     function cycleKeyboardLayout() { root._act("keyboard.cycleLayout", "keyboardLayoutSwitch", []); }
     function setCursor(theme, size) { root._act("cursor.set", "cursorSet", [String(theme), String(size)]); }
     function reloadConfig(scope) { root._act("config.reload", "configReload", [String(scope || "")]); }
-    function setOutputPower(output, on) { root._act("output.power", "outputPower", [on ? "on" : "off", String(output)]); }
+    function setOutputPower(output, on) { root._act("output.power", "outputPower", [String(output), on ? "on" : "off"]); }
     function toggleOverview() { root._act("overview.toggle", "nativeOverview", []); }
     function enterSubmap(name) { root._act("submap.enter", "submap", [String(name)]); }
     function resetSubmap() { root._act("submap.reset", "submap", []); }
@@ -280,6 +279,7 @@ Singleton {
                 root._ready = frame.ready === true;
                 root._caps = frame.caps || ({});
                 root._workspaceModel = frame.workspaceModel || "fixed";
+                root._provider = frame.provider || "";
                 root._configFiles = frame.configFiles || [];
                 root._focusedOutput = frame.focusedOutput || "";
                 root._outputs = frame.outputs || [];
@@ -295,6 +295,7 @@ Singleton {
                 root._ready = frame.ready === true;
                 root._caps = frame.caps || ({});
                 root._workspaceModel = frame.workspaceModel || "fixed";
+                root._provider = frame.provider || "";
                 root._configFiles = frame.configFiles || [];
             }
             if (v.windows !== old.windows) root._winResidue = frame.windows || [];

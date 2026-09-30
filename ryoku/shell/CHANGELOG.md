@@ -3,6 +3,41 @@
 ## Unreleased
 
 ### New
+- **Rices save, export and import from Ryogami.** The Rices tab gains Save
+  look and Import beside its tabs, and an empty tab offers both instead of
+  sending you to Ryoku Hub. A rice's card keeps Apply, Fork, Restore and Delete
+  and adds a Share row: Save look names a capture of this desktop and lists what
+  it carries (it warns before replacing a rice with the same name), Export opens
+  a folder browser with Home, Rices, Downloads and Documents one click away, and
+  Import shows every folder holding a rice as a tile with its preview. Each
+  command reports what really happened, a refused folder keeps the dialog open,
+  and a new rice slides under the cursor once it lands. Wallpaper filters (type,
+  colour, folder, favourites, shape, size) no longer empty the Rices and Themes
+  tabs when left on, and the bar hides them there
+  (`ryogami/picker/qml/chrome/RiceShare.qml`, `RiceFolderBrowser.qml`,
+  `RiceWorkshop.qml`, `ryogami/picker/src/core/libraryview.cpp`).
+- **Night light AT THE CLOCK.** The Displays card's schedule was sun-only, so
+  a fixed bedtime had to borrow the weather's sunset. A new switch warms the
+  screen between the hours you choose: START AT and OFF AT rows each carry a
+  12-hour time you can step by the hour, flip AM/PM, or type ("9:30 pm"), and
+  the window wraps midnight like the sun one. It is exclusive with FOLLOW THE
+  SUN, persists across restarts, and applies at once when armed.
+  (`ipc/nightlight_schedule.go`, `../hub/quickshell/pages/DisplaysPage.qml`).
+- **iRiS is now Shima, synced with iNiR 2.32.** iNiR's license terms keep
+  the names iNiR and iRiS, their logo and the Kira mascot for snowarch, so the
+  frame bar style is renamed Shima everywhere you see it, draws its own island
+  mark, and drops the mascot. Internal ids and settings keys are unchanged, so
+  nothing you set moves. The About page credits "Based on iNiR by snowarch"
+  and gains a second tab for the Ryoku maintainer. The same pass brings
+  iNiR 2.32 across: light, ink and dark schemes with per-scheme tone, colour
+  and frost; widget stacks with dots and controls; a visualizer bubble and
+  visualizer designs; an app-icon tile pack for plates; settings rows that say
+  why they are locked; and upstream's repaint and wallpaper-decode fixes.
+  Orbit, which is built on niri alone, and upstream's IrisGate are left out.
+  Ryoku Hub's Bar Studio says Shima too, and Ryostore rebuilds a saved
+  catalogue whose built-in bar styles carry old names, so the rename shows
+  after an update without pressing refresh
+  (`quickshell/inir/`, `inir/NOTICE`, `apps/ryostore/backend/`).
 - **Per-widget Depth: in front or behind.** Right-clicking a desktop widget or
   a store tile, and the visualiser's own editor, now offer a Depth control
   that lifts just that widget above the subject cut-out or drops it behind
@@ -23,6 +58,8 @@
   on the bar opens the online browser: Wallhaven, the Steam Workshop (searchable
   without a key), Unsplash, Pexels, YouTube, Bing, MoeWalls, MotionBGs, Ryostore
   and repos, each with its own filters, previews and one-click save or apply.
+  The bar also shows running downloads, scans and index builds with a Stop
+  control, and a mute toggle and audio mixer whenever a video or scene plays.
   Wallpaper Engine scenes from the Workshop play through skwd-paper, with their
   user properties editable per scene. Playlists, a rule-based schedule (time,
   sun, weather, power), per-display placement, locks and audio, a theme designer
@@ -121,8 +158,45 @@
   `scripts/ryoku-cmd-studiorecord`, `scripts/ryoku-cmd-edit-recording`,
   `scripts/ryoku-cmd-discord-compress`, `ipc/record.go`, `services/Recorder.qml`,
   `modules/bar/RecordIsland.qml`, `modules/bar/popouts/CapturePopout.qml`).
+- **iRiS catches up with iNiR's latest wave.** The vendored frame family now
+  carries upstream's newest desktop widget editor (quick controls, identity
+  marks, design presets), Island and Dock refinements, the reworked settings
+  pages and themes, wallpaper-luma legibility and the new fonts, adapted to
+  Ryoku's seams (`../inir/`).
 
 ### Changed
+- **The visualiser's deep settings moved onto the desktop editor.** The
+  placement bar grew a gear that opens a square drawer of everything it has no
+  room for: playback (enabled, idle wave, frame rate, adaptive quality), shape
+  (corner style, segments, bar width, grow direction, spin, reflection, bloom)
+  and the edge field's whole vocabulary, scrollable, dimming what the current
+  look ignores. `S` opens it too. The frame rate row shows a muted "capped 30"
+  or "capped 24" while adaptive quality is shedding frames, so the governor is
+  visible instead of silent. The visualiser no longer drops to 30 fps after a
+  reboot or a power-profile flip (the resume spike tripped the governor, and
+  the Hub could rewrite the file before it had loaded), and the shipped
+  defaults are now 60 fps and the wave look
+  (`modules/visualizer/SettingsPopup.qml`, `EditBar.qml`, `Placer.qml`,
+  `Singletons/Config.qml`, `Motion.qml`, `AuraMotion.qml`,
+  `VisualizerView.qml`).
+
+- **The screen recorder is GPU Screen Recorder.** The wf-recorder pipeline is
+  gone: capture and encode now run entirely on the GPU through
+  `gpu-screen-recorder` (the Arch package, not the flatpak), which handles the
+  hybrid-GPU dispatch, the desktop+microphone mix, and the CPU fallback
+  itself. Control runs over GSR's IPC socket, so stop always finalizes the
+  file cleanly, and the record island gains a pause/resume button. The
+  capture card's record zone now carries the recorder's own settings as
+  tap-to-cycle chips (codec, quality, framerate, container) plus a
+  Record-cursor switch and a link to Hub > Recording, which grew the full GSR
+  surface (bitrate mode, container, audio codec, color range, keyframe
+  interval, output resolution). Studio and Edit-in-Ryoku-Motion are gone with
+  the Ryoku Motion removal; the Discord-sized copy stays. Region geometry is
+  sent in physical pixels so a crop lands exactly where it was drawn on a
+  scaled display, on Hyprland and niri alike
+  (`scripts/ryoku-cmd-record`, `ipc/record.go`, `services/Recorder.qml`,
+  `services/Capture.qml`, `modules/bar/popouts/CapturePopout.qml`,
+  `modules/bar/RecordIsland.qml`, `../inir/services/RecorderStatus.qml`).
 - **Optimising images keeps the originals.** As in skwd, each image the optimiser
   re-encodes leaves its original in Ryogami's trash
   (`~/.local/share/ryogami/trash`), which the Library tab's retention settings
@@ -203,8 +277,65 @@
   it. The sharp themes keep their crisp joins, and the Fusion slider still
   sets it. Edge bubbles also sit a little off the band so their ring never
   grazes the frame.
+- **QS Bar is the shipped default again.** A store with no `barStyle` renders
+  QS Bar, and the Hub's Bar Studio, the Ryostore catalogue and both compositors'
+  close-confirm binds now agree on that; iRiS stays one click away
+  (`services/Config.qml`, `../../hub/quickshell/pages/BarStudioPage.qml`,
+  `../../apps/ryostore/backend/provider_bars.go`, `../../wm/niri/config_binds.go`,
+  `../../hyprland/modules/binds.lua`).
 
 ### Fixed
+- **Docking no longer freezes the night light.** A connector change (dock,
+  undock, lid, resume) can take the warm gamma away from the running backend
+  without telling it, so the bar kept reading on over a cold screen. While the
+  light is on, the daemon now watches the output set and re-claims the gamma
+  once it settles, keeping the chosen temperature; a light left off is never
+  turned on by a hotplug (`ipc/nightlight.go`, `ipc/wmclient.go`).
+- **The Sun theme mode is back.** The new picker's Variant dropdown and the
+  settings schema dropped the sunrise/sunset-following mode the old picker
+  offered, so it could no longer be selected (#299). The dropdown lists it
+  again and the daemon accepts it (`folio/tabs/ThemeTab.qml`,
+  `ryogami/daemon/settings_schema_table.go`).
+- **Wallpaper slices dissolve at the screen edge.** In the picker's slices
+  mode the edge fade was calibrated to the strip, not the screen, so on
+  wide displays the outermost cards were cut off at the panel edge at
+  partial opacity instead of fading out (#301). Each card's fade now
+  completes before its outer edge reaches the viewport
+  (`ryogami/picker/src/layouts/geometry.cpp`).
+- **iRiS and store bar styles no longer fall back to Sumi.** Syntax damage and
+  lost registrations in the iRiS tree (settings options, theme presets, the
+  Island and Dock resize handles under Qt 6.11, the region-capture router, the
+  tray's status shim) made its scene fail to load, and a style that errored
+  while the shell was mid-update got marked failed for the whole session. A
+  builtin style that keeps failing now degrades to the Sumi rail instead of an
+  empty frame, and hiding a monitor's bar no longer blanks iRiS
+  (`modules/bar/Frame.qml`, `services/BarProducts.qml`).
+- **iRiS settings stick.** Every change after the first was queued on a closed
+  daemon connection and lost on reload; the writer now reopens it
+  (`../inir/modules/common/Config.qml`). `iris settings <section>` opens that
+  page again (and `iris settings about` the About page), the desktop menu's
+  screenshot, record, colour picker, terminal, settings and restart actions
+  use Ryoku's own tools, and the tray lists its icons. Night Light's switch,
+  warmth and schedule now drive Ryoku's night light (sunset to sunrise) instead
+  of a frame-only key. Rows nothing in Ryoku reads are gone: compositor blur,
+  Niri animations, the shell-family switch, app colours, blur and parallax
+  behind windows, banner timeouts, quiet hours and sound, and the capture and
+  recording page, whose real settings live in ryoshot and Hub > Recording.
+- **iRiS says who made what.** About credits the design to iNiR with the
+  upstream version it follows (`../inir/VERSION`), credits this build to Ryoku
+  with its own version and issue tracker, and names the running window
+  manager from the seam; iRiS runs on every compositor Ryoku supports.
+- **Chrome keeps its size when the display scale grows.** The launcher, the
+  needle panel and popouts, the overview and the clipboard sized themselves
+  by the monitor's logical height, so raising the display scale shrank them
+  while every app grew, and the launcher read as tiny next to the desktop
+  (#293). The shared factor now uses the physical height, with the
+  compositor's own scale read from the daemon's output state; the iRiS pill
+  bar's thickness follows the same rule (`services/lib/screens.js`,
+  `modules/launcher/`, `modules/bar/Frame.qml`,
+  `modules/overview/OverviewSurface.qml`,
+  `modules/clipboard/ClipboardSurface.qml`,
+  `../inir/services/ShellLayoutController.qml`).
 - **A moved wallpaper folder keeps working.** Ryogami kept the path it first saw
   for each wallpaper, so moving the folder or the home directory left the
   catalogue pointing at the old place and applies failed until the files
@@ -415,12 +546,6 @@
   (`ryogami/wall-ui/qml/wallpaper/HandView.qml`, `SandyView.qml`,
   `GridLayoutsView.qml`, `settings/SelectorSettings.qml`, `components/RowSlider.qml`).
 
-- **Bars and Chroma modules can be assigned per display.** Each connector can
-  follow the global Bar Studio style or select its own, while Chroma inherits
-  global module switches unless a display overrides one. Chroma also gains live
-  position, gap, radius, opacity, workspace-label and clock-format controls
-  (`services/Config.qml`, `modules/bar/`, `barstyles/chroma/`).
-
 - **Upscaling runs in its own worker process and reports its progress.** The
   waifu2x/ffmpeg enhance ran inside the daemon: a panicking job took the whole
   daemon (and the picker with it) down, a crash mid-run wedged the job lock so
@@ -599,6 +724,12 @@
   properties nothing had bound since the cutover: transitions come from
   `transition.shader` and the built-in engine. Nothing wrote the keys, so no
   config migrates (`ryogami/wall-ui/qml/Config.qml`).
+
+- **A Super tap no longer opens the niri overview.** Tapping Super by itself
+  used to toggle niri's overview through the keypress daemon; Super+Tab already
+  does that, so the tap binding, the daemon claim behind it and the reader it
+  kept alive with the visualiser off are gone (`shell.qml`,
+  `services/Keypresses.qml`, `ipc/keypress.go`).
 
 ### Fixed
 - **Suspend is fail-closed without deadlocking fast user switching.** Each

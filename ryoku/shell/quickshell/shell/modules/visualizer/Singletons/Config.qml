@@ -19,8 +19,13 @@ Singleton {
 
     // --- globals (shared by every instance) -----------------------------------
     property alias enabled:  adapter.enabled     // master on/off (also Super+M)
-    property alias fps:      adapter.fps          // 30 default, up to 60
+    property alias fps:      adapter.fps          // 60 default (30 / 45 / 60)
     property alias adaptive: adapter.adaptive     // auto-throttle under load
+
+    // The adaptive governor of the ACTIVE instance caps fps to 30/24 while it
+    // works; the settings popup reads this so it can say so, rather than the
+    // user reading the frame-rate control as stuck. 0 while the governor idles.
+    property int activeGovTier: 0
 
     // The looks the renderer knows, canonical here for cycleStyle.
     readonly property var knownStyles: act.knownStyles
@@ -223,6 +228,17 @@ Singleton {
         file.writeAdapter();
     }
 
+    // fps and adaptive are global, not per-viz: write the flat keys directly, so
+    // tuning while an extra instance is active never buries them in its slot.
+    function setFps(v) {
+        adapter.fps = Math.max(1, Math.min(240, Math.round(v)));
+        settle.restart();
+    }
+    function setAdaptive(on) {
+        adapter.adaptive = on === true;
+        settle.restart();
+    }
+
     // How much of the box's own turned footprint is allowed to hang past a
     // screen edge, an aesthetic choice the box can be left sitting in (not just
     // a mid-drag overshoot that snaps back): 0 keeps the whole look on screen,
@@ -397,14 +413,14 @@ Singleton {
             property real bloom: 0.6
             property real reflection: 0.1
             property bool idleWave: true
-            property string style: "bars"
+            property string style: "wave"
             property string shape: "rounded"
             property string color: ""
             property string color2: ""
             property bool gradient: false
             property bool mirror: false
             property int segments: 10
-            property int fps: 30
+            property int fps: 60
             property bool adaptive: true
             property real smoothing: 0.5
             property real gain: 1.0

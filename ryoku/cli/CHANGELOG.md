@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Added
+- **`ryoku doctor` removes the retired Ryoku Motion package.** `ryomotion`, the
+  screen-demo recorder, shipped as a hard depend once, so a box installed before
+  it was dropped still carries it and pacman never removes it on its own. The new
+  retired-apps reconciler removes it (`pacman -Rns --noconfirm ryomotion`); a box
+  that never had it is left untouched
+  (`internal/doctor/reconcile_retired_apps.go`).
 - **`ryoku doctor` names the reverse-PRIME first-commit hazard.** On a laptop
   whose connected panel is driven by the iGPU while the render pin puts NVIDIA
   first, the session's very first cross-GPU commit fails once on some kernels

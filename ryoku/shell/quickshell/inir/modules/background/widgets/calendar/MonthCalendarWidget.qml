@@ -10,6 +10,7 @@ import inir.modules.common.functions
 import inir.modules.common.widgets
 import inir.modules.common.widgets.widgetCanvas
 import inir.modules.background.widgets
+import inir.modules.background.widgets.instrument
 import inir.modules.iris.widgets
 
 AbstractBackgroundWidget {
@@ -118,58 +119,46 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 4
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.instrument ? "instrument" : "card"
                     model: [
                         { label: Translation.tr("Card"), icon: "crop_landscape", value: "card" },
                         { label: Translation.tr("Instrument"), icon: "avg_pace", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.instrument === (modelData.value === "instrument")
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 4
-                Repeater {
+            WidgetQuickSection {
+                title: Translation.tr("Week starts on")
+                WidgetQuickChoices {
+                    current: root.weekStart
                     model: [
-                        { label: "Monday", value: 1 },
-                        { label: "Sunday", value: 0 }
+                        { label: Translation.tr("Monday"), value: 1 },
+                        { label: Translation.tr("Sunday"), value: 0 }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonText: Translation.tr(modelData.label)
-                        toggled: root.weekStart === modelData.value
-                        onClicked: root._setOutputValue("weekStart", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("weekStart", value)
                 }
             }
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                leftmost: true; rightmost: true
-                buttonIcon: "date_range"
-                buttonText: Translation.tr("Adjacent days")
-                toggled: root.showAdjacentDays
-                onClicked: root._setOutputValue("showAdjacentDays", !root.showAdjacentDays)
-            }
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.instrument
-                leftmost: true; rightmost: true
-                buttonIcon: "horizontal_rule"
-                buttonText: Translation.tr("Header rule")
-                toggled: root.instrumentRule
-                onClicked: root._setOutputValue("instrumentRule", !root.instrumentRule)
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "date_range"
+                    label: Translation.tr("Adjacent days")
+                    checked: root.showAdjacentDays
+                    onToggled: root._setOutputValue("showAdjacentDays", !root.showAdjacentDays)
+                }
+                WidgetQuickToggle {
+                    visible: root.instrument
+                    Layout.fillWidth: true
+                    iconName: "horizontal_rule"
+                    label: Translation.tr("Header rule")
+                    checked: root.instrumentRule
+                    onToggled: root._setOutputValue("instrumentRule", !root.instrumentRule)
+                }
             }
         }
     }
@@ -208,8 +197,16 @@ AbstractBackgroundWidget {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
+                InstrumentLabel {
+                    visible: root.instrument
+                    text: Translation.tr("Calendar / %1").arg(root.viewingDate.getFullYear())
+                    color: root.widgetAccentVisible
+                    scaleFactor: root.scaleFactor
+                    strong: true
+                }
                 StyledText {
                     text: root.viewingDate.toLocaleDateString(Qt.locale(), "MMMM")
+                    font.capitalization: Font.Capitalize
                     color: root.ink
                     font.family: root.widgetTitleFamily
                     font.pixelSize: Math.round(Appearance.font.pixelSize.larger
@@ -218,6 +215,7 @@ AbstractBackgroundWidget {
                     font.letterSpacing: root.widgetTitleTracking
                 }
                 StyledText {
+                    visible: !root.instrument
                     text: String(root.viewingDate.getFullYear())
                     color: root.inkMuted
                     font.pixelSize: Math.round(Appearance.font.pixelSize.smaller * root.scaleFactor)

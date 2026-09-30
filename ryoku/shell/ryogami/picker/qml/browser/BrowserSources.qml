@@ -4,25 +4,26 @@ import Ryoku.Ui.Singletons
 QtObject {
     id: sources
 
-    // apply is the kind a downloaded result becomes; searchable false turns the search box into a label.
+    // Every source the daemon offers, in its order, so a tab exists before source.providers
+    // answers; searchable false turns the search box into a label.
     readonly property var providers: [
-        { id: "wallhaven", label: I18n.tr("Wallhaven"),      searchable: true,  apply: "static" },
-        { id: "steam",     label: I18n.tr("Steam Workshop"), searchable: true,  apply: "we" },
-        { id: "unsplash",  label: I18n.tr("Unsplash"),       searchable: true,  apply: "static" },
-        { id: "pexels",    label: I18n.tr("Pexels"),         searchable: true,  apply: "static" },
-        { id: "youtube",   label: I18n.tr("YouTube"),        searchable: true,  apply: "video" },
-        { id: "bing",      label: I18n.tr("Bing Daily"),     searchable: false, apply: "static" }
+        { id: "wallhaven", label: I18n.tr("Wallhaven"),      searchable: true },
+        { id: "steam",     label: I18n.tr("Steam Workshop"), searchable: true },
+        { id: "unsplash",  label: I18n.tr("Unsplash"),       searchable: true },
+        { id: "pexels",    label: I18n.tr("Pexels"),         searchable: true },
+        { id: "youtube",   label: I18n.tr("YouTube"),        searchable: true },
+        { id: "bing",      label: I18n.tr("Bing Daily"),     searchable: false },
+        { id: "moewalls",  label: I18n.tr("MoeWalls"),       searchable: true },
+        { id: "motionbgs", label: I18n.tr("MotionBGs"),      searchable: true },
+        { id: "ryostore",  label: I18n.tr("Ryostore"),       searchable: true },
+        { id: "repos",     label: I18n.tr("Repos"),          searchable: true }
     ]
-
-    readonly property var canonicalOrder: ({
-        wallhaven: 0, steam: 1, unsplash: 2, pexels: 3, youtube: 4, bing: 5
-    })
 
     function descriptor(id) {
         for (var i = 0; i < sources.providers.length; ++i)
             if (sources.providers[i].id === id)
                 return sources.providers[i]
-        return { id: id, label: id, searchable: true, apply: "static" }
+        return { id: id, label: id, searchable: true }
     }
 
     function searchPlaceholder(id) {
@@ -32,6 +33,7 @@ QtObject {
         case "unsplash": return I18n.tr("Search Unsplash…")
         case "pexels":   return I18n.tr("Search Pexels…")
         case "youtube":  return I18n.tr("Search YouTube…")
+        case "repos":    return I18n.tr("Filter files…")
         default:         return I18n.tr("Search…")
         }
     }
@@ -127,6 +129,10 @@ QtObject {
             return { orientation: "", size: "", colour: "" }
         case "youtube":
             return { maxDuration: "" }
+        case "repos": {
+            var saved = sources.savedRepos(settings)
+            return { repo: saved.length > 0 ? saved[0] : "", type: "all" }
+        }
         default:
             return {}
         }
@@ -182,15 +188,17 @@ QtObject {
             return { max_duration: st.maxDuration.length > 0 ? parseInt(st.maxDuration, 10) : 0 }
         case "bing":
             return { market: _str(settings, "sources.bing.market", "en-US") }
+        case "repos":
+            return { repo: st.repo || "", type: st.type || "all" }
         default:
             return {}
         }
     }
 
-    // Prefers the daemon's own reason from source.providers, else derives one from settings.
+    // Prefers the daemon's own verdict from source.providers, else derives one from settings.
     function availability(id, settings, rpc) {
         if (rpc && rpc.available === false)
-            return { enabled: false, reason: rpc.unavailableReason || I18n.tr("Enable in settings") }
+            return { enabled: false, reason: sources.reasonText(id, rpc.unavailableReason), code: rpc.unavailableReason || "Disabled" }
         if (rpc && rpc.available === true)
             return { enabled: true, reason: I18n.tr("Available") }
 
@@ -205,16 +213,16 @@ QtObject {
                 : { enabled: false, reason: I18n.tr("Enable in settings") }
         case "unsplash":
             if (!_bool(settings, "sources.unsplash.enabled", false))
-                return { enabled: false, reason: I18n.tr("Enable in settings") }
+                return { enabled: false, reason: I18n.tr("Enable in settings"), code: "Disabled" }
             return _str(settings, "sources.unsplash.accessKey", "").length > 0
                 ? { enabled: true, reason: I18n.tr("Available") }
-                : { enabled: false, reason: I18n.tr("Credentials required") }
+                : { enabled: false, reason: I18n.tr("Credentials required"), code: "MissingCredentials" }
         case "pexels":
             if (!_bool(settings, "sources.pexels.enabled", false))
-                return { enabled: false, reason: I18n.tr("Enable in settings") }
+                return { enabled: false, reason: I18n.tr("Enable in settings"), code: "Disabled" }
             return _str(settings, "sources.pexels.apiKey", "").length > 0
                 ? { enabled: true, reason: I18n.tr("Available") }
-                : { enabled: false, reason: I18n.tr("Credentials required") }
+                : { enabled: false, reason: I18n.tr("Credentials required"), code: "MissingCredentials" }
         case "youtube":
             return _bool(settings, "sources.youtube.enabled", false)
                 ? { enabled: true, reason: I18n.tr("Available") }
@@ -228,11 +236,79 @@ QtObject {
         }
     }
 
+    // The daemon reports why a source is off as a code; people read skwd's wording.
+    function reasonText(id, code) {
+        switch (code) {
+        case "MissingCredentials": return I18n.tr("Credentials required")
+        case "MissingTool": return id === "youtube" ? I18n.tr("Install yt-dlp") : I18n.tr("Helper not installed")
+        default: return I18n.tr("Enable in settings")
+        }
+    }
+
+    // The Sources setting that turns a source on, or takes its missing key.
+    function settingsControl(id, code) {
+        switch (id) {
+        case "wallhaven": return "features.wallhaven"
+        case "steam": return "features.steam"
+        case "unsplash": return code === "MissingCredentials" ? "sources.unsplash.accessKey" : "sources.unsplash.enabled"
+        case "pexels": return code === "MissingCredentials" ? "sources.pexels.apiKey" : "sources.pexels.enabled"
+        default: return "sources." + id + ".enabled"
+        }
+    }
+
     function showApplyButton(id, settings) {
         return _bool(settings, "sources." + id + ".showApplyButton", false)
     }
 
-    // Each section: { n, group, build(state, ctx) -> [chip] }.
+    // Saved as owner/repo; a pasted GitHub address is cut back to that.
+    function normaliseRepo(raw) {
+        var v = String(raw || "").trim()
+            .replace(/^(https?:\/\/)?(www\.)?github\.com\//, "")
+            .replace(/\.git$/, "")
+        var parts = v.split("/").filter(function(p) { return p.length > 0 })
+        if (parts.length < 2)
+            return ""
+        var repo = parts[0] + "/" + parts[1].replace(/\.git$/, "")
+        return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo) ? repo : ""
+    }
+
+    function savedRepos(settings) {
+        var list = settings ? settings.value("sources.repos") : null
+        var out = []
+        if (list && list.length !== undefined)
+            for (var i = 0; i < list.length; ++i)
+                if (typeof list[i] === "string" && list[i].length > 0)
+                    out.push(list[i])
+        return out
+    }
+
+    // A section input hands typed text here; the next filter state, or null to refuse the text.
+    function submit(id, input, text, st) {
+        if (id !== "repos" || !input || input.action !== "addRepo")
+            return null
+        var repo = sources.normaliseRepo(text)
+        if (repo.length === 0)
+            return null
+        var saved = sources.savedRepos(Settings)
+        if (saved.indexOf(repo) < 0) {
+            saved.push(repo)
+            Settings.set("sources.repos", saved)
+        }
+        st.repo = repo
+        return st
+    }
+
+    // An action chip changes saved data rather than a filter; the next filter state, or null.
+    function act(id, chip, st) {
+        if (id !== "repos" || chip.action !== "forgetRepo")
+            return null
+        var saved = sources.savedRepos(Settings).filter(function(r) { return r !== chip.value })
+        Settings.set("sources.repos", saved)
+        st.repo = saved.length > 0 ? saved[0] : ""
+        return st
+    }
+
+    // Each section: { n, group, build(state, ctx) -> [chip], input? }.
     function sections(id) {
         switch (id) {
         case "wallhaven": return sources._wallhavenSections
@@ -240,6 +316,7 @@ QtObject {
         case "unsplash":  return sources._unsplashSections
         case "pexels":    return sources._pexelsSections
         case "youtube":   return sources._youtubeSections
+        case "repos":     return sources._reposSections
         default:          return []
         }
     }
@@ -419,6 +496,25 @@ QtObject {
             { kind: "single", key: "maxDuration", value: "600",  label: I18n.tr("\u226410m") },
             { kind: "single", key: "maxDuration", value: "1800", label: I18n.tr("\u226430m") },
             { kind: "single", key: "maxDuration", value: "3600", label: I18n.tr("\u22641h") }
+        ] } }
+    ]
+
+    readonly property var _reposSections: [
+        { n: "01", group: I18n.tr("Repository"),
+          input: { action: "addRepo", placeholder: I18n.tr("Add owner/repo or a GitHub link"), glyph: "\uf09b" },
+          build: function(st) {
+            var saved = sources.savedRepos(Settings)
+            var out = []
+            for (var i = 0; i < saved.length; ++i)
+                out.push({ kind: "single", key: "repo", value: saved[i], label: saved[i] })
+            if (st.repo && saved.indexOf(st.repo) >= 0)
+                out.push({ kind: "action", action: "forgetRepo", value: st.repo, label: I18n.tr("Forget selected") })
+            return out
+        } },
+        { n: "02", group: I18n.tr("Type"), build: function(st) { return [
+            { kind: "single", key: "type", value: "all",    label: I18n.tr("All") },
+            { kind: "single", key: "type", value: "live",   label: I18n.tr("Live") },
+            { kind: "single", key: "type", value: "images", label: I18n.tr("Images") }
         ] } }
     ]
 }

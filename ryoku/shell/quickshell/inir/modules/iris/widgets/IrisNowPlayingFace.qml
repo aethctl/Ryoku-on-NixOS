@@ -17,6 +17,8 @@ IrisWidgetFace {
     readonly property var player: MprisController.activePlayer
     readonly property bool hasPlayer: root.player !== null && root.player !== undefined
     readonly property bool playing: root.hasPlayer && media.effectiveIsPlaying
+    readonly property bool restsWhenPaused: Boolean(root.widget.irisOption("rest", true))
+    readonly property bool resting: !root.hasPlayer || (root.restsWhenPaused && !root.playing && restDelay.elapsed)
     readonly property string art: root.hasPlayer ? media.displayedArtFilePath : ""
     readonly property color artLight: IrisStyle.vividHighlight(media.colorQuantizer?.colors?.[0] ?? root.accent, root.accent)
     readonly property real progress: media.effectiveLength > 0 ? Math.min(1, media.effectivePosition / media.effectiveLength) : 0
@@ -28,11 +30,21 @@ IrisWidgetFace {
         return identity.length > 0 ? identity.charAt(0).toUpperCase() + identity.slice(1) : Translation.tr("Music")
     }
 
-    light: root.small || !root.hasPlayer || root.art.length === 0 ? "transparent" : root.artLight
+    light: root.small || root.art.length === 0 ? (root.resting && !root.small ? IrisStyle.identity.pink : "transparent")
+        : root.artLight
     padding: root.small && root.art.length > 0 ? 0 : root.dp(16)
 
     onLyricsWantedChanged: root.lyricsWanted ? LyricsService.subscribe() : LyricsService.unsubscribe()
     Component.onDestruction: if (root.lyricsWanted) LyricsService.unsubscribe()
+
+    Timer {
+        id: restDelay
+        property bool elapsed: false
+        interval: 30000
+        running: root.hasPlayer && !root.playing
+        onRunningChanged: if (running) elapsed = false
+        onTriggered: elapsed = true
+    }
 
     PlayerBase {
         id: media
@@ -58,8 +70,8 @@ IrisWidgetFace {
             implicitWidth: Math.round(transport.disc * 1.2)
             glyph: root.playing ? "pause" : "play_arrow"
             name: root.playing ? Translation.tr("Pause") : Translation.tr("Play")
-            tint: root.playing ? IrisStyle.onTintFor(root.artLight) : root.ink
-            color: root.playing ? root.artLight : IrisStyle.fill
+            tint: root.playing ? root.onFill(root.artLight) : root.ink
+            color: root.playing ? root.artLight : root.fill
             onActivated: media.togglePlaying()
         }
         FaceAction {
@@ -76,7 +88,7 @@ IrisWidgetFace {
     component Progress: Rectangle {
         implicitHeight: root.dp(4)
         radius: height / 2
-        color: IrisStyle.fill
+        color: root.fill
         Rectangle {
             width: parent.width * root.progress
             height: parent.height
@@ -85,50 +97,83 @@ IrisWidgetFace {
         }
     }
 
-    ColumnLayout {
+    Item {
+        id: rest
         anchors.fill: parent
-        visible: !root.hasPlayer
-        spacing: root.dp(6)
+        visible: root.resting
+        readonly property real size: Math.round(Math.min(root.contentWidth, root.height - root.padding * 2)
+            * (root.large ? 0.42 : root.medium ? 0.72 : 0.6))
+        readonly property bool paused: root.hasPlayer
+        readonly property bool cover: rest.paused && root.art.length > 0
 
-        FaceHeader {
-            face: root
-            Layout.fillWidth: true
-            glyph: "music_note"
-            text: Translation.tr("Now Playing")
-            tint: IrisStyle.identity.pink
+        Item {
+            id: restMark
+            anchors.centerIn: parent
+            width: rest.size
+            height: rest.size
+            scale: resume.pressed ? IrisStyle.pressScale(0.94) : 1
+            Behavior on scale { NumberAnimation { duration: IrisStyle.duration(120); easing.type: IrisStyle.feedbackEasing } }
+
+            Rectangle {
+                id: tile
+                anchors.fill: parent
+                visible: !rest.cover
+                radius: IrisStyle.iconRadius(width)
+                readonly property color base: IrisStyle.identity.pink
+                gradient: Gradient {
+                    GradientStop { position: 0; color: Qt.lighter(tile.base, 1.18) }
+                    GradientStop { position: 1; color: tile.base }
+                }
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: rest.paused ? "pause" : "music_note"
+                    fill: 1
+                    iconSize: Math.round(parent.width * 0.56)
+                    color: IrisStyle.onTint
+                }
+            }
+            IrisArtwork {
+                anchors.fill: parent
+                visible: rest.cover
+                source: root.art
+                circular: false
+                radius: IrisStyle.iconRadius(width)
+            }
+            Rectangle {
+                anchors.fill: parent
+                visible: rest.cover
+                radius: IrisStyle.iconRadius(width)
+                color: IrisStyle.veil
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "pause"
+                    fill: 1
+                    iconSize: Math.round(parent.width * 0.42)
+                    color: IrisStyle.onMedia
+                }
+            }
         }
-        Item { Layout.fillHeight: true }
-        FaceText {
-            face: root
-            Layout.fillWidth: true
-            text: Translation.tr("Nothing playing")
-            size: root.small ? 14 : 15
-            weight: Font.DemiBold
-        }
-        FaceText {
-            face: root
-            Layout.fillWidth: true
-            text: Translation.tr("Your music appears here")
-            color: root.inkSecondary
-            size: 12
+        MouseArea {
+            id: resume
+            anchors.fill: restMark
+            enabled: rest.paused
+            cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: media.togglePlaying()
         }
     }
 
     Item {
         anchors.fill: parent
-        visible: root.hasPlayer && root.small
+        visible: !root.resting && root.small
 
         ClippingRectangle {
             anchors.fill: parent
             visible: root.art.length > 0
             radius: root.radius
             color: "transparent"
-            Image {
+            IrisImage {
                 anchors.fill: parent
                 source: root.art
-                fillMode: Image.PreserveAspectCrop
-                sourceSize.width: Math.round(root.width * 2)
-                asynchronous: true
             }
             Rectangle {
                 anchors.left: parent.left
@@ -191,7 +236,7 @@ IrisWidgetFace {
 
     RowLayout {
         anchors.fill: parent
-        visible: root.hasPlayer && root.medium
+        visible: !root.resting && root.medium
         spacing: root.dp(14)
 
         IrisArtwork {
@@ -242,7 +287,7 @@ IrisWidgetFace {
 
     ColumnLayout {
         anchors.fill: parent
-        visible: root.hasPlayer && root.large
+        visible: !root.resting && root.large
         spacing: root.dp(12)
 
         RowLayout {
@@ -291,6 +336,14 @@ IrisWidgetFace {
             spacing: root.dp(4)
 
             Item { Layout.fillHeight: true }
+            FaceText {
+                face: root
+                Layout.fillWidth: true
+                visible: root.lyricsWanted && LyricsService.status === "offline"
+                text: Translation.tr("Lyrics need an internet connection")
+                color: root.inkTertiary
+                size: 12.5
+            }
             FaceText {
                 face: root
                 Layout.fillWidth: true

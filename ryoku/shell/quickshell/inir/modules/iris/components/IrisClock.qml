@@ -9,7 +9,7 @@ Row {
     id: root
 
     property string text: DateTime.timeDisplay
-    property real pixelSize: 15 * IrisStyle.typeScale
+    property real pixelSize: IrisStyle.typeHeadline
     property int weight: IrisStyle.figureWeight
     property color color: IrisStyle.text
     property color separatorColor: IrisStyle.frameAccent
@@ -32,19 +32,25 @@ Row {
     spacing: 0
 
     component Figure: Text {
+        id: figure
+        width: Math.ceil(implicitWidth)
+        transform: Translate { x: Math.round(figure.x) - figure.x; y: Math.round(figure.y) - figure.y }
         font.family: root.family
         font.pixelSize: root.pixelSize
         font.weight: root.weight
         font.features: ({ "tnum": 1 })
-        font.letterSpacing: -root.pixelSize * 0.02
+        font.letterSpacing: Math.round(-root.pixelSize * 0.02)
         color: root.color
         renderType: Text.NativeRendering
     }
 
     component Minor: Text {
+        id: minor
+        width: Math.ceil(implicitWidth)
+        transform: Translate { x: Math.round(minor.x) - minor.x; y: Math.round(minor.y) - minor.y }
         font.family: root.family
         font.pixelSize: Math.round(root.pixelSize * root.minorScale)
-        font.weight: Font.DemiBold
+        font.weight: IrisStyle.weight(Font.DemiBold)
         font.features: ({ "tnum": 1 })
         color: IrisStyle.secondaryOf(root.color)
         renderType: Text.NativeRendering
@@ -54,7 +60,7 @@ Row {
         family: root.family
         pixelSize: root.pixelSize
         weight: root.weight
-        letterSpacing: -root.pixelSize * 0.02
+        letterSpacing: Math.round(-root.pixelSize * 0.02)
         color: root.color
     }
 
@@ -64,14 +70,14 @@ Row {
         visible: root.parts.minutes.length > 0
         color: root.separatorColor
         anchors.baseline: hoursText.baseline
-        anchors.baselineOffset: -root.pixelSize * 0.06
-        leftPadding: root.pixelSize * 0.03
-        rightPadding: root.pixelSize * 0.03
+        anchors.baselineOffset: -Math.round(root.pixelSize * 0.06)
+        leftPadding: Math.round(root.pixelSize * 0.03)
+        rightPadding: Math.round(root.pixelSize * 0.03)
     }
     Count { text: root.parts.minutes; anchors.baseline: hoursText.baseline }
     Item {
         visible: root.parts.seconds.length > 0
-        implicitWidth: secondsText.implicitWidth + root.pixelSize * 0.12
+        implicitWidth: Math.ceil(secondsText.implicitWidth + root.pixelSize * 0.12)
         implicitHeight: secondsText.implicitHeight
         baselineOffset: secondsText.baselineOffset
         anchors.baseline: hoursText.baseline
@@ -88,7 +94,7 @@ Row {
     Minor {
         visible: root.parts.period.length > 0
         text: root.parts.period
-        leftPadding: root.pixelSize * 0.16
+        leftPadding: Math.round(root.pixelSize * 0.16)
         anchors.baseline: hoursText.baseline
     }
 

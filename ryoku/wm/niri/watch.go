@@ -100,7 +100,8 @@ type session struct {
 	// outputs is kept only so the maximise correction can size a window against
 	// its own output; a plain watch never reads it.
 	outputs []wm.Output
-	// overview is the compositor's native overview state.
+	// overview is the compositor's native overview state, replayed on connect
+	// and folded from every OverviewOpenedOrClosed event.
 	overview bool
 	// ready gates the correction: everything replayed before it is a window that
 	// was already up, never an open this watch owns.
@@ -517,16 +518,7 @@ func (s *session) workspaceFrame() []wm.Workspace {
 			Windows: counts[ws.ID],
 		})
 	}
-	indices := make(map[string]int, len(s.workspaces))
-	for _, ws := range s.workspaces {
-		indices[formatUint(ws.ID)] = ws.Idx
-	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].Output != out[j].Output {
-			return out[i].Output < out[j].Output
-		}
-		return indices[out[i].ID] < indices[out[j].ID]
-	})
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
 }
 

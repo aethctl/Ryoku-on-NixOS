@@ -40,6 +40,9 @@ private:
         float tilt = 52;     // resting lay-back angle (deg)
         float corners = 2;   // corner radius px
         float speed = 100;   // scales camera + open spring
+        bool shadows = true;
+        float shadowStrength = 1.0f;
+        float shadowDistance = 1.0f;
     };
     struct Hit {
         int row;

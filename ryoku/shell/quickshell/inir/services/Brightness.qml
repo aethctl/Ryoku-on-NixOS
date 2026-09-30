@@ -18,6 +18,7 @@ import "brightnessPolicy.js" as BrightnessPolicy
 Singleton {
     id: root
     signal brightnessChanged()
+    property real lastUserChange: 0
 
     property var ddcMonitors: []
     property list<BrightnessMonitor> monitors: []
@@ -473,6 +474,7 @@ Singleton {
         }
 
         function setBrightness(value: real): void {
+            root.lastUserChange = Date.now()
             value = Math.max(0, Math.min(1, value));
             const screenName = monitor.screen?.name ?? ""
             if (screenName && value >= 0.01)

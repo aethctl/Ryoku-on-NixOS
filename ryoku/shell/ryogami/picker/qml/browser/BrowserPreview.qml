@@ -1,4 +1,5 @@
 import QtQuick
+import QtMultimedia
 import Ryoku.Ui.Singletons
 
 Item {
@@ -35,9 +36,14 @@ Item {
     readonly property bool _downloaded: !!item && item.downloaded === true
     readonly property bool _downloading: !!sources && sources.isDownloading(item)
     readonly property bool _hasClip: _isYoutube && _duration > 0
-    readonly property string _artSource: fullPath.length > 0
-        ? "file://" + fullPath
-        : (item && item.thumb ? item.thumb : "")
+    // The thumbnail is a plain cache path until the full image arrives.
+    readonly property string _artSource: Library.fileUrl(fullPath.length > 0 ? fullPath
+        : (item && item.thumb ? String(item.thumb) : ""))
+    readonly property string _clipUrl: {
+        var u = item && item.fullUrl ? String(item.fullUrl) : ""
+        var path = u.split(/[?#]/)[0].toLowerCase()
+        return /\.(webm|mp4|mkv|mov)$/.test(path) ? u : ""
+    }
 
     // The panel refreshes item as a download progresses; only a different item resets the clip.
     property string _clipFor: ""
@@ -110,6 +116,20 @@ Item {
         cache: false
         opacity: preview.anim
     }
+    // A result whose link is the clip plays it here; the thumbnail above covers the first frames.
+    Loader {
+        anchors.fill: parent
+        anchors.margins: 40 * Theme.scale
+        active: preview.shown && preview._clipUrl.length > 0
+        sourceComponent: Video {
+            source: preview._clipUrl
+            fillMode: VideoOutput.PreserveAspectFit
+            loops: MediaPlayer.Infinite
+            muted: true
+            opacity: preview.anim
+            Component.onCompleted: play()
+        }
+    }
     BrowserSpinner {
         anchors.centerIn: parent
         visible: preview._artSource.length === 0
@@ -122,7 +142,7 @@ Item {
         anchors.top: parent.top
         anchors.margins: 20 * Theme.scale
         spacing: 8 * Theme.scale
-        visible: preview.fullPath.length === 0 && preview._artSource.length > 0
+        visible: preview.fullPath.length === 0 && preview._artSource.length > 0 && preview._clipUrl.length === 0
         BrowserSpinner { anchors.verticalCenter: parent.verticalCenter; size: 14; color: "white" }
         Text {
             anchors.verticalCenter: parent.verticalCenter

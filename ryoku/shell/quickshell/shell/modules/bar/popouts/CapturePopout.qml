@@ -43,21 +43,25 @@ Item {
     readonly property string saveLabel: Capture.save === "clipboard" ? I18n.tr("Clip")
         : Capture.save === "file" ? I18n.tr("Folder") : I18n.tr("Both")
 
+    // recording quality chips: value lists (daemon-validated) and the short labels
+    // the chips show. The chip's own I18n.tr wraps the label, so these stay English.
+    readonly property var codecSteps: ["h264", "hevc", "av1"]
+    readonly property var qualitySteps: ["medium", "high", "very_high", "ultra"]
+    readonly property var fpsSteps: [30, 60, 120]
+    readonly property var containerSteps: ["mp4", "mkv", "webm"]
+    function codecLabel(c) { return c === "hevc" ? "HEVC" : c === "av1" ? "AV1" : "H.264"; }
+    function qualityLabel(q) { return q === "medium" ? "Medium" : q === "high" ? "High" : q === "ultra" ? "Ultra" : "Very high"; }
+    function containerLabel(c) { return c === "mkv" ? "MKV" : c === "webm" ? "WEBM" : "MP4"; }
+
     function shoot(mode) { root.requestClose(); Capture.shoot(mode); }
     function record(mode) {
         root.requestClose();
-        // Studio mode records with a cursor sidecar and opens the clip in Ryoku
-        // Motion; otherwise a Quick capture (save + notify, plus the optional
-        // edit-after / Discord post-actions). Screen has no target to pick, so it
-        // arms the delay here; the other three pick first, then apply the delay.
-        if (mode === "screen") {
-            if (Recorder.studioMode)
-                Recorder.startStudio(Recorder.optDesktopAudio, Recorder.optMic, "");
-            else
-                Recorder.startAfter(Recorder.recordArgs(), Capture.delay);
-        } else {
-            Capture.recordTarget(mode, Recorder.recordArgs(), Recorder.studioMode);
-        }
+        // Screen has no target to pick, so it arms the delay here; the other three
+        // pick first, then apply the delay.
+        if (mode === "screen")
+            Recorder.startAfter(Recorder.recordArgs(), Capture.delay);
+        else
+            Capture.recordTarget(mode, Recorder.recordArgs());
     }
 
     // ── recent captures gallery (roomy tab) ─────────────────────────────────────
@@ -654,33 +658,83 @@ Item {
             }
         }
 
-        // Studio / post-capture options (pre-record only). Studio records for Ryoku
-        // Motion with a cursor-follow sidecar; edit-after opens a Quick clip in the
-        // editor when it ends; Discord makes a size-capped copy. Studio always edits
-        // and never compresses, so those two hide while it is on.
+        // recording quality (pre-record only): each chip reads the daemon-owned
+        // setting and cycles it through the daemon, which validates and rewrites
+        // recording.json; the mirror then reloads and the chip updates.
+        Flow {
+            width: parent.width
+            visible: !Recorder.anyActive
+            spacing: 5 * root.s
+            CycleChip {
+                glyph: "film"
+                label: root.codecLabel(Recorder.recCodec)
+                tip: I18n.tr("Video codec")
+                onTapped: Recorder.setSetting("codec", root.cycle(root.codecSteps, Recorder.recCodec))
+            }
+            CycleChip {
+                glyph: "sparkle"
+                label: root.qualityLabel(Recorder.recQuality)
+                tip: I18n.tr("Recording quality")
+                onTapped: Recorder.setSetting("quality", root.cycle(root.qualitySteps, Recorder.recQuality))
+            }
+            CycleChip {
+                glyph: "watch"
+                label: Recorder.recFps + " fps"
+                tip: I18n.tr("Frames per second")
+                onTapped: Recorder.setSetting("fps", root.cycle(root.fpsSteps, Recorder.recFps))
+            }
+            CycleChip {
+                glyph: "archive"
+                label: root.containerLabel(Recorder.recContainer)
+                tip: I18n.tr("File format")
+                onTapped: Recorder.setSetting("container", root.cycle(root.containerSteps, Recorder.recContainer))
+            }
+        }
         InlineToggle {
             width: parent.width
             visible: !Recorder.anyActive
-            glyph: "film"
-            label: I18n.tr("Studio: Ryoku Motion + cursor zoom")
-            on: Recorder.studioMode
-            onToggled: Recorder.studioMode = !Recorder.studioMode
+            glyph: "mouse"
+            label: I18n.tr("Record cursor")
+            on: Recorder.recCursor
+            onToggled: Recorder.setSetting("cursor", !Recorder.recCursor)
         }
+        // Discord makes a size-capped copy of a finished clip.
         InlineToggle {
             width: parent.width
-            visible: !Recorder.anyActive && !Recorder.studioMode
-            glyph: "folder"
-            label: I18n.tr("Edit in Ryoku Motion when done")
-            on: Recorder.editMode
-            onToggled: Recorder.editMode = !Recorder.editMode
-        }
-        InlineToggle {
-            width: parent.width
-            visible: !Recorder.anyActive && !Recorder.studioMode
+            visible: !Recorder.anyActive
             glyph: "discord"
             label: I18n.tr("Compact for Discord")
             on: Recorder.discordMode
             onToggled: Recorder.discordMode = !Recorder.discordMode
+        }
+        // the rest of the recording knobs live in the Hub.
+        Item {
+            width: parent.width
+            visible: !Recorder.anyActive
+            height: (root.roomy ? 24 : 18) * root.s
+            Row {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 6 * root.s
+                GlyphIcon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 13 * root.s
+                    height: width
+                    name: "chevron-right"
+                    stroke: 1.7
+                    color: moreHov.hovered ? root.ink : root.inkDim
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: I18n.tr("More recording settings")
+                    color: moreHov.hovered ? root.ink : root.inkDim
+                    font.family: Theme.fontPrimary
+                    font.pixelSize: 11 * root.s
+                    font.weight: Font.Medium
+                }
+            }
+            HoverHandler { id: moreHov; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: Quickshell.execDetached(["ryoku-shell", "hub", "open", "recording"]) }
         }
 
         // RECENT - screenshots and recordings in separate labelled groups; a click

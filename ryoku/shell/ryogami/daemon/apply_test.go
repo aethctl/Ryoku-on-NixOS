@@ -14,7 +14,6 @@ import (
 func TestHealAnimatedWebp(t *testing.T) {
 	fakeFFprobeFrames(t)
 	root := t.TempDir()
-	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
 	wall := filepath.Join(root, "wall")
 	cache := filepath.Join(root, "cache")
 	if err := os.MkdirAll(wall, 0o755); err != nil {
@@ -38,8 +37,7 @@ func TestHealAnimatedWebp(t *testing.T) {
 	d.store.entries["still.webp"] = Entry{Key: "still.webp", Name: "still.webp", Type: "video", VideoFile: "anim/still.mp4"}
 	d.store.entries["motion.webp"] = Entry{Key: "motion.webp", Name: "motion.webp", Type: "video", VideoFile: "anim/motion.mp4"}
 	// The stored choice paints a webp as a looping video on restore.
-	_ = os.MkdirAll(cfg.stateDir(), 0o755)
-	saveJSON(filepath.Join(cfg.stateDir(), "outputs.json"), map[string]map[string]interface{}{
+	saveJSON(filepath.Join(cache, "outputs.json"), map[string]map[string]interface{}{
 		"*": {"type": "video", "path": stillSrc},
 	})
 
@@ -52,7 +50,7 @@ func TestHealAnimatedWebp(t *testing.T) {
 		t.Fatalf("animated webp must stay a video, got %q", e.Type)
 	}
 	var out map[string]map[string]interface{}
-	loadJSON(filepath.Join(cfg.stateDir(), "outputs.json"), &out)
+	loadJSON(filepath.Join(cache, "outputs.json"), &out)
 	if got := out["*"]["type"]; got != "static" {
 		t.Fatalf("stored choice must drop the video type, got %v", got)
 	}

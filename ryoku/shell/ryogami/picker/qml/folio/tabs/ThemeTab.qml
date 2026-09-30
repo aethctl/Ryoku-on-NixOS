@@ -8,12 +8,12 @@ FolioTabData {
     sections: [
         {
             title: I18n.tr("App themes"),
-            subtitle: I18n.tr("Recolour supported desktop apps from the wallpaper palette (issue #84)."),
+            subtitle: I18n.tr("Recolour supported desktop apps from the wallpaper palette."),
             controls: [
                 { id: "app-theme.{appId}",
                   key: null,
                   kind: "appTheme",
-                  label: I18n.tr("%1 (dynamic per detected app)"),
+                  label: I18n.tr("Apps that follow your colours"),
                   help: I18n.tr("Choose which apps follow your colours. Turning an app off restores its previous theme setup."),
                   args: ["app.name"],
                   action: "SetAppTheme(index, enabled)",
@@ -101,10 +101,10 @@ FolioTabData {
                   key: "theme.mode",
                   kind: "dropdown",
                   label: I18n.tr("Variant"),
-                  help: I18n.tr("Auto follows the wallpaper's measured brightness. Smart lets Matugen choose light or dark from the image. Smart requires Matugen 4.2 or newer."),
-                  options: [{ value: "dark", label: I18n.tr("Dark") }, { value: "light", label: I18n.tr("Light") }, { value: "auto", label: I18n.tr("Auto (from wallpaper)") }, { value: "smart", label: I18n.tr("Smart") }],
+                  help: I18n.tr("Auto follows the wallpaper's measured brightness. Smart lets Matugen choose light or dark from the image. Smart requires Matugen 4.2 or newer. Sun follows your real sunrise and sunset instead of the wallpaper."),
+                  options: [{ value: "dark", label: I18n.tr("Dark") }, { value: "light", label: I18n.tr("Light") }, { value: "auto", label: I18n.tr("Auto (from wallpaper)") }, { value: "smart", label: I18n.tr("Smart") }, { value: "sun", label: I18n.tr("Sun (follows sunrise/sunset)") }],
                   visibleWhen: "theme.policy == wallpaper",
-                  search: ["theme.mode", "variant", "dark", "light", "auto", "smart", "dropdown"] },
+                  search: ["theme.mode", "variant", "dark", "light", "auto", "smart", "sun", "sunrise", "sunset", "day", "dropdown"] },
                 { id: "matugen.colorIndex",
                   key: "matugen.colorIndex",
                   kind: "dropdown",

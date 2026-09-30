@@ -25,7 +25,7 @@ IrisWidgetFace {
         property string glyph: ""
         property string label: ""
         property bool on: false
-        property color tint: IrisStyle.accent
+        property color tint: root.accent
         property bool available: true
         signal toggled()
 
@@ -39,7 +39,7 @@ IrisWidgetFace {
             width: root.disc
             height: root.disc
             radius: height / 2
-            color: toggle.on ? toggle.tint : tap.pressed ? IrisStyle.fillActive : hover.hovered ? IrisStyle.fillHover : IrisStyle.fill
+            color: toggle.on ? toggle.tint : tap.pressed ? root.fillActive : hover.hovered ? root.fillHover : root.fill
             scale: tap.pressed ? IrisStyle.pressScale(0.94) : 1
             Behavior on color { ColorAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
             Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
@@ -49,7 +49,7 @@ IrisWidgetFace {
                 text: toggle.glyph
                 fill: toggle.on ? 1 : 0
                 iconSize: Math.round(root.disc * 0.42)
-                color: toggle.on ? IrisStyle.onTintFor(toggle.tint) : root.ink
+                color: toggle.on ? root.onFill(toggle.tint) : root.ink
             }
             HoverHandler { id: hover; enabled: toggle.available; cursorShape: Qt.PointingHandCursor }
             TapHandler { id: tap; enabled: toggle.available; gesturePolicy: TapHandler.WithinBounds; onTapped: toggle.toggled() }

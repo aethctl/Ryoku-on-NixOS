@@ -42,6 +42,7 @@ class CardField : public QQuickItem
     Q_PROPERTY(int columns READ columns WRITE setColumns NOTIFY columnsChanged)
     Q_PROPERTY(int hoveredIndex READ hoveredIndex NOTIFY hoveredIndexChanged)
     Q_PROPERTY(QRectF currentRect READ currentRect NOTIFY currentRectChanged)
+    Q_PROPERTY(QPointF currentShear READ currentShear NOTIFY currentRectChanged)
     Q_PROPERTY(QRectF stageRect READ stageRect NOTIFY stageRectChanged)
     Q_PROPERTY(QSizeF barReserve READ barReserve WRITE setBarReserve NOTIFY barReserveChanged)
     Q_PROPERTY(bool barVertical READ barVertical WRITE setBarVertical NOTIFY barVerticalChanged)
@@ -72,6 +73,7 @@ public:
     void setColumns(int columns);
     int hoveredIndex() const { return m_hovered; }
     QRectF currentRect() const { return m_currentRect; }
+    QPointF currentShear() const { return m_currentShear; }
     QRectF stageRect() const { return m_stageRect; }
     QSizeF barReserve() const { return m_barReserve; }
     void setBarReserve(const QSizeF &reserve);
@@ -163,7 +165,7 @@ private:
 
     void schedulePreview();
     void startPreview();
-    void publishRects(const QRectF &current, const QRectF &stage);
+    void publishRects(const QRectF &current, QPointF shear, const QRectF &stage);
     void publishVisibleEnd(int end);
     void stopPreview();
 
@@ -186,6 +188,7 @@ private:
     ScenePalette m_palette;
     int m_hovered = -1;
     QRectF m_currentRect;
+    QPointF m_currentShear;
     QRectF m_stageRect;
     QSizeF m_barReserve;
     bool m_barVertical = false;
@@ -209,6 +212,7 @@ private:
     int m_previewRow = -1;
     QTimer *m_previewTimer = nullptr;
     QRectF m_pendingRect;
+    QPointF m_pendingShear;
     QRectF m_pendingStage;
     bool m_rectQueued = false;
     int m_pendingVisibleEnd = -1;

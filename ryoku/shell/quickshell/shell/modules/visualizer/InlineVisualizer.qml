@@ -11,9 +11,9 @@ Item {
     Repeater {
         model: Config.count
         delegate: VisualizerView {
-            required property int index
+            id: vizView
             anchors.fill: parent
-            cfg: VizItem { data: Config.dataAt(index) }
+            cfg: VizItem { data: Config.dataAt(vizView.index) }
         }
     }
 }

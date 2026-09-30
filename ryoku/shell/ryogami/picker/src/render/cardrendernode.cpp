@@ -31,12 +31,16 @@ static_assert(sizeof(Uniforms) == 96);
 
 constexpr QSize kFarLayer(2048, 2048);
 constexpr QSize kFarTile(256, 160);
+// Layouts keep up to about a dozen sharp cards resident while moving (Sandy holds its
+// transition history too); growing the array copies every layer inside one frame, which
+// showed as a 30-140 ms hitch on the first moves after opening.
+constexpr int kNearLayers = 12;
 
 }
 
 CardRenderNode::CardRenderNode(QQuickWindow *window, QSize nearLayer)
     : m_window(window)
-    , m_near(nearLayer, nearLayer, 4, 24, 2)
+    , m_near(nearLayer, nearLayer, kNearLayers, 24, 2)
     , m_far(kFarLayer, kFarTile, 1, 4, 1)
 {
 }

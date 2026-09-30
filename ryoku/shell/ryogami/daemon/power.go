@@ -104,16 +104,20 @@ func (d *daemon) watchPower() {
 }
 
 func (d *daemon) broadcastPower(onBattery bool) {
-	pct, havePct := batteryPercent()
+	d.broadcast("ryogami.power.changed", d.powerStatus(onBattery))
+}
+
+// powerStatus is what the settings page shows: the supply, and whether the battery limits apply.
+func (d *daemon) powerStatus(onBattery bool) map[string]interface{} {
 	data := map[string]interface{}{
 		"onBattery":   onBattery,
 		"present":     batteryPresent(),
 		"saverActive": onBattery && d.settingBool("performance.batterySaver"),
 	}
-	if havePct {
+	if pct, havePct := batteryPercent(); havePct {
 		data["percent"] = pct
 	}
-	d.broadcast("ryogami.power.changed", data)
+	return data
 }
 
 func init() {

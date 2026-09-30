@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- **The night light can run on the clock.** Hub > Displays > Night light
+  gained an AT THE CLOCK switch with START AT and OFF AT rows: a 12-hour
+  time you step by the hour, flip AM/PM, or type, wrapping midnight, so a
+  fixed bedtime no longer has to borrow the weather's sunset
+  (`shell/ipc/nightlight_schedule.go`, `hub/quickshell/pages/DisplaysPage.qml`).
 - **The Cursor motion plugin says what it costs on NVIDIA.** Realistic
   cursor motion forces software cursor rendering, which reports say stutters
   when the pointer crosses monitors; the plugin's own card now carries that
@@ -57,8 +62,29 @@
   `touchpadToggle`, `output.cycle` and `output.enable`, `window.summon` and
   `decoration.gameMode`; providers also publish the window-rule actions they
   honour (`wm/caps.go`, `wm/action.go`, `wm/hyprland/act.go`, `wm/niri/act.go`).
+- **The Wm singleton answers an output's scale.** `Wm.outputScale(name)`
+  reads the compositor's own scale factor for a monitor off the daemon's
+  output state, so a surface can convert its logical rectangle back to
+  physical pixels instead of guessing from the reported height
+  (`ui/Singletons/Wm.qml`).
 
 ### Fixed
+- **The night light warms the screen on niri.** Users reported it doing
+  nothing there. The niri backend is now wlsunset, the small day/night gamma
+  daemon in extra, which speaks the gamma protocol niri serves and holds the
+  screen at the chosen temperature; the shipped niri variant depends on it, so
+  every install has the backend and the old gammastep drops out as an orphan
+  on the next update (`wm/niri/act.go`, `wm/niri/caps.go`,
+  `../release/packages/ryoku-desktop-niri/PKGBUILD`).
+- **A category-folded Hermes skill reads as wired.** Hermes keeps skills under
+  category folders, so `~/.hermes/skills/ryoku` can be a real directory with
+  the skill link nested inside it. `ryoku-rashin status` only ever checked
+  for the link itself, so it reported `skillWired: false` (and setup re-ran
+  without fixing it) while the skill loaded fine (#297). Wire, status and
+  unwire now follow that layout: a real dir with no SKILL.md of its own is a
+  category, the link lives inside it, and unwire removes the link and leaves
+  the folder. A foreign skill dir (one carrying its own SKILL.md) is still
+  never clobbered (`rashin/backend/agents.go`).
 - **Clicking SAVE no longer eats the text you just typed.** A TapHandler
   button never takes focus from a TextInput, so the field's editing-finished
   (its commit into the draft) did not fire when the user typed and clicked

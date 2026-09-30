@@ -16,6 +16,18 @@ Item {
     property var visualizerPoints: []
     property bool active: false
     property bool audioActive: false
+    property bool animate: true
+    // Paused, the field retreats under the card; once it has, nothing is left to move.
+    property bool _settling: false
+    onAudioActiveChanged: {
+        root._settling = !root.audioActive
+        if (root._settling) settleTimer.restart()
+    }
+    Timer {
+        id: settleTimer
+        interval: 1600
+        onTriggered: root._settling = false
+    }
     property color playerColor: Appearance.colors.colPrimary
     property real cardRadius: 0
     property var albumPalette: []
@@ -83,6 +95,7 @@ Item {
             // decay instead of freezing the last Cava frame when playback pauses.
             points: root.audioActive ? root.visualizerPoints : root.silentPoints
             active: root.active
+            animate: root.animate && (root.audioActive || root._settling)
             visualizerType: "organic"
             normalizationCeiling: CavaService.normalizationCeiling
             spectrumColors: root.palette

@@ -48,7 +48,7 @@ func spawnSh(cmd string) string { return "spawn-sh " + kdlStr(cmd) }
 // what injects the shared QML module path into the configs it supervises.
 // irisCloseCheck succeeds when the iRiS frame is the bar style and its close
 // confirmation is switched on.
-const irisCloseCheck = `jq -e '(.barStyle // "iris") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1`
+const irisCloseCheck = `jq -e '(.barStyle // "qsbar") == "iris" and .inir.closeConfirm.enabled == true' "${XDG_CONFIG_HOME:-$HOME/.config}/ryoku/shell.json" >/dev/null 2>&1`
 
 const qmlEnv = `env QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml"`
 

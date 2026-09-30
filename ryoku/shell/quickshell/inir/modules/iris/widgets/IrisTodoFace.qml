@@ -44,13 +44,13 @@ IrisWidgetFace {
             radius: width / 2
             color: task.modelData.done ? root.accent : "transparent"
             border.width: task.modelData.done ? 0 : Math.max(1.5, root.dp(1.6))
-            border.color: checkHover.hovered ? root.accent : IrisStyle.borderStrong
+            border.color: checkHover.hovered ? root.accent : root.fillActive
             MaterialSymbol {
                 anchors.centerIn: parent
                 visible: task.modelData.done
                 text: "check"
                 iconSize: parent.width * 0.78
-                color: IrisStyle.onTintFor(root.accent)
+                color: root.onFill(root.accent)
             }
             HoverHandler { id: checkHover; cursorShape: Qt.PointingHandCursor }
             TapHandler {
@@ -74,7 +74,7 @@ IrisWidgetFace {
             visible: taskHover.hovered && !root.small
             text: "close"
             iconSize: root.px(15)
-            color: removeHover.hovered ? IrisStyle.danger : root.inkTertiary
+            color: removeHover.hovered ? root.danger : root.inkTertiary
             HoverHandler { id: removeHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: Todo.deleteItem(task.modelData.originalIndex) }
             Accessible.role: Accessible.Button
@@ -111,7 +111,7 @@ IrisWidgetFace {
             Layout.fillWidth: true
             Layout.preferredHeight: root.dp(34)
             radius: root.innerRadius
-            color: IrisStyle.fill
+            color: root.fill
             TextInput {
                 id: entry
                 anchors.fill: parent
@@ -120,7 +120,7 @@ IrisWidgetFace {
                 verticalAlignment: TextInput.AlignVCenter
                 color: root.ink
                 selectionColor: root.accent
-                selectedTextColor: IrisStyle.onTintFor(root.accent)
+                selectedTextColor: root.onFill(root.accent)
                 font.family: root.fontMain
                 font.pixelSize: root.px(13)
                 clip: true

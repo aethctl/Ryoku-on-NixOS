@@ -20,7 +20,7 @@ Singleton {
 
     property bool active: false
     property int bars: 64
-    property int fps: 30
+    property int fps: 60
     // Instances being placed (Super+Alt+M) hold this up so the spectrum keeps
     // running while it is aimed: you cannot position a frozen, invisible line.
     property int placementHolds: 0

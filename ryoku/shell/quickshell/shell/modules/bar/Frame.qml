@@ -7,6 +7,7 @@ import Ryoku.Blobs
 import Ryoku.Ui.Singletons
 import shell.services
 import "framebars/RailGeometry.js" as RailGeometry
+import "../../services/lib/screens.js" as Screens
 
 // One monitor's frame bar. It maps four exclusive-zone background surfaces that
 // reserve the revealed bar's thickness (so tiled windows clear the rails) and a
@@ -40,16 +41,30 @@ Scope {
     readonly property real uiScale: Tokens.uiScaleFor(root.modelData ? root.modelData.name : "")
     readonly property bool barEnabled: Tokens.barEnabledFor(
         root.modelData ? root.modelData.name : "")
-    readonly property string barStyle: Config.barStyleFor(
-        root.modelData ? root.modelData.name : "")
+    // Match QS Bar's primary-screen calculation so its shared host can be
+    // created on the primary even when that monitor uses another bar style.
+    readonly property var validScreens: Screens.uniqueByName(Quickshell.screens)
+    readonly property string outputName: root.modelData ? root.modelData.name : ""
+    readonly property string barStyle: Config.barStyleFor(root.outputName)
+    readonly property bool primaryScreen: root.modelData
+        && root.validScreens.length > 0
+        && root.validScreens[0].name === root.outputName
+    readonly property bool primaryHost: root.primaryScreen
+        && BarProducts.isFrameFamily(root.barStyle)
+    readonly property bool qsbarRequested: Config.hasBarStyle(root.validScreens, "qsbar")
 
-    // The built-in Sumi frame scene draws only while the active bar style is the
-    // built-in one; a receipt-owned style would load its own scene without rails.
-    readonly property bool sumiActive: BarProducts.sceneUrl(root.barStyle) === ""
+    // The built-in Sumi frame scene draws while the active bar style is the
+    // built-in one, or while a broken style has degraded to it; a healthy
+    // receipt-owned style loads its own scene instead.
+    readonly property bool sumiActive: root.degraded
+        || BarProducts.sceneUrl(root.barStyle) === ""
 
-    // A transient Loader.Error on a builtin style must not stick us on sumi; count
-    // retries so a genuinely broken style still degrades gracefully after ~8s.
+    // A transient Loader.Error on a builtin style must not stick us on sumi;
+    // count retries so a hiccup self-heals. Once a builtin is genuinely broken
+    // (retries spent), BarProducts records it and every monitor degrades to the
+    // painted sumi rail instead of an empty frame, until the style changes.
     property int barStyleRetries: 0
+    readonly property bool degraded: BarProducts.brokenStyle === root.barStyle
 
     readonly property var state: root.modelData ? ShellState.forScreen(root.modelData) : null
     readonly property bool revealed: root.state ? root.state.barRevealed : true
@@ -118,7 +133,13 @@ Scope {
     PanelWindow {
         id: overlay
 
-        readonly property real s: (root.modelData ? root.modelData.height / 1080 : 1) * Math.max(0.7, Math.min(1.6, Config.fontScale))
+        // Physical panel height (Quickshell's is logical: a logical-only term
+        // shrinks the popouts and the needle panel as the display scale rises),
+        // the accessibility font scale, and this monitor's interface scale, so
+        // the popout chrome matches the rails it grows out of.
+        readonly property real s: Screens.monitorScale(root.modelData,
+            Wm.outputScale(root.modelData ? root.modelData.name : ""))
+            * Math.max(0.7, Math.min(1.6, Config.fontScale)) * root.uiScale
         readonly property var frameBars: Config.normalizedFrameBars
         // Read through `overlay.` and keep the rail host's id distinct: an id
         // shadows a same-named property in this scope, which once left every rail
@@ -127,8 +148,7 @@ Scope {
         readonly property real frameLip: root.frameBorderPx
 
         // fold qsbar's shared menus to whichever edge its bar sits on
-        readonly property string qsBarEdge: Config.barEdgeFor(
-            root.modelData ? root.modelData.name : "")
+        readonly property string qsBarEdge: (!root.sumiActive && Config.qsbar && Config.qsbar.barPosition === "bottom") ? "bottom" : "top"
         readonly property var edgeReveal: ({
             top: root.edgeRevealed("top"),
             bottom: root.edgeRevealed("bottom"),
@@ -156,7 +176,7 @@ Scope {
         // frame reveals on hover there without the region eating clicks; off
         // while a fullscreen window owns the monitor.
         readonly property bool rightDropOn: !overlay.monFullscreen
-        readonly property real rightDropW: Math.max(root.edgeReserve("right"), 2)
+        readonly property real rightDropW: root.sumiActive ? Math.max(root.edgeReserve("right"), 2) : 2
 
         // True when this monitor's active workspace holds a fullscreen window;
         // the frame then unmaps its input and hides so the window is unobstructed.
@@ -403,32 +423,73 @@ Scope {
         }
     }
 
-    // Receipt-owned bar styles load from their durable content-addressed
-    // views. Sumi is the built-in frame scene (the overlay above); any other
-    // style loads its own scene here, without rails. The overlay and its menu
-    // host still map (topBar mode) so menus and surfaces stay style-agnostic.
+    // QS Bar owns one shared system whose Variants render only its assigned
+    // screens. Hosting it independently avoids the previous primary-output
+    // dependency when the primary output selects Sumi/Chroma/Kairos instead.
+    property int qsbarRetries: 0
+    Loader {
+        id: qsbarHostLoader
+        active: root.primaryScreen && root.qsbarRequested
+            && BarProducts.brokenStyle !== "qsbar"
+        source: BarProducts.sceneUrl("qsbar")
+        onLoaded: {
+            root.qsbarRetries = 0
+            if (item) item.modelData = root.modelData
+        }
+        onStatusChanged: {
+            if (status !== Loader.Error) return;
+            if (root.qsbarRetries < 10) {
+                root.qsbarRetries++;
+                qsbarReload.restart();
+            } else {
+                Qt.callLater(BarProducts.markBroken, "qsbar");
+            }
+        }
+    }
+    Timer {
+        id: qsbarReload
+        interval: 800
+        onTriggered: {
+            qsbarHostLoader.active = false;
+            qsbarHostLoader.active = Qt.binding(() => root.primaryScreen
+                && root.qsbarRequested && BarProducts.brokenStyle !== "qsbar");
+        }
+    }
+
+    // Per-output Sumi paints directly in the Frame overlay. Other per-output
+    // styles use this Loader; the whole-desktop iRiS family is primary-only.
     Loader {
         id: barStyleLoader
-        // QS Bar owns one shared multi-output root, so its first matching Scene
-        // remains loaded even when every QS Bar output is temporarily hidden.
-        active: !root.sumiActive && (root.barEnabled || root.barStyle === "qsbar")
-        source: BarProducts.sceneUrl(root.barStyle)
+        active: !root.sumiActive && root.barStyle !== "qsbar"
+            && (root.barEnabled || root.primaryHost)
+            && (!BarProducts.isFrameFamily(root.barStyle) || root.primaryHost)
+        source: root.barStyle === "qsbar" ? "" : BarProducts.sceneUrl(root.barStyle)
         onLoaded: {
             root.barStyleRetries = 0
             if (item) item.modelData = root.modelData
         }
-        // A builtin style (qsbar) cannot be legitimately broken: a load error is a
-        // transient hiccup (an update's config/plugin swap, a cold-start race), so
-        // retry instead of permanently dropping to the sumi rail. A store-installed
-        // style that errors is genuinely broken → fail() it as before.
+        // A builtin style cannot be legitimately broken: a load error is a
+        // transient hiccup (an update's config/plugin swap, a cold-start
+        // import race), so retry it. Once retries are spent the style is
+        // genuinely broken on this box: degrade to the painted sumi rail so
+        // the user keeps a working bar instead of an empty frame, and record
+        // it so the Hub can say so. A store style that errors is failed as
+        // before (sceneUrl then returns "" and sumi draws). Both marks flip
+        // this Loader's own `active`, so they land after the status change
+        // settles instead of inside it.
         onStatusChanged: {
             if (status !== Loader.Error)
                 return;
-            if (BarProducts.isBuiltin(root.barStyle) && root.barStyleRetries < 10) {
-                root.barStyleRetries++;
-                barStyleReload.restart();
+            const style = root.barStyle;
+            if (BarProducts.isBuiltin(style)) {
+                if (root.barStyleRetries < 10) {
+                    root.barStyleRetries++;
+                    barStyleReload.restart();
+                } else {
+                    Qt.callLater(BarProducts.markBroken, style);
+                }
             } else {
-                BarProducts.fail(root.barStyle);
+                Qt.callLater(BarProducts.fail, style);
             }
         }
     }
@@ -438,7 +499,9 @@ Scope {
         onTriggered: {
             barStyleLoader.active = false;
             barStyleLoader.active = Qt.binding(
-                () => !root.sumiActive && (root.barEnabled || root.barStyle === "qsbar"));
+                () => !root.sumiActive && root.barStyle !== "qsbar"
+                    && (root.barEnabled || root.primaryHost)
+                    && (!BarProducts.isFrameFamily(root.barStyle) || root.primaryHost));
         }
     }
     Connections {
@@ -446,6 +509,23 @@ Scope {
         function onModelDataChanged() {
             if (barStyleLoader.item)
                 barStyleLoader.item.modelData = root.modelData;
+            if (qsbarHostLoader.item)
+                qsbarHostLoader.item.modelData = root.modelData;
+        }
+    }
+    Connections {
+        target: root
+        function onBarStyleChanged() { root.barStyleRetries = 0; }
+    }
+    // A new pick gets a fresh set of retries; a style that broke earlier is
+    // tried again once the user picks it again.
+    Connections {
+        target: Config
+        function onBarStyleChanged() {
+            root.barStyleRetries = 0;
+            root.qsbarRetries = 0;
+            if (BarProducts.brokenStyle !== Config.barStyle)
+                BarProducts.brokenStyle = "";
         }
     }
 }

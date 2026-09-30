@@ -25,18 +25,28 @@ Item {
 
     visible: !!root.state.view && root.state.view.count === 0
 
-    Text {
+    // The picker has no backdrop of its own, so the message carries one to read on any wallpaper.
+    Rectangle {
         anchors.centerIn: parent
-        width: Math.min(parent.width - 80 * Theme.scale, 640 * Theme.scale)
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
-        text: root.message
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
-        font.pixelSize: Theme.fs(16)
-        color: Theme.withAlpha(Theme.surfaceText, 0.82)
-        style: Text.Outline
-        styleColor: Theme.withAlpha(Theme.background, 0.6)
-        renderType: Text.NativeRendering
+        width: label.width + 44 * Theme.scale
+        height: label.implicitHeight + 26 * Theme.scale
+        radius: Theme.radius
+        color: Theme.withAlpha(Theme.surfaceContainer, 0.92)
+        border.width: 1
+        border.color: Theme.withAlpha(Theme.outline, 0.4)
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, Math.min(root.width - 124 * Theme.scale, 596 * Theme.scale))
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: root.message
+            font.family: Theme.ui
+            font.weight: Theme.uiWeight
+            font.pixelSize: Theme.fs(16)
+            color: Theme.surfaceText
+            renderType: Text.NativeRendering
+        }
     }
 }

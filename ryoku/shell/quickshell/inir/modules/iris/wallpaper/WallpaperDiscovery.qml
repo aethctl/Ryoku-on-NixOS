@@ -41,18 +41,14 @@ ColumnLayout {
     ChipStrip {
         Repeater {
             model: root.picker.discoveries
-            IrisButton {
+            IrisChip {
                 id: tagChip
                 required property var modelData
                 required property int index
-                readonly property bool active: root.picker.discovery === tagChip.index && root.picker.series === null
+                label: tagChip.modelData.label
+                selected: root.picker.discovery === tagChip.index && root.picker.series === null
                     && root.picker.query.length === 0
-                text: tagChip.modelData.label
-                selected: tagChip.active
-                quiet: !tagChip.active
-                implicitHeight: Math.round(30 * root.d)
-                buttonRadius: height / 2
-                buttonRadiusPressed: height / 2
+                quiet: !tagChip.selected
                 onClicked: root.picker.pickDiscovery(tagChip.index)
             }
         }
@@ -65,53 +61,21 @@ ColumnLayout {
             rightPadding: Math.round(4 * root.d)
             text: Translation.tr("Airing now")
             color: IrisStyle.label
-            font.pixelSize: 12 * IrisStyle.typeScale
-            font.weight: Font.DemiBold
+            font.pixelSize: IrisStyle.typeMeta
+            font.weight: IrisStyle.weight(Font.DemiBold)
         }
         Repeater {
             model: root.picker.airing
-            MouseArea {
+            IrisChip {
                 id: seriesChip
                 required property var modelData
-                readonly property bool active: root.picker.series?.id === seriesChip.modelData.id
-                width: seriesRow.implicitWidth + Math.round(16 * root.d)
-                height: Math.round(30 * root.d)
-                hoverEnabled: true
-                cursorShape: Qt.PointingHandCursor
-                Accessible.role: Accessible.Button
+                artwork: String(seriesChip.modelData.imageSmall ?? "")
+                label: root.picker.seriesLabel(seriesChip.modelData)
+                labelCap: Math.round(180 * root.d)
+                selected: root.picker.series?.id === seriesChip.modelData.id
+                quiet: !seriesChip.selected
                 Accessible.name: String(seriesChip.modelData.title ?? "")
                 onClicked: root.picker.pickSeries(seriesChip.modelData)
-                Rectangle {
-                    anchors.fill: parent
-                    radius: height / 2
-                    color: seriesChip.active ? IrisStyle.tintFill(IrisStyle.accent)
-                        : seriesChip.pressed ? IrisStyle.fillActive
-                        : seriesChip.containsMouse ? IrisStyle.fillHover : IrisStyle.fillQuiet
-                    Behavior on color { ColorAnimation { duration: IrisStyle.duration(110) } }
-                }
-                Row {
-                    id: seriesRow
-                    anchors.left: parent.left
-                    anchors.leftMargin: Math.round(4 * root.d)
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Math.round(7 * root.d)
-                    IrisArtwork {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: Math.round(22 * root.d)
-                        height: width
-                        circular: false
-                        radius: IrisStyle.iconRadius(width)
-                        source: String(seriesChip.modelData.imageSmall ?? "")
-                        decodeSize: width * 2
-                    }
-                    IrisText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.picker.seriesLabel(seriesChip.modelData)
-                        color: seriesChip.active ? IrisStyle.accent : IrisStyle.text
-                        font.pixelSize: 12.5 * IrisStyle.typeScale
-                        font.weight: seriesChip.active ? Font.DemiBold : Font.Medium
-                    }
-                }
             }
         }
     }

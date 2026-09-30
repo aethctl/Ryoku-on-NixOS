@@ -13,6 +13,16 @@ Item {
 
     property var points: []
     property bool active: false
+    // False holds the last frame: no new points, no motion clock, still drawn.
+    property bool animate: true
+    property var _shownPoints: []
+    Binding {
+        target: root
+        property: "_shownPoints"
+        value: root.points
+        when: root.animate
+        restoreMode: Binding.RestoreNone
+    }
     property string visualizerType: "wave" // wave | bars | organic
     property real normalizationCeiling: CavaService.normalizationCeiling
     property var spectrumColors: CavaTheme.visualizerColors
@@ -52,7 +62,7 @@ Item {
     property var clipSegments: []
 
     readonly property var organicPoints: {
-        const source = root.points ?? []
+        const source = root._shownPoints ?? []
         const start = Math.max(0, Math.min(1, root.sampleStartRatio))
         const end = Math.max(start, Math.min(1, root.sampleEndRatio))
         const samples = source.slice(Math.floor(start * source.length),
@@ -95,6 +105,7 @@ Item {
         required property real cardWidth
         required property real cardHeight
         required property real cardRadius
+        property bool drawing: true
 
         x: cardX - root._organicEdgeMargin
         y: cardY - root._organicEdgeMargin
@@ -104,7 +115,8 @@ Item {
 
         OrganicAudioBlob {
             anchors.fill: parent
-            active: root.effectiveActive && edgeField.visible
+            active: root.effectiveActive && edgeField.visible && edgeField.drawing
+            animate: root.animate && edgeField.drawing
             points: root.organicPoints
             normalizationCeiling: root.normalizationCeiling
             primaryColor: root.spectrumColors?.length > 0
@@ -146,154 +158,179 @@ Item {
         }
     }
 
-    CavaSpectrum {
+    // In a host that opts in (the desktop background, a full-output window), the moving field can draw in a small
+    // surface of its own once the widget around it is still (LiveLayer): at the display rate it otherwise repaints
+    // the whole output and Niri recomposes it. Only when the owner says nothing of its own draws over the field
+    // (`detachable`): the surface sits above the whole host, so an aura behind a card or artwork on top of the
+    // field would end up under it. Bars and other small windows are not hosts: it draws in place there anyway.
+    property bool detachable: false
+    LiveLayer {
         anchors.fill: parent
-        visible: root.visualizerType !== "organic"
-        points: root.points
-        sampleStartRatio: root.sampleStartRatio
-        sampleEndRatio: root.sampleEndRatio
-        reverseFrequency: root.reverseFrequency
-        startOpacity: root.startOpacity
-        endOpacity: root.endOpacity
-        startTaper: root.startTaper
-        endTaper: root.endTaper
-        clipSegments: root.clipSegments
-        active: root.effectiveActive && root.visualizerType !== "organic"
-        threadedRendering: root.threadedRendering
-        visualizerType: root.visualizerType
-        normalizationCeiling: root.normalizationCeiling
-        spectrumColors: root.spectrumColors
-        spectrumColor: root.spectrumColor
-        spectrumOpacity: root.spectrumOpacity
-        fillRatio: root.fillRatio
-        pixelsPerBar: root.pixelsPerBar > 0
-            ? root.pixelsPerBar
-            : Math.max(3, (width + root.barSpacing) / Math.max(4, root.barCount))
-        barSpacing: root.barSpacing
-        barMinHeight: root.barMinHeight
-        barRadius: root.barRadius
-        barsOrigin: root.barsOrigin
-        smoothing: root.smoothing
-        waveMode: root.waveMode
-        lineWidth: root.lineWidth
-        edgeInset: root.edgeInset
-        edgeSoftness: root.edgeSoftness
-        frequencyProfile: root.frequencyProfile
-        accentStrength: root.accentStrength
-        mirroredStereo: Config.options?.appearance?.cava?.stereo ?? true
-        topLeftRadius: root.topLeftRadius
-        topRightRadius: root.topRightRadius
-        bottomLeftRadius: root.bottomLeftRadius
-        bottomRightRadius: root.bottomRightRadius
+        allowed: root.detachable
+        live: root.effectiveActive && root.animate
+        pad: root.visualizerType === "organic" && root.organicEdgeAura ? Math.ceil(root._organicEdgeMargin) : 0
+        content: field
     }
 
-    OrganicAudioBlob {
-        id: organic
-        anchors.fill: parent
-        visible: root.visualizerType === "organic" && !root.organicEdgeAura
-        active: root.effectiveActive && visible
-        points: root.organicPoints
-        // Bar hosts constrain the halo to their surface; standalone Organic
-        // widgets retain their intentional overscan.
-        layer.enabled: visible && (root.topLeftRadius >= 0 || root.topRightRadius >= 0
-            || root.bottomLeftRadius >= 0 || root.bottomRightRadius >= 0
-            || root.startOpacity < 1 || root.endOpacity < 1)
-        layer.effect: GE.OpacityMask {
-            maskSource: Item {
-                width: organic.width
-                height: organic.height
+    Component {
+        id: field
+        Item {
+            id: drawn
+            property bool drawing: false
 
-                Rectangle {
-                    anchors.fill: parent
-                    visible: (root.clipSegments?.length ?? 0) === 0
-                    topLeftRadius: Math.max(0, root.topLeftRadius)
-                    topRightRadius: Math.max(0, root.topRightRadius)
-                    bottomLeftRadius: Math.max(0, root.bottomLeftRadius)
-                    bottomRightRadius: Math.max(0, root.bottomRightRadius)
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Math.max(0, Math.min(1, root.startOpacity))) }
-                        GradientStop { position: 0.5; color: "white" }
-                        GradientStop { position: 1; color: Qt.rgba(1, 1, 1, Math.max(0, Math.min(1, root.endOpacity))) }
+            CavaSpectrum {
+                anchors.fill: parent
+                visible: root.visualizerType !== "organic"
+                points: root._shownPoints
+                sampleStartRatio: root.sampleStartRatio
+                sampleEndRatio: root.sampleEndRatio
+                reverseFrequency: root.reverseFrequency
+                startOpacity: root.startOpacity
+                endOpacity: root.endOpacity
+                startTaper: root.startTaper
+                endTaper: root.endTaper
+                clipSegments: root.clipSegments
+                active: root.effectiveActive && root.visualizerType !== "organic" && drawn.drawing
+                threadedRendering: root.threadedRendering
+                visualizerType: root.visualizerType
+                normalizationCeiling: root.normalizationCeiling
+                spectrumColors: root.spectrumColors
+                spectrumColor: root.spectrumColor
+                spectrumOpacity: root.spectrumOpacity
+                fillRatio: root.fillRatio
+                pixelsPerBar: root.pixelsPerBar > 0
+                    ? root.pixelsPerBar
+                    : Math.max(3, (width + root.barSpacing) / Math.max(4, root.barCount))
+                barSpacing: root.barSpacing
+                barMinHeight: root.barMinHeight
+                barRadius: root.barRadius
+                barsOrigin: root.barsOrigin
+                smoothing: root.smoothing
+                waveMode: root.waveMode
+                lineWidth: root.lineWidth
+                edgeInset: root.edgeInset
+                edgeSoftness: root.edgeSoftness
+                frequencyProfile: root.frequencyProfile
+                accentStrength: root.accentStrength
+                mirroredStereo: Config.options?.appearance?.cava?.stereo ?? true
+                topLeftRadius: root.topLeftRadius
+                topRightRadius: root.topRightRadius
+                bottomLeftRadius: root.bottomLeftRadius
+                bottomRightRadius: root.bottomRightRadius
+            }
+
+            OrganicAudioBlob {
+                id: organic
+                anchors.fill: parent
+                visible: root.visualizerType === "organic" && !root.organicEdgeAura
+                active: root.effectiveActive && visible && drawn.drawing
+                animate: root.animate && drawn.drawing
+                points: root.organicPoints
+                // Bar hosts constrain the halo to their surface; standalone Organic
+                // widgets retain their intentional overscan.
+                layer.enabled: visible && (root.topLeftRadius >= 0 || root.topRightRadius >= 0
+                    || root.bottomLeftRadius >= 0 || root.bottomRightRadius >= 0
+                    || root.startOpacity < 1 || root.endOpacity < 1)
+                layer.effect: GE.OpacityMask {
+                    maskSource: Item {
+                        width: organic.width
+                        height: organic.height
+
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: (root.clipSegments?.length ?? 0) === 0
+                            topLeftRadius: Math.max(0, root.topLeftRadius)
+                            topRightRadius: Math.max(0, root.topRightRadius)
+                            bottomLeftRadius: Math.max(0, root.bottomLeftRadius)
+                            bottomRightRadius: Math.max(0, root.bottomRightRadius)
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0; color: Qt.rgba(1, 1, 1, Math.max(0, Math.min(1, root.startOpacity))) }
+                                GradientStop { position: 0.5; color: "white" }
+                                GradientStop { position: 1; color: Qt.rgba(1, 1, 1, Math.max(0, Math.min(1, root.endOpacity))) }
+                            }
+                        }
+
+                        Repeater {
+                            model: root.clipSegments ?? []
+                            Rectangle {
+                                required property var modelData
+                                x: modelData?.x ?? 0
+                                y: modelData?.y ?? 0
+                                width: Math.max(0, modelData?.width ?? 0)
+                                height: Math.max(0, modelData?.height ?? 0)
+                                topLeftRadius: Math.max(0, modelData?.radii?.[0] ?? 0)
+                                topRightRadius: Math.max(0, modelData?.radii?.[1] ?? 0)
+                                bottomRightRadius: Math.max(0, modelData?.radii?.[2] ?? 0)
+                                bottomLeftRadius: Math.max(0, modelData?.radii?.[3] ?? 0)
+                                color: "white"
+                            }
+                        }
                     }
                 }
+                normalizationCeiling: root.normalizationCeiling
+                primaryColor: root.spectrumColors?.length > 0
+                    ? root.spectrumColors[0] : root.spectrumColor
+                secondaryColor: root.spectrumColors?.length > 1
+                    ? root.spectrumColors[Math.floor((root.spectrumColors.length - 1) / 2)]
+                    : primaryColor
+                tertiaryColor: root.spectrumColors?.length > 2
+                    ? root.spectrumColors[root.spectrumColors.length - 1]
+                    : secondaryColor
+                smoothing: root.smoothing
+                frequencyProfile: root.frequencyProfile
+                accentStrength: root.accentStrength
+                mirroredStereo: Config.options?.appearance?.cava?.stereo ?? true
+                sensitivity: root.organicSensitivity
+                amplitude: root.fillRatio
+                pulseStrength: root.organicPulse
+                compression: root.organicCompression
+                motionSpeed: root.organicMotionSpeed
+                idleMotion: root.organicIdleMotion
+                glowStrength: root.organicGlow
+                overscan: root.organicOverscan
+                presentationScale: root.organicPresentationScale
+                baseRadius: root.organicBaseRadius
+                presentationMode: root.organicPresentationMode
+                screenEdge: root.organicScreenEdge
+                stretchToHost: root.organicStretchToHost
+                hollowAmount: root.organicHollowAmount
+                edgeBaseRadius: root.organicEdgeBaseRadius
+                edgeCardHalf: root.organicEdgeCardHalf
+                edgeReachHalf: root.organicEdgeReachHalf
+                edgeCornerRadius: root.organicEdgeCornerRadius
+                edgeReachScales: root.organicEdgeReachScales
+                edgeDirections: root.organicEdgeDirections
+                opacity: root.organicOpacity
+            }
 
-                Repeater {
-                    model: root.clipSegments ?? []
-                    Rectangle {
-                        required property var modelData
-                        x: modelData?.x ?? 0
-                        y: modelData?.y ?? 0
-                        width: Math.max(0, modelData?.width ?? 0)
-                        height: Math.max(0, modelData?.height ?? 0)
-                        topLeftRadius: Math.max(0, modelData?.radii?.[0] ?? 0)
-                        topRightRadius: Math.max(0, modelData?.radii?.[1] ?? 0)
-                        bottomRightRadius: Math.max(0, modelData?.radii?.[2] ?? 0)
-                        bottomLeftRadius: Math.max(0, modelData?.radii?.[3] ?? 0)
-                        color: "white"
-                    }
+            EdgeOrganicField {
+                drawing: drawn.drawing
+                visible: root.organicEdgeAura && !root._organicUsesSegmentFields
+                cardX: 0
+                cardY: 0
+                cardWidth: root.width
+                cardHeight: root.height
+                cardRadius: Math.max(0, Math.max(root.topLeftRadius, root.topRightRadius,
+                    root.bottomLeftRadius, root.bottomRightRadius))
+            }
+
+            Repeater {
+                model: root._organicUsesSegmentFields ? (root.clipSegments ?? []) : []
+                EdgeOrganicField {
+                    required property var modelData
+                    drawing: drawn.drawing
+                    cardX: modelData?.x ?? 0
+                    cardY: modelData?.y ?? 0
+                    cardWidth: Math.max(0, modelData?.width ?? 0)
+                    cardHeight: Math.max(0, modelData?.height ?? 0)
+                    cardRadius: Math.max(0,
+                        modelData?.radii?.[0] ?? 0,
+                        modelData?.radii?.[1] ?? 0,
+                        modelData?.radii?.[2] ?? 0,
+                        modelData?.radii?.[3] ?? 0)
                 }
             }
-        }
-        normalizationCeiling: root.normalizationCeiling
-        primaryColor: root.spectrumColors?.length > 0
-            ? root.spectrumColors[0] : root.spectrumColor
-        secondaryColor: root.spectrumColors?.length > 1
-            ? root.spectrumColors[Math.floor((root.spectrumColors.length - 1) / 2)]
-            : primaryColor
-        tertiaryColor: root.spectrumColors?.length > 2
-            ? root.spectrumColors[root.spectrumColors.length - 1]
-            : secondaryColor
-        smoothing: root.smoothing
-        frequencyProfile: root.frequencyProfile
-        accentStrength: root.accentStrength
-        mirroredStereo: Config.options?.appearance?.cava?.stereo ?? true
-        sensitivity: root.organicSensitivity
-        amplitude: root.fillRatio
-        pulseStrength: root.organicPulse
-        compression: root.organicCompression
-        motionSpeed: root.organicMotionSpeed
-        idleMotion: root.organicIdleMotion
-        glowStrength: root.organicGlow
-        overscan: root.organicOverscan
-        presentationScale: root.organicPresentationScale
-        baseRadius: root.organicBaseRadius
-        presentationMode: root.organicPresentationMode
-        screenEdge: root.organicScreenEdge
-        stretchToHost: root.organicStretchToHost
-        hollowAmount: root.organicHollowAmount
-        edgeBaseRadius: root.organicEdgeBaseRadius
-        edgeCardHalf: root.organicEdgeCardHalf
-        edgeReachHalf: root.organicEdgeReachHalf
-        edgeCornerRadius: root.organicEdgeCornerRadius
-        edgeReachScales: root.organicEdgeReachScales
-        edgeDirections: root.organicEdgeDirections
-        opacity: root.organicOpacity
-    }
-
-    EdgeOrganicField {
-        visible: root.organicEdgeAura && !root._organicUsesSegmentFields
-        cardX: 0
-        cardY: 0
-        cardWidth: root.width
-        cardHeight: root.height
-        cardRadius: Math.max(0, Math.max(root.topLeftRadius, root.topRightRadius,
-            root.bottomLeftRadius, root.bottomRightRadius))
-    }
-
-    Repeater {
-        model: root._organicUsesSegmentFields ? (root.clipSegments ?? []) : []
-        EdgeOrganicField {
-            required property var modelData
-            cardX: modelData?.x ?? 0
-            cardY: modelData?.y ?? 0
-            cardWidth: Math.max(0, modelData?.width ?? 0)
-            cardHeight: Math.max(0, modelData?.height ?? 0)
-            cardRadius: Math.max(0,
-                modelData?.radii?.[0] ?? 0,
-                modelData?.radii?.[1] ?? 0,
-                modelData?.radii?.[2] ?? 0,
-                modelData?.radii?.[3] ?? 0)
         }
     }
 }

@@ -30,7 +30,7 @@ Item {
     function nearest(width: real, height: real): string {
         let best = root.widget.irisSize
         let bestDistance = Infinity
-        for (const size of root.widget.irisSizes) {
+        for (const size of root.widget.irisSizeChoices) {
             const target = root.sizeOf(size)
             const distance = Math.pow(width - target.width, 2) + Math.pow(height - target.height, 2)
             if (distance < bestDistance) {

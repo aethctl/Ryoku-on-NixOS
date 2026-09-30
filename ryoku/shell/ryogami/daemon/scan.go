@@ -540,22 +540,9 @@ func ensureVideoPreview(it scanned) string {
 	tmp := tmpPath(prev)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	var cmd *exec.Cmd
-	if dev := vaapiRenderNode(); dev != "" {
-		cmd = exec.CommandContext(ctx, "ffmpeg", "-y", "-v", "error",
-			"-hwaccel", "vaapi", "-hwaccel_device", dev, "-hwaccel_output_format", "vaapi",
-			"-i", it.src,
-			"-vf", "fps=24,scale_vaapi=w=640:h=-2:format=nv12",
-			"-c:v", "h264_vaapi", "-qp", "27", "-bf", "0", "-an", tmp)
-	} else {
-		cmd = exec.CommandContext(ctx, "nice", "-n", "19", "ffmpeg", "-y", "-v", "error", "-i", it.src,
-			"-vf", "scale=640:-2", "-r", "24",
-			"-c:v", "libx264", "-preset", "veryfast", "-crf", "27", "-bf", "0",
-			"-threads", "4", "-pix_fmt", "yuv420p", "-an", tmp)
-	}
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if err := transcodeH264(ctx, transcodeSpec{src: it.src, dst: tmp, fps: 24, maxWidth: 640, qp: 27, crf: 27}); err != nil {
 		os.Remove(tmp)
-		fmt.Fprintf(os.Stderr, "ryogami: preview failed for %s: %v: %s\n", it.name, err, strings.TrimSpace(string(out)))
+		fmt.Fprintf(os.Stderr, "ryogami: preview failed for %s: %v\n", it.name, err)
 		return ""
 	}
 	if os.Rename(tmp, prev) != nil {

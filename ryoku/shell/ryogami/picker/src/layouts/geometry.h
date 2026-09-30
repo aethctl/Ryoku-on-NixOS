@@ -93,7 +93,7 @@ bool shearedContains(float cx, float cy, float hw, float hh, float skew, float e
 bool pointInQuad(const std::array<QPointF, 4> &quad, float px, float py);
 
 float sliceOpacity(float itemCenterX, float viewCenterX, float halfView,
-                   float expandedLayoutW, float sliceStride);
+                   float expandedLayoutW, float sliceStride, float edgeDist, float halfWidth);
 
 // Whole notches round; sub-notch deltas accumulate.
 int sliceScrollSteps(float &accumulator, float amount);

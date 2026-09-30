@@ -2,14 +2,14 @@ local mod = "SUPER"
 
 local K = require("modules.rebind")
 
--- The iRiS frame can ask before a window closes. Only route through the shell
+-- The Shima frame can ask before a window closes. Only route through the shell
 -- when that is switched on, so every other close stays a native dispatch with
 -- no process in the way (reading shell.json here costs no fork).
 local function close_active()
     local f = io.open((os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config")) .. "/ryoku/shell.json")
     local s = f and f:read("a") or ""
     if f then f:close() end
-    local style = s:match('"barStyle"%s*:%s*"([^"]*)"') or "iris"
+    local style = s:match('"barStyle"%s*:%s*"([^"]*)"') or "qsbar"
     if style == "iris" and s:find('"closeConfirm"%s*:%s*{[^{}]*"enabled"%s*:%s*true') then
         hl.exec_cmd("qs -c shell ipc call closeConfirm trigger")
     else
@@ -18,7 +18,7 @@ local function close_active()
 end
 
 -- Windows
-hl.bind(K(mod .. " + Q"),         close_active)                                    -- close active window (iRiS asks first when set to)
+hl.bind(K(mod .. " + Q"),         close_active)                                    -- close active window (Shima asks first when set to)
 hl.bind(K(mod .. " + F"),         hl.dsp.window.fullscreen())                      -- fullscreen
 hl.bind(K(mod .. " + SHIFT + P"), hl.dsp.window.pin())                             -- pin a floating window
 hl.bind(K(mod .. " + A"),         function() hl.dispatch(hl.dsp.window.float({ action = "toggle" })); hl.dispatch(hl.dsp.window.resize({ x = 1000, y = 660, exact = true })); hl.dispatch(hl.dsp.window.center()) end) -- float at 1000x660, centred (press again to tile back)

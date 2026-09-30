@@ -58,8 +58,8 @@ Item {
     property real screenY: 0
 
     readonly property string effectiveArtUrl: isYtMusicPlayer ? YtMusic.currentThumbnail : MprisController.effectiveArtUrl(player)
-    readonly property string effectiveTitle: isYtMusicPlayer ? YtMusic.currentTitle : (player?.trackTitle ?? "")
-    readonly property string effectiveArtist: isYtMusicPlayer ? YtMusic.currentArtist : (player?.trackArtist ?? "")
+    readonly property string effectiveTitle: isYtMusicPlayer ? YtMusic.currentTitle : (MprisController.titleOf(player) ?? "")
+    readonly property string effectiveArtist: isYtMusicPlayer ? YtMusic.currentArtist : (MprisController.artistOf(player) ?? "")
     // Only the artwork identity may trigger cover motion. Title/artist often
     // arrive before the real art URL and caused the same cover to slide twice.
     readonly property string mediaTransitionKey: (root.effectiveArtUrl ?? "").split("?")[0].split("#")[0]
@@ -333,7 +333,7 @@ Item {
 
                     StyledText {
                         Layout.fillWidth: true
-                        text: StringUtils.cleanMusicTitle(root.isYtMusicPlayer ? YtMusic.currentTitle : root.player?.trackTitle) || "—"
+                        text: StringUtils.cleanMusicTitle(root.isYtMusicPlayer ? YtMusic.currentTitle : MprisController.titleOf(root.player)) || "—"
                         font.pixelSize: Appearance.font.pixelSize.large
                         font.weight: Appearance.zzzEverywhere ? Font.Black : Font.Medium
                         font.italic: Appearance.zzzEverywhere
@@ -386,7 +386,7 @@ Item {
                 // Artist
                 StyledText {
                     Layout.fillWidth: true
-                    text: root.isYtMusicPlayer ? YtMusic.currentArtist : (root.player?.trackArtist || "")
+                    text: root.isYtMusicPlayer ? YtMusic.currentArtist : (MprisController.artistOf(root.player) || "")
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: Appearance.zzzEverywhere ? Appearance.zzz.inkMuted
                         : Appearance.inirEverywhere ? root.inirTextSecondary : (blendedColors?.colSubtext ?? Appearance.colors.colSubtext)
@@ -407,8 +407,8 @@ Item {
                 PlayerProgress {
                     Layout.fillWidth: true
                     implicitHeight: 16
-                    position: root.player?.position ?? 0
-                    length: root.player?.length ?? 0
+                    position: MprisController.positionOf(root.player)
+                    length: MprisController.lengthOf(root.player)
                     canSeek: root.player?.canSeek ?? false
                     isPlaying: root.player?.isPlaying ?? false
                     highlightColor: Appearance.zzzEverywhere ? Appearance.zzz.metricFill
@@ -419,7 +419,7 @@ Item {
                         : Appearance.inirEverywhere ? root.inirLayer2
                         : Appearance.auroraEverywhere ? Appearance.aurora.colElevatedSurface
                         : (blendedColors?.colSecondaryContainer ?? Appearance.colors.colSecondaryContainer)
-                    onSeekRequested: seconds => { if (root.player) root.player.position = seconds }
+                    onSeekRequested: seconds => MprisController.seek(root.player, seconds)
                 }
 
                 // Time + controls
@@ -428,7 +428,7 @@ Item {
                     spacing: 4
 
                     StyledText {
-                        text: StringUtils.friendlyTimeForSeconds(root.player?.position ?? 0)
+                        text: StringUtils.friendlyTimeForSeconds(MprisController.positionOf(root.player))
                         font.pixelSize: Appearance.font.pixelSize.smallest
                         font.family: Appearance.font.family.numbers
                         color: Appearance.zzzEverywhere ? Appearance.zzz.ink
@@ -542,7 +542,7 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     StyledText {
-                        text: StringUtils.friendlyTimeForSeconds(root.player?.length ?? 0)
+                        text: StringUtils.friendlyTimeForSeconds(MprisController.lengthOf(root.player))
                         font.pixelSize: Appearance.font.pixelSize.smallest
                         font.family: Appearance.font.family.numbers
                         color: Appearance.zzzEverywhere ? Appearance.zzz.ink

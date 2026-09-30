@@ -1,4 +1,3 @@
-module inir.modules.iris.bar.island
 DateMark 1.0 DateMark.qml
 Glyph 1.0 Glyph.qml
 GlyphButton 1.0 GlyphButton.qml
@@ -8,9 +7,8 @@ IslandCompactColumn 1.0 IslandCompactColumn.qml
 IslandDesktopPage 1.0 IslandDesktopPage.qml
 IslandMediaPage 1.0 IslandMediaPage.qml
 IslandStackedClock 1.0 IslandStackedClock.qml
+LevelFace 1.0 LevelFace.qml
 Metric 1.0 Metric.qml
 ProgressRing 1.0 ProgressRing.qml
 RecordDot 1.0 RecordDot.qml
-StudioChip 1.0 StudioChip.qml
 Tabular 1.0 Tabular.qml
-Waveform 1.0 Waveform.qml

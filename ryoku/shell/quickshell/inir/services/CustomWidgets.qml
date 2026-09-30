@@ -237,7 +237,7 @@ Singleton {
     "main": "${_createProcess._pascalName}.qml",
     "iris": {
         "main": "IrisCompact.qml",
-        "slots": ["bar.left", "bar.center", "bar.right"]
+        "slots": ["island.desktop"]
     },
     "defaultConfig": {
         "placementStrategy": "free",
@@ -339,7 +339,7 @@ AbstractBackgroundWidget {
     //   Audio.value (0-2.0), Audio.sink?.audio?.muted, Audio.ready
     //   Network.wifi, Network.networkName, Network.networkStrength (0-100)
     //   ResourceUsage.cpuUsage (0-1), ResourceUsage.memoryUsedPercentage (call ensureRunning() first)
-    //   MprisController.activePlayer?.trackTitle, MprisController.displayPlayers
+    //   MprisController.titleOf(MprisController.activePlayer), MprisController.displayPlayers
     //   Notifications.unread, Notifications.list
 
     // Available components (import inir.modules.common.widgets):
@@ -376,13 +376,13 @@ Item {
     RowLayout {
         id: compactRow
         anchors.centerIn: parent
-        spacing: Math.round(5 * IrisStyle.density)
+        spacing: IrisStyle.spaceSmall
 
         IrisMark { implicitSize: Math.round(14 * IrisStyle.density) }
         IrisText {
             text: DateTime.timeDisplay
+            role: IrisText.Meta
             font.family: IrisStyle.fontNumbers
-            font.pixelSize: Math.round(11 * IrisStyle.density)
             color: IrisStyle.text
         }
     }

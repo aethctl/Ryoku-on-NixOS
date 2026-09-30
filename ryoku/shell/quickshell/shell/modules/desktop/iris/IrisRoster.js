@@ -29,7 +29,7 @@ var faces = [
     { id: "editorial",          prefix: "irisEditorial",   label: "Editorial",       icon: "article",   gloss: "社説", kind: "canvas", sizes: [] },
     { id: "imageConverter",     prefix: "irisConverter",   label: "Image Converter", icon: "sync_alt",  gloss: "変換", kind: "canvas", sizes: [] },
     { id: "japaneseTypography", prefix: "irisJp",          label: "Japanese Type",   icon: "translate", gloss: "縦書", kind: "canvas", sizes: [] },
-    { id: "visualizer",         prefix: "irisVisualizer",  label: "iRiS Visualizer", icon: "graphic_eq", gloss: "音波", kind: "canvas", sizes: [] }
+    { id: "visualizer",         prefix: "irisVisualizer",  label: "Shima Visualizer", icon: "graphic_eq", gloss: "音波", kind: "canvas", sizes: [] }
 ];
 
 // Prefix -> face record, for the menu and Hub.

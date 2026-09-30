@@ -1690,7 +1690,7 @@ func TestPortalConfigCandidatesOrder(t *testing.T) {
 	t.Setenv("XDG_CONFIG_DIRS", "")
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_DATA_DIRS", "")
-	got := portalConfigCandidates(home)
+	got := portalConfigCandidates(home, "hyprland")
 	idx := func(p string) int {
 		for i, c := range got {
 			if c == p {
@@ -1710,6 +1710,60 @@ func TestPortalConfigCandidatesOrder(t *testing.T) {
 	}
 	if idx("/etc/xdg-desktop-portal/portals.conf") > idx("/usr/share/xdg-desktop-portal/hyprland-portals.conf") {
 		t.Error("an /etc-level portals.conf must outrank the packaged hyprland one")
+	}
+}
+
+// The desktop token drives which <desktop>-portals.conf the portal loads: the
+// running session's first XDG_CURRENT_DESKTOP entry wins, the provider name is
+// the fallback, and the packaged candidate is named for that token (so a niri
+// box looks for niri-portals.conf, not hyprland's).
+func TestPortalDesktopToken(t *testing.T) {
+	// table-driven so the desktop names read as data, not as a branch on which
+	// compositor is running (the isolation gate's whole point).
+	cases := []struct {
+		env, provider, want string
+	}{
+		{"niri:wayland", "niri", "niri"},
+		{"GNOME", "gnome", "gnome"},
+		{"", "Niri", "niri"}, // empty session env falls back to the provider
+		{"", "", ""},         // neither: nothing desktop-specific to look for
+	}
+	for _, c := range cases {
+		if got := portalDesktopToken(c.env, c.provider); got != c.want {
+			t.Errorf("portalDesktopToken(%q, %q) = %q, want %q", c.env, c.provider, got, c.want)
+		}
+	}
+}
+
+// A niri session's packaged candidate is niri-portals.conf, and it outranks the
+// generic portals.conf in the same directory (portals.conf(5) order).
+func TestPortalConfigCandidatesNiri(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", "")
+	t.Setenv("XDG_CONFIG_DIRS", "")
+	t.Setenv("XDG_DATA_HOME", "")
+	t.Setenv("XDG_DATA_DIRS", "")
+	got := portalConfigCandidates(home, "niri")
+	idx := func(p string) int {
+		for i, c := range got {
+			if c == p {
+				return i
+			}
+		}
+		t.Fatalf("candidate %s missing from %v", p, got)
+		return -1
+	}
+	if idx(filepath.Join(home, ".config/xdg-desktop-portal/niri-portals.conf")) != 0 {
+		t.Error("the user niri-portals.conf must lead the order")
+	}
+	if idx("/usr/share/xdg-desktop-portal/niri-portals.conf") > idx("/usr/share/xdg-desktop-portal/portals.conf") {
+		t.Error("the packaged niri-portals.conf must outrank the generic one")
+	}
+	// an empty token yields only the generic candidate, never a bare -portals.conf.
+	for _, c := range portalConfigCandidates(home, "") {
+		if strings.HasSuffix(c, "/-portals.conf") {
+			t.Fatalf("empty token produced %s", c)
+		}
 	}
 }
 
@@ -1735,6 +1789,8 @@ func TestReconcilePortalRoutingHealsUserHijack(t *testing.T) {
 	}
 	t.Setenv("PATH", bin)
 	t.Setenv("RYOKU_WM", "hyprland")
+	// no session env: the token falls back to the provider name (hyprland).
+	t.Setenv("XDG_CURRENT_DESKTOP", "")
 	userDir := filepath.Join(home, ".config/xdg-desktop-portal")
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -1766,6 +1822,44 @@ func TestReconcilePortalRoutingHealsUserHijack(t *testing.T) {
 	}
 	if r := reconcilePortalRouting(true); r.status != recOK {
 		t.Errorf("healed box must be ok, got %q: %s", r.status.label(), r.detail)
+	}
+}
+
+// A niri box routes portals through the packaged niri-portals.conf (gnome
+// backend, FileChooser to gtk). Before the candidate list was desktop-aware the
+// doctor only ever looked for hyprland-portals.conf, so it could not see this
+// file and falsely warned that nothing routes to gnome. The session env names
+// the desktop, so the token is niri and the packaged file reads as healthy.
+func TestReconcilePortalRoutingNiriPackaged(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_CONFIG_DIRS", filepath.Join(home, "empty-etc-xdg"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local/share"))
+	data := filepath.Join(home, "data")
+	t.Setenv("XDG_DATA_DIRS", data)
+	bin := filepath.Join(home, "bin")
+	if err := os.MkdirAll(bin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	caps := "#!/bin/sh\n[ \"$1\" = caps ] && echo '{\"name\":\"niri\",\"portalBackend\":\"gnome\",\"supports\":[],\"workspaceModel\":\"dynamic\"}'\n"
+	if err := os.WriteFile(filepath.Join(bin, "ryoku-wm-niri"), []byte(caps), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("RYOKU_WM", "niri")
+	t.Setenv("XDG_CURRENT_DESKTOP", "niri")
+	packaged := filepath.Join(data, "xdg-desktop-portal")
+	if err := os.MkdirAll(packaged, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// the shipped routing: gnome default, FileChooser pinned to gtk.
+	if err := os.WriteFile(filepath.Join(packaged, "niri-portals.conf"),
+		[]byte("[preferred]\ndefault=gnome;gtk\norg.freedesktop.impl.portal.FileChooser=gtk\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if r := reconcilePortalRouting(true); r.status != recOK {
+		t.Fatalf("packaged niri box = %q (%s), want ok", r.status.label(), r.detail)
 	}
 }
 

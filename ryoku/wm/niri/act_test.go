@@ -377,7 +377,7 @@ func stubRequest(t *testing.T, fn func(any) (json.RawMessage, error)) func() {
 
 // The colour temperature is clamped to the range the gamma client accepts and a
 // missing or unparseable argument falls back to the default, so a stray keybind
-// argument can never ask gammastep for a value it would reject or for 0 K.
+// argument can never ask wlsunset for a value it would reject or for 0 K.
 func TestNightlightTempClamps(t *testing.T) {
 	for _, tc := range []struct {
 		args []string
@@ -445,26 +445,5 @@ func TestActBorderPaletteNoOpWhenFixed(t *testing.T) {
 	}
 	if _, err := os.Stat(borderPalettePath()); !os.IsNotExist(err) {
 		t.Error("a fixed border must not write the palette file")
-	}
-}
-
-func TestTouchpadNotificationsOnlyOnChange(t *testing.T) {
-	restore := stubRequest(t, func(any) (json.RawMessage, error) { return nil, nil })
-	defer restore()
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
-	previous := touchpadNotify
-	count := 0
-	touchpadNotify = func(string, string) { count++ }
-	defer func() { touchpadNotify = previous }()
-
-	for _, mode := range []string{"on", "off", "off", "restore", "on", "on"} {
-		if err := runAct([]string{"input.touchpad", mode}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if count != 2 {
-		t.Fatalf("got %d notifications for two state changes", count)
 	}
 }

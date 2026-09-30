@@ -33,13 +33,13 @@ Item {
         if (!root.present || panel.width < 1) return []
         const rect = panel.bodyRect
         if (rect.width <= 1 || rect.height <= 1) return []
-        const joinOrigin = Config.options?.iris?.appearance?.surfaces?.cards?.joinOrigin ?? true
+        const joinOrigin = IrisStyle.cardJoins
         const joinRise = root.fromPiece && joinOrigin && String(root.origin?.fieldId ?? "").length > 0
             ? IrisStyle.ramp(panel.progress, 0.08, 0.3) : 0
         const shapes = [{ x: rect.x, y: rect.y, width: rect.width, height: rect.height,
             radius: rect.radius, paints: true,
             fuse: root.fromPiece ? Math.round(IrisStyle.fuseDeep * joinRise) : IrisStyle.fuseDeep,
-            id: "control-center",
+            id: "control-center", glass: IrisStyle.surfaceGlass("controlCenter"),
             joins: root.fromPiece ? (joinRise > 0 ? String(root.origin?.fieldId ?? "") : "")
                 : root.islandBody ? "island" : "" }]
         return shapes
@@ -77,12 +77,13 @@ Item {
     }
     readonly property var placement: root.fromPiece
         ? IrisFrame.place(root.placementOrigin, panel.width, panel.height, root.width, root.height, panel.radius,
-            root.avoidRects, (Config.options?.iris?.appearance?.surfaces?.cards?.joinOrigin ?? true) ? -IrisStyle.weld : IrisFrame.bodyAir) : null
-    readonly property real panelWidth: Math.min(root.width - 16, Math.max(320, Number(root.options?.width ?? 360)) * IrisStyle.density)
+            root.avoidRects, IrisStyle.cardJoins ? -IrisStyle.weld : Math.max(IrisFrame.bodyAir, IrisStyle.cardGap)) : null
+    readonly property real panelWidth: Math.min(root.width - 16, (Math.max(320, Number(root.options?.width ?? 360))
+        + (GlobalStates.irisControlEdit ? IrisControlOptions.editorExtra : 0)) * IrisStyle.density)
     readonly property real contentPadding: IrisStyle.concentricPad(IrisStyle.surfaceRadius("controlCenter", IrisStyle.radiusPanel), 16 * IrisStyle.density)
     readonly property real edge: Math.round(8 * IrisStyle.density) + IrisFrame.band
-    readonly property real edgeLeft: Math.round(8 * IrisStyle.density) + IrisFrame.clear("left")
-    readonly property real edgeRight: Math.round(8 * IrisStyle.density) + IrisFrame.clear("right")
+    readonly property real edgeLeft: Math.round(8 * IrisStyle.density) + IrisFrame.safeClear("left")
+    readonly property real edgeRight: Math.round(8 * IrisStyle.density) + IrisFrame.safeClear("right")
 
     MouseArea { anchors.fill: parent; onClicked: GlobalStates.controlPanelOpen = false }
     Shortcut { sequence: "Escape"; onActivated: GlobalStates.controlPanelOpen = false }
@@ -106,6 +107,7 @@ Item {
         id: panel
         open: root.morphOpen
         motionSurface: "controlCenter"
+        settles: true
         color: IrisStyle.bodySurface
         fieldBacked: true
         contentReady: contents.contentHeight > 0
@@ -125,7 +127,7 @@ Item {
             : (root.width - width) / 2
         y: root.placement ? root.placement.y
             : root.holding ? Math.max(12, Math.min(root.heldTop, root.height - height - root.edgeGap))
-            : root.islandSide ? Math.round(Math.max(IrisFrame.inset("top") + root.edge, Math.min(root.height - height - IrisFrame.inset("bottom") - root.edge,
+            : root.islandSide ? Math.round(Math.max(IrisFrame.safeInset("top") + root.edge, Math.min(root.height - height - IrisFrame.safeInset("bottom") - root.edge,
                 (root.origin ? root.origin.y + root.origin.height / 2 : (root.islandBody ? root.islandBody.y + root.islandBody.height / 2 : root.height / 2)) - height / 2)))
             : root.barBottom ? (root.islandBody ? root.islandBody.y - height + IrisStyle.weld
                 : root.height - height - root.edgeGap - IrisFrame.band)
@@ -134,8 +136,8 @@ Item {
         onYChanged: if (!root.holding) root.heldTop = panel.y
         width: root.panelWidth
         readonly property real room: {
-            const top = IrisFrame.clear("top") + Math.round(8 * IrisStyle.density)
-            const bottom = IrisFrame.clear("bottom") + Math.round(8 * IrisStyle.density)
+            const top = IrisFrame.safeClear("top") + Math.round(8 * IrisStyle.density)
+            const bottom = IrisFrame.safeClear("bottom") + Math.round(8 * IrisStyle.density)
             const body = root.islandBody
             if (root.placement || root.islandSide || !body) return root.height - top - bottom
             return root.barBottom ? body.y - top : root.height - (body.y + body.height) - bottom

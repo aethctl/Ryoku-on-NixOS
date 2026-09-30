@@ -66,12 +66,6 @@ pkgs.stdenv.mkDerivation {
         '/usr/share/waifu2x-ncnn-vulkan/models-cunet' \
         '${waifu2xModels}'
 
-    # NixOS exposes the active OpenGL/VAAPI driver set through
-    # /run/opengl-driver rather than Arch's /usr/lib/dri.
-    substituteInPlace daemon/livewall.go \
-      --replace-fail \
-        '/usr/lib/dri/radeonsi_drv_video.so' \
-        '/run/opengl-driver/lib/dri/radeonsi_drv_video.so'
   '';
 
   buildPhase = ''
@@ -183,6 +177,7 @@ pkgs.stdenv.mkDerivation {
       --set RYOGAMI_SHELL_QML "$out/share/ryogami/shell.qml" \
       --prefix QML_IMPORT_PATH : "$out/${qmlRoot}" \
       --prefix QML2_IMPORT_PATH : "$out/${qmlRoot}" \
+      --prefix QT_PLUGIN_PATH : "${pkgs.qt6.qtimageformats}/lib/qt-6/plugins:${pkgs.qt6.qtbase}/lib/qt-6/plugins" \
       --prefix PATH : "$out/bin:${runtimePath}"
 
     runHook postInstall

@@ -110,7 +110,7 @@ IrisWidgetFace {
                 size: 22
                 weight: root.figureWeight
                 font.family: IrisStyle.fontTitle
-                font.letterSpacing: -0.4
+                font.letterSpacing: 0
             }
             FaceText {
                 face: root

@@ -862,7 +862,8 @@ void CardField::resolveTexture(CardRenderNode *node, const LayoutContext &ctx,
     const QString key = m_source->cardKey(row);
     m_wanted.insert(key);
     const bool wantNear = visual.wantNear || std::abs(row - ctx.current) <= 2;
-    const bool preview = (row == ctx.current) && m_previewActive && node->hasPreview();
+    // The preview texture still holds the last clip's frame until this clip delivers one.
+    const bool preview = (row == ctx.current) && m_previewActive && m_previewHasFrame && node->hasPreview();
     uint32_t src = CardTex::None;
 
     if (preview) {
@@ -990,18 +991,20 @@ void CardField::startPreview()
     m_previewActive = true;
 }
 
-void CardField::publishRects(const QRectF &current, const QRectF &stage)
+void CardField::publishRects(const QRectF &current, QPointF shear, const QRectF &stage)
 {
     // Signals leave sync through the event loop so bound QML never re-enters polish or sync.
     m_pendingRect = current;
+    m_pendingShear = shear;
     m_pendingStage = stage;
     if (m_rectQueued)
         return;
     m_rectQueued = true;
     QMetaObject::invokeMethod(this, [this] {
         m_rectQueued = false;
-        if (m_pendingRect != m_currentRect) {
+        if (m_pendingRect != m_currentRect || m_pendingShear != m_currentShear) {
             m_currentRect = m_pendingRect;
+            m_currentShear = m_pendingShear;
             emit currentRectChanged();
         }
         if (m_pendingStage != m_stageRect) {
@@ -1054,7 +1057,8 @@ QSGNode *CardField::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         instances.reserve(m_visuals.size() + m_filterOld.size());
         resolve(node, ctx, instances);
 
-        publishRects(m_layout->cardRect(ctx.current), m_layout->stageRect(ctx));
+        publishRects(m_layout->cardRect(ctx.current), m_layout->cardShear(ctx.current),
+                     m_layout->stageRect(ctx));
         int visEnd = -1;
         for (const CardVisual &v : m_visuals)
             if (v.texture != CardVisual::TextureNone && v.row > visEnd)
@@ -1074,7 +1078,7 @@ QSGNode *CardField::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         node->setScene(boundingRect(), boundingRect(), float(m_time), 1.0f);
         publishVisibleEnd(-1);
         if (m_layout)
-            publishRects(m_pendingRect, m_layout->stageRect(makeContext()));
+            publishRects(m_pendingRect, m_pendingShear, m_layout->stageRect(makeContext()));
     }
 
     if (m_decoder)

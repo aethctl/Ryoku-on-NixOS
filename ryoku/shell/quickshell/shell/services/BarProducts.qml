@@ -11,6 +11,7 @@ Singleton {
     property var rows: []
     property string revisionKey: ""
     property var failedStyles: ({})
+    property string brokenStyle: ""
 
     function parseRows(raw) {
         try {
@@ -43,6 +44,18 @@ Singleton {
     }
     function isBuiltin(id) {
         return !!(id && root.builtins[id]);
+    }
+    // A builtin whose scene kept failing after Frame's retries: every monitor
+    // draws the sumi rail beside it until the style changes or the shell
+    // restarts, and the Hub can surface that the pick is degraded.
+    function markBroken(id) {
+        if (root.builtins[id])
+            root.brokenStyle = id;
+    }
+    // Frame-family styles own the whole desktop (island, dock, popups) from one
+    // host screen, so they must load even where the user hid the bar.
+    function isFrameFamily(id) {
+        return id === "iris";
     }
 
 

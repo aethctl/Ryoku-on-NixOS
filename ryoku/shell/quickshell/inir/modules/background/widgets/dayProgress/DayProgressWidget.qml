@@ -182,96 +182,57 @@ AbstractBackgroundWidget {
     // ── Quick controls ───────────────────────────────────────
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.ringStyle
                     model: [
                         { value: "ring", label: Translation.tr("Ring"), icon: "donut_large" },
                         { value: "arc", label: Translation.tr("Arc"), icon: "data_usage" },
                         { value: "ticks", label: Translation.tr("Ticks"), icon: "blur_on" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.ringStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("style", value)
                 }
             }
-
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                leftmost: true; rightmost: true
-                buttonIcon: "flare"
-                buttonText: Translation.tr("Comet tail")
-                toggled: root.showComet
-                enabled: root.showArc
-                onClicked: root._setOutputValue("comet", !root.showComet)
-            }
-
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                leftmost: true; rightmost: true
-                buttonIcon: root.isDaytime ? "light_mode" : "bedtime"
-                buttonText: Translation.tr("Sun icon")
-                toggled: root.showIcon
-                onClicked: root._setOutputValue("showIcon", !root.showIcon)
-            }
-
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                leftmost: true; rightmost: true
-                buttonIcon: "pin_drop"
-                buttonText: Translation.tr("Hour labels")
-                toggled: root.showHourLabels
-                onClicked: root._setOutputValue("hourLabels", !root.showHourLabels)
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 10
-
-                StyledText {
-                    text: Translation.tr("Text size")
-                    color: root.inkMuted
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    font.weight: Font.DemiBold
-                }
-                StyledSlider {
-                    id: textSizeSlider
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    enabled: root.showArc
                     Layout.fillWidth: true
-                    from: 60; to: 180; stepSize: 10
-                    value: root.textScale * 100
-                    configuration: StyledSlider.Configuration.XS
-                    onMoved: root._setOutputValue("fontScale", Math.round(value))
+                    iconName: "flare"
+                    label: Translation.tr("Comet tail")
+                    checked: root.showComet
+                    onToggled: root._setOutputValue("comet", !root.showComet)
                 }
-                StyledText {
-                    text: Math.round(textSizeSlider.value) + "%"
-                    color: root.inkMuted
-                    font {
-                        family: root.widgetNumbersFamily
-                        pixelSize: Appearance.font.pixelSize.smaller
-                        weight: Font.DemiBold
-                    }
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: root.isDaytime ? "light_mode" : "bedtime"
+                    label: Translation.tr("Sun icon")
+                    checked: root.showIcon
+                    onToggled: root._setOutputValue("showIcon", !root.showIcon)
+                }
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "pin_drop"
+                    label: Translation.tr("Hour labels")
+                    checked: root.showHourLabels
+                    onToggled: root._setOutputValue("hourLabels", !root.showHourLabels)
+                }
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "event"
+                    label: Translation.tr("Date")
+                    checked: root.showDate
+                    onToggled: root._setOutputValue("showDate", !root.showDate)
                 }
             }
-
-            WidgetChoiceButton {
-                Layout.fillWidth: true
-                leftmost: true; rightmost: true
-                buttonIcon: "event"
-                buttonText: Translation.tr("Show date")
-                toggled: root.showDate
-                onClicked: root._setOutputValue("showDate", !root.showDate)
+            WidgetQuickSlider {
+                title: Translation.tr("Text size")
+                from: 60; to: 180; stepSize: 10; unit: "%"
+                value: Math.round(root.textScale * 100)
+                onMoved: v => root.previewIrisValue("fontScale", v)
+                onCommitted: v => root.commitIrisValue("fontScale", v)
             }
         }
     }

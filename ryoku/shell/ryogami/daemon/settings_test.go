@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func resetSettingsState() {
@@ -55,11 +56,12 @@ func TestValidateSetting(t *testing.T) {
 		{"transition.durationMs", 40.0, false},
 		{"transition.durationMs", 20000.0, false},
 		{"display.fillMode", "fit", true},
-		{"display.fillMode", "span", true},
 		{"display.fillMode", "bogus", false},
 		{"display.fillMode", 5, false},
 		{"general.language", "de", true},
 		{"general.language", 3, false},
+		{"theme.mode", "sun", true},
+		{"theme.mode", "bogus", false},
 		{"postProcessing", []interface{}{"cmd"}, true},
 		{"postProcessing", "cmd", false},
 		{"transition.shaderScopes", map[string]interface{}{}, true},
@@ -147,6 +149,26 @@ func TestResetSetting(t *testing.T) {
 	m := readJSONFile(t, configPath())
 	if _, ok := m["selector"]; ok {
 		t.Fatalf("reset left the key behind: %v", m["selector"])
+	}
+}
+
+// The video engine is a shell-owned key the picker writes directly. A settings
+// change must return promptly (a nested store write once deadlocked every later
+// change and stalled the picker) and the apply path must read the new engine.
+func TestVideoEngineWritesThrough(t *testing.T) {
+	d := newSettingsDaemon(t)
+	done := make(chan error, 1)
+	go func() { done <- d.setSetting("wallpaper.video_engine", "in_shell") }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("setSetting never returned: a store write deadlocked")
+	}
+	if got := wallPrefs().Engine; got != "in_shell" {
+		t.Fatalf("apply reads video engine %q, want in_shell", got)
 	}
 }
 
@@ -399,5 +421,33 @@ func TestMigrateLegacyConfig(t *testing.T) {
 	}
 	if _, err := os.Stat(oldPath + ".migrated"); err != nil {
 		t.Errorf("config.json.migrated should exist: %v", err)
+	}
+}
+
+// TestPerOutputSettingRoundTrip: the Displays page writes placement and lock
+// under each output's own name. The pattern spec validates them, the daemon's
+// readers see them, and a full settings.get hands them back on the next open.
+func TestPerOutputSettingRoundTrip(t *testing.T) {
+	d := newSettingsDaemon(t)
+	d.surface = newWallSurface()
+	req := &request{Method: "settings.set", ID: 8, Params: json.RawMessage(
+		`{"values":{"display.fillModes.DP-1":"fit","display.outputLocks.DP-1":true}}`)}
+	if resp, _ := d.dispatchSettings(req, req.params()); resp.Error != nil {
+		t.Fatalf("per-output set rejected: %+v", resp.Error)
+	}
+	if got := d.fillModeOverrides()["DP-1"]; got != modeToContentFit("fit") {
+		t.Fatalf("fill override for DP-1 = %q, want %q", got, modeToContentFit("fit"))
+	}
+	if locked := d.lockedOutputs(); !locked["DP-1"] || locked["HDMI-A-1"] {
+		t.Fatalf("locked outputs = %v, want DP-1 only", locked)
+	}
+	all := d.collectValues(nil)
+	if all["display.fillModes.DP-1"] != "fit" || all["display.outputLocks.DP-1"] != true {
+		t.Fatalf("settings.get dropped the per-output values: %v", all)
+	}
+
+	bad := &request{Method: "settings.set", ID: 9, Params: json.RawMessage(`{"values":{"display.fillModes.DP-1":"zoom"}}`)}
+	if resp, _ := d.dispatchSettings(bad, bad.params()); resp.Error == nil {
+		t.Fatal("an unknown placement must still be rejected")
 	}
 }

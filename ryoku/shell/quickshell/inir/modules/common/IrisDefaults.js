@@ -162,6 +162,31 @@ function config() {
      "light": "inherit",
      "speed": 100
     }
+   },
+   "icons": {
+    "style": "iris",
+    "plate": "black"
+   },
+   "scheme": "auto",
+   "tune": {
+    "dark": {
+     "tone": 0,
+     "colour": 100,
+     "widgets": 100,
+     "lume": false
+    },
+    "ink": {
+     "tone": 0,
+     "colour": 100,
+     "widgets": 120,
+     "lume": true
+    },
+    "light": {
+     "tone": 0,
+     "colour": 85,
+     "widgets": 110,
+     "lume": true
+    }
    }
   },
   "bar": {
@@ -256,7 +281,12 @@ function config() {
    "roundCover": true,
    "artworkBackground": true,
    "bubbleOpens": "card",
-   "cardPinned": false
+   "cardPinned": false,
+   "visualizer": {
+    "style": "capsules",
+    "bars": 5,
+    "colour": "art"
+   }
   },
   "bubbles": {
    "scale": 100,
@@ -374,6 +404,12 @@ function config() {
      "opens": "card"
     },
     "updates": {
+     "enable": false,
+     "place": "right",
+     "fx": 0.5,
+     "fy": 0.5
+    },
+    "visualizer": {
      "enable": false,
      "place": "right",
      "fx": 0.5,
@@ -1042,30 +1078,6 @@ function config() {
     "x": 100,
     "y": 260
    },
-   "mascot": {
-    "enable": false,
-    "locked": false,
-    "placementStrategy": "free",
-    "contentWidth": 200,
-    "dim": 0,
-    "widgetScale": 100,
-    "widgetOpacity": 100,
-    "showBackground": false,
-    "useBlur": false,
-    "showBorder": false,
-    "backgroundOpacity": 0.16,
-    "borderWidth": 1,
-    "borderOpacity": 0.2,
-    "cornerRadius": -1,
-    "colorMode": "auto",
-    "pose": "reading",
-    "poseFilter": "all",
-    "posePickerMode": "buttons",
-    "customPath": "",
-    "anchorWidget": "",
-    "x": 120,
-    "y": 320
-   },
    "editGrid": {
     "size": 32,
     "snap": true
@@ -1081,7 +1093,8 @@ function config() {
      "America/New_York"
     ]
    },
-   "dynamicOpacity": 0
+   "dynamicOpacity": 0,
+   "stacks": []
   },
   "edgeWidgets": {
    "organic": {
@@ -2152,47 +2165,6 @@ function config() {
  },
  "display": {
   "primaryMonitor": ""
- },
- "mascot": {
-  "chaos": {
-   "artStyle": "jrpg",
-   "allowRearrange": false,
-   "enable": false
-  },
-  "enable": false,
-  "surfacePoses": {
-   "about": "",
-   "aiChat": "",
-   "bootGreeting": "",
-   "calendar": "",
-   "cheatsheet": "",
-   "clipboard": "",
-   "dashboard": "",
-   "dialogs": "",
-   "emptyStates": "",
-   "mediaControls": "",
-   "notifications": "",
-   "session": "",
-   "startMenu": "",
-   "todo": "",
-   "updates": "",
-   "wallpaperSelector": "",
-   "wifi": ""
-  },
-  "surfaces": {
-   "about": true,
-   "aiChat": true,
-   "bootGreeting": true,
-   "cheatsheet": true,
-   "dashboard": true,
-   "dialogs": true,
-   "emptyStates": true,
-   "session": true,
-   "updates": true
-  },
-  "companion": {
-   "respectQuiet": true
-  }
  },
  "media": {
   "filterDuplicatePlayers": true,

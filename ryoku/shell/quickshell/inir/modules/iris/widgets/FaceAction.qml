@@ -17,7 +17,7 @@ Rectangle {
     implicitWidth: root.face.dp(32)
     implicitHeight: implicitWidth
     radius: height / 2
-    color: hover.hovered ? (root.danger ? IrisStyle.tintFill(IrisStyle.danger) : IrisStyle.fillHover) : IrisStyle.fill
+    color: hover.hovered ? (root.danger ? IrisStyle.tintFill(root.face.danger) : root.face.fillHover) : root.face.fill
     scale: tap.pressed ? IrisStyle.pressScale(0.94) : 1
     Behavior on color { ColorAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
     Behavior on scale { NumberAnimation { duration: IrisStyle.feedbackDuration; easing.type: IrisStyle.feedbackEasing } }
@@ -27,7 +27,7 @@ Rectangle {
         text: root.glyph
         fill: 1
         iconSize: root.face.px(17)
-        color: hover.hovered && root.danger ? IrisStyle.danger : root.tint
+        color: hover.hovered && root.danger ? root.face.danger : root.tint
     }
     HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
     TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: root.activated() }

@@ -40,6 +40,16 @@ Singleton {
 
         return Qt.locale().name;
     }
+    // The catalogue that serves languageCode: the exact one, else one for the same language
+    // (es_MX reads the Spanish catalogue), else none and the English source.
+    readonly property string catalogLocale: {
+        const code = root.languageCode;
+        const all = root.allAvailableLanguages;
+        if (all.includes(code))
+            return code;
+        const language = code.split(/[_.@-]/)[0].toLowerCase();
+        return all.find(locale => locale.split("_")[0].toLowerCase() === language) ?? code;
+    }
 
     TranslationScanner {
         id: scanLanguagesProcess
@@ -57,8 +67,8 @@ Singleton {
         }
     }
 
-    onLanguageCodeChanged: {
-        print("[Translation] Language changed to", root.languageCode);
+    onCatalogLocaleChanged: {
+        print("[Translation] Language changed to", root.languageCode, "using", root.catalogLocale);
         root.reloadLanguage();
     }
 
@@ -76,7 +86,7 @@ Singleton {
             return;
         }
 
-        const locale = root.languageCode;
+        const locale = root.catalogLocale;
         const generation = ++root._loadGeneration;
         root.isLoading = true;
         root._activeLoadLocale = locale;
@@ -103,7 +113,7 @@ Singleton {
         if (!root._pendingTranslationsReady || !root._pendingGeneratedReady)
             return;
 
-        if (locale === root.languageCode) {
+        if (locale === root.catalogLocale) {
             const combined = Object.assign({}, root._pendingGeneratedTranslations);
             const primary = root._pendingTranslations;
             for (const key in primary) {
@@ -122,7 +132,7 @@ Singleton {
         root.isLoading = false;
         root._activeLoadLocale = "";
 
-        if (root._reloadQueued || root.loadedLanguageCode !== root.languageCode) {
+        if (root._reloadQueued || root.loadedLanguageCode !== root.catalogLocale) {
             root._reloadQueued = false;
             Qt.callLater(root.reloadLanguage);
         }
@@ -165,22 +175,27 @@ Singleton {
             "ar_SA": "العربية",
             "de_DE": "Deutsch",
             "en_US": "English",
-            "es_AR": "Español",
+            "es_419": "Español (Latinoamérica)",
             "fr_FR": "Français",
             "he_HE": "עברית",
             "hi_IN": "हिन्दी",
+            "id_ID": "Bahasa Indonesia",
             "it_IT": "Italiano",
             "ja_JP": "日本語",
             "kl_GL": "Kalaallisut",
             "ko_KR": "한국어",
-            "pt_BR": "Português",
+            "pt_BR": "Português (Brasil)",
             "ru_RU": "Русский",
             "tr_TR": "Türkçe",
             "uk_UA": "Українська",
             "vi_VN": "Tiếng Việt",
             "zh_CN": "简体中文"
         };
-        return names[locale] ?? locale;
+        if (names[locale] !== undefined)
+            return names[locale];
+        // A language made with Gemini, or added by hand: the name Qt has for it in its own language.
+        const own = String(Qt.locale(locale).nativeLanguageName ?? "");
+        return own.length > 0 ? own.charAt(0).toUpperCase() + own.slice(1) : locale;
     }
 
     component TranslationScanner: Process {

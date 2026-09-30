@@ -48,14 +48,14 @@ Rectangle {
         "dayprogress": "How much of the day is left",
         "shape": "A plain decorative accent",
         "visualizer": "Audio spectrum on the desktop",
-        "irisClock": "A clean iRiS clock face",
-        "irisWeather": "An iRiS weather face",
-        "irisMedia": "An iRiS now-playing face",
+        "irisClock": "A clea Shima clock face",
+        "irisWeather": "A Shima weather face",
+        "irisMedia": "A Shima now-playing face",
         "irisControls": "Quick toggles as a face",
         "irisMonth": "A full month calendar",
         "irisAgenda": "Your next few events",
         "irisTodo": "Tasks and checklists",
-        "irisNotes": "iRiS sticky notes",
+        "irisNotes": "Shima sticky notes",
         "irisTimers": "Countdowns and a stopwatch",
         "irisScreen": "Time spent on screen today",
         "irisVitals": "CPU, memory and temperatures",
@@ -69,7 +69,7 @@ Rectangle {
         "irisEditorial": "A magazine-style headline",
         "irisConverter": "Convert image formats",
         "irisJp": "Vertical Japanese type",
-        "irisVisualizer": "An iRiS audio spectrum"
+        "irisVisualizer": "A Shima audio spectrum"
     })
 
     // The live on/off for an id, read from `items` rather than a row's snapshot so

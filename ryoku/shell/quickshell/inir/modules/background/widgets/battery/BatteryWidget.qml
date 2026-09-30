@@ -44,46 +44,37 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-            GridLayout {
-                columns: 2
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
+            spacing: 14
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.displayMode
                     model: [
                         { label: Translation.tr("Ring"), icon: "donut_large", value: "ring" },
                         { label: Translation.tr("Bars"), icon: "bar_chart", value: "bars" },
                         { label: Translation.tr("Pill"), icon: "horizontal_rule", value: "pill" },
                         { label: Translation.tr("Instrument"), icon: "battery_charging_full", value: "instrument" }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: root.displayMode === modelData.value
-                        onClicked: root._setOutputValue("displayMode", modelData.value)
-                    }
+                    onPicked: value => root._setOutputValue("displayMode", value)
                 }
             }
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                leftmost: true; rightmost: true
-                buttonIcon: "timer"
-                buttonText: Translation.tr("Show time")
-                toggled: root.showTimeEstimate
-                onClicked: root._setOutputValue("showTime", !root.showTimeEstimate)
-            }
-            WidgetChoiceButton {
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.displayMode === "instrument"
-                leftmost: true; rightmost: true
-                buttonIcon: "electric_bolt"
-                buttonText: Translation.tr("Power draw")
-                toggled: root.showEnergyRate
-                onClicked: root._setOutputValue("showRate", !root.showEnergyRate)
+            WidgetQuickSection {
+                title: Translation.tr("Show")
+                WidgetQuickToggle {
+                    Layout.fillWidth: true
+                    iconName: "timer"
+                    label: Translation.tr("Time left")
+                    checked: root.showTimeEstimate
+                    onToggled: root._setOutputValue("showTime", !root.showTimeEstimate)
+                }
+                WidgetQuickToggle {
+                    visible: root.displayMode === "instrument"
+                    Layout.fillWidth: true
+                    iconName: "electric_bolt"
+                    label: Translation.tr("Power draw")
+                    checked: root.showEnergyRate
+                    onToggled: root._setOutputValue("showRate", !root.showEnergyRate)
+                }
             }
         }
     }

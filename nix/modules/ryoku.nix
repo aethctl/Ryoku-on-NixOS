@@ -351,6 +351,8 @@ EOF
     export QML_IMPORT_PATH="${qmlRoot}:${qtQmlPath}''${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}"
     export QML2_IMPORT_PATH="${qmlRoot}:${qtQmlPath}''${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
 
+    export QT_PLUGIN_PATH="${ryokuNixpkgs.qt6.qtimageformats}/lib/qt-6/plugins:${ryokuNixpkgs.qt6.qtbase}/lib/qt-6/plugins''${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+
     exec ${ryokuQuickshell}/bin/qs "$@"
   '';
 
@@ -464,7 +466,6 @@ EOF
     ryokuNixpkgs.qt6.qtwayland
     ryokuNixpkgs.qt6.qt5compat
     ryokuNixpkgs.qt6.qtsvg
-    ryokuNixpkgs.qt6.qtimageformats
     ryokuNixpkgs.qt6Packages.qt6ct
     ryokuNixpkgs.kdePackages.syntax-highlighting
     ryokuNixpkgs.kdePackages.kirigami.unwrapped
@@ -1706,6 +1707,9 @@ in
 
         QT_MEDIA_BACKEND = "ffmpeg";
         QT_FFMPEG_DECODING_HW_DEVICE_TYPES = ",";
+
+        QT_PLUGIN_PATH =
+          "${ryokuNixpkgs.qt6.qtimageformats}/lib/qt-6/plugins:${ryokuNixpkgs.qt6.qtbase}/lib/qt-6/plugins";
 
         QML_IMPORT_PATH =
           "${qmlRoot}:${qtQmlPath}";

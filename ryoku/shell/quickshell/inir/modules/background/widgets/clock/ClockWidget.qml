@@ -55,7 +55,7 @@ AbstractBackgroundWidget {
         : root.clockStyle === "androidStacked"
             ? androidStackedClockLoader.height : digitalClockLoader.height
     readonly property bool statusShown: root.wallpaperSafetyTriggered
-        || (GlobalStates.screenLocked && (Config.options?.lock?.showLockedText ?? false))
+        || (root.shellLocked && (Config.options?.lock?.showLockedText ?? false))
     implicitHeight: root.irisFaced ? root.irisFaceHeight : root.activeClockHeight
         + (root.statusShown ? contentColumn.spacing + statusText.implicitHeight : 0)
     implicitWidth: root.irisFaced ? root.irisFaceWidth : Math.max(root.activeClockWidth,
@@ -79,121 +79,86 @@ AbstractBackgroundWidget {
 
     editPopoverContent: Component {
         ColumnLayout {
-            spacing: 6
-            GridLayout {
-                columns: 2
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                Repeater {
-                    model: [
-                        { label: "Digital", icon: "digital_out_of_home", value: "digital" },
-                        { label: "Android", icon: "android", value: "androidStacked" },
-                        { label: "Cookie", icon: "circle", value: "cookie" },
-                        { label: "Pixel", icon: "view_comfy_alt", value: "pixel" },
-                        { label: "Instrument", icon: "avg_pace", value: "instrument" }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: Translation.tr(modelData.label)
-                        toggled: root.clockStyle === modelData.value
-                        onClicked: root._setOutputValue("style", modelData.value)
-                    }
-                }
-            }
-            RowLayout {
-                spacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.clockStyle === "pixel"
-                Repeater {
-                    model: [
-                        { label: "Horizontal", icon: "view_week", value: "horizontal" },
-                        { label: "Vertical", icon: "view_agenda", value: "vertical" }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: Translation.tr(modelData.label)
-                        toggled: root.pixelOrientation === modelData.value
-                        onClicked: root._setOutputValue("pixel.orientation", modelData.value)
-                    }
-                }
-            }
-            GridLayout {
-                columns: 3
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.textClockStyle
-                Repeater {
-                    model: [
-                        { label: "System", icon: "settings", value: "system" },
-                        { label: "24h", icon: "schedule", value: "24h" },
-                        { label: "12h", icon: "nest_clock_farsight_analog", value: "12h" }
-                    ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: Translation.tr(modelData.label)
-                        toggled: root.timeFormat === modelData.value
-                        onClicked: root._setOutputValue("timeFormat", modelData.value)
-                    }
-                }
-            }
-            GridLayout {
-                columns: 2
-                columnSpacing: 4
-                rowSpacing: 4
-                Layout.alignment: Qt.AlignHCenter
-                visible: root.clockStyle === "instrument"
+            spacing: 14
 
+            WidgetQuickSection {
+                title: Translation.tr("Style")
+                WidgetQuickChoices {
+                    current: root.clockStyle
+                    model: [
+                        { value: "digital", icon: "digital_out_of_home", label: Translation.tr("Digital") },
+                        { value: "androidStacked", icon: "android", label: Translation.tr("Android") },
+                        { value: "cookie", icon: "circle", label: Translation.tr("Cookie") },
+                        { value: "pixel", icon: "view_comfy_alt", label: Translation.tr("Pixel") },
+                        { value: "instrument", icon: "avg_pace", label: Translation.tr("Instrument") }
+                    ]
+                    onPicked: value => root._setOutputValue("style", value)
+                }
+            }
+
+            WidgetQuickSection {
+                visible: root.clockStyle === "pixel"
+                title: Translation.tr("Orientation")
+                WidgetQuickChoices {
+                    current: root.pixelOrientation
+                    model: [
+                        { value: "horizontal", icon: "view_week", label: Translation.tr("Horizontal") },
+                        { value: "vertical", icon: "view_agenda", label: Translation.tr("Vertical") }
+                    ]
+                    onPicked: value => root._setOutputValue("pixel.orientation", value)
+                }
+            }
+
+            WidgetQuickSection {
+                visible: root.textClockStyle
+                title: Translation.tr("Time format")
+                WidgetQuickChoices {
+                    current: root.timeFormat
+                    model: [
+                        { value: "system", icon: "settings", label: Translation.tr("System") },
+                        { value: "24h", icon: "schedule", label: Translation.tr("24h") },
+                        { value: "12h", icon: "nest_clock_farsight_analog", label: Translation.tr("12h") }
+                    ]
+                    onPicked: value => root._setOutputValue("timeFormat", value)
+                }
+            }
+
+            WidgetQuickSection {
+                visible: root.clockStyle === "instrument"
+                title: Translation.tr("Show")
                 Repeater {
                     model: [
                         { label: Translation.tr("Seconds"), icon: "timelapse", key: "showSeconds", fallback: false },
                         { label: Translation.tr("Date"), icon: "calendar_today", key: "showDate", fallback: true },
                         { label: Translation.tr("Numerals"), icon: "pin", key: "instrumentNumerals", fallback: true }
                     ]
-                    WidgetChoiceButton {
+                    WidgetQuickToggle {
                         required property var modelData
                         Layout.fillWidth: true
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
-                        onClicked: root._setOutputValue(modelData.key, !toggled)
+                        iconName: modelData.icon
+                        label: modelData.label
+                        checked: Boolean(root._readConfigKey(modelData.key) ?? modelData.fallback)
+                        onToggled: root._setOutputValue(modelData.key, !checked)
                     }
                 }
             }
-            RowLayout {
-                Layout.alignment: Qt.AlignHCenter
-                spacing: 4
-                visible: root.clockStyle === "instrument"
 
-                Repeater {
+            WidgetQuickSection {
+                visible: root.clockStyle === "instrument"
+                title: Translation.tr("Second hand trail")
+                WidgetQuickChoices {
+                    isSelected: entry => entry.enabled === root.instrumentTrail
+                        && (!entry.enabled || (entry.length <= 6 ? root.instrumentTrailLength <= 7 : root.instrumentTrailLength > 7))
                     model: [
-                        { label: Translation.tr("Clean"), icon: "horizontal_rule", enabled: false, length: 0 },
-                        { label: Translation.tr("Trace"), icon: "blur_on", enabled: true, length: 5 },
-                        { label: Translation.tr("Long trace"), icon: "blur_linear", enabled: true, length: 11 }
+                        { value: "clean", label: Translation.tr("Clean"), icon: "horizontal_rule", enabled: false, length: 0 },
+                        { value: "trace", label: Translation.tr("Trace"), icon: "blur_on", enabled: true, length: 5 },
+                        { value: "long", label: Translation.tr("Long trace"), icon: "blur_linear", enabled: true, length: 11 }
                     ]
-                    WidgetChoiceButton {
-                        required property var modelData
-                        leftmost: true; rightmost: true
-                        buttonIcon: modelData.icon
-                        buttonText: modelData.label
-                        toggled: modelData.enabled === root.instrumentTrail
-                            && (!modelData.enabled
-                                || (modelData.length <= 6 ? root.instrumentTrailLength <= 7 : root.instrumentTrailLength > 7))
-                        onClicked: {
-                            root._setOutputValue("instrumentTrail", modelData.enabled)
-                            if (modelData.enabled)
-                                root._setOutputValue("instrumentTrailLength", modelData.length)
-                        }
+                    onPicked: (value, entry) => {
+                        const updates = { instrumentTrail: entry.enabled }
+                        if (entry.enabled)
+                            updates.instrumentTrailLength = entry.length
+                        root._setOutputValues(updates)
                     }
                 }
             }
@@ -205,7 +170,8 @@ AbstractBackgroundWidget {
     readonly property bool textClockStyle: root.clockStyle === "digital"
         || root.clockStyle === "androidStacked"
     property bool adaptDigitalToWallpaper: root._readConfigKey("digital.adaptToWallpaper") ?? true
-    property bool forceCenter: (GlobalStates.screenLocked && (Config.options?.lock?.centerClock ?? false))
+    readonly property bool shellLocked: GlobalStates.screenLocked && Config.options?.panelFamily !== "iris"
+    property bool forceCenter: (root.shellLocked && (Config.options?.lock?.centerClock ?? false))
     property bool wallpaperSafetyTriggered: false
     property bool debugRegionActive: false
     property color debugRegionColor: "transparent"
@@ -214,9 +180,6 @@ AbstractBackgroundWidget {
     property string cookieDiagnostics: "{}"
     needsColText: root.clockStyle === "instrument"
         || (root.textClockStyle && (root.adaptDigitalToWallpaper || root.widgetHasSurface))
-    liveColorTracking: (root.textClockStyle && root.adaptDigitalToWallpaper
-            || root.clockStyle === "instrument")
-        && !root.widgetHasSurface
     visibleWhenLocked: true
 
     // --- Clock customization config ---
@@ -778,7 +741,7 @@ AbstractBackgroundWidget {
                     }
                     ClockStatusText {
                         id: lockStatusText
-                        shown: GlobalStates.screenLocked && (Config.options?.lock?.showLockedText ?? false)
+                        shown: root.shellLocked && (Config.options?.lock?.showLockedText ?? false)
                         statusIcon: "lock"
                         statusText: Translation.tr("Locked")
                     }

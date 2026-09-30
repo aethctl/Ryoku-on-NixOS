@@ -10,6 +10,8 @@ Item {
     // Drops toward 0 so the picker scene shows through a design section.
     property real pageOpacity: 0.965
     property real scrimAlpha: 0.68
+    // Large faint glyph behind the reading page; empty shows none.
+    property string watermark: ""
 
     readonly property alias mastheadArea: mastheadHost
     readonly property alias indexArea: indexHost
@@ -47,6 +49,7 @@ Item {
         anchors.centerIn: parent
         width: sheet._pw
         height: sheet._ph
+        radius: Theme.radius
         color: "transparent"
         border.width: 1
         border.color: Theme.withAlpha(Theme.outline, 0.58)
@@ -59,6 +62,8 @@ Item {
             anchors.right: parent.right
             height: sheet._mastheadH
             visible: sheet.showMasthead
+            topLeftRadius: Theme.radius
+            topRightRadius: Theme.radius
             color: Theme.withAlpha(Theme.surface, 0.99)
         }
         Rectangle {
@@ -66,6 +71,7 @@ Item {
             anchors.left: parent.left
             anchors.bottom: parent.bottom
             width: sheet._indexW
+            bottomLeftRadius: Theme.radius
             color: Theme.withAlpha(Theme.surface, 0.99)
         }
         Item {
@@ -95,7 +101,16 @@ Item {
 
             Rectangle {
                 anchors.fill: parent
+                bottomRightRadius: Theme.radius
                 color: Theme.withAlpha(Theme.surface, sheet.pageOpacity)
+            }
+            Text {
+                anchors.centerIn: parent
+                visible: sheet.watermark.length > 0
+                text: sheet.watermark
+                font.pixelSize: Math.min(page.width, page.height) * 0.72
+                font.weight: Font.Bold
+                color: Theme.withAlpha(Theme.surfaceText, 0.045 * sheet.reveal)
             }
             FolioBlueprint {
                 anchors.fill: parent

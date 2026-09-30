@@ -23,6 +23,7 @@ FolioIndexShell {
     bodySpacing: 17
 
     readonly property var _results: (nav.searchOpen && nav.query.length > 0) ? Search.search(nav.query, nav.tabs) : []
+    onSearchOpenChanged: if (nav.searchOpen) searchInput.forceActiveFocus()
 
     Column {
         parent: nav.body
