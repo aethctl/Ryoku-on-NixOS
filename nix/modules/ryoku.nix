@@ -798,6 +798,7 @@ in
   options.programs.ryoku = {
     enable = lib.mkEnableOption "Ryoku desktop";
 
+
     defaultCompositor = lib.mkOption {
       type = lib.types.nullOr (lib.types.enum [
         "hyprland"
@@ -834,6 +835,17 @@ in
         Optional Ryoku applications and tool groups supplied by the NixOS
         integration. Required desktop contracts remain installed regardless of
         this list. The graphical installer writes this option declaratively.
+
+    binaryCache.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+
+      description = ''
+        Use Ryoku's public Ryotunes binary cache to avoid
+        compiling the music application locally.
+      '';
+    };
+
       '';
     };
 
@@ -876,6 +888,18 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Public binary cache for independently compiled Ryotunes releases.
+    # Never distribute the private Cachix authentication token.
+    nix.settings = lib.mkIf cfg.binaryCache.enable {
+      substituters = lib.mkAfter [
+        "https://ryotunes.cachix.org"
+      ];
+
+      trusted-public-keys = lib.mkAfter [
+        "ryotunes.cachix.org-1:QNocajCsVm/IAMb8LPOWJi72XwqiexW9ec0UqeXLpGs="
+      ];
+    };
+
     # apple-cursor is part of Ryoku's cursor catalogue and is unfree in nixpkgs.
     nixpkgs.config.allowUnfreePredicate = lib.mkDefault (
       pkg: lib.getName pkg == "apple_cursor"
