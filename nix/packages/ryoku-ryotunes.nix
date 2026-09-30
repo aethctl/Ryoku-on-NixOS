@@ -19,6 +19,11 @@ in
 pkgs.symlinkJoin {
   name = "ryoku-ryotunes-${ryotunesUnwrapped.version}";
 
+  # The wrapper is distributed through Cachix.
+  # Override symlinkJoin's local-build defaults.
+  preferLocalBuild = false;
+  allowSubstitutes = true;
+
   paths = [ ryotunesUnwrapped ];
 
   nativeBuildInputs = [ pkgs.makeWrapper ];
