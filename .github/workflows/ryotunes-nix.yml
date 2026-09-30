@@ -1,0 +1,154 @@
+name: Ryotunes Nix
+
+on:
+  push:
+    branches:
+      - unstable-dev
+      - feat/ryotunes-build-isolation
+    paths:
+      - flake.nix
+      - flake.lock
+      - nix/packages/ryotunes-unwrapped.nix
+      - nix/packages/ryoku-ryotunes.nix
+      - nix/packages/default.nix
+      - .github/workflows/ryotunes-nix.yml
+
+  pull_request:
+    paths:
+      - flake.nix
+      - flake.lock
+      - nix/packages/ryotunes-unwrapped.nix
+      - nix/packages/ryoku-ryotunes.nix
+      - nix/packages/default.nix
+      - .github/workflows/ryotunes-nix.yml
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ryotunes-nix-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate Ryotunes packaging
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+        with:
+          determinate: false
+
+      - name: Evaluate packages
+        run: |
+          nix eval --raw .#ryotunes-unwrapped.drvPath
+          nix eval --raw .#ryoku-ryotunes.drvPath
+          nix flake check --no-build
+
+  publish:
+    name: Build and cache Ryotunes
+    needs: validate
+    if: github.event_name != 'pull_request'
+
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+
+    steps:
+      - name: Check cache configuration
+        env:
+          CACHE: ${{ vars.CACHIX_CACHE }}
+          TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          test -n "$CACHE" || {
+            printf 'Missing repository variable: CACHIX_CACHE\n' >&2
+            exit 1
+          }
+
+          test -n "$TOKEN" || {
+            printf 'Missing repository secret: CACHIX_AUTH_TOKEN\n' >&2
+            exit 1
+          }
+
+      - name: Free build disk space
+        run: |
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc
+
+          df -h /
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+        with:
+          determinate: false
+
+      - name: Configure Cachix
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ vars.CACHIX_CACHE }}
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Build standalone application
+        id: application
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          output="$(
+            nix build \
+              --no-link \
+              --print-out-paths \
+              -L \
+              .#ryotunes-unwrapped
+          )"
+
+          test -x "$output/bin/ryotunes"
+          test -x "$output/bin/ryotunesd"
+          test -x "$output/bin/ryotunes-cli"
+          test -f "$output/share/ryotunes/client/shell.qml"
+
+          printf 'path=%s\n' "$output" >> "$GITHUB_OUTPUT"
+
+      - name: Build Ryoku integration
+        id: integration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          output="$(
+            nix build \
+              --no-link \
+              --print-out-paths \
+              -L \
+              .#ryoku-ryotunes
+          )"
+
+          test -x "$output/bin/ryotunes"
+          test -x "$output/bin/ryotunes-qml"
+
+          grep -q \
+            'QML_IMPORT_PATH' \
+            "$output/bin/ryotunes-qml"
+
+          printf 'path=%s\n' "$output" >> "$GITHUB_OUTPUT"
+
+      - name: Publish completed packages
+        env:
+          CACHE: ${{ vars.CACHIX_CACHE }}
+          APPLICATION: ${{ steps.application.outputs.path }}
+          INTEGRATION: ${{ steps.integration.outputs.path }}
+        run: |
+          cachix push "$CACHE" \
+            "$APPLICATION" \
+            "$INTEGRATION"
