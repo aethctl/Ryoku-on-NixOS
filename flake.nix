@@ -126,6 +126,7 @@
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
         ryoku-ryotunes = ryoku.ryotunes;
+        ryotunes-unwrapped = ryoku.ryotunesUnwrapped;
         ryoku-keysounds = ryoku.keysounds;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;

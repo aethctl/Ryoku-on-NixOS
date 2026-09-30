@@ -96,11 +96,12 @@ let
       ;
   };
 
+  ryotunesUnwrapped = import ./ryotunes-unwrapped.nix {
+    inherit pkgs ryotunesSrc;
+  };
+
   ryotunes = import ./ryoku-ryotunes.nix {
-    inherit
-      pkgs
-      ryotunesSrc
-      ;
+    inherit pkgs ryotunesUnwrapped;
     ryokuQml = qml;
   };
 
@@ -297,6 +298,7 @@ in
     livewall
     ryogami
     ryotunes
+    ryotunesUnwrapped
     keysounds
     qmkHid
     waifu2x
