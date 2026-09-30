@@ -250,7 +250,18 @@ func saveDesktop(raw string) error {
 		// showing the packaged fallback until the next palette change. The
 		// full build rasterises eleven sizes, so it runs off the save path.
 		if after == wm.CursorThemeMaterial && before != after {
-			go func() { _ = exec.Command("ryoku-cursor-material-recolor", "--force", "--full").Run() }()
+			cmd := exec.Command(
+				"ryoku-cursor-material-recolor",
+				"--force",
+				"--full",
+			)
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+
+			if err := cmd.Start(); err != nil {
+				fmt.Fprintln(os.Stderr, "ryoku-hub: start cursor recolour:", err)
+			} else {
+				_ = cmd.Process.Release()
+			}
 		}
 		return nil
 	})
