@@ -36,10 +36,10 @@
       flake = false;
     };
 
-    # Native Ryotunes 2.5.1 application used by Ryoku 0.59.7.
+    # Native Ryotunes 1.1.6, pinned to its release commit.
     # Keep this pinned to the exact upstream release commit.
     ryotunesSrc = {
-      url = "github:Ryoku-dev/ryotunes/767cc5311eac58fa3e5073bfaf9a05be8be3bda6";
+      url = "github:Ryoku-dev/ryotunes/8fad27becd373ca7943b2e8943a8f14398b67ddb";
       flake = false;
     };
   };

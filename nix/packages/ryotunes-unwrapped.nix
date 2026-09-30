@@ -5,18 +5,16 @@
 
 pkgs.rustPlatform.buildRustPackage rec {
   pname = "ryotunes-unwrapped";
-  version = "1.0.6";
+  version = "1.1.6";
 
   src = ryotunesSrc;
 
-  # Ryotunes 2.5 gained additional workspace crates plus pinned
-  # librespot git dependencies. Keep the complete Cargo vendor tree
-  # fixed to the exact 2.5.1 source.
-  cargoHash = "sha256-0P4XWRsk9wVBwVHSkJFXsXxF/3QP6QmAjamHTWyPETA=";
+  # Cargo dependencies include pinned librespot Git revisions.
+  # Keep the vendor hash tied to the exact upstream release.
+  cargoHash = "sha256-SoWIji85omW32TyXwk/zBzreShj/ZVXkOabHsHbxa1I=";
 
-  # The legacy Tauri frontend is still shipped as an explicit fallback,
-  # so build its Svelte/Vite payload even though the native QML client is
-  # now the normal Ryoku launch path.
+  # The Linux application launches its native QML client.
+  # The Tauri build currently also requires the Svelte/Vite payload.
   pnpmDeps = pkgs.fetchPnpmDeps {
     pname = "ryotunes-ui";
     inherit version;
