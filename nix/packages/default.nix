@@ -101,6 +101,7 @@ let
       pkgs
       ryotunesSrc
       ;
+    ryokuQml = qml;
   };
 
   keysounds = import ./ryoku-keysounds.nix {
