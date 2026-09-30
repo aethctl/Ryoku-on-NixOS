@@ -48,6 +48,7 @@ jobs:
 
       - name: Evaluate packages
         run: |
+          nix eval --raw .#ryotunes-unwrapped.version
           nix eval --raw .#ryotunes-unwrapped.drvPath
           nix eval --raw .#ryoku-ryotunes.drvPath
           nix flake check --no-build
