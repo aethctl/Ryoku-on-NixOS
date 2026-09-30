@@ -482,6 +482,7 @@ EOF
 
     kitty
     fish
+    gtk3
     starship
     fastfetch
     yazi

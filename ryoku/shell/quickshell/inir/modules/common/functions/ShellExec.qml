@@ -10,17 +10,17 @@ import inir.modules.common
 Singleton {
     id: root
 
-    readonly property string fishPath: "/usr/bin/fish"
-    readonly property string bashPath: "/usr/bin/bash"
-    readonly property string systemdRunPath: "/usr/bin/systemd-run"
-    readonly property string gtkLaunchPath: "/usr/bin/gtk-launch"
+    readonly property string fishPath: "fish"
+    readonly property string bashPath: "bash"
+    readonly property string systemdRunPath: "systemd-run"
+    readonly property string gtkLaunchPath: "gtk-launch"
 
     // -1 unknown, 0 no, 1 yes
     property int _fishAvailable: -1
 
     Process {
         id: fishCheckProc
-        command: ["/usr/bin/test", "-x", root.fishPath]
+        command: ["sh", "-c", "command -v fish >/dev/null 2>&1"]
         onExited: (exitCode, exitStatus) => {
             root._fishAvailable = (exitCode === 0) ? 1 : 0
         }
@@ -57,11 +57,11 @@ Singleton {
             # session. Quickshell intentionally carries shell-only Qt scaling,
             # rendering and optional GPU policy that must not leak into apps.
             manager_env=""
-            if [ -x /usr/bin/systemctl ]; then
-                if [ -x /usr/bin/timeout ]; then
-                    manager_env="$(/usr/bin/timeout 1s /usr/bin/systemctl --user show-environment 2>/dev/null || true)"
+            if command -v systemctl >/dev/null 2>&1; then
+                if command -v timeout >/dev/null 2>&1; then
+                    manager_env="$(timeout 1s systemctl --user show-environment 2>/dev/null || true)"
                 else
-                    manager_env="$(/usr/bin/systemctl --user show-environment 2>/dev/null || true)"
+                    manager_env="$(systemctl --user show-environment 2>/dev/null || true)"
                 fi
             fi
 
@@ -165,7 +165,7 @@ Singleton {
                 cd -- "$workdir" || true
             fi
 
-            if [ -x "$systemd_run" ] && [ -S "$XDG_RUNTIME_DIR/systemd/private" ]; then
+            if command -v "$systemd_run" >/dev/null 2>&1 && [ -S "$XDG_RUNTIME_DIR/systemd/private" ]; then
                 if [ -n "$desc" ]; then
                     exec "$systemd_run" --user --quiet --collect --same-dir --scope \
                         --description="$desc" -- "$@"
