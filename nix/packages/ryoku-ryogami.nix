@@ -66,6 +66,15 @@ pkgs.stdenv.mkDerivation {
         '/usr/share/waifu2x-ncnn-vulkan/models-cunet' \
         '${waifu2xModels}'
 
+    install -Dm644 \
+      ${src}/ryoku/assets/brand/logo-mark-v2.png \
+      picker/logo-mark-v2.png
+
+    substituteInPlace picker/CMakeLists.txt \
+      --replace-fail \
+        '../../../assets/brand/logo-mark-v2.png' \
+        'logo-mark-v2.png'
+
   '';
 
   buildPhase = ''
