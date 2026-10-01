@@ -9,6 +9,10 @@ pkgs.rustPlatform.buildRustPackage rec {
 
   src = ryotunesSrc;
 
+  patches = [
+    ../patches/ryotunes-spotify-mpris.patch
+  ];
+
   # Cargo dependencies include pinned librespot Git revisions.
   # Keep the vendor hash tied to the exact upstream release.
   cargoHash = "sha256-SoWIji85omW32TyXwk/zBzreShj/ZVXkOabHsHbxa1I=";
