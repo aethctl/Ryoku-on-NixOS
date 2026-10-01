@@ -334,6 +334,11 @@
           }
           ''
             RYOKU_NIX_MODULE=${./nix/modules/ryoku.nix} \
+            RYOKU_SHELL_QML=${./ryoku/shell/quickshell/shell/shell.qml} \
+            RYOKU_NOTIFS_QML=${./ryoku/shell/quickshell/shell/services/Notifs.qml} \
+            RYOKU_SCHEME_QML=${./ryoku/shell/quickshell/shell/services/Scheme.qml} \
+            RYOKU_NOTIFICATION_CARD_QML=${./ryoku/shell/quickshell/shell/modules/notifications/NotificationCard.qml} \
+            RYOKU_IRIS_THEME_QML=${./ryoku/shell/quickshell/inir/services/MaterialThemeLoader.qml} \
               python3 ${./nix/tests/test-notification-ownership.py}
 
             touch "$out"
