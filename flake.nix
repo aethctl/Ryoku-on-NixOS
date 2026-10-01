@@ -327,6 +327,24 @@
         # Installer
         ryoku-install = ryokuInstall;
 
+        ryoku-bt-audio-watch-singleton = pkgs.runCommand
+          "ryoku-bt-audio-watch-singleton-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              gawk
+              python3
+              util-linux
+            ];
+          }
+          ''
+            RYOKU_BT_AUDIO_TEST_HELPER=${./system/hardware/audio/ryoku-bt-audio} \
+              python3 ${./nix/tests/test-bt-audio-watch-singleton.py}
+
+            touch "$out"
+          '';
+
         ryoku-qylock-staging-cleanup = pkgs.runCommand
           "ryoku-qylock-staging-cleanup-check"
           {
