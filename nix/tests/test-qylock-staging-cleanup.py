@@ -8,7 +8,7 @@ import unittest
 
 INSTALLER = pathlib.Path(
     os.environ.get(
-        "RYOKU_QYLOCK_INSTALLER",
+        "RYOKU_QYLOCK_TEST_INSTALLER",
         pathlib.Path(__file__).parents[2] / "ryoku/lockscreen/install-qylock",
     )
 )

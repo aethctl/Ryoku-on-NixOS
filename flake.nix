@@ -341,7 +341,7 @@
             ];
           }
           ''
-            RYOKU_QYLOCK_INSTALLER=${./ryoku/lockscreen/install-qylock} \
+            RYOKU_QYLOCK_TEST_INSTALLER=${./ryoku/lockscreen/install-qylock} \
               python3 ${./nix/tests/test-qylock-staging-cleanup.py}
 
             touch "$out"
