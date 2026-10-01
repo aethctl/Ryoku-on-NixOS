@@ -345,6 +345,63 @@ func TestConfigReloadResultAcceptsProviderWithoutReload(t *testing.T) {
 	}
 }
 
+// A drifted /var/lib/ryoku mode (0700) hides the cutover marker from the
+// update's unprivileged stat. That must fall back to asking root, never
+// abort the update with "inspect package power cutover state: permission
+// denied".
+func TestCutoverMarkerFallsBackToRootWhenUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions; EACCES is not reproducible")
+	}
+	closed := t.TempDir()
+	if err := os.Chmod(closed, 0o000); err != nil {
+		t.Fatalf("chmod 000: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(closed, 0o700) })
+	marker := filepath.Join(closed, "power-cutover-hook-active")
+
+	oldMarker, oldProbe := packagePowerCutoverMarker, cutoverMarkerExistsAsRoot
+	t.Cleanup(func() { packagePowerCutoverMarker, cutoverMarkerExistsAsRoot = oldMarker, oldProbe })
+	packagePowerCutoverMarker = marker
+
+	probed := 0
+	cutoverMarkerExistsAsRoot = func(path string) bool {
+		probed++
+		if path != marker {
+			t.Errorf("root probe asked for %q, want %q", path, marker)
+		}
+		return true
+	}
+	if !packageCutoverMarkerPresent() {
+		t.Fatal("EACCES on the marker's parent must defer to the root probe")
+	}
+	if probed != 1 {
+		t.Fatalf("root probe ran %d times, want 1", probed)
+	}
+
+	// A box that cannot ask root (no cached credential: the stub returns
+	// false) reads as absent, erring toward re-adoption, not a hard failure.
+	cutoverMarkerExistsAsRoot = func(string) bool { return false }
+	if packageCutoverMarkerPresent() {
+		t.Fatal("a failed root probe must read as absent")
+	}
+
+	// ENOENT must not wake the root probe at all.
+	missing := t.TempDir()
+	packagePowerCutoverMarker = filepath.Join(missing, "power-cutover-hook-active")
+	probed = 0
+	cutoverMarkerExistsAsRoot = func(string) bool {
+		probed++
+		return true
+	}
+	if packageCutoverMarkerPresent() {
+		t.Fatal("a genuinely absent marker is absent")
+	}
+	if probed != 0 {
+		t.Fatalf("ENOENT woke the root probe %d times, want 0", probed)
+	}
+}
+
 func TestDbRejection(t *testing.T) {
 	cases := map[string]bool{
 		"error: failed to commit transaction (conflicting files)": false,
