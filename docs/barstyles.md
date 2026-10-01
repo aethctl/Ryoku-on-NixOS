@@ -1,18 +1,33 @@
 # Bar styles
 
-Ryoku ships four bar styles, and a single key decides which one runs. The default
-is **QS Bar** (`qsbar`), a full-colour top bar. **Sumi** is the monochrome left
-rail, **Chroma** is a modular Matugen signal bar, and **Kairos** is a single
-island at the top centre that carries the clock:
-hovering opens it into a rolling date wheel, a track that plays adds a cover
-bubble beside it that peeks open on hover and opens the now-playing panel on a
-click (moving the pointer off it closes it again), and Super+Space grows the same
-island into its own app launcher
-(`docs/launcher.md`). Sumi is not a folder: the shell paints it from the built-in
-frame scene in `shell.qml`, so it has no scene file of its own. QS Bar and Kairos
-live under `ryoku/shell/quickshell/shell/modules/bar/barstyles/`, ship their own
-bar, and load once per monitor. Store-installed styles land under the same folder
-contract.
+Ryoku ships six bar styles, and a single key decides which one runs. The
+shipped default is **QS Bar** (`qsbar`), the full-colour top bar. **Chroma**
+(`chroma`) is the modular Matugen signal bar. **Shima** (`iris`) and
+**Python** (`python`) are the frame family: whole-desktop systems hosted once
+on the primary output. Shima is an island on any screen edge
+that morphs into whatever you clicked, with glass popups, bubbles, a dock, a live
+Studio and its own settings overlay. Python is a bar of pill widgets that open
+into one morphing stage (its own guide carries its settings), based on
+Serpantinum by ilyamiro. **Sumi** is the monochrome left rail, and **Kairos** is a single
+island at the top centre that carries the clock: hovering opens it into a
+rolling date wheel, a track that plays adds a cover bubble beside it, and
+Super+Space grows the same island into its own app launcher
+(`docs/launcher.md`). Sumi is not a folder: the shell paints it from the
+built-in frame scene in `shell.qml`, so it has no scene file of its own. The
+other four live under `ryoku/shell/quickshell/shell/modules/bar/barstyles/`,
+ship their own scene, and load once per monitor. Shima is special: its scene is
+a thin host that mounts the vendored frame family in
+`ryoku/shell/quickshell/inir/`. It is based on iNiR by snowarch
+(https://github.com/snowarch/inir) and tracks its releases (the one it follows is
+in `inir/VERSION`). iNiR's NOTICE grants no rights to the names iNiR and iRiS,
+their logos or the Kira mascot, so Ryoku ships it as Shima with its own mark and
+no mascot, keeps that NOTICE and the credit in the About page, and leaves out
+upstream's IrisGate, which closes the surfaces under any host but iNiR. Internal
+names (`iris` ids, `Iris*` files, `inir.iris.*` keys) are unchanged so settings
+carry over. Nothing in it is tied to niri: it
+reads the desktop only through the window-manager seam and the daemon's
+settings topic, so it runs on every compositor Ryoku supports.
+Store-installed styles land under the same folder contract.
 
 **QS Bar wears colour on purpose, and it is the one place the desktop does.** It
 is a Quickshell "Rise" bar ported onto Ryoku's data plane, and it keeps that
@@ -49,7 +64,9 @@ file. Built-in folder styles ship inside the shell, one row each:
 readonly property var builtins: ({
     "qsbar": "barstyles/qsbar/Scene.qml",
     "chroma": "barstyles/chroma/Scene.qml",
-    "kairos": "barstyles/kairos/Scene.qml"
+    "kairos": "barstyles/kairos/Scene.qml",
+    "iris": "barstyles/iris/Scene.qml",
+    "python": "barstyles/python/Scene.qml"
 })
 ```
 
@@ -57,7 +74,7 @@ readonly property var builtins: ({
 
 - `""` for `"sumi"`, an empty id, or a style that has failed to load. An empty
   scene is the built-in frame scene (Sumi), which `shell.qml` paints itself.
-- the built-in's relative `Scene.qml` for a built-in id (`"qsbar"`, `"chroma"`, `"kairos"`).
+- the built-in's relative `Scene.qml` for a built-in id (`"qsbar"`, `"chroma"`, `"kairos"`, `"iris"`, `"python"`).
 - a `file://` path drawn from `~/.local/state/ryoku/store/barstyles.json` for a
   store-installed folder style. The store writes that index and a `revision.json`;
   `BarProducts` watches both and reloads live.
@@ -67,7 +84,8 @@ readonly property var builtins: ({
 ```qml
 import shell.services
 
-readonly property bool sumiActive: BarProducts.sceneUrl(Config.barStyle) === ""
+readonly property bool sumiActive: root.degraded
+    || BarProducts.sceneUrl(Config.barStyle) === ""
 ```
 
 `sumiActive` is the gate. While it is true, the built-in frame chrome and the four
@@ -79,26 +97,33 @@ mounts the active style's `Scene.qml`:
 ```qml
 Loader {
     id: barStyleLoader
-    active: !root.sumiActive
+    active: !root.sumiActive && (root.barEnabled || root.primaryHost)
     source: BarProducts.sceneUrl(Config.barStyle)
     onLoaded: if (item) item.modelData = root.modelData
-    onStatusChanged: if (status === Loader.Error) BarProducts.fail(Config.barStyle)
 }
 ```
 
 `Frame.qml` is itself instantiated once per screen by `shell.qml`'s `Variants`, so
-the contract is: your `Scene.qml` loads once per screen, takes the screen through
-a `modelData` property, and if it errors on load `BarProducts.fail` drops the shell
-back to Sumi. Everything else is yours.
+the contract is: your `Scene.qml` loads once per screen and takes the screen
+through a `modelData` property. Everything else is yours.
+
+A load error is handled by kind. A store style is failed at once
+(`BarProducts.fail`), so `sceneUrl` returns `""` and Sumi draws until the store
+index reloads. A built-in style cannot be legitimately broken, so Frame retries it
+ten times, 800 ms apart, to ride out an update's plugin swap; if it still fails,
+`BarProducts.markBroken` records it and every monitor degrades to the Sumi rail
+instead of an empty frame, until the user picks a style again.
 
 Ryoku Settings > Displays can suppress the active bar on any output. Sumi releases
 its rail reserve there, normal folder styles are not instantiated there, and QS
-Bar filters that output from its shared multi-monitor bar model. A missing
-per-display setting means enabled, so upgrades preserve the existing layout.
-The same display card can override the global style with `displays.bar_style`
-and can override Chroma's modules with `displays.bar_widgets.<output>.chroma`.
-An empty style value follows the global Bar Studio selection, and missing module
-values inherit Chroma's global switches.
+Bar filters that output from its shared multi-monitor bar model. The primary
+output still hosts QS Bar and any frame-family style (`BarProducts.isFrameFamily`,
+today Shima and Python), because their popups, dock and island serve the whole
+desktop. A missing per-display setting means enabled, so upgrades preserve the
+existing layout. The same display card can override the global style with
+`displays.bar_style` and can override Chroma's modules with
+`displays.bar_widgets.<output>.chroma`. An empty style value follows the global
+Bar Studio selection, and missing module values inherit Chroma's global switches.
 
 **To add a built-in style, drop its folder under `barstyles/` and add one row to
 `BarProducts.builtins`.** A store style needs no shell edit: it installs into
@@ -587,9 +612,10 @@ over the same `Ryoku.Ui` form kit the rest of Ryoku Settings uses.
 | Dock | 台 | the app dock: enabled, edge, autohide, magnify, labels, frost, pinned apps |
 
 Open it from the bar logo, or from a terminal or a keybind with `ryoku-shell bar
-settings [route]`. The picker style and desktop widgets it used to carry now live
-in the Hub (Desktop and Widgets pages); session and mid-work toggles live in the
-Super+Escape quick settings.
+settings [route]`. The picker style it used to carry now lives in the Hub
+(Desktop page); desktop widgets are edited in place from the wallpaper's
+right-click menu (Widgets). Session and mid-work toggles live in the Super+Escape
+quick settings.
 
 ## Kairos Settings
 
