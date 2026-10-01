@@ -156,3 +156,55 @@ func BenchmarkMonitorSpawnProxy(b *testing.B) {
 		_ = exec.Command("true").Run()
 	}
 }
+
+func TestUnchangedWMFrameDoesNotRepublish(t *testing.T) {
+	d := &daemon{
+		wmc:       wm.OpenNamed("does-not-exist"),
+		widgetSig: make(chan struct{}, 1),
+	}
+	d.wmTopic = newStateTopic()
+	sub := d.wmTopic.subscribe()
+	defer d.wmTopic.unsubscribe(sub)
+
+	frame := wm.Frame{
+		Kind: wm.FrameWorkspaces,
+		Workspaces: []wm.Workspace{{
+			ID: "1", Name: "1", Output: "DP-1", Active: true, Windows: 2,
+		}},
+	}
+
+	d.onWMFrame(frame)
+	select {
+	case <-sub.frames:
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial changed frame was not published")
+	}
+	select {
+	case <-d.widgetSig:
+	default:
+		t.Fatal("initial changed workspace frame did not wake widget gate")
+	}
+	d.wmMu.Lock()
+	before := d.wmVersions[string(wm.FrameWorkspaces)]
+	d.wmMu.Unlock()
+
+	d.onWMFrame(frame)
+
+	d.wmMu.Lock()
+	after := d.wmVersions[string(wm.FrameWorkspaces)]
+	d.wmMu.Unlock()
+	if after != before {
+		t.Fatalf("unchanged frame bumped version: before=%d after=%d", before, after)
+	}
+
+	select {
+	case <-sub.frames:
+		t.Fatal("unchanged frame republished wm topic")
+	case <-time.After(50 * time.Millisecond):
+	}
+	select {
+	case <-d.widgetSig:
+		t.Fatal("unchanged frame woke widget gate")
+	default:
+	}
+}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"time"
 
 	wm "ryoku-wm"
@@ -44,30 +45,55 @@ func (d *daemon) activeMonitor() string {
 // re-evaluate on every one of them.
 func (d *daemon) onWMFrame(f wm.Frame) {
 	d.wmMu.Lock()
+
+	changed := false
+
 	switch f.Kind {
 	case wm.FrameFocus:
+		changed = d.activeMon != f.FocusedOutput
 		d.activeMon = f.FocusedOutput
+
 	case wm.FrameOutputs:
+		changed = !reflect.DeepEqual(d.wmOutputs, f.Outputs)
 		d.wmOutputs = f.Outputs
+
 	case wm.FrameWorkspaces:
+		changed = !reflect.DeepEqual(d.wmWorkspaces, f.Workspaces)
 		d.wmWorkspaces = f.Workspaces
+
 	case wm.FrameWindows:
+		changed = !reflect.DeepEqual(d.wmWindows, f.Windows)
 		d.wmWindows = f.Windows
+
 	case wm.FrameKeyboard:
+		changed = d.wmKbdLayout != f.KeyboardLayout ||
+			!reflect.DeepEqual(d.wmKbdList, f.KeyboardLayouts)
 		d.wmKbdLayout = f.KeyboardLayout
 		d.wmKbdList = f.KeyboardLayouts
+
 	case wm.FrameOverview:
+		changed = d.wmOverview != f.OverviewOpen
 		d.wmOverview = f.OverviewOpen
+
 	case wm.FrameReady:
+		changed = !d.wmReady
 		d.wmReady = true
+
 	default:
 		d.wmMu.Unlock()
 		return
 	}
+
+	if !changed {
+		d.wmMu.Unlock()
+		return
+	}
+
 	if d.wmVersions == nil {
 		d.wmVersions = map[string]int{}
 	}
 	d.wmVersions[string(f.Kind)]++
+
 	d.wmMu.Unlock()
 
 	switch f.Kind {
@@ -78,13 +104,10 @@ func (d *daemon) onWMFrame(f wm.Frame) {
 		}
 	}
 
-	// A hotplug (dock/undock, lid, VT resume) moves the output set. The night
-	// light self-heals from it: the compositor can revoke a running backend's
-	// gamma ownership on a connector change without telling it, which leaves
-	// the screen cold while the bar still reads on. See rearmOnOutputs.
 	if f.Kind == wm.FrameOutputs && d.nightlight != nil {
 		d.nightlight.rearmOnOutputs(f.Outputs)
 	}
+
 	d.publishWM()
 }
 
