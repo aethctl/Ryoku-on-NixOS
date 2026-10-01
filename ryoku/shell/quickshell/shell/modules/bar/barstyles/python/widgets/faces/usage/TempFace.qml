@@ -14,6 +14,9 @@ Item {
     property real minAspect: 0.6
     property real maxAspect: 3.0
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     property bool isSubscribed: false
     property bool compactMode: root.height < Scaler.s(100) || root.width < Scaler.s(140)
@@ -53,7 +56,7 @@ Item {
     SystemUsageCard {
         anchors.fill: parent
         value: Math.max(0.0, Math.min(1.0, root.tempC / 100.0))
-        colorBase: ThemeBackend.surface0
+        colorBase: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         colorFill: ThemeBackend.mauve
         icon: "\uF2C9"
         title: I18n.t("quickactions.systemusage.temp")

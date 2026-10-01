@@ -4,6 +4,7 @@ import QtQuick.Effects
 import "Singletons"
 import Ryoku.Ui.Singletons
 import "iris/IrisRoster.js" as IrisRoster
+import "python/PythonRoster.js" as PythonRoster
 import "options/OptionsCatalog.js" as OptionsCatalog
 
 // The widget inspector: the Customize sheet a widget's right-click menu opens. A
@@ -62,6 +63,9 @@ Item {
     // ── widget identity: glyph, name and kanji seal for the title row ──────
     readonly property var irisFace: IrisRoster.byPrefix(insp.scope)
     readonly property bool isIris: insp.irisFace !== null
+    readonly property var pythonFace: PythonRoster.byPrefix(insp.scope)
+    readonly property bool isPython: insp.pythonFace !== null
+    readonly property var hostedFace: insp.isIris ? insp.irisFace : insp.pythonFace
     readonly property var builtinInfo: ({
         clock: { label: "Clock", icon: "schedule", gloss: "時計" },
         calendar: { label: "Calendar", icon: "calendar_month", gloss: "暦" },
@@ -74,9 +78,9 @@ Item {
         shape: { label: "Shape", icon: "category", gloss: "図形" }
     })
     readonly property var _info: insp.builtinInfo[insp.scope] || null
-    readonly property string wLabel: insp.isIris ? insp.irisFace.label : (insp._info ? insp._info.label : insp.cap(insp.scope))
-    readonly property string wIcon: insp.isIris ? insp.irisFace.icon : (insp._info ? insp._info.icon : "widgets")
-    readonly property string wGloss: insp.isIris ? insp.irisFace.gloss : (insp._info ? insp._info.gloss : "")
+    readonly property string wLabel: insp.hostedFace ? insp.hostedFace.label : (insp._info ? insp._info.label : insp.cap(insp.scope))
+    readonly property string wIcon: insp.hostedFace ? insp.hostedFace.icon : (insp._info ? insp._info.icon : "widgets")
+    readonly property string wGloss: insp.hostedFace ? insp.hostedFace.gloss : (insp._info ? insp._info.gloss : "")
 
     // ── look / colour / shape state (the generic controls the menu shed) ──
     readonly property bool isClock: insp.scope === "clock"
@@ -85,9 +89,10 @@ Item {
     readonly property bool isAio: insp.scope === "aio"
     readonly property bool isDayprogress: insp.scope === "dayprogress"
     readonly property bool isShape: insp.scope === "shape"
-    readonly property bool isRyokuStyle: insp.isIris && Config[insp.scope + "Style"] === "ryoku"
+    readonly property bool isRyokuStyle: (insp.isIris || insp.isPython) && Config[insp.scope + "Style"] === "ryoku"
     readonly property bool isCanvas: insp.isIris && insp.irisFace.kind === "canvas"
     readonly property string curIrisSize: insp.isIris ? (Config[insp.scope + "Size"] || insp.irisFace.sizes[0]) : ""
+    readonly property string curPythonVariant: insp.isPython ? (Config[insp.scope + "Variant"] || insp.pythonFace.variants[0]) : ""
 
     readonly property var designLists: ({
         clock: ["digital", "minimal", "grand", "column", "outline", "banner", "analog", "flip", "rings", "bighour", "metal", "goodnight"],
@@ -101,7 +106,7 @@ Item {
     readonly property string designKey: insp.isCalendar || insp.isMusic || insp.isAio || insp.isDayprogress
         ? insp.scope + "Style" : insp.isShape ? insp.scope + "Kind" : insp.scope + "Design"
     readonly property string curDesign: Config[insp.designKey] ?? ""
-    readonly property bool hasDesign: !insp.isIris && (insp.designLists[insp.scope] !== undefined)
+    readonly property bool hasDesign: !insp.isIris && !insp.isPython && (insp.designLists[insp.scope] !== undefined)
 
     readonly property string curColor: Config[insp.scope + "Color"] || ""
     readonly property bool curGradient: Config[insp.scope + "Gradient"] === true
@@ -116,6 +121,10 @@ Item {
     function cycleIrisSize() {
         const s = insp.irisFace.sizes;
         Config.set(insp.scope + "Size", s[(s.indexOf(insp.curIrisSize) + 1) % s.length]);
+    }
+    function cyclePythonVariant() {
+        const v = insp.pythonFace.variants;
+        Config.set(insp.scope + "Variant", v[(v.indexOf(insp.curPythonVariant) + 1) % v.length]);
     }
     function hexOf(c) {
         return "#" + [c.r, c.g, c.b].map(function (x) {
@@ -402,12 +411,13 @@ Item {
                         onTriggered: insp.cycleDesign()
                     }
                     MenuRow {
-                        visible: insp.isIris
+                        visible: insp.isIris || insp.isPython
                         label: I18n.tr("Style")
                         value: insp.isRyokuStyle ? "Ryoku" : "Original"
                         on: insp.isRyokuStyle
                         closeOnTrigger: false
-                        onTriggered: Config.set(insp.scope + "Style", insp.isRyokuStyle ? "inir" : "ryoku")
+                        onTriggered: Config.set(insp.scope + "Style",
+                            insp.isRyokuStyle ? (insp.isPython ? "serp" : "inir") : "ryoku")
                     }
                     MenuRow {
                         visible: insp.isIris && insp.irisFace.sizes.length > 1
@@ -416,18 +426,27 @@ Item {
                         closeOnTrigger: false
                         onTriggered: insp.cycleIrisSize()
                     }
+                    MenuRow {
+                        visible: insp.isPython && insp.pythonFace.variants.length > 1
+                        label: I18n.tr("Variant")
+                        value: insp.cap(insp.curPythonVariant)
+                        closeOnTrigger: false
+                        onTriggered: insp.cyclePythonVariant()
+                    }
                     Text {
                         // Canvas widgets carry no iRiS ink token, so the Ryoku skin
                         // only wraps them in the slot backing; their own colours
                         // stay. State it rather than ship a dead colour picker.
-                        visible: insp.isCanvas && insp.isRyokuStyle
+                        visible: insp.isPython || (insp.isCanvas && insp.isRyokuStyle)
                         width: parent.width
                         leftPadding: Theme.s3
                         rightPadding: Theme.s3
                         topPadding: Theme.s1
                         bottomPadding: Theme.s1
                         wrapMode: Text.WordWrap
-                        text: I18n.tr("Ryoku style wraps this widget; it keeps its own colours")
+                        text: insp.isPython
+                            ? I18n.tr("Serpantinum faces follow the wallpaper palette; the Ryoku style adds the plate")
+                            : I18n.tr("Ryoku style wraps this widget; it keeps its own colours")
                         color: Theme.inkDim
                         font.family: Theme.font
                         font.pixelSize: Theme.fSmall
@@ -515,7 +534,7 @@ Item {
                         onReleased: (v) => Config.set(insp.scope + "Opacity", v)
                     }
 
-                    MenuSection { visible: insp.isIris; label: I18n.tr("Shape"); gloss: "形状" }
+                    MenuSection { visible: insp.isIris || insp.isPython; label: I18n.tr("Shape"); gloss: "形状" }
                     MenuRow {
                         visible: insp.isRyokuStyle
                         label: I18n.tr("Background")
@@ -528,7 +547,7 @@ Item {
                     }
                     MenuSlider {
                         id: radiusSlider
-                        visible: insp.isIris
+                        visible: insp.isIris || (insp.isPython && insp.isRyokuStyle)
                         label: I18n.tr("Corner radius")
                         from: 0; to: 120; step: 1
                         value: Config[insp.scope + "Radius"] >= 0 ? Config[insp.scope + "Radius"] : Theme.radius
@@ -538,7 +557,7 @@ Item {
                     }
                     MenuSlider {
                         id: padSlider
-                        visible: insp.isIris
+                        visible: insp.isIris || (insp.isPython && insp.isRyokuStyle)
                         label: I18n.tr("Padding")
                         from: 0; to: 48; step: 1
                         value: Config[insp.scope + "Pad"] >= 0 ? Config[insp.scope + "Pad"] : 0
@@ -577,9 +596,9 @@ Item {
                         onReleased: (v) => Config.set(insp.scope + "BackingOpacity", v)
                     }
 
-                    MenuSection { visible: !insp.isCanvas; label: I18n.tr("Colour"); gloss: "彩色" }
+                    MenuSection { visible: !insp.isCanvas && !insp.isPython; label: I18n.tr("Colour"); gloss: "彩色" }
                     Item {
-                        visible: !insp.isCanvas
+                        visible: !insp.isCanvas && !insp.isPython
                         width: parent.width
                         implicitHeight: !insp.isCanvas ? colorCol.implicitHeight : 0
                         Column {

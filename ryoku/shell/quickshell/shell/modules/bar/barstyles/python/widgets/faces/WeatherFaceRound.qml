@@ -17,7 +17,6 @@ Item {
     property real minAspect: 1.0
     property real maxAspect: 1.0
     property bool isRound: true
-
     property real faceSize: Math.min(root.width, root.height)
     property real pillLength: root.faceSize * 0.94
     property real pillWidth: root.faceSize * 0.54

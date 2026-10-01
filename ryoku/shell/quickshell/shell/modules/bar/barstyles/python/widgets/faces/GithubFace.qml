@@ -19,8 +19,21 @@ Item {
     property real minAspect: minWidth / maxHeight
     property real maxAspect: maxWidth / minHeight
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     property string username: ""
+
+    // Ryoku host option: the desktop widget panel sets the account through the
+    // widget's own Opts store; a non-empty value wins over the cached file.
+    property string hostUser: ""
+    onHostUserChanged: {
+        if (hostUser !== "" && hostUser !== username) {
+            saveUsername(hostUser);
+            loadUser(hostUser, true);
+        }
+    }
     property var rawContributionsList: []
     property var weeks: []
     property int totalContributions: 0
@@ -403,7 +416,10 @@ Item {
         stdout: StdioCollector {
             onStreamFinished: {
                 let u = this.text.trim();
-                if (u !== "") {
+                if (root.hostUser !== "") {
+                    // The Ryoku host pins the account; a stale cached file
+                    // must never win over the live option.
+                } else if (u !== "") {
                     root.loadUser(u, false);
                 } else if (typeof SystemInfo !== "undefined" && SystemInfo.username !== "") {
                     root.loadUser(SystemInfo.username, false);
@@ -493,7 +509,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: ThemeBackend.surface0
+        color: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         radius: ThemeBackend.clampedBorderRadius !== undefined ? ThemeBackend.clampedBorderRadius : ThemeBackend.borderRadius
         clip: true
 

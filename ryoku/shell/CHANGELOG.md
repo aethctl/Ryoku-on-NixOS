@@ -26,9 +26,11 @@
   disk, battery, github, with their variant ladders) is ported into the style
   folder and hosted by Ryoku's desktop widgets, the same way the Shima faces
   are: the slot owns placement, size, lock and backing, the face only paints.
-  Each widget's right-click menu carries a Serpantinum/Ryoku style switch, so a
-  face can keep its own plate or wear the shared paper-and-ink chrome. The
-  style's guide also regains its Welcome and Launcher tabs, and the bar's
+  Each widget's right-click menu and the Customize panel carry a
+  Serpantinum/Ryoku style switch, so a face can keep its own plate or wear the
+  shared paper-and-ink chrome, and the panel gains the faces' own options:
+  clock seconds, music layout toggles, the image path and the GitHub account.
+  The style's guide also regains its Welcome and Launcher tabs, and the bar's
   calendar, media and notification surfaces run error-free.
   (`barstyles/python/widgets/`, `modules/desktop/python/`)
 - **Ryogami's bar is now a masthead.** The two rows of slanted skwd chips are

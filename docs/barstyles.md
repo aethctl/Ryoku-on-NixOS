@@ -625,6 +625,48 @@ scale, resolution and Night Light). It is written and drawn inside the island
 it, by moving the pointer away, by Escape, or by tapping the tune icon again; it
 never replaces Ryoku Settings.
 
+## Python Settings
+
+Python keeps its settings in the style itself: the **guide**, opened by the bar's
+gear pill (or `qs -c shell ipc call main handleCommand toggle guide`). It is
+serpantinum's own settings surface, ported 1:1, with tabs for Welcome, General,
+Display, Theme, Bar, Dock, Launcher, On-Screen Display, Notifications, Wellbeing
+and About. Every
+control writes the `python` key in `shell.json` through the shell daemon (the
+sole writer) and applies live; Ryoku Settings is untouched except that Bar
+Studio carries an **OPEN PYTHON SETTINGS** button that routes to the guide.
+
+What stays Ryoku's while Python is the bar: the app launcher (Super+Space), the
+clipboard history, the wallpaper picker (Super+W, ryogami), the lock screen,
+screen capture, updates and the desktop widgets. The bar's buttons for those
+hand over to Ryoku's own surfaces. Two visual takeovers are the style's: while
+`barStyle` is `python`, the shell's own notification banners and OSD pills stand
+down (`Config.styleOwnsBanners` / `styleOwnsFeedback`) and Python draws its
+ported versions; a user can flip `python.general.notifications` (or
+`python.general.osd`) off to get Ryoku's back.
+
+Python also brings serpantinum's desktop-widget faces to Ryoku's global desktop
+widgets: the style folder carries the ported face library under
+`barstyles/python/widgets/faces/`, and `shell/modules/desktop/` adapts each type
+(clock, music, weather, visualizer, image, user, cpu, ram, temp, disk, battery,
+github, each with its variant ladder) into the same `WidgetSlot` that hosts the
+built-ins and the Shima faces. Placement, size, lock, backing and the colour
+modes are Ryoku's (widgets.json, the desktop edit bar and the widget menu); the
+face only paints. Pick **Serpantinum** or **Ryoku** as the widget's style in its
+right-click menu: Serpantinum draws the upstream plate, Ryoku lets the slot draw
+the shared paper-and-ink backing, so the widget can read as part of either
+system while staying on the same host. The Customize panel carries each face's
+own options (clock seconds, music layout, the image path, the GitHub account)
+under each widget's own tab; they persist in the widget's `<prefix>Opts` slot of
+widgets.json and reach the live face through `PythonFaceProvider`.
+
+The style's palette follows Ryoku's live wallpaper palette, with one exception:
+picking a preset in the guide's Theme tab stores that palette under
+`python.theme.colors` and Python paints itself with it (the ported Catppuccin
+slot names map onto the Material roles in `ThemeBackend`). The font picker
+writes Ryoku's single global `fontFamily`, so the whole desktop retunes, and
+the blue-light rows drive the daemon's night light.
+
 ## Frame menus
 
 The wallpaper picker (Super+W), quick settings (Super+Escape), the feature sidebar

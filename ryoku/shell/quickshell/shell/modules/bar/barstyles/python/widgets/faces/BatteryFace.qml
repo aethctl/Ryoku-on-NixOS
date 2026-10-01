@@ -17,6 +17,9 @@ Item {
     property real minAspect: 1.5
     property real maxAspect: 4.5
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     readonly property bool hasBattery: UPower.displayDevice.ready ? UPower.displayDevice.isLaptopBattery : !SystemInfo.isDesktop
     readonly property int batCapacity: (UPower.displayDevice.ready && hasBattery) ? Math.round(UPower.displayDevice.percentage * 100) : 0
@@ -76,7 +79,7 @@ Item {
     Rectangle {
         id: bgContainer
         anchors.fill: parent
-        color: ThemeBackend.surface0
+        color: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         radius: ThemeBackend.borderRadius
         border.width: 1
         border.color: Qt.rgba(ThemeBackend.text.r, ThemeBackend.text.g, ThemeBackend.text.b, 0.06)

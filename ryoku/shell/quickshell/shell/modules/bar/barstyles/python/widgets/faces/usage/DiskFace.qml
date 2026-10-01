@@ -14,6 +14,9 @@ Item {
     property real minAspect: 0.6
     property real maxAspect: 3.0
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     property bool isSubscribed: false
     property bool compactMode: root.height < Scaler.s(100) || root.width < Scaler.s(140)
@@ -56,7 +59,7 @@ Item {
     SystemUsageCard {
         anchors.fill: parent
         value: root.diskUsagePercent
-        colorBase: ThemeBackend.surface0
+        colorBase: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         colorFill: Qt.darker(ThemeBackend.mauve, 1.15)
         icon: "\uF0A0"
         title: root.diskTotalText

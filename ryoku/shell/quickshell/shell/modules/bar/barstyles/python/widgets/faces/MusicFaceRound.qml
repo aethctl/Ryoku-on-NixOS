@@ -20,7 +20,6 @@ Item {
     property real minAspect: 1.0
     property real maxAspect: 1.0
     property bool isRound: true
-
     property var player: MprisController.activePlayer
     property bool isMediaActive: player !== null && player.playbackState !== MprisPlaybackState.Stopped && player.trackTitle !== ""
 

@@ -19,6 +19,10 @@ Item {
     property real minAspect: 2.4
     property real maxAspect: 3.2
 
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
+
     property real dynMargin: Math.max(6, Math.min(24, root.height * 0.12))
     property real dynSpacing: Math.max(4, Math.min(20, root.height * 0.08))
     property real btnSize: Math.max(18, Math.min(56, root.height * 0.24))
@@ -38,7 +42,13 @@ Item {
         else Cava.unregisterConsumer();
     }
 
+    // Upstream hides art/time/artist/bars below size thresholds; the Ryoku
+    // host lets the user pin them instead (autoFit off), so the panel's
+    // toggles survive resizing.
+    property bool autoFit: true
+
     function updateVisibility() {
+        if (!autoFit) return;
         if (height >= 65 && width >= 180) showArt = true;
         else if (height <= 58 || width <= 170) showArt = false;
 
@@ -117,7 +127,7 @@ Item {
     Rectangle {
         id: bgContainer
         anchors.fill: parent
-        color: ThemeBackend.surface0
+        color: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         radius: ThemeBackend.borderRadius
 
         Rectangle {

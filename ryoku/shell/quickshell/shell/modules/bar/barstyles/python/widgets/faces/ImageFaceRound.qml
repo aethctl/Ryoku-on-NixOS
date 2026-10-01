@@ -15,13 +15,16 @@ Item {
     property real minAspect: 1.0
     property real maxAspect: 1.0
     property bool isRound: true
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     property string imagePath: ""
 
     Rectangle {
         id: bgRect
         anchors.fill: parent
-        color: (root.imagePath === "" || srcImage.status !== Image.Ready) ? ThemeBackend.surface0 : "transparent"
+        color: (!root.ryokuBare && (root.imagePath === "" || srcImage.status !== Image.Ready)) ? ThemeBackend.surface0 : "transparent"
         radius: width / 2
         antialiasing: true
 

@@ -136,13 +136,13 @@ Item {
         onLoaded: prov._applyOptions()
     }
 
-    Binding { target: prov.item; property: "ryokuStyle"; value: prov.ryokuStyle; when: prov.item !== null && prov.item.ryokuStyle !== undefined }
+    // The faces speak the same host hook the Shima faces do: ryokuBare tells
+    // the face its own plate steps aside because the slot draws the backing.
+    // Without it the face paints an opaque serp plate over the Ryoku card and
+    // the style toggle looks dead.
+    Binding { target: prov.item; property: "ryokuBare"; value: prov.ryokuStyle; when: prov.item !== null && prov.item.ryokuBare !== undefined }
     Binding { target: prov.item; property: "inkOverride"; value: prov.inkOverride; when: prov.item !== null && prov.item.inkOverride !== undefined }
     Binding { target: prov.item; property: "accentOverride"; value: prov.accentOverride; when: prov.item !== null && prov.item.accentOverride !== undefined }
-    Binding { target: prov.item; property: "sizeOverride"; value: prov.sizeOverride; when: prov.item !== null && prov.item.sizeOverride !== undefined }
-    Binding { target: prov.item; property: "scaleOverride"; value: prov.scaleOverride; when: prov.item !== null && prov.item.scaleOverride !== undefined }
-    Binding { target: prov.item; property: "radiusOverride"; value: prov.radiusOverride; when: prov.item !== null && prov.item.radiusOverride !== undefined }
-
     Component { id: cVisualizerBars; PythonFaces.VisualizerFace {} }
     Component { id: cVisualizerContinuous; PythonFaces.VisualizerFaceContinuous {} }
     Component { id: cTimeDigital; PythonFaces.ClockFaceDigital {} }

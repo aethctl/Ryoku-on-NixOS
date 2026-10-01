@@ -13,7 +13,6 @@ Item {
     property real minAspect: 1.0
     property real maxAspect: 1.0
     property bool isRound: true
-
     property var currentTime: new Date()
 
     Timer {

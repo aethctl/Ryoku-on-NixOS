@@ -14,13 +14,16 @@ Item {
     property real minAspect: 0.8
     property real maxAspect: 2.8
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     readonly property bool isStacked: (width / height) < 1.25
 
     Rectangle {
         id: bgContainer
         anchors.fill: parent
-        color: ThemeBackend.surfaceVariant ?? ThemeBackend.surface0
+        color: root.ryokuBare ? "transparent" : (ThemeBackend.surfaceVariant ?? ThemeBackend.surface0)
         radius: ThemeBackend.borderRadius
         antialiasing: true
 

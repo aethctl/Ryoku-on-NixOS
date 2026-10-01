@@ -17,6 +17,10 @@ Item {
     property real minAspect: 0.7
     property real maxAspect: 2.2
 
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
+
     property real dynMargin: Math.max(6, Math.min(16, Math.min(root.width, root.height) * 0.08))
     property real dynSpacing: Math.max(2, Math.min(8, Math.min(root.width, root.height) * 0.04))
 
@@ -29,7 +33,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: ThemeBackend.surface0
+        color: root.ryokuBare ? "transparent" : ThemeBackend.surface0
         radius: ThemeBackend.borderRadius * 2
     }
 

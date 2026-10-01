@@ -15,19 +15,25 @@ Item {
     property real minAspect: 0.02
     property real maxAspect: 50.0
     property bool isRound: false
+    // Ryoku host hook: while the desktop slot draws the plate (Ryoku style),
+    // this face's own plate steps aside; the content keeps painting.
+    property bool ryokuBare: false
 
     property string imagePath: ""
 
+    // Ryoku host option: fill the frame (crop) or letterbox it (fit).
+    property bool fitCrop: false
+
     Rectangle {
         anchors.fill: parent
-        color: root.imagePath === "" ? ThemeBackend.surface0 : "transparent"
+        color: (root.ryokuBare || root.imagePath !== "") ? "transparent" : ThemeBackend.surface0
         clip: true
 
         AnimatedImage {
             id: srcImage
             anchors.fill: parent
             source: root.imagePath !== "" ? (root.imagePath.startsWith("file://") ? root.imagePath : "file://" + root.imagePath) : ""
-            fillMode: Image.PreserveAspectFit
+            fillMode: root.fitCrop ? Image.PreserveAspectCrop : Image.PreserveAspectFit
             asynchronous: true
             cache: true
             smooth: true

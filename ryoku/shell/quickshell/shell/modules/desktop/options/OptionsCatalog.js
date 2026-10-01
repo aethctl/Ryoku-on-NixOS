@@ -31,7 +31,12 @@ var _has = {
     "irisProfile": true,
     "irisUptime": true,
     "irisNews": true,
-    "irisVisualizer": true
+    "irisVisualizer": true,
+    // Python faces (PythonRoster + the options/Python* panels).
+    "pythonTime": true,
+    "pythonMusic": true,
+    "pythonImage": true,
+    "pythonGithub": true
 };
 
 function has(widget) {
