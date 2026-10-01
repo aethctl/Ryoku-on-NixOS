@@ -16,9 +16,11 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: row.active ? Theme.withAlpha(Theme.primary, 0.18)
-             : hover.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+        radius: Theme.radius
+        color: row.active ? Theme.withAlpha(Theme.surfaceText, 0.09)
+             : hover.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.05)
              : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
     }
 
     Text {
@@ -27,8 +29,7 @@ Item {
         anchors.rightMargin: 7 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
         text: row.hex
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.display
         font.pixelSize: Theme.fontFine
         color: Theme.withAlpha(Theme.surfaceText, 0.46)
         renderType: Text.NativeRendering
@@ -43,15 +44,20 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 8 * Theme.scale
 
-        Text {
+        Item {
             anchors.verticalCenter: parent.verticalCenter
             width: 10 * Theme.scale
-            horizontalAlignment: Text.AlignHCenter
-            text: row.active ? "\u25c6" : "\u25c7"
-            font.family: Theme.ui
-            font.pixelSize: Theme.fontMicro
-            color: Theme.withAlpha(Theme.primary, row.active ? 1.0 : 0.44)
-            renderType: Text.NativeRendering
+            height: 10 * Theme.scale
+            Rectangle {
+                anchors.centerIn: parent
+                width: 6 * Theme.scale
+                height: 6 * Theme.scale
+                radius: width / 2
+                color: row.active ? Theme.withAlpha(Theme.surfaceText, 0.9) : "transparent"
+                border.width: row.active ? 0 : 1
+                border.color: Theme.withAlpha(Theme.surfaceText, 0.4)
+                Behavior on color { ColorAnimation { duration: Theme.fast } }
+            }
         }
 
         Rectangle {
@@ -68,8 +74,8 @@ Item {
             width: Math.max(0, lead.width - (10 + 24) * Theme.scale - lead.spacing * 2)
             text: row.roleName
             elide: Text.ElideRight
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: row.active ? Font.DemiBold : Font.Medium
             font.pixelSize: Theme.fontWide
             color: Theme.surfaceText
             renderType: Text.NativeRendering

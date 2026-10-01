@@ -32,10 +32,10 @@ Item {
 
             Text {
                 text: I18n.tr("Schedule state")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontFine
-                color: Theme.primary
+                color: Theme.withAlpha(Theme.surfaceText, 0.7)
                 renderType: Text.NativeRendering
             }
             ChoiceButtons {
@@ -51,8 +51,8 @@ Item {
                 width: parent.width
                 text: panel.scheduleEnabled ? I18n.tr("This ordered rule stack is active.")
                                     : I18n.tr("Rules stay saved, but none of them will run.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                 lineHeight: 1.35
@@ -69,10 +69,10 @@ Item {
 
             Text {
                 text: I18n.tr("On startup")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontFine
-                color: Theme.primary
+                color: Theme.withAlpha(Theme.surfaceText, 0.7)
                 renderType: Text.NativeRendering
             }
             ChoiceButtons {
@@ -88,17 +88,17 @@ Item {
             Text {
                 topPadding: 4 * Theme.scale
                 text: I18n.tr("Location")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontFine
-                color: Theme.primary
+                color: Theme.withAlpha(Theme.surfaceText, 0.7)
                 renderType: Text.NativeRendering
             }
             Text {
                 width: parent.width
                 text: I18n.tr("Used for sunrise/sunset times and for weather conditions.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                 lineHeight: 1.35
@@ -180,16 +180,16 @@ Item {
 
                     Text {
                         text: I18n.tr("No schedule rules")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontLabel
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
                     }
                     Text {
                         text: I18n.tr("Create one below to begin.")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontMini
                         color: Theme.withAlpha(Theme.surfaceText, 0.46)
                         renderType: Text.NativeRendering
@@ -206,10 +206,10 @@ Item {
 
             Text {
                 text: I18n.tr("New rule")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontFine
-                color: Theme.primary
+                color: Theme.withAlpha(Theme.surfaceText, 0.7)
                 renderType: Text.NativeRendering
             }
             FolioAction {

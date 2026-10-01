@@ -128,10 +128,10 @@ Item {
             leftPadding: 8 * Theme.scale
             rightPadding: 8 * Theme.scale
             text: root._caption
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.DemiBold
             font.pixelSize: Theme.fontBody
-            color: Theme.primary
+            color: Theme.withAlpha(Theme.surfaceText, 0.7)
             wrapMode: Text.WordWrap
             renderType: Text.NativeRendering
         }
@@ -160,8 +160,8 @@ Item {
                 Text {
                     width: parent.width
                     text: root._caption
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontLabel
                     color: Theme.surfaceText
                     wrapMode: Text.WordWrap
@@ -171,8 +171,8 @@ Item {
                     width: parent.width
                     visible: root.changed
                     text: I18n.tr("Author's default: %1").arg(root._defaultText())
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Normal
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.58)
                     wrapMode: Text.WordWrap
@@ -243,10 +243,9 @@ Item {
                 Layout.preferredWidth: 56 * Theme.scale
                 text: root._formatNumber(root.rangeValue)
                 horizontalAlignment: Text.AlignRight
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontBase
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
         }
@@ -309,8 +308,8 @@ Item {
                 Text {
                     Layout.preferredWidth: 58 * Theme.scale
                     text: I18n.tr("Red")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -333,8 +332,7 @@ Item {
                     Layout.preferredWidth: 48 * Theme.scale
                     text: root.colR.toFixed(3)
                     horizontalAlignment: Text.AlignRight
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -347,8 +345,8 @@ Item {
                 Text {
                     Layout.preferredWidth: 58 * Theme.scale
                     text: I18n.tr("Green")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -371,8 +369,7 @@ Item {
                     Layout.preferredWidth: 48 * Theme.scale
                     text: root.colG.toFixed(3)
                     horizontalAlignment: Text.AlignRight
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -385,8 +382,8 @@ Item {
                 Text {
                     Layout.preferredWidth: 58 * Theme.scale
                     text: I18n.tr("Blue")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -409,8 +406,7 @@ Item {
                     Layout.preferredWidth: 48 * Theme.scale
                     text: root.colB.toFixed(3)
                     horizontalAlignment: Text.AlignRight
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontBase
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -428,8 +424,8 @@ Item {
                 id: note
                 width: parent.width
                 text: I18n.tr("Not adjustable here")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.48)
                 wrapMode: Text.WordWrap

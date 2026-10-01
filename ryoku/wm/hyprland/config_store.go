@@ -250,6 +250,27 @@ type Hyprfocus struct {
 	Slide   float64 `json:"slide"`
 }
 
+// BordersPlusPlus is the official borders-plus-plus plugin: extra static
+// borders outside the window's own one, each with its own colour and width.
+type BordersPlusPlus struct {
+	Enabled         bool   `json:"enabled"`
+	Count           int    `json:"count"`
+	NaturalRounding bool   `json:"naturalRounding"`
+	Color           string `json:"color"`
+	Size            int    `json:"size"`
+}
+
+// Hyprgrass drives windows from touchscreen and touchpad gestures; the Ryoku
+// look wires the three edge swipes the shell cannot reach on a tablet.
+type Hyprgrass struct {
+	Enabled        bool    `json:"enabled"`
+	Sensitivity    float64 `json:"sensitivity"`
+	LongPressDelay int     `json:"longPressDelay"`
+	EdgeMargin     int     `json:"edgeMargin"`
+	ResizeOnBorder bool    `json:"resizeOnBorderLongPress"`
+	ThreeFingerTap bool    `json:"threeFingerTap"`
+}
+
 // Hyprscrolling is Hyprland core (0.54+) config, not a plugin: it applies
 // whenever the tiling layout is "scrolling".
 type Hyprscrolling struct {
@@ -273,14 +294,16 @@ type ExtraPlugin struct {
 }
 
 type Plugins struct {
-	DynamicCursors DynamicCursors         `json:"dynamicCursors"`
-	Hyprbars       Hyprbars               `json:"hyprbars"`
-	Imgborders     Imgborders             `json:"imgborders"`
-	Hyprglass      Hyprglass              `json:"hyprglass"`
-	Hyprfocus      Hyprfocus              `json:"hyprfocus"`
-	Keysounds      Keysounds              `json:"keysounds"`
-	Hyprscrolling  Hyprscrolling          `json:"hyprscrolling"`
-	Extra          map[string]ExtraPlugin `json:"extra,omitempty"`
+	DynamicCursors  DynamicCursors         `json:"dynamicCursors"`
+	Hyprbars        Hyprbars               `json:"hyprbars"`
+	Imgborders      Imgborders             `json:"imgborders"`
+	Hyprglass       Hyprglass              `json:"hyprglass"`
+	Hyprfocus       Hyprfocus              `json:"hyprfocus"`
+	Keysounds       Keysounds              `json:"keysounds"`
+	Hyprscrolling   Hyprscrolling          `json:"hyprscrolling"`
+	BordersPlusPlus BordersPlusPlus        `json:"borders-plus-plus"`
+	Hyprgrass       Hyprgrass              `json:"hyprgrass"`
+	Extra           map[string]ExtraPlugin `json:"extra,omitempty"`
 }
 
 type Overrides struct {
@@ -359,13 +382,15 @@ func defaultOverrides() Overrides {
 		LayerRules:   []LayerRule{},
 		AppOverrides: []AppOverride{},
 		Plugins: Plugins{
-			DynamicCursors: DynamicCursors{Enabled: false, Mode: "tilt", Shake: true, Magnify: 4.0},
-			Hyprbars:       Hyprbars{Enabled: false, Height: 26, TextSize: 11, Blur: true, Buttons: true},
-			Imgborders:     Imgborders{Enabled: false, Image: "", Sizes: "8,8,8,8", Insets: "0,0,0,0", Scale: 1.0, Smooth: true, Blur: false},
-			Hyprglass:      Hyprglass{Enabled: false, Preset: "clear", BlurStrength: 2.0, Opacity: 1.0, Tint: "8899aa22", Brightness: 1.0, Theme: "dark"},
-			Hyprfocus:      Hyprfocus{Enabled: false, Mode: "flash", Opacity: 0.8, Bounce: 0.95, Slide: 20},
-			Keysounds:      Keysounds{Enabled: false, Profile: "cherry-mx-brown", Volume: 0.6, Release: true},
-			Hyprscrolling:  Hyprscrolling{ColumnWidth: 0.5, FollowFocus: true},
+			DynamicCursors:  DynamicCursors{Enabled: false, Mode: "tilt", Shake: true, Magnify: 4.0},
+			Hyprbars:        Hyprbars{Enabled: false, Height: 26, TextSize: 11, Blur: true, Buttons: true},
+			Imgborders:      Imgborders{Enabled: false, Image: "", Sizes: "8,8,8,8", Insets: "0,0,0,0", Scale: 1.0, Smooth: true, Blur: false},
+			Hyprglass:       Hyprglass{Enabled: false, Preset: "clear", BlurStrength: 2.0, Opacity: 1.0, Tint: "8899aa22", Brightness: 1.0, Theme: "dark"},
+			Hyprfocus:       Hyprfocus{Enabled: false, Mode: "flash", Opacity: 0.8, Bounce: 0.95, Slide: 20},
+			Keysounds:       Keysounds{Enabled: false, Profile: "cherry-mx-brown", Volume: 0.6, Release: true},
+			Hyprscrolling:   Hyprscrolling{ColumnWidth: 0.5, FollowFocus: true},
+			BordersPlusPlus: BordersPlusPlus{Enabled: false, Count: 1, NaturalRounding: true, Color: "#e0563b", Size: 2},
+			Hyprgrass:       Hyprgrass{Enabled: false, Sensitivity: 1.0, LongPressDelay: 400, EdgeMargin: 10, ResizeOnBorder: false, ThreeFingerTap: false},
 		},
 	}
 }

@@ -41,10 +41,9 @@ Rectangle {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
             text: chip.ordinal < 10 ? ("0" + chip.ordinal) : String(chip.ordinal)
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.display
             font.pixelSize: Theme.fontFine
-            color: Theme.withAlpha(Theme.primary, chip._playing ? 1 : 0.5)
+            color: Theme.withAlpha(Theme.surfaceText, chip._playing ? 0.85 : 0.4)
             renderType: Text.NativeRendering
         }
 
@@ -52,11 +51,10 @@ Rectangle {
             id: marker
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: chip._playing ? "\u25c6" : "\u25c7"
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            text: chip._playing ? "\u25cf" : "\u25cb"
+            font.family: Theme.sans
             font.pixelSize: Theme.fontFine
-            color: chip._playing ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.34)
+            color: chip._playing ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.34)
             renderType: Text.NativeRendering
         }
 
@@ -72,8 +70,8 @@ Rectangle {
             Text {
                 width: parent.width
                 text: chip._name
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
                 color: Theme.surfaceText
                 elide: Text.ElideRight
@@ -82,8 +80,8 @@ Rectangle {
             Text {
                 width: parent.width
                 text: chip._state
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                 elide: Text.ElideRight

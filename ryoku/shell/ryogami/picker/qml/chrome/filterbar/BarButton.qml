@@ -1,132 +1,113 @@
 import QtQuick
-import Ryoku.Ui.Singletons
 
+// One masthead control. Emphasis is inversion: an active control turns into a bone
+// plate with dark ink rather than taking an accent colour.
 Item {
-    id: chip
+    id: btn
 
     property string label: ""
     property string glyph: ""
-    // "straight" | "slices" | "geometric"; the caller resolves "match".
-    property string barStyle: "straight"
     property bool active: false
     property bool destructive: false
-    property bool prominent: false
     property string tooltip: ""
-    property real hpad: 12
-    property real minWidth: 0
-    // Width of the vertical bar's rail; 0 sizes the chip to its content.
-    property real railWidth: 0
+    property real hpad: 10
+    // A long label (a deep folder path) elides past this width; 0 never elides.
+    property real maxLabelWidth: 0
+
+    // A menu trigger carries a chevron that turns over while its list is open.
+    property bool dropdown: false
+    property bool expanded: false
+    // The settings gear turns a little under the pointer.
+    property bool spinOnHover: false
 
     signal triggered()
 
-    readonly property color accent: chip.destructive ? Theme.tertiary : Theme.primary
     readonly property bool hovered: hover.containsMouse
-    readonly property real skew: chip.barStyle === "slices" ? 10 * Theme.scale : 0
-    readonly property real chamfer: chip.barStyle === "geometric"
-        ? Math.min(height * 0.32, 8 * Theme.scale) : 0
+    readonly property color ink: !btn.enabled ? Theme.withAlpha(Theme.surfaceText, 0.3)
+        : btn.active ? Theme.surface
+        : btn.destructive ? Theme.tertiary
+        : btn.hovered ? Theme.surfaceText
+        : Theme.withAlpha(Theme.surfaceText, 0.74)
 
-    implicitHeight: 26 * Theme.scale
-    implicitWidth: Math.max(chip.minWidth * Theme.scale,
-        content.implicitWidth + chip.hpad * 2 * Theme.scale + chip.skew + chip.chamfer)
-    width: chip.railWidth > 0 ? chip.railWidth : implicitWidth
-    height: chip.railWidth > 0 ? 24 * Theme.scale : implicitHeight
+    implicitHeight: 30 * Theme.scale
+    implicitWidth: content.implicitWidth + btn.hpad * 2 * Theme.scale
 
-    readonly property color fillColor: !chip.enabled
-        ? Theme.withAlpha(Theme.surfaceContainer, 0.42)
-        : chip.active ? chip.accent
-        : chip.hovered ? Theme.withAlpha(Theme.surfaceVariant, 0.82)
-        : Theme.withAlpha(Theme.surfaceContainer, 0.92)
-    readonly property color strokeColor: !chip.enabled
-        ? Theme.withAlpha(Theme.outline, 0.18)
-        : chip.active ? Theme.withAlpha(Theme.outline, 0.72)
-        : (chip.hovered || chip.prominent)
-            ? Theme.withAlpha(chip.accent, chip.prominent ? 0.85 : 0.58)
-        : Theme.withAlpha(Theme.outline, 0.40)
-    readonly property color textColor: !chip.enabled
-        ? Theme.withAlpha(Theme.surfaceText, 0.34)
-        : chip.active ? (chip.destructive ? Theme.background : Theme.primaryText)
-        : Theme.surfaceText
-
-    Canvas {
+    Rectangle {
         id: face
         anchors.fill: parent
-        renderTarget: Canvas.Image
-
-        onWidthChanged: requestPaint()
-        onHeightChanged: requestPaint()
-        Connections {
-            target: chip
-            function onFillColorChanged() { face.requestPaint() }
-            function onStrokeColorChanged() { face.requestPaint() }
-            function onBarStyleChanged() { face.requestPaint() }
-        }
-
-        onPaint: {
-            var ctx = getContext("2d")
-            ctx.reset()
-            if (width <= 0 || height <= 0)
-                return
-            var w = width, h = height, s = chip.skew, c = chip.chamfer
-            ctx.beginPath()
-            if (c > 0) {
-                ctx.moveTo(c, 0)
-                ctx.lineTo(w - c, 0)
-                ctx.lineTo(w, c)
-                ctx.lineTo(w, h - c)
-                ctx.lineTo(w - c, h)
-                ctx.lineTo(c, h)
-                ctx.lineTo(0, h - c)
-                ctx.lineTo(0, c)
-            } else {
-                ctx.moveTo(s + 0.5, 0.5)
-                ctx.lineTo(w - 0.5, 0.5)
-                ctx.lineTo(w - s - 0.5, h - 0.5)
-                ctx.lineTo(0.5, h - 0.5)
-            }
-            ctx.closePath()
-            ctx.fillStyle = chip.fillColor
-            ctx.fill()
-            ctx.lineWidth = 1
-            ctx.strokeStyle = chip.strokeColor
-            ctx.stroke()
-        }
+        radius: Theme.radius
+        scale: hover.pressed ? 0.94 : 1
+        color: btn.active ? Theme.surfaceText
+             : btn.hovered && btn.enabled ? Theme.withAlpha(Theme.surfaceText, 0.09)
+             : Theme.withAlpha(Theme.surfaceText, 0)
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
+        Behavior on scale { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
     }
 
     Row {
         id: content
         anchors.centerIn: parent
-        spacing: 6 * Theme.scale
+        spacing: 7 * Theme.scale
+        scale: face.scale
 
         Text {
-            visible: chip.glyph.length > 0
+            id: glyphText
+            visible: btn.glyph.length > 0
             anchors.verticalCenter: parent.verticalCenter
-            text: chip.glyph
+            text: btn.glyph
             font.family: Theme.icon
-            font.pixelSize: Theme.fontBody
-            color: chip.textColor
+            font.pixelSize: Theme.fs(14)
+            color: btn.ink
             renderType: Text.NativeRendering
+            rotation: btn.spinOnHover && btn.hovered ? 60 : 0
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
+            Behavior on rotation { NumberAnimation { duration: Theme.slow; easing.type: Easing.OutCubic } }
         }
         Text {
-            visible: chip.label.length > 0
+            visible: btn.label.length > 0
             anchors.verticalCenter: parent.verticalCenter
-            text: chip.label
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
-            font.pixelSize: Theme.fontSmall
-            color: chip.textColor
+            text: btn.label
+            width: btn.maxLabelWidth > 0 ? Math.min(implicitWidth, btn.maxLabelWidth * Theme.scale) : implicitWidth
+            elide: Text.ElideMiddle
+            font.family: Theme.sans
+            font.weight: Font.Medium
+            font.pixelSize: Theme.fs(12.5)
+            color: btn.ink
             renderType: Text.NativeRendering
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
+        }
+        Text {
+            visible: btn.dropdown
+            anchors.verticalCenter: parent.verticalCenter
+            text: "\u{f0140}"
+            font.family: Theme.icon
+            font.pixelSize: Theme.fs(13)
+            color: btn.ink
+            rotation: btn.expanded ? 180 : 0
+            renderType: Text.NativeRendering
+            Behavior on rotation { NumberAnimation { duration: Theme.standard; easing.type: Easing.OutBack } }
         }
     }
+
+    // A toggle that turns on, or a glyph that changes (sort order, light and dark), gets one
+    // small pop so the change reads at a glance.
+    SequentialAnimation {
+        id: pop
+        NumberAnimation { target: glyphText; property: "scale"; to: 1.3; duration: Theme.fast * 0.45; easing.type: Easing.OutQuad }
+        NumberAnimation { target: glyphText; property: "scale"; to: 1; duration: Theme.fast; easing.type: Easing.OutBack; easing.overshoot: 3 }
+    }
+    onActiveChanged: if (btn.active && btn.visible) pop.restart()
+    onGlyphChanged: if (btn.visible) pop.restart()
 
     MouseArea {
         id: hover
         anchors.fill: parent
         hoverEnabled: true
-        enabled: chip.enabled
+        enabled: btn.enabled
         cursorShape: Qt.PointingHandCursor
-        onClicked: chip.triggered()
+        onClicked: btn.triggered()
         onExited: tipTimer.stop()
-        onEntered: if (chip.tooltip.length > 0) tipTimer.restart()
+        onEntered: if (btn.tooltip.length > 0) tipTimer.restart()
     }
 
     Timer { id: tipTimer; interval: 550 }
@@ -134,25 +115,24 @@ Item {
     Rectangle {
         id: tip
         visible: opacity > 0.01
-        opacity: (chip.hovered && chip.tooltip.length > 0 && !tipTimer.running) ? 1 : 0
+        opacity: (btn.hovered && btn.tooltip.length > 0 && !tipTimer.running) ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.fast } }
         z: 50
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.top
-        anchors.bottomMargin: 6 * Theme.scale
-        width: tipText.implicitWidth + 14 * Theme.scale
-        height: tipText.implicitHeight + 8 * Theme.scale
-        color: Theme.withAlpha(Theme.surfaceContainer, 0.98)
-        border.width: 1
-        border.color: Theme.withAlpha(Theme.outline, 0.45)
+        anchors.top: parent.bottom
+        anchors.topMargin: (6 + (1 - tip.opacity) * -4) * Theme.scale
+        width: tipText.implicitWidth + 16 * Theme.scale
+        height: tipText.implicitHeight + 10 * Theme.scale
+        radius: Theme.radius
+        color: Theme.surfaceText
         Text {
             id: tipText
             anchors.centerIn: parent
-            text: chip.tooltip
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
-            font.pixelSize: Theme.fontFine
-            color: Theme.surfaceText
+            text: btn.tooltip
+            font.family: Theme.sans
+            font.weight: Font.Medium
+            font.pixelSize: Theme.fs(11.5)
+            color: Theme.surface
             renderType: Text.NativeRendering
         }
     }

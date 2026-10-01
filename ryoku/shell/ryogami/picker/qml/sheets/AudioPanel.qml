@@ -177,8 +177,8 @@ Item {
                         visible: root._rowModels.length === 0
                         width: parent.width
                         text: I18n.tr("Detecting outputs")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontSmall
                         color: Theme.withAlpha(Theme.surfaceText, 0.5)
                         wrapMode: Text.WordWrap
@@ -209,17 +209,17 @@ Item {
 
                     Text {
                         text: I18n.tr("Current audio")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
-                        color: Theme.primary
+                        color: Theme.withAlpha(Theme.surfaceText, 0.54)
                         renderType: Text.NativeRendering
                     }
                     Text {
                         width: parent.width
                         text: I18n.tr("%1 playing \u00b7 %2 with audio").arg(root._sounding).arg(root._available)
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontMini
                         color: Theme.withAlpha(Theme.surfaceText, 0.48)
                         wrapMode: Text.WordWrap
@@ -252,17 +252,16 @@ Item {
 
                     Text {
                         text: I18n.tr("Audio / displays")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
-                        color: Theme.withAlpha(Theme.primary, 0.84)
+                        color: Theme.withAlpha(Theme.surfaceText, 0.54)
                         renderType: Text.NativeRendering
                     }
                     Text {
                         width: parent.width
                         text: I18n.tr("Wallpaper mixer")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fs(34)
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -280,8 +279,8 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("Pause each display independently. Volume and mute stay linked for shared wallpapers.")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontSmall
                         color: Theme.withAlpha(Theme.surfaceText, 0.56)
                         horizontalAlignment: Text.AlignRight
@@ -291,8 +290,8 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("%1 output(s) \u00b7 %2 with audio \u00b7 %3 playing").arg(root._total).arg(root._available).arg(root._sounding)
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontFine
                         color: Theme.withAlpha(Theme.surfaceText, 0.42)
                         horizontalAlignment: Text.AlignRight
@@ -321,8 +320,8 @@ Item {
                             Layout.preferredWidth: 90 * Theme.scale
                             Layout.alignment: Qt.AlignVCenter
                             text: I18n.tr("Default audio")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontFine
                             color: Theme.withAlpha(Theme.surfaceText, 0.46)
                             renderType: Text.NativeRendering
@@ -345,8 +344,8 @@ Item {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignVCenter
                             text: I18n.tr("Pause wallpaper audio while other apps play sound")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontBody
                             color: Theme.withAlpha(Theme.surfaceText, 0.72)
                             wrapMode: Text.WordWrap
@@ -365,7 +364,6 @@ Item {
 
             FolioField {
                 Layout.fillWidth: true
-                number: "01"
                 title: I18n.tr("Output channels")
                 desc: I18n.tr("Muted channels stay dark. Displays showing the same source share volume and mute settings.")
             }
@@ -403,8 +401,8 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Looking for displays")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontField
                                 color: Theme.surfaceText
                                 renderType: Text.NativeRendering
@@ -412,8 +410,8 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Audio controls will appear when the wallpaper service reports its displays.")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Normal
                                 font.pixelSize: Theme.fontSmall
                                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                 wrapMode: Text.WordWrap
@@ -466,17 +464,9 @@ Item {
                             Row {
                                 spacing: 8 * Theme.scale
                                 Text {
-                                    text: "02"
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
-                                    font.pixelSize: Theme.fontFine
-                                    color: Theme.primary
-                                    renderType: Text.NativeRendering
-                                }
-                                Text {
                                     text: I18n.tr("Current state")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontLabel
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -486,8 +476,8 @@ Item {
                                 width: parent.width
                                 text: root._sounding === 0 ? I18n.tr("No wallpaper audio is currently playing.")
                                     : I18n.tr("Highlighted channels are playing audio.")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Normal
                                 font.pixelSize: Theme.fontMini
                                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                 wrapMode: Text.WordWrap

@@ -95,10 +95,10 @@ Item {
 
                 Text {
                     text: I18n.tr("Library") + " / " + back._typeLabel(back.meta.type).toUpperCase()
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontSmall
-                    color: Theme.withAlpha(Theme.primary, 0.9)
+                    color: Theme.withAlpha(Theme.surfaceText, 0.55)
                     renderType: Text.NativeRendering
                 }
 
@@ -108,8 +108,7 @@ Item {
                     elide: Text.ElideRight
                     maximumLineCount: 2
                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontTitle
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -134,16 +133,15 @@ Item {
                             Text {
                                 width: 96 * Theme.scale
                                 text: modelData.label.toUpperCase()
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontTiny
-                                color: Theme.withAlpha(Theme.primary, 0.72)
+                                color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                 renderType: Text.NativeRendering
                             }
                             Text {
                                 text: modelData.value
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.display
                                 font.pixelSize: Theme.fontBody
                                 color: Theme.withAlpha(Theme.surfaceText, 0.9)
                                 renderType: Text.NativeRendering
@@ -158,10 +156,10 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Colour").toUpperCase()
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontTiny
-                        color: Theme.withAlpha(Theme.primary, 0.72)
+                        color: Theme.withAlpha(Theme.surfaceText, 0.5)
                         renderType: Text.NativeRendering
                     }
                     Rectangle {
@@ -178,8 +176,8 @@ Item {
                 Text {
                     visible: !!(back.meta.tags && back.meta.tags.length > 0)
                     text: I18n.tr("Tags / %1").arg(back.meta.tags ? back.meta.tags.length : 0)
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontTiny
                     color: Theme.withAlpha(Theme.surfaceText, 0.52)
                     renderType: Text.NativeRendering
@@ -202,8 +200,8 @@ Item {
                                 id: tagText
                                 anchors.centerIn: parent
                                 text: modelData.toUpperCase()
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
                                 color: Theme.withAlpha(Theme.surfaceText, 0.84)
                                 renderType: Text.NativeRendering
@@ -215,8 +213,8 @@ Item {
                 FolioRule { width: parent.width }
                 Text {
                     text: I18n.tr("Actions").toUpperCase()
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontTiny
                     color: Theme.withAlpha(Theme.surfaceText, 0.52)
                     renderType: Text.NativeRendering

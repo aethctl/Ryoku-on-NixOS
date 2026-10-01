@@ -35,18 +35,17 @@ Rectangle {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: rail.smart ? I18n.tr("Matching wallpapers") : I18n.tr("Playback order")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontFine
-                color: Theme.primary
+                color: Theme.withAlpha(Theme.surfaceText, 0.7)
                 renderType: Text.NativeRendering
             }
             Text {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 text: rail._count < 10 ? "0" + rail._count : String(rail._count)
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.44)
                 renderType: Text.NativeRendering
@@ -58,8 +57,8 @@ Rectangle {
             text: rail.smart
                 ? I18n.tr("These wallpapers match the filter and refresh as your library changes.")
                 : I18n.tr("Wallpapers play from top to bottom. Use the arrows to change the order.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontMini
             color: Theme.withAlpha(Theme.surfaceText, 0.48)
             lineHeight: 1.4
@@ -117,8 +116,8 @@ Rectangle {
             text: rail.smart
                 ? I18n.tr("No wallpapers match this filter yet.")
                 : I18n.tr("This playlist is empty. Open a wallpaper card and choose Playlist to add it.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBody
             color: Theme.surfaceText
             wrapMode: Text.WordWrap
@@ -129,8 +128,8 @@ Rectangle {
             text: rail.smart
                 ? I18n.tr("Adjust the source or colours on the left to widen the match.")
                 : I18n.tr("You can also use Add wallpapers under Playlist details.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontFine
             color: Theme.withAlpha(Theme.surfaceText, 0.46)
             lineHeight: 1.4

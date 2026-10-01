@@ -10,8 +10,6 @@ Item {
     // Drops toward 0 so the picker scene shows through a design section.
     property real pageOpacity: 0.965
     property real scrimAlpha: 0.68
-    // Large faint glyph behind the reading page; empty shows none.
-    property string watermark: ""
 
     readonly property alias mastheadArea: mastheadHost
     readonly property alias indexArea: indexHost
@@ -38,8 +36,8 @@ Item {
     RectangularShadow {
         anchors.fill: panel
         offset.y: 16 * Theme.scale
-        blur: 48 * Theme.scale
-        color: Qt.rgba(0, 0, 0, 0.52)
+        blur: 28 * Theme.scale
+        color: Qt.rgba(0, 0, 0, 0.42)
         opacity: sheet.reveal * (sheet.pageOpacity > 0.5 ? 1 : 0)
         cached: true
     }
@@ -103,18 +101,6 @@ Item {
                 anchors.fill: parent
                 bottomRightRadius: Theme.radius
                 color: Theme.withAlpha(Theme.surface, sheet.pageOpacity)
-            }
-            Text {
-                anchors.centerIn: parent
-                visible: sheet.watermark.length > 0
-                text: sheet.watermark
-                font.pixelSize: Math.min(page.width, page.height) * 0.72
-                font.weight: Font.Bold
-                color: Theme.withAlpha(Theme.surfaceText, 0.045 * sheet.reveal)
-            }
-            FolioBlueprint {
-                anchors.fill: parent
-                reveal: 1
             }
             Item {
                 id: readingHost

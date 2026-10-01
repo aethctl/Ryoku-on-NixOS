@@ -177,7 +177,7 @@ Item {
             anchors.centerIn: parent
             visible: results.source ? (results.source.loading && results.source.count === 0) : false
             size: 90
-            color: Theme.primary
+            color: Theme.surfaceText
         }
         Text {
             anchors.centerIn: parent
@@ -190,8 +190,8 @@ Item {
             text: (results.source && results.source.error && results.source.error.length > 0)
                 ? results.source.error
                 : results.emptyText
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontLabel
             color: Theme.withAlpha(Theme.surfaceText, 0.4)
             renderType: Text.NativeRendering

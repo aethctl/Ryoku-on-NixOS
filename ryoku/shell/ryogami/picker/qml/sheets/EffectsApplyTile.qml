@@ -47,7 +47,7 @@ Item {
         color: Theme.withAlpha(Theme.surfaceContainer, tile.selected ? 0.7 : 0.48)
         border.width: 1
         border.color: tile.selected
-            ? Theme.withAlpha(Theme.primary, 0.62)
+            ? Theme.withAlpha(Theme.surfaceText, 0.7)
             : Theme.withAlpha(Theme.outline, 0.5)
 
         Column {
@@ -95,8 +95,8 @@ Item {
                         Text {
                             width: parent.width
                             text: tile._name
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.DemiBold
                             font.pixelSize: Theme.fontHead
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
@@ -105,8 +105,7 @@ Item {
                         Text {
                             width: parent.width
                             text: tile._resolution
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fontSmall
                             color: Theme.withAlpha(Theme.surfaceText, 0.5)
                             renderType: Text.NativeRendering
@@ -115,23 +114,37 @@ Item {
                         Text {
                             width: parent.width
                             text: tile.selected ? I18n.tr("New wallpaper") : I18n.tr("Current wallpaper")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontFine
                             color: Theme.withAlpha(Theme.surfaceText, 0.4)
                             renderType: Text.NativeRendering
                         }
                     }
 
-                    Text {
+                    Row {
                         id: markerText
                         anchors.verticalCenter: parent.verticalCenter
-                        text: tile.selected ? I18n.tr("\u25c6  Selected") : I18n.tr("\u25c7  Add")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
-                        font.pixelSize: Theme.fontSmall
-                        color: tile.selected ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.58)
-                        renderType: Text.NativeRendering
+                        spacing: 6 * Theme.scale
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 6 * Theme.scale
+                            height: 6 * Theme.scale
+                            radius: width / 2
+                            color: tile.selected ? Theme.withAlpha(Theme.surfaceText, 0.9) : "transparent"
+                            border.width: tile.selected ? 0 : 1
+                            border.color: Theme.withAlpha(Theme.surfaceText, 0.4)
+                            Behavior on color { ColorAnimation { duration: Theme.fast } }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: tile.selected ? I18n.tr("Selected") : I18n.tr("Add")
+                            font.family: Theme.sans
+                            font.weight: tile.selected ? Font.DemiBold : Font.Medium
+                            font.pixelSize: Theme.fontSmall
+                            color: tile.selected ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.58)
+                            renderType: Text.NativeRendering
+                        }
                     }
                 }
                 MouseArea {
@@ -150,8 +163,8 @@ Item {
                     width: 72 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Placement")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                     renderType: Text.NativeRendering
@@ -170,8 +183,8 @@ Item {
                     width: 72 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Lock")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                     renderType: Text.NativeRendering
@@ -192,8 +205,8 @@ Item {
                     width: 72 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Colours")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                     renderType: Text.NativeRendering
@@ -214,8 +227,8 @@ Item {
                     width: 72 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Audio")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                     renderType: Text.NativeRendering
@@ -239,8 +252,8 @@ Item {
                     width: 72 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Wallpaper")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                     renderType: Text.NativeRendering

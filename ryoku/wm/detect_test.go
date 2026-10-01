@@ -1,6 +1,10 @@
 package wm
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 // LeafScriptsDir is the single definition of where a provider's bare-name
 // scripts live; deploy.sh and the switch resolve them through it, so a wrong
@@ -14,5 +18,46 @@ func TestLeafScriptsDir(t *testing.T) {
 	}
 	if got := LeafScriptsDir(""); got != "" {
 		t.Errorf("empty name = %q, want empty", got)
+	}
+}
+
+// SessionGap is the switch's honesty gate: a checkout box has every provider's
+// binary and config tree, but only a session the greeter can actually boot is
+// switchable. The gap must name the missing half, and a provider with both
+// halves must report none.
+func TestSessionGap(t *testing.T) {
+	bin := t.TempDir()
+	mango := filepath.Join(bin, "mango")
+	if err := os.WriteFile(mango, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	entries := t.TempDir()
+	if err := os.WriteFile(filepath.Join(entries, "mango.desktop"), []byte("[Desktop Entry]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orig := sessionEntryDirs
+	t.Cleanup(func() { sessionEntryDirs = orig })
+	sessionEntryDirs = func() []string { return []string{entries} }
+
+	if got := SessionGap(ProviderMango); got != "" {
+		t.Errorf("installed compositor + entry = %q, want ready", got)
+	}
+	if got := SessionGap("nobody"); got != "compositor" {
+		t.Errorf("unknown provider = %q, want compositor (no binary named)", got)
+	}
+
+	// The entry disappears: the greeter has nothing to offer.
+	os.Remove(filepath.Join(entries, "mango.desktop"))
+	if got := SessionGap(ProviderMango); got != "entry" {
+		t.Errorf("compositor without a session entry = %q, want entry", got)
+	}
+
+	// The compositor disappears: the entry would launch nothing.
+	os.WriteFile(filepath.Join(entries, "mango.desktop"), []byte("[Desktop Entry]\n"), 0o644)
+	t.Setenv("PATH", t.TempDir())
+	if got := SessionGap(ProviderMango); got != "compositor" {
+		t.Errorf("entry without a compositor = %q, want compositor", got)
 	}
 }

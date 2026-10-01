@@ -45,7 +45,6 @@ class CardField : public QQuickItem
     Q_PROPERTY(QPointF currentShear READ currentShear NOTIFY currentRectChanged)
     Q_PROPERTY(QRectF stageRect READ stageRect NOTIFY stageRectChanged)
     Q_PROPERTY(QSizeF barReserve READ barReserve WRITE setBarReserve NOTIFY barReserveChanged)
-    Q_PROPERTY(bool barVertical READ barVertical WRITE setBarVertical NOTIFY barVerticalChanged)
     Q_PROPERTY(int visibleEnd READ visibleEnd NOTIFY visibleEndChanged)
     Q_PROPERTY(int flippedIndex READ flippedIndex NOTIFY flippedIndexChanged)
     Q_PROPERTY(bool flipsInPlace READ flipsInPlace NOTIFY flipsInPlaceChanged)
@@ -77,8 +76,6 @@ public:
     QRectF stageRect() const { return m_stageRect; }
     QSizeF barReserve() const { return m_barReserve; }
     void setBarReserve(const QSizeF &reserve);
-    bool barVertical() const { return m_barVertical; }
-    void setBarVertical(bool vertical);
     int flippedIndex() const { return m_flippedRow; }
     int visibleEnd() const { return m_visibleEnd; }
     bool flipsInPlace() const { return m_layout && m_layout->flipsInPlace(); }
@@ -107,7 +104,6 @@ Q_SIGNALS:
     void currentRectChanged();
     void stageRectChanged();
     void barReserveChanged();
-    void barVerticalChanged();
     void flippedIndexChanged();
     void flipsInPlaceChanged();
     void visibleEndChanged();
@@ -153,6 +149,8 @@ private:
                         CardInstance &inst, int row);
     void applyCrop(const CardVisual &visual, CardInstance &inst, int row) const;
     void applyFlipPayload(CardInstance &inst, int row) const;
+    // Staggered open bloom plus hover/press settle, folded into one instance.
+    void applyMicroAnim(CardInstance &inst, int row, bool projected, const LayoutContext &ctx) const;
     void resolveTransition(CardRenderNode *node, const LayoutContext &ctx);
     float fadeFor(const QString &key) const;
     bool tickFades(double dt);
@@ -191,7 +189,6 @@ private:
     QPointF m_currentShear;
     QRectF m_stageRect;
     QSizeF m_barReserve;
-    bool m_barVertical = false;
     int m_visibleEnd = -1;
     QPointF m_pointer;
     bool m_pointerInside = false;
@@ -201,6 +198,12 @@ private:
     Spring m_flip;
     int m_flippedRow = -1;
     FlipOptions m_flipOpts;
+
+    // Per-card micro-animation springs, only alive while the ticker runs.
+    Spring m_hover;
+    int m_hoverRow = -1;
+    Spring m_press;
+    int m_pressRow = -1;
 
     MotionProfile m_motion;
     double m_filterMs = 450;
@@ -249,6 +252,8 @@ private:
     QHash<qint64, int> m_filterCell;
     QHash<qint64, float> m_filterIn;
     float m_filterWave = 10.0f;
+    // Watchdog: a bounded swap must terminate, so a stuck roll can never blank a card.
+    double m_filterElapsed = 0.0;
 
     Spring m_trans;
     bool m_transActive = false;

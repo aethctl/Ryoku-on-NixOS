@@ -45,11 +45,11 @@ Item {
 
             Text {
                 width: parent.width - valueText.width - parent.spacing
-                text: (ctl.focused ? "\u25c6  " : "") + (ctl.param && ctl.param.label !== undefined ? ctl.param.label : "")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                text: (ctl.param && ctl.param.label !== undefined ? ctl.param.label : "")
+                font.family: Theme.sans
+                font.weight: ctl.focused ? Font.DemiBold : Font.Medium
                 font.pixelSize: Theme.fontBase
-                color: ctl.focused ? Theme.primary : Theme.surfaceText
+                color: ctl.focused ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.82)
                 renderType: Text.NativeRendering
                 elide: Text.ElideRight
             }
@@ -57,10 +57,9 @@ Item {
                 id: valueText
                 visible: ctl._numeric
                 text: ctl._numeric ? ctl._fmt(slider.value) : ""
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontBody
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
         }
@@ -90,8 +89,7 @@ Item {
             visible: ctl._numeric
             width: parent.width
             text: ctl._fmt(ctl.param ? ctl.param.min : 0) + " - " + ctl._fmt(ctl.param ? ctl.param.max : 0)
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.display
             font.pixelSize: Theme.fontTiny
             color: Theme.withAlpha(Theme.surfaceText, 0.38)
             renderType: Text.NativeRendering

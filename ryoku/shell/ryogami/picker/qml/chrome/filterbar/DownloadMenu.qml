@@ -1,21 +1,16 @@
 import QtQuick
 import Ryoku.Ui.Singletons
 
-Item {
+BarMenu {
     id: dl
 
     required property PickerState state
-    property string barStyle: "straight"
-    property real railWidth: 0
-    // The list opens upward only when the bar sits along the bottom edge.
-    property bool menuUp: false
-    readonly property real naturalWidth: trigger.implicitWidth
 
-    width: trigger.width
-    implicitHeight: trigger.height
-
-    property bool _menuOpen: false
-    on_MenuOpenChanged: if (dl._menuOpen) dl._refresh()
+    glyph: "\u{f01da}"
+    label: I18n.tr("Download")
+    panelWidth: 250
+    alignRight: true
+    onOpenChanged: if (dl.open) dl._refresh()
 
     readonly property var _order: [
         { key: "wallhaven", label: I18n.tr("Wallhaven"), glyph: "\uf03e" },
@@ -63,118 +58,18 @@ Item {
                 dl.state.openSheet("settings", { tab: "sources", section: 0,
                                                  control: dl._srcs.settingsControl(row.key, row.code) })
         }
-        dl._menuOpen = false
+        dl.close()
     }
 
-    BarButton {
-        id: trigger
-        barStyle: dl.barStyle
-        railWidth: dl.railWidth
-        glyph: "\u{f01da}"
-        label: I18n.tr("Download") + "  \u25be"
-        prominent: true
-        onTriggered: dl._menuOpen = !dl._menuOpen
-    }
-
-    Timer { id: closeTimer; interval: 350; onTriggered: dl._menuOpen = false }
-
-    Rectangle {
-        id: panel
-        visible: opacity > 0.01
-        opacity: dl._menuOpen ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.fast; easing.type: Theme.revealEasing } }
-        z: 60
-        x: trigger.x + (trigger.width - width) * 0.5
-        y: dl.menuUp ? trigger.y - height - 6 * Theme.scale : trigger.y + trigger.height + 6 * Theme.scale
-        width: 236 * Theme.scale
-        height: list.implicitHeight + 8 * Theme.scale
-        color: Theme.withAlpha(Theme.surface, 0.98)
-        border.width: 1
-        border.color: Theme.withAlpha(Theme.primary, 0.40)
-
-        HoverHandler { id: panelHover }
-
-        Column {
-            id: list
-            width: parent.width - 8 * Theme.scale
-            x: 4 * Theme.scale
-            y: 4 * Theme.scale
-            spacing: 1 * Theme.scale
-
-            Repeater {
-                model: dl._rows
-                delegate: Item {
-                    id: row
-                    required property var modelData
-                    width: list.width
-                    height: 28 * Theme.scale
-                    readonly property bool hovered: rowMouse.containsMouse
-
-                    Rectangle {
-                        anchors.fill: parent
-                        color: row.hovered ? Theme.withAlpha(Theme.primary, 0.10) : "transparent"
-                    }
-                    Row {
-                        anchors.left: parent.left
-                        anchors.leftMargin: 10 * Theme.scale
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 9 * Theme.scale
-                        opacity: row.modelData.enabled ? 1 : 0.45
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: row.modelData.glyph
-                            font.family: Theme.icon
-                            font.pixelSize: Theme.fontBody
-                            color: row.hovered ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.8)
-                            renderType: Text.NativeRendering
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: row.modelData.label
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
-                            font.pixelSize: Theme.fontBase
-                            color: Theme.surfaceText
-                            renderType: Text.NativeRendering
-                        }
-                    }
-                    Text {
-                        visible: !row.modelData.enabled
-                        anchors.right: parent.right
-                        anchors.rightMargin: 8 * Theme.scale
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: row.modelData.reason
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
-                        font.pixelSize: Theme.fontMicro
-                        color: row.hovered ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.55)
-                        renderType: Text.NativeRendering
-                    }
-                    MouseArea {
-                        id: rowMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: dl._open(row.modelData)
-                    }
-                }
-            }
+    Repeater {
+        model: dl._rows
+        delegate: MenuRow {
+            required property var modelData
+            glyph: modelData.glyph
+            label: modelData.label
+            detail: modelData.enabled ? "" : modelData.reason
+            available: modelData.enabled
+            onChosen: dl._open(modelData)
         }
-    }
-
-    HoverHandler { id: triggerHover }
-
-    Connections {
-        target: triggerHover
-        function onHoveredChanged() { dl._maybeClose() }
-    }
-    Connections {
-        target: panelHover
-        function onHoveredChanged() { dl._maybeClose() }
-    }
-    function _maybeClose() {
-        if (!dl._menuOpen) return
-        if (triggerHover.hovered || panelHover.hovered) closeTimer.stop()
-        else closeTimer.restart()
     }
 }

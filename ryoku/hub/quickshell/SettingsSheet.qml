@@ -608,6 +608,7 @@ Item {
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
                                             options: sheet.optsFor(srow.r)
+                                            labels: srow.r.optLabels || ({})
                                             current: String(sheet.val(srow.r))
                                             onChose: (k) => sheet.edited(srow.r.key, k)
                                         }

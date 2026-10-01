@@ -559,8 +559,8 @@ Item {
                 anchors.centerIn: parent
                 visible: root._previewPending && root._previewOut.length === 0 && (root._selKind === "effect" || root._selKind === "grade")
                 text: I18n.tr("Updating preview\u2026")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.52)
                 renderType: Text.NativeRendering
@@ -620,8 +620,7 @@ Item {
                         Text {
                             Layout.fillWidth: true
                             text: root._title
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fs(52)
                             lineHeight: 0.96
                             color: Theme.surfaceText
@@ -633,8 +632,8 @@ Item {
                             Layout.maximumWidth: 620 * Theme.scale
                             visible: root._desc.length > 0
                             text: root._desc
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.72)
                             lineHeight: 1.35
@@ -683,8 +682,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Settings")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -716,8 +715,8 @@ Item {
                                     visible: !(root._selectedEffect && root._selectedEffect.params && root._selectedEffect.params.length > 0)
                                     width: parent.width
                                     text: I18n.tr("This effect has no settings. Apply it as it is.")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fontBase
                                     color: Theme.withAlpha(Theme.surfaceText, 0.52)
                                     wrapMode: Text.WordWrap
@@ -743,8 +742,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Adjustments")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -774,8 +773,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Upscale this image")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -787,8 +786,8 @@ Item {
                                     visible: root._upRunning
                                     Text {
                                         text: (root._upStatus.phase ? String(root._upStatus.phase) : I18n.tr("Working")) + root._progressSuffix(root._upStatus)
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Medium
                                         font.pixelSize: Theme.fontBase
                                         color: Theme.withAlpha(Theme.surfaceText, 0.7)
                                         renderType: Text.NativeRendering
@@ -800,15 +799,15 @@ Item {
                                         Rectangle {
                                             height: parent.height
                                             width: parent.width * root._progressFrac(root._upStatus)
-                                            color: Theme.primary
+                                            color: Theme.withAlpha(Theme.surfaceText, 0.9)
                                         }
                                     }
                                     Text {
                                         visible: root._upStatus.file !== undefined && String(root._upStatus.file).length > 0
                                         width: parent.width
                                         text: String(root._upStatus.file || "")
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Medium
                                         font.pixelSize: Theme.fontMini
                                         color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                         elide: Text.ElideMiddle
@@ -820,8 +819,8 @@ Item {
                                     visible: !root._upRunning && root._upStatus.verdict !== undefined && root._verdictText(root._upStatus.verdict).length > 0
                                     width: parent.width
                                     text: root._verdictText(root._upStatus.verdict)
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fontMini
                                     color: Theme.withAlpha(Theme.surfaceText, 0.6)
                                     wrapMode: Text.WordWrap
@@ -864,8 +863,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Optimise the library")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -873,8 +872,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Quality")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Medium
                                     font.pixelSize: Theme.fontFine
                                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                                     renderType: Text.NativeRendering
@@ -892,8 +891,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Maximum resolution")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Medium
                                     font.pixelSize: Theme.fontFine
                                     color: Theme.withAlpha(Theme.surfaceText, 0.46)
                                     renderType: Text.NativeRendering
@@ -915,8 +914,8 @@ Item {
                                     visible: root._optRunning
                                     Text {
                                         text: I18n.tr("Optimising") + root._progressSuffix(root._optStatus)
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Medium
                                         font.pixelSize: Theme.fontBase
                                         color: Theme.withAlpha(Theme.surfaceText, 0.7)
                                         renderType: Text.NativeRendering
@@ -928,15 +927,15 @@ Item {
                                         Rectangle {
                                             height: parent.height
                                             width: parent.width * root._progressFrac(root._optStatus)
-                                            color: Theme.primary
+                                            color: Theme.withAlpha(Theme.surfaceText, 0.9)
                                         }
                                     }
                                     Text {
                                         visible: root._optStatus.currentFile !== undefined && String(root._optStatus.currentFile).length > 0
                                         width: parent.width
                                         text: String(root._optStatus.currentFile || "")
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Medium
                                         font.pixelSize: Theme.fontMini
                                         color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                         elide: Text.ElideMiddle
@@ -951,8 +950,8 @@ Item {
                                         .arg(Number(root._optStatus.optimized || 0))
                                         .arg(Number(root._optStatus.skipped || 0))
                                         .arg(Number(root._optStatus.failed || 0))
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fontMini
                                     color: Theme.withAlpha(Theme.surfaceText, 0.6)
                                     renderType: Text.NativeRendering
@@ -1029,17 +1028,17 @@ Item {
                     }
                     Text {
                         text: I18n.tr("New wallpaper")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontFine
-                        color: Theme.primary
+                        color: Theme.surfaceText
                         renderType: Text.NativeRendering
                     }
                     Text {
                         width: parent.width
                         text: root._incName
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontField
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -1047,8 +1046,8 @@ Item {
                     }
                     Text {
                         text: root._kindLabel(root._incType)
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontMini
                         color: Theme.withAlpha(Theme.surfaceText, 0.48)
                         renderType: Text.NativeRendering
@@ -1062,16 +1061,15 @@ Item {
                     spacing: 7 * Theme.scale
                     Text {
                         text: I18n.tr("Displays")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontFine
-                        color: Theme.primary
+                        color: Theme.surfaceText
                         renderType: Text.NativeRendering
                     }
                     Text {
                         text: String(root._selCount())
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fontStudio
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
@@ -1079,8 +1077,8 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("of %1 selected").arg(root._outputs.length)
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontBase
                         color: Theme.withAlpha(Theme.surfaceText, 0.7)
                         wrapMode: Text.WordWrap
@@ -1089,8 +1087,8 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("Each display keeps its own placement and audio settings.")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontFine
                         color: Theme.withAlpha(Theme.surfaceText, 0.46)
                         wrapMode: Text.WordWrap
@@ -1125,8 +1123,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: I18n.tr("Choose displays")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fs(34)
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -1137,8 +1134,8 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: I18n.tr("Only the displays you pick will change.")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Normal
                     font.pixelSize: Theme.fontSmall
                     color: Theme.withAlpha(Theme.surfaceText, 0.56)
                     renderType: Text.NativeRendering
@@ -1147,8 +1144,8 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: I18n.tr("Displays")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.DemiBold
                     font.pixelSize: Theme.fontField
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -1156,8 +1153,8 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: I18n.tr("Pick a display, then choose how the wallpaper should fit.")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Normal
                     font.pixelSize: Theme.fontSmall
                     color: Theme.withAlpha(Theme.surfaceText, 0.52)
                     renderType: Text.NativeRendering
@@ -1190,8 +1187,8 @@ Item {
                                 spacing: 5 * Theme.scale
                                 Text {
                                     text: I18n.tr("Looking for displays")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
@@ -1199,8 +1196,8 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: I18n.tr("Displays will show up here when the compositor reports them.")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fontSmall
                                     color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                     wrapMode: Text.WordWrap
@@ -1248,16 +1245,16 @@ Item {
                         Layout.fillWidth: true
                         Text {
                             text: I18n.tr("Apply wallpaper")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.DemiBold
                             font.pixelSize: Theme.fontLabel
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
                         }
                         Text {
                             text: root._selCount() === 0 ? I18n.tr("Pick at least one display.") : I18n.tr("Only the displays you picked will change.")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontFine
                             color: Theme.withAlpha(Theme.surfaceText, 0.5)
                             renderType: Text.NativeRendering

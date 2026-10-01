@@ -69,8 +69,8 @@ Item {
                 anchors.rightMargin: 10 * Theme.scale
                 anchors.verticalCenter: parent.verticalCenter
                 text: row.control.label ? row.control.label : ""
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontField
                 color: Theme.withAlpha(Theme.surfaceText, row.enabled ? row.reveal : 0.4 * row.reveal)
                 elide: Text.ElideRight
@@ -93,10 +93,9 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: row._slider
                     text: row._format(row._shown)
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontField
-                    color: Theme.withAlpha(Theme.primary, row.enabled ? row.reveal : 0.4 * row.reveal)
+                    color: Theme.withAlpha(Theme.surfaceText, row.enabled ? row.reveal : 0.4 * row.reveal)
                     renderType: Text.NativeRendering
                 }
                 NumberField {
@@ -142,8 +141,8 @@ Item {
                 if (h.length > 0 && r.length > 0) return h + "  \u00b7  " + r;
                 return h.length > 0 ? h : r;
             }
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.56 * row.reveal)
             lineHeight: 1.38

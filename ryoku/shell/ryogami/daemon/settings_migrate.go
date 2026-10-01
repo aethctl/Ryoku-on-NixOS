@@ -64,19 +64,25 @@ func isLegacyLook(path string) bool {
 	return false
 }
 
-// The skwd-paper image/video engine is gone: Ryoku paints stills and video
-// itself, and skwd-paper stays only as the Wallpaper Engine scene renderer.
-// These keys no longer have a schema entry, so migration must drop them rather
-// than carry them forward as foreign data.
-var retiredEngine = []string{
+// Retired keys no longer have a schema entry, so migration must drop them rather
+// than carry them forward as foreign data. The skwd-paper image/video engine is
+// gone: Ryoku paints stills and video itself, and skwd-paper stays only as the
+// Wallpaper Engine scene renderer.
+var retiredKeys = []string{
 	"paper.engine",
 	"paper.videoEngine",
 	"paper.wallpaperLayer",
 	"paper.videoMultiProcess",
+	// The skwd filter bar gave way to the masthead: one layout, pinned to the top,
+	// so its style, orientation and offsets have nothing left to choose.
+	"filterBar.visualStyle",
+	"filterBar.orientation",
+	"filterBar.offsetX",
+	"filterBar.offsetY",
 }
 
-func isRetiredEngine(path string) bool {
-	for _, p := range retiredEngine {
+func isRetiredKey(path string) bool {
+	for _, p := range retiredKeys {
 		if path == p {
 			return true
 		}
@@ -92,7 +98,7 @@ func migrateMerge(dst, src map[string]interface{}, prefix string) bool {
 		if prefix != "" {
 			path = prefix + "." + k
 		}
-		if path == "daynight" || strings.HasPrefix(path, "daynight.") || isLegacyLook(path) || isRetiredEngine(path) {
+		if path == "daynight" || strings.HasPrefix(path, "daynight.") || isLegacyLook(path) || isRetiredKey(path) {
 			continue
 		}
 		if spec, ok := specFor(path); ok {

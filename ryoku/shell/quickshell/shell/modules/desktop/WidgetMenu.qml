@@ -4,6 +4,7 @@ import Quickshell
 import "Singletons"
 import Ryoku.Ui.Singletons
 import "iris/IrisRoster.js" as IrisRoster
+import "python/PythonRoster.js" as PythonRoster
 import "../stage/Singletons" as StageCfg
 
 // A desktop widget's right-click menu, built on the shared DesktopMenu chrome in
@@ -54,12 +55,21 @@ Item {
         : menu.scope + "Design"
     readonly property string curDesign: menu.isWidget ? (Config[menu.designKey] ?? "") : ""
 
-    // iRiS faces hosted in Ryoku's slot: the roster row (or null), the per-widget
-    // skin toggle, and the face's own iRiS size ladder.
+    // Vendored face libraries hosted in Ryoku's slot: roster metadata, their
+    // upstream/Ryoku skin toggle, and the face-specific preset ladder.
     readonly property var irisFace: IrisRoster.byPrefix(menu.scope)
     readonly property bool isIris: menu.irisFace !== null
-    readonly property bool isRyokuStyle: menu.isIris && Config[menu.scope + "Style"] === "ryoku"
+    readonly property var pythonFace: PythonRoster.byPrefix(menu.scope)
+    readonly property bool isPython: menu.pythonFace !== null
+    readonly property var hostedFace: menu.isIris ? menu.irisFace : menu.pythonFace
+    readonly property bool isRyokuStyle: (menu.isIris || menu.isPython)
+        && Config[menu.scope + "Style"] === "ryoku"
     readonly property string curIrisSize: menu.isIris ? (Config[menu.scope + "Size"] || menu.irisFace.sizes[0]) : ""
+    readonly property string curPythonVariant: menu.isPython ? (Config[menu.scope + "Variant"] || menu.pythonFace.variants[0]) : ""
+    readonly property var facePresets: menu.isIris ? menu.irisFace.sizes
+        : menu.isPython ? menu.pythonFace.variants : []
+    readonly property string facePresetKey: menu.scope + (menu.isPython ? "Variant" : "Size")
+    readonly property string curFacePreset: menu.isPython ? menu.curPythonVariant : menu.curIrisSize
 
     // the kanji seal each scope carries in the menu masthead (docs/ui-ux.md).
     readonly property var glosses: ({
@@ -86,7 +96,8 @@ Item {
         dayprogress: ["ring", "arc"],
         shape: ["dot", "ring", "diamond", "square"]
     })
-    readonly property bool hasDesign: menu.isWidget && !menu.isIris && (menu.designLists[menu.scope] !== undefined)
+    readonly property bool hasDesign: menu.isWidget && !menu.isIris && !menu.isPython
+        && (menu.designLists[menu.scope] !== undefined)
 
     // Size quick-nudge: a small scale ladder every widget shares. Fine control
     // (and the iRiS size preset) lives on the inspector's Look tab.
@@ -101,6 +112,13 @@ Item {
         if (!d)
             return;
         Config.set(menu.designKey, d[(d.indexOf(Config[menu.designKey]) + 1) % d.length]);
+    }
+    function cycleFacePreset() {
+        const presets = menu.facePresets;
+        if (!presets || presets.length < 2)
+            return;
+        const current = presets.indexOf(menu.curFacePreset);
+        Config.set(menu.facePresetKey, presets[(current + 1) % presets.length]);
     }
     function cycleScale() {
         const d = [0.75, 1.0, 1.25, 1.5, 2.0];
@@ -120,12 +138,12 @@ Item {
 
     DesktopMenu {
         id: shell
-        title: menu.isIris ? I18n.tr(menu.irisFace.label) : menu.scope
-        gloss: menu.glosses[menu.scope] || (menu.isIris ? menu.irisFace.gloss : "")
+        title: (menu.isIris || menu.isPython) ? I18n.tr(menu.hostedFace.label) : menu.scope
+        gloss: menu.glosses[menu.scope] || ((menu.isIris || menu.isPython) ? menu.hostedFace.gloss : "")
 
         // ── quick knobs ────────────────────────────────────────────────
-        // Native widgets cycle their look; iRiS faces flip between the Ryoku and
-        // iNiR skins. Everything finer opens through Customize.
+        // Native widgets cycle their look; hosted faces flip between their
+        // upstream skin and Ryoku's backing. Everything finer opens Customize.
         MenuRow {
             visible: menu.hasDesign
             label: I18n.tr("Style")
@@ -134,12 +152,20 @@ Item {
             onTriggered: menu.cycleDesign()
         }
         MenuRow {
-            visible: menu.isIris
+            visible: menu.isIris || menu.isPython
             label: I18n.tr("Style")
             value: menu.isRyokuStyle ? "Ryoku" : "Original"
             on: menu.isRyokuStyle
             closeOnTrigger: false
-            onTriggered: Config.set(menu.scope + "Style", menu.isRyokuStyle ? "inir" : "ryoku")
+            onTriggered: Config.set(menu.scope + "Style",
+                menu.isRyokuStyle ? (menu.isPython ? "serp" : "inir") : "ryoku")
+        }
+        MenuRow {
+            visible: (menu.isIris || menu.isPython) && menu.facePresets.length > 1
+            label: menu.isPython ? I18n.tr("Variant") : I18n.tr("Face size")
+            value: menu.cap(menu.curFacePreset)
+            closeOnTrigger: false
+            onTriggered: menu.cycleFacePreset()
         }
         MenuRow {
             visible: menu.isWidget

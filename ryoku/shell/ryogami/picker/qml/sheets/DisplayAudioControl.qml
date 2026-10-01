@@ -44,8 +44,7 @@ RowLayout {
     Text {
         Layout.preferredWidth: 42 * Theme.scale
         text: Math.round(vol.value) + "%"
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.display
         font.pixelSize: Theme.fontSmall
         color: (root.muted || !root.playing) ? Theme.withAlpha(Theme.surfaceText, 0.42) : Theme.surfaceText
         horizontalAlignment: Text.AlignRight

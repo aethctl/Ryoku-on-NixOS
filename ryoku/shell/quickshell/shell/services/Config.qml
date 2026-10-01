@@ -49,6 +49,7 @@ Singleton {
     property alias qsbar: adapter.qsbar
     property alias kairos: adapter.kairos
     property alias chroma: adapter.chroma
+    property alias python: adapter.python
     property alias displays: adapter.displays
 
     // dock: the first-class app dock surface (modules/dock). A top-level store,
@@ -127,6 +128,34 @@ Singleton {
         const fallback = widgets[id] !== false;
         return DisplayBar.widgetEnabled(root.displays || ({}), outputName, "chroma", id, fallback);
     }
+
+    // Folder styles may own the shell's resident feedback surfaces. Resolve
+    // this per display because the NixOS port supports monitor-specific styles.
+    function styleOwnsBannersFor(outputName) {
+        const style = outputName && outputName.length > 0
+            ? root.barStyleFor(outputName)
+            : root.barStyle;
+        return style === "python"
+            && !(root.python
+                && root.python.general
+                && root.python.general.notifications === false);
+    }
+
+    function styleOwnsFeedbackFor(outputName) {
+        const style = outputName && outputName.length > 0
+            ? root.barStyleFor(outputName)
+            : root.barStyle;
+        return style === "python"
+            && !(root.python
+                && root.python.general
+                && root.python.general.osd === false);
+    }
+
+    readonly property bool styleOwnsBanners:
+        root.styleOwnsBannersFor("")
+
+    readonly property bool styleOwnsFeedback:
+        root.styleOwnsFeedbackFor("")
 
     // typography: a scale that grows or shrinks the whole shell (the bar text
     // and the surfaces around it), keeping the readout legible without overflow.
@@ -264,6 +293,7 @@ Singleton {
             property var qsbar: ({})
             property var kairos: ({})
             property var chroma: ({})
+            property var python: ({})
             property var displays: ({})
             property var dock: ({
                 "enabled": false,

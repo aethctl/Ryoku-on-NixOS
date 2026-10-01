@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# The session intro: the welcome tour and the first-boot keyboard hint. Every
+# compositor's autostart calls this instead of carrying the logic inline,
+# because the copy lives in three config dialects and only one of them can
+# script; mango in particular truncates a config value at 255 characters, so
+# an inline chain silently loses its tail there. The behaviour is unchanged
+# from when each line lived in the configs:
+#
+#   welcome   once per tour version: a fresh or older-version box sees it, a
+#             box already on this version is left alone. The version is written
+#             only after qs actually ran the tour, so a first-boot launch
+#             failure retries next login, and the flock guards a double fire.
+#             Bump the version when the tour changes materially (beta 18 = 18).
+#   keys-hint shown exactly once ever: the marker is written before the async
+#             launch, so a reboot before the toast is dismissed cannot bring
+#             it back. It rides the overlay layer above the tour and stays
+#             until its X is clicked.
+#
+# qs surfaces launched here bypass ryoku-shell's daemon, which is what injects
+# the shared QML module path into the configs it supervises, so the env is
+# spelled out.
+set -uo pipefail
+
+state="${XDG_STATE_HOME:-$HOME/.local/state}/ryoku"
+qml_env=(QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml" QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml")
+welcome_version=18
+
+case "${1:-}" in
+welcome)
+	seen=0
+	if [[ -r $state/welcome-seen ]]; then
+		v=$(head -n1 "$state/welcome-seen")
+		[[ $v =~ ^[0-9]+$ ]] && seen=$v
+	fi
+	(( seen < welcome_version )) || exit 0
+	flock -n "${XDG_RUNTIME_DIR:-/tmp}/ryoku-welcome.lock" \
+		env "${qml_env[@]}" qs -c welcome &&
+		mkdir -p "$state" && printf '%s' "$welcome_version" >"$state/welcome-seen"
+	;;
+keys-hint)
+	[[ -e $state/keys-hint-seen ]] && exit 0
+	mkdir -p "$state" && printf 'seen' >"$state/keys-hint-seen"
+	flock -n "${XDG_RUNTIME_DIR:-/tmp}/ryoku-keys-hint.lock" \
+		env "${qml_env[@]}" qs -c keys-hint &
+	;;
+*)
+	echo "usage: ryoku-session-intro {welcome|keys-hint}" >&2
+	exit 2
+	;;
+esac

@@ -47,8 +47,8 @@ Item {
                     id: keyText
                     anchors.centerIn: parent
                     text: row.control.label ? row.control.label : ""
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontLabel
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -58,8 +58,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - keyText.width - 40 * Theme.scale
                 text: row.control.help ? row.control.help : ""
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.68 * row.reveal)
                 wrapMode: Text.WordWrap
@@ -71,8 +71,8 @@ Item {
             width: parent.width
             visible: !row._fixedKey && row.control.label && row.control.label.length > 0
             text: row._fill(row.control.label)
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontField
             color: Theme.withAlpha(row._conflict ? Theme.tertiary : Theme.surfaceText, row.reveal)
             wrapMode: Text.WordWrap
@@ -94,8 +94,8 @@ Item {
                 anchors.rightMargin: 10 * Theme.scale
                 verticalAlignment: Text.AlignVCenter
                 text: row.valueText.length > 0 ? row.valueText : row._fill(row.control.help)
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.7 * row.reveal)
                 lineHeight: 1.35

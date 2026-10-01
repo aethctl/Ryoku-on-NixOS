@@ -77,41 +77,12 @@ hl.on("hyprland.start", function()
     -- file exists for the user to paste an API key into; idempotent, a no-op if
     -- present. The Hub's Language > "Generate with AI" then reads it.
     hl.exec_cmd("command -v ryoku-i18n >/dev/null 2>&1 && ryoku-i18n ensure >/dev/null 2>&1")
-    -- Welcome walkthrough: show the guided tour once per tour VERSION. A fresh
-    -- box (no flag) sees it; a box that saw an older tour (a bare flag or a lower
-    -- version) sees the refreshed tour once more on update; a box already on this
-    -- version is left alone. The flag lives in state (not config), so it needs no
-    -- doctor reconciler. The seen-check lives in Lua because Hyprland's exec reads
-    -- a leading [...] as its window-rules prefix, and because Lua can compare the
-    -- stored version. The flock guards a double fire, and the version is written
-    -- only if qs actually ran the tour (`&&`), so a first-boot launch failure
-    -- retries next login instead of marking it seen. exec is async, so the
-    -- blocking `qs` never holds up autostart. Bump welcome_version when the tour
-    -- changes materially (beta 18 = 18).
-    local welcome_state = (os.getenv("XDG_STATE_HOME") or (os.getenv("HOME") .. "/.local/state")) .. "/ryoku"
-    local welcome_version = 18
-    local seen_file = io.open(welcome_state .. "/welcome-seen", "r")
-    local seen_version = 0
-    if seen_file then
-        seen_version = tonumber((seen_file:read("*l") or "")) or 0
-        seen_file:close()
-    end
-    if seen_version < welcome_version then
-        hl.exec_cmd("flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-welcome.lock\" qs -c welcome && mkdir -p '" .. welcome_state .. "' && printf '" .. welcome_version .. "' > '" .. welcome_state .. "/welcome-seen'")
-    end
-
-    -- First-boot keyboard hint. A one-shot toast pointing new users at Super+K,
-    -- shown exactly once ever: the marker is written the first time this runs and
-    -- checked forever after, so it never returns on a relogin, reboot or update
-    -- (unlike the versioned welcome flag above). The marker is written before the
-    -- async launch, so a reboot before the user dismisses the toast cannot bring
-    -- it back. It rides the overlay layer above the welcome tour and stays until
-    -- its X is clicked.
-    local keys_hint_seen = welcome_state .. "/keys-hint-seen"
-    local kh = io.open(keys_hint_seen, "r")
-    if kh then
-        kh:close()
-    else
-        hl.exec_cmd("mkdir -p '" .. welcome_state .. "' && printf 'seen' > '" .. keys_hint_seen .. "' && flock -n \"${XDG_RUNTIME_DIR:-/tmp}/ryoku-keys-hint.lock\" qs -c keys-hint")
-    end
+    -- Welcome tour and first-boot keyboard hint: the tour once per tour
+    -- version, the hint exactly once ever. The behaviour lives in
+    -- ryoku-session-intro so every compositor's autostart calls the same
+    -- script: mango's config grammar truncates a value at 255 characters,
+    -- so an inline chain there silently loses its tail. Bump the tour
+    -- version in the helper when the tour changes materially (beta 18 = 18).
+    hl.exec_cmd("command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro welcome")
+    hl.exec_cmd("command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro keys-hint")
 end)

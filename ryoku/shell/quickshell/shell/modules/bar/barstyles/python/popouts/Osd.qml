@@ -1,0 +1,988 @@
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import QtQuick.Shapes
+import Quickshell
+import Quickshell.Wayland
+import Quickshell.Io
+import Quickshell.Bluetooth
+import Quickshell.Networking
+import Quickshell.Services.Pipewire
+import "../reusables"
+import "../"
+
+PanelWindow {
+    id: osdWindow
+
+    screen: OsdController.screen
+
+    WlrLayershell.namespace: "osd"
+    WlrLayershell.layer: WlrLayer.Overlay
+    focusable: false
+    exclusionMode: ExclusionMode.Ignore
+    color: "transparent"
+
+    mask: Region {
+        item: (osdWindow.isVisible || osdContainer.animProgress > 0.001) ? osdContainer : null
+    }
+
+    anchors {
+        top: true
+        bottom: true
+        left: true
+        right: true
+    }
+
+    function s(val) { return (typeof Scaler !== "undefined") ? Scaler.s(val) : val; }
+
+    readonly property color briColor: Qt.lighter(ThemeBackend.mauve, 1.1)
+    readonly property color volColor: Qt.lighter(ThemeBackend.sapphire, 1.5)
+    readonly property color micColor: Qt.lighter(ThemeBackend.mauve, 1.3)
+    readonly property color capsColor: Qt.lighter(ThemeBackend.peach, 1.2)
+    readonly property color numColor: Qt.lighter(ThemeBackend.sapphire, 1.4)
+    readonly property color airColor: Qt.lighter(ThemeBackend.red, 1.2)
+
+    property string kind: OsdController.kind
+    property int briVal: OsdController.briVal
+    property string stateVal: OsdController.stateVal
+
+    readonly property bool isToggleKind: kind === "capslock" || kind === "numlock" || kind === "airplane"
+    readonly property bool isToggleActive: stateVal === "on" || stateVal === "true" || stateVal === "1"
+
+    readonly property bool isToggleAllowed: {
+        if (!isToggleKind) return true;
+        if (isVerticalLayout) return false;
+        if (kind === "capslock") return showCapsLock;
+        if (kind === "numlock") return showNumLock;
+        if (kind === "airplane") return showAirplane;
+        return true;
+    }
+
+    property bool isVisible: OsdController.isVisible && isToggleAllowed
+
+    readonly property color toggleActiveColor: {
+        if (kind === "capslock") return capsColor;
+        if (kind === "numlock") return numColor;
+        if (kind === "airplane") return airColor;
+        return ThemeBackend.mauve;
+    }
+
+    readonly property string toggleTitle: {
+        if (kind === "capslock") return "Caps Lock";
+        if (kind === "numlock") return "Num Lock";
+        if (kind === "airplane") return "Airplane Mode";
+        return "";
+    }
+
+    readonly property string toggleStatus: isToggleActive ? "ON" : "OFF"
+
+    readonly property PwNode activeSink: Audio.defaultSink || (Audio.outputs && Audio.outputs.length > 0 ? Audio.outputs[0] : null)
+    readonly property int volVal: activeSink && activeSink.audio ? Math.round(activeSink.audio.volume * 100) : 0
+    readonly property bool isMuted: activeSink && activeSink.audio ? activeSink.audio.muted : false
+
+    readonly property PwNode activeSource: Audio.defaultSource || (Audio.inputs && Audio.inputs.length > 0 ? Audio.inputs[0] : null)
+    readonly property int micVal: activeSource && activeSource.audio ? Math.round(activeSource.audio.volume * 100) : 0
+    readonly property bool isMicMuted: activeSource && activeSource.audio ? activeSource.audio.muted : false
+
+    readonly property bool isMutedState: {
+        if (kind === "volume") return isMuted;
+        if (kind === "mic") return isMicMuted;
+        return false;
+    }
+
+    readonly property int currentVal: {
+        if (kind === "volume") return volVal;
+        if (kind === "mic") return micVal;
+        return briVal;
+    }
+
+    property int configRevision: 0
+
+    Connections {
+        target: (typeof Config !== "undefined") ? Config : null
+        function onSettingsLoaded() {
+            OsdController.hide();
+            osdWindow.configRevision++;
+        }
+    }
+
+    property var defaultOsdSettings: ({
+        "horizontalPosition": 50,
+        "verticalPosition": 90,
+        "orientation": "horizontal",
+        "showCapsLock": true,
+        "showNumLock": true,
+        "showAirplane": true,
+        "attachToBar": true
+    })
+
+    property var osdSettings: {
+        let dummy = configRevision;
+        let s = (typeof Config !== "undefined" && Config.rawSettings) ? Config.rawSettings["osd"] : undefined;
+        if (s !== undefined && s !== null) return s;
+        if (typeof Config !== "undefined" && typeof Config.getSetting === "function") {
+            return Config.getSetting("osd", defaultOsdSettings);
+        }
+        return defaultOsdSettings;
+    }
+
+    readonly property string orientation: osdSettings.orientation !== undefined ? osdSettings.orientation : "horizontal"
+    readonly property bool isVertical: orientation === "vertical"
+    readonly property bool attachToBar: osdSettings.attachToBar !== undefined ? osdSettings.attachToBar : true
+    readonly property real horizontalPosition: osdSettings.horizontalPosition !== undefined ? osdSettings.horizontalPosition : 50
+    readonly property real verticalPosition: osdSettings.verticalPosition !== undefined ? osdSettings.verticalPosition : 90
+    readonly property bool showCapsLock: osdSettings.showCapsLock !== undefined ? osdSettings.showCapsLock : true
+    readonly property bool showNumLock: osdSettings.showNumLock !== undefined ? osdSettings.showNumLock : true
+    readonly property bool showAirplane: osdSettings.showAirplane !== undefined ? osdSettings.showAirplane : true
+
+    onAttachToBarChanged: OsdController.hide()
+
+    property var barConfig: {
+        let dummy = configRevision;
+        if (typeof Config !== "undefined") {
+            if (Config.rawSettings && Config.rawSettings.bar) return Config.rawSettings.bar;
+            if (typeof Config.getSetting === "function") return Config.getSetting("bar", null);
+        }
+        return null;
+    }
+
+    property bool barAutohide: (barConfig && barConfig.autohide !== undefined) ? Boolean(barConfig.autohide) : false
+
+    onBarAutohideChanged: {
+        OsdController.hide();
+    }
+
+    property string barStyle: {
+        if (!barConfig) return "modular";
+        let s = barConfig.style;
+        if (typeof s === "string") return s;
+        if (s && typeof s === "object") {
+            if (s.fill || s.mode === "fill") return "fill";
+            if (s.solid || s.mode === "solid") return "solid";
+        }
+        return "modular";
+    }
+
+    onBarStyleChanged: {
+        OsdController.hide();
+    }
+
+    property string barPosition: {
+        if (!barConfig) return "top";
+        return barConfig.position || "top";
+    }
+
+    property real barOpacity: {
+        if (!barConfig || barConfig.opacity === undefined) return 1.0;
+        let op = Number(barConfig.opacity);
+        return op > 1.0 ? (op / 100.0) : op;
+    }
+
+    property bool isFullscreen: OsdController.isFullscreen
+    readonly property bool isBarEffectivelyHidden: barAutohide || isFullscreen
+    property bool isSideBar: barPosition === "left" || barPosition === "right"
+    property bool isRightBar: barPosition === "right"
+    property bool isBottomBar: barPosition === "bottom"
+    property bool isFill: barStyle === "fill"
+    property bool isSolid: (barStyle === "solid" || barStyle === "fill") && Math.round(barOpacity * 100) >= 100
+    readonly property bool isAttached: attachToBar && isSolid && !isBarEffectivelyHidden && (!isSideBar || !isToggleKind) && (isSideBar ? isVertical : !isVertical)
+    readonly property bool isVerticalLayout: isAttached ? isSideBar : isVertical
+
+    property real barHeight: {
+        return (barConfig && barConfig.height) ? s(barConfig.height) : s(40);
+    }
+
+    property real cornerRadius: ThemeBackend.borderRadius || s(12)
+    property real menuMargin: isAttached ? 0 : s(20)
+
+    property real osdWidth: isVerticalLayout ? s(58) : s(296)
+    property real osdHeight: isVerticalLayout ? s(296) : s(58)
+    property real collapsedWidth: s(58)
+
+    visible: isVisible || osdContainer.animProgress > 0.001
+
+    property real clampedX: {
+        if (isAttached) {
+            if (isSideBar) {
+                if (isRightBar) {
+                    return osdWindow.width - barHeight - osdWidth;
+                } else {
+                    return barHeight;
+                }
+            } else {
+                return (osdWindow.width - osdWidth) / 2;
+            }
+        } else {
+            return (osdWindow.width - osdWidth) * (horizontalPosition / 100.0);
+        }
+    }
+
+    property real clampedY: {
+        if (isAttached) {
+            if (isSideBar) {
+                return (osdWindow.height - osdHeight) / 2;
+            } else {
+                if (isBottomBar) {
+                    return osdWindow.height - barHeight - osdHeight;
+                } else {
+                    return barHeight;
+                }
+            }
+        } else {
+            return (osdWindow.height - osdHeight) * (verticalPosition / 100.0);
+        }
+    }
+
+    Timer {
+        id: cmdThrottle
+        interval: 50
+        property int targetPct: -1
+        onTriggered: {
+            if (targetPct >= 0) {
+                if (targetPct > 0 && osdWindow.isMuted) {
+                    if (osdWindow.activeSink && osdWindow.activeSink.audio && osdWindow.activeSink.audio.muted) {
+                        Audio.toggleMute(osdWindow.activeSink);
+                    }
+                }
+                if (osdWindow.activeSink) {
+                    Audio.setVolume(osdWindow.activeSink, targetPct);
+                }
+                targetPct = -1;
+            }
+        }
+    }
+
+    Timer {
+        id: micThrottle
+        interval: 50
+        property int targetPct: -1
+        onTriggered: {
+            if (targetPct >= 0) {
+                if (targetPct > 0 && osdWindow.isMicMuted) {
+                    if (osdWindow.activeSource && osdWindow.activeSource.audio && osdWindow.activeSource.audio.muted) {
+                        Audio.toggleMute(osdWindow.activeSource);
+                    }
+                }
+                if (osdWindow.activeSource) {
+                    Audio.setVolume(osdWindow.activeSource, targetPct);
+                }
+                targetPct = -1;
+            }
+        }
+    }
+
+    Timer {
+        id: briCmdThrottle
+        interval: 400
+        property int targetPct: -1
+        onTriggered: {
+            if (targetPct >= 0) {
+                Quickshell.execDetached(["bash", Caching.scriptsPath + "/brightness.sh", "set", targetPct.toString()]);
+                targetPct = -1;
+            }
+        }
+    }
+
+    Item {
+        id: osdContainer
+
+        property real animProgress: osdWindow.isVisible ? 1.0 : 0.0
+        Behavior on animProgress {
+            NumberAnimation {
+                duration: osdWindow.isVisible ? 450 : 300
+                easing.type: osdWindow.isVisible ? Easing.OutQuint : Easing.InCubic
+            }
+        }
+
+        property real dynamicCornerRadius: osdWindow.isAttached ? Math.max(0, Math.min(osdWindow.cornerRadius, (osdWindow.isSideBar ? width : height))) : 0
+
+        x: {
+            if (osdWindow.isAttached) {
+                if (osdWindow.isSideBar && osdWindow.isRightBar) {
+                    return (osdWindow.clampedX + osdWindow.osdWidth) - width;
+                }
+                return osdWindow.clampedX;
+            }
+            return (osdWindow.width - width) * (osdWindow.horizontalPosition / 100.0);
+        }
+        y: {
+            if (osdWindow.isAttached) {
+                if (!osdWindow.isSideBar && osdWindow.isBottomBar) {
+                    return (osdWindow.clampedY + osdWindow.osdHeight) - height;
+                }
+                return osdWindow.clampedY;
+            }
+            return (osdWindow.height - height) * (osdWindow.verticalPosition / 100.0);
+        }
+        width: {
+            if (osdWindow.isAttached) {
+                if (osdWindow.isSideBar) {
+                    return osdWindow.osdWidth * animProgress;
+                }
+                return osdWindow.osdWidth;
+            }
+            if (osdWindow.isVerticalLayout) {
+                return osdWindow.osdWidth;
+            }
+            return osdWindow.collapsedWidth + (osdWindow.osdWidth - osdWindow.collapsedWidth) * animProgress;
+        }
+        height: {
+            if (osdWindow.isAttached) {
+                if (!osdWindow.isSideBar) {
+                    return osdWindow.osdHeight * animProgress;
+                }
+                return osdWindow.osdHeight;
+            }
+            if (osdWindow.isVerticalLayout) {
+                return osdWindow.collapsedWidth + (osdWindow.osdHeight - osdWindow.collapsedWidth) * animProgress;
+            }
+            return osdWindow.osdHeight;
+        }
+        opacity: osdWindow.isAttached ? ((osdWindow.isVisible || animProgress > 0.001) ? 1.0 : 0.0) : Math.max(0.0, Math.min(1.0, animProgress * 1.5))
+
+        transformOrigin: {
+            if (osdWindow.isAttached) {
+                if (osdWindow.isSideBar) {
+                    return osdWindow.isRightBar ? Item.Right : Item.Left;
+                }
+                return osdWindow.isBottomBar ? Item.Bottom : Item.Top;
+            }
+            return Item.Center;
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && !osdWindow.isSideBar && !osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+            x: -osdContainer.dynamicCornerRadius
+            y: 0
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: 0
+                startY: 0
+                PathLine { x: osdContainer.dynamicCornerRadius; y: 0 }
+                PathLine { x: osdContainer.dynamicCornerRadius; y: osdContainer.dynamicCornerRadius }
+                PathArc {
+                    x: 0
+                    y: 0
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Counterclockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && !osdWindow.isSideBar && !osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+            x: parent.width
+            y: 0
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: osdContainer.dynamicCornerRadius
+                startY: 0
+                PathLine { x: 0; y: 0 }
+                PathLine { x: 0; y: osdContainer.dynamicCornerRadius }
+                PathArc {
+                    x: osdContainer.dynamicCornerRadius
+                    y: 0
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Clockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && !osdWindow.isSideBar && osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+            x: -osdContainer.dynamicCornerRadius
+            y: parent.height - osdContainer.dynamicCornerRadius
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: 0
+                startY: osdContainer.dynamicCornerRadius
+                PathLine { x: osdContainer.dynamicCornerRadius; y: osdContainer.dynamicCornerRadius }
+                PathLine { x: osdContainer.dynamicCornerRadius; y: 0 }
+                PathArc {
+                    x: 0
+                    y: osdContainer.dynamicCornerRadius
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Clockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && !osdWindow.isSideBar && osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+            x: parent.width
+            y: parent.height - osdContainer.dynamicCornerRadius
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: osdContainer.dynamicCornerRadius
+                startY: osdContainer.dynamicCornerRadius
+                PathLine { x: 0; y: osdContainer.dynamicCornerRadius }
+                PathLine { x: 0; y: 0 }
+                PathArc {
+                    x: osdContainer.dynamicCornerRadius
+                    y: osdContainer.dynamicCornerRadius
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Counterclockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && osdWindow.isSideBar && !osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+            x: 0
+            y: -osdContainer.dynamicCornerRadius
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: 0
+                startY: 0
+                PathLine { x: 0; y: osdContainer.dynamicCornerRadius }
+                PathLine { x: osdContainer.dynamicCornerRadius; y: osdContainer.dynamicCornerRadius }
+                PathArc {
+                    x: 0
+                    y: 0
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Clockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && osdWindow.isSideBar && !osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+            x: 0
+            y: parent.height
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: 0
+                startY: osdContainer.dynamicCornerRadius
+                PathLine { x: 0; y: 0 }
+                PathLine { x: osdContainer.dynamicCornerRadius; y: 0 }
+                PathArc {
+                    x: 0
+                    y: osdContainer.dynamicCornerRadius
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Counterclockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && osdWindow.isSideBar && osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+            x: parent.width - osdContainer.dynamicCornerRadius
+            y: -osdContainer.dynamicCornerRadius
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: osdContainer.dynamicCornerRadius
+                startY: 0
+                PathLine { x: osdContainer.dynamicCornerRadius; y: osdContainer.dynamicCornerRadius }
+                PathLine { x: 0; y: osdContainer.dynamicCornerRadius }
+                PathArc {
+                    x: osdContainer.dynamicCornerRadius
+                    y: 0
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Counterclockwise
+                }
+            }
+        }
+
+        Shape {
+            visible: osdWindow.isAttached && osdWindow.isSideBar && osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+            x: parent.width - osdContainer.dynamicCornerRadius
+            y: parent.height
+            width: osdContainer.dynamicCornerRadius
+            height: osdContainer.dynamicCornerRadius
+            preferredRendererType: Shape.CurveRenderer
+            ShapePath {
+                fillColor: ThemeBackend.base
+                strokeColor: "transparent"
+                startX: osdContainer.dynamicCornerRadius
+                startY: osdContainer.dynamicCornerRadius
+                PathLine { x: osdContainer.dynamicCornerRadius; y: 0 }
+                PathLine { x: 0; y: 0 }
+                PathArc {
+                    x: osdContainer.dynamicCornerRadius
+                    y: osdContainer.dynamicCornerRadius
+                    radiusX: osdContainer.dynamicCornerRadius
+                    radiusY: osdContainer.dynamicCornerRadius
+                    direction: PathArc.Clockwise
+                }
+            }
+        }
+
+        Rectangle {
+            id: osdBox
+            anchors.fill: parent
+            color: ThemeBackend.base
+            radius: osdWindow.cornerRadius
+            border.width: osdWindow.isAttached ? 0 : 1
+            border.color: osdWindow.isAttached ? "transparent" : ThemeBackend.surface0
+            clip: true
+
+            Rectangle {
+                visible: osdWindow.isAttached && !osdWindow.isSideBar && !osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+                x: 0
+                y: 0
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && !osdWindow.isSideBar && !osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+                x: parent.width - osdContainer.dynamicCornerRadius
+                y: 0
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && !osdWindow.isSideBar && osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+                x: 0
+                y: parent.height - osdContainer.dynamicCornerRadius
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && !osdWindow.isSideBar && osdWindow.isBottomBar && osdContainer.dynamicCornerRadius > 0.5
+                x: parent.width - osdContainer.dynamicCornerRadius
+                y: parent.height - osdContainer.dynamicCornerRadius
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && osdWindow.isSideBar && !osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+                x: 0
+                y: 0
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && osdWindow.isSideBar && !osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+                x: 0
+                y: parent.height - osdContainer.dynamicCornerRadius
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && osdWindow.isSideBar && osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+                x: parent.width - osdContainer.dynamicCornerRadius
+                y: 0
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            Rectangle {
+                visible: osdWindow.isAttached && osdWindow.isSideBar && osdWindow.isRightBar && osdContainer.dynamicCornerRadius > 0.5
+                x: parent.width - osdContainer.dynamicCornerRadius
+                y: parent.height - osdContainer.dynamicCornerRadius
+                width: osdContainer.dynamicCornerRadius
+                height: osdContainer.dynamicCornerRadius
+                color: ThemeBackend.base
+            }
+
+            HoverHandler {
+                id: osdHoverHandler
+                onHoveredChanged: {
+                    OsdController.isHovered = hovered;
+                    if (hovered) {
+                        OsdController.cancelHide();
+                    } else {
+                        OsdController.requestHide();
+                    }
+                }
+            }
+
+            ColumnLayout {
+                visible: osdWindow.isVerticalLayout
+                anchors.fill: parent
+                anchors.topMargin: osdWindow.s(14)
+                anchors.bottomMargin: osdWindow.s(14)
+                anchors.leftMargin: osdWindow.s(10)
+                anchors.rightMargin: osdWindow.s(10)
+                spacing: osdWindow.s(10)
+
+                IconButton {
+                    Layout.alignment: Qt.AlignHCenter
+                    size: osdWindow.s(26)
+                    iconOffsetX: {
+                        if (osdWindow.kind === "airplane" || osdWindow.kind === "capslock") return -1;
+                        if (osdWindow.kind === "volume") return -1;
+                        if (osdWindow.kind === "mic") return 0;
+                        return -3;
+                    }
+                    cornerRadius: osdWindow.s(8)
+                    buttonIcon: {
+                        if (osdWindow.kind === "volume") {
+                            return osdWindow.isMuted || osdWindow.volVal === 0 ? "󰖁" : (osdWindow.volVal > 50 ? "󰕾" : "󰖀");
+                        } else if (osdWindow.kind === "mic") {
+                            return osdWindow.isMicMuted || osdWindow.micVal === 0 ? "󰍭" : "󰍬";
+                        } else if (osdWindow.kind === "capslock") {
+                            return "󰬈";
+                        } else if (osdWindow.kind === "numlock") {
+                            return "󰎠";
+                        } else if (osdWindow.kind === "airplane") {
+                            return "󰀝";
+                        } else {
+                            return osdWindow.briVal > 66 ? "󰃠" : (osdWindow.briVal > 33 ? "󰃟" : "󰃞");
+                        }
+                    }
+                    iconFontSize: osdWindow.s(15)
+                    accentColor: ThemeBackend.surface1
+                    textColor: {
+                        if (isHoveredOrHighlighted) return ThemeBackend.text;
+                        if (osdWindow.kind === "volume") {
+                            return osdWindow.isMuted ? ThemeBackend.overlay0 : osdWindow.volColor;
+                        } else if (osdWindow.kind === "mic") {
+                            return osdWindow.isMicMuted ? ThemeBackend.overlay0 : osdWindow.micColor;
+                        } else if (osdWindow.isToggleKind) {
+                            return osdWindow.isToggleActive ? osdWindow.toggleActiveColor : ThemeBackend.overlay0;
+                        } else {
+                            return osdWindow.briColor;
+                        }
+                    }
+                    onClicked: {
+                        OsdController.restartTimer();
+                        if (osdWindow.kind === "volume") {
+                            if (osdWindow.activeSink) {
+                                Audio.toggleMute(osdWindow.activeSink);
+                            }
+                        } else if (osdWindow.kind === "mic") {
+                            if (osdWindow.activeSource) {
+                                Audio.toggleMute(osdWindow.activeSource);
+                            }
+                        } else if (osdWindow.kind === "airplane") {
+                            if (osdWindow.isToggleActive) {
+                                Networking.wifiEnabled = true;
+                                if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = true;
+                            } else {
+                                Networking.wifiEnabled = false;
+                                if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = false;
+                            }
+                        } else if (osdWindow.kind === "brightness") {
+                            briCmdThrottle.stop();
+                            briCmdThrottle.targetPct = -1;
+                            let target = osdWindow.briVal > 0 ? 0 : 100;
+                            OsdController.briVal = target;
+                            Quickshell.execDetached(["bash", Caching.scriptsPath + "/brightness.sh", "set", target.toString()]);
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: osdWindow.isToggleKind
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: osdWindow.s(28)
+                    Layout.preferredHeight: osdWindow.s(22)
+                    radius: osdWindow.s(6)
+                    color: osdWindow.isToggleActive ? Qt.rgba(osdWindow.toggleActiveColor.r, osdWindow.toggleActiveColor.g, osdWindow.toggleActiveColor.b, 0.2) : ThemeBackend.surface1
+                    border.width: 1
+                    border.color: osdWindow.isToggleActive ? osdWindow.toggleActiveColor : "transparent"
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: osdWindow.toggleStatus
+                        font.family: ThemeBackend.fontFamily
+                        font.pixelSize: osdWindow.s(10)
+                        font.bold: true
+                        color: osdWindow.isToggleActive ? osdWindow.toggleActiveColor : ThemeBackend.overlay0
+                    }
+                }
+
+                Draggable {
+                    id: verticalSlider
+                    visible: !osdWindow.isToggleKind
+                    vertical: true
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: osdWindow.s(16)
+                    Layout.alignment: Qt.AlignHCenter
+                    from: 0.0
+                    to: 100.0
+                    value: osdWindow.currentVal
+                    backgroundColor: ThemeBackend.surface1
+
+                    readonly property color activeColor: {
+                        if (osdWindow.kind === "volume") {
+                            return osdWindow.isMuted ? ThemeBackend.surface2 : osdWindow.volColor;
+                        } else if (osdWindow.kind === "mic") {
+                            return osdWindow.isMicMuted ? ThemeBackend.surface2 : osdWindow.micColor;
+                        } else {
+                            return osdWindow.briColor;
+                        }
+                    }
+
+                    accentColor: activeColor
+                    gradColor1: activeColor
+                    gradColor2: Qt.lighter(activeColor, 1.05)
+                    gradColor3: Qt.lighter(activeColor, 1.10)
+                    cornerRadius: osdWindow.s(5)
+                    handleSize: osdWindow.s(22)
+
+                    handleColor: (osdWindow.isMutedState) ? ThemeBackend.overlay0 : Qt.lighter(activeColor, 1.15)
+                    handleHoverColor: (osdWindow.isMutedState) ? ThemeBackend.subtext0 : Qt.lighter(activeColor, 1.5)
+                    handleDragColor: (osdWindow.isMutedState) ? ThemeBackend.text : Qt.lighter(activeColor, 1.45)
+                    handleBorderColor: Qt.rgba(0, 0, 0, 0.2)
+
+                    onDragStarted: OsdController.cancelHide()
+                    onDragFinished: {
+                        OsdController.restartTimer();
+                        if (osdWindow.kind === "brightness" && briCmdThrottle.targetPct >= 0) {
+                            briCmdThrottle.stop();
+                            Quickshell.execDetached(["bash", Caching.scriptsPath + "/brightness.sh", "set", briCmdThrottle.targetPct.toString()]);
+                            briCmdThrottle.targetPct = -1;
+                        }
+                    }
+                    onMoved: val => {
+                        OsdController.restartTimer();
+                        let pct = Math.max(0, Math.min(100, Math.round(val)));
+                        if (osdWindow.kind === "brightness") {
+                            OsdController.briVal = pct;
+                            briCmdThrottle.targetPct = pct;
+                            if (!verticalSlider.isDragging) briCmdThrottle.restart();
+                        } else if (osdWindow.kind === "volume") {
+                            cmdThrottle.targetPct = pct;
+                            if (!cmdThrottle.running) cmdThrottle.start();
+                        } else if (osdWindow.kind === "mic") {
+                            micThrottle.targetPct = pct;
+                            if (!micThrottle.running) micThrottle.start();
+                        }
+                    }
+                }
+            }
+
+            Item {
+                visible: !osdWindow.isVerticalLayout
+                anchors.fill: parent
+
+                Item {
+                    width: osdWindow.s(58)
+                    height: parent.height
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+
+                    IconButton {
+                        anchors.centerIn: parent
+                        size: osdWindow.s(30)
+                        cornerRadius: osdWindow.s(8)
+                        iconOffsetX: {
+                            if (osdWindow.kind === "airplane" || osdWindow.kind === "capslock") return -1;
+                            if (osdWindow.kind === "volume") return -1;
+                            if (osdWindow.kind === "mic") return 0;
+                            return -3;
+                        }
+                        buttonIcon: {
+                            if (osdWindow.kind === "volume") {
+                                return osdWindow.isMuted || osdWindow.volVal === 0 ? "󰖁" : (osdWindow.volVal > 50 ? "󰕾" : "󰖀");
+                            } else if (osdWindow.kind === "mic") {
+                                return osdWindow.isMicMuted || osdWindow.micVal === 0 ? "󰍭" : "󰍬";
+                            } else if (osdWindow.kind === "capslock") {
+                                return "󰬈";
+                            } else if (osdWindow.kind === "numlock") {
+                                return "󰎠";
+                            } else if (osdWindow.kind === "airplane") {
+                                return "󰀝";
+                            } else {
+                                return osdWindow.briVal > 66 ? "󰃠" : (osdWindow.briVal > 33 ? "󰃟" : "󰃞");
+                            }
+                        }
+                        iconFontSize: osdWindow.s(15)
+                        accentColor: ThemeBackend.surface1
+                        textColor: {
+                            if (isHoveredOrHighlighted) return ThemeBackend.text;
+                            if (osdWindow.kind === "volume") {
+                                return osdWindow.isMuted ? ThemeBackend.overlay0 : osdWindow.volColor;
+                            } else if (osdWindow.kind === "mic") {
+                                return osdWindow.isMicMuted ? ThemeBackend.overlay0 : osdWindow.micColor;
+                            } else if (osdWindow.isToggleKind) {
+                                return osdWindow.isToggleActive ? osdWindow.toggleActiveColor : ThemeBackend.overlay0;
+                            } else {
+                                return osdWindow.briColor;
+                            }
+                        }
+                        onClicked: {
+                            OsdController.restartTimer();
+                            if (osdWindow.kind === "volume") {
+                                if (osdWindow.activeSink) {
+                                    Audio.toggleMute(osdWindow.activeSink);
+                                }
+                            } else if (osdWindow.kind === "mic") {
+                                if (osdWindow.activeSource) {
+                                    Audio.toggleMute(osdWindow.activeSource);
+                                }
+                            } else if (osdWindow.kind === "airplane") {
+                                if (osdWindow.isToggleActive) {
+                                    Networking.wifiEnabled = true;
+                                    if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = true;
+                                } else {
+                                    Networking.wifiEnabled = false;
+                                    if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = false;
+                                }
+                            } else if (osdWindow.kind === "brightness") {
+                                briCmdThrottle.stop();
+                                briCmdThrottle.targetPct = -1;
+                                let target = osdWindow.briVal > 0 ? 0 : 100;
+                                OsdController.briVal = target;
+                                Quickshell.execDetached(["bash", Caching.scriptsPath + "/brightness.sh", "set", target.toString()]);
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    visible: osdWindow.isToggleKind
+                    anchors.left: parent.left
+                    anchors.leftMargin: osdWindow.s(58)
+                    anchors.right: parent.right
+                    anchors.rightMargin: osdWindow.s(16)
+                    anchors.verticalCenter: parent.verticalCenter
+                    opacity: Math.max(0.0, Math.min(1.0, (osdContainer.animProgress - 0.2) / 0.8))
+                    spacing: osdWindow.s(8)
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: osdWindow.toggleTitle
+                        font.family: ThemeBackend.fontFamily
+                        font.pixelSize: osdWindow.s(14)
+                        font.bold: true
+                        color: ThemeBackend.text
+                        elide: Text.ElideRight
+                    }
+
+                    ClickButton {
+                        id: toggleBtn
+                        Layout.alignment: Qt.AlignVCenter
+                        Layout.preferredHeight: osdWindow.s(24)
+                        Layout.preferredWidth: implicitWidth
+                        height: osdWindow.s(24)
+                        cornerRadius: osdWindow.s(6)
+                        horizontalPadding: osdWindow.s(10)
+                        buttonText: osdWindow.toggleStatus
+                        textFontSize: osdWindow.s(11)
+                        accentColor: osdWindow.isToggleActive ? osdWindow.toggleActiveColor : ThemeBackend.surface1
+                        textColor: osdWindow.isToggleActive ? ThemeBackend.base : ThemeBackend.subtext0
+
+                        onClicked: {
+                            OsdController.restartTimer();
+                            if (osdWindow.kind === "airplane") {
+                                if (osdWindow.isToggleActive) {
+                                    Networking.wifiEnabled = true;
+                                    if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = true;
+                                } else {
+                                    Networking.wifiEnabled = false;
+                                    if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = false;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Draggable {
+                    id: horizontalSlider
+                    width: Math.max(0, osdContainer.width - osdWindow.s(80))
+                    height: osdWindow.s(18)
+                    anchors.left: parent.left
+                    anchors.leftMargin: osdWindow.s(58)
+                    anchors.right: parent.right
+                    anchors.rightMargin: osdWindow.s(16)
+                    anchors.verticalCenter: parent.verticalCenter
+                    opacity: Math.max(0.0, Math.min(1.0, (osdContainer.animProgress - 0.2) / 0.8))
+                    visible: !osdWindow.isToggleKind && opacity > 0.01
+
+                    from: 0.0
+                    to: 100.0
+                    value: osdWindow.currentVal
+                    backgroundColor: ThemeBackend.surface1
+
+                    readonly property color activeColor: {
+                        if (osdWindow.kind === "volume") {
+                            return osdWindow.isMuted ? ThemeBackend.surface2 : osdWindow.volColor;
+                        } else if (osdWindow.kind === "mic") {
+                            return osdWindow.isMicMuted ? ThemeBackend.surface2 : osdWindow.micColor;
+                        } else {
+                            return osdWindow.briColor;
+                        }
+                    }
+
+                    accentColor: activeColor
+                    gradColor1: activeColor
+                    gradColor2: Qt.lighter(activeColor, 1.05)
+                    gradColor3: Qt.lighter(activeColor, 1.10)
+                    cornerRadius: osdWindow.s(5)
+                    handleSize: osdWindow.s(22)
+
+                    handleColor: (osdWindow.isMutedState) ? ThemeBackend.overlay0 : Qt.lighter(activeColor, 1.15)
+                    handleHoverColor: (osdWindow.isMutedState) ? ThemeBackend.subtext0 : Qt.lighter(activeColor, 1.5)
+                    handleDragColor: (osdWindow.isMutedState) ? ThemeBackend.text : Qt.lighter(activeColor, 1.45)
+                    handleBorderColor: Qt.rgba(0, 0, 0, 0.2)
+
+                    onDragStarted: OsdController.cancelHide()
+                    onDragFinished: {
+                        OsdController.restartTimer();
+                        if (osdWindow.kind === "brightness" && briCmdThrottle.targetPct >= 0) {
+                            briCmdThrottle.stop();
+                            Quickshell.execDetached(["bash", Caching.scriptsPath + "/brightness.sh", "set", briCmdThrottle.targetPct.toString()]);
+                            briCmdThrottle.targetPct = -1;
+                        }
+                    }
+                    onMoved: val => {
+                        OsdController.restartTimer();
+                        let pct = Math.max(0, Math.min(100, Math.round(val)));
+                        if (osdWindow.kind === "brightness") {
+                            OsdController.briVal = pct;
+                            briCmdThrottle.targetPct = pct;
+                            if (!horizontalSlider.isDragging) briCmdThrottle.restart();
+                        } else if (osdWindow.kind === "volume") {
+                            cmdThrottle.targetPct = pct;
+                            if (!cmdThrottle.running) cmdThrottle.start();
+                        } else if (osdWindow.kind === "mic") {
+                            micThrottle.targetPct = pct;
+                            if (!micThrottle.running) micThrottle.start();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

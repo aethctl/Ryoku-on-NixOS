@@ -55,8 +55,8 @@ Item {
                 text: row.sheet && row.rule
                     ? (row.sheet.conditionSummary(row.rule.condition) + "  \u00b7  " + row.sheet.targetLabel(row.rule))
                     : ""
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontTiny
                 color: Theme.withAlpha(Theme.surfaceText, row.ruleEnabled ? 0.44 : 0.28)
                 wrapMode: Text.WordWrap
@@ -70,10 +70,10 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Rule state")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontMicro
-                    color: Theme.withAlpha(Theme.primary, 0.82)
+                    color: Theme.withAlpha(Theme.surfaceText, 0.54)
                     renderType: Text.NativeRendering
                 }
                 Item {

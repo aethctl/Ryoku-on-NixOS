@@ -71,7 +71,7 @@ PanelWindow {
     function _restoreFocus() {
         if (!picker.shown)
             return
-        if (pickerState.sheet !== "" || pickerState.searchOpen)
+        if (pickerState.sheet !== "" || pickerState.searchOpen || pickerState.riceShare !== "")
             return   // a text surface owns the keyboard
         cardField.forceActiveFocus()
     }
@@ -83,6 +83,7 @@ PanelWindow {
         function onMultipickerOpenChanged() { picker._restoreFocus() }
         function onHelpOpenChanged() { picker._restoreFocus() }
         function onRiceWorkshopOpenChanged() { picker._restoreFocus() }
+        function onRiceShareChanged() { picker._restoreFocus() }
         function onThemeBarOpenChanged() { picker._restoreFocus() }
     }
 
@@ -123,6 +124,7 @@ PanelWindow {
             active: picker.shown
             interactive: pickerState.sheet === "" && !pickerState.multipickerOpen
                 && !pickerState.helpOpen && !pickerState.riceWorkshopOpen
+                && pickerState.riceShare === ""
             palette: ({
                 primary: Theme.primary,
                 accent: Theme.primary,
@@ -145,6 +147,7 @@ PanelWindow {
         HelpOverlay { anchors.fill: parent; state: pickerState }
         ThemeBar { anchors.fill: parent; state: pickerState }
         RiceWorkshop { anchors.fill: parent; state: pickerState }
+        RiceShare { anchors.fill: parent; state: pickerState }
 
         CardBackPanel { anchors.fill: parent; state: pickerState }
         Multipicker { anchors.fill: parent; state: pickerState }

@@ -48,20 +48,18 @@ Item {
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: member.ordinal < 10 ? "0" + member.ordinal : String(member.ordinal)
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fontField
-                            color: Theme.primary
+                            color: Theme.withAlpha(Theme.surfaceText, 0.7)
                             renderType: Text.NativeRendering
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: member._kind === "video" ? "\u25b6"
-                                : (member._kind === "we" || member._kind === "scene") ? "\u25c6"
+                                : (member._kind === "we" || member._kind === "scene") ? "\u25cf"
                                 : (member._kind === "static" || member._kind === "image") ? "\u25a7"
-                                : "\u25c7"
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                                : "\u25cb"
+                            font.family: Theme.sans
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.54)
                             renderType: Text.NativeRendering
@@ -99,10 +97,10 @@ Item {
                         anchors.bottom: parent.bottom
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: I18n.tr("Active")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontMicro
-                        color: Theme.withAlpha(Theme.primary, 0.72)
+                        color: Theme.withAlpha(Theme.surfaceText, 0.6)
                         renderType: Text.NativeRendering
                     }
                 }
@@ -131,8 +129,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: member._kind.length > 0 ? member._kind.charAt(0).toUpperCase() : "?"
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fs(18)
                             color: Theme.withAlpha(Theme.surfaceText, 0.40)
                             renderType: Text.NativeRendering

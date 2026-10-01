@@ -188,7 +188,7 @@ func (m *lensManager) stopService() {
 func (d *daemon) dispatchSemantic(req *request, p map[string]interface{}) (response, bool) {
 	switch req.Method {
 	case "semantic.query":
-		results, err := d.lens().query(strParam(p, "text", ""), int(intParam(p, "limit", 48)))
+		results, err := d.lens().query(strParam(p, "query", ""), int(intParam(p, "limit", 48)))
 		if err != nil {
 			return errResp(req.ID, 6, err.Error()), true
 		}

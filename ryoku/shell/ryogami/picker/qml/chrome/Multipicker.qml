@@ -88,18 +88,17 @@ Item {
 
             Text {
                 text: I18n.tr("Apply to displays")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontLead
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
             Text {
                 width: parent.width
                 text: I18n.tr("Choose displays and, for video and Wallpaper Engine scenes, their sound. Pick one display to drive the desktop colours.")
                 wrapMode: Text.WordWrap
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                 renderType: Text.NativeRendering
@@ -171,8 +170,7 @@ Item {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: (mp.vol[modelData.name] !== undefined ? mp.vol[modelData.name] : 100) + "%"
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.display
                                     font.pixelSize: Theme.fontSmall
                                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                                     renderType: Text.NativeRendering

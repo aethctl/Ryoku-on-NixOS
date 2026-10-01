@@ -84,8 +84,7 @@ Item {
                     anchors.rightMargin: 16 * Theme.scale
                     anchors.verticalCenter: parent.verticalCenter
                     text: studio.section ? studio.section.title : ""
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontStudio
                     color: Theme.withAlpha(Theme.surfaceText, studio._reveal)
                     elide: Text.ElideRight
@@ -104,8 +103,8 @@ Item {
                 width: parent.width
                 text: I18n.tr("Shape %1").replace("%1", studio._modeLabel) + "  \u00b7  "
                     + I18n.tr("Adjust the whole layout or individual cards; the scene previews live.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56 * studio._reveal)
                 lineHeight: 1.4

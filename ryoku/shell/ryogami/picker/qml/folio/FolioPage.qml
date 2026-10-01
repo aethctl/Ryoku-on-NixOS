@@ -99,8 +99,7 @@ Item {
                     anchors.rightMargin: 16 * Theme.scale
                     anchors.top: parent.top
                     text: page.section ? page.section.title : ""
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontSection
                     lineHeight: 1.0
                     color: Theme.withAlpha(Theme.surfaceText, page._reveal)
@@ -120,8 +119,8 @@ Item {
                 width: parent.width
                 visible: page.subtitle.length > 0
                 text: page.subtitle
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56 * page._reveal)
                 lineHeight: 1.4

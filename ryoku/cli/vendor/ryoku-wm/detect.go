@@ -3,6 +3,7 @@ package wm
 import (
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 const (
 	ProviderHyprland = "hyprland"
 	ProviderNiri     = "niri"
+	ProviderMango    = "mango"
 )
 
 type Detection struct {
@@ -46,6 +48,9 @@ var envProviders = []struct {
 	{"HYPRLAND_INSTANCE_SIGNATURE", ProviderHyprland, hyprlandSockets},
 	// niri exports the socket path itself.
 	{"NIRI_SOCKET", ProviderNiri, func(h string) []string { return []string{h} }},
+	// mango does too: MANGO_INSTANCE_SIGNATURE is the IPC socket path
+	// ($XDG_RUNTIME_DIR/mango-<pid>.sock), set by the compositor at startup.
+	{"MANGO_INSTANCE_SIGNATURE", ProviderMango, func(h string) []string { return []string{h} }},
 }
 
 // Hyprland's socket dir survives the instance that made it, so the path
@@ -79,6 +84,7 @@ func handleAlive(sockets []string) bool {
 var configDirs = map[string]string{
 	ProviderHyprland: "hypr",
 	ProviderNiri:     "niri",
+	ProviderMango:    "mango",
 }
 
 func ConfigDir(name string) string { return configDirs[name] }
@@ -104,6 +110,7 @@ func LeafScriptsDir(name string) string {
 var configEntries = map[string]string{
 	ProviderHyprland: "hyprland.lua",
 	ProviderNiri:     "config.kdl",
+	ProviderMango:    "config.conf",
 }
 
 // ConfigEntry returns the entry point of a provider's config tree as a path
@@ -115,6 +122,25 @@ func ConfigEntry(name string) string {
 	}
 	return dir + "/" + leaf
 }
+
+// gpuPinFile is the file each provider's ryoku-gpu writer owns inside the
+// config tree: the drop-in the compositor reads for its render-device order.
+// Empty for a provider that picks its own device (niri), for which a mode
+// write has no effect and the installer skips it.
+var gpuPinFile = map[string]string{
+	ProviderHyprland: "gpu.lua",
+	ProviderMango:    "gpu.conf",
+}
+
+// GpuPinFile returns a provider's render-pin file inside its config dir, or
+// "" when the compositor has no ryoku-gpu writer.
+func GpuPinFile(name string) string { return gpuPinFile[name] }
+
+// GpuPinStore is the canonical policy store every mode write lands in and
+// every reader (the Hub GPU page, doctor, the login persist) audits: the
+// Hyprland drop-in, because the policy predates the seam and the other
+// providers mirror it into their own dialect.
+func GpuPinStore() string { return configDirs[ProviderHyprland] + "/gpu.lua" }
 
 // configSeeds are the per-machine files under a provider's config dir that are
 // seeded once and then owned by the machine: the runtime rewrites them (display
@@ -129,6 +155,10 @@ var configSeeds = map[string][]string{
 	// so the file has to exist from first boot. Being a seed is also what stops
 	// an update re-laying it over a user's edits.
 	ProviderNiri: {"monitors.kdl", "gpu.kdl", "keyboard.kdl", "user.kdl", "monitors_user.kdl"},
+	// mango seeds like niri: the entry sources every file by name and Ryoku's
+	// tree must be whole from first login, so the hand-edit and per-machine
+	// files all exist before the session reads them.
+	ProviderMango: {"monitors.conf", "gpu.conf", "keyboard.conf", "user.conf", "monitors_user.conf"},
 }
 
 // ConfigSeeds returns the seeded, machine-owned files for a provider, as paths
@@ -170,6 +200,7 @@ func ConfigUserOwned(name string) []string {
 var configFiles = map[string][]string{
 	ProviderHyprland: {"hypr/user.lua", "hypr/monitors_user.lua", "hypr/modules"},
 	ProviderNiri:     {"niri/user.kdl", "niri/monitors_user.kdl"},
+	ProviderMango:    {"mango/user.conf", "mango/monitors_user.conf"},
 }
 
 // generatedConfig are the files a provider's apply authors from the store, as
@@ -179,6 +210,7 @@ var configFiles = map[string][]string{
 var generatedConfig = map[string][]string{
 	ProviderHyprland: {"hypr/settings.lua", "hypr/rebinds.lua", "ryoku/user_edits/hypr/settings.lua", "ryoku/user_edits/hypr/rebinds.lua"},
 	ProviderNiri:     {"niri/settings.kdl", "niri/rebinds.kdl", "ryoku/user_edits/niri/settings.kdl", "ryoku/user_edits/niri/rebinds.kdl"},
+	ProviderMango:    {"mango/settings.conf", "mango/rebinds.conf", "ryoku/user_edits/mango/settings.conf", "ryoku/user_edits/mango/rebinds.conf"},
 }
 
 // ConfigFiles are a provider's user-editable config paths (the hand-edit escape
@@ -205,7 +237,54 @@ func ResetPaths(name string) []string {
 
 // Providers is stable order, so generated config and installer prompts do not
 // reshuffle between runs.
-func Providers() []string { return []string{ProviderHyprland, ProviderNiri} }
+func Providers() []string {
+	return []string{ProviderHyprland, ProviderNiri, ProviderMango}
+}
+
+// compositorBins is the executable each provider's session runs. Named in the
+// seam because nothing outside it may know a compositor's shape; its absence
+// means the greeter would offer a session that cannot start.
+var compositorBins = map[string]string{
+	ProviderHyprland: "Hyprland",
+	ProviderNiri:     "niri",
+	ProviderMango:    "mango",
+}
+
+// sessionEntryDirs are the directories a greeter lists wayland-session entries
+// from: SDDM's configured SessionDir first, then the XDG data dirs every
+// greeter scans. A var so a test can point the scan at a sandbox tree.
+var sessionEntryDirs = func() []string {
+	dirs := []string{"/usr/local/share/wayland-sessions", "/usr/share/wayland-sessions"}
+	for _, d := range filepath.SplitList(os.Getenv("XDG_DATA_DIRS")) {
+		if d != "" {
+			dirs = append(dirs, filepath.Join(d, "wayland-sessions"))
+		}
+	}
+	return dirs
+}
+
+// SessionGap names what stops this provider from being entered at the greeter
+// right now, "" when nothing does: "compositor" when its binary is not
+// installed, "entry" when no greeter directory holds its session file. The
+// switch asks before promising "log out and pick it": a provider deployed
+// from a checkout has its binary and its config tree but may still have no
+// compositor and no greeter entry, and the promise is then false.
+func SessionGap(name string) string {
+	if _, err := exec.LookPath(compositorBins[name]); err != nil {
+		return "compositor"
+	}
+	entry := name + ".desktop"
+	for _, d := range sessionEntryDirs() {
+		if _, err := os.Stat(filepath.Join(d, entry)); err == nil {
+			return ""
+		}
+	}
+	return "entry"
+}
+
+// SessionReady reports whether picking this provider at the greeter now would
+// start a session: its compositor is installed and a greeter lists its entry.
+func SessionReady(name string) bool { return SessionGap(name) == "" }
 
 // Detect resolves the active provider: RYOKU_WM so a developer can drive one
 // without that session, then a live session handle, then XDG_CURRENT_DESKTOP,

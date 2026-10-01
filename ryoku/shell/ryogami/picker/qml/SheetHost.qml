@@ -1,6 +1,7 @@
 import QtQuick
 
 // Each sheet is built the first time it opens and stays resident, so reopening never rebuilds.
+// Collapsed folio categories build their rows lazily, so the first open lays out only what it shows.
 Item {
     id: host
 
@@ -19,6 +20,7 @@ Item {
     }
 
     SheetSlot { sheetName: "settings"; sourceComponent: cSettings }
+    SheetSlot { sheetName: "browser"; sourceComponent: cBrowser }
     SheetSlot { sheetName: "playlists"; sourceComponent: cPlaylists }
     SheetSlot { sheetName: "schedule"; sourceComponent: cSchedule }
     SheetSlot { sheetName: "effects"; sourceComponent: cEffects }
@@ -26,7 +28,6 @@ Item {
     SheetSlot { sheetName: "sceneProperties"; sourceComponent: cSceneProps }
     SheetSlot { sheetName: "themeDesigner"; sourceComponent: cThemeDesigner }
     SheetSlot { sheetName: "themeAudition"; sourceComponent: cThemeAudition }
-    SheetSlot { sheetName: "browser"; sourceComponent: cBrowser }
 
     Component {
         id: cSettings

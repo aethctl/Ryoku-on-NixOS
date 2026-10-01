@@ -19,30 +19,25 @@ FocusScope {
 
     readonly property bool _ghost: field.variant === "ghost"
     readonly property color _bg: field.variant === "field"
-        ? Theme.withAlpha(Theme.surfaceContainer, 0.88)
+        ? Theme.withAlpha(Theme.surfaceText, 0.05)
         : field._ghost ? "transparent"
-        : Qt.rgba(0, 0, 0, 0.58)
+        : Theme.withAlpha(Theme.surfaceText, 0.05)
     readonly property color _border: field.variant === "field"
-        ? Theme.withAlpha(Theme.outline, 0.48)
+        ? Theme.withAlpha(Theme.outline, 0.4)
         : field._ghost ? "transparent"
-        : Theme.withAlpha(Theme.surfaceText, 0.28)
-    readonly property color _placeholder: field.variant === "field"
-        ? Theme.withAlpha(Theme.surfaceText, 0.35)
-        : field._ghost ? Theme.withAlpha(Theme.surfaceText, 0.42)
-        : Theme.withAlpha(Theme.surfaceText, 0.48)
-    readonly property color _selection: field.variant === "field"
-        ? Theme.withAlpha(Theme.primary, 0.40)
-        : field._ghost ? Theme.withAlpha(Theme.primary, 0.35)
-        : Theme.withAlpha(Theme.primary, 0.45)
+        : Theme.withAlpha(Theme.outline, 0.4)
+    readonly property color _placeholder: Theme.withAlpha(Theme.surfaceText, 0.42)
+    readonly property color _selection: Theme.withAlpha(Theme.surfaceText, 0.24)
 
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
         color: field._bg
         border.width: input.activeFocus ? 2 : 1
-        border.color: input.activeFocus ? Theme.withAlpha(Theme.primary, 0.9)
+        border.color: input.activeFocus ? Theme.withAlpha(Theme.surfaceText, 0.7)
                     : field.enabled ? field._border
                     : Theme.withAlpha(Theme.outline, 0.18)
+        Behavior on border.color { ColorAnimation { duration: Theme.fast } }
     }
 
     Text {
@@ -54,21 +49,22 @@ FocusScope {
         text: field.glyph
         font.family: Theme.icon
         font.pixelSize: Theme.fontLabel
-        color: Theme.tertiary
+        color: Theme.withAlpha(Theme.surfaceText, input.activeFocus ? 0.9 : 0.5)
         renderType: Text.NativeRendering
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
     }
 
     TextInput {
         id: input
         focus: true
         anchors.fill: parent
-        anchors.leftMargin: (field.glyph.length > 0 ? 26 : 7) * Theme.scale
-        anchors.rightMargin: 7 * Theme.scale
+        anchors.leftMargin: (field.glyph.length > 0 ? 26 : 9) * Theme.scale
+        anchors.rightMargin: 9 * Theme.scale
         verticalAlignment: TextInput.AlignVCenter
         clip: true
         enabled: field.enabled
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: Font.Medium
         font.pixelSize: Theme.fontLabel
         color: field.enabled ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.4)
         selectionColor: field._selection

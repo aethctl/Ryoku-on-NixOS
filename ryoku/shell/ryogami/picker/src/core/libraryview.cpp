@@ -323,6 +323,10 @@ bool LibraryView::appliedOf(const Row &row) const
 
 bool LibraryView::passesFacets(const Row &row) const
 {
+    // Type, colour, favourites, shape and size describe wallpapers. Rice and theme rows
+    // carry none of them, so a facet left set on a wallpaper tab would empty those tabs.
+    if (m_collection != kWallpapers && m_collection != kWorkshop)
+        return true;
     if (!m_typeFilter.isEmpty() && row.type != m_typeFilter)
         return false;
     if (m_hueFilter != -1 && row.hue != m_hueFilter)
@@ -352,7 +356,7 @@ bool LibraryView::keep(const Row &row) const
     if (!passesFacets(row))
         return false;
 
-    if (m_folder != QLatin1String("*")) {
+    if (m_folder != QLatin1String("*") && (m_collection == kWallpapers || m_collection == kWorkshop)) {
         if (m_folder.isEmpty()) {
             if (!row.folder.isEmpty())
                 return false;

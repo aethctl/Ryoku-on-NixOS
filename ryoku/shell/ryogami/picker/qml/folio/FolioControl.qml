@@ -66,8 +66,8 @@ Item {
             width: parent.width
             visible: fc._visible && !fc._enabled && text.length > 0
             text: fc._reason
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.tertiary, 0.85 * fc.reveal)
             wrapMode: Text.WordWrap

@@ -16,9 +16,21 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: row.selected ? Theme.withAlpha(Theme.primary, 0.18)
-             : hover.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+        radius: Theme.radius
+        color: row.selected ? Theme.withAlpha(Theme.surfaceText, 0.06)
+             : hover.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.09)
              : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
+    }
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        width: 2 * Theme.scale
+        height: row.selected ? parent.height - 12 * Theme.scale : 0
+        radius: width
+        color: Theme.surfaceText
+        Behavior on height { NumberAnimation { duration: Theme.standard; easing.type: Easing.OutBack } }
     }
 
     Text {
@@ -27,10 +39,9 @@ Item {
         anchors.leftMargin: 10 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
         text: I18n.tr("ID %1").arg(row.pid)
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.display
         font.pixelSize: Theme.fontFine
-        color: (row.selected || row.playing) ? Theme.primary : Theme.withAlpha(Theme.primary, 0.46)
+        color: (row.selected || row.playing) ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.5)
         renderType: Text.NativeRendering
     }
 
@@ -39,11 +50,12 @@ Item {
         anchors.right: parent.right
         anchors.rightMargin: 10 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
-        text: row.playing ? "\u25cf" : row.selected ? "\u25c6" : "\u25c7"
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        text: row.playing ? "\u25cf" : "\u25cb"
+        font.family: Theme.sans
         font.pixelSize: Theme.fontFine
-        color: (row.selected || row.playing) ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.32)
+        color: row.playing ? Theme.surfaceText
+             : (row.selected || hover.containsMouse) ? Theme.withAlpha(Theme.surfaceText, 0.55)
+             : Theme.withAlpha(Theme.surfaceText, 0.3)
         renderType: Text.NativeRendering
     }
 
@@ -59,8 +71,8 @@ Item {
         Text {
             width: parent.width
             text: row.name
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontBody
             color: Theme.surfaceText
             elide: Text.ElideRight
@@ -69,10 +81,10 @@ Item {
         Text {
             width: parent.width
             text: row.detail
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontTiny
-            color: row.playing ? Theme.withAlpha(Theme.primary, 0.86) : Theme.withAlpha(Theme.surfaceText, 0.44)
+            color: row.playing ? Theme.withAlpha(Theme.surfaceText, 0.7) : Theme.withAlpha(Theme.surfaceText, 0.44)
             elide: Text.ElideRight
             renderType: Text.NativeRendering
         }

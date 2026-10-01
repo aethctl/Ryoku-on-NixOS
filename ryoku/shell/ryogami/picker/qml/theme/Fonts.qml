@@ -17,4 +17,10 @@ QtObject {
     readonly property int uiWeight: Font.Bold
 
     readonly property string icon: iconLoader.status === FontLoader.Ready ? iconLoader.name : "Symbols Nerd Font"
+
+    // Ryoku's brand stack (docs/ui-ux.md), installed system-wide by the desktop packages:
+    // Fraunces for numerals and titles, Space Grotesk for words, Noto CJK for kanji seals.
+    readonly property string display: "Fraunces"
+    readonly property string sans: "Space Grotesk"
+    readonly property string jp: "Noto Sans CJK JP"
 }

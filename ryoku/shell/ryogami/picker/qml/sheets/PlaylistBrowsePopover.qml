@@ -48,18 +48,17 @@ Item {
 
             Text {
                 text: I18n.tr("Add wallpapers")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontHead
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
             Text {
                 Layout.fillWidth: true
                 visible: popover.playlistName.length > 0
                 text: popover.playlistName
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.6)
                 elide: Text.ElideRight
@@ -141,8 +140,8 @@ Item {
                 text: browseView.query && browseView.query.length > 0
                     ? I18n.tr("No wallpapers match this search.")
                     : I18n.tr("No wallpapers in your library yet.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontLabel
                 color: Theme.withAlpha(Theme.surfaceText, 0.4)
                 renderType: Text.NativeRendering

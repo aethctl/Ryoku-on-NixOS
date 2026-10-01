@@ -35,8 +35,8 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: details.expanded ? "\u25be" : (I18n.rtl ? "\u25c2" : "\u25b8")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontSmall
                     color: Theme.withAlpha(Theme.surfaceText, details.expanded ? 0.85 : 0.55)
                     renderType: Text.NativeRendering
@@ -44,8 +44,8 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: details.title
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.DemiBold
                     font.pixelSize: Theme.fontBody2
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering

@@ -1,5 +1,6 @@
 import QtQuick
 
+// A large section title. Fraunces sets it, the way a page title does.
 Text {
     id: segment
 
@@ -7,8 +8,7 @@ Text {
     property real reveal: 1
 
     text: segment.label
-    font.family: Theme.ui
-    font.weight: Theme.uiWeight
+    font.family: Theme.display
     font.pixelSize: Theme.fontSegment
     color: Theme.withAlpha(Theme.surfaceText, segment.reveal)
     renderType: Text.NativeRendering

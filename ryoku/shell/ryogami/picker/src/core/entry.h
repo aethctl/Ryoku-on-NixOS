@@ -43,6 +43,22 @@ struct Entry {
         return out;
     }
 
+    // The daemon stores tags as a comma-joined string in its JSON index; accept that as well as
+    // a plain array so the model's tag list is never silently empty.
+    static QStringList tagList(const QJsonValue &v)
+    {
+        if (v.isArray())
+            return stringList(v);
+        QStringList out;
+        const QStringList parts = v.toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
+        for (const QString &p : parts) {
+            const QString s = p.trimmed();
+            if (!s.isEmpty())
+                out.append(s);
+        }
+        return out;
+    }
+
     static Entry fromJson(const QJsonObject &o)
     {
         Entry e;
@@ -60,7 +76,7 @@ struct Entry {
         e.weType = o.value(QStringLiteral("we_type")).toString();
         e.title = o.value(QStringLiteral("title")).toString();
         e.preview = o.value(QStringLiteral("preview")).toString();
-        e.tags = stringList(o.value(QStringLiteral("tags")));
+        e.tags = tagList(o.value(QStringLiteral("tags")));
         e.favourite = o.value(QStringLiteral("favourite")).toInt();
         e.hue = o.contains(QStringLiteral("hue")) ? o.value(QStringLiteral("hue")).toInt(99) : 99;
         e.sat = o.value(QStringLiteral("sat")).toInt();

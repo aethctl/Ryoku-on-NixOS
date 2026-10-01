@@ -161,10 +161,16 @@ void Library::onEvent(const QString &name, const QVariantMap &data)
         removeWallpaper(data.value(QStringLiteral("name")).toString(),
                         data.value(QStringLiteral("type")).toString());
     } else if (name == QLatin1String("ryogami.wall.scan_done")) {
+        // A picker started mid-scan holds only what the daemon had listed so far, and not
+        // every entry a scan settles arrives as a cached event; the finished list is the
+        // truth, so take it whole rather than leave cards missing until a relaunch.
         flushCached();
+        fetchWallpapers();
     } else if (name == QLatin1String("ryogami.wall.cache")) {
-        if (data.value(QStringLiteral("status")).toString() == QLatin1String("ready"))
+        if (data.value(QStringLiteral("status")).toString() == QLatin1String("ready")) {
             flushCached();
+            fetchWallpapers();
+        }
     } else if (name == QLatin1String("ryogami.workshop.changed")) {
         fetchWorkshop();
     } else if (name == QLatin1String("ryogami.wall.applied")) {

@@ -284,6 +284,10 @@ func (m *lensManager) build(paths semanticPaths, req buildRequest) {
 }
 
 type lensStatus struct {
+	// State is the plain condition the search UI shows: "ready", "indexing",
+	// "noModel" (import a pack), "disabled" (turned off) or "unavailable"
+	// (skwd-lens or its runtime is not installed on this system).
+	State   string `json:"state"`
 	Indexed int    `json:"indexed"`
 	Total   int    `json:"total"`
 	Model   string `json:"model"`
@@ -294,12 +298,49 @@ func (m *lensManager) status() lensStatus {
 	m.buildMu.Lock()
 	busy := m.building
 	m.buildMu.Unlock()
-	st := lensStatus{Busy: busy, Total: m.d.eligibleCount()}
+	st := lensStatus{State: m.semanticState(), Busy: busy, Total: m.d.eligibleCount()}
 	if paths, ok := m.d.discoverSemanticPaths(); ok {
 		st.Model = manifestIdentity(paths.manifest)
 		st.Indexed = indexUniqueKeys(paths.index)
 	}
 	return st
+}
+
+// semanticState reports exactly why Describe search is or is not usable, so the picker
+// can say what is missing instead of failing silently. The checks mirror the order of
+// discoverSemanticPaths so a component that is present is never reported as missing.
+func (m *lensManager) semanticState() string {
+	if lensHelper() == "" {
+		return "unavailable"
+	}
+	manifest := m.d.lensManifest()
+	if manifest == "" || !fileExists(manifest) {
+		return "noModel"
+	}
+	if rt := lensRuntime(manifest); rt == "" || !fileExists(rt) {
+		return "unavailable"
+	}
+	if !m.d.settingBool("semantic.enabled") {
+		return "disabled"
+	}
+	paths, ok := m.d.discoverSemanticPaths()
+	if !ok {
+		return "unavailable"
+	}
+	m.buildMu.Lock()
+	busy := m.building
+	m.buildMu.Unlock()
+	if busy {
+		return "indexing"
+	}
+	// An empty library has nothing to index, so search is set up even with no index file.
+	if m.d.eligibleCount() == 0 {
+		return "ready"
+	}
+	if !indexModelMatches(paths) || indexUniqueKeys(paths.index) == 0 {
+		return "indexing"
+	}
+	return "ready"
 }
 
 func (m *lensManager) publishStatus() {
@@ -309,6 +350,7 @@ func (m *lensManager) publishStatus() {
 func (m *lensManager) publishBuildProgress(detail string, encoded, encodeTotal int) {
 	st := m.status()
 	m.d.broadcast("ryogami.semantic.status", map[string]interface{}{
+		"state":       st.State,
 		"indexed":     st.Indexed,
 		"total":       st.Total,
 		"model":       st.Model,

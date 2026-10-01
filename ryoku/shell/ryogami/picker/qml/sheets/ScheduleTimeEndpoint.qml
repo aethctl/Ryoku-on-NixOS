@@ -50,8 +50,8 @@ Item {
         Text {
             width: parent.width
             text: I18n.tr("Use a clock time, sunrise, sunset, or add an offset such as sunset-30 or sunrise+45.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontTiny
             color: Theme.withAlpha(Theme.surfaceText, 0.42)
             lineHeight: 1.35

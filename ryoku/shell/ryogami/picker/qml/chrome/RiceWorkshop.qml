@@ -35,7 +35,7 @@ Item {
     Keys.onEscapePressed: root.close()
 
     onShownChanged: {
-        if (root.shown) { root._loadTouches(); pickField.mode = ""; forceActiveFocus() }
+        if (root.shown) { root._loadTouches(); forceActiveFocus() }
     }
 
     ListModel { id: touchModel }
@@ -62,6 +62,7 @@ Item {
     }
 
     function _run(args) { Quickshell.execDetached(args) }
+
     function applyRice() {
         if (root.slug === "") return
         root._run(["ryoku-hub", "rice", "apply", root.slug, "all"])
@@ -82,23 +83,6 @@ Item {
         root._run(["ryoku-hub", "rice", "delete", root.slug])
         if (root.state) root.state.toast(I18n.tr("Deleted rice"), "success")
         root.close()
-    }
-    function captureLook() {
-        var nm = root.name !== "" ? root.name : "rice"
-        root._run(["ryoku-hub", "rice", "capture", nm, "all"])
-        if (root.state) root.state.toast(I18n.tr("Capturing the current desktop"), "info")
-    }
-    function commitPath(folder) {
-        if (folder === "") return
-        if (pickField.mode === "export") {
-            if (root.slug !== "") root._run(["ryoku-hub", "rice", "export", root.slug, folder])
-            if (root.state) root.state.toast(I18n.tr("Exporting rice"), "info")
-        } else if (pickField.mode === "import") {
-            root._run(["ryoku-hub", "rice", "import", folder])
-            if (root.state) root.state.toast(I18n.tr("Importing rice"), "info")
-        }
-        pickField.mode = ""
-        pickField.text = ""
     }
 
     Scrim {
@@ -128,7 +112,7 @@ Item {
             anchors.topMargin: 12 * Theme.scale
             anchors.rightMargin: 14 * Theme.scale
             text: "\u00d7"
-            font.family: Theme.ui; font.weight: Theme.uiWeight
+            font.family: Theme.sans; font.weight: Font.Medium
             font.pixelSize: Theme.fontTitle
             color: closeMouse.containsMouse ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.7)
             z: 5
@@ -169,7 +153,7 @@ Item {
                     anchors.centerIn: parent
                     visible: root.preview === ""
                     text: root.name.length > 0 ? root.name.charAt(0).toUpperCase() : "?"
-                    font.family: Theme.ui
+                    font.family: Theme.display
                     font.pixelSize: 120 * Theme.scale
                     color: Theme.withAlpha(Theme.surfaceText, 0.22)
                     renderType: Text.NativeRendering
@@ -196,7 +180,7 @@ Item {
                     Text {
                         visible: root.author !== ""
                         text: root.author.toUpperCase()
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
                         font.letterSpacing: 2
                         color: Theme.withAlpha(Theme.surfaceText, 0.6)
@@ -205,7 +189,7 @@ Item {
                     Text {
                         width: parent.width
                         text: root.name
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fontSegment
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -217,8 +201,8 @@ Item {
                         spacing: 6 * Theme.scale
                         RiceChip { visible: root.compat !== ""; label: root.compat.toUpperCase(); strong: true }
                         RiceChip { visible: root.createdWith !== ""; label: "v" + root.createdWith }
-                        RiceChip { visible: root.live; label: I18n.tr("LIVE"); tint: Theme.primary; strong: true }
-                        RiceChip { visible: root.active; label: I18n.tr("ACTIVE"); tint: Theme.primary; strong: true }
+                        RiceChip { visible: root.live; label: I18n.tr("LIVE"); tint: Theme.surfaceText; strong: true }
+                        RiceChip { visible: root.active; label: I18n.tr("ACTIVE"); tint: Theme.surfaceText; strong: true }
                         Repeater {
                             model: root.tags
                             delegate: RiceChip {
@@ -235,19 +219,13 @@ Item {
                         wrapMode: Text.WordWrap
                         maximumLineCount: 3
                         elide: Text.ElideRight
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase
                         color: Theme.withAlpha(Theme.surfaceText, 0.62)
                         renderType: Text.NativeRendering
                     }
-                    Text {
-                        text: I18n.tr("Touches")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
-                        font.pixelSize: Theme.fontTiny
-                        font.letterSpacing: 1.5
-                        color: Theme.withAlpha(Theme.surfaceText, 0.52)
-                        renderType: Text.NativeRendering
-                    }
+                    Item { width: 1; height: 6 * Theme.scale }
+                    SectionLabel { width: parent.width; text: I18n.tr("Touches") }
                     Flow {
                         width: parent.width
                         spacing: 6 * Theme.scale
@@ -261,7 +239,7 @@ Item {
                         Text {
                             visible: touchModel.count === 0
                             text: "\u2014"
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.Medium
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.4)
                             renderType: Text.NativeRendering
@@ -274,32 +252,6 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     spacing: 10 * Theme.scale
-
-                    Row {
-                        visible: pickField.mode !== ""
-                        width: parent.width
-                        spacing: 8 * Theme.scale
-                        TextField {
-                            id: pickField
-                            property string mode: ""
-                            width: parent.width - goBtn.width - cancelBtn.width - 16 * Theme.scale
-                            variant: "field"
-                            placeholder: pickField.mode === "export"
-                                ? I18n.tr("Folder to export into")
-                                : I18n.tr("Folder to import from")
-                            onCommitted: root.commitPath(text.trim())
-                        }
-                        FolioAction {
-                            id: goBtn
-                            label: I18n.tr("Go")
-                            onTriggered: root.commitPath(pickField.text.trim())
-                        }
-                        FolioAction {
-                            id: cancelBtn
-                            label: I18n.tr("Cancel")
-                            onTriggered: { pickField.mode = ""; pickField.text = "" }
-                        }
-                    }
 
                     Row {
                         spacing: 8 * Theme.scale
@@ -326,58 +278,35 @@ Item {
                         }
                     }
 
-                    Text {
-                        text: I18n.tr("Share")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
-                        font.pixelSize: Theme.fontTiny
-                        font.letterSpacing: 1.5
-                        color: Theme.withAlpha(Theme.surfaceText, 0.52)
-                        renderType: Text.NativeRendering
-                    }
+                    Item { width: 1; height: 4 * Theme.scale }
+                    SectionLabel { width: parent.width; text: I18n.tr("Share") }
 
+                    // Export and import open the rice share dialog, which runs the command
+                    // tracked and reports what really happened.
                     Row {
                         spacing: 8 * Theme.scale
                         FixedButton {
                             mode: "action"
+                            glyph: "\u{f0193}"
                             label: I18n.tr("Save look")
-                            onTriggered: root.captureLook()
+                            onTriggered: if (root.state) root.state.openRiceShare("save", null)
                         }
                         FixedButton {
                             mode: "action"
+                            glyph: "\u{f0207}"
                             label: I18n.tr("Export")
                             enabled: root.slug !== ""
-                            onTriggered: { pickField.mode = "export"; pickField.text = ""; pickField.forceActiveFocus() }
+                            onTriggered: if (root.state) root.state.openRiceShare("export", root.rice)
                         }
                         FixedButton {
                             mode: "action"
+                            glyph: "\u{f02fa}"
                             label: I18n.tr("Import")
-                            onTriggered: { pickField.mode = "import"; pickField.text = ""; pickField.forceActiveFocus() }
+                            onTriggered: if (root.state) root.state.openRiceShare("import", null)
                         }
                     }
                 }
             }
-        }
-    }
-
-    component RiceChip: Rectangle {
-        id: chip
-        property string label: ""
-        property color tint: Theme.withAlpha(Theme.surfaceText, 0.7)
-        property bool strong: false
-        implicitWidth: chipText.implicitWidth + 16 * Theme.scale
-        height: 20 * Theme.scale
-        color: chip.strong ? Theme.withAlpha(chip.tint, 0.16) : "transparent"
-        border.width: 1
-        border.color: Theme.withAlpha(chip.tint, chip.strong ? 0.55 : 0.3)
-        Text {
-            id: chipText
-            anchors.centerIn: parent
-            text: chip.label
-            font.family: Theme.ui; font.weight: Theme.uiWeight
-            font.pixelSize: Theme.fontFine
-            font.letterSpacing: 0.8
-            color: chip.strong ? chip.tint : Theme.withAlpha(Theme.surfaceText, 0.7)
-            renderType: Text.NativeRendering
         }
     }
 }

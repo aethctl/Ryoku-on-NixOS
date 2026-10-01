@@ -56,7 +56,11 @@ PanelWindow {
     property bool mapped: false
 
     screen: modelData
-    visible: mapped && Config.barStyle !== "nacre"
+    visible: mapped
+        && Config.barStyle !== "nacre"
+        && !Config.styleOwnsBannersFor(
+            modelData ? modelData.name : ""
+        )
     color: "transparent"
     // Exclusive zone 0: reserve nothing, respect other layers' zones (contract
     // 12 sec 1). ExclusionMode.Ignore would request -1 instead.

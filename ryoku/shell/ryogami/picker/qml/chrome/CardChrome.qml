@@ -79,10 +79,10 @@ Item {
                     id: typeText
                     anchors.centerIn: parent
                     text: chrome.typeLabel
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.DemiBold
                     font.pixelSize: Theme.fontFine
-                    color: Theme.primary
+                    color: Theme.withAlpha(Theme.surfaceText, 0.92)
                     renderType: Text.NativeRendering
                 }
             }
@@ -101,7 +101,7 @@ Item {
                     text: "\u{f02d1}"
                     font.family: Theme.icon
                     font.pixelSize: Theme.fontFine
-                    color: Theme.primary
+                    color: Theme.withAlpha(Theme.surfaceText, 0.92)
                     renderType: Text.NativeRendering
                 }
             }
@@ -120,7 +120,7 @@ Item {
                 anchors.top: parent.top
                 width: 3 * Theme.scale
                 height: parent.height
-                color: Theme.primary
+                color: Theme.surfaceText
             }
 
             Text {
@@ -132,8 +132,8 @@ Item {
                 anchors.rightMargin: 12 * Theme.scale
                 text: chrome.entry.name || chrome.entry.key || ""
                 elide: Text.ElideRight
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontBody
                 color: Theme.surfaceText
                 renderType: Text.NativeRendering

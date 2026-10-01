@@ -52,11 +52,12 @@ func compositorDiagnosticPackages() []string {
 	byName := map[string][]string{
 		"hyprland": {"hyprland", "xdg-desktop-portal-hyprland"},
 		"niri":     {"niri", "xwayland-satellite", "xdg-desktop-portal-gnome"},
+		"mango":    {"mangowm", "scenefx0.5", "xdg-desktop-portal-wlr", "wlsunset"},
 	}
 	if name := wm.Detect().Name; byName[name] != nil {
 		return byName[name]
 	}
-	return []string{"hyprland", "xdg-desktop-portal-hyprland", "niri", "xwayland-satellite", "xdg-desktop-portal-gnome"}
+	return []string{"hyprland", "xdg-desktop-portal-hyprland", "niri", "xwayland-satellite", "xdg-desktop-portal-gnome", "mangowm", "xdg-desktop-portal-wlr", "wlsunset"}
 }
 
 // gatherReport: one self-contained text report. doctor findings, then the

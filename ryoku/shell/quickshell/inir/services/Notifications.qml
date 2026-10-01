@@ -85,7 +85,6 @@ Singleton {
     on_WatchPopupsChanged: _rebuild()
     Component.onCompleted: {
         _rebuild()
-        root.silent = Config.getNestedValue("notifications.silent", false) === true
     }
 
     // ---- group model ----
@@ -182,19 +181,13 @@ Singleton {
 
     // ---- DND and mute ----
     readonly property bool manualDndActive: Ryoku.Notifs.dnd === true
-    property bool silent: false
+    readonly property bool silent: manualDndActive
 
     function toggleSilent() {
-        root.silent = !root.silent;
+        Ryoku.Flags.dnd = !Ryoku.Flags.dnd;
     }
 
     function markAllRead() {
         root.timeoutAll();
-    }
-
-    // The frame's persisted "silent" flag lives in its own store.
-    onSilentChanged: {
-        if (root.silent !== Config.getNestedValue("notifications.silent", false))
-            Config.setNestedValue("notifications.silent", root.silent);
     }
 }

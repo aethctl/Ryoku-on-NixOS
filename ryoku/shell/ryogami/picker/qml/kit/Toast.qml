@@ -35,7 +35,7 @@ Item {
 
     Timer { id: life; interval: toast.duration; onTriggered: toast.close() }
 
-    readonly property color _accent: toast.kind === "error" ? Theme.tertiary : Theme.primary
+    readonly property color _accent: toast.kind === "error" ? Theme.tertiary : Theme.surfaceText
 
     opacity: toast._open ? 1 : 0
     Behavior on opacity { NumberAnimation { duration: Theme.standard; easing.type: Theme.revealEasing } }
@@ -73,8 +73,8 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: toast.text
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
                 color: Theme.surfaceText
                 renderType: Text.NativeRendering

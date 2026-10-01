@@ -22,11 +22,10 @@ Rectangle {
         anchors.rightMargin: 6 * Theme.scale
         verticalAlignment: TextInput.AlignVCenter
         clip: true
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.display
         font.pixelSize: Theme.fontBody
         color: "white"
-        selectionColor: Qt.rgba(Qt.color(Theme.primary).r, Qt.color(Theme.primary).g, Qt.color(Theme.primary).b, 0.4)
+        selectionColor: Qt.rgba(1, 1, 1, 0.24)
         selectedTextColor: "white"
         selectByMouse: true
         renderType: Text.NativeRendering

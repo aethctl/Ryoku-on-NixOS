@@ -425,10 +425,10 @@ Item {
                                     topPadding: 7 * Theme.scale
                                     bottomPadding: 3 * Theme.scale
                                     text: root._groupLabel(groupCol.modelData)
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontSmall
-                                    color: Theme.primary
+                                    color: Theme.surfaceText
                                     renderType: Text.NativeRendering
                                 }
 
@@ -461,16 +461,16 @@ Item {
                     Text {
                         width: parent.width
                         text: root._selName()
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontSmall
-                        color: Theme.primary
+                        color: Theme.surfaceText
                         renderType: Text.NativeRendering
                         elide: Text.ElideRight
                     }
                     Text {
                         width: parent.width
                         text: root.selRole
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontMini
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
@@ -479,7 +479,7 @@ Item {
                     Text {
                         width: parent.width
                         text: root._selDesc()
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Normal
                         font.pixelSize: Theme.fontBase
                         color: Theme.withAlpha(Theme.surfaceText, 0.5)
                         lineHeight: 1.4
@@ -521,8 +521,7 @@ Item {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
                             text: I18n.tr("Theme designer")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fontSection
                             lineHeight: 1.0
                             color: Theme.surfaceText
@@ -539,7 +538,7 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("Edit the full colour scheme, preview the Wall interface, and save both variants.")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Normal
                         font.pixelSize: Theme.fontXSmall
                         color: Theme.withAlpha(Theme.surfaceText, 0.56)
                         wrapMode: Text.WordWrap
@@ -569,7 +568,7 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 text: I18n.tr("Colour field")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.DemiBold
                                 font.pixelSize: Theme.fontField
                                 color: Theme.surfaceText
                                 renderType: Text.NativeRendering
@@ -587,7 +586,7 @@ Item {
                         Text {
                             width: wheelEditor.width
                             text: I18n.tr("Choose hue on the ring, then saturation and light inside the field.")
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.Normal
                             font.pixelSize: Theme.fontXSmall
                             color: Theme.withAlpha(Theme.surfaceText, 0.56)
                             wrapMode: Text.WordWrap
@@ -650,7 +649,7 @@ Item {
                             Text {
                                 Layout.alignment: Qt.AlignVCenter
                                 text: I18n.tr("Last loaded")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Medium
                                 font.pixelSize: Theme.fontMini
                                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                 renderType: Text.NativeRendering
@@ -665,7 +664,7 @@ Item {
                             Text {
                                 Layout.alignment: Qt.AlignVCenter
                                 text: root.loadedHex
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.display
                                 font.pixelSize: Theme.fontFine
                                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                                 renderType: Text.NativeRendering
@@ -676,9 +675,9 @@ Item {
 
                         Text {
                             text: I18n.tr("Recent")
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.DemiBold
                             font.pixelSize: Theme.fontFine
-                            color: Theme.primary
+                            color: Theme.surfaceText
                             renderType: Text.NativeRendering
                         }
 
@@ -707,7 +706,7 @@ Item {
                             visible: root.recents.length === 0
                             width: wheelEditor.width
                             text: I18n.tr("Colours used during this edit appear here.")
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.Normal
                             font.pixelSize: Theme.fontFine
                             color: Theme.withAlpha(Theme.surfaceText, 0.42)
                             wrapMode: Text.WordWrap
@@ -726,7 +725,7 @@ Item {
 
                         Text {
                             text: I18n.tr("Settings preview")
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.DemiBold
                             font.pixelSize: Theme.fontField
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
@@ -734,7 +733,7 @@ Item {
                         Text {
                             width: previewCol.width
                             text: I18n.tr("This preview uses all nine colours across navigation, controls, fields, cards, and status messages.")
-                            font.family: Theme.ui; font.weight: Theme.uiWeight
+                            font.family: Theme.sans; font.weight: Font.Normal
                             font.pixelSize: Theme.fontXSmall
                             color: Theme.withAlpha(Theme.surfaceText, 0.56)
                             wrapMode: Text.WordWrap
@@ -769,7 +768,7 @@ Item {
                             FolioRule { width: parent.width; alpha: 0.58 }
                             Text {
                                 text: I18n.tr("Starting palette")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.DemiBold
                                 font.pixelSize: Theme.fontField
                                 color: Theme.surfaceText
                                 renderType: Text.NativeRendering
@@ -777,7 +776,7 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Open a preset, or build a palette from the colour selected above.")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontXSmall
                                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                 wrapMode: Text.WordWrap
@@ -802,7 +801,7 @@ Item {
                             FolioRule { width: parent.width; alpha: 0.58 }
                             Text {
                                 text: I18n.tr("Save palette")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.DemiBold
                                 font.pixelSize: Theme.fontField
                                 color: Theme.surfaceText
                                 renderType: Text.NativeRendering
@@ -810,7 +809,7 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Name this palette to save both variants. Save + apply uses the variant selected above.")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontXSmall
                                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                 wrapMode: Text.WordWrap
@@ -864,7 +863,7 @@ Item {
                             FolioRule { width: parent.width; alpha: 0.58 }
                             Text {
                                 text: I18n.tr("Current wallpaper")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.DemiBold
                                 font.pixelSize: Theme.fontField
                                 color: Theme.surfaceText
                                 renderType: Text.NativeRendering
@@ -872,7 +871,7 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Save both dark and light variants for the wallpaper supplying your desktop theme.")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontXSmall
                                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                 wrapMode: Text.WordWrap
@@ -899,7 +898,7 @@ Item {
                                         Layout.fillWidth: true
                                         text: root._wpEntry ? (root._wpEntry.name || root._wpEntry.key) : ""
                                         elide: Text.ElideRight
-                                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                                        font.family: Theme.sans; font.weight: Font.DemiBold
                                         font.pixelSize: Theme.fontLabel
                                         color: Theme.surfaceText
                                         renderType: Text.NativeRendering
@@ -926,7 +925,7 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: I18n.tr("No wallpaper palette is available yet.")
-                                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                                    font.family: Theme.sans; font.weight: Font.Normal
                                     font.pixelSize: Theme.fontBase
                                     color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                     wrapMode: Text.WordWrap
@@ -942,7 +941,7 @@ Item {
                                 visible: root.libError.length > 0
                                 width: parent.width
                                 text: root.libError
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontBase
                                 color: Theme.tertiary
                                 wrapMode: Text.WordWrap
@@ -959,14 +958,14 @@ Item {
                                 Text {
                                     Layout.fillWidth: true
                                     text: I18n.tr("Saved palettes")
-                                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                                    font.family: Theme.sans; font.weight: Font.DemiBold
                                     font.pixelSize: Theme.fontField
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering
                                 }
                                 Text {
                                     text: root.savedPalettes.length + " " + I18n.tr("custom")
-                                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                                    font.family: Theme.sans; font.weight: Font.Medium
                                     font.pixelSize: Theme.fontFine
                                     color: Theme.withAlpha(Theme.surfaceText, 0.44)
                                     renderType: Text.NativeRendering
@@ -975,7 +974,7 @@ Item {
                             Text {
                                 width: parent.width
                                 text: I18n.tr("Open a saved palette to edit its full dark and light schemes.")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontMini
                                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                                 wrapMode: Text.WordWrap
@@ -985,7 +984,7 @@ Item {
                             Text {
                                 visible: root.loadingLib
                                 text: I18n.tr("Loading saved palettes\u2026")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Medium
                                 font.pixelSize: Theme.fontBase
                                 color: Theme.withAlpha(Theme.surfaceText, 0.6)
                                 renderType: Text.NativeRendering
@@ -994,7 +993,7 @@ Item {
                                 visible: !root.loadingLib && root.savedPalettes.length === 0 && root.libError.length === 0
                                 width: parent.width
                                 text: I18n.tr("No custom palettes yet. Name the current palette and save it to add the first one.")
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans; font.weight: Font.Normal
                                 font.pixelSize: Theme.fontBase
                                 color: Theme.withAlpha(Theme.surfaceText, 0.48)
                                 wrapMode: Text.WordWrap
@@ -1021,8 +1020,8 @@ Item {
 
                                             Rectangle {
                                                 anchors.fill: parent
-                                                color: (savedRow.entry.name === root.nameText) ? Theme.withAlpha(Theme.primary, 0.18)
-                                                     : loadHover.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+                                                color: (savedRow.entry.name === root.nameText) ? Theme.withAlpha(Theme.surfaceText, 0.09)
+                                                     : loadHover.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.05)
                                                      : "transparent"
                                             }
                                             RowLayout {
@@ -1030,18 +1029,20 @@ Item {
                                                 anchors.leftMargin: 7 * Theme.scale
                                                 anchors.rightMargin: 7 * Theme.scale
                                                 spacing: 8 * Theme.scale
-                                                Text {
-                                                    text: (savedRow.entry.name === root.nameText) ? "\u25c6" : "\u25c7"
-                                                    font.family: Theme.ui
-                                                    font.pixelSize: Theme.fontMicro
-                                                    color: Theme.withAlpha(Theme.primary, (savedRow.entry.name === root.nameText) ? 1.0 : 0.44)
-                                                    renderType: Text.NativeRendering
+                                                Rectangle {
+                                                    Layout.preferredWidth: 6 * Theme.scale
+                                                    Layout.preferredHeight: 6 * Theme.scale
+                                                    radius: 3 * Theme.scale
+                                                    color: (savedRow.entry.name === root.nameText) ? Theme.withAlpha(Theme.surfaceText, 0.9) : "transparent"
+                                                    border.width: (savedRow.entry.name === root.nameText) ? 0 : 1
+                                                    border.color: Theme.withAlpha(Theme.surfaceText, 0.4)
+                                                    Behavior on color { ColorAnimation { duration: Theme.fast } }
                                                 }
                                                 Text {
                                                     Layout.fillWidth: true
                                                     text: savedRow.entry.name
                                                     elide: Text.ElideRight
-                                                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                                                    font.family: Theme.sans; font.weight: (savedRow.entry.name === root.nameText) ? Font.DemiBold : Font.Medium
                                                     font.pixelSize: Theme.fontWide
                                                     color: Theme.surfaceText
                                                     renderType: Text.NativeRendering

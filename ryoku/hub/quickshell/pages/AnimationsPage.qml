@@ -1210,8 +1210,8 @@ Item {
                                     onModified: (v) => pg.he(prow.r.key, v) } }
                             Component { id: pSegC
                                 Seg { anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter
-                                    options: prow.r.opts || []; current: String(pg.hv(prow.r.key))
-                                    onChose: (k) => pg.he(prow.r.key, k) } }
+                                    options: prow.r.opts || []; labels: prow.r.optLabels || ({})
+                                    current: String(pg.hv(prow.r.key)); onChose: (k) => pg.he(prow.r.key, k) } }
                             Component { id: pChipsC
                                 Chips { anchors.fill: parent
                                     options: prow.r.opts || []; labels: prow.r.optLabels || ({})

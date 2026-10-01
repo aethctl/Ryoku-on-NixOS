@@ -9,7 +9,12 @@
       "description": "Compact command palette with a centered RestDashboard image card.",
       "entrypoint": "variants/main/Main.qml",
       "preview": "variants/main/Preview.qml",
-      "capabilities": ["shape", "background", "results", "hero"]
+      "capabilities": [
+        "shape",
+        "background",
+        "results",
+        "hero"
+      ]
     },
     {
       "id": "hero",
@@ -17,7 +22,12 @@
       "description": "Full HeroShutter image header with modes, actions, and provider results.",
       "entrypoint": "variants/hero/Main.qml",
       "preview": "variants/hero/Preview.qml",
-      "capabilities": ["shape", "background", "results", "hero"]
+      "capabilities": [
+        "shape",
+        "background",
+        "results",
+        "hero"
+      ]
     },
     {
       "id": "okshell",
@@ -41,6 +51,14 @@
       "description": "The Shima launcher: the frame's morphing-glass search, with apps, actions, commands and web in one row.",
       "entrypoint": "variants/spotlight/Main.qml",
       "preview": "variants/spotlight/Preview.qml",
+      "capabilities": []
+    },
+    {
+      "id": "python",
+      "name": "Python",
+      "description": "The Python launcher: serpantinum's bar-attached search pill with usage ranking and a Files tab.",
+      "entrypoint": "variants/python/Main.qml",
+      "preview": "variants/python/Preview.qml",
       "capabilities": []
     }
   ]

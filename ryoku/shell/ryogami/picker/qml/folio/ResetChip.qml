@@ -19,20 +19,22 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: "\u21ba"
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontFine
-            color: Theme.withAlpha(Theme.primary, chip.hovered ? 1 : 0.7)
+            color: Theme.withAlpha(Theme.surfaceText, chip.hovered ? 1 : 0.5)
             renderType: Text.NativeRendering
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
         }
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: I18n.tr("Reset")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontFine
-            color: Theme.withAlpha(Theme.primary, chip.hovered ? 1 : 0.7)
+            color: Theme.withAlpha(Theme.surfaceText, chip.hovered ? 1 : 0.5)
             renderType: Text.NativeRendering
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
         }
     }
 

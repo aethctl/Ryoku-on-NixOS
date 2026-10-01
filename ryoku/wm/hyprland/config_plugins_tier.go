@@ -76,6 +76,22 @@ var bundledPlugins = []pluginDef{
 		Loaded:  "hyprfocus",
 	},
 	{
+		ID: "borders-plus-plus", Name: "Extra borders",
+		Desc: "One or two static borders outside the window's own, each with its colour and width.",
+		Repo: "https://github.com/hyprwm/hyprland-plugins", Plugin: "borders-plus-plus",
+		Package: "ryoku-hypr-plugins",
+		Docs:    "https://github.com/hyprwm/hyprland-plugins/tree/main/borders-plus-plus",
+		Loaded:  "borders-plus-plus",
+	},
+	{
+		ID: "hyprgrass", Name: "Touch gestures",
+		Desc: "Swipe, pinch, and long-press touchscreen gestures that drive windows and workspaces.",
+		Repo: "https://github.com/horriblename/hyprgrass", Plugin: "hyprgrass",
+		Package: "hyprgrass",
+		Docs:    "https://github.com/horriblename/hyprgrass/blob/master/docs/configuration.md",
+		Loaded:  "hyprgrass",
+	},
+	{
 		ID: "keysounds", Name: "Key sounds",
 		Desc:   "Plays a keyboard sound on every key press: real switch recordings, or your own samples.",
 		Plugin: "keysounds", Local: "ryoku/hyprland/plugins/keysounds",
@@ -679,6 +695,10 @@ func pluginEnabled(o Overrides, id string) bool {
 		return o.Plugins.Hyprfocus.Enabled
 	case "keysounds":
 		return o.Plugins.Keysounds.Enabled
+	case "borders-plus-plus":
+		return o.Plugins.BordersPlusPlus.Enabled
+	case "hyprgrass":
+		return o.Plugins.Hyprgrass.Enabled
 	}
 	return o.Plugins.Extra[id].Enabled
 }

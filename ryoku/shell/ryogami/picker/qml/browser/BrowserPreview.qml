@@ -134,7 +134,7 @@ Item {
         anchors.centerIn: parent
         visible: preview._artSource.length === 0
         size: 64
-        color: Theme.primary
+        color: Theme.surfaceText
     }
 
     Row {
@@ -147,8 +147,8 @@ Item {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: I18n.tr("Loading full preview\u2026")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontBody
             color: "white"
             renderType: Text.NativeRendering
@@ -201,8 +201,7 @@ Item {
                     text: preview.item ? (preview.item.title && preview.item.title.length > 0
                         ? preview.item.title : String(preview.item.id)) : ""
                     elide: Text.ElideRight
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fs(18)
                     color: "white"
                     renderType: Text.NativeRendering
@@ -215,8 +214,8 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: preview.item ? I18n.tr("Workshop ID: %1").arg(String(preview.item.id)) : ""
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontLabel
                         color: Qt.rgba(1, 1, 1, 0.7)
                         renderType: Text.NativeRendering
@@ -230,8 +229,8 @@ Item {
                             id: copyText
                             anchors.centerIn: parent
                             text: I18n.tr("Copy ID")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontBase
                             color: "white"
                             renderType: Text.NativeRendering
@@ -252,7 +251,7 @@ Item {
                 Text {
                     visible: !!preview.item && !!preview.item.resolution
                     text: preview.item ? String(preview.item.resolution) : ""
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans; font.weight: Font.Medium
                     font.pixelSize: Theme.fontLabel; color: "white"
                     renderType: Text.NativeRendering
                 }
@@ -260,7 +259,7 @@ Item {
                     readonly property string sz: preview.item ? preview._fmtSize(preview.item.fileSize) : ""
                     visible: sz.length > 0
                     text: sz
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans; font.weight: Font.Medium
                     font.pixelSize: Theme.fontBody; color: Qt.rgba(1, 1, 1, 0.65)
                     renderType: Text.NativeRendering
                 }
@@ -273,7 +272,7 @@ Item {
                         id: catText
                         anchors.centerIn: parent
                         text: preview.item ? String(preview.item.category) : ""
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: Qt.rgba(1, 1, 1, 0.85)
                         renderType: Text.NativeRendering
                     }
@@ -287,7 +286,7 @@ Item {
                         id: purText
                         anchors.centerIn: parent
                         text: preview.item ? String(preview.item.purity) : ""
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: Qt.rgba(1, 1, 1, 0.85)
                         renderType: Text.NativeRendering
                     }
@@ -295,7 +294,7 @@ Item {
                 Text {
                     visible: !!preview.item && !!preview.item.attribution
                     text: preview.item ? String(preview.item.attribution) : ""
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans; font.weight: Font.Medium
                     font.pixelSize: Theme.fontBody; color: Qt.rgba(1, 1, 1, 0.7)
                     renderType: Text.NativeRendering
                 }
@@ -306,7 +305,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("Clip")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: "white"
                         renderType: Text.NativeRendering
                     }
@@ -319,7 +318,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "+"
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: "white"
                         renderType: Text.NativeRendering
                     }
@@ -332,7 +331,7 @@ Item {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: I18n.tr("of %1").arg(preview._fmtClock(preview._duration))
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: Qt.rgba(1, 1, 1, 0.7)
                         renderType: Text.NativeRendering
                     }
@@ -364,7 +363,7 @@ Item {
                                     ? I18n.tr("Cancel")
                                     : (preview.sources ? preview.sources.progressLabel(I18n.tr("Saving"), preview.item) : I18n.tr("Saving\u2026")))
                                 : I18n.tr("Save")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase; color: "white"
                         renderType: Text.NativeRendering
                     }
@@ -381,13 +380,13 @@ Item {
                     visible: preview.showApply
                     width: applyLbl.implicitWidth + 24 * Theme.scale
                     height: 30 * Theme.scale
-                    color: Theme.primary
+                    color: Theme.surfaceText
                     Text {
                         id: applyLbl
                         anchors.centerIn: parent
                         text: preview.applying ? I18n.tr("Applying") : I18n.tr("Apply")
-                        font.family: Theme.ui; font.weight: Font.Bold
-                        font.pixelSize: Theme.fontBase; color: Theme.primaryText
+                        font.family: Theme.sans; font.weight: Font.DemiBold
+                        font.pixelSize: Theme.fontBase; color: Theme.surface
                         renderType: Text.NativeRendering
                     }
                     MouseArea {

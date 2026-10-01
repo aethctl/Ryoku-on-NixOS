@@ -577,10 +577,13 @@ cp -a "$here/quickshell/." "$cfg/quickshell/"
 
 # xdg-desktop-portal: route each compositor's portals. hyprland owns its own
 # ScreenCast/Screenshot; niri has no backend, so screen sharing rides gnome and
-# only FileChooser is pinned to gtk (the gnome one hangs off a GNOME session).
-# Both files land; the portal reads the one named for the running desktop.
+# only FileChooser is pinned to gtk (the gnome one hangs off a GNOME session);
+# mango ships no backend either, so its routing lives in the wlr backend with
+# the gtk default. Every file lands; the portal reads the one named for the
+# running desktop.
 install -Dm644 "$here/../hyprland/hyprland-portals.conf" "$cfg/xdg-desktop-portal/hyprland-portals.conf"
 install -Dm644 "$here/../niri/niri-portals.conf" "$cfg/xdg-desktop-portal/niri-portals.conf"
+install -Dm644 "$here/../mango/mango-portals.conf" "$cfg/xdg-desktop-portal/mango-portals.conf"
 # The single-instance shell ships as ryoku/shell/quickshell/shell and lands at
 # $cfg/quickshell/shell via the copy above; the ryoku-shell daemon launches it as
 # `qs -c shell`, the live desktop.

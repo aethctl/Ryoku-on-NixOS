@@ -28,17 +28,16 @@ Item {
         anchors.topMargin: 6 * Theme.scale
         width: 70 * Theme.scale
         height: 22 * Theme.scale
-        color: Theme.withAlpha(Theme.primary, 0.94 * actions.reveal)
-        border.width: 1
-        border.color: Theme.withAlpha(Theme.primaryText, 0.42 * actions.reveal)
+        radius: Theme.radius
+        color: Theme.withAlpha(Theme.surfaceText, 0.96 * actions.reveal)
 
         Text {
             anchors.centerIn: parent
             text: I18n.tr("\u2713 Saved")
-            font.family: Theme.ui
-            font.weight: Font.Bold
+            font.family: Theme.sans
+            font.weight: Font.DemiBold
             font.pixelSize: Theme.fontSmall
-            color: Theme.withAlpha(Theme.primaryText, actions.reveal)
+            color: Theme.withAlpha(Theme.surface, actions.reveal)
             renderType: Text.NativeRendering
         }
     }
@@ -55,9 +54,10 @@ Item {
             id: saveBtn
             width: Math.round(bar.width * 0.56)
             height: bar.height
-            color: Theme.withAlpha(Theme.surfaceContainer, 0.94 * actions.reveal)
+            radius: Theme.radius
+            color: Theme.withAlpha(Theme.surfaceText, 0.05 * actions.reveal)
             border.width: 1
-            border.color: Theme.withAlpha(Theme.outline, 0.72 * actions.reveal)
+            border.color: Theme.withAlpha(Theme.outline, 0.4 * actions.reveal)
 
             Text {
                 anchors.centerIn: parent
@@ -71,8 +71,8 @@ Item {
                             ? I18n.tr("Cancel")
                             : (actions.sources ? actions.sources.progressLabel(I18n.tr("Saving"), actions.item) : I18n.tr("Saving")))
                         : I18n.tr("Save")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontSmall
                 color: Theme.withAlpha(Theme.surfaceText,
                     (actions._downloaded || actions._downloading ? 0.56 : 0.96) * actions.reveal)
@@ -93,9 +93,8 @@ Item {
             visible: actions.showApply
             width: bar.width - saveBtn.width
             height: bar.height
-            color: Theme.withAlpha(Theme.primary, 0.97 * actions.reveal)
-            border.width: 1
-            border.color: Theme.withAlpha(Theme.primaryText, 0.38 * actions.reveal)
+            radius: Theme.radius
+            color: Theme.withAlpha(Theme.surfaceText, 0.97 * actions.reveal)
 
             Text {
                 anchors.centerIn: parent
@@ -103,10 +102,10 @@ Item {
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight
                 text: actions.applying ? I18n.tr("Applying") : I18n.tr("Apply")
-                font.family: Theme.ui
-                font.weight: Font.Bold
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontSmall
-                color: Theme.withAlpha(Theme.primaryText, (actions.applying ? 0.62 : 1.0) * actions.reveal)
+                color: Theme.withAlpha(Theme.surface, (actions.applying ? 0.62 : 1.0) * actions.reveal)
                 renderType: Text.NativeRendering
             }
             MouseArea {

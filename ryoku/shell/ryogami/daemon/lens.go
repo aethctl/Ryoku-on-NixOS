@@ -370,6 +370,15 @@ func init() {
 		_, ok := d.discoverSemanticPaths()
 		return ok
 	})
+	// The Lens component (skwd-lens plus its ONNX runtime) is present but a model pack may
+	// not be; the settings model-import controls stay reachable so search can be set up.
+	registerAvailability("lensHelper", func(d *daemon) bool {
+		if lensHelper() == "" {
+			return false
+		}
+		rt := lensRuntime(d.lensManifest())
+		return rt != "" && fileExists(rt)
+	})
 	onStart(func(d *daemon) { d.lens().start() })
 	watchSetting("semantic.", func(d *daemon, key string, _ interface{}) {
 		d.lens().onSettingChanged(key)

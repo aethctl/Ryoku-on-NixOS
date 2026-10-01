@@ -35,11 +35,13 @@ Item {
                 width: parent.width - node.depth * 13 * Theme.scale
                 height: nodeContent.implicitHeight + 16 * Theme.scale
                 radius: Theme.radius
-                color: node.selected ? Theme.withAlpha(Theme.primary, 0.18)
+                color: node.selected ? Theme.surfaceText
                                      : Theme.withAlpha(Theme.surfaceContainer, 0.22)
                 border.width: 1
-                border.color: node.selected ? Theme.withAlpha(Theme.primary, 0.4)
+                border.color: node.selected ? "transparent"
                                             : Theme.withAlpha(Theme.outline, 0.3)
+                Behavior on color { ColorAnimation { duration: Theme.fast } }
+                Behavior on border.color { ColorAnimation { duration: Theme.fast } }
 
                 Row {
                     anchors.fill: parent
@@ -57,11 +59,11 @@ Item {
                         Text {
                             width: parent.width
                             text: node.sheet ? node.sheet.nodeEyebrow(node.model, node.isRoot) : ""
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fs(7.8)
-                            color: node.selected ? Theme.withAlpha(Theme.primaryText, 0.72)
-                                                 : Theme.withAlpha(Theme.primary, 0.5)
+                            color: node.selected ? Theme.withAlpha(Theme.surface, 0.72)
+                                                 : Theme.withAlpha(Theme.surfaceText, 0.5)
                             renderType: Text.NativeRendering
                             elide: Text.ElideRight
                         }
@@ -69,10 +71,10 @@ Item {
                             width: parent.width
                             text: node.sheet ? (node.isGroup ? node.sheet.groupTitle(node.model)
                                                               : node.sheet.conditionSentence(node.model)) : ""
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontBase
-                            color: node.selected ? Theme.primaryText : Theme.surfaceText
+                            color: node.selected ? Theme.surface : Theme.surfaceText
                             renderType: Text.NativeRendering
                             elide: Text.ElideRight
                         }
@@ -80,10 +82,10 @@ Item {
                             width: parent.width
                             text: node.sheet ? (node.isGroup ? node.sheet.groupDetail(node.model)
                                                               : node.sheet.predicateDetail(node.model)) : ""
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fs(8.6)
-                            color: node.selected ? Theme.withAlpha(Theme.primaryText, 0.68)
+                            color: node.selected ? Theme.withAlpha(Theme.surface, 0.68)
                                                  : Theme.withAlpha(Theme.surfaceText, 0.44)
                             renderType: Text.NativeRendering
                             elide: Text.ElideRight
@@ -94,10 +96,10 @@ Item {
                         id: editLabel
                         anchors.verticalCenter: parent.verticalCenter
                         text: node.selected ? I18n.tr("Editing") : I18n.tr("Edit  \u203a")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
-                        color: node.selected ? Theme.withAlpha(Theme.primaryText, 0.8)
+                        color: node.selected ? Theme.withAlpha(Theme.surface, 0.8)
                                              : Theme.withAlpha(Theme.surfaceText, 0.5)
                         renderType: Text.NativeRendering
                     }
@@ -123,10 +125,10 @@ Item {
                 Text {
                     x: (node.depth + 1) * 13 * Theme.scale
                     text: node.sheet ? node.sheet.connector(childWrap.index, node.model.op) : ""
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fs(8)
-                    color: Theme.withAlpha(Theme.primary, 0.52)
+                    color: Theme.withAlpha(Theme.surfaceText, 0.4)
                     renderType: Text.NativeRendering
                 }
 

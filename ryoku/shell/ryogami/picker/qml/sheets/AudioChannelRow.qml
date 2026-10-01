@@ -49,12 +49,13 @@ Rectangle {
     }
     readonly property string _stateText: !row.hasAudio ? I18n.tr("\u2013  No audio")
         : row.manual ? I18n.tr("Paused")
-        : row.groupMuted ? I18n.tr("\u25c7  Muted")
-        : I18n.tr("\u25c6  Sound")
+        : row.groupMuted ? I18n.tr("\u25cb  Muted")
+        : I18n.tr("\u25cf  Sound")
 
     color: Theme.withAlpha(Theme.surfaceContainer, 0.48)
     border.width: 1
-    border.color: Theme.withAlpha(row._playing ? Theme.primary : Theme.outline, 0.5)
+    border.color: row._playing ? Theme.withAlpha(Theme.surfaceText, 0.55) : Theme.withAlpha(Theme.outline, 0.5)
+    Behavior on border.color { ColorAnimation { duration: Theme.fast } }
     implicitHeight: col.implicitHeight + col.anchors.topMargin + 9 * Theme.scale
 
     Column {
@@ -71,7 +72,8 @@ Rectangle {
             width: parent.width
             color: Theme.withAlpha(Theme.surfaceContainer, 0.58)
             border.width: 1
-            border.color: Theme.withAlpha(row._playing ? Theme.primary : Theme.outline, 0.52)
+            border.color: row._playing ? Theme.withAlpha(Theme.surfaceText, 0.55) : Theme.withAlpha(Theme.outline, 0.52)
+            Behavior on border.color { ColorAnimation { duration: Theme.fast } }
             implicitHeight: summary.implicitHeight + 18 * Theme.scale
 
             Item {
@@ -89,10 +91,9 @@ Rectangle {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     text: row.ordinal < 10 ? ("0" + row.ordinal) : String(row.ordinal)
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontFine
-                    color: Theme.withAlpha(Theme.primary, row._playing ? 1 : 0.5)
+                    color: Theme.withAlpha(Theme.surfaceText, row._playing ? 0.85 : 0.5)
                     renderType: Text.NativeRendering
                 }
 
@@ -108,8 +109,8 @@ Rectangle {
                     Text {
                         width: parent.width
                         text: (row._outName === "" || row._outName === "*") ? I18n.tr("Shared outputs") : row._outName
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontLead
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -118,8 +119,8 @@ Rectangle {
                     Text {
                         width: parent.width
                         text: row._sourceLabel
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontSmall
                         color: Theme.withAlpha(Theme.surfaceText, 0.52)
                         elide: Text.ElideRight
@@ -128,8 +129,8 @@ Rectangle {
                     Text {
                         width: parent.width
                         text: row._kind
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
                         color: Theme.withAlpha(Theme.surfaceText, 0.4)
                         elide: Text.ElideRight
@@ -146,18 +147,18 @@ Rectangle {
                     Text {
                         anchors.right: parent.right
                         text: row._stateText
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontSmall
-                        color: row._playing ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.56)
+                        color: row._playing ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.56)
                         renderType: Text.NativeRendering
                     }
                     Text {
                         anchors.right: parent.right
                         visible: row.hasAudio
                         text: row.shared ? I18n.tr("Linked source") : I18n.tr("Independent source")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontTiny
                         color: Theme.withAlpha(Theme.surfaceText, 0.38)
                         renderType: Text.NativeRendering
@@ -175,8 +176,8 @@ Rectangle {
                 Layout.preferredWidth: 72 * Theme.scale
                 Layout.alignment: Qt.AlignVCenter
                 text: I18n.tr("Audio")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                 renderType: Text.NativeRendering
@@ -202,8 +203,8 @@ Rectangle {
                 Layout.preferredWidth: 72 * Theme.scale
                 Layout.alignment: Qt.AlignTop
                 text: I18n.tr("Audio")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                 renderType: Text.NativeRendering
@@ -211,8 +212,8 @@ Rectangle {
             Text {
                 Layout.fillWidth: true
                 text: I18n.tr("This wallpaper does not expose an audio channel.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                 wrapMode: Text.WordWrap
@@ -229,8 +230,8 @@ Rectangle {
                 Layout.preferredWidth: 72 * Theme.scale
                 Layout.alignment: Qt.AlignVCenter
                 text: I18n.tr("Wallpaper")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.46)
                 renderType: Text.NativeRendering

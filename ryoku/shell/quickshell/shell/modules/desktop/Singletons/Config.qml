@@ -574,6 +574,80 @@ Singleton {
     property alias irisVisualizerBorderOpacity: adapter.irisVisualizerBorderOpacity
     property alias irisVisualizerBackingOpacity: adapter.irisVisualizerBackingOpacity
 
+    // Serpantinum face library, hosted by PythonFaceWidget.
+    property alias pythonVisualizerEnabled: adapter.pythonVisualizerEnabled; property alias pythonVisualizerScale: adapter.pythonVisualizerScale; property alias pythonVisualizerAnchor: adapter.pythonVisualizerAnchor
+    property alias pythonVisualizerX: adapter.pythonVisualizerX; property alias pythonVisualizerY: adapter.pythonVisualizerY; property alias pythonVisualizerLocked: adapter.pythonVisualizerLocked
+    property alias pythonVisualizerOpacity: adapter.pythonVisualizerOpacity; property alias pythonVisualizerBg: adapter.pythonVisualizerBg; property alias pythonVisualizerColor: adapter.pythonVisualizerColor
+    property alias pythonVisualizerColor2: adapter.pythonVisualizerColor2; property alias pythonVisualizerStyle: adapter.pythonVisualizerStyle; property alias pythonVisualizerVariant: adapter.pythonVisualizerVariant
+    property alias pythonVisualizerRadius: adapter.pythonVisualizerRadius; property alias pythonVisualizerPad: adapter.pythonVisualizerPad; property alias pythonVisualizerBorder: adapter.pythonVisualizerBorder
+    property alias pythonVisualizerBorderOpacity: adapter.pythonVisualizerBorderOpacity; property alias pythonVisualizerBackingOpacity: adapter.pythonVisualizerBackingOpacity; property alias pythonVisualizerOpts: adapter.pythonVisualizerOpts
+    property alias pythonTimeEnabled: adapter.pythonTimeEnabled; property alias pythonTimeScale: adapter.pythonTimeScale; property alias pythonTimeAnchor: adapter.pythonTimeAnchor
+    property alias pythonTimeX: adapter.pythonTimeX; property alias pythonTimeY: adapter.pythonTimeY; property alias pythonTimeLocked: adapter.pythonTimeLocked
+    property alias pythonTimeOpacity: adapter.pythonTimeOpacity; property alias pythonTimeBg: adapter.pythonTimeBg; property alias pythonTimeColor: adapter.pythonTimeColor
+    property alias pythonTimeColor2: adapter.pythonTimeColor2; property alias pythonTimeStyle: adapter.pythonTimeStyle; property alias pythonTimeVariant: adapter.pythonTimeVariant
+    property alias pythonTimeRadius: adapter.pythonTimeRadius; property alias pythonTimePad: adapter.pythonTimePad; property alias pythonTimeBorder: adapter.pythonTimeBorder
+    property alias pythonTimeBorderOpacity: adapter.pythonTimeBorderOpacity; property alias pythonTimeBackingOpacity: adapter.pythonTimeBackingOpacity; property alias pythonTimeOpts: adapter.pythonTimeOpts
+    property alias pythonMusicEnabled: adapter.pythonMusicEnabled; property alias pythonMusicScale: adapter.pythonMusicScale; property alias pythonMusicAnchor: adapter.pythonMusicAnchor
+    property alias pythonMusicX: adapter.pythonMusicX; property alias pythonMusicY: adapter.pythonMusicY; property alias pythonMusicLocked: adapter.pythonMusicLocked
+    property alias pythonMusicOpacity: adapter.pythonMusicOpacity; property alias pythonMusicBg: adapter.pythonMusicBg; property alias pythonMusicColor: adapter.pythonMusicColor
+    property alias pythonMusicColor2: adapter.pythonMusicColor2; property alias pythonMusicStyle: adapter.pythonMusicStyle; property alias pythonMusicVariant: adapter.pythonMusicVariant
+    property alias pythonMusicRadius: adapter.pythonMusicRadius; property alias pythonMusicPad: adapter.pythonMusicPad; property alias pythonMusicBorder: adapter.pythonMusicBorder
+    property alias pythonMusicBorderOpacity: adapter.pythonMusicBorderOpacity; property alias pythonMusicBackingOpacity: adapter.pythonMusicBackingOpacity; property alias pythonMusicOpts: adapter.pythonMusicOpts
+    property alias pythonWeatherEnabled: adapter.pythonWeatherEnabled; property alias pythonWeatherScale: adapter.pythonWeatherScale; property alias pythonWeatherAnchor: adapter.pythonWeatherAnchor
+    property alias pythonWeatherX: adapter.pythonWeatherX; property alias pythonWeatherY: adapter.pythonWeatherY; property alias pythonWeatherLocked: adapter.pythonWeatherLocked
+    property alias pythonWeatherOpacity: adapter.pythonWeatherOpacity; property alias pythonWeatherBg: adapter.pythonWeatherBg; property alias pythonWeatherColor: adapter.pythonWeatherColor
+    property alias pythonWeatherColor2: adapter.pythonWeatherColor2; property alias pythonWeatherStyle: adapter.pythonWeatherStyle; property alias pythonWeatherVariant: adapter.pythonWeatherVariant
+    property alias pythonWeatherRadius: adapter.pythonWeatherRadius; property alias pythonWeatherPad: adapter.pythonWeatherPad; property alias pythonWeatherBorder: adapter.pythonWeatherBorder
+    property alias pythonWeatherBorderOpacity: adapter.pythonWeatherBorderOpacity; property alias pythonWeatherBackingOpacity: adapter.pythonWeatherBackingOpacity; property alias pythonWeatherOpts: adapter.pythonWeatherOpts
+    property alias pythonImageEnabled: adapter.pythonImageEnabled; property alias pythonImageScale: adapter.pythonImageScale; property alias pythonImageAnchor: adapter.pythonImageAnchor
+    property alias pythonImageX: adapter.pythonImageX; property alias pythonImageY: adapter.pythonImageY; property alias pythonImageLocked: adapter.pythonImageLocked
+    property alias pythonImageOpacity: adapter.pythonImageOpacity; property alias pythonImageBg: adapter.pythonImageBg; property alias pythonImageColor: adapter.pythonImageColor
+    property alias pythonImageColor2: adapter.pythonImageColor2; property alias pythonImageStyle: adapter.pythonImageStyle; property alias pythonImageVariant: adapter.pythonImageVariant
+    property alias pythonImageRadius: adapter.pythonImageRadius; property alias pythonImagePad: adapter.pythonImagePad; property alias pythonImageBorder: adapter.pythonImageBorder
+    property alias pythonImageBorderOpacity: adapter.pythonImageBorderOpacity; property alias pythonImageBackingOpacity: adapter.pythonImageBackingOpacity; property alias pythonImageOpts: adapter.pythonImageOpts
+    property alias pythonUserEnabled: adapter.pythonUserEnabled; property alias pythonUserScale: adapter.pythonUserScale; property alias pythonUserAnchor: adapter.pythonUserAnchor
+    property alias pythonUserX: adapter.pythonUserX; property alias pythonUserY: adapter.pythonUserY; property alias pythonUserLocked: adapter.pythonUserLocked
+    property alias pythonUserOpacity: adapter.pythonUserOpacity; property alias pythonUserBg: adapter.pythonUserBg; property alias pythonUserColor: adapter.pythonUserColor
+    property alias pythonUserColor2: adapter.pythonUserColor2; property alias pythonUserStyle: adapter.pythonUserStyle; property alias pythonUserVariant: adapter.pythonUserVariant
+    property alias pythonUserRadius: adapter.pythonUserRadius; property alias pythonUserPad: adapter.pythonUserPad; property alias pythonUserBorder: adapter.pythonUserBorder
+    property alias pythonUserBorderOpacity: adapter.pythonUserBorderOpacity; property alias pythonUserBackingOpacity: adapter.pythonUserBackingOpacity; property alias pythonUserOpts: adapter.pythonUserOpts
+    property alias pythonCpuEnabled: adapter.pythonCpuEnabled; property alias pythonCpuScale: adapter.pythonCpuScale; property alias pythonCpuAnchor: adapter.pythonCpuAnchor
+    property alias pythonCpuX: adapter.pythonCpuX; property alias pythonCpuY: adapter.pythonCpuY; property alias pythonCpuLocked: adapter.pythonCpuLocked
+    property alias pythonCpuOpacity: adapter.pythonCpuOpacity; property alias pythonCpuBg: adapter.pythonCpuBg; property alias pythonCpuColor: adapter.pythonCpuColor
+    property alias pythonCpuColor2: adapter.pythonCpuColor2; property alias pythonCpuStyle: adapter.pythonCpuStyle; property alias pythonCpuVariant: adapter.pythonCpuVariant
+    property alias pythonCpuRadius: adapter.pythonCpuRadius; property alias pythonCpuPad: adapter.pythonCpuPad; property alias pythonCpuBorder: adapter.pythonCpuBorder
+    property alias pythonCpuBorderOpacity: adapter.pythonCpuBorderOpacity; property alias pythonCpuBackingOpacity: adapter.pythonCpuBackingOpacity; property alias pythonCpuOpts: adapter.pythonCpuOpts
+    property alias pythonRamEnabled: adapter.pythonRamEnabled; property alias pythonRamScale: adapter.pythonRamScale; property alias pythonRamAnchor: adapter.pythonRamAnchor
+    property alias pythonRamX: adapter.pythonRamX; property alias pythonRamY: adapter.pythonRamY; property alias pythonRamLocked: adapter.pythonRamLocked
+    property alias pythonRamOpacity: adapter.pythonRamOpacity; property alias pythonRamBg: adapter.pythonRamBg; property alias pythonRamColor: adapter.pythonRamColor
+    property alias pythonRamColor2: adapter.pythonRamColor2; property alias pythonRamStyle: adapter.pythonRamStyle; property alias pythonRamVariant: adapter.pythonRamVariant
+    property alias pythonRamRadius: adapter.pythonRamRadius; property alias pythonRamPad: adapter.pythonRamPad; property alias pythonRamBorder: adapter.pythonRamBorder
+    property alias pythonRamBorderOpacity: adapter.pythonRamBorderOpacity; property alias pythonRamBackingOpacity: adapter.pythonRamBackingOpacity; property alias pythonRamOpts: adapter.pythonRamOpts
+    property alias pythonTempEnabled: adapter.pythonTempEnabled; property alias pythonTempScale: adapter.pythonTempScale; property alias pythonTempAnchor: adapter.pythonTempAnchor
+    property alias pythonTempX: adapter.pythonTempX; property alias pythonTempY: adapter.pythonTempY; property alias pythonTempLocked: adapter.pythonTempLocked
+    property alias pythonTempOpacity: adapter.pythonTempOpacity; property alias pythonTempBg: adapter.pythonTempBg; property alias pythonTempColor: adapter.pythonTempColor
+    property alias pythonTempColor2: adapter.pythonTempColor2; property alias pythonTempStyle: adapter.pythonTempStyle; property alias pythonTempVariant: adapter.pythonTempVariant
+    property alias pythonTempRadius: adapter.pythonTempRadius; property alias pythonTempPad: adapter.pythonTempPad; property alias pythonTempBorder: adapter.pythonTempBorder
+    property alias pythonTempBorderOpacity: adapter.pythonTempBorderOpacity; property alias pythonTempBackingOpacity: adapter.pythonTempBackingOpacity; property alias pythonTempOpts: adapter.pythonTempOpts
+    property alias pythonDiskEnabled: adapter.pythonDiskEnabled; property alias pythonDiskScale: adapter.pythonDiskScale; property alias pythonDiskAnchor: adapter.pythonDiskAnchor
+    property alias pythonDiskX: adapter.pythonDiskX; property alias pythonDiskY: adapter.pythonDiskY; property alias pythonDiskLocked: adapter.pythonDiskLocked
+    property alias pythonDiskOpacity: adapter.pythonDiskOpacity; property alias pythonDiskBg: adapter.pythonDiskBg; property alias pythonDiskColor: adapter.pythonDiskColor
+    property alias pythonDiskColor2: adapter.pythonDiskColor2; property alias pythonDiskStyle: adapter.pythonDiskStyle; property alias pythonDiskVariant: adapter.pythonDiskVariant
+    property alias pythonDiskRadius: adapter.pythonDiskRadius; property alias pythonDiskPad: adapter.pythonDiskPad; property alias pythonDiskBorder: adapter.pythonDiskBorder
+    property alias pythonDiskBorderOpacity: adapter.pythonDiskBorderOpacity; property alias pythonDiskBackingOpacity: adapter.pythonDiskBackingOpacity; property alias pythonDiskOpts: adapter.pythonDiskOpts
+    property alias pythonBatteryEnabled: adapter.pythonBatteryEnabled; property alias pythonBatteryScale: adapter.pythonBatteryScale; property alias pythonBatteryAnchor: adapter.pythonBatteryAnchor
+    property alias pythonBatteryX: adapter.pythonBatteryX; property alias pythonBatteryY: adapter.pythonBatteryY; property alias pythonBatteryLocked: adapter.pythonBatteryLocked
+    property alias pythonBatteryOpacity: adapter.pythonBatteryOpacity; property alias pythonBatteryBg: adapter.pythonBatteryBg; property alias pythonBatteryColor: adapter.pythonBatteryColor
+    property alias pythonBatteryColor2: adapter.pythonBatteryColor2; property alias pythonBatteryStyle: adapter.pythonBatteryStyle; property alias pythonBatteryVariant: adapter.pythonBatteryVariant
+    property alias pythonBatteryRadius: adapter.pythonBatteryRadius; property alias pythonBatteryPad: adapter.pythonBatteryPad; property alias pythonBatteryBorder: adapter.pythonBatteryBorder
+    property alias pythonBatteryBorderOpacity: adapter.pythonBatteryBorderOpacity; property alias pythonBatteryBackingOpacity: adapter.pythonBatteryBackingOpacity; property alias pythonBatteryOpts: adapter.pythonBatteryOpts
+    property alias pythonGithubEnabled: adapter.pythonGithubEnabled; property alias pythonGithubScale: adapter.pythonGithubScale; property alias pythonGithubAnchor: adapter.pythonGithubAnchor
+    property alias pythonGithubX: adapter.pythonGithubX; property alias pythonGithubY: adapter.pythonGithubY; property alias pythonGithubLocked: adapter.pythonGithubLocked
+    property alias pythonGithubOpacity: adapter.pythonGithubOpacity; property alias pythonGithubBg: adapter.pythonGithubBg; property alias pythonGithubColor: adapter.pythonGithubColor
+    property alias pythonGithubColor2: adapter.pythonGithubColor2; property alias pythonGithubStyle: adapter.pythonGithubStyle; property alias pythonGithubVariant: adapter.pythonGithubVariant
+    property alias pythonGithubRadius: adapter.pythonGithubRadius; property alias pythonGithubPad: adapter.pythonGithubPad; property alias pythonGithubBorder: adapter.pythonGithubBorder
+    property alias pythonGithubBorderOpacity: adapter.pythonGithubBorderOpacity; property alias pythonGithubBackingOpacity: adapter.pythonGithubBackingOpacity; property alias pythonGithubOpts: adapter.pythonGithubOpts
+
     // brand: the desktop's mark + name, user-overridable from Ryoku Settings ->
     // Shell -> Global. a small cross-cutting identity master (like theme.json).
     // markText is the glyph/short-text seal (default 力); markImage an optional
@@ -1172,6 +1246,78 @@ Singleton {
             property real irisVisualizerBorder: -1
             property real irisVisualizerBorderOpacity: -1
             property real irisVisualizerBackingOpacity: -1
+            property bool pythonVisualizerEnabled: false; property real pythonVisualizerScale: 1.0; property string pythonVisualizerAnchor: "free"
+            property int pythonVisualizerX: 120; property int pythonVisualizerY: 120; property bool pythonVisualizerLocked: false
+            property real pythonVisualizerOpacity: 1.0; property string pythonVisualizerBg: "card"; property string pythonVisualizerColor: ""
+            property string pythonVisualizerColor2: ""; property string pythonVisualizerStyle: "serp"; property string pythonVisualizerVariant: "bars"
+            property int pythonVisualizerRadius: -1; property real pythonVisualizerPad: -1; property real pythonVisualizerBorder: -1
+            property real pythonVisualizerBorderOpacity: -1; property real pythonVisualizerBackingOpacity: -1; property string pythonVisualizerOpts: ""
+            property bool pythonTimeEnabled: false; property real pythonTimeScale: 1.0; property string pythonTimeAnchor: "free"
+            property int pythonTimeX: 168; property int pythonTimeY: 160; property bool pythonTimeLocked: false
+            property real pythonTimeOpacity: 1.0; property string pythonTimeBg: "card"; property string pythonTimeColor: ""
+            property string pythonTimeColor2: ""; property string pythonTimeStyle: "serp"; property string pythonTimeVariant: "digital"
+            property int pythonTimeRadius: -1; property real pythonTimePad: -1; property real pythonTimeBorder: -1
+            property real pythonTimeBorderOpacity: -1; property real pythonTimeBackingOpacity: -1; property string pythonTimeOpts: ""
+            property bool pythonMusicEnabled: false; property real pythonMusicScale: 1.0; property string pythonMusicAnchor: "free"
+            property int pythonMusicX: 216; property int pythonMusicY: 200; property bool pythonMusicLocked: false
+            property real pythonMusicOpacity: 1.0; property string pythonMusicBg: "card"; property string pythonMusicColor: ""
+            property string pythonMusicColor2: ""; property string pythonMusicStyle: "serp"; property string pythonMusicVariant: "full"
+            property int pythonMusicRadius: -1; property real pythonMusicPad: -1; property real pythonMusicBorder: -1
+            property real pythonMusicBorderOpacity: -1; property real pythonMusicBackingOpacity: -1; property string pythonMusicOpts: ""
+            property bool pythonWeatherEnabled: false; property real pythonWeatherScale: 1.0; property string pythonWeatherAnchor: "free"
+            property int pythonWeatherX: 264; property int pythonWeatherY: 240; property bool pythonWeatherLocked: false
+            property real pythonWeatherOpacity: 1.0; property string pythonWeatherBg: "card"; property string pythonWeatherColor: ""
+            property string pythonWeatherColor2: ""; property string pythonWeatherStyle: "serp"; property string pythonWeatherVariant: "compact"
+            property int pythonWeatherRadius: -1; property real pythonWeatherPad: -1; property real pythonWeatherBorder: -1
+            property real pythonWeatherBorderOpacity: -1; property real pythonWeatherBackingOpacity: -1; property string pythonWeatherOpts: ""
+            property bool pythonImageEnabled: false; property real pythonImageScale: 1.0; property string pythonImageAnchor: "free"
+            property int pythonImageX: 312; property int pythonImageY: 280; property bool pythonImageLocked: false
+            property real pythonImageOpacity: 1.0; property string pythonImageBg: "card"; property string pythonImageColor: ""
+            property string pythonImageColor2: ""; property string pythonImageStyle: "serp"; property string pythonImageVariant: "rect"
+            property int pythonImageRadius: -1; property real pythonImagePad: -1; property real pythonImageBorder: -1
+            property real pythonImageBorderOpacity: -1; property real pythonImageBackingOpacity: -1; property string pythonImageOpts: ""
+            property bool pythonUserEnabled: false; property real pythonUserScale: 1.0; property string pythonUserAnchor: "free"
+            property int pythonUserX: 360; property int pythonUserY: 320; property bool pythonUserLocked: false
+            property real pythonUserOpacity: 1.0; property string pythonUserBg: "card"; property string pythonUserColor: ""
+            property string pythonUserColor2: ""; property string pythonUserStyle: "serp"; property string pythonUserVariant: "default"
+            property int pythonUserRadius: -1; property real pythonUserPad: -1; property real pythonUserBorder: -1
+            property real pythonUserBorderOpacity: -1; property real pythonUserBackingOpacity: -1; property string pythonUserOpts: ""
+            property bool pythonCpuEnabled: false; property real pythonCpuScale: 1.0; property string pythonCpuAnchor: "free"
+            property int pythonCpuX: 408; property int pythonCpuY: 360; property bool pythonCpuLocked: false
+            property real pythonCpuOpacity: 1.0; property string pythonCpuBg: "card"; property string pythonCpuColor: ""
+            property string pythonCpuColor2: ""; property string pythonCpuStyle: "serp"; property string pythonCpuVariant: "default"
+            property int pythonCpuRadius: -1; property real pythonCpuPad: -1; property real pythonCpuBorder: -1
+            property real pythonCpuBorderOpacity: -1; property real pythonCpuBackingOpacity: -1; property string pythonCpuOpts: ""
+            property bool pythonRamEnabled: false; property real pythonRamScale: 1.0; property string pythonRamAnchor: "free"
+            property int pythonRamX: 456; property int pythonRamY: 400; property bool pythonRamLocked: false
+            property real pythonRamOpacity: 1.0; property string pythonRamBg: "card"; property string pythonRamColor: ""
+            property string pythonRamColor2: ""; property string pythonRamStyle: "serp"; property string pythonRamVariant: "default"
+            property int pythonRamRadius: -1; property real pythonRamPad: -1; property real pythonRamBorder: -1
+            property real pythonRamBorderOpacity: -1; property real pythonRamBackingOpacity: -1; property string pythonRamOpts: ""
+            property bool pythonTempEnabled: false; property real pythonTempScale: 1.0; property string pythonTempAnchor: "free"
+            property int pythonTempX: 504; property int pythonTempY: 440; property bool pythonTempLocked: false
+            property real pythonTempOpacity: 1.0; property string pythonTempBg: "card"; property string pythonTempColor: ""
+            property string pythonTempColor2: ""; property string pythonTempStyle: "serp"; property string pythonTempVariant: "default"
+            property int pythonTempRadius: -1; property real pythonTempPad: -1; property real pythonTempBorder: -1
+            property real pythonTempBorderOpacity: -1; property real pythonTempBackingOpacity: -1; property string pythonTempOpts: ""
+            property bool pythonDiskEnabled: false; property real pythonDiskScale: 1.0; property string pythonDiskAnchor: "free"
+            property int pythonDiskX: 552; property int pythonDiskY: 480; property bool pythonDiskLocked: false
+            property real pythonDiskOpacity: 1.0; property string pythonDiskBg: "card"; property string pythonDiskColor: ""
+            property string pythonDiskColor2: ""; property string pythonDiskStyle: "serp"; property string pythonDiskVariant: "default"
+            property int pythonDiskRadius: -1; property real pythonDiskPad: -1; property real pythonDiskBorder: -1
+            property real pythonDiskBorderOpacity: -1; property real pythonDiskBackingOpacity: -1; property string pythonDiskOpts: ""
+            property bool pythonBatteryEnabled: false; property real pythonBatteryScale: 1.0; property string pythonBatteryAnchor: "free"
+            property int pythonBatteryX: 600; property int pythonBatteryY: 520; property bool pythonBatteryLocked: false
+            property real pythonBatteryOpacity: 1.0; property string pythonBatteryBg: "card"; property string pythonBatteryColor: ""
+            property string pythonBatteryColor2: ""; property string pythonBatteryStyle: "serp"; property string pythonBatteryVariant: "default"
+            property int pythonBatteryRadius: -1; property real pythonBatteryPad: -1; property real pythonBatteryBorder: -1
+            property real pythonBatteryBorderOpacity: -1; property real pythonBatteryBackingOpacity: -1; property string pythonBatteryOpts: ""
+            property bool pythonGithubEnabled: false; property real pythonGithubScale: 1.0; property string pythonGithubAnchor: "free"
+            property int pythonGithubX: 648; property int pythonGithubY: 560; property bool pythonGithubLocked: false
+            property real pythonGithubOpacity: 1.0; property string pythonGithubBg: "card"; property string pythonGithubColor: ""
+            property string pythonGithubColor2: ""; property string pythonGithubStyle: "serp"; property string pythonGithubVariant: "default"
+            property int pythonGithubRadius: -1; property real pythonGithubPad: -1; property real pythonGithubBorder: -1
+            property real pythonGithubBorderOpacity: -1; property real pythonGithubBackingOpacity: -1; property string pythonGithubOpts: ""
         }
     }
 

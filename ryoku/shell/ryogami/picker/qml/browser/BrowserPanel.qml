@@ -388,8 +388,8 @@ Item {
         RectangularShadow {
             anchors.fill: sheet
             offset.y: 16 * panel._s
-            blur: 48 * panel._s
-            color: Qt.rgba(0, 0, 0, 0.58)
+            blur: 28 * panel._s
+            color: Qt.rgba(0, 0, 0, 0.42)
             opacity: panel.ease
             cached: true
         }
@@ -408,6 +408,7 @@ Item {
                 visible: panel.atmosphereArt.length > 0
                 source: panel.atmosphereArt
                 fillMode: Image.PreserveAspectCrop
+                sourceSize: Qt.size(400, 250)
                 asynchronous: true
                 cache: false
                 opacity: 0.055 * panel.ease
@@ -566,7 +567,7 @@ Item {
                 Text {
                     width: parent.width
                     text: panel.steamInstalled ? I18n.tr("This item downloads through Steam") : I18n.tr("Steam is not installed")
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontHead
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -577,7 +578,7 @@ Item {
                     text: panel.steamInstalled
                         ? I18n.tr("Steam will subscribe and download it. It appears in your library automatically once Steam finishes.")
                         : I18n.tr("Workshop items download through Steam. Install Steam and sign in with an account that owns Wallpaper Engine; items you subscribe to then appear in the Workshop tab by themselves.")
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans; font.weight: Font.Normal
                     font.pixelSize: Theme.fontBody
                     color: Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering

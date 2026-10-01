@@ -69,13 +69,13 @@ report 'import Quickshell.Hyprland (import Ryoku.Wm.Hyprland instead)' \
 #    allowed; only the bare name as the whole branched value is a leak. ryoku/hyprland
 #    is the Hyprland payload; ryoku-shell-installer reads foreign configs by name.
 report 'isHyprland / isNiri or a compositor name compared or switched on' \
-	'\b[iI]s(Hyprland|Niri)\b|[=!]=+[[:space:]]*"(hyprland|niri)"|"(hyprland|niri)"[[:space:]]*[=!]=+|[=!]=+[[:space:]]*(hyprland|niri)([[:space:]);]|$)|^[[:space:]]*"?(hyprland|niri)"?\)|\bcase[[:space:]]+"?(hyprland|niri)"?[[:space:]:)]' \
-	':(exclude)ryoku/hyprland/*' ':(exclude)ryoku-shell-installer/*'
+	'\b[iI]s(Hyprland|Niri|Mango)\b|[=!]=+[[:space:]]*"(hyprland|niri|mango)"|"(hyprland|niri|mango)"[[:space:]]*[=!]=+|[=!]=+[[:space:]]*(hyprland|niri|mango)([[:space:]);]|$)|^[[:space:]]*"?(hyprland|niri|mango)"?\)|\bcase[[:space:]]+"?(hyprland|niri|mango)"?[[:space:]:)]' \
+	':(exclude)ryoku/hyprland/*' ':(exclude)ryoku/mango/*' ':(exclude)ryoku-shell-installer/*'
 
 # 4. a capability named after a compositor (the niriBackdropSupported mistake):
 #    capabilities describe behaviour, never a compositor. Allowed nowhere.
 report 'capability identifier baked with a compositor name (name it for behaviour)' \
-	'Cap[A-Za-z0-9]*(Hyprland|Niri)[A-Za-z0-9]*|(hyprland|niri)[A-Za-z0-9]*(Support|Supported|Capable|Capabilit|Enabled)'
+	'Cap[A-Za-z0-9]*(Hyprland|Niri|Mango)[A-Za-z0-9]*|(hyprland|niri|mango)[A-Za-z0-9]*(Support|Supported|Capable|Capabilit|Enabled)'
 
 (( fail )) || say 'wm-isolation: no compositor specifics leak outside ryoku/wm'
 exit "$fail"

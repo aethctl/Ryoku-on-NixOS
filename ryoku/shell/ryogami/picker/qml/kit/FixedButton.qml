@@ -1,12 +1,15 @@
 import QtQuick
 import Ryoku.Ui.Singletons
 
+// A pressable control in the masthead language: emphasis is inversion, so a held or
+// confirmed control flips to a bone plate with dark ink rather than taking an accent fill.
+// Idle is bare paper with a hairline; hover lifts a faint wash; press gives one small spring.
 Item {
     id: btn
 
     property string label: ""
     property string glyph: ""
-    // "toggle" holds the fill while active; "action" flashes on press.
+    // "toggle" holds the plate while active; "action" flashes it on press.
     property string mode: "toggle"
     property bool active: false
     property bool destructive: false
@@ -14,10 +17,6 @@ Item {
     // Arm-then-confirm: first press arms, second within the window triggers.
     property bool confirm: false
     readonly property bool armed: btn.armState
-
-    property real idleFillAlpha: 0.92
-    property real hoverFillAlpha: 0.62
-    property real activeFillAlpha: 0.92
 
     // A positive fixedWidth wins; otherwise the box hugs its content within [minWidth, maxWidth].
     property real fixedWidth: 0
@@ -34,18 +33,13 @@ Item {
         : Math.max(btn.minWidth * Theme.scale,
                    Math.min(btn.maxWidth * Theme.scale, content.implicitWidth + btn.hpad * 2 * Theme.scale))
 
-    readonly property color accent: btn.destructive ? Theme.tertiary : Theme.primary
+    readonly property color plate: btn.destructive ? Theme.tertiary : Theme.surfaceText
+    readonly property color plateInk: btn.destructive ? Theme.background : Theme.surface
     readonly property bool hovered: hoverArea.containsMouse
-    readonly property bool hot: btn.active || btn.holdFill
+    readonly property bool hot: btn.active || btn.holdFill || btn.armState
 
-    // The wipe follows its target through a Behavior, so it animates without per-frame JS.
     property bool holdFill: false
     property bool armState: false
-    readonly property real wipeTarget: (btn.active || btn.holdFill) ? 1 : 0
-    property real wipeProgress: btn.wipeTarget
-    Behavior on wipeProgress {
-        NumberAnimation { duration: Theme.fast; easing.type: Theme.revealEasing }
-    }
 
     Timer { id: flashTimer; interval: Theme.fast; onTriggered: btn.holdFill = false }
     Timer { id: disarmTimer; interval: 3000; onTriggered: btn.armState = false }
@@ -76,68 +70,34 @@ Item {
         id: box
         anchors.fill: parent
         radius: Theme.radius
-        clip: true
-
-        color: !btn.enabled
-            ? Theme.withAlpha(Theme.surfaceContainer, 0.42)
-            : btn.hovered
-                ? Theme.withAlpha(Theme.surfaceVariant, btn.hoverFillAlpha)
-                : Theme.withAlpha(Theme.surfaceContainer, btn.idleFillAlpha)
-
+        scale: hoverArea.pressed && btn.enabled ? 0.94 : 1
+        color: !btn.enabled ? Theme.withAlpha(Theme.surfaceText, 0.05)
+             : btn.hot ? btn.plate
+             : btn.hovered ? Theme.withAlpha(Theme.surfaceText, 0.09)
+             : Theme.withAlpha(Theme.surfaceText, 0)
         border.width: btn.focused ? 2 : 1
-        border.color: !btn.enabled
-            ? Theme.withAlpha(Theme.outline, 0.18)
-            : btn.focused
-                ? Theme.withAlpha(Theme.primary, 0.90)
-                : (btn.hot || btn.hovered || btn.destructive)
-                    ? Theme.withAlpha(btn.accent, 0.90)
-                    : Theme.withAlpha(Theme.outline, 0.40)
-
-        readonly property real slant: box.height * 0.72
-
-        Rectangle {
-            id: wipe
-            height: box.height
-            width: box.width + box.slant
-            y: 0
-            x: -(width + box.slant) + btn.wipeProgress * width
-            color: Theme.withAlpha(btn.accent, btn.activeFillAlpha)
-            transform: Matrix4x4 {
-                matrix: Qt.matrix4x4(1, box.slant / wipe.height, 0, 0,
-                                     0, 1, 0, 0,
-                                     0, 0, 1, 0,
-                                     0, 0, 0, 1)
-            }
-        }
-
-        Rectangle {
-            id: edge
-            width: 2
-            height: box.height
-            y: 0
-            x: wipe.x + wipe.width - width
-            color: Theme.withAlpha(Theme.tertiary, 0.9)
-            visible: btn.wipeProgress > 0.001 && btn.wipeProgress < 0.999
-            transform: Matrix4x4 {
-                matrix: Qt.matrix4x4(1, box.slant / edge.height, 0, 0,
-                                     0, 1, 0, 0,
-                                     0, 0, 1, 0,
-                                     0, 0, 0, 1)
-            }
-        }
+        border.color: !btn.enabled ? Theme.withAlpha(Theme.outline, 0.18)
+             : btn.focused ? Theme.withAlpha(Theme.surfaceText, 0.7)
+             : btn.hot ? "transparent"
+             : btn.hovered ? Theme.withAlpha(Theme.surfaceText, 0.24)
+             : btn.destructive ? Theme.withAlpha(Theme.tertiary, 0.5)
+             : Theme.withAlpha(Theme.outline, 0.4)
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
+        Behavior on scale { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutBack; easing.overshoot: 2.2 } }
     }
 
     Row {
         id: content
         anchors.centerIn: parent
         spacing: 6 * Theme.scale
+        scale: box.scale
 
-        // Follows the fill under the label, not the target state, so it never reads dark on dark mid-wipe.
         readonly property color textColor: !btn.enabled
             ? Theme.withAlpha(Theme.surfaceText, 0.3)
-            : btn.wipeProgress > 0.5
-                ? (btn.destructive ? Theme.background : Theme.primaryText)
-                : Theme.surfaceText
+            : btn.hot ? btn.plateInk
+            : btn.destructive ? Theme.tertiary
+            : btn.hovered ? Theme.surfaceText
+            : Theme.withAlpha(Theme.surfaceText, 0.82)
 
         Text {
             visible: btn.glyph.length > 0
@@ -147,16 +107,18 @@ Item {
             font.pixelSize: Theme.fontLabel
             color: content.textColor
             renderType: Text.NativeRendering
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
         }
         Text {
             visible: btn.label.length > 0 || btn.armState
             anchors.verticalCenter: parent.verticalCenter
             text: btn.armState ? (I18n.tr("Confirm") + " " + btn.label) : btn.label
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: btn.hot ? Font.DemiBold : Font.Medium
             font.pixelSize: Theme.fontLabel
             color: content.textColor
             renderType: Text.NativeRendering
+            Behavior on color { ColorAnimation { duration: Theme.fast } }
         }
     }
 

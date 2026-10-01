@@ -29,8 +29,7 @@ Rectangle {
             Text {
                 width: parent.width
                 text: shell.title
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontTitle
                 color: Theme.surfaceText
                 renderType: Text.NativeRendering
@@ -40,8 +39,8 @@ Rectangle {
                 width: parent.width
                 visible: shell.note.length > 0
                 text: shell.note
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                 lineHeight: 1.4

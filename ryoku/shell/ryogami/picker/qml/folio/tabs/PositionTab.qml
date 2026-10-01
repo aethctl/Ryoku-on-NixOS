@@ -4,7 +4,7 @@ import Ryoku.Ui.Singletons
 FolioTabData {
     tabKey: "position"
     title: I18n.tr("Position")
-    note: I18n.tr("Position each picker style and place its filter bar and search panel independently.")
+    note: I18n.tr("Position each picker style and its search panel independently.")
     sections: [
         {
             title: I18n.tr("Slices"),
@@ -114,26 +114,6 @@ FolioTabData {
                   unit: I18n.tr("%"),
                   perMode: true,
                   search: ["components.wallpaperSelector.handStageY", "hand", "vertical", "offset", "number"] }
-            ]
-        },
-        {
-            title: I18n.tr("Filter bar"),
-            subtitle: "",
-            controls: [
-                { id: "filterBar.offsetX",
-                  key: "filterBar.offsetX",
-                  kind: "number",
-                  label: I18n.tr("Filter bar horizontal offset"),
-                  help: I18n.tr("Move the filter bar left or right relative to this picker."),
-                  unit: I18n.tr("px"),
-                  search: ["filterBar.offsetX", "filter", "bar", "horizontal", "offset", "number"] },
-                { id: "filterBar.offsetY",
-                  key: "filterBar.offsetY",
-                  kind: "number",
-                  label: I18n.tr("Filter bar vertical offset"),
-                  help: I18n.tr("Move the filter bar up or down relative to this picker."),
-                  unit: I18n.tr("px"),
-                  search: ["filterBar.offsetY", "filter", "bar", "vertical", "offset", "number"] }
             ]
         },
         {

@@ -55,8 +55,8 @@ Item {
                     Text {
                         width: parent.width - valueText.width - parent.spacing
                         text: row.modelData.label
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontBase
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
@@ -65,10 +65,9 @@ Item {
                     Text {
                         id: valueText
                         text: String(Math.round(slider.value))
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fontBody
-                        color: Theme.primary
+                        color: Theme.surfaceText
                         renderType: Text.NativeRendering
                     }
                 }
@@ -104,17 +103,17 @@ Item {
                     width: parent.width - vignetteToggle.width - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Vignette")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontBase
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
                 }
-                FolioAction {
+                Switch {
                     id: vignetteToggle
-                    label: panel.vignette ? I18n.tr("On") : I18n.tr("Off")
-                    active: panel.vignette
-                    onTriggered: { panel.vignette = !panel.vignette; panel.changed() }
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: panel.vignette
+                    onToggled: { panel.vignette = checked; panel.changed() }
                 }
             }
         }
@@ -130,17 +129,17 @@ Item {
                     width: parent.width - negateToggle.width - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Negate")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontBase
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
                 }
-                FolioAction {
+                Switch {
                     id: negateToggle
-                    label: panel.negate ? I18n.tr("On") : I18n.tr("Off")
-                    active: panel.negate
-                    onTriggered: { panel.negate = !panel.negate; panel.changed() }
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: panel.negate
+                    onToggled: { panel.negate = checked; panel.changed() }
                 }
             }
         }

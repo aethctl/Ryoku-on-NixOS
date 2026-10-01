@@ -81,6 +81,10 @@ CardField::CardField(QQuickItem *parent)
     m_flip.epsilon = 0.01;
     m_trans = Spring::forDuration(0, 250);
     m_trans.epsilon = 0.01;
+    m_hover = Spring::forDuration(0, 180);
+    m_hover.epsilon = 0.01;
+    m_press = Spring::forDuration(0, 120);
+    m_press.epsilon = 0.01;
     m_layout = makeLayout(m_mode);
     connect(m_decoder.get(), &ThumbDecoder::ready, this, [this] { kick(); }, Qt::QueuedConnection);
     connect(m_preview.get(), &PreviewVideo::frameReady, this, &QQuickItem::update,
@@ -348,15 +352,6 @@ void CardField::setBarReserve(const QSizeF &reserve)
     kick();
 }
 
-void CardField::setBarVertical(bool vertical)
-{
-    if (vertical == m_barVertical)
-        return;
-    m_barVertical = vertical;
-    emit barVerticalChanged();
-    kick();
-}
-
 void CardField::step(int dx, int dy)
 {
     if (!m_layout)
@@ -451,7 +446,9 @@ LayoutContext CardField::makeContext()
     ctx.hovered = m_hovered;
     ctx.pointer = m_pointer;
     ctx.pointerInside = m_pointerInside;
-    ctx.entrance = std::clamp(m_entrance.x, 0.0, 1.0);
+    // Layouts lay cards out at full presence; the staggered open bloom is folded in per
+    // card by applyMicroAnim so it can spring each card from the focus outward.
+    ctx.entrance = 1.0;
     ctx.time = m_time;
     ctx.motion = &m_motion;
     ctx.params = &m_params;
@@ -463,7 +460,6 @@ LayoutContext CardField::makeContext()
     ctx.flip.seed = std::fmod(float(m_flippedRow < 0 ? 0 : m_flippedRow), 7.0f) * 1.3f + 0.5f;
     ctx.columnsOverride = m_columns;
     ctx.barReserve = m_barReserve;
-    ctx.barVertical = m_barVertical;
     return ctx;
 }
 
@@ -531,6 +527,13 @@ void CardField::mousePressEvent(QMouseEvent *event)
     if (event->button() == Qt::LeftButton) {
         m_dragging = true;
         m_dragLast = pos;
+        if (row >= 0) {
+            // A short inward tap the release springs back out of.
+            m_pressRow = row;
+            m_press.snap(1.0);
+            m_press.target = 0.0;
+            kick();
+        }
         if (row < 0) {
             emit backgroundClicked();
             event->accept();
@@ -587,10 +590,20 @@ void CardField::hoverMoveEvent(QHoverEvent *event)
     const QPointF pos = event->position();
     m_pointer = pos;
     m_pointerInside = true;
-    const int row = m_layout->hitTest(pos);
+    // The masthead sits over the top band; a card found under it would make the hover key
+    // (and its live palette preview) churn as the pointer travels the bar, flashing the desktop.
+    const bool overBar = m_barReserve.height() > 0.0 && pos.y() < m_barReserve.height();
+    const int row = overBar ? -1 : m_layout->hitTest(pos);
     if (row != m_hovered) {
         m_hovered = row;
+        if (row >= 0) {
+            m_hoverRow = row;
+            m_hover.target = 1.0;
+        } else {
+            m_hover.target = 0.0;
+        }
         emit hoveredIndexChanged();
+        kick();
     }
     LayoutContext ctx = makeContext();
     if (m_layout->pointer(ctx, pos, true))
@@ -607,11 +620,12 @@ void CardField::hoverLeaveEvent(QHoverEvent *event)
         m_hovered = -1;
         emit hoveredIndexChanged();
     }
+    m_hover.target = 0.0;
     if (m_layout) {
         LayoutContext ctx = makeContext();
         m_layout->pointer(ctx, m_pointer, false);
     }
-    update();
+    kick();
 }
 
 void CardField::wheelEvent(QWheelEvent *event)
@@ -658,6 +672,18 @@ bool CardField::advanceFilterSwap(double dt)
 {
     const float step = float(std::min(dt, 0.05) * 1000.0 / std::max(m_filterMs, 50.0));
     bool active = false;
+    // A swap is a bounded animation; if one ever overruns its budget (a stuck roll), snap
+    // every card to rest so nothing can sit blank/slivered until relaunch.
+    if (!m_filterOld.empty() || !m_filterIn.empty()) {
+        m_filterElapsed += std::min(dt, 0.05);
+        if (m_filterElapsed * 1000.0 > std::max(m_filterMs * 3.0, 2000.0)) {
+            m_filterOld.clear();
+            m_filterIn.clear();
+            m_filterCell.clear();
+            m_filterWave = 10.0f;
+            return false;
+        }
+    }
     if (m_filterWave < 10.0f)
         m_filterWave += step;
     if (!m_filterOld.empty()) {
@@ -691,6 +717,11 @@ void CardField::tick()
     bool moving = false;
 
     moving |= m_entrance.tick(dt);
+
+    m_hover.setDuration(m_motion.ms(MotionProfile::Fast));
+    m_press.setDuration(std::max(1.0, m_motion.ms(MotionProfile::Fast) * 0.7));
+    moving |= m_hover.tick(dt);
+    moving |= m_press.tick(dt);
 
     const bool flipMoving = m_flip.tick(dt);
     moving |= flipMoving;
@@ -783,6 +814,7 @@ void CardField::filterStorm()
         m_filterOld.push_back({fc.inst, fc.cell, fc.key, t0});
     }
     m_filterWave = 0.0f;
+    m_filterElapsed = 0.0;
 }
 
 void CardField::pushFilterOld(std::vector<CardInstance> &instances)
@@ -900,6 +932,45 @@ void CardField::resolveTexture(CardRenderNode *node, const LayoutContext &ctx,
     applyCrop(visual, inst, row);
 }
 
+void CardField::applyMicroAnim(CardInstance &inst, int row, bool projected, const LayoutContext &ctx) const
+{
+    // Open bloom: the focused card leads, the rest ripple out from it and spring to rest.
+    const float e = float(std::clamp(m_entrance.x, 0.0, 1.0));
+    if (e < 0.999f) {
+        constexpr float span = 0.55f;
+        const float phase = std::min(1.0f, float(std::abs(row - ctx.current)) / 12.0f);
+        const float local = std::clamp(e * (1.0f + span) - phase * span, 0.0f, 1.0f);
+        inst.params[2] *= geom::easeOutCubic(local);
+        if (!projected) {
+            const float back = local - 1.0f;
+            const float overshoot = 1.0f + 2.70158f * back * back * back + 1.70158f * back * back;
+            const float scale = 0.92f + 0.08f * overshoot;
+            inst.rect[2] *= scale;
+            inst.rect[3] *= scale;
+        }
+    }
+
+    // Hover: brighten (lift the dimming tint) and, on flat cards, a small scale and rise.
+    if (row >= 0 && row == m_hoverRow && m_hover.x > 0.001) {
+        const float h = float(std::clamp(m_hover.x, 0.0, 1.0));
+        inst.tint[3] *= 1.0f - 0.55f * h;
+        if (!projected) {
+            const float lift = 1.0f + 0.03f * h;
+            inst.rect[2] *= lift;
+            inst.rect[3] *= lift;
+            inst.rect[1] -= 5.0f * h;
+        }
+    }
+
+    // Press: a quick inward tap the release lets spring back.
+    if (row >= 0 && row == m_pressRow && !projected && m_press.x > 0.001) {
+        const float p = float(std::clamp(m_press.x, 0.0, 1.0));
+        const float shrink = 1.0f - 0.035f * p;
+        inst.rect[2] *= shrink;
+        inst.rect[3] *= shrink;
+    }
+}
+
 void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
                         std::vector<CardInstance> &instances)
 {
@@ -929,6 +1000,7 @@ void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
             pendingShadow = int(instances.size());
             pendingShadowRow = row;
         }
+        applyMicroAnim(inst, row, projected, ctx);
         instances.push_back(inst);
     }
     pushFilterOld(instances);
@@ -987,6 +1059,12 @@ void CardField::startPreview()
     const QString clip = m_source->cardPreviewVideo(std::clamp(m_current, 0, count - 1));
     if (clip.isEmpty())
         return;
+    // Hold the decoder off until the scene settles: a clip that starts while the camera is
+    // still gliding stalls navigation, and the card is not yet the one being looked at.
+    if (m_animating) {
+        m_previewTimer->start(int(std::max(120.0, m_previewDelayMs)));
+        return;
+    }
     m_preview->play(clip, true, 0.0);
     m_previewActive = true;
 }

@@ -120,16 +120,16 @@ Item {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     text: I18n.tr("Shortcuts")
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontLead
-                    color: Theme.primary
+                    color: Theme.surfaceText
                     renderType: Text.NativeRendering
                 }
                 Text {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     text: "\u00d7"
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans; font.weight: Font.Medium
                     font.pixelSize: Theme.fontHead
                     color: closeMouse.containsMouse ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.7)
                     renderType: Text.NativeRendering
@@ -153,9 +153,9 @@ Item {
                     spacing: 7 * Theme.scale
                     Text {
                         text: I18n.tr("Keyboard")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontLabel
-                        color: Theme.tertiary
+                        color: Theme.withAlpha(Theme.surfaceText, 0.78)
                         renderType: Text.NativeRendering
                     }
                     Repeater {
@@ -169,9 +169,9 @@ Item {
                     spacing: 7 * Theme.scale
                     Text {
                         text: I18n.tr("Mouse")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans; font.weight: Font.DemiBold
                         font.pixelSize: Theme.fontLabel
-                        color: Theme.tertiary
+                        color: Theme.withAlpha(Theme.surfaceText, 0.78)
                         renderType: Text.NativeRendering
                     }
                     Repeater {
@@ -184,23 +184,41 @@ Item {
     }
 
     component HelpRow: Row {
+        id: helpRow
         property string keyLabel: ""
         property string desc: ""
         width: parent ? parent.width : 0
         spacing: 10 * Theme.scale
-        Text {
+        Rectangle {
             width: 92 * Theme.scale
-            text: parent.keyLabel
-            font.family: Theme.ui; font.weight: Theme.uiWeight
-            font.pixelSize: Theme.fontBody
-            color: Theme.primary
-            elide: Text.ElideRight
-            renderType: Text.NativeRendering
+            height: chord.implicitHeight + 6 * Theme.scale
+            anchors.verticalCenter: parent.verticalCenter
+            radius: Theme.radius
+            color: Theme.withAlpha(Theme.surfaceText, 0.05)
+            border.width: 1
+            border.color: Theme.withAlpha(Theme.outline, 0.4)
+            Text {
+                id: chord
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 8 * Theme.scale
+                anchors.rightMargin: 8 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                text: helpRow.keyLabel
+                font.family: Theme.sans
+                font.weight: Font.Medium
+                font.pixelSize: Theme.fontBody
+                color: Theme.surfaceText
+                elide: Text.ElideRight
+                renderType: Text.NativeRendering
+            }
         }
         Text {
-            width: parent.width - 92 * Theme.scale - 10 * Theme.scale
-            text: parent.desc
-            font.family: Theme.ui; font.weight: Theme.uiWeight
+            anchors.verticalCenter: parent.verticalCenter
+            width: helpRow.width - 92 * Theme.scale - 10 * Theme.scale
+            text: helpRow.desc
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBody
             color: Theme.withAlpha(Theme.surfaceText, 0.85)
             elide: Text.ElideRight

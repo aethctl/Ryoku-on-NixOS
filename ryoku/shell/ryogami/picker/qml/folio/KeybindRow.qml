@@ -30,8 +30,8 @@ Item {
             anchors.rightMargin: 10 * Theme.scale
             anchors.verticalCenter: parent.verticalCenter
             text: row.control.label ? row.control.label : ""
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontField
             color: Theme.withAlpha(Theme.surfaceText, row.enabled ? row.reveal : 0.4 * row.reveal)
             elide: Text.ElideRight

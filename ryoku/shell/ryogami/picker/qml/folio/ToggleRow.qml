@@ -40,8 +40,8 @@ Item {
                 anchors.rightMargin: 10 * Theme.scale
                 anchors.verticalCenter: parent.verticalCenter
                 text: row.control.label ? row.control.label : ""
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontField
                 color: Theme.withAlpha(Theme.surfaceText, row.enabled ? row.reveal : 0.4 * row.reveal)
                 elide: Text.ElideRight
@@ -59,14 +59,12 @@ Item {
                     visible: row.bound && !row.atDefault && row.enabled
                     onTriggered: row.resetValue()
                 }
-                FixedButton {
+                Switch {
                     id: toggle
                     anchors.verticalCenter: parent.verticalCenter
+                    checked: row._on
                     enabled: row.enabled
-                    active: row._on
-                    minWidth: 92
-                    label: row._on ? I18n.tr("Enabled") : I18n.tr("Disabled")
-                    onTriggered: row._apply(!row._on)
+                    onToggled: (v) => row._apply(v)
                 }
             }
         }
@@ -75,8 +73,8 @@ Item {
             width: parent.width
             visible: !!row.control.help && row.control.help.length > 0
             text: row.control.help ? row.control.help : ""
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.56 * row.reveal)
             lineHeight: 1.38

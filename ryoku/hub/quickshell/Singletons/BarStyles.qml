@@ -11,7 +11,8 @@ QtObject {
         { "id": "qsbar", "name": "QS Bar", "desc": "The configurable module bar.", "installed": true, "unavailable": false },
         { "id": "chroma", "name": "Chroma", "desc": "A vivid compact status bar.", "installed": true, "unavailable": false },
         { "id": "kairos", "name": "Kairos", "desc": "A centered editorial bar.", "installed": true, "unavailable": false },
-        { "id": "iris", "name": "Shima", "desc": "The morphing island and frame desktop.", "installed": true, "unavailable": false }
+        { "id": "iris", "name": "Shima", "desc": "The morphing island and frame desktop.", "installed": true, "unavailable": false },
+        { "id": "python", "name": "Python", "desc": "Serpantinum's morphing stage bar.", "installed": true, "unavailable": false }
     ]
     property var items: builtins
     readonly property var chromaWidgets: [

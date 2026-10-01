@@ -20,9 +20,8 @@ Rectangle {
         anchors.leftMargin: 20 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
         text: masthead.wordmark
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
-        font.pixelSize: Theme.fontField
+        font.family: Theme.display
+        font.pixelSize: Theme.fontHead
         color: Theme.surfaceText
         renderType: Text.NativeRendering
     }
@@ -37,8 +36,8 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             visible: masthead.breadcrumb.length > 0
             text: masthead.breadcrumb
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontSmall
             color: Theme.withAlpha(Theme.surfaceText, 0.54)
             renderType: Text.NativeRendering

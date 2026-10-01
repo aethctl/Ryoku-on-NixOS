@@ -71,8 +71,8 @@ Item {
             width: parent.width
             visible: row._presets.length === 0
             text: I18n.tr("No saved styles yet. Save the current layout to reuse it later.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.5 * row.reveal)
             wrapMode: Text.WordWrap

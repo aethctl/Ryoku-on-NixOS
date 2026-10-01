@@ -1,5 +1,10 @@
 # Changelog: ryoku/hub/
 
+### Added
+- **Bar Studio knows Python.** The style shelf lists the ported serpantinum
+  style, and while it is active the page carries a Python card that opens the
+  style's own settings guide through the shell IPC, like the Shima and QS Bar
+  cards route to their surfaces. (`pages/BarStudioPage.qml`)
 
 ### Added
 - **A rice now saves everything visual.** The capture grew the stores the

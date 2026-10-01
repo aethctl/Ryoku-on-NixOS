@@ -253,8 +253,8 @@ Item {
                 anchors.rightMargin: 27 * Theme.scale
                 anchors.topMargin: 24 * Theme.scale
                 text: I18n.tr("Reading the scene's properties\u2026")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBody
                 color: Theme.surfaceText
                 wrapMode: Text.WordWrap
@@ -286,8 +286,8 @@ Item {
 
                         Text {
                             text: I18n.tr("FPS")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontLabel
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
@@ -295,8 +295,8 @@ Item {
                         Text {
                             width: parent.width
                             text: I18n.tr("Limits this wallpaper's frame rate. Default follows the global Wallpaper Engine setting (%1 FPS).").arg(root.globalFps)
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.58)
                             lineHeight: 1.35
@@ -348,10 +348,9 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: Math.round(fpsSlider.value)
                                 horizontalAlignment: Text.AlignRight
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.display
                                 font.pixelSize: Theme.fontBase
-                                color: Theme.primary
+                                color: Theme.surfaceText
                                 renderType: Text.NativeRendering
                             }
                         }
@@ -380,8 +379,8 @@ Item {
                         visible: !root.loading && root.errorText === "" && root._shownRows().length === 0
                         width: parent.width
                         text: I18n.tr("This scene does not publish any adjustable properties.")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontBody
                         color: Theme.withAlpha(Theme.surfaceText, 0.56)
                         wrapMode: Text.WordWrap
@@ -392,8 +391,8 @@ Item {
                         visible: root.errorText !== ""
                         width: parent.width
                         text: root.errorText
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontBody
                         color: Theme.destructive
                         wrapMode: Text.WordWrap

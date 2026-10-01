@@ -7,8 +7,10 @@
 
 namespace {
 
-constexpr double kBarZone = 48.0;
-constexpr double kTopBar = 50.0;
+// Breathing room under the strip, and the least the hero keeps clear at the top; the
+// masthead's own band (ctx.barReserve) wins when it reaches further down.
+constexpr double kFootZone = 48.0;
+constexpr double kTopClear = 50.0;
 constexpr double kLodVelLo = 1.5;
 constexpr double kLodVelHi = 6.0;
 constexpr double kPi = 3.14159265358979323846;
@@ -58,7 +60,7 @@ double clampCam(double camera, int count)
 
 double edgePan(double x, double y, double vw, double vh, double stripHeight)
 {
-    const double bottom = vh - kBarZone;
+    const double bottom = vh - kFootZone;
     if (y < bottom - stripHeight || y > bottom)
         return 0.0;
     const double zone = std::max(vw * 0.14, 1.0);
@@ -591,9 +593,10 @@ void SandyLayout::build(const LayoutContext &ctx, std::vector<CardVisual> &out)
     const double cx = vw * 0.5 + m_live.offsetX * vw * 0.5;
     const double offsetY = m_live.offsetY * vh * 0.5;
     const double stripH = m_live.stripH();
-    const double stripBottom = (vh - kBarZone) + offsetY;
+    const double stripBottom = (vh - kFootZone) + offsetY;
     const double stripCy = stripBottom - stripH * 0.5;
-    const double cy = (kTopBar + 20.0 + ((vh - kBarZone) - stripH)) * 0.5 + offsetY;
+    const double topClear = std::max(kTopClear, ctx.barReserve.height());
+    const double cy = (topClear + 20.0 + ((vh - kFootZone) - stripH)) * 0.5 + offsetY;
     const double chw = m_live.centerHw();
     const double chh = m_live.centerHh();
     const double entrance = std::clamp(ctx.entrance, 0.0, 1.0);
@@ -727,7 +730,7 @@ QRectF SandyLayout::cardRect(int row) const
 QRectF SandyLayout::stageRect(const LayoutContext &ctx) const
 {
     const double stripH = m_live.stripH();
-    return QRectF(0, ctx.viewport.height() - kBarZone - stripH, ctx.viewport.width(), stripH);
+    return QRectF(0, ctx.viewport.height() - kFootZone - stripH, ctx.viewport.width(), stripH);
 }
 
 int SandyLayout::step(const LayoutContext &ctx, int dx, int dy) const
@@ -772,7 +775,7 @@ bool SandyLayout::pointer(const LayoutContext &ctx, QPointF pos, bool inside)
         m_camFree = true;
         return true;
     }
-    const double bottom = vh - kBarZone;
+    const double bottom = vh - kFootZone;
     const bool overStrip = localY >= bottom - m_live.stripH() && localY <= bottom;
     if (!overStrip) {
         if (m_camFree) {

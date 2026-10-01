@@ -56,7 +56,7 @@ Item {
         anchors.fill: parent
         visible: strip.message.length > 0
         color: strip.isError
-            ? Theme.withAlpha(Theme.primary, 0.9)
+            ? Theme.withAlpha(Theme.tertiary, 0.12)
             : Theme.withAlpha(Theme.surface, 0.85)
 
         Row {
@@ -71,17 +71,17 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: !strip.isError
                 size: 12
-                color: Theme.primary
+                color: Theme.surfaceText
             }
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 width: Math.min(implicitWidth, strip.width - 30 * Theme.scale)
                 text: strip.message
                 elide: Text.ElideRight
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
-                color: strip.isError ? Theme.primaryText : Theme.surfaceText
+                color: strip.isError ? Theme.tertiary : Theme.surfaceText
                 renderType: Text.NativeRendering
             }
         }

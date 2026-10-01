@@ -31,6 +31,10 @@ foreach(font_file IN LISTS picker_fonts)
     set_source_files_properties("${font_file}" PROPERTIES QT_RESOURCE_ALIAS "fonts/${font_name}")
 endforeach()
 
+# The Ryoku mark the masthead wears, read from the brand folder so the repo keeps one copy.
+set(picker_brand "${CMAKE_CURRENT_SOURCE_DIR}/../../../assets/brand/logo-mark-v2.png")
+set_source_files_properties("${picker_brand}" PROPERTIES QT_RESOURCE_ALIAS "brand/logo-mark.png")
+
 foreach(qml_file IN LISTS picker_qml)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
@@ -46,7 +50,7 @@ qt_add_qml_module(ryogami-picker
     OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/qml/Ryoku/Ryogami"
     SOURCES ${picker_sources}
     QML_FILES ${picker_qml}
-    RESOURCES ${picker_fonts}
+    RESOURCES ${picker_fonts} ${picker_brand}
 )
 
 # qmltyperegistrar includes the QML_ELEMENT headers by bare name.

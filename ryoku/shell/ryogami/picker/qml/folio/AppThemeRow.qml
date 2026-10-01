@@ -59,8 +59,8 @@ Item {
             width: parent.width
             visible: !!row.control.help && row.control.help.length > 0
             text: row.control.help ? row.control.help : ""
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.56 * row.reveal)
             lineHeight: 1.38
@@ -72,8 +72,8 @@ Item {
             width: parent.width
             visible: row._apps.length === 0
             text: I18n.tr("No supported apps detected. Use Find apps after installing one.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.5 * row.reveal)
             wrapMode: Text.WordWrap
@@ -99,8 +99,8 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: appRow.modelData.name !== undefined ? appRow.modelData.name
                         : (appRow.modelData.label !== undefined ? appRow.modelData.label : String(appRow.modelData.id))
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontLabel
                     color: Theme.withAlpha(Theme.surfaceText, appRow._available ? row.reveal : 0.4 * row.reveal)
                     elide: Text.ElideRight

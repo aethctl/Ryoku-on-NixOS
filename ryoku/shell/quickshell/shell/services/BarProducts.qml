@@ -52,22 +52,25 @@ Singleton {
         if (root.builtins[id])
             root.brokenStyle = id;
     }
-    // Frame-family styles own the whole desktop (island, dock, popups) from one
-    // host screen, so they must load even where the user hid the bar.
+    // A frame-family style owns the whole desktop (island, dock, popups) from
+    // one host screen, so it must load even where the user hid the bar.
     function isFrameFamily(id) {
-        return id === "iris";
+        return id === "iris" || id === "python";
     }
 
 
     // Built-in folder styles ship inside the shell and resolve relative to the
     // Frame Loader, so no store install is needed. "sumi" stays the painted
     // frame scene (empty scene url); "qsbar" is the shipped QS Bar folder,
-    // "kairos" the shipped island clock and "iris" the shipped frame family.
+    // "kairos" the shipped island clock, "iris" the shipped frame family and
+    // "python" the shipped serpantinum port (its Scene hosts the bar, dock,
+    // popups and guide from the primary output, like the frame family).
     readonly property var builtins: ({
         "qsbar": "barstyles/qsbar/Scene.qml",
         "chroma": "barstyles/chroma/Scene.qml",
         "kairos": "barstyles/kairos/Scene.qml",
-        "iris": "barstyles/iris/Scene.qml"
+        "iris": "barstyles/iris/Scene.qml",
+        "python": "barstyles/python/Scene.qml"
     })
 
     function sceneUrl(id) {

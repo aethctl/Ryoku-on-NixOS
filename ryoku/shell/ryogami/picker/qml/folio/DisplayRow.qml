@@ -31,8 +31,8 @@ Item {
             width: parent.width
             visible: Library.outputs.length === 0
             text: I18n.tr("No displays detected.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBody
             color: Theme.withAlpha(Theme.surfaceText, 0.5 * row.reveal)
             renderType: Text.NativeRendering
@@ -50,7 +50,7 @@ Item {
                 title: {
                     var o = outCard.modelData;
                     var size = (o.width && o.height) ? ("  " + o.width + "\u00d7" + o.height) : "";
-                    return (o.name ? o.name : I18n.tr("Display")) + size + (o.focused ? "  \u25c6" : "");
+                    return (o.name ? o.name : I18n.tr("Display")) + size + (o.focused ? "  \u25cf" : "");
                 }
 
                 readonly property string _name: outCard.modelData.name ? String(outCard.modelData.name) : ""
@@ -92,8 +92,8 @@ Item {
                             anchors.centerIn: parent
                             visible: !outCard._current || !outCard._current.path
                             text: I18n.tr("Nothing applied")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.5)
                             renderType: Text.NativeRendering
@@ -132,8 +132,8 @@ Item {
                             anchors.rightMargin: 10 * Theme.scale
                             anchors.verticalCenter: parent.verticalCenter
                             text: I18n.tr("Use this display's colours")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontField
                             color: Theme.withAlpha(Theme.surfaceText, row.reveal)
                             elide: Text.ElideRight
@@ -159,8 +159,8 @@ Item {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: I18n.tr("Audio")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontField
                                 color: Theme.withAlpha(Theme.surfaceText, row.reveal)
                                 renderType: Text.NativeRendering
@@ -197,8 +197,8 @@ Item {
                             anchors.rightMargin: 10 * Theme.scale
                             anchors.verticalCenter: parent.verticalCenter
                             text: I18n.tr("Playback")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontField
                             color: Theme.withAlpha(Theme.surfaceText, row.reveal)
                             elide: Text.ElideRight

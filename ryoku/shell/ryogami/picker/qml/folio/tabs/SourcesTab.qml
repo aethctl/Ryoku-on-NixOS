@@ -385,7 +385,14 @@ FolioTabData {
                   help: I18n.tr("YouTube loops are often hours long. Download only this many minutes; each video can override this before download. 0 downloads everything."),
                   unit: I18n.tr("min"),
                   details: "source.youtube",
-                  search: ["sources.youtube.maxMinutes", "clip", "length", "number"] }
+                  search: ["sources.youtube.maxMinutes", "clip", "length", "number"] },
+                { id: "sources.motionbgs.quality",
+                  key: "sources.motionbgs.quality",
+                  kind: "dropdown",
+                  label: I18n.tr("Live wallpaper quality"),
+                  help: I18n.tr("Best downloads 4K when MotionBGs offers it and falls back to HD. Light always uses HD for smaller files."),
+                  options: [{ value: "best", label: I18n.tr("Best (4K)") }, { value: "light", label: I18n.tr("Light (HD)") }],
+                  search: ["sources.motionbgs.quality", "live", "wallpaper", "quality", "motionbgs", "best", "4k", "light", "hd", "dropdown"] }
             ]
         }
     ]

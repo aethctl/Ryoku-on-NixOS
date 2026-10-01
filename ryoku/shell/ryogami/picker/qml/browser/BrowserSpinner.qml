@@ -4,7 +4,7 @@ import QtQuick
 Item {
     id: spinner
 
-    property color color: Theme.primary
+    property color color: Theme.surfaceText
     property real size: 48
 
     implicitWidth: spinner.size * Theme.scale

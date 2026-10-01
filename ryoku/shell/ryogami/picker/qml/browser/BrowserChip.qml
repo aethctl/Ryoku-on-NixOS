@@ -27,12 +27,15 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: !chip._swatch
+        radius: Theme.radius
         color: chip.active
-            ? (chip._order ? "transparent" : Theme.withAlpha(Theme.primary, 0.14))
+            ? (chip._order ? "transparent" : Theme.withAlpha(Theme.surfaceText, 0.06))
             : chip.hovered
-                ? Theme.withAlpha(Theme.surfaceVariant, chip._order ? 0.30 : 0.34)
+                ? Theme.withAlpha(Theme.surfaceText, chip._order ? 0.07 : 0.09)
                 : "transparent"
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
 
+        // A bone underline marks the chosen plain chip.
         Rectangle {
             visible: !chip._order
             anchors.left: parent.left
@@ -40,26 +43,18 @@ Item {
             anchors.bottom: parent.bottom
             height: chip.active ? 2 * Theme.scale : 1
             color: chip.active
-                ? Theme.primary
-                : Theme.withAlpha(Theme.outline, chip.hovered ? 0.22 : 0.22)
-            opacity: chip.active ? 1 : 1
+                ? Theme.surfaceText
+                : Theme.withAlpha(Theme.outline, 0.22)
+            Behavior on height { NumberAnimation { duration: Theme.fast; easing.type: Theme.revealEasing } }
         }
-        Rectangle {
-            visible: !chip._order && chip.active
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 2 * Theme.scale
-            height: 1
-            color: Theme.withAlpha(Theme.outline, 0.08)
-        }
+        // A bone marker runs down the chosen order chip.
         Rectangle {
             visible: chip._order && chip.active
             anchors.left: parent.left
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             width: 2 * Theme.scale
-            color: Theme.primary
+            color: Theme.surfaceText
         }
     }
 
@@ -70,15 +65,16 @@ Item {
         anchors.left: parent.left
         anchors.leftMargin: (chip._order ? 8 : 7) * Theme.scale
         text: chip.label
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: chip.active ? Font.DemiBold : Font.Medium
         font.pixelSize: Theme.fontBase
         color: chip.active
-            ? Theme.primary
+            ? Theme.surfaceText
             : chip.hovered
                 ? Theme.withAlpha(Theme.surfaceText, chip._order ? 0.88 : 0.90)
                 : Theme.withAlpha(Theme.surfaceText, chip._order ? 0.54 : 0.64)
         renderType: Text.NativeRendering
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
     }
 
     Item {
@@ -98,7 +94,7 @@ Item {
                 ? chip.swatchInnerActive
                 : chip.hovered ? Qt.lighter(chip.swatchInner, 1.2) : chip.swatchInner
             border.width: chip.active ? 1.5 : 0
-            border.color: Theme.primary
+            border.color: Theme.surfaceText
         }
     }
 

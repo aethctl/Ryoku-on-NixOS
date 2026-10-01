@@ -3,8 +3,66 @@
 ## Unreleased
 
 ### New
-- **Rices save, export and import from Ryogami.** The Rices tab gains Save
-  look and Import beside its tabs, and an empty tab offers both instead of
+- **A fifth bar style: Python.** The serpantinum shell (by ilyamiro, AGPL-3.0)
+  is ported into the style folder as `python`: a top or edge bar of pill
+  widgets that open into one morphing stage, with the ported network, sound,
+  calendar, media, system panel, notification centre, dock, floating
+  quick-actions rail, song pill, OSD pills and the style's own settings guide.
+  The QML is serpantinum's; its data plane is Ryoku's. Workspaces, windows,
+  the keyboard layout and monitor power ride the window-manager seam, so the
+  bar behaves the same on Hyprland and niri; settings live in the `python` key
+  of `shell.json` and apply live through the daemon; the palette follows the
+  wallpaper (a guide preset can override it), the font picker writes Ryoku's
+  single global font, and the blue-light rows drive the daemon's night light.
+  Ryoku keeps what it owns: the launcher, the clipboard, ryogami, the lock
+  screen, capture, updates and the desktop widgets, and the bar's buttons for
+  those hand over to Ryoku's surfaces. While Python is the bar, the shell's own
+  notification banners and OSD pills stand down so the ported ones draw alone;
+  `python.general.notifications` / `python.general.osd` flip them back. Pick it
+  with `ryoku-shell barstyle python` or Bar Studio.
+  (`barstyles/python/`, `services/BarProducts.qml`, `services/Config.qml`)
+- **Python's desktop widgets join the global roster.** Serpantinum's widget
+  face library (clock, music, weather, visualizer, image, user, cpu, ram, temp,
+  disk, battery, github, with their variant ladders) is ported into the style
+  folder and hosted by Ryoku's desktop widgets, the same way the Shima faces
+  are: the slot owns placement, size, lock and backing, the face only paints.
+  Each widget's right-click menu carries a Serpantinum/Ryoku style switch, so a
+  face can keep its own plate or wear the shared paper-and-ink chrome. The
+  style's guide also regains its Welcome and Launcher tabs, and the bar's
+  calendar, media and notification surfaces run error-free.
+  (`barstyles/python/widgets/`, `modules/desktop/python/`)
+- **Ryogami's bar is now a masthead.** The two rows of slanted skwd chips are
+  gone. The picker opens under one quiet slab: the Ryoku mark settles in, the four
+  libraries sit as words with their Japanese names (壁紙 Wallpapers, 配色 Themes,
+  装い Rices, 工房 Workshop), and a bone plate slides to the open one, turning
+  the letters dark as it passes over them. A search line, a Fraunces count and
+  the light/dark and settings buttons finish the top row. Under a hairline, a
+  second row holds only what the open library needs: Stills, Video and Scenes
+  with a sliding rule, folder and order menus that unfold with a turning
+  chevron, the hue chips, favourites, shape, size and auto-rotate for
+  wallpapers; Design a theme for themes; Save look and Import for rices. The
+  seven sort buttons are one Order menu. It sits at the top in every picker
+  style, and the wall and sandy styles lay their cards out below it. The
+  Visual style, Orientation and filter bar offset settings are removed, and
+  `ryoku doctor` clears them from `ryogami.json`
+  (`ryogami/picker/qml/chrome/FilterBar.qml`, `chrome/filterbar/`,
+  `cli/internal/doctor/reconcile_retired_filterbar_keys.go`).
+- **Ryogami speaks Ryoku everywhere, not just in the bar.** Settings, the
+  download browser, the rice dialogs, the theme strip and the card badges drop
+  skwd's slanted pink buttons and condensed type: real switches, bone plates for
+  what is chosen, sliding rules, Fraunces numerals, no poster watermark. Cards
+  bloom in from the one you are on when the picker opens and lift under the
+  pointer. A new masthead button turns wallpaper colours on or off (matugen
+  follows each wallpaper you apply; theme tiles now pick a fixed palette through
+  the same setting). Search is rebuilt: it drops from the search line, types
+  straight away, shows live match counts, and tags include or exclude with a
+  click. Describe search says plainly when it needs a vision model and opens the
+  import for it. MotionBGs, the live-wallpaper source iNiR's iris picker uses,
+  now previews its clips, lets you pick Best (4K) or Light (HD), falls back to HD
+  when a wallpaper has no 4K file, and saves downloads as videos
+  (`ryogami/picker/qml/`, `ryogami/daemon/source_ryowalls.go`, `lens_*.go`).
+- **Rices save, export and import from Ryogami.** The Rices tab's second row
+  holds Save look and Import, and an empty tab offers both instead of
   sending you to Ryoku Hub. A rice's card keeps Apply, Fork, Restore and Delete
   and adds a Share row: Save look names a capture of this desktop and lists what
   it carries (it warns before replacing a rice with the same name), Export opens
@@ -13,7 +71,7 @@
   command reports what really happened, a refused folder keeps the dialog open,
   and a new rice slides under the cursor once it lands. Wallpaper filters (type,
   colour, folder, favourites, shape, size) no longer empty the Rices and Themes
-  tabs when left on, and the bar hides them there
+  tabs when left on
   (`ryogami/picker/qml/chrome/RiceShare.qml`, `RiceFolderBrowser.qml`,
   `RiceWorkshop.qml`, `ryogami/picker/src/core/libraryview.cpp`).
 - **Night light AT THE CLOCK.** The Displays card's schedule was sun-only, so
@@ -285,6 +343,16 @@
   `../../hyprland/modules/binds.lua`).
 
 ### Fixed
+- **Ryogami's picker stops losing cards and stuttering.** A picker opened while
+  the daemon was still scanning kept only the wallpapers it had seen so far until
+  a relaunch; it now takes the full list when the scan ends. A texture array
+  that failed to grow no longer leaves cards blank, and a filter change that
+  never settles snaps its cards to rest. Hearting a wallpaper updates straight
+  away. Crossing the top bar no longer recolours the desktop through hover
+  previews. Live-wallpaper previews wait for the cards to settle instead of
+  decoding mid-navigation. Settings and the download browser open without the
+  hitch, the browser grid fits its pane, and tag and describe search work
+  (`ryogami/picker/src/`, `ryogami/daemon/rpc.go`).
 - **Docking no longer freezes the night light.** A connector change (dock,
   undock, lid, resume) can take the warm gamma away from the running backend
   without telling it, so the bar kept reading on over a cold screen. While the

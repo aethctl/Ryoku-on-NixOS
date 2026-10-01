@@ -1,11 +1,20 @@
 import QtQuick
+import QtQuick.Effects
 import Ryoku.Ui.Singletons
 
+// The picker's masthead, set like the head of a printed page: the 力 seal, the four
+// libraries named in Latin and Japanese, a search line and the count. Under a hairline,
+// a second line carries only what the open library needs. Emphasis is inversion, colour
+// appears only as data (the hue swatches) and in the seal.
 Item {
     id: root
 
     required property PickerState state
     readonly property LibraryView view: root.state ? root.state.view : null
+    readonly property string collection: root.view ? root.view.collection : ""
+    // Type, folder, sort, colour, favourites, shape and size describe wallpapers; rices
+    // and themes carry none of them, so the second line drops those controls there.
+    readonly property bool wallFacets: root.collection === "wallpapers" || root.collection === "workshop"
 
     // A cheap stamp so settings-driven bindings re-evaluate without one SettingValue per key.
     property int settingsRev: 0
@@ -20,27 +29,7 @@ Item {
     }
     function show(key) { return root.val(key, true) !== false }
 
-    readonly property string barStyle: {
-        root.settingsRev
-        var vs = root.val("filterBar.visualStyle", "match")
-        if (vs === "slices") return "slices"
-        if (vs === "hex") return "geometric"
-        if (vs === "wall") return "straight"
-        var m = root.state ? root.state.mode : "slices"
-        if (m === "hex") return "geometric"
-        if (m === "wall" || m === "grid" || m === "collection") return "straight"
-        return "slices"
-    }
-
     readonly property CardField field: root.state ? root.state.field : null
-    readonly property string mode: root.state ? root.state.mode : "slices"
-    // Sandy keeps its bar along the bottom edge and never turns it vertical.
-    readonly property bool menuUp: root.mode === "sandy"
-    readonly property bool vertical: root.val("filterBar.orientation", "horizontal") === "vertical" && !root.menuUp
-    readonly property rect stage: root.field ? root.field.stageRect : Qt.rect(0, 0, root.width, root.height)
-    readonly property real gap: 8 * Theme.scale
-    readonly property real offX: Number(root.val("filterBar.offsetX", 0))
-    readonly property real offY: Number(root.val("filterBar.offsetY", 0))
     readonly property bool muted: root.val("wallpaperMute", true) === true
     readonly property bool audioActive: {
         var outs = Library.outputs || []
@@ -54,79 +43,17 @@ Item {
 
     readonly property bool revealed: (root.state ? root.state.filterBarShown : false)
         && !(root.field && root.field.flippedIndex >= 0)
-    opacity: root.revealed ? 1 : 0
-    Behavior on opacity { NumberAnimation { duration: Theme.standard; easing.type: Theme.revealEasing } }
-
-    // Children the Flow actually lays out: positioners skip hidden and zero-sized items.
-    function laidOut(c) { return c.visible && c.width > 0 && c.height > 0 }
-    readonly property real naturalExtent: {
-        var total = 0
-        var n = 0
-        for (var i = 0; i < bar.children.length; ++i) {
-            var c = bar.children[i]
-            if (!root.laidOut(c)) continue
-            total += root.vertical ? c.height : c.width
-            n++
-        }
-        return Math.ceil(total + Math.max(n - 1, 0) * bar.spacing)
-    }
-    // skwd's vertical rail: every item takes the widest one's width, at least 84.
-    readonly property real rail: {
-        if (!root.vertical) return 0
-        var w = 84 * Theme.scale
-        for (var i = 0; i < bar.children.length; ++i) {
-            var c = bar.children[i]
-            if (c.visible)
-                w = Math.max(w, c.naturalWidth !== undefined ? c.naturalWidth : c.implicitWidth)
-        }
-        return Math.ceil(w)
-    }
-    readonly property size used: {
-        var r = 0
-        var b = 0
-        for (var i = 0; i < bar.children.length; ++i) {
-            var c = bar.children[i]
-            if (!root.laidOut(c)) continue
-            r = Math.max(r, c.x + c.width)
-            b = Math.max(b, c.y + c.height)
-        }
-        return Qt.size(r, b)
-    }
-
-    readonly property real barX: {
-        if (root.vertical && root.mode === "wall")
-            return Math.max(root.stage.x - root.gap - root.used.width + root.offX, 0)
-        if (root.vertical)
-            return Math.max(16 + root.offX, 0)
-        return Math.max((root.width - root.used.width) * 0.5 + root.offX, 0)
-    }
-    readonly property real barY: {
-        if (root.menuUp)
-            return Math.max(root.height - 12 - root.used.height + root.offY, 0)
-        if (root.vertical && root.mode === "wall")
-            return Math.max(root.stage.y + root.offY, 0)
-        if (root.vertical)
-            return Math.max((root.height - root.used.height) * 0.5 + root.offY, 0)
-        if (root.mode === "wall")
-            return Math.max(root.stage.y - root.gap - root.used.height + root.offY, 0)
-        return Math.max(root.stage.y + 13 + root.offY, 0)
-    }
-
-    // The wall grid and the bar centre as one group while the bar shows over the scene.
+    // The wall grid centres itself in the space below the masthead while it shows.
     readonly property bool obscured: root.state !== null && root.state.sheet !== "" && !root.state.sceneThrough
+    readonly property real edge: 22 * Theme.scale
+    readonly property real gap: 14 * Theme.scale
     Binding {
         when: root.field !== null
         target: root.field
         property: "barReserve"
         value: root.revealed && !root.obscured
-            ? Qt.size(root.used.width + root.gap, root.used.height + root.gap)
+            ? Qt.size(slab.width, root.edge + slab.height + root.gap)
             : Qt.size(0, 0)
-    }
-    Binding {
-        when: root.field !== null
-        target: root.field
-        property: "barVertical"
-        value: root.vertical
     }
 
     property bool rotationActive: false
@@ -160,19 +87,15 @@ Item {
         }, function () {})
     }
 
-    // The library filters on wide/tall; the remote browser's landscape/portrait belong to a
-    // different view and never matched, so the Shape button relabelled without filtering.
     function cycleShape() {
         if (!root.view) return
         var o = root.view.orientation
         root.view.orientation = (o === "" || o === undefined) ? "wide"
                               : (o === "wide") ? "tall" : ""
     }
-    function shapeLabel() {
-        if (!root.view) return I18n.tr("Shape")
-        var o = root.view.orientation
-        return (o === "wide") ? I18n.tr("Wide")
-             : (o === "tall") ? I18n.tr("Tall") : I18n.tr("Shape")
+    readonly property string shapeLabel: {
+        var o = root.view ? root.view.orientation : ""
+        return o === "wide" ? I18n.tr("Wide") : o === "tall" ? I18n.tr("Tall") : ""
     }
 
     property int resIndex: -1
@@ -203,12 +126,11 @@ Item {
         var presets = root.resPresets()
         if (root.resIndex >= 0 && root.resIndex < presets.length && presets[root.resIndex].label)
             return presets[root.resIndex].label
-        return I18n.tr("Size")
+        return ""
     }
 
-    function setThemeMode(mode) {
-        Settings.set("theme.mode", mode)
-    }
+    readonly property bool light: root.val("theme.mode", "dark") === "light"
+    readonly property bool followWall: root.val("theme.policy", "wallpaper") === "wallpaper"
 
     readonly property bool sticky: root.val("filterBar.sticky", false) === true
     property bool _restoring: false
@@ -248,256 +170,337 @@ Item {
         function onFavouritesOnlyChanged() { root.save("favourites", root.view.favouritesOnly ? "1" : "0") }
     }
 
-    readonly property var typeModel: [
-        { value: "", label: I18n.tr("All"), key: "filterBar.show.type.all" },
-        { value: "static", label: I18n.tr("PIC"), key: "filterBar.show.type.static" },
-        { value: "video", label: I18n.tr("VID"), key: "filterBar.show.type.video" },
-        { value: "we", label: I18n.tr("WE"), key: "filterBar.show.type.we" }
-    ]
-    readonly property var sortModel: [
-        { value: "date", glyph: "\u{f00f0}", label: I18n.tr("Newest"), key: "filterBar.show.sort.date" },
-        { value: "recent", glyph: "\u{f02da}", label: I18n.tr("Recently applied"), key: "filterBar.show.sort.recent" },
-        { value: "color", glyph: "\u{f03d8}", label: I18n.tr("Default (by colour)"), key: "filterBar.show.sort.color" },
-        { value: "pop", glyph: "\u{f0238}", label: I18n.tr("Colour pop"), key: "filterBar.show.sort.pop" },
-        { value: "richness", glyph: "\u{f0b74}", label: I18n.tr("Colourful"), key: "filterBar.show.sort.richness" },
-        { value: "minimalist", glyph: "\u{f0764}", label: I18n.tr("Minimalist"), key: "filterBar.show.sort.minimalist" },
-        { value: "res", glyph: "\u{f0a24}", label: I18n.tr("Highest resolution"), key: "filterBar.show.sort.res" }
-    ]
+    // The seal stamps in each time the picker opens: the one moment the masthead performs.
+    Connections {
+        target: root.state
+        function onShownChanged() { if (root.state.shown) stamp.restart() }
+    }
 
-    // Wraps like skwd: into rows past the viewport width, into columns past its height.
-    Flow {
-        id: bar
-        x: root.barX
-        y: root.barY
-        width: root.vertical ? implicitWidth : Math.min(root.naturalExtent, root.width - 24)
-        height: root.vertical ? Math.min(root.naturalExtent, root.height - 32) : implicitHeight
+    // The second line fades across when the library changes, so its controls never pop.
+    property string lineCollection: root.collection
+    property real lineSwap: 1
+    onCollectionChanged: swapAnim.restart()
+    SequentialAnimation {
+        id: swapAnim
+        NumberAnimation { target: root; property: "lineSwap"; to: 0; duration: Theme.fast * 0.6; easing.type: Easing.InQuad }
+        ScriptAction { script: root.lineCollection = root.collection }
+        NumberAnimation { target: root; property: "lineSwap"; to: 1; duration: Theme.standard; easing.type: Easing.OutCubic }
+    }
+
+    Rectangle {
+        id: slab
+        width: Math.min(root.width - 96 * Theme.scale, 1320 * Theme.scale)
+        height: head.height + 1 + line.height
+        x: (root.width - width) * 0.5
+        y: root.edge
+        radius: Theme.radius
+        color: Theme.withAlpha(Theme.surface, 0.95)
+        border.width: 1
+        border.color: Theme.withAlpha(Theme.outline, 0.5)
         enabled: root.revealed
-        flow: root.vertical ? Flow.TopToBottom : Flow.LeftToRight
-        spacing: (root.vertical ? 3 : 4) * Theme.scale
+        opacity: root.revealed ? 1 : 0
+        visible: opacity > 0.01
+        transform: Translate { y: (1 - slab.opacity) * -10 * Theme.scale }
+        Behavior on opacity { NumberAnimation { duration: Theme.standard; easing.type: Theme.revealEasing } }
+        // Clicks and hover in a gap of the masthead stay on it: an empty click on the scene
+        // closes the picker, and hover reaching the cards below recoloured the whole desktop
+        // through the hover palette preview as the pointer crossed the bar.
+        MouseArea { anchors.fill: parent; hoverEnabled: true }
 
-        CollectionTabs {
-            state: root.state
-            barStyle: root.barStyle
-            railWidth: root.rail
-        }
-
+        // ── head: seal, libraries, search, count ─────────────────────────────
         Item {
-            readonly property real naturalWidth: 0
-            width: root.vertical ? root.rail : 9 * Theme.scale
-            height: root.vertical ? 9 * Theme.scale : 26 * Theme.scale
+            id: head
+            width: parent.width
+            height: 58 * Theme.scale
+
+            // Ryoku's mark, the one on the README. On a light theme its bone strokes would
+            // vanish, so it takes the ink colour there.
+            Item {
+                id: seal
+                anchors.left: parent.left
+                anchors.leftMargin: 16 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                width: 30 * Theme.scale
+                height: 26 * Theme.scale
+                Image {
+                    id: mark
+                    anchors.fill: parent
+                    source: Qt.resolvedUrl("brand/logo-mark.png")
+                    fillMode: Image.PreserveAspectFit
+                    sourceSize.height: 64
+                    smooth: true
+                    mipmap: true
+                    visible: Theme.isDark
+                }
+                MultiEffect {
+                    anchors.fill: mark
+                    source: mark
+                    visible: !Theme.isDark
+                    colorization: 1
+                    colorizationColor: Theme.surfaceText
+                }
+                ParallelAnimation {
+                    id: stamp
+                    NumberAnimation { target: seal; property: "scale"; from: 0.7; to: 1; duration: Theme.slow; easing.type: Easing.OutBack; easing.overshoot: 1.8 }
+                    NumberAnimation { target: seal; property: "opacity"; from: 0; to: 1; duration: Theme.standard; easing.type: Easing.OutQuad }
+                }
+            }
             Rectangle {
-                anchors.centerIn: parent
-                width: root.vertical ? root.rail - 16 * Theme.scale : 1
-                height: root.vertical ? 1 : 22 * Theme.scale
-                color: Theme.withAlpha(Theme.outline, 0.3)
+                id: sealRule
+                anchors.left: seal.right
+                anchors.leftMargin: 14 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                width: 1
+                height: 30 * Theme.scale
+                color: Theme.withAlpha(Theme.surfaceText, 0.18)
             }
-        }
 
-        Repeater {
-            model: root.typeModel
-            delegate: BarButton {
-                required property var modelData
-                visible: root.show(modelData.key)
-                barStyle: root.barStyle
-                railWidth: root.rail
-                label: modelData.label
-                active: root.view && root.view.typeFilter === modelData.value
-                onTriggered: {
-                    if (!root.view) return
-                    root.view.typeFilter = (root.view.typeFilter === modelData.value && modelData.value !== "") ? "" : modelData.value
-                }
+            CollectionTabs {
+                id: tabsBlock
+                anchors.left: sealRule.right
+                anchors.leftMargin: 10 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                state: root.state
             }
-        }
 
-        FolderMenu {
-            visible: root.show("filterBar.show.folder") && root.view && (root.view.collection === "wallpapers" || root.view.collection === "workshop")
-            view: root.view
-            barStyle: root.barStyle
-            railWidth: root.rail
-            menuUp: root.menuUp
-        }
-
-        Repeater {
-            model: root.sortModel
-            delegate: BarButton {
-                required property var modelData
-                visible: root.show(modelData.key)
-                barStyle: root.barStyle
-                railWidth: root.rail
-                glyph: modelData.glyph
-                tooltip: modelData.label
-                active: root.view && root.view.sort === modelData.value
-                onTriggered: if (root.view) root.view.sort = modelData.value
-            }
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.favourites")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f02d1}"
-            tooltip: I18n.tr("Favourites")
-            active: root.view && root.view.favouritesOnly
-            onTriggered: if (root.view) root.view.favouritesOnly = !root.view.favouritesOnly
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.random")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f049d}"
-            tooltip: root.rotationActive
-                ? I18n.tr("Stop auto-rotate")
-                : I18n.tr("Auto-rotate: continuous random wallpapers")
-            active: root.rotationActive
-            onTriggered: root.toggleRotation()
-        }
-
-        Item {
-            visible: root.show("filterBar.show.colors")
-            readonly property real naturalWidth: 84 * Theme.scale
-            width: root.vertical ? root.rail : sw.implicitWidth
-            height: (root.vertical ? 24 : 26) * Theme.scale
-            BarSwatches {
-                id: sw
-                anchors.centerIn: parent
-                view: root.view
-                stripWidth: root.vertical ? 84 * Theme.scale : 0
-            }
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.theme")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0599}"
-            label: I18n.tr("Light")
-            active: root.val("theme.mode", "dark") === "light"
-            onTriggered: root.setThemeMode("light")
-        }
-        BarButton {
-            visible: root.show("filterBar.show.theme")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0594}"
-            label: I18n.tr("Dark")
-            active: root.val("theme.mode", "dark") === "dark"
-            onTriggered: root.setThemeMode("dark")
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.tagcloud")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0349}"
-            tooltip: I18n.tr("Search")
-            active: root.state && root.state.searchOpen
-            onTriggered: if (root.state) root.state.searchOpen = !root.state.searchOpen
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.orient")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f065f}"
-            label: root.shapeLabel()
-            active: root.view && root.view.orientation !== "" && root.view.orientation !== undefined
-            onTriggered: root.cycleShape()
-        }
-
-        BarButton {
-            visible: root.show("filterBar.show.resolution") && root.resPresets().length > 0
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0a24}"
-            label: root.resLabel()
-            active: root.resIndex >= 0
-            onTriggered: root.cycleResolution()
-        }
-
-        Item {
-            visible: root.view !== null
-            readonly property real naturalWidth: cnt.implicitWidth
-            width: root.vertical ? root.rail : cnt.implicitWidth
-            height: (root.vertical ? 24 : 26) * Theme.scale
             Row {
-                id: cnt
-                anchors.centerIn: parent
+                id: headRight
+                anchors.right: parent.right
+                anchors.rightMargin: 12 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: 4 * Theme.scale
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "\u{f0b38}"
-                    font.family: Theme.icon
-                    font.pixelSize: Theme.fontSmall
-                    color: Theme.withAlpha(Theme.surfaceText, 0.55)
-                    renderType: Text.NativeRendering
+
+                Item {
+                    id: countMark
+                    visible: root.view !== null
+                    width: countCol.implicitWidth + 18 * Theme.scale
+                    height: 44 * Theme.scale
+                    property real shown: root.view ? root.view.count : 0
+                    Behavior on shown { NumberAnimation { duration: Theme.slow; easing.type: Easing.OutCubic } }
+                    Column {
+                        id: countCol
+                        anchors.centerIn: parent
+                        spacing: -2 * Theme.scale
+                        Text {
+                            anchors.right: parent.right
+                            text: String(Math.round(countMark.shown))
+                            font.family: Theme.display
+                            font.pixelSize: Theme.fs(24)
+                            font.weight: Font.Normal
+                            font.features: { "tnum": 1, "lnum": 1 }
+                            color: Theme.surfaceText
+                            renderType: Text.NativeRendering
+                        }
+                        Text {
+                            anchors.right: parent.right
+                            text: root.collection === "themes" ? I18n.tr("themes")
+                                : root.collection === "rices" ? I18n.tr("rices")
+                                : root.collection === "workshop" ? I18n.tr("scenes")
+                                : I18n.tr("walls")
+                            font.family: Theme.sans
+                            font.pixelSize: Theme.fs(9)
+                            font.letterSpacing: 1.6
+                            font.capitalization: Font.AllUppercase
+                            color: Theme.withAlpha(Theme.surfaceText, 0.5)
+                            renderType: Text.NativeRendering
+                        }
+                    }
                 }
-                Text {
+                Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: root.view ? String(root.view.count) : "0"
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
-                    font.pixelSize: Theme.fontSmall
-                    color: Theme.withAlpha(Theme.surfaceText, 0.7)
-                    renderType: Text.NativeRendering
+                    width: 1
+                    height: 30 * Theme.scale
+                    color: Theme.withAlpha(Theme.surfaceText, 0.18)
                 }
+                // Wallpaper colours: matugen derives the desktop palette from each wallpaper
+                // you apply. Off holds the current colours; a theme tile picks a fixed one.
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    glyph: "\u{f020a}"
+                    tooltip: root.followWall ? I18n.tr("Colours follow the wallpaper") : I18n.tr("Take colours from the wallpaper")
+                    active: root.followWall
+                    hpad: 9
+                    onTriggered: Settings.set("theme.policy", root.followWall ? "off" : "wallpaper")
+                }
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.show("filterBar.show.theme")
+                    glyph: root.light ? "\u{f0599}" : "\u{f0594}"
+                    tooltip: root.light ? I18n.tr("Switch to dark") : I18n.tr("Switch to light")
+                    hpad: 9
+                    onTriggered: Settings.set("theme.mode", root.light ? "dark" : "light")
+                }
+                BarButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    glyph: "\u{f0493}"
+                    tooltip: I18n.tr("Settings")
+                    spinOnHover: true
+                    hpad: 9
+                    active: root.state && root.state.sheet === "settings"
+                    onTriggered: if (root.state) root.state.openSheet("settings", undefined)
+                }
+            }
+
+            SearchTrigger {
+                visible: root.show("filterBar.show.tagcloud")
+                anchors.right: headRight.left
+                anchors.rightMargin: 18 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(Math.min(headRight.x - 18 * Theme.scale - (tabsBlock.x + tabsBlock.width + 32 * Theme.scale), 360 * Theme.scale), 120 * Theme.scale)
+                state: root.state
             }
         }
 
-        BarButton {
-            visible: root.show("filterBar.show.playlists")
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0cb8}"
-            tooltip: I18n.tr("Playlists")
-            active: root.state && root.state.sheet === "playlists"
-            onTriggered: if (root.state) root.state.openSheet("playlists", undefined)
+        Rectangle {
+            anchors.top: head.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 1
+            anchors.rightMargin: 1
+            height: 1
+            color: Theme.withAlpha(Theme.outline, 0.4)
         }
 
-        // Shown while a display plays a video or scene, the only wallpapers with sound.
-        BarButton {
-            visible: root.audioActive
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: root.muted ? "\u{f075f}" : "\u{f057e}"
-            tooltip: root.muted ? I18n.tr("Unmute wallpapers") : I18n.tr("Mute wallpapers")
-            active: !root.muted
-            onTriggered: Settings.set("wallpaperMute", !root.muted)
-        }
-        BarButton {
-            visible: root.audioActive
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f062e}"
-            tooltip: I18n.tr("Audio mixer")
-            active: root.state && root.state.sheet === "audio"
-            onTriggered: if (root.state) root.state.openSheet("audio", undefined)
-        }
+        // ── line: what the open library needs ────────────────────────────────
+        Item {
+            id: line
+            y: head.height + 1
+            width: parent.width
+            height: 44 * Theme.scale
 
-        DownloadMenu {
-            visible: root.show("filterBar.show.download")
-            state: root.state
-            barStyle: root.barStyle
-            railWidth: root.rail
-            menuUp: root.menuUp
-        }
+            Row {
+                id: lineLeft
+                anchors.left: parent.left
+                anchors.leftMargin: 10 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2 * Theme.scale
+                opacity: root.lineSwap
+                transform: Translate { x: (1 - root.lineSwap) * 10 * Theme.scale }
 
-        BarButton {
-            barStyle: root.barStyle
-            railWidth: root.rail
-            glyph: "\u{f0493}"
-            tooltip: I18n.tr("Settings")
-            active: root.state && root.state.sheet === "settings"
-            onTriggered: if (root.state) root.state.openSheet("settings", undefined)
-        }
+                readonly property bool walls: root.lineCollection === "wallpapers" || root.lineCollection === "workshop"
 
-        Repeater {
-            model: Tasks.bar
-            delegate: TaskChip {
-                required property var modelData
-                task: modelData
-                barStyle: root.barStyle
-                railWidth: root.rail
+                TypeSegment {
+                    visible: root.lineCollection === "wallpapers"
+                    view: root.view
+                    shown: root.show
+                }
+                BarRule { visible: root.lineCollection === "wallpapers" }
+                FolderMenu {
+                    id: folderMenu
+                    visible: lineLeft.walls && root.show("filterBar.show.folder") && folderMenu.hasFolders
+                    view: root.view
+                }
+                SortMenu {
+                    id: sortMenu
+                    visible: lineLeft.walls && sortMenu.shownCount > 0
+                    view: root.view
+                    shown: root.show
+                }
+                BarRule { visible: lineLeft.walls && root.show("filterBar.show.colors") }
+                BarSwatches {
+                    visible: lineLeft.walls && root.show("filterBar.show.colors")
+                    view: root.view
+                    compact: slab.width < 1300 * Theme.scale || root.audioActive || Tasks.bar.length > 0
+                }
+                BarRule { visible: lineLeft.walls }
+                BarButton {
+                    visible: lineLeft.walls && root.show("filterBar.show.favourites")
+                    glyph: root.view && root.view.favouritesOnly ? "\u{f02d1}" : "\u{f02d5}"
+                    tooltip: I18n.tr("Favourites only")
+                    active: root.view && root.view.favouritesOnly
+                    onTriggered: if (root.view) root.view.favouritesOnly = !root.view.favouritesOnly
+                }
+                BarButton {
+                    visible: lineLeft.walls && root.show("filterBar.show.orient")
+                    glyph: "\u{f065f}"
+                    label: root.shapeLabel
+                    tooltip: I18n.tr("Shape: any, wide, tall")
+                    active: root.shapeLabel !== ""
+                    onTriggered: root.cycleShape()
+                }
+                BarButton {
+                    visible: lineLeft.walls && root.show("filterBar.show.resolution") && root.resPresets().length > 0
+                    glyph: "\u{f0a24}"
+                    label: root.resLabel()
+                    tooltip: I18n.tr("Size")
+                    active: root.resIndex >= 0
+                    onTriggered: root.cycleResolution()
+                }
+                BarButton {
+                    visible: lineLeft.walls && root.show("filterBar.show.random")
+                    glyph: "\u{f049d}"
+                    tooltip: root.rotationActive ? I18n.tr("Stop auto-rotate") : I18n.tr("Auto-rotate through random wallpapers")
+                    active: root.rotationActive
+                    onTriggered: root.toggleRotation()
+                }
+
+                BarButton {
+                    visible: root.lineCollection === "themes"
+                    glyph: "\u{f03d8}"
+                    label: I18n.tr("Design a theme")
+                    active: root.state && root.state.sheet === "themeDesigner"
+                    onTriggered: if (root.state) root.state.openSheet("themeDesigner", ({}))
+                }
+
+                BarButton {
+                    visible: root.lineCollection === "rices"
+                    glyph: "\u{f0193}"
+                    label: I18n.tr("Save look")
+                    tooltip: I18n.tr("Save this desktop as a rice")
+                    active: root.state && root.state.riceShare === "save"
+                    onTriggered: if (root.state) root.state.openRiceShare("save", null)
+                }
+                BarButton {
+                    visible: root.lineCollection === "rices"
+                    glyph: "\u{f02fa}"
+                    label: I18n.tr("Import")
+                    tooltip: I18n.tr("Import a rice someone shared")
+                    active: root.state && root.state.riceShare === "import"
+                    onTriggered: if (root.state) root.state.openRiceShare("import", null)
+                }
+            }
+
+            Row {
+                id: lineRight
+                anchors.right: parent.right
+                anchors.rightMargin: 10 * Theme.scale
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2 * Theme.scale
+
+                Repeater {
+                    model: Tasks.bar
+                    delegate: TaskChip {
+                        required property var modelData
+                        task: modelData
+                    }
+                }
+                BarRule { visible: Tasks.bar.length > 0 }
+
+                // Shown while a display plays a video or scene, the only wallpapers with sound.
+                BarButton {
+                    visible: root.audioActive
+                    glyph: root.muted ? "\u{f075f}" : "\u{f057e}"
+                    tooltip: root.muted ? I18n.tr("Unmute wallpapers") : I18n.tr("Mute wallpapers")
+                    onTriggered: Settings.set("wallpaperMute", !root.muted)
+                }
+                BarButton {
+                    visible: root.audioActive
+                    glyph: "\u{f062e}"
+                    tooltip: I18n.tr("Audio mixer")
+                    active: root.state && root.state.sheet === "audio"
+                    onTriggered: if (root.state) root.state.openSheet("audio", undefined)
+                }
+                BarButton {
+                    visible: root.show("filterBar.show.playlists")
+                    glyph: "\u{f0cb8}"
+                    tooltip: I18n.tr("Playlists")
+                    active: root.state && root.state.sheet === "playlists"
+                    onTriggered: if (root.state) root.state.openSheet("playlists", undefined)
+                }
+                DownloadMenu {
+                    visible: root.show("filterBar.show.download")
+                    state: root.state
+                }
             }
         }
     }

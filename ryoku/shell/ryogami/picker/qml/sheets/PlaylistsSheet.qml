@@ -352,18 +352,17 @@ Item {
                                 anchors.left: parent.left
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: I18n.tr("New playlist")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
-                                color: Theme.primary
+                                color: Theme.withAlpha(Theme.surfaceText, 0.54)
                                 renderType: Text.NativeRendering
                             }
                             Text {
                                 anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: root._pad2(root.playlists.length)
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.display
                                 font.pixelSize: Theme.fontFine
                                 color: Theme.withAlpha(Theme.surfaceText, 0.42)
                                 renderType: Text.NativeRendering
@@ -399,10 +398,10 @@ Item {
 
                         Text {
                             text: root.anyActive() ? I18n.tr("Active displays") : I18n.tr("Saved playlists")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontFine
-                            color: Theme.primary
+                            color: Theme.withAlpha(Theme.surfaceText, 0.54)
                             renderType: Text.NativeRendering
                         }
                         Text {
@@ -412,8 +411,8 @@ Item {
                                     ? I18n.tr("%1 active assignment").arg(root.assignmentCount())
                                     : I18n.tr("%1 active assignments").arg(root.assignmentCount()))
                                 : I18n.tr("%1 saved \u00b7 none active").arg(root.playlists.length)
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontMini
                             color: Theme.withAlpha(Theme.surfaceText, 0.48)
                             wrapMode: Text.WordWrap
@@ -469,8 +468,8 @@ Item {
 
                         Text {
                             text: I18n.tr("No playlists yet")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontLabel
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
@@ -478,8 +477,8 @@ Item {
                         Text {
                             width: parent.width
                             text: I18n.tr("Create one below to begin.")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontMini
                             color: Theme.withAlpha(Theme.surfaceText, 0.46)
                             wrapMode: Text.WordWrap
@@ -551,27 +550,26 @@ Item {
 
                             Text {
                                 text: I18n.tr("Playlists / edit")
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
-                                color: Theme.withAlpha(Theme.primary, 0.84)
+                                color: Theme.withAlpha(Theme.surfaceText, 0.54)
                                 renderType: Text.NativeRendering
                             }
                             Text {
                                 text: I18n.tr("ID %1").arg(root.selectedId)
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.display
                                 font.pixelSize: Theme.fontFine
-                                color: Theme.withAlpha(Theme.primary, 0.84)
+                                color: Theme.withAlpha(Theme.surfaceText, 0.54)
                                 renderType: Text.NativeRendering
                             }
                             Item { Layout.fillWidth: true }
                             Text {
                                 text: root._stateCopy
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
-                                color: root.isPlaying(root.selectedId) ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.46)
+                                color: root.isPlaying(root.selectedId) ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.46)
                                 renderType: Text.NativeRendering
                             }
                         }
@@ -579,8 +577,7 @@ Item {
                         Text {
                             width: parent.width
                             text: root._displayName
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fs(42)
                             lineHeight: 0.98
                             color: Theme.surfaceText
@@ -595,8 +592,8 @@ Item {
                             Text {
                                 text: I18n.tr("%1 \u00b7 ready for display assignment")
                                     .arg(root.smart ? I18n.tr("Filtered playlist") : I18n.tr("Manual playlist"))
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Normal
                                 font.pixelSize: Theme.fontXSmall
                                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                 renderType: Text.NativeRendering
@@ -621,7 +618,6 @@ Item {
                         id: filterFieldBlock
                         visible: root.smart
                         width: editorCol.contentW
-                        number: "01"
                         title: I18n.tr("Filtered playlist")
                         desc: I18n.tr("Members resolve from the rules below and stay in sync with your library.")
 
@@ -662,8 +658,8 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Colours")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Medium
                                     font.pixelSize: Theme.fontTiny
                                     color: Theme.withAlpha(Theme.surfaceText, 0.44)
                                     renderType: Text.NativeRendering
@@ -687,7 +683,6 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
                             Layout.alignment: Qt.AlignTop
-                            number: root.smart ? "02" : "01"
                             title: I18n.tr("Playlist details")
                             desc: I18n.tr("Set the name and choose whether wallpapers are added manually or selected by a filter.")
 
@@ -733,7 +728,6 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
                             Layout.alignment: Qt.AlignTop
-                            number: root.smart ? "03" : "02"
                             title: I18n.tr("Playback")
                             desc: I18n.tr("Choose the order and how long each wallpaper stays on screen.")
 
@@ -757,8 +751,8 @@ Item {
 
                                     Text {
                                         text: I18n.tr("Every")
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Medium
                                         font.pixelSize: Theme.fontBase
                                         color: Theme.withAlpha(Theme.surfaceText, 0.48)
                                         renderType: Text.NativeRendering
@@ -773,8 +767,8 @@ Item {
                                     }
                                     Text {
                                         text: I18n.tr("seconds (min 5)")
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.Normal
                                         font.pixelSize: Theme.fontTiny
                                         color: Theme.withAlpha(Theme.surfaceText, 0.42)
                                         renderType: Text.NativeRendering
@@ -788,7 +782,6 @@ Item {
                     FolioField {
                         id: routingField
                         width: editorCol.contentW
-                        number: root.smart ? "04" : "03"
                         title: I18n.tr("Apply to displays")
                         desc: I18n.tr("Choose where this playlist runs. Selecting every display creates one shared assignment.")
 
@@ -818,10 +811,10 @@ Item {
                             }
                             Text {
                                 text: root._routingState
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
-                                color: root.isPlaying(root.selectedId) ? Theme.primary : Theme.withAlpha(Theme.surfaceText, 0.44)
+                                color: root.isPlaying(root.selectedId) ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.44)
                                 renderType: Text.NativeRendering
                             }
                         }
@@ -842,17 +835,16 @@ Item {
 
                     Text {
                         text: I18n.tr("Playlists / library")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
-                        color: Theme.withAlpha(Theme.primary, 0.84)
+                        color: Theme.withAlpha(Theme.surfaceText, 0.54)
                         renderType: Text.NativeRendering
                     }
                     Text {
                         width: emptyCol.contentW
                         text: I18n.tr("Build a rotation")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fs(34)
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
@@ -863,8 +855,7 @@ Item {
                         spacing: 7 * Theme.scale
                         Text {
                             text: I18n.tr("Choose a playlist from the index")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.display
                             font.pixelSize: Theme.fs(19)
                             color: Theme.surfaceText
                             renderType: Text.NativeRendering
@@ -872,8 +863,8 @@ Item {
                         Text {
                             width: parent.width
                             text: I18n.tr("Pick one on the left to edit its wallpapers, order, and displays.")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontXSmall
                             color: Theme.withAlpha(Theme.surfaceText, 0.5)
                             wrapMode: Text.WordWrap

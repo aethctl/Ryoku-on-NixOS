@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
@@ -24,21 +25,23 @@ const (
 )
 
 var (
-	mbMediaRe    = regexp.MustCompile(`/i/c/[0-9]+x[0-9]+/media/[0-9]+/[^"' ]+\.jpe?g`)
-	mbResRe      = regexp.MustCompile(`\.([0-9]+x[0-9]+)\.jpe?g$`)
-	mbStripResRe = regexp.MustCompile(`\.[0-9]+x[0-9]+`)
-	mbStripExtRe = regexp.MustCompile(`\.jpe?g$`)
-	mwSrcRe      = regexp.MustCompile(`src="(https://moewalls\.com/wp-content/uploads/[0-9]{4}/[0-9]{2}/[^"]*-thumb-[0-9]+x[0-9]+\.(?:jpe?g|png))"`)
-	mwHrefRe     = regexp.MustCompile(`class="g1-frame" href="(https://moewalls\.com/[^"]*)"`)
-	mwTitleRe    = regexp.MustCompile(`<a title="([^"]*)" class="g1-frame"`)
-	mwResRe      = regexp.MustCompile(`resolutions-([0-9]+x[0-9]+)`)
-	moeTokenRe   = regexp.MustCompile(`id="moe-download"[^>]*data-url="([^"]*)"`)
-	moeTokenRe2  = regexp.MustCompile(`data-url="([^"]*)"[^>]*id="moe-download"`)
-	vidExtRe     = regexp.MustCompile(`(?i)\.(mp4|webm|mkv|mov)$`)
-	imgExtRe     = regexp.MustCompile(`(?i)\.(jpe?g|png|webp)$`)
-	stripExtRe   = regexp.MustCompile(`\.[^.]+$`)
-	trailNumRe   = regexp.MustCompile(`-[0-9]+$`)
-	thumbNameRe  = regexp.MustCompile(`(?i)thumb|poster|cover`)
+	mbAnchorRe     = regexp.MustCompile(`(?s)<a title="([^"]*)" href=/([a-z0-9][a-z0-9-]*)>(.*?)</a>`)
+	mbThumbRe      = regexp.MustCompile(`/i/c/([0-9]+)x[0-9]+/media/([0-9]+)/([^ >"]+?\.(?:jpe?g|png))`)
+	mbTitleRe      = regexp.MustCompile(`<span class=ttl>([^<]*)</span>`)
+	mbQualityRe    = regexp.MustCompile(`<span class=frm>\s*([^<]*?)\s*</span>`)
+	mbStemRe       = regexp.MustCompile(`(?:\.[0-9]+x[0-9]+)?\.(?:jpe?g|png)$`)
+	mbLiveSuffixRe = regexp.MustCompile(`(?i)\s+live wallpaper$`)
+	mwSrcRe        = regexp.MustCompile(`src="(https://moewalls\.com/wp-content/uploads/[0-9]{4}/[0-9]{2}/[^"]*-thumb-[0-9]+x[0-9]+\.(?:jpe?g|png))"`)
+	mwHrefRe       = regexp.MustCompile(`class="g1-frame" href="(https://moewalls\.com/[^"]*)"`)
+	mwTitleRe      = regexp.MustCompile(`<a title="([^"]*)" class="g1-frame"`)
+	mwResRe        = regexp.MustCompile(`resolutions-([0-9]+x[0-9]+)`)
+	moeTokenRe     = regexp.MustCompile(`id="moe-download"[^>]*data-url="([^"]*)"`)
+	moeTokenRe2    = regexp.MustCompile(`data-url="([^"]*)"[^>]*id="moe-download"`)
+	vidExtRe       = regexp.MustCompile(`(?i)\.(mp4|webm|mkv|mov)$`)
+	imgExtRe       = regexp.MustCompile(`(?i)\.(jpe?g|png|webp)$`)
+	stripExtRe     = regexp.MustCompile(`\.[^.]+$`)
+	trailNumRe     = regexp.MustCompile(`-[0-9]+$`)
+	thumbNameRe    = regexp.MustCompile(`(?i)thumb|poster|cover`)
 )
 
 type ryowallsWall struct {
@@ -69,7 +72,7 @@ func (s *sources) fetchHTML(ctx context.Context, rawURL, referer string) (string
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("request failed: HTTP %d", resp.StatusCode)
+		return "", httpStatusError{resp.StatusCode}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTextBytes))
 	if err != nil {
@@ -191,63 +194,87 @@ func ryowallsRegistryRows(reg ryowallsRegistry, base, query string, proxyThumb b
 }
 
 func (s *sources) motionbgsSearch(ctx context.Context, query string, page int) (sourcePage, error) {
-	q := strings.ReplaceAll(strings.ToLower(query), " ", "-")
-	var path string
-	switch {
-	case q != "":
-		path = "/tag:" + q + "/"
-		if page > 1 {
-			path += strconv.Itoa(page) + "/"
-		}
-	case page > 1:
-		path = "/" + strconv.Itoa(page) + "/"
-	default:
-		path = "/"
-	}
-	body, err := s.fetchHTML(ctx, motionbgsBase+path, motionbgsBase+"/")
+	body, err := s.fetchHTML(ctx, motionbgsBase+motionbgsPath(query, page), motionbgsBase+"/")
 	if err != nil {
+		// Paging past the last page answers 404; that means no more results, not a failure.
+		var status httpStatusError
+		if page > 1 && errors.As(err, &status) && status.code == http.StatusNotFound {
+			return serverPage(nil, page), nil
+		}
 		return sourcePage{}, fmt.Errorf("search failed")
 	}
 	return serverPage(parseMotionbgs(body), page), nil
 }
 
+// MotionBGs answers /search?q= with a redirect to the tag page, so the tag path is
+// requested directly. An empty query browses the latest wallpapers.
+func motionbgsPath(query string, page int) string {
+	q := url.PathEscape(strings.Join(strings.Fields(strings.ToLower(query)), "-"))
+	switch {
+	case q != "":
+		p := "/tag:" + q + "/"
+		if page > 1 {
+			p += strconv.Itoa(page) + "/"
+		}
+		return p
+	case page > 1:
+		return "/" + strconv.Itoa(page) + "/"
+	default:
+		return "/"
+	}
+}
+
 func parseMotionbgs(body string) []sourceResult {
 	seen := map[string]bool{}
 	out := make([]sourceResult, 0, ryowallsPerPage)
-	for _, p := range mbMediaRe.FindAllString(body, -1) {
-		parts := strings.Split(p, "/") // ['','i','c',WxH,'media',id,fname]
-		if len(parts) < 7 {
+	for _, m := range mbAnchorRe.FindAllStringSubmatch(body, -1) {
+		anchorTitle, inner := m[1], m[3]
+		id, thumbPath, file := bestMotionbgsThumb(inner)
+		if id == "" || seen[id] {
 			continue
 		}
-		wxh, mid, fname := parts[3], parts[5], parts[6]
-		w0 := wxh
-		if x := strings.IndexAny(wxh, "xX"); x >= 0 {
-			w0 = wxh[:x]
+		seen[id] = true
+		quality := "HD"
+		if qm := mbQualityRe.FindStringSubmatch(inner); qm != nil {
+			quality = strings.ToUpper(strings.TrimSpace(qm[1]))
 		}
-		if width, err := strconv.Atoi(w0); err != nil || width < 300 {
-			continue
+		title := anchorTitle
+		if tm := mbTitleRe.FindStringSubmatch(inner); tm != nil && strings.TrimSpace(tm[1]) != "" {
+			title = tm[1]
 		}
-		if seen[mid] {
-			continue
+		title = html.UnescapeString(strings.TrimSpace(mbLiveSuffixRe.ReplaceAllString(title, "")))
+		res := "1920x1080"
+		if quality == "4K" {
+			res = "3840x2160"
 		}
-		seen[mid] = true
-		mbase := mbStripExtRe.ReplaceAllString(mbStripResRe.ReplaceAllString(fname, ""), "")
-		res := ""
-		if rm := mbResRe.FindStringSubmatch(fname); rm != nil {
-			res = rm[1]
-		}
+		stem := mbStemRe.ReplaceAllString(file, "")
 		out = append(out, sourceResult{
-			id:         mid,
-			thumbURL:   motionbgsBase + p,
-			fullURL:    motionbgsBase + "/dl/4k/" + mid + "/",
+			id:       id,
+			thumbURL: motionbgsBase + thumbPath,
+			// The motion preview clip plays in the card and preview; the download resolves
+			// the full-resolution file from the id and the quality setting.
+			fullURL:    motionbgsBase + "/media/" + id + "/" + stem + ".960x540.mp4",
 			resolution: res,
-			title:      strings.ReplaceAll(mbase, "-", " "),
+			title:      title,
 		})
 		if len(out) >= ryowallsPerPage {
 			break
 		}
 	}
 	return out
+}
+
+// bestMotionbgsThumb picks the largest thumbnail actually present in the card, so a
+// missing size is never guessed into a broken URL.
+func bestMotionbgsThumb(inner string) (id, path, file string) {
+	best := 0
+	for _, mm := range mbThumbRe.FindAllStringSubmatch(inner, -1) {
+		w, _ := strconv.Atoi(mm[1])
+		if w > best {
+			best, path, id, file = w, mm[0], mm[2], mm[3]
+		}
+	}
+	return id, path, file
 }
 
 func (s *sources) moewallsSearch(ctx context.Context, query string, page int) (sourcePage, error) {
@@ -579,6 +606,25 @@ func (s *sources) moewallsDownload(ctx context.Context, id, fullURL, postURL, vi
 	return s.downloadWithProgress(ctx, "moewalls", fullURL, videoDir, id, sniffVideo, nil)
 }
 
+// motionbgsDownload fetches the full-resolution clip for the chosen quality. "best"
+// prefers 4K and falls back to HD (HD-only wallpapers answer the 4K route with 500);
+// "light" fetches HD directly. The file is always saved with an .mp4 extension so the
+// library recognises it as a video.
+func (s *sources) motionbgsDownload(ctx context.Context, id, videoDir string, onProgress func(float64)) (string, error) {
+	dest := filepath.Join(videoDir, "motionbgs-"+safeSeg(id)+".mp4")
+	policy := func(u string) error { return requireSource("motionbgs", u) }
+	seg := url.PathEscape(id)
+	if s.str("sources.motionbgs.quality") != "light" {
+		if err := s.fetchToFile(ctx, motionbgsBase+"/dl/4k/"+seg+"/", dest, sniffVideo, maxDownloadBytes, policy, onProgress); err == nil {
+			return dest, nil
+		}
+	}
+	if err := s.fetchToFile(ctx, motionbgsBase+"/dl/hd/"+seg+"/", dest, sniffVideo, maxDownloadBytes, policy, onProgress); err != nil {
+		return "", err
+	}
+	return dest, nil
+}
+
 func (s *sources) ryowallsDownload(reqID int64, source string, p map[string]interface{}) response {
 	id := strParam(p, "id", "")
 	fullURL := strParam(p, "fullUrl", "")
@@ -608,14 +654,17 @@ func (s *sources) ryowallsDownload(reqID int64, source string, p map[string]inte
 			path string
 			err  error
 		)
-		if source == "moewalls" {
+		onProgress := func(pct float64) {
+			v := pct
+			m := "fetching"
+			s.emitDownload(downloadEvent{ID: id, Status: dlDownloading, Progress: &v, Message: &m})
+		}
+		switch source {
+		case "moewalls":
 			path, err = s.moewallsDownload(ctx, id, fullURL, postURL, dir)
-		} else {
-			onProgress := func(pct float64) {
-				v := pct
-				m := "fetching"
-				s.emitDownload(downloadEvent{ID: id, Status: dlDownloading, Progress: &v, Message: &m})
-			}
+		case "motionbgs":
+			path, err = s.motionbgsDownload(ctx, id, dir, onProgress)
+		default:
 			path, err = s.downloadWithProgress(ctx, source, fullURL, dir, id, want, onProgress)
 		}
 		s.finishDownload(id, path, err)

@@ -52,10 +52,9 @@ Item {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.tr("Filter reference")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontHead
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
             FolioAction {
@@ -90,8 +89,8 @@ Item {
                         required property string modelData
                         width: entries.width
                         text: modelData
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontBody
                         color: Theme.surfaceText
                         lineHeight: 1.35

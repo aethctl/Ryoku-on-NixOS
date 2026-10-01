@@ -20,7 +20,7 @@ Item {
         width: 2
         height: parent.height
         x: I18n.rtl ? parent.width - width : 0
-        color: Theme.withAlpha(Theme.primary, stack.expanded ? 1 : 0.28)
+        color: Theme.withAlpha(Theme.surfaceText, stack.expanded ? 0.9 : 0.24)
         Behavior on color { ColorAnimation { duration: Theme.fast } }
     }
 
@@ -43,8 +43,8 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: stack.expanded ? "\u25be" : (I18n.rtl ? "\u25c2" : "\u25b8")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontSmall
                     color: Theme.withAlpha(Theme.surfaceText, stack.expanded ? 0.85 : 0.55)
                     renderType: Text.NativeRendering
@@ -52,8 +52,8 @@ Item {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: stack.title
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.DemiBold
                     font.pixelSize: Theme.fontBody2
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering

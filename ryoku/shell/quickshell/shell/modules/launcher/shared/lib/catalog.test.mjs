@@ -15,7 +15,7 @@ test("real catalog exposes its variants with the promised routing", () => {
 
   assert.deepEqual(
     catalog.variants.map(variant => variant.id),
-    ["main", "hero", "okshell", "kairos", "spotlight"]
+    ["main", "hero", "okshell", "kairos", "spotlight", "python"]
   );
   assert.equal(Catalog.defaultEntry(catalog).id, "hero");
   assert.equal(Catalog.fallbackEntry(catalog).id, "okshell");

@@ -23,7 +23,7 @@ Column {
         for (var i = 0; i < defs.length; ++i) {
             var built = defs[i].build(chips.state, ctx) || []
             if (built.length > 0 || defs[i].input)
-                out.push({ n: defs[i].n, group: defs[i].group, chips: built, input: defs[i].input || null })
+                out.push({ group: defs[i].group, chips: built, input: defs[i].input || null })
         }
         return out
     }
@@ -87,25 +87,9 @@ Column {
             width: chips.width
             spacing: 5 * Theme.scale
 
-            Row {
+            SectionLabel {
                 width: parent.width
-                spacing: 6 * Theme.scale
-                Text {
-                    id: heading
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modelData.n + "  " + modelData.group
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
-                    font.pixelSize: Theme.fontTiny
-                    color: Theme.withAlpha(Theme.surfaceText, 0.42)
-                    renderType: Text.NativeRendering
-                }
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Math.max(0, parent.width - heading.implicitWidth - 6 * Theme.scale)
-                    height: 1
-                    color: Theme.withAlpha(Theme.outline, 0.28)
-                }
+                text: section.modelData.group
             }
 
             Flow {

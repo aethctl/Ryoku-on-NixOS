@@ -24,8 +24,8 @@ Row {
         text: root.manual ? I18n.tr("Paused manually")
             : root.paused ? I18n.tr("Paused by another rule")
             : I18n.tr("Playing")
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: Font.Medium
         font.pixelSize: Theme.fontFine
         color: Theme.withAlpha(Theme.surfaceText, 0.56)
         renderType: Text.NativeRendering

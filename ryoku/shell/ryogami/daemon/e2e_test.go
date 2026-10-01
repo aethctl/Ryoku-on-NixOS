@@ -329,6 +329,69 @@ func TestE2EFavouriteSurvivesRescan(t *testing.T) {
 	}
 }
 
+// The picker's in-memory Library only updates a wallpaper's heart when the
+// daemon echoes the mutated entry over ryogami.wall.cached; without it the
+// favourite toggle looks dead until a full rescan.
+func TestE2ESetFavouriteBroadcastsCached(t *testing.T) {
+	d := startDaemon(t)
+	img := filepath.Join(d.root, "Pictures", "Wallpapers", "a.png")
+	writeE2EPNG(t, img)
+	d.send(`{"method":"wall.cache_rebuild","id":1}`)
+	deadline := time.Now().Add(10 * time.Second)
+	var key string
+	for {
+		reply := d.send(`{"method":"wall.list","id":2}`)
+		var resp map[string]interface{}
+		_ = json.Unmarshal([]byte(reply), &resp)
+		if res, okRes := resp["result"].(map[string]interface{}); okRes {
+			if walls, okW := res["wallpapers"].([]interface{}); okW && len(walls) == 1 {
+				key = walls[0].(map[string]interface{})["key"].(string)
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("catalog never scanned")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Subscribe only after the scan settled so the scan's own cached frames
+	// are already flushed and the next one is the favourite echo.
+	sub := d.connect()
+	defer sub.Close()
+	_ = sub.SetDeadline(time.Now().Add(15 * time.Second))
+	r := bufio.NewReader(sub)
+	fmt.Fprintln(sub, `{"method":"subscribe","params":{"prefixes":["ryogami.wall."]},"id":9}`)
+	readJSONLine(t, r) // subscribe ack
+
+	req := fmt.Sprintf(`{"method":"wall.set_favourite","params":{"key":%q,"favourite":true},"id":3}`, key)
+	if got := d.send(req); !strings.Contains(got, `"ok"`) {
+		t.Fatalf("favourite reply: %s", got)
+	}
+
+	found := false
+	for i := 0; i < 40 && !found; i++ {
+		ev := readJSONLine(t, r)
+		if ev["event"] != "ryogami.wall.cached" {
+			continue
+		}
+		data, _ := ev["data"].(map[string]interface{})
+		if data == nil {
+			t.Fatalf("cached event carried no entry: %v", ev)
+		}
+		if data["key"] != key {
+			continue
+		}
+		if fav, _ := data["favourite"].(float64); fav != 1 {
+			t.Fatalf("cached entry favourite = %v, want 1", data["favourite"])
+		}
+		found = true
+	}
+	if !found {
+		t.Fatal("wall.set_favourite did not broadcast ryogami.wall.cached for the toggled key")
+	}
+}
+
 // Regression: ryogami owns the wallpaper now, but rice capture, the overview
 // backdrop and the Super+W on-air dot still read ~/.local/state/ryoku-wallpaper.
 // A `wall.apply` must write that legacy state file with the applied path, or

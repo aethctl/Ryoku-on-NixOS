@@ -18,9 +18,10 @@ Rectangle {
     function reject() { field.invalid = true }
 
     implicitHeight: input.implicitHeight + 8 * Theme.scale
-    color: Theme.withAlpha(Theme.background, 0.44)
+    radius: Theme.radius
+    color: Theme.withAlpha(Theme.surfaceText, 0.05)
     border.width: 1
-    border.color: field.invalid ? Theme.withAlpha(Theme.tertiary, 0.8) : Theme.withAlpha(Theme.outline, 0.34)
+    border.color: field.invalid ? Theme.withAlpha(Theme.tertiary, 0.8) : Theme.withAlpha(Theme.outline, 0.4)
 
     TextField {
         id: input

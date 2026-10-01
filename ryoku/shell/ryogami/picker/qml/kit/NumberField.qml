@@ -41,27 +41,28 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
-        color: Qt.rgba(0, 0, 0, 0.58)
+        color: Theme.withAlpha(Theme.surfaceText, 0.05)
         border.width: input.activeFocus ? 2 : 1
-        border.color: input.activeFocus ? Theme.withAlpha(Theme.primary, 0.9)
-                    : numberField.enabled ? Theme.withAlpha(Theme.surfaceText, 0.28)
+        border.color: input.activeFocus ? Theme.withAlpha(Theme.surfaceText, 0.7)
+                    : numberField.enabled ? Theme.withAlpha(Theme.outline, 0.4)
                     : Theme.withAlpha(Theme.outline, 0.18)
+        Behavior on border.color { ColorAnimation { duration: Theme.fast } }
     }
 
+    // Fraunces sets the numeral; a number is a value, not a word.
     TextInput {
         id: input
         anchors.left: parent.left
-        anchors.leftMargin: 7 * Theme.scale
+        anchors.leftMargin: 9 * Theme.scale
         anchors.right: unitLabel.left
         anchors.rightMargin: 4 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
         clip: true
         enabled: numberField.enabled
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.display
         font.pixelSize: Theme.fontHead
         color: numberField.enabled ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.4)
-        selectionColor: Theme.withAlpha(Theme.primary, 0.45)
+        selectionColor: Theme.withAlpha(Theme.surfaceText, 0.24)
         selectedTextColor: Theme.surfaceText
         selectByMouse: true
         inputMethodHints: Qt.ImhFormattedNumbersOnly
@@ -75,8 +76,9 @@ Item {
             visible: input.text.length === 0
             verticalAlignment: Text.AlignVCenter
             text: numberField.placeholder
-            font: input.font
-            color: Theme.withAlpha(Theme.surfaceText, 0.48)
+            font.family: Theme.sans
+            font.pixelSize: Theme.fontHead
+            color: Theme.withAlpha(Theme.surfaceText, 0.42)
             renderType: Text.NativeRendering
         }
     }
@@ -85,11 +87,11 @@ Item {
         id: unitLabel
         visible: numberField.unit.length > 0
         anchors.right: parent.right
-        anchors.rightMargin: 7 * Theme.scale
+        anchors.rightMargin: 9 * Theme.scale
         anchors.verticalCenter: parent.verticalCenter
         text: numberField.unit
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: Font.Medium
         font.pixelSize: Theme.fontBase
         color: Theme.withAlpha(Theme.surfaceText, 0.56)
         renderType: Text.NativeRendering

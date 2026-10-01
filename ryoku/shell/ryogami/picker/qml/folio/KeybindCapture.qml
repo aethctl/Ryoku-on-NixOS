@@ -87,8 +87,7 @@ FocusScope {
             Text {
                 width: parent.width
                 text: capture.actionLabel
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.display
                 font.pixelSize: Theme.fontTitle
                 color: Theme.surfaceText
                 elide: Text.ElideRight
@@ -100,18 +99,18 @@ FocusScope {
                     ? capture._chord
                     : (capture.currentBinding.length > 0 ? capture.currentBinding : I18n.tr("Unbound"))
                 horizontalAlignment: Text.AlignHCenter
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontSegment
-                color: Theme.primary
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
             Text {
                 width: parent.width
                 text: I18n.tr("Press the keys for this action.")
                 horizontalAlignment: Text.AlignHCenter
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56)
                 wrapMode: Text.WordWrap
@@ -122,8 +121,8 @@ FocusScope {
                 visible: capture._conflict.length > 0
                 text: capture._conflict
                 horizontalAlignment: Text.AlignHCenter
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.tertiary
                 wrapMode: Text.WordWrap

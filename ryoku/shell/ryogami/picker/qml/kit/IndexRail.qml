@@ -38,34 +38,26 @@ Canvas {
         var s = Theme.scale
 
         ctx.lineWidth = 1
-        ctx.strokeStyle = Theme.withAlpha(Theme.outline, 0.48 * rail.reveal)
+        ctx.strokeStyle = Theme.withAlpha(Theme.surfaceText, 0.16 * rail.reveal)
         ctx.beginPath()
         ctx.moveTo(cx, 0); ctx.lineTo(cx, height)
         ctx.stroke()
 
-        ctx.strokeStyle = Theme.withAlpha(Theme.outline, 0.58 * rail.reveal)
-        var tick = 2.5 * s
         for (var i = 0; i < rail.count; ++i) {
             var ny = rail._y(i)
             ctx.beginPath()
-            ctx.moveTo(cx - tick, ny); ctx.lineTo(cx + tick, ny)
-            ctx.stroke()
+            ctx.arc(cx, ny, 1.5 * s, 0, Math.PI * 2)
+            ctx.fillStyle = Theme.withAlpha(Theme.surfaceText, 0.28 * rail.reveal)
+            ctx.fill()
         }
 
         if (rail.count > 0) {
             var y = rail._y(Math.max(0, Math.min(rail.count - 1, rail.activeIndex)))
-            var r = rail.markerRadius * s
+            var r = rail.markerRadius * s * 0.7
             ctx.beginPath()
-            ctx.moveTo(cx, y - r)
-            ctx.lineTo(cx + r, y)
-            ctx.lineTo(cx, y + r)
-            ctx.lineTo(cx - r, y)
-            ctx.closePath()
-            ctx.fillStyle = Theme.withAlpha(Theme.background, rail.reveal)
+            ctx.arc(cx, y, r, 0, Math.PI * 2)
+            ctx.fillStyle = Theme.withAlpha(Theme.surfaceText, rail.reveal)
             ctx.fill()
-            ctx.lineWidth = 1.5
-            ctx.strokeStyle = Theme.withAlpha(Theme.primary, rail.reveal)
-            ctx.stroke()
         }
     }
 }

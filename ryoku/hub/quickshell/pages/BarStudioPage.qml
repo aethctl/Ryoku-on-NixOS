@@ -284,6 +284,13 @@ Item {
             "iris.appearance.frontend", JSON.stringify(v)]);
     }
 
+    // Python keeps its whole settings surface in the style itself: the guide
+    // stage, opened through the style's resident `main` IPC target.
+    function openPythonSettings() {
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "main",
+            "handleCommand", "toggle", "guide", ""]);
+    }
+
     CatalogLabels { id: labels }
 
     // ── head: the eyebrow band, the title, the blurb ─────────────────────────
@@ -746,12 +753,45 @@ Item {
                 }
             }
 
+            // Python arranges itself live from its own guide: the settings
+            // stage opens with the bar's gear, so this card only routes there.
+            SettingCard {
+                id: pythonSect
+                width: col.colWidth
+                visible: page.activeStyle === "python"
+                title: I18n.tr("PYTHON")
+                kana: "蛇"
+
+                Item {
+                    width: parent.width
+                    height: pythonBody.height + Tokens.s3 + Tokens.s4
+                    Column {
+                        id: pythonBody
+                        anchors { left: parent.left; right: parent.right; top: parent.top }
+                        anchors.leftMargin: Tokens.s4; anchors.rightMargin: Tokens.s4; anchors.topMargin: Tokens.s3
+                        spacing: Tokens.s3
+                        Text {
+                            width: parent.width
+                            text: I18n.tr("Python keeps its bar, dock, widgets and look in its own settings guide: click any bar pill, or use the button below. Ryoku's launcher, wallpaper picker and clipboard stay on their usual keys.")
+                            color: Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fBody
+                            wrapMode: Text.WordWrap
+                        }
+                        Btn {
+                            text: I18n.tr("OPEN PYTHON SETTINGS")
+                            onAct: page.openPythonSettings()
+                        }
+                    }
+                }
+            }
+
             // A folder style owns its own frame, rails and widgets inside its
             // barstyles/<id>/ folder, so the Sumi editors below stand down.
             SettingCard {
                 id: folderNote
                 width: col.colWidth
-                visible: !page.sumiActive && page.activeStyle !== "qsbar" && page.activeStyle !== "iris"
+                visible: !page.sumiActive && page.activeStyle !== "qsbar" && page.activeStyle !== "iris" && page.activeStyle !== "python"
                 title: I18n.tr("LAYOUT")
 
                 Text {

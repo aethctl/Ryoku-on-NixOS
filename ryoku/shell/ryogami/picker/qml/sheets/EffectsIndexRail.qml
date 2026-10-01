@@ -36,8 +36,8 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Images only")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.DemiBold
                     font.pixelSize: Theme.fontLabel
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -45,8 +45,8 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Effects do not work with videos, so there is nothing to edit here.")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Normal
                     font.pixelSize: Theme.fontMini
                     color: Theme.withAlpha(Theme.surfaceText, 0.48)
                     lineHeight: 1.4
@@ -82,10 +82,10 @@ Item {
                                 width: parent.width
                                 height: catLabel.implicitHeight + 16 * Theme.scale
                                 color: catHover.containsMouse
-                                    ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+                                    ? Theme.withAlpha(Theme.surfaceText, 0.05)
                                     : "transparent"
                                 border.width: (rail.focusCategory && catBlock._expanded) ? 2 : 0
-                                border.color: Theme.withAlpha(Theme.primary, 1)
+                                border.color: Theme.withAlpha(Theme.surfaceText, 0.7)
 
                                 Row {
                                     anchors.fill: parent
@@ -95,20 +95,18 @@ Item {
 
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: (rail.focusCategory && catBlock._expanded) ? "\u25c6"
-                                            : catBlock._expanded ? "\u25be" : "\u25b8"
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        text: catBlock._expanded ? "\u25be" : "\u25b8"
+                                        font.family: Theme.sans
                                         font.pixelSize: Theme.fontFine
-                                        color: Theme.withAlpha(Theme.surfaceText, 0.7)
+                                        color: Theme.withAlpha(Theme.surfaceText, (rail.focusCategory && catBlock._expanded) ? 1 : 0.7)
                                         renderType: Text.NativeRendering
                                     }
                                     Text {
                                         id: catLabel
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: String(catBlock.modelData.name).toLowerCase()
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: Font.DemiBold
                                         font.pixelSize: Theme.fontBody2
                                         color: Theme.surfaceText
                                         renderType: Text.NativeRendering
@@ -141,15 +139,15 @@ Item {
                                         readonly property bool _focus: rail.focusEffect && fxRow._sel
 
                                         color: fxRow._sel
-                                            ? Theme.withAlpha(Theme.primary, 0.18)
-                                            : fxHover.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+                                            ? Theme.withAlpha(Theme.surfaceText, 0.09)
+                                            : fxHover.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.05)
                                             : "transparent"
                                         border.width: fxRow._focus ? 2 : 0
-                                        border.color: Theme.withAlpha(Theme.primary, 1)
+                                        border.color: Theme.withAlpha(Theme.surfaceText, 0.7)
 
                                         Rectangle {
                                             width: 1
-                                            color: Theme.withAlpha(Theme.primary, 0.42)
+                                            color: Theme.withAlpha(Theme.surfaceText, 0.18)
                                             anchors.left: parent.left
                                             anchors.leftMargin: 4 * Theme.scale
                                             anchors.top: parent.top
@@ -162,21 +160,22 @@ Item {
                                             anchors.rightMargin: 8 * Theme.scale
                                             spacing: 8 * Theme.scale
 
-                                            Text {
+                                            Rectangle {
                                                 anchors.verticalCenter: parent.verticalCenter
-                                                text: fxRow._focus ? "\u25c6" : fxRow._sel ? "\u25cf" : "\u25c7"
-                                                font.family: Theme.ui
-                                                font.weight: Theme.uiWeight
-                                                font.pixelSize: Theme.fontTiny
-                                                color: Theme.withAlpha(Theme.primary, fxRow._sel ? 1 : 0.44)
-                                                renderType: Text.NativeRendering
+                                                width: 6 * Theme.scale
+                                                height: 6 * Theme.scale
+                                                radius: width / 2
+                                                color: fxRow._sel ? Theme.withAlpha(Theme.surfaceText, 0.9) : "transparent"
+                                                border.width: fxRow._sel ? 0 : 1
+                                                border.color: Theme.withAlpha(Theme.surfaceText, 0.4)
+                                                Behavior on color { ColorAnimation { duration: Theme.fast } }
                                             }
                                             Text {
                                                 id: fxLabel
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 text: fxRow.modelData.label
-                                                font.family: Theme.ui
-                                                font.weight: Theme.uiWeight
+                                                font.family: Theme.sans
+                                                font.weight: fxRow._sel ? Font.DemiBold : Font.Medium
                                                 font.pixelSize: Theme.fontWide
                                                 color: Theme.surfaceText
                                                 renderType: Text.NativeRendering
@@ -213,8 +212,8 @@ Item {
                             readonly property bool _sel: extraRow.modelData.id === rail.selectedId
 
                             color: extraRow._sel
-                                ? Theme.withAlpha(Theme.primary, 0.18)
-                                : extraHover.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62)
+                                ? Theme.withAlpha(Theme.surfaceText, 0.09)
+                                : extraHover.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.05)
                                 : "transparent"
 
                             Row {
@@ -223,21 +222,22 @@ Item {
                                 anchors.rightMargin: 8 * Theme.scale
                                 spacing: 8 * Theme.scale
 
-                                Text {
+                                Rectangle {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: extraRow._sel ? "\u25cf" : "\u25c7"
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
-                                    font.pixelSize: Theme.fontTiny
-                                    color: Theme.withAlpha(Theme.primary, extraRow._sel ? 1 : 0.44)
-                                    renderType: Text.NativeRendering
+                                    width: 6 * Theme.scale
+                                    height: 6 * Theme.scale
+                                    radius: width / 2
+                                    color: extraRow._sel ? Theme.withAlpha(Theme.surfaceText, 0.9) : "transparent"
+                                    border.width: extraRow._sel ? 0 : 1
+                                    border.color: Theme.withAlpha(Theme.surfaceText, 0.4)
+                                    Behavior on color { ColorAnimation { duration: Theme.fast } }
                                 }
                                 Text {
                                     id: extraLabel
                                     anchors.verticalCenter: parent.verticalCenter
                                     text: extraRow.modelData.label
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: extraRow._sel ? Font.DemiBold : Font.Medium
                                     font.pixelSize: Theme.fontBody2
                                     color: Theme.surfaceText
                                     renderType: Text.NativeRendering

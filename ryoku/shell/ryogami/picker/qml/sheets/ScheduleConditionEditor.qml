@@ -34,8 +34,8 @@ Item {
             Text {
                 width: parent.width
                 text: I18n.tr("What should this group check?")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontSmall
                 color: Theme.surfaceText
                 wrapMode: Text.WordWrap
@@ -44,8 +44,8 @@ Item {
             Text {
                 width: parent.width
                 text: I18n.tr("Choose a condition, or add a nested group when this rule needs mixed all/any logic.")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fs(8.6)
                 color: Theme.withAlpha(Theme.surfaceText, 0.48)
                 lineHeight: 1.35
@@ -175,8 +175,8 @@ Item {
             width: parent.width
             visible: editor.editing.mode !== "add" && editor.selNode === null
             text: I18n.tr("Select a condition or group above to edit it.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontSmall
             color: Theme.withAlpha(Theme.surfaceText, 0.46)
             wrapMode: Text.WordWrap
@@ -186,8 +186,8 @@ Item {
 
     component Hint: Text {
         width: parent ? parent.width : 0
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: Font.Normal
         font.pixelSize: Theme.fs(8.5)
         color: Theme.withAlpha(Theme.surfaceText, 0.42)
         lineHeight: 1.35
@@ -196,8 +196,8 @@ Item {
     }
 
     component EndpointLabel: Text {
-        font.family: Theme.ui
-        font.weight: Theme.uiWeight
+        font.family: Theme.sans
+        font.weight: Font.Medium
         font.pixelSize: Theme.fontFine
         color: Theme.withAlpha(Theme.surfaceText, 0.52)
         renderType: Text.NativeRendering

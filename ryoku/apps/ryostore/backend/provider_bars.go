@@ -153,6 +153,13 @@ func builtinBarStyles() []Item {
 		Tags:        []string{"island", "frame", "built-in"},
 		Installed:   true,
 		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
+	}, {
+		ID: "python", Category: "barstyles", Name: "Python",
+		Summary:     "Based on Serpantinum by ilyamiro",
+		Description: "A bar of pill widgets that open into one morphing stage: network, sound, calendar, media, a system panel, a dock and the style's own settings guide.",
+		Tags:        []string{"top", "stage", "dock", "built-in"},
+		Installed:   true,
+		Metadata:    map[string]any{"scene": "Scene.qml", "core": true},
 	}}
 }
 
@@ -224,7 +231,7 @@ func barStyleRegistryUnavailable(err error) bool {
 }
 
 func (p barProvider) Install(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" || id == "python" {
 		return fmt.Errorf("the built-in %s bar style is already installed", id)
 	}
 	entries, _, err := loadProductRegistry(ctx, p.cache, "barstyles", false)
@@ -239,7 +246,7 @@ func (p barProvider) Install(ctx context.Context, id string) error {
 }
 
 func (p barProvider) Remove(ctx context.Context, id string) error {
-	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" {
+	if id == "sumi" || id == "qsbar" || id == "chroma" || id == "kairos" || id == "iris" || id == "python" {
 		return fmt.Errorf("the built-in %s bar style is not removable", id)
 	}
 	return removeProduct(ctx, "barstyles", id)

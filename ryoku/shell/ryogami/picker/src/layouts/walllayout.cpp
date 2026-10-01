@@ -10,6 +10,9 @@
 
 namespace {
 
+// Breathing room either side of a pinned-column grid inside its pane.
+constexpr float kPinnedMargin = 12.0f;
+
 QString wsKey(const char *name)
 {
     return QStringLiteral("components.wallpaperSelector.") + QLatin1String(name);
@@ -455,7 +458,14 @@ void WallLayout::build(const LayoutContext &ctx, std::vector<CardVisual> &out)
         configure(ctx, false);
 
     // Set live and target together so the param morph agrees with a pinned column count.
-    const int effectiveCols = ctx.columnsOverride > 0 ? ctx.columnsOverride : m_settingsCols;
+    // A pinned count (the download browser) is a ceiling: the grid drops columns rather
+    // than spill past a results pane narrower than the count at the card size wants.
+    int effectiveCols = m_settingsCols;
+    if (ctx.columnsOverride > 0) {
+        const float room = float(ctx.viewport.width()) - 2.0f * kPinnedMargin + m_target.gapX;
+        const int fit = std::max(1, int(room / std::max(m_target.cellW(), 1.0f)));
+        effectiveCols = std::min(ctx.columnsOverride, fit);
+    }
     m_live.cols = effectiveCols;
     m_target.cols = effectiveCols;
 
@@ -607,11 +617,7 @@ QPointF WallLayout::compositionCenter(const LayoutContext &ctx) const
 {
     const float vw = float(ctx.viewport.width());
     double cx = geom::centerLayout(vw, 0.0f).centerX;
-    double cy = ctx.viewport.height() * 0.5;
-    if (ctx.barVertical)
-        cx += ctx.barReserve.width() * 0.5;
-    else
-        cy += ctx.barReserve.height() * 0.5;
+    const double cy = ctx.viewport.height() * 0.5 + ctx.barReserve.height() * 0.5;
     return QPointF(cx, cy);
 }
 

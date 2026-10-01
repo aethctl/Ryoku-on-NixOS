@@ -197,4 +197,7 @@ QtObject {
     readonly property string ui: Fonts.ui
     readonly property int uiWeight: Fonts.uiWeight
     readonly property string icon: Fonts.icon
+    readonly property string display: Fonts.display
+    readonly property string sans: Fonts.sans
+    readonly property string jp: Fonts.jp
 }

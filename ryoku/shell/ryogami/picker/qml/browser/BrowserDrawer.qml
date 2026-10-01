@@ -47,20 +47,18 @@ Rectangle {
             width: flick.width - 10 * Theme.scale
             spacing: 10 * Theme.scale
 
-            Text {
+            SectionLabel {
+                width: parent.width
                 text: I18n.tr("Search")
-                font.family: Theme.ui; font.weight: Theme.uiWeight
-                font.pixelSize: Theme.fontTiny
-                color: Theme.withAlpha(Theme.surfaceText, 0.42 * drawer.reveal)
-                renderType: Text.NativeRendering
             }
 
             Rectangle {
                 width: parent.width
                 height: searchInput.implicitHeight + 12 * Theme.scale
-                color: Theme.withAlpha(Theme.background, 0.44)
+                radius: Theme.radius
+                color: Theme.withAlpha(Theme.surfaceText, 0.05)
                 border.width: 1
-                border.color: Theme.withAlpha(Theme.outline, 0.34)
+                border.color: Theme.withAlpha(Theme.outline, 0.4)
 
                 TextField {
                     id: searchInput
@@ -79,9 +77,10 @@ Rectangle {
                     visible: !drawer.searchable
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: 6 * Theme.scale
+                    anchors.leftMargin: 8 * Theme.scale
                     text: drawer.providerLabel
-                    font.family: Theme.ui; font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontField
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -90,21 +89,10 @@ Rectangle {
 
             FolioRule { width: parent.width; alpha: 0.34; reveal: drawer.reveal }
 
-            Text {
+            SectionLabel {
                 visible: drawer.searchable
+                width: parent.width
                 text: I18n.tr("Filters")
-                font.family: Theme.ui; font.weight: Theme.uiWeight
-                font.pixelSize: Theme.fontFine
-                color: Theme.withAlpha(Theme.primary, 0.9 * drawer.reveal)
-                renderType: Text.NativeRendering
-            }
-            Text {
-                visible: drawer.searchable
-                text: I18n.tr("Filter results")
-                font.family: Theme.ui; font.weight: Theme.uiWeight
-                font.pixelSize: Theme.fs(19)
-                color: Theme.withAlpha(Theme.surfaceText, 0.96 * drawer.reveal)
-                renderType: Text.NativeRendering
             }
             Text {
                 visible: drawer.searchable
@@ -113,7 +101,8 @@ Rectangle {
                 text: drawer.manual
                     ? I18n.tr("Change filters, then press Apply or Enter to search.")
                     : I18n.tr("Each provider has different filters. Changing them starts a new search without importing anything.")
-                font.family: Theme.ui; font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.48 * drawer.reveal)
                 renderType: Text.NativeRendering

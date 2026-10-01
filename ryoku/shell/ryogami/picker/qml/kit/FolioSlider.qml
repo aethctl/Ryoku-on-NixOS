@@ -1,6 +1,7 @@
 import QtQuick
 
 // moved fires while dragging; released fires once on let-go.
+// A hairline track fills bone to a round knob; the knob springs a touch under the pointer.
 Item {
     id: slider
 
@@ -19,13 +20,12 @@ Item {
     implicitHeight: 26 * Theme.scale
     implicitWidth: 160 * Theme.scale
 
-    readonly property real _thumb: 8 * Theme.scale
-    readonly property real _inset: slider._thumb * 0.71
+    readonly property real _knob: 12 * Theme.scale
+    readonly property real _inset: slider._knob * 0.5
     readonly property real _trackW: Math.max(1, width - slider._inset * 2)
     readonly property real _span: (slider.to - slider.from) || 1
     readonly property real _t: Math.max(0, Math.min(1, (slider.value - slider.from) / slider._span))
-    // Snapped to a half pixel so the diamond stays crisp.
-    readonly property real _thumbX: Math.round(slider._inset + slider._t * slider._trackW) + 0.5
+    readonly property real _knobX: slider._inset + slider._t * slider._trackW
 
     function _snap(v) {
         var c = Math.max(slider.from, Math.min(slider.to, v))
@@ -39,33 +39,33 @@ Item {
     }
 
     Rectangle {
-        height: 1
+        height: 2
+        radius: height
         width: slider._trackW
         x: slider._inset
         y: (slider.height - height) / 2
-        color: Theme.withAlpha(Theme.outline, slider.enabled ? 0.5 : 0.28)
+        color: Theme.withAlpha(Theme.surfaceText, slider.enabled ? 0.18 : 0.1)
     }
 
     Rectangle {
         height: 2
-        width: Math.max(0, slider._thumbX - slider._inset)
+        radius: height
+        width: Math.max(0, slider._knobX - slider._inset)
         x: slider._inset
         y: (slider.height - height) / 2
-        color: Theme.withAlpha(Theme.primary, slider.enabled ? 1 : 0.4)
+        color: Theme.withAlpha(Theme.surfaceText, slider.enabled ? 0.9 : 0.35)
     }
 
     Rectangle {
-        width: slider._thumb
-        height: slider._thumb
-        x: slider._thumbX - width / 2
+        width: slider._knob
+        height: slider._knob
+        radius: slider._knob / 2
+        x: slider._knobX - width / 2
         y: (slider.height - height) / 2
-        rotation: 45
         antialiasing: true
-        color: Theme.surface
-        border.width: 1
-        border.color: Theme.withAlpha(Theme.primary, slider.enabled ? 1 : 0.4)
-        scale: slider.dragging || slider.focused ? 1.15 : 1
-        Behavior on scale { NumberAnimation { duration: Theme.fast; easing.type: Theme.revealEasing } }
+        color: slider.enabled ? Theme.surfaceText : Theme.withAlpha(Theme.surfaceText, 0.4)
+        scale: slider.dragging ? 1.25 : slider.focused ? 1.15 : 1
+        Behavior on scale { NumberAnimation { duration: Theme.fast; easing.type: Easing.OutBack; easing.overshoot: 2.4 } }
     }
 
     MouseArea {

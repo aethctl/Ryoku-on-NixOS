@@ -114,6 +114,9 @@ void Catalogs::start()
 {
     const QString themesDir = QDir(dataHome()).filePath(QStringLiteral("ryoku/themes"));
     const QString ricesDir = QDir(configHome()).filePath(QStringLiteral("ryoku/rices"));
+    // The picker saves and imports rices itself; without the folder there is nothing to
+    // watch, and the first rice would never appear until the picker restarted.
+    QDir().mkpath(ricesDir);
     for (const QString &dir : {themesDir, ricesDir}) {
         if (QFileInfo::exists(dir))
             m_watcher->addPath(dir);

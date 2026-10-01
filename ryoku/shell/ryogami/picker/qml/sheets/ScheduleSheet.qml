@@ -467,8 +467,8 @@ Item {
             FolioRule { width: outer.width; alpha: 0.56 }
             Text {
                 text: sectionRoot.sTitle
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.DemiBold
                 font.pixelSize: Theme.fontField
                 color: Theme.surfaceText
                 renderType: Text.NativeRendering
@@ -477,8 +477,8 @@ Item {
                 width: outer.width
                 visible: sectionRoot.sDesc.length > 0
                 text: sectionRoot.sDesc
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                 lineHeight: 1.4
@@ -542,16 +542,15 @@ Item {
 
                 Text {
                     text: I18n.tr("Schedule / rules")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
-                    color: Theme.primary
+                    color: Theme.withAlpha(Theme.surfaceText, 0.54)
                     renderType: Text.NativeRendering
                 }
                 Text {
                     text: I18n.tr("Build a schedule")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontStudio
                     color: Theme.surfaceText
                     renderType: Text.NativeRendering
@@ -559,8 +558,8 @@ Item {
                 Text {
                     width: parent.width
                     text: I18n.tr("Create a rule in the index. Rules run from top to bottom and save as you edit.")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Normal
                     font.pixelSize: Theme.fontXSmall
                     color: Theme.withAlpha(Theme.surfaceText, 0.58)
                     lineHeight: 1.4
@@ -606,17 +605,17 @@ Item {
                         width: parent.width
                         Text {
                             text: I18n.tr("Schedule / rule")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontFine
-                            color: Theme.primary
+                            color: Theme.withAlpha(Theme.surfaceText, 0.54)
                             renderType: Text.NativeRendering
                         }
                         Item { Layout.fillWidth: true }
                         Text {
                             text: I18n.tr("Saved")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fontFine
                             color: Theme.withAlpha(Theme.surfaceText, 0.46)
                             renderType: Text.NativeRendering
@@ -627,8 +626,7 @@ Item {
                         width: parent.width * 0.72
                         text: (root.currentRule && root.currentRule.name && root.currentRule.name.length)
                             ? root.currentRule.name : I18n.tr("Unnamed rule")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fontStudio
                         color: Theme.surfaceText
                         elide: Text.ElideRight
@@ -638,8 +636,8 @@ Item {
                     Text {
                         visible: root.nextTrigger.length > 0
                         text: I18n.tr("Next change") + "  \u00b7  " + root.nextTrigger
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontFine
                         color: Theme.withAlpha(Theme.surfaceText, 0.5)
                         renderType: Text.NativeRendering
@@ -651,17 +649,17 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignTop
                             text: I18n.tr("When")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fs(8.5)
-                            color: Theme.primary
+                            color: Theme.withAlpha(Theme.surfaceText, 0.54)
                             renderType: Text.NativeRendering
                         }
                         Text {
                             Layout.fillWidth: true
                             text: root.currentRule ? root.conditionSummary(root.currentRule.condition) : ""
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontBase
                             color: Theme.withAlpha(Theme.surfaceText, 0.74)
                             wrapMode: Text.WordWrap
@@ -675,10 +673,10 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignVCenter
                             text: I18n.tr("Then")
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Medium
                             font.pixelSize: Theme.fs(8.5)
-                            color: Theme.primary
+                            color: Theme.withAlpha(Theme.surfaceText, 0.54)
                             renderType: Text.NativeRendering
                         }
                         Text {
@@ -687,8 +685,8 @@ Item {
                             text: root.currentRule
                                 ? (I18n.tr("Apply") + " " + root.targetLabel(root.currentRule) + "  \u00b7  " + root.themeLabel(root.currentRule.theme))
                                 : ""
-                            font.family: Theme.ui
-                            font.weight: Theme.uiWeight
+                            font.family: Theme.sans
+                            font.weight: Font.Normal
                             font.pixelSize: Theme.fontXSmall
                             color: Theme.withAlpha(Theme.surfaceText, 0.74)
                             elide: Text.ElideRight
@@ -785,10 +783,10 @@ Item {
 
                                 Text {
                                     text: I18n.tr("Pool filters")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Medium
                                     font.pixelSize: Theme.fontFine
-                                    color: Theme.withAlpha(Theme.primary, 0.82)
+                                    color: Theme.withAlpha(Theme.surfaceText, 0.54)
                                     renderType: Text.NativeRendering
                                 }
                                 Flow {
@@ -865,8 +863,8 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: I18n.tr("Set up this rule's conditions")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Medium
                                     font.pixelSize: Theme.fontBase
                                     color: Theme.surfaceText
                                     wrapMode: Text.WordWrap
@@ -875,8 +873,8 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: I18n.tr("This unfinished rule has no usable condition tree. Start fresh, then add conditions in plain language.")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fs(8.8)
                                     color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                     lineHeight: 1.35
@@ -905,8 +903,8 @@ Item {
                                 Text {
                                     width: parent.width
                                     text: I18n.tr("Use groups only when one rule needs a mix of all/any logic.")
-                                    font.family: Theme.ui
-                                    font.weight: Theme.uiWeight
+                                    font.family: Theme.sans
+                                    font.weight: Font.Normal
                                     font.pixelSize: Theme.fontBase
                                     color: Theme.withAlpha(Theme.surfaceText, 0.42)
                                     lineHeight: 1.35

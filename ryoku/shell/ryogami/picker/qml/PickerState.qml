@@ -30,6 +30,10 @@ QtObject {
     property bool themeBarOpen: false
     property bool riceWorkshopOpen: false
     property var riceEntry: null
+    // The rice share dialog: "save" names a capture of this desktop, "export" writes
+    // riceShareEntry to a folder, "import" installs a folder someone shared.
+    property string riceShare: ""
+    property var riceShareEntry: null
     property bool multipickerOpen: false
     property int multipickerRow: -1
 
@@ -78,6 +82,15 @@ QtObject {
         state.toastRequested(message, kind || "info")
     }
 
+    function openRiceShare(mode, entry) {
+        state.riceShareEntry = entry || null
+        state.riceShare = mode
+    }
+    function closeRiceShare() {
+        state.riceShare = ""
+        state.riceShareEntry = null
+    }
+
     function runAction(id, args) {
         Daemon.call("settings.action", { id: id, args: args || ({}) }, function(result, error) {
             if (error)
@@ -92,7 +105,14 @@ QtObject {
         if (!e || !e.key)
             return
         if (state.collection === "themes") {
-            Quickshell.execDetached(["ryoku-shell", "theme", e.key])
+            // A theme tile is the fixed-palette choice; the daemon applies it and the masthead's
+            // wallpaper-colours toggle reads the same policy, so the two never disagree.
+            if (e.key === "Wallpaper") {
+                Settings.set("theme.policy", "wallpaper")
+            } else {
+                Settings.set("theme.staticTheme", e.key)
+                Settings.set("theme.policy", "fixed")
+            }
             if (state._bool(state._closeOnSelection))
                 state.hideRequested()
             return
@@ -152,6 +172,7 @@ QtObject {
     function closeTopLayer() {
         if (state.sheet !== "") { state.closeSheet(); return true }
         if (state.multipickerOpen) { state.multipickerOpen = false; return true }
+        if (state.riceShare !== "") { state.closeRiceShare(); return true }
         if (state.riceWorkshopOpen) { state.riceWorkshopOpen = false; return true }
         if (state.themeBarOpen) { state.themeBarOpen = false; return true }
         if (state.helpOpen) { state.helpOpen = false; return true }
@@ -237,6 +258,7 @@ QtObject {
             state.searchOpen = false
             state.themeBarOpen = false
             state.riceWorkshopOpen = false
+            state.closeRiceShare()
         }
     }
 

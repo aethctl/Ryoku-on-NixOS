@@ -117,6 +117,11 @@ func (d *daemon) dispatchRequest(req *request) response {
 		if !d.store.mutate(key, func(e *Entry) { e.Favourite = fav }) {
 			return errResp(req.ID, 2, fmt.Sprintf("unknown wallpaper: %s", key))
 		}
+		// The picker's Library only learns of catalog edits through wall.cached,
+		// so the heart would never flip without this echo.
+		if updated, has := d.store.get(key); has {
+			d.broadcast("ryogami.wall.cached", updated)
+		}
 		return ok(req.ID, map[string]interface{}{"ok": true})
 
 	case "wall.delete":

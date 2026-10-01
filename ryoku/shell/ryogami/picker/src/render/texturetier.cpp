@@ -108,8 +108,33 @@ bool TextureTier::commit(QRhi *rhi, QRhiResourceUpdateBatch *batch)
     if (!m_texture || m_textureLayers < m_layers) {
         const QRhiTexture::Flags flags = m_mipLevels > 1 ? QRhiTexture::MipMapped : QRhiTexture::Flags();
         std::unique_ptr<QRhiTexture> tex(rhi->newTextureArray(QRhiTexture::RGBA8, m_layers, m_layerSize, 1, flags));
-        if (!tex->create())
-            return false;
+        if (!tex->create()) {
+            // The array could not grow (a driver layer cap or GPU memory pressure). Fall back
+            // to the size that still exists instead of leaving tiles pointing at layers the
+            // live texture never got, which would show as cards that never paint until relaunch.
+            if (m_textureLayers < m_layers) {
+                m_layers = std::max(1, m_textureLayers);
+                const int cap = tileCount();
+                m_tiles.resize(size_t(cap));
+                for (auto it = m_index.begin(); it != m_index.end();) {
+                    if (it.value() >= cap)
+                        it = m_index.erase(it);
+                    else
+                        ++it;
+                }
+                m_pending.erase(std::remove_if(m_pending.begin(), m_pending.end(),
+                                               [cap](const Pending &p) { return p.tile >= cap; }),
+                                m_pending.end());
+                std::vector<bool> used(size_t(cap), false);
+                for (auto it = m_index.constBegin(); it != m_index.constEnd(); ++it)
+                    used[size_t(it.value())] = true;
+                m_free.clear();
+                for (int i = cap - 1; i >= 0; --i)
+                    if (!used[size_t(i)])
+                        m_free.push_back(i);
+            }
+            return changed;
+        }
         if (m_texture) {
             const int levels = m_mipLevels > 1 ? rhi->mipLevelsForSize(m_layerSize) : 1;
             for (int layer = 0; layer < m_textureLayers; ++layer) {

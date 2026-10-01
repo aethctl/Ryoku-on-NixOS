@@ -43,7 +43,10 @@ PanelWindow {
     Behavior on prog { NumberAnimation { duration: Motion.effects; easing.type: Easing.OutCubic } }
 
     screen: modelData
-    visible: win.prog > 0.01 || osd.flashing
+    visible: (win.prog > 0.01 || osd.flashing)
+        && !Config.styleOwnsFeedbackFor(
+            modelData ? modelData.name : ""
+        )
     color: "transparent"
     // Exclusive zone 0: reserve nothing, but respect other layers' zones
     // (contract 12 sec 1). ExclusionMode.Ignore would request -1 instead.

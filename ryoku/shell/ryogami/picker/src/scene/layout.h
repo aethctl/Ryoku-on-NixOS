@@ -48,10 +48,9 @@ struct LayoutContext {
     FlipState flip;
     // 0 means the wall layout reads its column count from settings.
     int columnsOverride = 0;
-    // Space the filter bar takes (its size plus the gap) while it shows; the
-    // wall mode centres its grid and the bar as one group.
+    // The band the masthead takes at the top of the picker (its bottom edge plus a
+    // gap) while it shows; the wall and sandy modes lay their cards out below it.
     QSizeF barReserve;
-    bool barVertical = false;
 };
 
 class Layout
@@ -115,7 +114,7 @@ public:
         return ctx.motion->ms(MotionProfile::Standard);
     }
     virtual const SandyPass *sandyPass() const { return nullptr; }
-    // The band the cards occupy; the filter bar and the search panel sit against it.
+    // The band the cards occupy; the search panel sits against it.
     virtual QRectF stageRect(const LayoutContext &ctx) const
     {
         const double vh = ctx.viewport.height();

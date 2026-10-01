@@ -133,8 +133,7 @@ Item {
                 Text {
                     Layout.fillWidth: true
                     text: I18n.tr("Add to playlist")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.display
                     font.pixelSize: Theme.fontLabel
                     color: Theme.surfaceText
                     elide: Text.ElideRight
@@ -150,8 +149,8 @@ Item {
                 width: parent.width
                 visible: card.wallName.length > 0
                 text: card.wallName
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.6)
                 elide: Text.ElideRight
@@ -172,8 +171,8 @@ Item {
                 text: card._curated.length === 0
                     ? I18n.tr("No playlists exist yet. Name one to create it with this wallpaper already added:")
                     : I18n.tr("Or create another playlist with this wallpaper:")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontSmall
                 color: Theme.withAlpha(Theme.surfaceText, 0.44)
                 lineHeight: 1.35

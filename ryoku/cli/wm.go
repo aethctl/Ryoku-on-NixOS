@@ -347,9 +347,11 @@ func laySwitchConfig() error {
 }
 
 // deployedProvider reports whether a provider is usable without its package:
-// its binary answers caps and its config tree exists, which is what a checkout
-// deploy leaves behind. Both must hold, since a provider with no config tree
-// would start a bare compositor.
+// its binary answers caps, its config tree exists, and its session is real:
+// the compositor is installed and a greeter directory lists its session
+// entry. All must hold: a checkout deploys the provider and lays the tree,
+// but that alone cannot boot a session the greeter offers, and promising
+// "log out and pick it" without them strands the user on the old desktop.
 func deployedProvider(name string) bool {
 	if _, err := wm.OpenNamed(name).Caps(); err != nil {
 		return false
@@ -358,8 +360,10 @@ func deployedProvider(name string) bool {
 	if dir == "" {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(sys.ConfigHome(), dir))
-	return err == nil
+	if _, err := os.Stat(filepath.Join(sys.ConfigHome(), dir)); err != nil {
+		return false
+	}
+	return wm.SessionReady(name)
 }
 
 // syncLeafScripts lays a checkout box's target-compositor leaf scripts into

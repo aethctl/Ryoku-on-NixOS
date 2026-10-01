@@ -140,7 +140,7 @@ Item {
         height: layout.implicitHeight + 2 * root.pad
         color: Theme.withAlpha(Theme.surface, 0.98)
         border.width: 1
-        border.color: Theme.withAlpha(Theme.primary, 0.48)
+        border.color: Theme.withAlpha(Theme.outline, 0.55)
         radius: Theme.radius
         opacity: root._reveal
         scale: 0.985 + 0.015 * root._reveal
@@ -170,8 +170,7 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("Colour preview")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.display
                         font.pixelSize: Theme.fontLead
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
@@ -180,8 +179,8 @@ Item {
                     Text {
                         width: parent.width
                         text: I18n.tr("Choose a colour source, then compare its profiles using the same wallpaper.")
-                        font.family: Theme.ui
-                        font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Normal
                         font.pixelSize: Theme.fontSmall
                         color: Theme.withAlpha(Theme.surfaceText, 0.62)
                         renderType: Text.NativeRendering
@@ -205,8 +204,8 @@ Item {
 
                 Text {
                     text: I18n.tr("Colour source")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontFine
                     color: Theme.withAlpha(Theme.surfaceText, 0.58)
                     renderType: Text.NativeRendering
@@ -228,15 +227,15 @@ Item {
                             implicitHeight: 26 * root._scale
                             implicitWidth: srcLabel.implicitWidth + 24 * root._scale
                             radius: Theme.radius
-                            color: srcButton.inspected
-                                ? Theme.primary
-                                : srcButton.hovered
-                                    ? Theme.withAlpha(Theme.surfaceVariant, 0.85)
-                                    : Theme.surfaceVariant
+                            color: srcButton.inspected ? Theme.surfaceText
+                                : srcButton.hovered ? Theme.withAlpha(Theme.surfaceText, 0.09)
+                                : Theme.withAlpha(Theme.surfaceText, 0.05)
                             border.width: srcButton.inspected ? 2 : 1
-                            border.color: (srcButton.inspected || srcButton.appliedOn || srcButton.hovered)
-                                ? Theme.primary
-                                : Theme.withAlpha(Theme.outline, 0.6)
+                            border.color: srcButton.inspected ? "transparent"
+                                : srcButton.hovered ? Theme.withAlpha(Theme.surfaceText, 0.24)
+                                : Theme.withAlpha(Theme.outline, 0.4)
+                            Behavior on color { ColorAnimation { duration: Theme.fast } }
+                            Behavior on border.color { ColorAnimation { duration: Theme.fast } }
 
                             Text {
                                 id: srcLabel
@@ -244,10 +243,10 @@ Item {
                                 text: srcButton.appliedOn
                                     ? I18n.tr("%1 · on").arg(root.backendLabel(srcButton.modelData))
                                     : root.backendLabel(srcButton.modelData)
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: srcButton.inspected ? Font.DemiBold : Font.Medium
                                 font.pixelSize: Theme.fontSmall
-                                color: srcButton.inspected ? Theme.primaryText : Theme.surfaceText
+                                color: srcButton.inspected ? Theme.surface : Theme.surfaceText
                                 renderType: Text.NativeRendering
                             }
 
@@ -267,8 +266,8 @@ Item {
                 width: parent.width
                 visible: root.loading
                 text: I18n.tr("Generating previews from the current wallpaper…")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.66)
                 renderType: Text.NativeRendering
@@ -279,8 +278,8 @@ Item {
                 width: parent.width
                 visible: !root.loading && root.error !== ""
                 text: root.error
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBody
                 color: Theme.tertiary
                 renderType: Text.NativeRendering

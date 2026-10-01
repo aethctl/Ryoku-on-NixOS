@@ -47,17 +47,17 @@ FolioIndexShell {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "\u2315"
-                    font.family: Theme.ui
+                    font.family: Theme.sans
                     font.pixelSize: Theme.fontLead
-                    color: Theme.primary
+                    color: Theme.withAlpha(Theme.surfaceText, 0.55)
                     renderType: Text.NativeRendering
                 }
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - 120 * Theme.scale
                     text: I18n.tr("Search settings")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontWide
                     color: Theme.withAlpha(Theme.surfaceText, nav.reveal)
                     elide: Text.ElideRight
@@ -70,8 +70,8 @@ FolioIndexShell {
                 anchors.rightMargin: 8 * Theme.scale
                 anchors.verticalCenter: parent.verticalCenter
                 text: I18n.tr("Ctrl F")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontFine
                 color: Theme.withAlpha(Theme.surfaceText, 0.42 * nav.reveal)
                 renderType: Text.NativeRendering
@@ -92,9 +92,9 @@ FolioIndexShell {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "\u2315"
-                    font.family: Theme.ui
+                    font.family: Theme.sans
                     font.pixelSize: Theme.fontLead
-                    color: Theme.primary
+                    color: Theme.withAlpha(Theme.surfaceText, 0.55)
                     renderType: Text.NativeRendering
                 }
                 TextField {
@@ -115,8 +115,7 @@ FolioIndexShell {
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "\u00d7"
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
                     font.pixelSize: Theme.fontField
                     color: Theme.withAlpha(Theme.surfaceText, closeArea.containsMouse ? 0.9 : 0.55)
                     renderType: Text.NativeRendering
@@ -160,8 +159,8 @@ FolioIndexShell {
                     visible: nav._results.length === 0
                     padding: 8 * Theme.scale
                     text: I18n.tr("No matching settings")
-                    font.family: Theme.ui
-                    font.weight: Theme.uiWeight
+                    font.family: Theme.sans
+                    font.weight: Font.Medium
                     font.pixelSize: Theme.fontXSmall
                     color: Theme.withAlpha(Theme.surfaceText, 0.5)
                     wrapMode: Text.WordWrap
@@ -175,7 +174,7 @@ FolioIndexShell {
                         required property var modelData
                         width: rcol.width
                         height: rtext.implicitHeight + 16 * Theme.scale
-                        color: rArea.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62) : "transparent"
+                        color: rArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.07) : "transparent"
 
                         Column {
                             id: rtext
@@ -188,8 +187,8 @@ FolioIndexShell {
                             Text {
                                 width: parent.width
                                 text: rrow.modelData.title
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.DemiBold
                                 font.pixelSize: Theme.fontBody
                                 color: Theme.surfaceText
                                 elide: Text.ElideRight
@@ -198,10 +197,10 @@ FolioIndexShell {
                             Text {
                                 width: parent.width
                                 text: rrow.modelData.tabLabel + "  /  " + rrow.modelData.sectionTitle
-                                font.family: Theme.ui
-                                font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: Font.Medium
                                 font.pixelSize: Theme.fontFine
-                                color: Theme.withAlpha(Theme.primary, 0.72)
+                                color: Theme.withAlpha(Theme.surfaceText, 0.5)
                                 elide: Text.ElideRight
                                 renderType: Text.NativeRendering
                             }
@@ -252,8 +251,9 @@ FolioIndexShell {
                             Rectangle {
                                 width: parent.width
                                 height: catText.implicitHeight + 16 * Theme.scale
-                                color: cat._active ? Theme.withAlpha(Theme.primary, 0.18 * nav.reveal)
-                                    : (catArea.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62 * nav.reveal) : "transparent")
+                                radius: Theme.radius
+                                color: cat._active ? Theme.withAlpha(Theme.surfaceText, 0.09 * nav.reveal)
+                                    : (catArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.06 * nav.reveal) : "transparent")
 
                                 Row {
                                     anchors.left: parent.left
@@ -265,7 +265,7 @@ FolioIndexShell {
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: cat._active ? "\u25be" : (I18n.rtl ? "\u25c2" : "\u25b8")
-                                        font.family: Theme.ui
+                                        font.family: Theme.sans
                                         font.pixelSize: Theme.fontSmall
                                         color: Theme.withAlpha(Theme.surfaceText, cat._active ? 0.85 : 0.55)
                                         renderType: Text.NativeRendering
@@ -274,8 +274,8 @@ FolioIndexShell {
                                         id: catText
                                         anchors.verticalCenter: parent.verticalCenter
                                         text: cat.modelData.title
-                                        font.family: Theme.ui
-                                        font.weight: Theme.uiWeight
+                                        font.family: Theme.sans
+                                        font.weight: cat._active ? Font.DemiBold : Font.Medium
                                         font.pixelSize: Theme.fontBody2
                                         color: Theme.withAlpha(Theme.surfaceText, nav.reveal)
                                         elide: Text.ElideRight
@@ -294,8 +294,7 @@ FolioIndexShell {
                             Item {
                                 width: parent.width
                                 clip: true
-                                readonly property real _target: cat._active ? branch.implicitHeight : 0
-                                height: _target
+                                height: cat._active ? branchLoader.implicitHeight : 0
                                 Behavior on height { NumberAnimation { duration: Theme.fast; easing.type: Theme.revealEasing } }
 
                                 Rectangle {
@@ -303,56 +302,56 @@ FolioIndexShell {
                                     x: I18n.rtl ? parent.width - width : 12 * Theme.scale
                                     width: 1
                                     height: parent.height
-                                    color: Theme.withAlpha(Theme.primary, 0.42 * nav.reveal)
+                                    color: Theme.withAlpha(Theme.surfaceText, 0.18 * nav.reveal)
                                 }
 
-                                Column {
-                                    id: branch
+                                // Collapsed categories never build their section rows, so the first
+                                // open lays out only the open category's branch.
+                                Loader {
+                                    id: branchLoader
                                     width: parent.width
-                                    Repeater {
-                                        model: cat.modelData.sections
-                                        delegate: Rectangle {
-                                            id: sec
-                                            required property var modelData
-                                            required property int index
-                                            width: branch.width
-                                            height: 36 * Theme.scale
-                                            readonly property bool _active: cat._active && sec.index === nav.activeSectionIndex
-                                            color: sec._active ? Theme.withAlpha(Theme.primary, 0.18 * nav.reveal)
-                                                : (secArea.containsMouse ? Theme.withAlpha(Theme.surfaceVariant, 0.62 * nav.reveal) : "transparent")
+                                    active: cat._active
+                                    sourceComponent: branchComp
+                                }
+                                Component {
+                                    id: branchComp
+                                    Column {
+                                        id: branch
+                                        width: branchLoader.width
+                                        Repeater {
+                                            model: cat.modelData.sections
+                                            delegate: Rectangle {
+                                                id: sec
+                                                required property var modelData
+                                                required property int index
+                                                width: branch.width
+                                                height: 36 * Theme.scale
+                                                radius: Theme.radius
+                                                readonly property bool _active: cat._active && sec.index === nav.activeSectionIndex
+                                                color: sec._active ? Theme.withAlpha(Theme.surfaceText, nav.reveal)
+                                                    : (secArea.containsMouse ? Theme.withAlpha(Theme.surfaceText, 0.07 * nav.reveal) : "transparent")
 
-                                            Row {
-                                                anchors.left: parent.left
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                anchors.leftMargin: 24 * Theme.scale
-                                                anchors.rightMargin: 7 * Theme.scale
-                                                spacing: 8 * Theme.scale
                                                 Text {
+                                                    anchors.left: parent.left
+                                                    anchors.right: parent.right
                                                     anchors.verticalCenter: parent.verticalCenter
-                                                    text: sec._active ? "\u25c6" : "\u25c7"
-                                                    font.family: Theme.ui
-                                                    font.pixelSize: Theme.fontMicro
-                                                    color: Theme.withAlpha(Theme.primary, (sec._active ? 1 : 0.44) * nav.reveal)
-                                                    renderType: Text.NativeRendering
-                                                }
-                                                Text {
-                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.leftMargin: 24 * Theme.scale
+                                                    anchors.rightMargin: 10 * Theme.scale
                                                     text: sec.modelData.title
-                                                    font.family: Theme.ui
-                                                    font.weight: Theme.uiWeight
+                                                    font.family: Theme.sans
+                                                    font.weight: sec._active ? Font.DemiBold : Font.Medium
                                                     font.pixelSize: Theme.fontWide
-                                                    color: Theme.withAlpha(Theme.surfaceText, nav.reveal)
+                                                    color: sec._active ? Theme.surface : Theme.withAlpha(Theme.surfaceText, nav.reveal * 0.72)
                                                     elide: Text.ElideRight
                                                     renderType: Text.NativeRendering
                                                 }
-                                            }
-                                            MouseArea {
-                                                id: secArea
-                                                anchors.fill: parent
-                                                hoverEnabled: true
-                                                cursorShape: Qt.PointingHandCursor
-                                                onClicked: nav.selectSection(cat.index, sec.index)
+                                                MouseArea {
+                                                    id: secArea
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: nav.selectSection(cat.index, sec.index)
+                                                }
                                             }
                                         }
                                     }

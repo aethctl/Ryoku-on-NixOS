@@ -40,8 +40,10 @@ func runWm(args []string) error {
 func wmPackage(name string) string { return "ryoku-desktop-" + name }
 
 // wmDeployed reports whether a provider works without its package: its binary
-// answers caps and its config tree exists. Both must hold, since a provider
-// with no config tree would bring up a bare compositor.
+// answers caps, its config tree exists, and its greeter session is real (the
+// compositor is installed and a session entry exists). All three, because a
+// checkout deploys the first two and the switch would then promise a session
+// the greeter cannot boot.
 func wmDeployed(name string) bool {
 	if _, err := wm.OpenNamed(name).Caps(); err != nil {
 		return false
@@ -50,8 +52,10 @@ func wmDeployed(name string) bool {
 	if dir == "" {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(configHome(), dir))
-	return err == nil
+	if _, err := os.Stat(filepath.Join(configHome(), dir)); err != nil {
+		return false
+	}
+	return wm.SessionReady(name)
 }
 
 // wmProvider is one row of `wm list`. Package and configDir travel with the row

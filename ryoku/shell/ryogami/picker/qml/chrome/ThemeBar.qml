@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell
 import Ryoku.Ui.Singletons
 
 Item {
@@ -18,12 +17,20 @@ Item {
 
     Keys.onEscapePressed: if (root.state) root.state.themeBarOpen = false
 
-    // Lights the active tile until the desktop reports the change through the palette.
-    property string appliedId: ""
+    // The daemon applies the theme from settings and the masthead's wallpaper-colours toggle
+    // reads the same policy, so the lit tile is derived from settings rather than tracked here.
+    SettingValue { id: policySetting; key: "theme.policy" }
+    SettingValue { id: staticSetting; key: "theme.staticTheme" }
+    readonly property string activeId: String(policySetting.value) === "wallpaper"
+        ? "Wallpaper" : String(staticSetting.value || "")
 
     function applyTheme(id) {
-        Quickshell.execDetached(["ryoku-shell", "theme", id])
-        root.appliedId = id
+        if (id === "Wallpaper") {
+            Settings.set("theme.policy", "wallpaper")
+        } else {
+            Settings.set("theme.staticTheme", id)
+            Settings.set("theme.policy", "fixed")
+        }
         if (root.state) root.state.toast(I18n.tr("Applying theme"), "info")
     }
     function followWallpaper() { root.applyTheme("Wallpaper") }
@@ -37,12 +44,13 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 88 * Theme.scale
+        radius: Theme.radius
         opacity: root.reveal
         transform: Translate { y: (1 - root.reveal) * 12 * Theme.scale }
 
         color: Theme.withAlpha(Theme.surface, 0.97)
         border.width: 1
-        border.color: Theme.withAlpha(Theme.primary, 0.48)
+        border.color: Theme.withAlpha(Theme.outline, 0.55)
 
         MouseArea { anchors.fill: parent }
 
@@ -64,14 +72,15 @@ Item {
                     spacing: 1
                     Text {
                         text: I18n.tr("Theme")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
-                        font.pixelSize: Theme.fontLabel
+                        font.family: Theme.display
+                        font.pixelSize: Theme.fontHead
                         color: Theme.surfaceText
                         renderType: Text.NativeRendering
                     }
                     Text {
                         text: I18n.tr("Matugen")
-                        font.family: Theme.ui; font.weight: Theme.uiWeight
+                        font.family: Theme.sans
+                        font.weight: Font.Medium
                         font.pixelSize: Theme.fontFine
                         color: Theme.withAlpha(Theme.surfaceText, 0.55)
                         renderType: Text.NativeRendering
@@ -86,7 +95,7 @@ Item {
                     FixedButton {
                         mode: "action"
                         label: I18n.tr("Follow wallpaper")
-                        active: root.appliedId === "Wallpaper"
+                        active: root.activeId === "Wallpaper"
                         onTriggered: root.followWallpaper()
                     }
                     FixedButton {
@@ -123,7 +132,7 @@ Item {
                     required property string key
                     required property string name
                     readonly property var entry: Library.entry("themes", key)
-                    readonly property bool active: root.appliedId === key
+                    readonly property bool active: root.activeId === key
                     readonly property bool hovered: tileMouse.containsMouse
 
                     width: 130 * Theme.scale
@@ -131,11 +140,15 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        color: Theme.withAlpha(Theme.surfaceContainer, 0.9)
+                        radius: Theme.radius
+                        color: tile.active ? Theme.withAlpha(Theme.surfaceText, 0.09)
+                             : tile.hovered ? Theme.withAlpha(Theme.surfaceText, 0.05)
+                             : "transparent"
                         border.width: tile.active ? 2 : 1
-                        border.color: tile.active ? Theme.primary
-                                     : tile.hovered ? Theme.withAlpha(Theme.primary, 0.6)
+                        border.color: tile.active ? Theme.surfaceText
+                                     : tile.hovered ? Theme.withAlpha(Theme.surfaceText, 0.28)
                                      : Theme.withAlpha(Theme.outline, 0.4)
+                        Behavior on color { ColorAnimation { duration: Theme.fast } }
 
                         Column {
                             anchors.fill: parent
@@ -177,7 +190,8 @@ Item {
                                 id: labelText
                                 width: parent.width
                                 text: tile.name
-                                font.family: Theme.ui; font.weight: Theme.uiWeight
+                                font.family: Theme.sans
+                                font.weight: tile.active ? Font.DemiBold : Font.Medium
                                 font.pixelSize: Theme.fontBase
                                 color: Theme.surfaceText
                                 elide: Text.ElideRight
@@ -201,7 +215,8 @@ Item {
                 visible: themes.count === 0
                 width: parent.width
                 text: I18n.tr("No themes installed")
-                font.family: Theme.ui; font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontLabel
                 color: Theme.withAlpha(Theme.surfaceText, 0.6)
                 horizontalAlignment: Text.AlignHCenter

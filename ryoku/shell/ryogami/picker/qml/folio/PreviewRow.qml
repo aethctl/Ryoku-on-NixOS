@@ -65,8 +65,8 @@ Item {
         Text {
             width: parent.width
             text: I18n.tr("Preview")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Medium
             font.pixelSize: Theme.fontField
             color: Theme.withAlpha(Theme.surfaceText, row.reveal)
             renderType: Text.NativeRendering
@@ -115,8 +115,8 @@ Item {
                 anchors.centerIn: parent
                 visible: !effect.visible
                 text: I18n.tr("Add wallpapers to preview transitions")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBody
                 color: Theme.withAlpha(Theme.surfaceText, 0.5)
                 renderType: Text.NativeRendering

@@ -7,22 +7,59 @@ import (
 )
 
 func TestParseMotionbgs(t *testing.T) {
-	html := `<img src="/i/c/1920x1080/media/123/cool-name.1920x1080.jpg">
-<img src="/i/c/1920x1080/media/123/cool-name.1920x1080.jpg">
-<img src="/i/c/200x100/media/999/small.200x100.jpg">`
+	html := `<a title="Celestial Veil live wallpaper" href=/celestial-veil>` +
+		`<img src=/i/c/48x48/media/8626/celestial-veil.3840x2160.jpg ` +
+		`srcset="/i/c/72x72/media/8626/celestial-veil.3840x2160.jpg, /i/c/546x308/media/8626/celestial-veil.3840x2160.jpg">` +
+		`<span class=ttl>Celestial Veil</span><span class=frm> 4K </span></a>` +
+		`<a title="Dupe live wallpaper" href=/celestial-veil><img src=/i/c/546x308/media/8626/celestial-veil.3840x2160.jpg></a>` +
+		`<a title="Spider&#039;s Web live wallpaper" href=/spider-web>` +
+		`<img src=/i/c/546x308/media/543/spider-web.jpg><span class=frm> HD </span></a>`
 	out := parseMotionbgs(html)
-	if len(out) != 1 {
-		t.Fatalf("expected 1 result (dedup + low-res drop), got %d", len(out))
+	if len(out) != 2 {
+		t.Fatalf("expected 2 results (dedup by id), got %d", len(out))
 	}
+	// 4K card: largest thumb kept, motion-preview clip is the fullURL, 4K resolution, title from ttl.
 	r := out[0]
-	if r.id != "123" || r.fullURL != "https://motionbgs.com/dl/4k/123/" {
-		t.Errorf("id/full wrong: %+v", r)
+	if r.id != "8626" {
+		t.Errorf("id = %q", r.id)
 	}
-	if r.resolution != "1920x1080" || r.title != "cool name" {
+	if r.thumbURL != "https://motionbgs.com/i/c/546x308/media/8626/celestial-veil.3840x2160.jpg" {
+		t.Errorf("thumb = %q", r.thumbURL)
+	}
+	if r.fullURL != "https://motionbgs.com/media/8626/celestial-veil.960x540.mp4" {
+		t.Errorf("fullURL = %q", r.fullURL)
+	}
+	if r.resolution != "3840x2160" || r.title != "Celestial Veil" {
 		t.Errorf("res/title wrong: %+v", r)
 	}
-	if r.thumbURL != "https://motionbgs.com/i/c/1920x1080/media/123/cool-name.1920x1080.jpg" {
-		t.Errorf("thumb = %q", r.thumbURL)
+	// HD-only card: 1080p resolution, title falls back to the anchor with the suffix and entity resolved.
+	h := out[1]
+	if h.id != "543" || h.resolution != "1920x1080" {
+		t.Errorf("hd res wrong: %+v", h)
+	}
+	if h.fullURL != "https://motionbgs.com/media/543/spider-web.960x540.mp4" {
+		t.Errorf("hd fullURL = %q", h.fullURL)
+	}
+	if h.title != "Spider's Web" {
+		t.Errorf("hd title = %q", h.title)
+	}
+}
+
+func TestMotionbgsPath(t *testing.T) {
+	cases := []struct {
+		query string
+		page  int
+		want  string
+	}{
+		{"", 1, "/"},
+		{"", 2, "/2/"},
+		{"Demon Slayer", 1, "/tag:demon-slayer/"},
+		{"demon   slayer", 3, "/tag:demon-slayer/3/"},
+	}
+	for _, c := range cases {
+		if got := motionbgsPath(c.query, c.page); got != c.want {
+			t.Errorf("motionbgsPath(%q,%d) = %q, want %q", c.query, c.page, got, c.want)
+		}
 	}
 }
 

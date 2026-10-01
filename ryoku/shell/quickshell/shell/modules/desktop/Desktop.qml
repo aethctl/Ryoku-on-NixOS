@@ -15,6 +15,8 @@ import "dayprogress"
 import "shape"
 import "iris"
 import "iris/IrisRoster.js" as IrisRoster
+import "python"
+import "python/PythonRoster.js" as PythonRoster
 import Ryoku.PluginKit
 import shell.services as Services
 import "../stage"
@@ -141,6 +143,11 @@ Scope {
         for (var k = 0; k < irisFaces.length; k++) {
             const f = irisFaces[k];
             out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: Config[f.prefix + "Enabled"] === true, group: "Shima widgets" });
+        }
+        const pythonFaces = PythonRoster.faces;
+        for (var p = 0; p < pythonFaces.length; p++) {
+            const f = pythonFaces[p];
+            out.push({ id: f.prefix, label: f.label, icon: f.icon, enabled: Config[f.prefix + "Enabled"] === true, group: "Python widgets" });
         }
         for (var g = 0; g < order.length; g++) {
             const rows = byGroup[order[g]];
@@ -1060,6 +1067,56 @@ Scope {
                                 screen: root.screen
                                 hostX: irisSlot.x
                                 hostY: irisSlot.y
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Serpantinum's face library uses the same global slot contract: Ryoku
+        // owns placement and chrome while the selected Python face paints inside.
+        Repeater {
+            id: pythonRepeater
+            model: PythonRoster.faces
+            delegate: Loader {
+                id: pythonLoader
+                required property var modelData
+                anchors.fill: parent
+                z: root.widgetZ(pythonLoader.modelData.prefix)
+                active: root.widgetsEnabled && root.reloadReady
+                    && (Config[pythonLoader.modelData.prefix + "Enabled"] === true)
+                sourceComponent: Component {
+                    Item {
+                        anchors.fill: parent
+                        WidgetSlot {
+                            id: pythonSlot
+                            widget: pythonLoader.modelData.prefix
+                            z: root.widgetZ(pythonLoader.modelData.prefix)
+                            visible: true
+                            anchor: Config[pythonLoader.modelData.prefix + "Anchor"]
+                            freeX: Config[pythonLoader.modelData.prefix + "X"]
+                            freeY: Config[pythonLoader.modelData.prefix + "Y"]
+                            locked: root.stageComposing ? false : Config[pythonLoader.modelData.prefix + "Locked"]
+                            composing: root.stageComposing
+                            gridSize: root.editGridSize
+                            snapEnabled: root.editGridSnap
+                            bg: Config[pythonLoader.modelData.prefix + "Style"] === "ryoku"
+                                ? Config[pythonLoader.modelData.prefix + "Bg"] : "none"
+                            scaleCfg: Config[pythonLoader.modelData.prefix + "Scale"]
+                            radiusOverride: Config[pythonLoader.modelData.prefix + "Radius"]
+                            pad: Config[pythonLoader.modelData.prefix + "Pad"] >= 0
+                                ? Config[pythonLoader.modelData.prefix + "Pad"] : 0
+                            borderWidth: Config[pythonLoader.modelData.prefix + "Border"]
+                            borderOpacity: Config[pythonLoader.modelData.prefix + "BorderOpacity"]
+                            backingOpacity: Config[pythonLoader.modelData.prefix + "BackingOpacity"]
+                            onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
+                            onDropped: (box) => win.flashDrop(box)
+                            onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                            PythonFaceWidget {
+                                faceId: pythonLoader.modelData.id
+                                prefix: pythonLoader.modelData.prefix
+                                screen: root.screen
                             }
                         }
                     }

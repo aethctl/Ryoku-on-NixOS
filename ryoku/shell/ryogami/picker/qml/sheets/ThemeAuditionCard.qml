@@ -20,15 +20,15 @@ Item {
     Rectangle {
         anchors.fill: parent
         radius: Theme.radius
-        color: card.active
-            ? Theme.withAlpha(Theme.primary, 0.12)
-            : card.hovered
-                ? Theme.withAlpha(Theme.surfaceVariant, 0.85)
-                : "transparent"
+        color: card.active ? Theme.withAlpha(Theme.surfaceText, 0.09)
+            : card.hovered ? Theme.withAlpha(Theme.surfaceText, 0.05)
+            : "transparent"
         border.width: card.active ? 2 : 1
-        border.color: (card.active || card.hovered)
-            ? Theme.primary
-            : Theme.withAlpha(Theme.outline, 0.6)
+        border.color: card.active ? Theme.withAlpha(Theme.surfaceText, 0.7)
+            : card.hovered ? Theme.withAlpha(Theme.surfaceText, 0.24)
+            : Theme.withAlpha(Theme.outline, 0.4)
+        Behavior on color { ColorAnimation { duration: Theme.fast } }
+        Behavior on border.color { ColorAnimation { duration: Theme.fast } }
     }
 
     Column {
@@ -53,10 +53,10 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: (card.preview && card.preview.label) ? card.preview.label : ""
                 elide: Text.ElideRight
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: card.active ? Font.DemiBold : Font.Medium
                 font.pixelSize: Theme.fontBase
-                color: card.active ? Theme.primary : Theme.surfaceText
+                color: Theme.surfaceText
                 renderType: Text.NativeRendering
             }
 
@@ -64,8 +64,8 @@ Item {
                 id: status
                 anchors.verticalCenter: parent.verticalCenter
                 text: card.active ? I18n.tr("Selected") : I18n.tr("Preview")
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Medium
                 font.pixelSize: Theme.fontMicro
                 color: Theme.withAlpha(Theme.surfaceText, 0.68)
                 renderType: Text.NativeRendering

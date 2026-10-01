@@ -46,8 +46,8 @@ Item {
                 width: parent.width
                 text: row.group.listControl && row.group.listControl.help ? row.group.listControl.help : ""
                 visible: text.length > 0
-                font.family: Theme.ui
-                font.weight: Theme.uiWeight
+                font.family: Theme.sans
+                font.weight: Font.Normal
                 font.pixelSize: Theme.fontBase
                 color: Theme.withAlpha(Theme.surfaceText, 0.56 * row.reveal)
                 lineHeight: 1.38
@@ -60,8 +60,8 @@ Item {
             width: parent.width
             visible: row._items.length === 0
             text: I18n.tr("Nothing here yet.")
-            font.family: Theme.ui
-            font.weight: Theme.uiWeight
+            font.family: Theme.sans
+            font.weight: Font.Normal
             font.pixelSize: Theme.fontBase
             color: Theme.withAlpha(Theme.surfaceText, 0.5 * row.reveal)
             renderType: Text.NativeRendering
