@@ -59,6 +59,20 @@ gtk4
 gtk4-layer-shell
 glm
 
+# The mango compositor stack: mangowm's meson resolves wlroots-0.20,
+# scenefx-0.5, libcjson, libpcre2-8 and the xcb util pc files, and
+# scenefx0.5 compiles shaders with glslang. scenefx (extra) is the build
+# host's pc provider; the repo's own scenefx0.5 replaces it for users,
+# and build-repo.sh never installs what it builds.
+wlroots0.20
+scenefx
+cjson
+pcre2
+libxcb
+xcb-util-wm
+xcb-util-renderutil
+glslang
+
 # ryoku-cursor-material compiles a Bibata variant at build time: fish + jq run
 # the vendored recipe, and python + librsvg (rsvg-convert) + xorg-xcursorgen
 # (xcursorgen) plus xcur2png (the recipe's -x PNG export) rasterise the cursors.
