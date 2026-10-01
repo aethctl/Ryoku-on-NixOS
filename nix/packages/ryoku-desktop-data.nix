@@ -253,6 +253,28 @@ pkgs.stdenvNoCC.mkDerivation {
       ryoku/lockscreen/install-qylock \
       "$out/share/ryoku/lockscreen/install-qylock"
 
+    patchShebangs "$out/share/ryoku/lockscreen/install-qylock"
+
+    # RYOKU NIXOS QYLOCK WRITABLE COPY
+    #
+    # install-qylock stages with `cp -a`. When its bundle comes from /nix/store,
+    # that faithfully preserves the store's read-only directory modes. The
+    # installer then creates themes_link inside the copied lockscreen and dies
+    # with EACCES. Make only the user-owned copies writable after each copy.
+    substituteInPlace "$out/share/ryoku/lockscreen/install-qylock" \
+      --replace-fail \
+        'user cp -a "$BUNDLE/quickshell-lockscreen" "$LOCK_DIR"' \
+        'user cp -a "$BUNDLE/quickshell-lockscreen" "$LOCK_DIR"
+user chmod -R u+w "$LOCK_DIR"' \
+      --replace-fail \
+        'user cp -a "$BUNDLE/themes/clockwork/orbital" "$STAGED_THEME_DIR/clockwork/orbital"' \
+        'user cp -a "$BUNDLE/themes/clockwork/orbital" "$STAGED_THEME_DIR/clockwork/orbital"
+user chmod -R u+w "$STAGED_THEME_DIR"' \
+      --replace-fail \
+        'user cp -a "$BUNDLE/themes/clockwork/orbital" "$QYLOCK_DIR/themes/clockwork/orbital"' \
+        'user cp -a "$BUNDLE/themes/clockwork/orbital" "$QYLOCK_DIR/themes/clockwork/orbital"
+user chmod -R u+w "$QYLOCK_DIR/themes/clockwork/orbital"'
+
     # ── Desktop integration ────────────────────────────────────
 
     install -Dm644 \

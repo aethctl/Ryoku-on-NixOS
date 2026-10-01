@@ -1306,7 +1306,7 @@ in
       [Login]
       HandleLidSwitch=suspend
       HandleLidSwitchExternalPower=suspend
-      HandleLidSwitchDocked=suspend
+      HandleLidSwitchDocked=ignore
       InhibitDelayMaxSec=15
     '';
 
@@ -1383,6 +1383,10 @@ in
       RYOKU_SDDM_THEME_APPLY =
         "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
       RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
+      RYOKU_QYLOCK_INSTALLER =
+        "${ryokuDesktopData}/share/ryoku/lockscreen/install-qylock";
+      RYOKU_QYLOCK_BUNDLE =
+        "${ryokuDesktopData}/share/ryoku/lockscreen/qylock";
 
       # Hyprland plugin binaries are ABI-sensitive generation state.
       # Hub may configure them, but Nix owns compilation and package paths.
@@ -1448,8 +1452,8 @@ in
     # policy from power.json and reaches display power through the WM seam.
     # NixOS keeps only the process lifecycle declarative; policy remains owned
     # by Ryoku and is editable from the Hub.
-    systemd.user.services.hypridle = {
-      description = "Ryoku idle and session lock daemon";
+    systemd.user.services.ryoku-idle = {
+      description = "Ryoku idle policy daemon";
 
       wantedBy = [
         "ryoku-session.target"
@@ -1482,6 +1486,45 @@ in
 
         Restart = "on-failure";
         RestartSec = "1s";
+      };
+    };
+
+    systemd.user.services.ryoku-clamshell = {
+      description = "Ryoku clamshell policy daemon";
+
+      wantedBy = [
+        "ryoku-session.target"
+      ];
+
+      partOf = [
+        "ryoku-session.target"
+      ];
+
+      requires = [
+        "ryoku-materialize.service"
+      ];
+
+      after = [
+        "ryoku-session.target"
+        "ryoku-materialize.service"
+      ];
+
+      path = [ ryokuPrivilegePath ] ++ runtimePackages;
+
+      unitConfig = {
+        ConditionEnvironment = "WAYLAND_DISPLAY";
+        StartLimitIntervalSec = 60;
+        StartLimitBurst = 5;
+      };
+
+      serviceConfig = {
+        ExecStart =
+          "${ryokuHelpers}/bin/ryoku-clamshell daemon";
+
+        Restart = "on-failure";
+        RestartSec = "2s";
+        TimeoutStopSec = "5s";
+        Slice = "session.slice";
       };
     };
 
@@ -1613,7 +1656,6 @@ in
 
       restartTriggers = [
         materializer
-        qylockMaterializer
       ];
 
       serviceConfig = {
@@ -1647,8 +1689,6 @@ in
           ${materializer}/bin/ryoku-materialize
         '';
 
-        ExecStartPost =
-          "${qylockMaterializer}";
       };
     };
 
@@ -1810,6 +1850,10 @@ in
         RYOKU_SDDM_THEME_APPLY =
           "${ryokuSddmThemeApply}/bin/ryoku-sddm-theme-apply";
         RYOKU_SYSTEM_UPDATES_EXTERNAL = "0";
+      RYOKU_QYLOCK_INSTALLER =
+        "${ryokuDesktopData}/share/ryoku/lockscreen/install-qylock";
+      RYOKU_QYLOCK_BUNDLE =
+        "${ryokuDesktopData}/share/ryoku/lockscreen/qylock";
 
       # Hyprland plugin binaries are ABI-sensitive generation state.
       # Hub may configure them, but Nix owns compilation and package paths.
@@ -1837,18 +1881,29 @@ in
       };
 
       serviceConfig = {
-        ExecStartPre =
-          "-${ryokuShell}/bin/ryoku-shell quit";
+        ExecStartPre = [
+          "-${ryokuShell}/bin/ryoku-shell quit"
+          "${ryokuHelpers}/bin/ryoku-qylock-activate"
+        ];
 
         ExecStart =
           ryokuSessionLauncher;
+
+        ExecStop =
+          "${ryokuHelpers}/bin/ryoku-qylock-activate --prepare-stop";
+
+        ExecStartPost =
+          "-${ryokuHelpers}/bin/ryoku-power-cutover qylock-guards-stop";
+
+        TimeoutStartSec = 0;
+        TimeoutStopSec = 0;
 
         Restart = "always";
         RestartSec = 2;
 
         # User applications are launched into independent app.slice scopes,
         # so the shell can safely own and clean up its complete process tree.
-        KillMode = "control-group";
+        KillMode = "process";
         Slice = "session.slice";
       };
     };
