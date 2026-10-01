@@ -278,6 +278,21 @@ fi
 
 acquire_generation_guard
 
+# A staged install is assembled under a process-unique directory and published
+# atomically only at the end. Any failure before that rename must remove the
+# incomplete generation; otherwise every failed activation leaves another
+# qylock-next.staging.<pid> tree behind.
+cleanup_install_exit() {
+  local status=$?
+  release_generation_guard || true
+  if [[ $QYLOCK_MODE == stage && $RYOKU_DRYRUN != 1 && -e ${STAGE_TMP:-} ]]; then
+    user chmod -R u+w "$STAGE_TMP" 2>/dev/null || true
+    user rm -rf "$STAGE_TMP" || true
+  fi
+  return "$status"
+}
+trap cleanup_install_exit EXIT
+
 if [[ $QYLOCK_MODE == live ]]; then
   LOCK_DIR="$LIVE_LOCK_DIR"
   STAGED_THEME_DIR=""

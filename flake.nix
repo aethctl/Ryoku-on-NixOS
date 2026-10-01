@@ -327,6 +327,26 @@
         # Installer
         ryoku-install = ryokuInstall;
 
+        ryoku-qylock-staging-cleanup = pkgs.runCommand
+          "ryoku-qylock-staging-cleanup-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              findutils
+              gnugrep
+              procps
+              python3
+              util-linux
+            ];
+          }
+          ''
+            RYOKU_QYLOCK_INSTALLER=${./ryoku/lockscreen/install-qylock} \
+              python3 ${./nix/tests/test-qylock-staging-cleanup.py}
+
+            touch "$out"
+          '';
+
         ryoku-install-parser = pkgs.runCommand
           "ryoku-install-parser-check"
           {
