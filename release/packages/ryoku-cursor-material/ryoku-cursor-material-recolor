@@ -188,7 +188,18 @@ def main():
     # internal: background X11-only pass spawned by the fast path.
     if "--x11only" in args:
         body, primary, watch = colors_from(accent())
-        x11_locked(lambda: build_x11(body, primary, watch))
+
+        # Niri consumes the Xcursor bitmap set, not hyprcursors. The normal
+        # matugen path launches this pass asynchronously after the fast
+        # hyprcursor update, so reassert again only after the Xcursor files are
+        # actually installed. Without this second reassert Niri reloads too
+        # early and keeps the previous cursor textures cached until some later
+        # config reload.
+        def rebuild_x11_and_reassert():
+            build_x11(body, primary, watch)
+            apply_live()
+
+        x11_locked(rebuild_x11_and_reassert)
         return
 
     if "--force" not in args and active_theme() != THEME:
