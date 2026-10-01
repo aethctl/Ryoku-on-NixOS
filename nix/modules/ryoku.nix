@@ -1883,6 +1883,15 @@ in
       serviceConfig = {
         ExecStartPre = [
           "-${ryokuShell}/bin/ryoku-shell quit"
+
+          # Ryoku Shell is the session's notification server. A Mako process
+          # from an older Nix generation can survive the package removal and
+          # keep org.freedesktop.Notifications, making Ryoku styling and DND
+          # appear broken after an in-place update. Retire both a user unit and
+          # any surviving standalone process before Quickshell starts.
+          "-${pkgs.systemd}/bin/systemctl --user stop mako.service"
+          "-${pkgs.procps}/bin/pkill -f /bin/mako([[:space:]]|$)"
+
           "${ryokuHelpers}/bin/ryoku-qylock-activate"
         ];
 

@@ -327,6 +327,18 @@
         # Installer
         ryoku-install = ryokuInstall;
 
+        ryoku-notification-ownership = pkgs.runCommand
+          "ryoku-notification-ownership-check"
+          {
+            nativeBuildInputs = [ pkgs.python3 ];
+          }
+          ''
+            RYOKU_NIX_MODULE=${./nix/modules/ryoku.nix} \
+              python3 ${./nix/tests/test-notification-ownership.py}
+
+            touch "$out"
+          '';
+
         ryoku-bt-audio-watch-singleton = pkgs.runCommand
           "ryoku-bt-audio-watch-singleton-check"
           {
