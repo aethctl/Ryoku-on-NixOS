@@ -817,19 +817,41 @@ func acquirePowerCutoverLock() (*os.File, error) {
 }
 
 const updateSleepGuardUnit = "ryoku-power-cutover-guard.service"
-const packagePowerCutoverMarker = "/var/lib/ryoku/power-cutover-hook-active"
+
+// A var so tests point it at a fixture.
+var packagePowerCutoverMarker = "/var/lib/ryoku/power-cutover-hook-active"
 
 func needsPackagePowerCutover(markerPresent, rootGuardActive bool) bool {
 	return !markerPresent || rootGuardActive
 }
 
-func ensurePackagePowerCutover() error {
-	markerPresent := false
-	if _, err := os.Stat(packagePowerCutoverMarker); err == nil {
-		markerPresent = true
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect package power cutover state: %w", err)
+// cutoverMarkerExistsAsRoot asks root whether the marker exists, for when an
+// unprivileged stat cannot see into the root-owned state dir. -n never
+// prompts; a box with no cached credential gets a non-zero exit, which the
+// caller reads as absent.
+var cutoverMarkerExistsAsRoot = func(path string) bool {
+	return exec.Command("sudo", "-n", "test", "-e", path).Run() == nil
+}
+
+// packageCutoverMarkerPresent reports whether the adoption marker exists.
+// /var/lib/ryoku is root-owned and a drifted mode there hides the marker from
+// an unprivileged stat; that is a question for root, not a reason to fail the
+// update. A probe that cannot run reports absent, which errs toward
+// adoption: the helper is idempotent, and skipping a needed cutover is worse
+// than a redundant one.
+func packageCutoverMarkerPresent() bool {
+	_, err := os.Stat(packagePowerCutoverMarker)
+	switch {
+	case err == nil:
+		return true
+	case os.IsNotExist(err):
+		return false
 	}
+	return cutoverMarkerExistsAsRoot(packagePowerCutoverMarker)
+}
+
+func ensurePackagePowerCutover() error {
+	markerPresent := packageCutoverMarkerPresent()
 	rootGuardActive := exec.Command(
 		"sudo", "-n", "systemctl", "is-active", "--quiet", updateSleepGuardUnit,
 	).Run() == nil
