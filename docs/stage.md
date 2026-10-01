@@ -135,23 +135,31 @@ widget wears a frame:
 - two small buttons on its top-right: **Settings** (opens that widget's own
   menu: design, lock, size, opacity, colour, snap) and **Remove** (hides it).
 
-Nothing is locked while editing: `locked` is false for every widget for the
-length of the session, and a widget added during the session is draggable the
-moment it appears. Per-widget Lock still applies outside the session.
+Every framed widget gets one: the built-ins, the Shima and Python faces, and
+the plugin tiles alike.
 
-One toolbar docked top-centre, one row:
+One toolbar rests bottom-centre, one row:
 
 ```
-Edit widgets   [+ Add widget v]  [Visualizer...]        [Reset]  [Done]
+部品 EDIT WIDGETS  [grid] [16]  [Widgets]  [Reset]  [Done]
 ```
 
-- **Add widget** drops a panel under the button: one row per widget (clock,
-  calendar, music, all-in-one, stats, weather, notes, every plugin widget, the
-  visualizer) with a switch; on adds it at its default anchor, off removes it.
-- **Visualizer...** leaves this session and opens Customize visualizer.
-- **Reset** restores widgets.json as it was when the session opened (enabled
-  set, free positions, sizes); its slot is kept while clean so Done never
-  moves.
+- **Widgets** grows a panel out of the bar's top edge. The roster is too long
+  for one honest list, so the panel is a settings page: a category rail on the
+  left (Ryoku widgets, Shima widgets, Python widgets, each installed plugin
+  set, with a live count) and a two-column grid of widget cards for the chosen
+  category. A card carries the glyph, name, hint, an on/off dot, and (once on)
+  a tune affordance that opens that widget's editor -- the inspector for a
+  slot-hosted face, the Placer for the visualizer, the tile's own menu for a
+  plugin. The whole card toggles. Search drops into a flat result grid across
+  every category, each card wearing its category as an eyebrow. Keyboard:
+  Down from the search enters the grid, arrows move, Space toggles, Esc
+  unwinds. Plugin rows read the installed set (enabled or not), so a hidden
+  tile keeps its card and the switch brings it back.
+- **Reset** restores widgets.json as it was when the session opened (every
+  widget's enabled set, placement, size, style, colour and face options, plus
+  the visualizer's flag and the placed plugin set); its slot is kept while
+  clean so Done never moves.
 - **Done** (or Escape, or a click on bare wallpaper when nothing is selected)
   leaves. There is no Save; the desktop is the document.
 
@@ -159,7 +167,7 @@ Edit widgets   [+ Add widget v]  [Visualizer...]        [Reset]  [Done]
 
 The visualizer's own editor, unchanged: the Placer (drag to move, corner to
 size, dot to turn, scroll to resize) with its EditBar fixed to a screen edge.
-The menu row (and the Edit widgets toolbar's `Visualizer...`) turns the
+The menu row (and the picker's tune on the visualizer card) turns the
 visualizer on if it is off and opens it. Its Done closes it.
 
 ## Session model
