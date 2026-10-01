@@ -554,7 +554,6 @@ EOF
     fd
     inxi
     lm_sensors
-    mako
     pciutils
     usbutils
 
