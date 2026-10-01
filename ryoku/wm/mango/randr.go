@@ -20,6 +20,7 @@ type randrOutput struct {
 	mode            string
 	modes           []string
 	make, model     string
+	physicalWidth   int
 }
 
 func randrDetail(name string) (randrOutput, bool) {
@@ -47,11 +48,10 @@ func parseRandr(text, name string) (randrOutput, bool) {
 			if inBlock {
 				have = true
 				cur = randrOutput{enabled: true}
-				if len(fields) > 1 {
-					cur.make = strings.Trim(fields[1], `"`)
-				}
-				if len(fields) > 2 {
-					cur.model = strings.Trim(fields[2], `"`)
+
+				desc := strings.TrimSpace(strings.TrimPrefix(raw, name))
+				if unquoted, err := strconv.Unquote(desc); err == nil {
+					cur.model = unquoted
 				}
 			}
 			continue
@@ -65,11 +65,17 @@ func parseRandr(text, name string) (randrOutput, bool) {
 			continue
 		}
 		if inModes && strings.Contains(trimmed, "px") {
-			mode := strings.Fields(trimmed)[0]
+			mode, ok := randrMode(trimmed)
+			if !ok {
+				continue
+			}
+
 			cur.modes = append(cur.modes, mode)
-			if strings.Contains(trimmed, "(current)") {
+
+			if strings.Contains(trimmed, "current") {
 				cur.mode = mode
 			}
+
 			continue
 		}
 		inModes = false
@@ -79,6 +85,20 @@ func parseRandr(text, name string) (randrOutput, bool) {
 		}
 		val := strings.TrimSpace(v)
 		switch k {
+		case "Make":
+			cur.make = val
+
+		case "Model":
+			cur.model = val
+
+		case "Physical size":
+			size := strings.Fields(val)
+			if len(size) > 0 {
+				if w, _, ok := strings.Cut(size[0], "x"); ok {
+					cur.physicalWidth, _ = strconv.Atoi(w)
+				}
+			}
+
 		case "Enabled":
 			cur.enabled = val == "yes"
 		case "Position":
@@ -92,6 +112,32 @@ func parseRandr(text, name string) (randrOutput, bool) {
 		}
 	}
 	return cur, have
+}
+
+func randrMode(line string) (string, bool) {
+	fields := strings.Fields(line)
+
+	if len(fields) < 4 || fields[1] != "px," || fields[3] != "Hz" {
+		return "", false
+	}
+
+	dims := fields[0]
+	w, h, ok := strings.Cut(dims, "x")
+
+	if !ok {
+		return "", false
+	}
+
+	wi, errW := strconv.Atoi(w)
+	hi, errH := strconv.Atoi(h)
+	hz, errHz := strconv.ParseFloat(fields[2], 64)
+
+	if errW != nil || errH != nil || errHz != nil ||
+		wi <= 0 || hi <= 0 || hz <= 0 {
+		return "", false
+	}
+
+	return dims + "@" + strconv.FormatFloat(hz, 'f', -1, 64), true
 }
 
 // waylandTransformName folds wlr-randr's spelling ("normal", "_90",

@@ -35,9 +35,27 @@ pkgs.stdenvNoCC.mkDerivation {
 
     mkdir -p "$cfg/niri"
     cp -a ryoku/niri/. "$cfg/niri/"
-    substituteInPlace "$cfg/niri/autostart.kdl" \
-      --replace-fail '$HOME/.local/lib/qt6/qml' \
-        '$HOME/.local/lib/qt6/qml:/run/current-system/sw/lib/qt-6/qml'
+
+    # ── Mango ─────────────────────────────────────────────────
+
+    mkdir -p "$cfg/mango"
+    cp -a ryoku/mango/. "$cfg/mango/"
+
+    # NixOS owns graphical-session lifecycle through its declarative user
+    # units. Upstream's package cutover helper is Arch transaction machinery,
+    # so each compositor login uses the Nix-native session handoff instead.
+    for autostart in \
+      "$cfg/hypr/modules/autostart.lua" \
+      "$cfg/niri/autostart.kdl" \
+      "$cfg/mango/autostart.conf"
+    do
+      [ -f "$autostart" ] || continue
+
+      substituteInPlace "$autostart" \
+        --replace-fail \
+          'ryoku-power-cutover session-start-logged' \
+          'ryoku-nix-session-start'
+    done
 
 
     # ── Shared translation catalog ─────────────────────────────

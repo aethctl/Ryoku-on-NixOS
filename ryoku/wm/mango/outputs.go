@@ -76,6 +76,9 @@ func runOutputs(args []string) error {
 func monitorsConf(layout []wm.OutputLayout) []byte {
 	var b strings.Builder
 	b.WriteString(monitorsHeader)
+
+	shiftX, shiftY := nonNegativeOffset(layout)
+
 	for _, o := range layout {
 		rule := "monitorrule=name:^" + o.Name + "$,"
 		var parts []string
@@ -84,13 +87,8 @@ func monitorsConf(layout []wm.OutputLayout) []byte {
 			b.WriteString(rule + strings.Join(parts, ",") + "\n")
 			continue
 		}
-		x, y := o.X, o.Y
-		if x < 0 {
-			x = 0
-		}
-		if y < 0 {
-			y = 0
-		}
+		x := o.X + shiftX
+		y := o.Y + shiftY
 		if w, h, ok := modeSize(o.Mode); ok {
 			parts = append(parts, "width:"+strconv.Itoa(w), "height:"+strconv.Itoa(h))
 		}
@@ -110,6 +108,26 @@ func monitorsConf(layout []wm.OutputLayout) []byte {
 		b.WriteString(rule + strings.Join(parts, ",") + "\n")
 	}
 	return []byte(b.String())
+}
+
+func nonNegativeOffset(layout []wm.OutputLayout) (int, int) {
+	minX, minY := 0, 0
+
+	for _, o := range layout {
+		if !o.Enabled {
+			continue
+		}
+
+		if o.X < minX {
+			minX = o.X
+		}
+
+		if o.Y < minY {
+			minY = o.Y
+		}
+	}
+
+	return -minX, -minY
 }
 
 // modeSize splits the editor's "WxH@Hz" into the size part.
@@ -209,9 +227,16 @@ func parseAdvertisedModes(text string) map[string]map[string]bool {
 			continue
 		}
 		if inModes && name != "" && strings.Contains(trimmed, "px") {
-			size := strings.Fields(trimmed)[0]
-			out[name][size] = true
-			out[name][size+"@"] = true
+			mode, ok := randrMode(trimmed)
+			if !ok {
+				continue
+			}
+
+			out[name][mode] = true
+
+			if size, _, ok := strings.Cut(mode, "@"); ok {
+				out[name][size] = true
+			}
 		}
 	}
 	return out

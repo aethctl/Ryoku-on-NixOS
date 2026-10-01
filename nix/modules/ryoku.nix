@@ -21,18 +21,101 @@ let
   ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
   ryokuWmHyprland = ryokuPkgs.ryoku-wm-hyprland;
   ryokuWmNiri = ryokuPkgs.ryoku-wm-niri;
+  ryokuWmMango = ryokuPkgs.ryoku-wm-mango;
 
   # Hyprland plugins are ABI-sensitive, so the compositor, portal and
   # plugin bundle must all come from Ryoku's own locked package set.
   ryokuHyprland = ryokuPkgs.ryoku-hyprland;
   ryokuHyprlandPortal = ryokuPkgs.ryoku-xdg-desktop-portal-hyprland;
   ryokuNiri = ryokuNixpkgs.niri;
+  ryokuMango = ryokuPkgs.ryoku-mango;
   ryokuXwaylandSatellite = ryokuPkgs.ryoku-xwayland-satellite;
   ryokuMatugen = ryokuPkgs.ryoku-matugen;
   ryokuHyprPlugins = ryokuPkgs.ryoku-hypr-plugins;
   ryokuCursorMaterial = ryokuPkgs.ryoku-cursor-material;
   ryokuMapleMonoNF = ryokuPkgs.ryoku-maple-mono-nf;
   materializer = ryokuPkgs.ryoku-materialize;
+
+  ryokuNixSessionStart = pkgs.writeShellScriptBin "ryoku-nix-session-start" ''
+    set -euo pipefail
+
+    sid="''${XDG_SESSION_ID:-}"
+    ready=0
+
+    if [ -n "$sid" ]; then
+      attempt=0
+
+      while [ "$attempt" -lt 150 ]; do
+        session_type="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Type --value 2>/dev/null || true)"
+        session_class="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Class --value 2>/dev/null || true)"
+        session_active="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Active --value 2>/dev/null || true)"
+
+        if [ "$session_type" = "wayland" ] &&
+           { [ "$session_class" = "user" ] || [ "$session_class" = "user-early" ]; } &&
+           [ "$session_active" = "yes" ]
+        then
+          ready=1
+          break
+        fi
+
+        attempt=$((attempt + 1))
+        ${pkgs.coreutils}/bin/sleep 0.1
+      done
+
+      if [ "$ready" -ne 1 ]; then
+        printf 'ryoku-nix-session-start: login1 did not expose graphical session %s\n' "$sid" >&2
+        exit 1
+      fi
+    fi
+
+    ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+    ${pkgs.systemd}/bin/systemctl --user daemon-reload
+
+    ${pkgs.systemd}/bin/systemctl --user reset-failed       ryoku-shell.service       ryogami.service       hypridle.service       >/dev/null 2>&1 || true
+
+    ${pkgs.systemd}/bin/systemctl --user restart ryoku-session.target
+
+    ${pkgs.systemd}/bin/systemctl --user try-restart       xdg-desktop-portal.service       xdg-desktop-portal-gnome.service       xdg-desktop-portal-gtk.service       xdg-desktop-portal-wlr.service       >/dev/null 2>&1 || true
+  '';
+
+  # Mango's stock session starts the compositor directly. Ryoku needs its
+  # writable config tree before Mango reads config.conf, so the greeter entry
+  # closes the first-login gap by materializing once when that entry is absent.
+  ryokuMangoSession = pkgs.runCommand "ryoku-mango-session" {
+    passthru.providedSessions = [ "ryoku-mango" ];
+  } ''
+    mkdir -p "$out/bin" "$out/share/wayland-sessions"
+
+    cat > "$out/bin/ryoku-mango-session" <<'EOF'
+#!${pkgs.runtimeShell}
+set -eu
+
+config_home="''${XDG_CONFIG_HOME:-$HOME/.config}"
+
+if [ ! -f "$config_home/mango/config.conf" ]; then
+  ${materializer}/bin/ryoku-materialize || true
+fi
+
+export XDG_SESSION_TYPE=wayland
+export XDG_CURRENT_DESKTOP=mango
+export XDG_SESSION_DESKTOP=mango
+export DESKTOP_SESSION=ryoku-mango
+
+exec ${ryokuMango}/bin/mango "$@"
+EOF
+
+    chmod 0755 "$out/bin/ryoku-mango-session"
+
+    cat > "$out/share/wayland-sessions/ryoku-mango.desktop" <<'EOF'
+[Desktop Entry]
+Name=Mango (Ryoku)
+Comment=Ryoku desktop on the MangoWM compositor
+Exec=ryoku-mango-session
+Icon=mango
+Type=Application
+DesktopNames=mango;wlroots
+EOF
+  '';
 
   # ───────────────────────────────────────────────────────────
   # Ryoku qylock
@@ -406,6 +489,7 @@ EOF
     ryokuBundle
     ryokuHelpers
     materializer
+    ryokuNixSessionStart
     ryokuSddmThemeApply
     ryokuSddmTheme
     ryokuPkgs.gpk
@@ -454,7 +538,9 @@ EOF
     ryokuHyprPlugins
     ryokuWmHyprland
     ryokuWmNiri
+    ryokuWmMango
     ryokuNiri
+    ryokuMango
     ryokuXwaylandSatellite
 
     # ─────────────────────────────────────────────────────────
@@ -506,6 +592,8 @@ EOF
     # ─────────────────────────────────────────────────────────
 
     hypridle
+    wlsunset
+    wlr-randr
     brightnessctl
     playerctl
 
@@ -850,6 +938,7 @@ in
       extraPortals = [
         pkgs.xdg-desktop-portal-gtk
         pkgs.xdg-desktop-portal-gnome
+        pkgs.xdg-desktop-portal-wlr
       ];
 
       config.hyprland.default = [
@@ -865,6 +954,28 @@ in
 
         "org.freedesktop.impl.portal.FileChooser" = [
           "gtk"
+        ];
+      };
+
+      config.mango = {
+        default = [
+          "gtk"
+        ];
+
+        "org.freedesktop.impl.portal.Secret" = [
+          "gnome-keyring"
+        ];
+
+        "org.freedesktop.impl.portal.ScreenCast" = [
+          "wlr"
+        ];
+
+        "org.freedesktop.impl.portal.ScreenShot" = [
+          "wlr"
+        ];
+
+        "org.freedesktop.impl.portal.Inhibit" = [
+          "none"
         ];
       };
     };
@@ -1222,6 +1333,7 @@ in
     # Supply a greeter on No Desktop installs, preserving another login manager.
     services.displayManager.sessionPackages = [
       ryokuNiri
+      ryokuMangoSession
     ];
 
     services.displayManager.sddm = {
@@ -1288,6 +1400,8 @@ in
 
     fonts.packages =
       [
+        pkgs.rubik
+        pkgs.readexpro
         pkgs.inter
         pkgs.fraunces
         spaceGrotesk

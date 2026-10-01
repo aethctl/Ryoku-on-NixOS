@@ -137,6 +137,8 @@
         ryoku-desktop-data = ryoku.desktopData;
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
+        ryoku-wm-mango = ryoku.wmMango;
+        ryoku-mango = ryoku.mango;
         ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
 
         # Ryoku owns its compositor ABI. These come from Ryoku's
@@ -233,6 +235,8 @@
         ryoku-desktop-data = ryoku.desktopData;
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
+        ryoku-wm-mango = ryoku.wmMango;
+        ryoku-mango = ryoku.mango;
         ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
         ryoku-helpers = ryoku.helpers;
         ryoku-nixos-system-bridge = ryoku.nixosSystemBridge;

@@ -29,6 +29,26 @@ let
     provider = "niri";
   };
 
+  wmMango = import ./ryoku-wm-provider.nix {
+    inherit pkgs src;
+    provider = "mango";
+  };
+
+  # Ryoku 0.82.2 targets Mango 0.17.4. The package in Ryoku's
+  # deliberately pinned nixpkgs universe is still 0.16.1, so keep
+  # the dependency ABI from that universe while updating the source.
+  ryokuMango = pkgs.mango.overrideAttrs (_old: {
+    pname = "ryoku-mango";
+    version = "0.17.4";
+
+    src = pkgs.fetchFromGitHub {
+      owner = "mangowm";
+      repo = "mango";
+      tag = "0.17.4";
+      sha256 = "1n9mbbf9g2h3lk3h8v084s2drvzq5zc0im5fr6ck5ycpgg0xhf38";
+    };
+  });
+
   xwaylandSatellite = import ./xwayland-satellite.nix {
     inherit pkgs;
   };
@@ -277,6 +297,7 @@ let
       desktopData
       wmHyprland
       wmNiri
+      wmMango
       helpers
       nixosSystemBridge
       qml
@@ -284,6 +305,8 @@ let
   };
 in
 {
+  mango = ryokuMango;
+
   inherit
     shell
     cli
@@ -305,6 +328,7 @@ in
     desktopData
     wmHyprland
     wmNiri
+    wmMango
     helpers
     nixosSystemBridge
     hyprglass

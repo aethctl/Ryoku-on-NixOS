@@ -120,6 +120,7 @@ func outputFrame(m mangoMonitor, full bool) wm.Output {
 			o.Mode = d.mode
 			o.Modes = d.modes
 			o.Make, o.Model = d.make, d.model
+			o.PhysicalWidth = d.physicalWidth
 			o.Disabled = !d.enabled
 		}
 	}
