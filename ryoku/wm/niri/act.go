@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,9 +66,7 @@ func runAct(args []string) error {
 
 	switch act {
 	case wm.ActionCursorReassert:
-		// The cursor is a config block on niri: regenerating the tree is the
-		// re-assert, and niri watches its config file.
-		return runApply([]string{storePath()})
+		return reassertCursor()
 
 	case wm.ActionWindowFocus:
 		id, err := argID(rest, 0, "window id")
@@ -239,6 +239,214 @@ func runAct(args []string) error {
 func perform(req any) error {
 	_, err := request(req)
 	return err
+}
+
+type configLoadedWaiter interface {
+	wait() error
+	close() error
+}
+
+type ipcConfigLoadedWaiter struct {
+	conn net.Conn
+	scan *bufio.Scanner
+}
+
+var newConfigLoadedWaiter = openConfigLoadedWaiter
+
+func openConfigLoadedWaiter() (configLoadedWaiter, error) {
+	conn, _, err := open("EventStream")
+	if err != nil {
+		return nil, err
+	}
+
+	scan := bufio.NewScanner(conn)
+	scan.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	if err := conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	if !scan.Scan() {
+		err := scan.Err()
+		_ = conn.Close()
+		if err == nil {
+			err = fmt.Errorf("event stream closed before acknowledgement")
+		}
+		return nil, err
+	}
+	if _, err := unwrap("EventStream", scan.Bytes()); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+
+	w := &ipcConfigLoadedWaiter{conn: conn, scan: scan}
+	// Every EventStream starts with a replay of the current ConfigLoaded state.
+	// Its failed bit describes the config that was active before this action, so
+	// drain the replay without treating that bit as this reload's result.
+	if err := w.next(false); err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	return w, nil
+}
+
+func (w *ipcConfigLoadedWaiter) next(requireSuccess bool) error {
+	if err := w.conn.SetReadDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		return err
+	}
+	for w.scan.Scan() {
+		var event map[string]json.RawMessage
+		if json.Unmarshal(w.scan.Bytes(), &event) != nil {
+			continue
+		}
+		body, ok := event["ConfigLoaded"]
+		if !ok {
+			continue
+		}
+		var loaded struct {
+			Failed bool `json:"failed"`
+		}
+		if json.Unmarshal(body, &loaded) != nil {
+			return fmt.Errorf("niri ConfigLoaded event is malformed")
+		}
+		if requireSuccess && loaded.Failed {
+			return fmt.Errorf("niri rejected the reloaded config")
+		}
+		return nil
+	}
+	if err := w.scan.Err(); err != nil {
+		return err
+	}
+	return fmt.Errorf("niri event stream closed before ConfigLoaded")
+}
+
+func (w *ipcConfigLoadedWaiter) wait() error  { return w.next(true) }
+func (w *ipcConfigLoadedWaiter) close() error { return w.conn.Close() }
+
+// loadConfigAndWait subscribes before dispatching LoadConfigFile, then blocks
+// until niri publishes the matching ConfigLoaded event. The IPC action itself
+// only queues work on niri's config-watcher thread, so its direct reply is not a
+// synchronization barrier.
+func loadConfigAndWait(path string) error {
+	w, err := newConfigLoadedWaiter()
+	if err != nil {
+		return err
+	}
+	defer w.close()
+
+	if err := perform(action("LoadConfigFile", map[string]any{"path": path})); err != nil {
+		return err
+	}
+	return w.wait()
+}
+
+func writeTempConfig(prefix string, body []byte) (string, error) {
+	f, err := os.CreateTemp(niriConfigDir(), prefix)
+	if err != nil {
+		return "", err
+	}
+	name := f.Name()
+	ok := false
+	defer func() {
+		_ = f.Close()
+		if !ok {
+			_ = os.Remove(name)
+		}
+	}()
+	if err := f.Chmod(0o600); err != nil {
+		return "", err
+	}
+	if _, err := f.Write(body); err != nil {
+		return "", err
+	}
+	if err := f.Sync(); err != nil {
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	ok = true
+	return name, nil
+}
+
+// reassertCursor makes niri parse one private config with a deliberately
+// different cursor struct, waits for ConfigLoaded, then explicitly restores its
+// real config and waits again. Niri only reloads its cursor manager when the
+// parsed cursor block compares unequal, so rewriting the same Ryoku-Material
+// theme after recolouring its files otherwise leaves old cursor textures cached.
+func reassertCursor() error {
+	lockDir := os.Getenv("XDG_RUNTIME_DIR")
+	if lockDir == "" {
+		lockDir = os.TempDir()
+	}
+	lock, err := os.OpenFile(filepath.Join(lockDir, "ryoku-niri-cursor-reassert.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		return err
+	}
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+
+	s := loadStore(storePath())
+	temp := s
+	if temp.Cursor.InactiveTimeout <= 0 {
+		temp.Cursor.InactiveTimeout = 24 * 60 * 60
+	} else {
+		temp.Cursor.InactiveTimeout++
+	}
+
+	dir := niriConfigDir()
+	realConfig := filepath.Join(dir, "config.kdl")
+	baseConfig, err := os.ReadFile(realConfig)
+	if err != nil {
+		return fmt.Errorf("cursor.reassert read config: %w", err)
+	}
+
+	tempSettings, err := writeTempConfig(".ryoku-cursor-reassert-settings-*.kdl", genSettings(temp))
+	if err != nil {
+		return fmt.Errorf("cursor.reassert temporary settings: %w", err)
+	}
+	tempSettingsBase := filepath.Base(tempSettings)
+
+	const settingsInclude = `include "settings.kdl"`
+	if !strings.Contains(string(baseConfig), settingsInclude) {
+		_ = os.Remove(tempSettings)
+		return fmt.Errorf("cursor.reassert: config.kdl has no settings.kdl include")
+	}
+	tempTopBody := strings.Replace(
+		string(baseConfig),
+		settingsInclude,
+		fmt.Sprintf(`include %q`, tempSettingsBase),
+		1,
+	)
+	tempTop, err := writeTempConfig(".ryoku-cursor-reassert-config-*.kdl", []byte(tempTopBody))
+	if err != nil {
+		_ = os.Remove(tempSettings)
+		return fmt.Errorf("cursor.reassert temporary config: %w", err)
+	}
+
+	restored := false
+	defer func() {
+		if restored {
+			_ = os.Remove(tempTop)
+			_ = os.Remove(tempSettings)
+		}
+	}()
+
+	tempErr := loadConfigAndWait(tempTop)
+	restoreErr := loadConfigAndWait(realConfig)
+	if restoreErr != nil {
+		// Leave the private files in place if niri could not switch back: its
+		// watcher may still target tempTop, and removing that path would make
+		// recovery harder than leaving two tiny diagnostic files behind.
+		return fmt.Errorf("cursor.reassert restore: %w", restoreErr)
+	}
+	restored = true
+	if tempErr != nil {
+		return fmt.Errorf("cursor.reassert temporary reload: %w", tempErr)
+	}
+	return nil
 }
 
 // outputRequest is niri's top-level Output request, not an Action: it turns one
