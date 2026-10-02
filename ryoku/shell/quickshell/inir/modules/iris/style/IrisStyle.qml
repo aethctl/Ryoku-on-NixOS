@@ -190,6 +190,7 @@ QtObject {
         model: ["Light", "Regular", "Medium", "SemiBold", "Bold"].map(weight => `inter/Inter-${weight}`)
             .concat(["Light", "Regular", "Medium", "SemiBold", "Bold"].map(weight => `inter/InterDisplay-${weight}`))
             .concat(["Light", "Regular", "Medium", "SemiBold", "Bold", "ExtraBold", "Black"].map(weight => `rubik/Rubik-${weight}`))
+            .concat(["Light", "Regular", "Medium", "SemiBold", "Bold"].map(weight => `montserrat/Montserrat-${weight}`))
         delegate: FontLoader {
             required property string modelData
             source: Directories.payloadPath(`assets/fonts/${modelData}.ttf`)
@@ -334,10 +335,20 @@ QtObject {
     // and apps on the raw material read white beside it. Solid, or before the wallpaper is read, it is the material itself;
     // under glass it is the material veiled by `glassTint` over the wallpaper's average, held to a paper (or a night) so the
     // generator still has room to solve its text against it.
+    // It follows the glass the person chose, never Game mode switching effects off for a while: every flip regenerates every
+    // app's theme, so a fullscreen game recoloured Spotify and Steam to the bare material and back (#275).
     readonly property string appsOutput: String(Quickshell.screens[0]?.name ?? "")
+    readonly property bool appsGlassy: root.glassRequested !== "off" && !(Config.options?.performance?.lowPower ?? false)
+    // False while glass waits for the wallpaper to be read: the material alone would be handed over, and every app
+    // regenerated on it, for the second a new wallpaper takes to read (IrisAppsSync waits instead).
+    readonly property bool appsSurfaceReady: {
+        if (!root.appsGlassy) return true
+        const screen = Lume.screenNamed(root.appsOutput)
+        return !screen || Lume.read(root.appsOutput, 0, 0, screen.width, screen.height) !== null
+    }
     readonly property color appsSurface: {
         const screen = Lume.screenNamed(root.appsOutput)
-        const sample = root.glassy && screen ? Lume.read(root.appsOutput, 0, 0, screen.width, screen.height) : null
+        const sample = root.appsGlassy && screen ? Lume.read(root.appsOutput, 0, 0, screen.width, screen.height) : null
         if (!sample) return root.surfaceOpaque
         const body = ColorUtils.mix(root.surfaceOpaque, sample.color, root.glassTint)
         return Qt.hsla(Math.max(0, body.hslHue), body.hslSaturation, root.light
@@ -642,7 +653,13 @@ QtObject {
     readonly property color border: root.ryokuFrontend ? Tokens.line : ColorUtils.applyAlpha(root.text, Math.min(0.5, 0.12 * root.preset.fill * root.tweak("lines", 0, 2)))
     readonly property color borderStrong: root.ryokuFrontend ? Tokens.lineStrong : ColorUtils.applyAlpha(root.text, Math.min(0.6, 0.28 * root.preset.fill * root.tweak("lines", 0, 2)))
     readonly property string rimTint: String(root.theme?.rimTint ?? "neutral")
-    readonly property color rim: !(root.theme?.rim ?? true) ? Qt.color("transparent")
+    // Appearance › Edges: the edge every body wears, on every material. Line is the even hairline (rim); Light is
+    // the glass edge (lit where it faces up, a faint line elsewhere, `glassEdge*`) on solid bodies too. Glass keeps
+    // its lit edge whatever this is: without it glass vanishes over a dark desktop.
+    readonly property string edgeStyle: !(root.theme?.rim ?? true) ? "none"
+        : String(root.theme?.edges ?? "line") === "light" ? "light" : "line"
+    readonly property bool edgeLit: root.edgeStyle === "light" && (root.glassEdgeLight > 0 || root.glassEdgeLine > 0)
+    readonly property color rim: root.edgeStyle !== "line" ? Qt.color("transparent")
         : root.ryokuFrontend ? Tokens.line
         : root.rimTint === "accent" ? ColorUtils.applyAlpha(root.accent, Math.min(0.9, 0.3 + 0.3 * root.tweak("lines", 0, 2)))
         : root.rimTint === "highlight" ? ColorUtils.applyAlpha(root.secondaryAccent, Math.min(0.9, 0.3 + 0.3 * root.tweak("lines", 0, 2)))
@@ -834,6 +851,17 @@ QtObject {
         return Math.max(8, Math.round(56 * root.density * scale * Math.max(0.2, Math.min(2, curve / 100))))
     }
     readonly property string pieceShape: String(root.theme?.pieceShape ?? "circle")
+    // Settings › Appearance › Button rows: rows of round controls on a plate (IrisControlPlate), or bare.
+    readonly property string controlPlate: {
+        const value = String(root.appearance?.controlPlate ?? "none")
+        return ["veil", "glass", "solid"].includes(value) ? value : "none"
+    }
+    // What a control's track or plate is made of under Button rows: every iRiS control that holds choices or a row
+    // of buttons (IrisControlPlate, IrisSegmented, IrisChip) reads these, so one choice changes them together.
+    readonly property bool controlPlated: root.controlPlate !== "none"
+    function plateFillFor(material: string): color {
+        return material === "veil" ? root.veil : material === "solid" ? root.readingCard : root.fill
+    }
     function profileRadius(profile: string, size: real): real {
         const half = size / 2
         if (profile === "squircle") return Math.min(half, size * 0.34 * Math.max(0.6, root.shapeScale))

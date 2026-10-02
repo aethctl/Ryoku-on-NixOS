@@ -42,7 +42,9 @@ function config() {
    "design": "iris",
    "material": "glass",
    "weight": "regular",
-   "rim": false
+   "rim": false,
+   "outline": "auto",
+   "brightWallpapers": false
   },
   "dock": {
    "enable": true,
@@ -96,6 +98,7 @@ function config() {
     "bounce": 100,
     "text": 100,
     "rim": true,
+    "edges": "line",
     "rimTint": "neutral",
     "rimWidth": 1,
     "glow": 0,
@@ -168,6 +171,7 @@ function config() {
     "plate": "black"
    },
    "scheme": "auto",
+   "controlPlate": "none",
    "tune": {
     "dark": {
      "tone": 0,
@@ -231,6 +235,11 @@ function config() {
    "blockStyle": "plain",
    "scrollAction": "volume",
    "desktopBanner": "wallpaper",
+   "desktopBannerFade": 100,
+   "desktopBannerTop": 100,
+   "desktopBannerVeil": 100,
+   "desktopBannerBlur": 0,
+   "navFrame": "auto",
    "desktopBlocks": [
     "profile",
     "context",

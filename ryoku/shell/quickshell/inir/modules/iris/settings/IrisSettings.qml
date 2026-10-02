@@ -126,12 +126,21 @@ PanelWindow {
             return on ? Translation.tr(spec.label) : ""
         }
         case "text": return String(value ?? "")
+        case "icon": return String(value ?? "").length > 0 ? Translation.tr("Custom") : ""
+        case "zone":
         case "choice":
             if (spec.fallback === "" && value === "") return ""
             return Translation.tr(String(IrisOptions.choicesOf(spec).find(choice => IrisOptions.same(choice.value, value))?.label ?? ""))
         case "range":
             if (spec.fallback !== undefined && IrisOptions.same(value, spec.fallback)) return ""
             return Translation.tr(spec.label) + " " + Translation.tr(IrisOptions.rangeText(spec, value))
+        case "pieces": {
+            // The first pieces in the order chosen: a group made only of lists still says what it holds.
+            const choices = IrisOptions.choicesOf(spec)
+            return Array.from(value ?? []).slice(0, 2)
+                .map(item => Translation.tr(String(choices.find(choice => IrisOptions.same(choice.value, item))?.label ?? "")))
+                .filter(text => text.length > 0).join(", ")
+        }
         default: return ""
         }
     }

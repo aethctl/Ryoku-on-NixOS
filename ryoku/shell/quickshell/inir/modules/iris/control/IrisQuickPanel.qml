@@ -165,40 +165,55 @@ ColumnLayout {
             buttonRadius: height / 2
             onClicked: GlobalStates.irisControlEdit = false
         }
-        IrisIconButton {
+        // Appearance › Button rows: the header's tools on one plate, concentric with it.
+        IrisControlPlate {
+            id: headerTools
             visible: !root.editing
-            materialIcon: "dashboard_customize"
-            Accessible.name: Translation.tr("Arrange the controls")
-            onClicked: GlobalStates.irisControlEdit = true
-        }
-        IrisIconButton {
-            visible: !root.editing
-            materialIcon: "lock"
-            Accessible.name: Translation.tr("Lock")
-            onClicked: {
-                GlobalStates.controlPanelOpen = false
-                Quickshell.execDetached(["ryoku-shell", "lock"])
+            Layout.alignment: Qt.AlignVCenter
+            controlHeight: Math.round(34 * root.d)
+            RowLayout {
+                // Bare, the header's own spacing, as before the plate.
+                spacing: headerTools.framed ? Math.round(2 * root.d) : 8 * root.d
+                IrisIconButton {
+                    buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                    buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                    materialIcon: "dashboard_customize"
+                    Accessible.name: Translation.tr("Arrange the controls")
+                    onClicked: GlobalStates.irisControlEdit = true
+                }
+                IrisIconButton {
+                    buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                    buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                    materialIcon: "lock"
+                    Accessible.name: Translation.tr("Lock")
+                    onClicked: {
+                        GlobalStates.controlPanelOpen = false
+                        Quickshell.execDetached(["ryoku-shell", "lock"])
+                    }
+                }
+                IrisIconButton {
+                    id: settingsButton
+                    buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                    buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                    materialIcon: "settings"
+                    Accessible.name: Translation.tr("Settings")
+                    onClicked: {
+                        GlobalStates.controlPanelOpen = false
+                        const p = settingsButton.mapToItem(null, 0, 0)
+                        GlobalStates.irisMorphOrigin = { x: p.x, y: p.y, width: settingsButton.width, height: settingsButton.height,
+                            radius: headerTools.framed ? headerTools.controlRadius : settingsButton.height / 2, screen: GlobalStates.focusedScreen?.name ?? "" }
+                        GlobalStates.irisMorphOwner = "control"
+                        GlobalStates.openSettings()
+                    }
+                }
+                IrisIconButton {
+                    buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                    buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                    materialIcon: "power_settings_new"
+                    Accessible.name: Translation.tr("Session")
+                    onClicked: { GlobalStates.controlPanelOpen = false; GlobalStates.sessionOpen = true }
+                }
             }
-        }
-        IrisIconButton {
-            id: settingsButton
-            visible: !root.editing
-            materialIcon: "settings"
-            Accessible.name: Translation.tr("Settings")
-            onClicked: {
-                GlobalStates.controlPanelOpen = false
-                const p = settingsButton.mapToItem(null, 0, 0)
-                GlobalStates.irisMorphOrigin = { x: p.x, y: p.y, width: settingsButton.width, height: settingsButton.height,
-                    radius: settingsButton.height / 2, screen: GlobalStates.focusedScreen?.name ?? "" }
-                GlobalStates.irisMorphOwner = "control"
-                GlobalStates.openSettings()
-            }
-        }
-        IrisIconButton {
-            visible: !root.editing
-            materialIcon: "power_settings_new"
-            Accessible.name: Translation.tr("Session")
-            onClicked: { GlobalStates.controlPanelOpen = false; GlobalStates.sessionOpen = true }
         }
     }
 

@@ -359,7 +359,7 @@ AbstractBackgroundWidget {
     ]
 
     Timer {
-        running: !root.widgetIris && !root.instrument && !root.hasPlayer && root.visible && root.powerActive
+        running: !root.widgetIris && !root.instrument && !root.hasPlayer && root.visible && root.motionActive
             && Appearance.animationsEnabled
         interval: 9000
         repeat: true

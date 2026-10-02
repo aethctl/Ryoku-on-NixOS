@@ -153,11 +153,19 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignHCenter
-            spacing: 4 * IrisStyle.density
+            spacing: 0
             Item { Layout.fillWidth: true }
-            IrisIconButton { foreground: root.ink; materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
-            IrisIconButton { foreground: root.ink; materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 28 }
-            IrisIconButton { foreground: root.ink; materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
+            // Appearance › Button rows: the transport on one plate, its buttons concentric with it.
+            IrisControlPlate {
+                id: transport
+                controlHeight: Math.round(34 * IrisStyle.density)
+                RowLayout {
+                    spacing: Math.round(4 * IrisStyle.density)
+                    IrisIconButton { buttonRadius: transport.framed ? transport.controlRadius : IrisStyle.radiusSmall; buttonRadiusPressed: transport.framed ? transport.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2); foreground: root.ink; materialIcon: "skip_previous"; Accessible.name: Translation.tr("Previous track"); enabled: media.effectiveCanGoPrevious; onClicked: media.previous() }
+                    IrisIconButton { buttonRadius: transport.framed ? transport.controlRadius : IrisStyle.radiusSmall; buttonRadiusPressed: transport.framed ? transport.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2); foreground: root.ink; materialIcon: media.effectiveIsPlaying ? "pause" : "play_arrow"; Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play"); enabled: root.hasPlayer; onClicked: media.togglePlaying(); iconSize: 28 }
+                    IrisIconButton { buttonRadius: transport.framed ? transport.controlRadius : IrisStyle.radiusSmall; buttonRadiusPressed: transport.framed ? transport.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2); foreground: root.ink; materialIcon: "skip_next"; Accessible.name: Translation.tr("Next track"); enabled: media.effectiveCanGoNext; onClicked: media.next() }
+                }
+            }
             Item { Layout.fillWidth: true }
         }
     }

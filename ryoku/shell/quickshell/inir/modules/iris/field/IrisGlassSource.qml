@@ -39,6 +39,7 @@ Item {
         blurEnabled: true
         blur: IrisStyle.glassBlurAmount
         blurMax: IrisStyle.glassBlurMax
-        saturation: IrisStyle.glassSaturation
+        saturation: Math.max(-1, Math.min(1, IrisStyle.glassSaturation + Wallpapers.desktopSaturation))
+        contrast: Wallpapers.desktopContrast
     }
 }

@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import QtCore
 import Qt.labs.folderlistmodel
+import inir
 import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.common.models
@@ -32,6 +33,18 @@ Singleton {
     }
 
     function currentMainWallpaperPath(monitorName = ""): string {
+        return root.effectiveWallpaperPath
+    }
+
+    // What the desktop actually shows: the daemon paints the wallpaper itself, so
+    // the overview backdrop never replaces it here and needs no dim to sample
+    // through. The frame reads these to match glass and previews to the screen.
+    readonly property bool desktopShowsBackdrop: false
+    readonly property real desktopDim: 0
+    readonly property real desktopSaturation: 0
+    readonly property real desktopContrast: 0
+
+    function desktopWallpaperPath(monitorName = ""): string {
         return root.effectiveWallpaperPath
     }
 
@@ -360,14 +373,40 @@ Singleton {
         const clean = FileUtils.trimFileProtocol(String(path ?? ""))
         return clean.length > 0 && clean === root.effectiveWallpaperPath
     }
-    // The frame's shuffle: a random file from the browsed folder, applied through
-    // the same daemon path as the picker's Apply.
+    // The shuffle reads its own listing: files only (a folder is never a wallpaper)
+    // and no search filter, so the picker keeps the folder it is showing even when
+    // the shuffle browses a folder of its own.
+    FolderListModel {
+        id: shuffleModel
+        folder: folderModelImpl.folder
+        nameFilters: root.extensions.map(ext => `*.${ext}`)
+        caseSensitive: false
+        showDirs: false
+        showDotAndDotDot: false
+        showOnlyReadable: true
+    }
+
     function randomFromCurrentFolder(darkMode = false, monitorName = "", target = ""): void {
-        if (folderModelImpl.count === 0)
+        if (shuffleModel.count === 0)
             return
-        const filePath = folderModelImpl.get(Math.floor(Math.random() * folderModelImpl.count), "filePath")
+        const filePath = shuffleModel.get(Math.floor(Math.random() * shuffleModel.count), "filePath")
         if (filePath)
             root.applySelectionTarget(String(filePath), target, monitorName)
+    }
+
+    // The shuffle: a new wallpaper from the browsed folder every few minutes,
+    // through the same daemon path as the desktop menu's Next wallpaper. It
+    // rests while the screen is locked. Ryoku themes every wallpaper it
+    // applies, so there is no colour switch here; the daemon owns that.
+    readonly property var shuffleOptions: Config.options?.background?.autoWallpaper ?? ({})
+    readonly property bool shuffleEnabled: Boolean(shuffleOptions.enable ?? false)
+    readonly property int shuffleMinutes: Math.max(1, Math.min(240, Number(shuffleOptions.intervalMinutes ?? 30)))
+    Timer {
+        id: shuffleTimer
+        interval: root.shuffleMinutes * 60000
+        repeat: true
+        running: root.shuffleEnabled && !GlobalStates.screenLocked
+        onTriggered: root.randomFromCurrentFolder()
     }
 
     function applySelectionTarget(path: string, target: string, monitorName: string): void {

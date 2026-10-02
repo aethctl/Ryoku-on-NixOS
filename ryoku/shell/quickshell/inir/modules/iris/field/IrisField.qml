@@ -217,7 +217,7 @@ Item {
         readonly property vector4d quiet: root.quietRect
         readonly property color rim: root.rim
         readonly property color sheen: root.sheen
-        readonly property vector4d edgeGlass: Qt.vector4d(IrisStyle.glassEdgeLight, IrisStyle.glassEdgeLine, IrisStyle.glassEdgeWidth, 0)
+        readonly property vector4d edgeGlass: Qt.vector4d(IrisStyle.glassEdgeLight, IrisStyle.glassEdgeLine, Math.max(1, Math.round(IrisStyle.glassEdgeWidth * IrisStyle.density)), IrisStyle.edgeLit ? 1 : 0)
         readonly property vector4d edge: Qt.vector4d(root.rimWidth, root.rim.a > 0 ? 1 : 0, 0, 0)
         readonly property vector4d shape0: pass.shapeAt(0)
         readonly property vector4d shape1: pass.shapeAt(1)

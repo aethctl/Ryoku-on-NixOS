@@ -191,6 +191,14 @@ ColumnLayout {
     readonly property string bannerSource: String(page.island.options?.desktopBanner ?? "wallpaper") === "wallpaper"
         ? WallpaperListener.wallpaperUrlForScreen(page.island.targetScreen) : ""
     readonly property bool showBanner: page.bannerSource.length > 0
+    // Settings › Island › Desktop page: 100 / 100 / 0 is the header as designed.
+    function bannerPart(key: string, fallback: int): real {
+        return Math.max(0, Math.min(100, Number(page.island.options?.[key] ?? fallback))) / 100
+    }
+    readonly property real bannerFade: page.bannerPart("desktopBannerFade", 100)
+    readonly property real bannerTop: page.bannerPart("desktopBannerTop", 100)
+    readonly property real bannerVeil: page.bannerPart("desktopBannerVeil", 100)
+    readonly property real bannerBlur: page.bannerPart("desktopBannerBlur", 0)
     function blockAvailable(kind: string): bool {
         if (kind === "context") return page.focusedWindow !== null || page.workspaces.length > 1
         if (kind === "modules") return page.customModules.length > 0
@@ -226,6 +234,9 @@ ColumnLayout {
                 maskSource: heroFade
                 maskThresholdMin: 0.5
                 maskSpreadAtMin: 1
+                blurEnabled: page.bannerBlur > 0
+                blur: page.bannerBlur
+                blurMax: 48
             }
             opacity: heroImage.ready ? 1 : 0
             x: -page.island.padding
@@ -233,87 +244,142 @@ ColumnLayout {
             width: hero.width + page.island.padding * 2
             height: hero.height + heroBleed.topBleed + Math.round(12 * IrisStyle.density)
 
-            IrisWallpaperView {
-                id: heroImage
+            // On a side edge the join is beside the header: the same treatment turned sideways (sideJoin).
+            Item {
+                id: heroContent
                 anchors.fill: parent
-                active: page.showBanner
-                screen: page.island.targetScreen
-                live: page.current && page.island.visualExpanded
-                asynchronous: page.island.heroPreloadItem.status !== Image.Ready
-                decodeSize: Qt.size(page.island.heroDecodeWidth, 0)
-            }
-            Rectangle {
-                id: heroScrim
-                anchors.fill: parent
-                readonly property bool hangs: (page.island.notch && !page.island.bottomEdge) || heroBleed.navBand > 0
-                readonly property real solidTop: (page.island.notch && !page.island.bottomEdge ? page.island.chassisItem.topInset : 0)
-                    + (heroBleed.navBand > 0 ? page.island.padding + heroBleed.navBand * 0.5 : 0)
-                readonly property real edge: hangs ? solidTop / Math.max(1, height) : 0
-                readonly property real topFade: hangs ? (solidTop + 30 * IrisStyle.density + heroBleed.navBand * 0.5) / Math.max(1, height) : 0.001
-                gradient: Gradient {
-                    GradientStop { position: 0; color: ColorUtils.applyAlpha(IrisStyle.bodyScrim, heroScrim.hangs && !IrisStyle.glassy ? 1 : 0.12) } // iris-literal: hero fade ramp
-                    GradientStop { position: heroScrim.edge; color: ColorUtils.applyAlpha(IrisStyle.bodyScrim, heroScrim.hangs && !IrisStyle.glassy ? 1 : 0.12) } // iris-literal: hero fade ramp
-                    GradientStop { position: heroScrim.topFade; color: ColorUtils.applyAlpha(IrisStyle.bodyScrim, 0.12) } // iris-literal: hero fade ramp
-                    GradientStop { position: 0.42; color: ColorUtils.applyAlpha(IrisStyle.surfaceOpaque, IrisStyle.wallpaperVeil) }
-                    GradientStop { position: 1; color: IrisStyle.bodyScrim }
+                // Always layered, like heroBleed: toggling layers inside the chassis stops it painting.
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    maskEnabled: sideJoin.active
+                    maskSource: sideJoin
+                    maskThresholdMin: 0.5
+                    maskSpreadAtMin: 1
+                }
+                IrisWallpaperView {
+                    id: heroImage
+                    anchors.fill: parent
+                    active: page.showBanner
+                    screen: page.island.targetScreen
+                    live: page.current && page.island.visualExpanded
+                    asynchronous: page.island.heroPreloadItem.status !== Image.Ready
+                    decodeSize: Qt.size(page.island.heroDecodeWidth, 0)
+                }
+                IrisHeaderScrim {
+                    id: heroScrim
+                    anchors.fill: parent
+                    hangs: (page.island.notch && !page.island.bottomEdge) || heroBleed.navBand > 0
+                    solidTop: (page.island.notch && !page.island.bottomEdge ? page.island.chassisItem.topInset : 0)
+                        + (heroBleed.navBand > 0 ? page.island.padding + heroBleed.navBand * 0.5 : 0)
+                    navBand: heroBleed.navBand
+                    topJoin: page.island.notch && page.island.edge === "top"
+                    // Measured from the chassis, not the header: while the Island opens the page rides above the body's
+                    // top, and a join fixed in the header's coordinates slid off the screen, letting the image touch the band.
+                    joinDepth: page.island.chassisItem.topInset + page.island.fillet + 4 * IrisStyle.density - heroScrim.chassisTop
+                    readonly property real chassisTop: {
+                        void (page.island.chassisItem.bodyHeight + page.island.chassisItem.height + heroBleed.height + heroBleed.y)
+                        return heroBleed.mapToItem(page.island.chassisItem, 0, 0).y
+                    }
+                    meltTop: page.bannerTop
+                    meltFade: page.bannerFade
+                    meltVeil: page.bannerVeil
                 }
             }
         }
 
+        // The Island notched on a side edge: its body runs into the frame beside the header. The image keeps off
+        // the band and the shoulders (the body's own material there) and enters on a ramp as long again, the
+        // same join as at the top.
         Item {
-            id: heroFade
+            id: sideJoin
+            readonly property string edge: page.island.notch ? String(page.island.edge) : ""
+            readonly property bool active: sideJoin.edge === "left" || sideJoin.edge === "right"
+            readonly property real depth: IrisFrame.band + page.island.fillet + 4 * IrisStyle.density
+            // Where the screen edge falls in the header's own coordinates.
+            readonly property real edgeX: {
+                void (heroBleed.width + heroBleed.x + page.island.chassisItem.width + page.island.chassisItem.x)
+                const window = heroBleed.Window.window
+                if (!window) return 0
+                return heroBleed.mapFromItem(null, sideJoin.edge === "right" ? window.width : 0, 0).x
+            }
+            readonly property real solid: Math.max(0, Math.min(1, (sideJoin.edge === "right"
+                ? sideJoin.edgeX - sideJoin.depth : sideJoin.edgeX + sideJoin.depth) / Math.max(1, width)))
+            readonly property real ramp: Math.max(0, Math.min(1, (sideJoin.edge === "right"
+                ? sideJoin.edgeX - sideJoin.depth / 0.45 : sideJoin.edgeX + sideJoin.depth / 0.45) / Math.max(1, width)))
             x: heroBleed.x
             y: heroBleed.y
             width: heroBleed.width
             height: heroBleed.height
             visible: false
             layer.enabled: true
-            readonly property real solidEnd: heroScrim.hangs ? heroScrim.edge : 0
             Rectangle {
                 anchors.fill: parent
                 gradient: Gradient {
-                    GradientStop { position: 0; color: IrisStyle.glassy ? "transparent" : "white" }
-                    GradientStop { position: heroFade.solidEnd; color: IrisStyle.glassy ? "transparent" : "white" }
-                    GradientStop { position: Math.min(0.99, heroScrim.topFade + 0.08); color: "white" }
-                    GradientStop { position: 0.6; color: "white" }
-                    GradientStop { position: 1; color: IrisStyle.glassy ? "transparent" : "white" }
+                    orientation: Gradient.Horizontal
+                    GradientStop { position: 0; color: sideJoin.edge === "right" ? "white" : "transparent" }
+                    GradientStop { position: Math.min(sideJoin.solid, sideJoin.ramp); color: sideJoin.edge === "right" ? "white" : "transparent" }
+                    GradientStop { position: Math.max(sideJoin.solid, sideJoin.ramp); color: sideJoin.edge === "right" ? "transparent" : "white" }
+                    GradientStop { position: 1; color: sideJoin.edge === "right" ? "transparent" : "white" }
                 }
             }
         }
 
-        GlyphButton {
-            anchors.right: wallpaperButton.visible ? wallpaperButton.left : parent.right
-            anchors.rightMargin: wallpaperButton.visible ? Math.round(6 * IrisStyle.density) : 0
-            anchors.top: parent.top
-            anchors.topMargin: -Math.round(6 * IrisStyle.density)
-            glyph: page.island.studio ? "check" : "edit"
-            glyphSize: 17 * IrisStyle.density
-            glyphColor: page.showBanner ? IrisStyle.onMedia : IrisStyle.text
-            implicitWidth: Math.round(32 * IrisStyle.density)
-            colBackground: page.showBanner ? IrisStyle.veil : IrisStyle.fillQuiet
-            colBackgroundHover: page.showBanner ? IrisStyle.veilStrong : IrisStyle.fillHover
-            Accessible.name: page.island.studio ? Translation.tr("Done") : Translation.tr("Arrange this page")
-            onClicked: {
-                page.island.pinned = true
-                GlobalStates.irisArrange = !page.island.studio
-            }
+        IrisHeaderFade {
+            id: heroFade
+            scrim: heroScrim
+            x: heroBleed.x
+            y: heroBleed.y
+            width: heroBleed.width
+            height: heroBleed.height
         }
-        GlyphButton {
-            id: wallpaperButton
-            visible: page.showBanner
+
+        // The header's tools share the Island's plate (IrisIsland.pagePlate); bare, each keeps its own veil.
+        IrisControlPlate {
+            id: heroTools
             anchors.right: parent.right
+            anchors.rightMargin: -heroTools.inset
             anchors.top: parent.top
-            anchors.topMargin: -Math.round(6 * IrisStyle.density)
-            glyph: "wallpaper"
-            glyphSize: 17 * IrisStyle.density
-            glyphColor: IrisStyle.onMedia
-            implicitWidth: Math.round(32 * IrisStyle.density)
-            colBackground: IrisStyle.veil
-            colBackgroundHover: IrisStyle.veilStrong
-            Accessible.name: Translation.tr("Change wallpaper")
-            onClicked: {
-                GlobalStates.wallpaperSelectorTargetMonitor = page.island.targetScreen?.name ?? ""
-                GlobalStates.wallpaperSelectorOpen = true
+            anchors.topMargin: -Math.round(6 * IrisStyle.density) - heroTools.inset
+            material: page.island.pagePlate
+            controlHeight: Math.round(32 * IrisStyle.density)
+
+            RowLayout {
+                spacing: heroTools.framed ? Math.round(2 * IrisStyle.density) : Math.round(6 * IrisStyle.density)
+
+                GlyphButton {
+                    glyph: page.island.studio ? "check" : "edit"
+                    glyphSize: 17 * IrisStyle.density
+                    glyphColor: page.showBanner ? IrisStyle.onMedia : IrisStyle.text
+                    implicitWidth: Math.round(32 * IrisStyle.density)
+                    buttonRadius: heroTools.framed ? heroTools.controlRadius : height / 2
+                    buttonRadiusPressed: heroTools.framed ? heroTools.controlRadius : height / 2
+                    quiet: heroTools.framed
+                    colBackground: heroTools.framed ? "transparent" : page.showBanner ? IrisStyle.veil : IrisStyle.fillQuiet
+                    colBackgroundHover: heroTools.framed ? IrisStyle.fillHover : page.showBanner ? IrisStyle.veilStrong : IrisStyle.fillHover
+                    Accessible.name: page.island.studio ? Translation.tr("Done") : Translation.tr("Arrange this page")
+                    onClicked: {
+                        page.island.pinned = true
+                        GlobalStates.irisArrange = !page.island.studio
+                    }
+                }
+                GlyphButton {
+                    id: wallpaperButton
+                    visible: page.showBanner
+                    glyph: "wallpaper"
+                    glyphSize: 17 * IrisStyle.density
+                    glyphColor: IrisStyle.onMedia
+                    implicitWidth: Math.round(32 * IrisStyle.density)
+                    buttonRadius: heroTools.framed ? heroTools.controlRadius : height / 2
+                    buttonRadiusPressed: heroTools.framed ? heroTools.controlRadius : height / 2
+                    quiet: heroTools.framed
+                    colBackground: heroTools.framed ? "transparent" : IrisStyle.veil
+                    colBackgroundHover: heroTools.framed ? IrisStyle.fillHover : IrisStyle.veilStrong
+                    Accessible.name: Translation.tr("Change wallpaper")
+                    onClicked: {
+                        GlobalStates.wallpaperSelectorTargetMonitor = page.island.targetScreen?.name ?? ""
+                        GlobalStates.wallpaperSelectorOpen = true
+                    }
+                }
             }
         }
 

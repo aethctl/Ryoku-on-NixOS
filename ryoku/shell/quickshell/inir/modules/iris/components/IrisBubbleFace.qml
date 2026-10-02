@@ -23,7 +23,9 @@ Item {
 
     readonly property var player: MprisController.activePlayer
     property bool playing: root.player?.isPlaying ?? false
-    property real mediaProgress: MprisController.lengthOf(root.player) > 0
+    // Every face builds every kind's body; the live readings below feed only the kind that shows. A hidden body
+    // that follows a reading still redraws the whole chassis on each change.
+    property real mediaProgress: root.kind === "media" && MprisController.lengthOf(root.player) > 0
         ? Math.max(0, Math.min(1, MprisController.positionOf(root.player) / MprisController.lengthOf(root.player))) : 0
     // Bare on the wallpaper (a clear menu bar), `backdrop` is Lume's reading under the face: the ink flips with
     // `lightBackdrop`, identity turns to ink as a template glyph does, and state colours keep their hue at a legible depth.
@@ -60,7 +62,7 @@ Item {
         : TimerService.stopwatchRunning ? "stopwatch" : ""
     readonly property bool timerPaused: root.timerKind === "pomodoro" ? TimerService.pomodoroPaused
         : root.timerKind === "countdown" ? TimerService.countdownPaused : TimerService.stopwatchPaused
-    readonly property real timerProgress: root.timerKind === "pomodoro"
+    readonly property real timerProgress: root.kind !== "timer" ? 0 : root.timerKind === "pomodoro"
         ? 1 - TimerService.pomodoroSecondsLeft / Math.max(1, TimerService.pomodoroLapDuration)
         : root.timerKind === "countdown"
             ? 1 - TimerService.countdownSecondsLeft / Math.max(1, TimerService.countdownDuration) : 0
@@ -237,7 +239,7 @@ Item {
             fill: 0
             iconSize: 19 * root.d
         }
-        readonly property int toolsMinutesLeft: root.timerKind === "pomodoro" ? Math.ceil(TimerService.pomodoroSecondsLeft / 60)
+        readonly property int toolsMinutesLeft: root.kind !== "tools" ? -1 : root.timerKind === "pomodoro" ? Math.ceil(TimerService.pomodoroSecondsLeft / 60)
             : root.timerKind === "countdown" ? Math.ceil(TimerService.countdownSecondsLeft / 60) : -1
         Ring {
             visible: root.kind === "tools" && parent.toolsMinutesLeft >= 0
@@ -307,13 +309,14 @@ Item {
             color: root.faceAccent
         }
         Ring {
+            id: soundRing
             visible: root.kind === "sound" || root.kind === "mic"
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
             readonly property bool muted: root.kind === "mic" ? Audio.micMuted : (Audio.sink?.audio?.muted ?? false)
             tint: muted ? (root.kind === "mic" ? root.dangerInk : root.inkMuted) : root.ink
-            progress: muted ? 0 : Math.min(1, root.kind === "mic" ? (Audio.micVolume ?? 0) : (Audio.value ?? 0))
-            Behavior on progress { NumberAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
+            progress: muted || !soundRing.visible ? 0 : Math.min(1, root.kind === "mic" ? (Audio.micVolume ?? 0) : (Audio.value ?? 0))
+            Behavior on progress { enabled: soundRing.visible; NumberAnimation { duration: IrisStyle.duration(110); easing.type: IrisStyle.feedbackEasing } }
         }
         Glyph {
             visible: root.kind === "sound" || root.kind === "mic"
@@ -376,7 +379,7 @@ Item {
             visible: root.kind === "clock"
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
-            readonly property var now: DateTime.clock.date
+            readonly property var now: root.kind === "clock" ? DateTime.clock.date : new Date(0)
             readonly property real minutes: clockFace.now.getMinutes() + clockFace.now.getSeconds() / 60
             readonly property real hours: (clockFace.now.getHours() % 12) + clockFace.minutes / 60
             Repeater {
@@ -433,12 +436,12 @@ Item {
             visible: root.kind === "battery"
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
-            readonly property real level: Math.max(0, Math.min(1, Battery.percentage))
+            readonly property real level: root.kind === "battery" ? Math.max(0, Math.min(1, Battery.percentage)) : 0
             tint: Battery.isCharging ? root.legible(IrisStyle.identity.green, 3)
                 : Battery.isCritical ? root.dangerInk
                 : Battery.isLow ? root.highlight : root.ink
             progress: batteryRing.level
-            Behavior on progress { NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
+            Behavior on progress { enabled: batteryRing.visible; NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
         }
         Column {
             visible: root.kind === "battery"
@@ -522,11 +525,11 @@ Item {
             visible: root.kind === "vitals"
             anchors.fill: parent
             anchors.margins: 3 * root.d + root.platedInset
-            readonly property real load: Math.max(0, Math.min(1, ResourceUsage.cpuUsage))
+            readonly property real load: root.kind === "vitals" ? Math.max(0, Math.min(1, ResourceUsage.cpuUsage)) : 0
             tint: vitalsRing.load > 0.85 ? root.dangerInk
                 : vitalsRing.load > 0.6 ? root.highlight : root.legible(IrisStyle.identity.teal, 3)
             progress: vitalsRing.load
-            Behavior on progress { NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
+            Behavior on progress { enabled: vitalsRing.visible; NumberAnimation { duration: IrisStyle.duration(220); easing.type: IrisStyle.feedbackEasing } }
         }
         FaceText {
             visible: root.kind === "vitals"

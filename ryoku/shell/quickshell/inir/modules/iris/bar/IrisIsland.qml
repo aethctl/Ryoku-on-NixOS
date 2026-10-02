@@ -85,6 +85,12 @@ Item {
         function onVisualExpandedChanged(): void { if (!root.visualExpanded && root.focusedOutput) GlobalStates.irisArrange = false }
     }
     readonly property bool notch: root.options?.notch ?? false
+    // The plate the open Island's rows of controls sit on (Settings › Island › Pages › Page buttons; Auto follows
+    // Appearance › Button rows): the page navigation and the desktop header's tools share it.
+    readonly property string pagePlate: {
+        const value = String(root.options?.navFrame ?? "auto")
+        return ["none", "veil", "glass", "solid"].includes(value) ? value : IrisStyle.controlPlate
+    }
     // The corner of a body that is always melted into its edge (the menu bar's heart, the utility island): a capsule on Auto.
     readonly property real meltedCorner: IrisStyle.profileRadius(IrisStyle.bodyProfile(IrisStyle.barShape, true), root.compactHeight)
     readonly property alias notchness: notchSpring.value
@@ -525,10 +531,20 @@ Item {
     readonly property real satelliteGap: Math.round(Math.max(0, Math.min(24, Number(Config.options?.iris?.bar?.satelliteGap ?? 6))) * root.d)
     readonly property real satelliteOffset: root.satelliteGap + Math.round(IrisStyle.fuseEdge / 4 * root.notchness)
     readonly property real fillet: Math.round(chassis.radius * 0.62 * root.notchness)
-    readonly property real expandedWidth: Math.min(root.vertical ? root.availableAcross : root.availableWidth - 2 * (root.bubble + root.satelliteGap),
-        root.effectivePage === "controls" ? (Math.max(340, Number(Config.options?.iris?.controlCenter?.width ?? 360))
+    readonly property real expandedRoom: root.vertical ? root.availableAcross : root.availableWidth - 2 * (root.bubble + root.satelliteGap)
+    readonly property real pageBodyWidth: root.effectivePage === "controls" ? (Math.max(340, Number(Config.options?.iris?.controlCenter?.width ?? 360))
             + (GlobalStates.irisControlEdit ? IrisControlOptions.editorExtra : 0)) * root.d + 2 * root.padding
-            : (root.effectivePage === "activity" ? root.pageWidth * 384 / 440 : root.pageWidth) * root.d)
+            : (root.effectivePage === "activity" ? root.pageWidth * 384 / 440 : root.pageWidth) * root.d
+    // The page navigation fits its page: a button added while something runs (recording, a timer) first narrows the
+    // buttons from 36 to 30 px, then the Island widens around the row, so the row never runs into the body's edge.
+    readonly property int navButtons: root.navEntries.filter(entry => entry.kind !== "|").length
+    readonly property int navDividers: root.navEntries.length - root.navButtons
+    readonly property real navFixed: root.navDividers * Math.round(9 * root.d) + Math.max(0, root.navEntries.length - 1) * 4 * root.d
+        + 2 * (["veil", "glass", "solid"].includes(root.pagePlate) ? Math.round(4 * root.d) : 0)
+    readonly property real navSlot: Math.max(Math.round(30 * root.d), Math.min(Math.round(36 * root.d),
+        Math.floor((Math.min(root.expandedRoom, root.pageBodyWidth) - 2 * root.padding - root.navFixed) / Math.max(1, root.navButtons))))
+    readonly property real navWidth: root.navFixed + root.navButtons * root.navSlot
+    readonly property real expandedWidth: Math.min(root.expandedRoom, Math.max(root.pageBodyWidth, root.navWidth + 2 * root.padding))
     readonly property real pageWidth: Math.max(360, Math.min(600, Number(root.options?.pageWidth ?? 440)))
     readonly property real padding: Math.round(20 * root.d)
     readonly property bool editingDesktop: GlobalStates.widgetEditMode
@@ -2445,69 +2461,75 @@ Item {
                             sourceComponent: IslandDesktopPage {
                                 width: desktopLoader.width
                                 island: root
-                                navOffset: navRow.height + expandedContent.rowSpacing
+                                navOffset: navFrame.height + expandedContent.rowSpacing
                             }
                         }
                     }
                 }
 
-                RowLayout {
-                    id: navRow
+                // Settings › Island › Pages › Page buttons: Auto follows Appearance › Button rows (IrisControlPlate).
+                IrisControlPlate {
+                    id: navFrame
                     Layout.row: root.bottomEdge ? 1 : 0
                     Layout.alignment: Qt.AlignHCenter
-                    spacing: 4 * root.d
+                    material: root.pagePlate
 
-                    WheelHandler {
-                        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                        onWheel: event => root.wheelPages(event, true)
-                    }
+                    RowLayout {
+                        id: navRow
+                        spacing: 4 * root.d
 
-                    Repeater {
-                        model: root.navEntries
-                        delegate: Item {
-                            id: navSlot
-                            required property var modelData
-                            implicitWidth: navSlot.modelData.kind === "|" ? Math.round(9 * root.d) : navButton.implicitWidth
-                            implicitHeight: navButton.implicitHeight
-                            Rectangle {
-                                visible: navSlot.modelData.kind === "|"
-                                anchors.centerIn: parent
-                                width: 1
-                                height: Math.round(14 * root.d)
-                                color: IrisStyle.fill
-                            }
-                            IrisButton {
-                                id: navButton
-                                visible: navSlot.modelData.kind !== "|"
-                                readonly property string target: navSlot.modelData.page ?? ""
-                                selected: navButton.target.length > 0 && root.effectivePage === navButton.target
-                                quiet: !navButton.selected
-                                implicitWidth: Math.round(36 * root.d)
-                                implicitHeight: Math.round(30 * root.d)
-                                buttonRadius: height / 2
-                                buttonRadiusPressed: height / 2
-                                colBackgroundHover: IrisStyle.fillHover
-                                Accessible.name: Translation.tr(navSlot.modelData.label ?? "")
-                                onHoveredChanged: {
-                                    if (navButton.target.length > 0) {
-                                        if (navButton.hovered) {
-                                            pageIntentExpiry.stop()
-                                            root.pageIntent = navButton.target
-                                        } else if (root.pageIntent === navButton.target) {
-                                            pageIntentExpiry.restart()
-                                        }
-                                    }
-                                    if (navSlot.modelData.kind === "settings" && root.focusedOutput)
-                                        root.settingsIntent = navButton.hovered
-                                }
-                                onClicked: root.activateNav(navSlot.modelData.kind)
-                                Glyph {
+                        WheelHandler {
+                            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                            onWheel: event => root.wheelPages(event, true)
+                        }
+
+                        Repeater {
+                            model: root.navEntries
+                            delegate: Item {
+                                id: navSlot
+                                required property var modelData
+                                implicitWidth: navSlot.modelData.kind === "|" ? Math.round(9 * root.d) : navButton.implicitWidth
+                                implicitHeight: navButton.implicitHeight
+                                Rectangle {
+                                    visible: navSlot.modelData.kind === "|"
                                     anchors.centerIn: parent
-                                    text: navSlot.modelData.glyph ?? ""
-                                    fill: navButton.selected ? 1 : 0
-                                    iconSize: 18 * root.d
-                                    color: navButton.selected ? IrisStyle.accent
-                                        : navButton.hovered ? IrisStyle.text : IrisStyle.textSecondary
+                                    width: 1
+                                    height: Math.round(14 * root.d)
+                                    color: IrisStyle.fill
+                                }
+                                IrisButton {
+                                    id: navButton
+                                    visible: navSlot.modelData.kind !== "|"
+                                    readonly property string target: navSlot.modelData.page ?? ""
+                                    selected: navButton.target.length > 0 && root.effectivePage === navButton.target
+                                    quiet: !navButton.selected
+                                    implicitWidth: root.navSlot
+                                    implicitHeight: Math.round(30 * root.d)
+                                    buttonRadius: navFrame.controlRadius
+                                    buttonRadiusPressed: navFrame.controlRadius
+                                    colBackgroundHover: IrisStyle.fillHover
+                                    Accessible.name: Translation.tr(navSlot.modelData.label ?? "")
+                                    onHoveredChanged: {
+                                        if (navButton.target.length > 0) {
+                                            if (navButton.hovered) {
+                                                pageIntentExpiry.stop()
+                                                root.pageIntent = navButton.target
+                                            } else if (root.pageIntent === navButton.target) {
+                                                pageIntentExpiry.restart()
+                                            }
+                                        }
+                                        if (navSlot.modelData.kind === "settings" && root.focusedOutput)
+                                            root.settingsIntent = navButton.hovered
+                                    }
+                                    onClicked: root.activateNav(navSlot.modelData.kind)
+                                    Glyph {
+                                        anchors.centerIn: parent
+                                        text: navSlot.modelData.glyph ?? ""
+                                        fill: navButton.selected ? 1 : 0
+                                        iconSize: 18 * root.d
+                                        color: navButton.selected ? IrisStyle.accent
+                                            : navButton.hovered ? IrisStyle.text : IrisStyle.textSecondary
+                                    }
                                 }
                             }
                         }

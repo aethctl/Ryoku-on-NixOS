@@ -147,9 +147,19 @@ GridLayout {
             Layout.fillWidth: true
             Layout.topMargin: -6 * IrisStyle.density
             Layout.bottomMargin: -4 * IrisStyle.density
-            spacing: 18 * IrisStyle.density
+            spacing: 0
             Item { Layout.fillWidth: true }
+            // The transport shares the Island's plate (IrisIsland.pagePlate), concentric with play.
+            IrisControlPlate {
+                id: transport
+                material: page.island.pagePlate
+                controlHeight: 52 * IrisStyle.density
+                RowLayout {
+                spacing: transport.framed ? 6 * IrisStyle.density : 18 * IrisStyle.density
             GlyphButton {
+                Layout.alignment: Qt.AlignVCenter
+                buttonRadius: transport.framed ? IrisStyle.pieceRadius(height) : height / 2
+                buttonRadiusPressed: buttonRadius
                 glyph: "fast_rewind"
                 glyphSize: 26 * IrisStyle.density
                 implicitWidth: 44 * IrisStyle.density
@@ -161,17 +171,24 @@ GridLayout {
                 glyph: media.effectiveIsPlaying ? "pause" : "play_arrow"
                 glyphSize: 36 * IrisStyle.density
                 implicitWidth: 52 * IrisStyle.density
+                buttonRadius: transport.framed ? transport.controlRadius : height / 2
+                buttonRadiusPressed: buttonRadius
                 enabled: page.island.hasMedia
                 Accessible.name: media.effectiveIsPlaying ? Translation.tr("Pause") : Translation.tr("Play")
                 onClicked: media.togglePlaying()
             }
             GlyphButton {
+                Layout.alignment: Qt.AlignVCenter
+                buttonRadius: transport.framed ? IrisStyle.pieceRadius(height) : height / 2
+                buttonRadiusPressed: buttonRadius
                 glyph: "fast_forward"
                 glyphSize: 26 * IrisStyle.density
                 implicitWidth: 44 * IrisStyle.density
                 enabled: page.anime || media.effectiveCanGoNext
                 Accessible.name: page.anime ? Translation.tr("Next episode") : Translation.tr("Next track")
                 onClicked: page.anime ? AnimeWatch.skip("next") : media.next()
+            }
+                }
             }
             Item { Layout.fillWidth: true }
         }

@@ -9,6 +9,7 @@ import inir.services
 import inir.modules.common
 import inir.modules.common.functions
 import inir.modules.common.widgets
+import inir.modules.iris.components
 import inir.modules.iris.style
 
 Item {
@@ -47,11 +48,18 @@ Item {
     readonly property bool lightBackdrop: IrisStyle.light && !root.clear ? true : root.opaque ? root.widget.forceDarkInk
         : root.clear ? root.widget.inkOnLight : root.widget.glassInkOnLight
     readonly property bool ownInk: root.lightBackdrop || (IrisStyle.light && root.clear)
-    // Transparent is bare: it carries no plate unless Lume on every widget asks for one.
+    // Transparent is bare: it carries no plate unless Lume on every widget asks for one. Glass is solved as
+    // thick as its text needs, then Surface opacity thins it (100 % keeps the solve); Lume on every widget
+    // keeps the full solve, since reading first is what that switch asks for.
+    // Glass thinned below its solve reads like Transparent: its text carries the same shadow, as strong as
+    // the veil it gave up.
+    readonly property real textShadow: root.clear ? 1
+        : root.glass && !root.widget.legibleAlways ? Math.min(1, (1 - root.strength) * 1.4) : 0
     readonly property real veil: root.opaque ? root.strength
         : root.clear && !root.widget.legibleAlways ? 0
-        : root.lightBackdrop ? IrisStyle.legibleFrost(root.readMaterial, root.frostLevel, root.readSpread, root.strength)
-        : IrisStyle.legibleVeil(root.readMaterial, root.readLevel, root.readSpread, root.strength)
+        : (root.lightBackdrop ? IrisStyle.legibleFrost(root.readMaterial, root.frostLevel, root.readSpread, 1)
+            : IrisStyle.legibleVeil(root.readMaterial, root.readLevel, root.readSpread, 1))
+            * (root.widget.legibleAlways ? 1 : root.strength)
     // Lume on every widget: the veil (light ink) is solved as if the region were bright and busy, the frost
     // (dark ink) as if it were dim and busy.
     readonly property real readLevel: root.widget.legibleAlways ? Math.max(0.72, root.widget.regionBrightness) : root.widget.regionBrightness
@@ -79,7 +87,16 @@ Item {
     readonly property int figureWeight: root.widget.widgetTitleWeight
     readonly property string fontMain: IrisStyle.fontMain
     readonly property string fontNumbers: IrisStyle.fontNumbers
-    readonly property bool rimShown: !root.clear || root.widget.irisRim || GlobalStates.widgetEditMode
+    // Outline: Auto follows the shell's outline and leaves Transparent bare; while arranging it always shows.
+    readonly property bool rimShown: GlobalStates.widgetEditMode || root.widget.irisOutline === "always"
+        || (root.widget.irisOutline === "auto" && (!root.clear || root.widget.irisRim))
+    // Glass wears the shell's glass edge (Appearance › Glass › Edge light, Edge line, Edge width, Edge colour):
+    // lit where it faces up, a line elsewhere. With both at 0 Auto draws no line, like the shell's glass.
+    // Appearance › Edges › Light gives every plated widget that edge, whatever its material.
+    readonly property bool glassEdge: (root.glass || IrisStyle.edgeLit) && !root.lightBackdrop
+        && (IrisStyle.glassEdgeLight > 0 || IrisStyle.glassEdgeLine > 0)
+    readonly property bool flatRim: root.rimShown && !root.glassEdge
+        && !(root.glass && !root.lightBackdrop && root.widget.irisOutline === "auto" && !GlobalStates.widgetEditMode)
     readonly property color plateColor: ColorUtils.applyAlpha(root.opaque ? root.widget.irisPlate
         : root.lightBackdrop ? IrisStyle.frost : IrisStyle.surface, root.veil)
     readonly property color knockout: root.opaque ? root.plateColor : root.lightBackdrop ? IrisStyle.frost : IrisStyle.surface
@@ -145,7 +162,7 @@ Item {
                 layer.enabled: true
                 layer.effect: MultiEffect {
                     blurEnabled: true
-                    blur: IrisStyle.glassBlur
+                    blur: IrisStyle.glassBlurAmount
                     blurMax: IrisStyle.glassBlurMax
                     saturation: IrisStyle.widgetGlassSaturation
                 }
@@ -158,10 +175,16 @@ Item {
         anchors.fill: parent
         radius: root.radius
         color: root.plateColor
-        border.width: root.rimShown ? 1 : 0
-        border.color: root.lightBackdrop ? root.hairline : root.clear ? IrisStyle.clearRim : IrisStyle.rim
+        border.width: root.flatRim ? 1 : 0
+        border.color: root.lightBackdrop ? root.hairline : root.clear || IrisStyle.rim.a === 0 ? IrisStyle.clearRim : IrisStyle.rim
         Behavior on color { ColorAnimation { duration: IrisStyle.revealDuration; easing.type: IrisStyle.feedbackEasing } }
         Behavior on border.width { NumberAnimation { duration: IrisStyle.revealDuration; easing.type: IrisStyle.feedbackEasing } }
+    }
+
+    IrisGlassEdge {
+        anchors.fill: parent
+        visible: root.glassEdge && root.rimShown && root.plated
+        radius: root.radius
     }
 
     Rectangle {
@@ -193,7 +216,7 @@ Item {
             ShaderEffectSource {
                 id: bodyCopy
                 anchors.fill: body
-                sourceItem: root.clear ? body : null
+                sourceItem: root.textShadow > 0.05 ? body : null
                 hideSource: false
                 visible: false
             }
@@ -203,7 +226,7 @@ Item {
                 y: body.y + 1
                 width: body.width
                 height: body.height
-                visible: root.clear
+                visible: root.textShadow > 0.05
                 source: bodyCopy
                 brightness: root.lightBackdrop ? 1 : -1
                 colorization: IrisStyle.glow > 0 && !root.lightBackdrop ? 1 : 0
@@ -211,7 +234,7 @@ Item {
                 blurEnabled: true
                 blur: 0.5
                 autoPaddingEnabled: true
-                opacity: root.lightBackdrop ? IrisStyle.frostShadow : IrisStyle.plateShadow.a
+                opacity: (root.lightBackdrop ? IrisStyle.frostShadow : IrisStyle.plateShadow.a) * root.textShadow
             }
 
             Item {

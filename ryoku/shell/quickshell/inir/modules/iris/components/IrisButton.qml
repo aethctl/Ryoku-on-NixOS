@@ -35,7 +35,9 @@ RippleButton {
     colBackground: root.danger && root.emphasized ? IrisStyle.danger
         : root.emphasized ? IrisStyle.accent
         : root.quiet ? ColorUtils.applyAlpha(IrisStyle.surfaceHigh, 0)
-        // The raised step of whatever the family is made of: solid on solid, a lit layer on glass.
+        // Appearance › Button rows: the controls' material; bare, the raised step of whatever the family is made of
+        // (solid on solid, a lit layer on glass).
+        : IrisStyle.controlPlated ? IrisStyle.plateFillFor(IrisStyle.controlPlate)
         : IrisStyle.surfaceHigh
     colBackgroundHover: root.danger && root.emphasized
         ? ColorUtils.mix(IrisStyle.danger, IrisStyle.inkOnDanger, 0.90)

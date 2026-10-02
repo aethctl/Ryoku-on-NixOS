@@ -45,3 +45,7 @@ IrisColumnStrip 1.0 IrisColumnStrip.qml
 IrisPulse 1.0 IrisPulse.qml
 IrisVisualizer 1.0 IrisVisualizer.qml
 IrisControlRow 1.0 IrisControlRow.qml
+IrisGlassEdge 1.0 IrisGlassEdge.qml
+IrisControlPlate 1.0 IrisControlPlate.qml
+IrisHeaderScrim 1.0 IrisHeaderScrim.qml
+IrisHeaderFade 1.0 IrisHeaderFade.qml

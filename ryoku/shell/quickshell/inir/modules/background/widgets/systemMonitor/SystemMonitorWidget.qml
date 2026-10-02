@@ -157,15 +157,33 @@ AbstractBackgroundWidget {
         return items;
     }
 
+    // What the widget shows: the live readings while the desktop is seen, the last ones behind windows.
+    // Another consumer (ii's bar) can keep ResourceUsage polling; a covered widget must not redraw for it.
+    function _readingNow(): var {
+        return {
+            cpu: ResourceUsage.cpuUsage, mem: ResourceUsage.memoryUsedPercentage, gpu: ResourceUsage.gpuUsage,
+            cpuTemp: ResourceUsage.cpuTemp, gpuTemp: ResourceUsage.gpuTemp, gpuTempPercentage: ResourceUsage.gpuTempPercentage,
+            disk: ResourceUsage.diskUsedPercentage, cpuHistory: ResourceUsage.cpuUsageHistory,
+            memHistory: ResourceUsage.memoryUsageHistory, gpuHistory: ResourceUsage.gpuUsageHistory,
+            gpuTempHistory: ResourceUsage.gpuTempHistory
+        };
+    }
+    property var reading: ({})
+    Binding on reading {
+        when: root.motionActive
+        value: root._readingNow()
+        restoreMode: Binding.RestoreNone
+    }
+
     // Live value accessor — delegates use this to read current value
     function _getValue(key: string): real {
         switch (key) {
-            case "cpu": return ResourceUsage.cpuUsage;
-            case "mem": return ResourceUsage.memoryUsedPercentage;
-            case "gpu": return ResourceUsage.gpuUsage;
-            case "temp": return Math.min(ResourceUsage.cpuTemp / 100, 1.0);
-            case "gpuTemp": return ResourceUsage.gpuTempPercentage;
-            case "disk": return ResourceUsage.diskUsedPercentage;
+            case "cpu": return root.reading.cpu ?? 0;
+            case "mem": return root.reading.mem ?? 0;
+            case "gpu": return root.reading.gpu ?? 0;
+            case "temp": return Math.min((root.reading.cpuTemp ?? 0) / 100, 1.0);
+            case "gpuTemp": return root.reading.gpuTempPercentage ?? 0;
+            case "disk": return root.reading.disk ?? 0;
             default: return 0;
         }
     }
@@ -183,8 +201,8 @@ AbstractBackgroundWidget {
     }
 
     function _getDisplayText(key: string): string {
-        if (key === "temp") return ResourceUsage.cpuTemp + "°C";
-        if (key === "gpuTemp") return ResourceUsage.gpuTemp + "°C";
+        if (key === "temp") return (root.reading.cpuTemp ?? 0) + "°C";
+        if (key === "gpuTemp") return (root.reading.gpuTemp ?? 0) + "°C";
         return Math.round(root._getValue(key) * 100) + "%";
     }
 
@@ -320,9 +338,10 @@ AbstractBackgroundWidget {
     // Values tick every second: easing them behind windows repaints the desktop for nothing.
     readonly property bool animatesValues: Appearance.animationsEnabled && root.motionActive
 
+    // Readings behind windows are never seen and each one redraws the desktop: polling follows motionActive.
     property bool _holdingResourceUsage: false
     function _syncResourceUsage(): void {
-        const shouldHold = root._active && root.visible && root.powerActive;
+        const shouldHold = root._active && root.visible && root.motionActive;
         if (shouldHold && !root._holdingResourceUsage) {
             root._holdingResourceUsage = true;
             ResourceUsage.keepAlive();
@@ -333,8 +352,8 @@ AbstractBackgroundWidget {
     }
     on_ActiveChanged: root._syncResourceUsage()
     onVisibleChanged: root._syncResourceUsage()
-    onPowerActiveChanged: root._syncResourceUsage()
-    Component.onCompleted: root._syncResourceUsage()
+    onMotionActiveChanged: root._syncResourceUsage()
+    Component.onCompleted: { root.reading = root._readingNow(); root._syncResourceUsage(); }
     Component.onDestruction: if (root._holdingResourceUsage) {
         root._holdingResourceUsage = false;
         ResourceUsage.releaseKeepAlive();
@@ -621,7 +640,7 @@ AbstractBackgroundWidget {
         Graph {
             anchors.fill: parent
             anchors.topMargin: parent._legendH
-            values: root.showCpu ? ResourceUsage.cpuUsageHistory : []
+            values: root.showCpu ? (root.reading.cpuHistory ?? []) : []
             color: root._graphColor("cpu")
             fillOpacity: root.graphFillOpacity + 0.05
             alignment: Graph.Alignment.Right
@@ -631,7 +650,7 @@ AbstractBackgroundWidget {
         Graph {
             anchors.fill: parent
             anchors.topMargin: parent._legendH
-            values: root.showMemory ? ResourceUsage.memoryUsageHistory : []
+            values: root.showMemory ? (root.reading.memHistory ?? []) : []
             color: root._graphColor("mem")
             fillOpacity: root.graphFillOpacity
             alignment: Graph.Alignment.Right
@@ -641,7 +660,7 @@ AbstractBackgroundWidget {
         Graph {
             anchors.fill: parent
             anchors.topMargin: parent._legendH
-            values: root.showGpuTemp ? ResourceUsage.gpuTempHistory : []
+            values: root.showGpuTemp ? (root.reading.gpuTempHistory ?? []) : []
             color: root._graphColor("gpuTemp")
             fillOpacity: root.graphFillOpacity - 0.05
             alignment: Graph.Alignment.Right
@@ -651,7 +670,7 @@ AbstractBackgroundWidget {
         Graph {
             anchors.fill: parent
             anchors.topMargin: parent._legendH
-            values: root.showGpu ? ResourceUsage.gpuUsageHistory : []
+            values: root.showGpu ? (root.reading.gpuHistory ?? []) : []
             color: root._graphColor("gpu")
             fillOpacity: root.graphFillOpacity - 0.05
             alignment: Graph.Alignment.Right
@@ -717,8 +736,8 @@ AbstractBackgroundWidget {
                     // Percentage/value inside the ring
                     StyledText {
                         anchors.centerIn: parent
-                        text: ringCol.modelData.key === "temp" ? ResourceUsage.cpuTemp + "°"
-                            : ringCol.modelData.key === "gpuTemp" ? ResourceUsage.gpuTemp + "°"
+                        text: ringCol.modelData.key === "temp" ? (root.reading.cpuTemp ?? 0) + "°"
+                            : ringCol.modelData.key === "gpuTemp" ? (root.reading.gpuTemp ?? 0) + "°"
                             : Math.round(ringCol._animatedValue * 100)
                         color: ringCol._liveColor
                         font {

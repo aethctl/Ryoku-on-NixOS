@@ -123,7 +123,7 @@ AbstractBackgroundWidget {
     Timer {
         interval: root.rotateSeconds * 1000
         repeat: true
-        running: root.visible && root.powerActive && !root.rotationPaused
+        running: root.visible && root.motionActive && !root.rotationPaused
             && root.articleCount > 1
         onTriggered: root._moveHeadline(1)
     }

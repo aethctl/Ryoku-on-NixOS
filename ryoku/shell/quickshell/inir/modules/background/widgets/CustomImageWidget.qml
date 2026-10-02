@@ -369,7 +369,7 @@ AbstractBackgroundWidget {
         interval: root.intervalSeconds * 1000
         repeat: true
         running: root.sourceMode === "folder" && root.mediaPaths.length > 1
-            && !root.rotationPaused && root.powerActive && root.visible
+            && !root.rotationPaused && root.motionActive && root.visible
         onTriggered: root.advance(1, root.rotationOrder === "random")
     }
 

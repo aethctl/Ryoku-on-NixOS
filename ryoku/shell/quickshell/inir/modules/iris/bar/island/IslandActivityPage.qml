@@ -41,11 +41,15 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
             IrisText {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 text: Translation.tr("Screen recording")
                 font.pixelSize: IrisStyle.typeBody
                 font.weight: IrisStyle.weight(Font.DemiBold)
             }
             IrisText {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 text: RecorderStatus.effectiveAudioMode === "none" ? Translation.tr("No audio")
                     : RecorderStatus.effectiveAudioMode === "microphone" ? Translation.tr("Microphone")
                     : RecorderStatus.effectiveAudioMode === "both" ? Translation.tr("System and microphone")
@@ -104,11 +108,15 @@ ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
             IrisText {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 text: page.island.timerLabel
                 font.pixelSize: IrisStyle.typeBody
                 font.weight: IrisStyle.weight(Font.DemiBold)
             }
             IrisText {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 text: page.island.timerPaused ? Translation.tr("Paused")
                     : page.island.timerKind === "pomodoro"
                         ? Translation.tr("Cycle %1 of %2").arg(TimerService.pomodoroCycle + 1).arg(TimerService.cyclesBeforeLongBreak)

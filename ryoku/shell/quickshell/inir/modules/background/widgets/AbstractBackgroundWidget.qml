@@ -406,8 +406,9 @@ AbstractWidget {
     // every frame it draws repaints the whole desktop window and makes Niri recompose the output.
     readonly property bool motionActive: root.powerActive && Wallpapers.videoMotionAllowedOn(root.outputName)
 
-    // Effective animation state: animations enabled AND power active
-    readonly property bool animationsActive: (root.widgetIris ? IrisStyle.motionEnabled : Appearance.animationsEnabled) && root.powerActive
+    // Eased transitions follow motionActive: behind windows a value snaps instead. Every animation that starts
+    // makes Qt's threaded loop request a frame from every shell window (QSGThreadedRenderLoop::animationStarted).
+    readonly property bool animationsActive: (root.widgetIris ? IrisStyle.motionEnabled : Appearance.animationsEnabled) && root.motionActive
 
     // Visual feedback when paused - desaturation + slight dim
     // Config option to disable visual effect if user only wants GPU savings
@@ -1730,7 +1731,7 @@ AbstractWidget {
                 spacing: Math.round(14 * semanticQuickRoot.d)
 
                 WidgetQuickSection {
-                    visible: root.widgetIrisFamily && (root.irisFace !== null || DesktopWidgetDesign.supports(root.configEntryName))
+                    visible: root.designChoices.length > 1
                     title: Translation.tr("Design")
                     detail: root.widgetDesignShared ? Translation.tr("Same as every widget") : Translation.tr("This widget only")
                     WidgetQuickChoices {
@@ -1744,19 +1745,6 @@ AbstractWidget {
                         iconName: "select_all"
                         label: Translation.tr("Use on every widget")
                         onClicked: root.useDesignEverywhere()
-                    }
-                }
-
-                WidgetQuickSection {
-                    visible: !root.widgetIrisFamily && DesktopWidgetDesign.supports(root.configEntryName)
-                        && DesktopWidgetDesign.shared !== "individual"
-                    title: Translation.tr("Design")
-                    WidgetQuickToggle {
-                        Layout.fillWidth: true
-                        iconName: "widgets"
-                        label: Translation.tr("Follow global design")
-                        checked: root.widgetSharedDesign === DesktopWidgetDesign.shared
-                        onToggled: root._setOutputValue("design", checked ? "individual" : "auto")
                     }
                 }
 
@@ -1900,15 +1888,15 @@ AbstractWidget {
     }
 
     property bool needsColText: false
-    // A bare widget reads its region even with adaptation off: the ink stays put, but the Lume shadow
-    // behind it is sized from what the ink sits on.
-    readonly property bool _regionSampling: (root.needsColText && (root.positionColorAdaptationEnabled || !root.widgetHasSurface))
-        || root.irisReadsRegion
-    readonly property bool positionColorAdaptationEnabled: Boolean(
-        Config.getNestedValue("background.widgets.adaptColorsToWallpaperPosition", true))
-    // Opt-in for widgets whose bare content changes ink with the wallpaper under
-    // them. Sampling is throttled while dragging; the shared process remains
-    // serialized so pointer movement can never spawn an unbounded process fanout.
+    // A bare iRiS widget reads its region even with adaptation off: the ink stays put, but the Lume
+    // shadow behind it is sized from what the ink sits on. Material has no such shadow.
+    readonly property bool _regionSampling: (root.needsColText && (root.positionColorAdaptationEnabled
+        || (root.widgetIrisFamily && !root.widgetHasSurface))) || root.irisReadsRegion
+    // Each family keeps its own switch: iRiS's *On bright wallpapers*, Material's wallpaper-position adaptation.
+    readonly property bool positionColorAdaptationEnabled: Boolean(root.widgetIrisFamily
+        ? Config.getNestedValue("iris.widgets.brightWallpapers", false)
+        : Config.getNestedValue("background.widgets.adaptColorsToWallpaperPosition", true))
+
     property bool liveColorTracking: false
     property color dominantColor: Appearance.colors.colPrimary
     // Wallpaper region brightness (0-1, gamma-encoded luma). -1 = not yet analyzed.
@@ -2073,6 +2061,10 @@ AbstractWidget {
     // plate can carry a trace of the same hue. Greyscale seeds keep iRiS blue.
     readonly property var irisWidgetOptions: Config.options?.iris?.widgets ?? ({})
     readonly property bool irisRim: Boolean(root.irisWidgetOptions.rim ?? false)
+    readonly property string irisOutline: {
+        const value = String(root.irisWidgetOptions.outline ?? "auto")
+        return ["auto", "always", "none"].includes(value) ? value : "auto"
+    }
     readonly property real irisSurfaceOpacity: {
         const own = Number(root._readConfigKey("iris.opacity") ?? -1)
         const value = own >= 20 ? own : Number(root.irisWidgetOptions.opacity ?? 100)
@@ -2124,8 +2116,10 @@ AbstractWidget {
     property bool irisOnly: false
     readonly property var designChoices: {
         const list = []
-        if (root.irisFace !== null) list.push({ value: "iris", icon: "auto_awesome", label: Translation.tr("Shima") })
-        if (!root.irisOnly) list.push({ value: "material", icon: "widgets", label: Translation.tr("Material") })
+        const family = Config.options?.panelFamily ?? "ii"
+        if (family !== "iris" && family !== "ii") return list
+        if (family === "iris" && root.irisFace !== null) list.push({ value: "iris", icon: "auto_awesome", label: Translation.tr("Shima") })
+        if (family === "ii" || !root.irisOnly) list.push({ value: "material", icon: "widgets", label: Translation.tr("Material") })
         if (DesktopWidgetDesign.supports(root.configEntryName)) {
             list.push({ value: "instrument", icon: "avg_pace", label: Translation.tr("iNstrument") })
             list.push({ value: "readout", icon: "view_agenda", label: Translation.tr("Readout") })
@@ -2143,6 +2137,11 @@ AbstractWidget {
     function pickDesign(value: string): void {
         if (root.stacked)
             return
+        if (!root.widgetIrisFamily) {
+            root._setOutputValue("design", value === DesktopWidgetDesign.current ? "auto"
+                : value === "material" ? "individual" : value)
+            return
+        }
         root._setOutputValue("iris.design", value === DesktopWidgetDesign.current ? "auto" : value)
     }
     property var irisSizes: ["small"]
@@ -2435,7 +2434,8 @@ AbstractWidget {
         return Math.max(0, Math.min(0.55, (0.62 - darkest) / 0.35 * 0.55))
     }
     readonly property color _legibleShadowColor: root._inkIsLight ? Qt.rgba(0, 0, 0, 1) : Qt.rgba(1, 1, 1, 1)
-    readonly property bool _legibleShadow: root.needsColText && !root.widgetHasSurface && !root.irisFaced
+    // iRiS only: Material widgets keep their own text halo and never carry a shadow under the whole body.
+    readonly property bool _legibleShadow: root.widgetIrisFamily && root.needsColText && !root.widgetHasSurface && !root.irisFaced
         && !GlobalStates.widgetEditMode && root._legibleShadowOpacity > 0.06
     readonly property color colHalo: root.inkOnLight && !root.forceDarkInk
         ? Qt.rgba(1, 1, 1, 0.12 + 0.3 * root._haloBusy)

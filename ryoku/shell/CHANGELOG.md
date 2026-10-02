@@ -108,6 +108,19 @@
   catalogue whose built-in bar styles carry old names, so the rename shows
   after an update without pressing refresh
   (`quickshell/inir/`, `inir/NOTICE`, `apps/ryostore/backend/`).
+- **Shima follows iNiR's October work.** The frame gains Appearance › Edges:
+  one edge for every surface, chosen once as a line or a lit glass edge, and
+  Appearance › Button rows, which sets the Island's page buttons, the player's
+  transport and the Control Center's header tools on one plate with the buttons
+  inside it concentric. The desktop page's wallpaper header can be tuned (fade,
+  veil, blur), the Island's page buttons fit while you record, and a full side
+  moves the centre instead of squeezing the bar. Widgets keep their family's
+  look, the shuffle reads files only so a folder is never a wallpaper, every
+  installed font can dress the shell (with Montserrat bundled), hidden faces
+  stop following live readings, and the Cookie clock's second hand keeps its
+  own seconds so the shell no longer ticks per second for nobody. Orbit,
+  upstream's on-screen keyboard and lock-screen work, and its niri-only pages
+  stay out (`quickshell/inir/`).
 - **Per-widget Depth: in front or behind.** Right-clicking a desktop widget or
   a store tile, and the visualiser's own editor, now offer a Depth control
   that lifts just that widget above the subject cut-out or drops it behind

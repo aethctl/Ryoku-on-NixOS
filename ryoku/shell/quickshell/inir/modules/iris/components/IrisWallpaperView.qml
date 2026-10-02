@@ -13,7 +13,7 @@ Item {
 
     property var screen: null
     readonly property string monitorName: WallpaperListener.getMonitorName(root.screen)
-    readonly property string configuredPath: Wallpapers.currentMainWallpaperPath(root.monitorName)
+    readonly property string configuredPath: Wallpapers.desktopWallpaperPath(root.monitorName)
     property string path: Wallpapers.internalPreviewFor(root.monitorName, root.configuredPath)
     property bool active: true
     property bool live: true
@@ -36,8 +36,11 @@ Item {
     readonly property bool ready: root.isGif ? gif.status === AnimatedImage.Ready
         : still.status === Image.Ready || root.videoFrame
 
+    // "Only the backdrop": the desktop shows the backdrop image under its dim, so everything that shows
+    // or samples the desktop wears the same dim (glass met the backdrop brighter than it).
+    readonly property real dim: Wallpapers.desktopDim
     // A moving wallpaper is a subtree: sampling it costs a pass per frame, so only samplers ask.
-    readonly property Item textureItem: root.animated && root.provideTexture ? motionTexture.item : still
+    readonly property Item textureItem: (root.animated || root.dim > 0) && root.provideTexture ? motionTexture.item : still
     readonly property Item stillItem: still
 
     Item {
@@ -81,12 +84,19 @@ Item {
                 decodeHeight: root.decodeSize.height > 0 ? root.decodeSize.height : -1
             }
         }
+
+        Rectangle {
+            anchors.fill: parent
+            visible: root.dim > 0
+            color: "black" // iris-literal: Backdrop.qml's dim is black at the configured opacity
+            opacity: root.dim
+        }
     }
 
     Loader {
         id: motionTexture
         anchors.fill: parent
-        active: root.animated && root.provideTexture
+        active: (root.animated || root.dim > 0) && root.provideTexture
         visible: false
         sourceComponent: ShaderEffectSource {
             sourceItem: content

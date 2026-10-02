@@ -16,7 +16,9 @@ Item {
     property color borderColor: "transparent"
     property bool pulsing: true
     property int halfPeriod: 700
-    readonly property bool breathing: root.pulsing && IrisStyle.motionEnabled
+    // `visible` is effective visibility: a hidden mark (nothing recording, a Dock dot of a closed app) must not keep
+    // its FrameAnimation running, or the host window redraws at the display rate for nothing.
+    readonly property bool breathing: root.pulsing && root.visible && IrisStyle.motionEnabled
 
     LiveLayer {
         anchors.fill: parent

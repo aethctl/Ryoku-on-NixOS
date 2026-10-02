@@ -53,6 +53,8 @@ DEFAULT_NIRI_FILES = [
 
 BACKDROP_SHADOW_OVERRIDE_START = "// >>> inir-backdrop-only >>>"
 BACKDROP_SHADOW_OVERRIDE_END = "// <<< inir-backdrop-only <<<"
+ALT_TAB_OVERRIDE_START = "// >>> inir-alt-tab >>>"
+ALT_TAB_OVERRIDE_END = "// <<< inir-alt-tab <<<"
 
 
 def get_niri_config_dir():
@@ -162,7 +164,7 @@ def cmd_outputs():
 
     for name, out in data.items():
         modes = out.get("modes", [])
-        current_idx = out.get("current_mode", 0)
+        current_idx = out.get("current_mode")
         logical = out.get("logical") or {}
 
         res_map = {}
@@ -189,7 +191,7 @@ def cmd_outputs():
             elif m.get("is_preferred", False):
                 res_map[key]["preferred"] = True
 
-        current_mode = modes[current_idx] if current_idx < len(modes) else None
+        current_mode = modes[current_idx] if current_idx is not None and current_idx < len(modes) else None
         current_res = ""
         current_rate = 0.0
         current_rate_string = ""
@@ -3339,12 +3341,99 @@ def cmd_remove_bind(args):
 # ─── Main ─────────────────────────────────────────────────────────────
 
 
+# ─── Alt+Tab: Niri's recent-windows switcher or iNiR's ────────────────
+#
+# Niri's switcher is bound in `recent-windows { binds { } }`, which has lower
+# precedence than normal binds, and a later include overrides earlier binds.
+# So iNiR's switcher is a managed normal-binds block at the end of the config
+# (90-user-extra.kdl); removing the block gives Alt+Tab back to Niri. The
+# user's own binds files are never edited.
+
+def _alt_tab_block_pattern():
+    return re.compile(
+        rf"\n?{re.escape(ALT_TAB_OVERRIDE_START)}.*?{re.escape(ALT_TAB_OVERRIDE_END)}\n?",
+        re.DOTALL,
+    )
+
+
+def _alt_tab_user_binding():
+    """An Alt+Tab in normal binds outside the managed block: (file, line) or None."""
+    files = [get_niri_config_path()]
+    config_d = get_niri_config_dir() / "config.d"
+    if config_d.is_dir():
+        files += sorted(config_d.glob("*.kdl"))
+    for path in files:
+        try:
+            content = path.read_text()
+        except OSError:
+            continue
+        content = _alt_tab_block_pattern().sub("\n", content)
+        bounds = _find_block_bounds(content, "binds", top_level=True)
+        if not bounds:
+            continue
+        _, inner_start, inner_end, _ = bounds
+        lines = content[inner_start:inner_end].split("\n")
+        span = _kb_find_in_block(lines, "Alt+Tab", check_commented=False)
+        if span is not None:
+            return str(path), lines[span[0]].strip()
+    return None
+
+
+def cmd_get_alt_tab():
+    target = resolve_niri_section_file("config.d/90-user-extra.kdl")
+    content = target.read_text() if target.exists() else ""
+    managed = ALT_TAB_OVERRIDE_START in content
+    user = _alt_tab_user_binding()
+    if managed:
+        source = "inir"
+    elif user is not None:
+        source = "inir" if "altSwitcher" in user[1] else "custom"
+    else:
+        source = "niri"
+    result = {"source": source, "managed": managed}
+    if user is not None:
+        result["userFile"], result["userBind"] = user
+    print(json.dumps(result))
+    return 0
+
+
+def cmd_set_alt_tab(args):
+    if len(args) != 1 or args[0] not in ("inir", "niri"):
+        print(json.dumps({"error": "Usage: set-alt-tab inir|niri"}))
+        return 1
+
+    target = resolve_niri_section_file("config.d/90-user-extra.kdl")
+    content = target.read_text() if target.exists() else ""
+    next_content = _alt_tab_block_pattern().sub("\n", content).rstrip()
+
+    if args[0] == "inir":
+        managed_block = (
+            f"{ALT_TAB_OVERRIDE_START}\n"
+            "// Alt+Tab opens iNiR's window switcher (Settings). Delete this block for Niri's.\n"
+            "binds {\n"
+            '    Alt+Tab { spawn "inir" "altSwitcher" "next"; }\n'
+            '    Alt+Shift+Tab { spawn "inir" "altSwitcher" "previous"; }\n'
+            "}\n"
+            f"{ALT_TAB_OVERRIDE_END}"
+        )
+        next_content = f"{next_content}\n\n{managed_block}\n" if next_content else f"{managed_block}\n"
+    elif next_content:
+        next_content += "\n"
+
+    if next_content == content:
+        print(json.dumps({"success": True, "file": str(target), "changed": False}))
+        return 0
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return _write_validated(target, next_content)
+
+
 def main():
     if len(sys.argv) < 2:
         print(
             json.dumps(
                 {
-                    "error": "No command. Use: outputs, apply-output, persist-output, persist-layout, get-input, get-hot-corners, get-layout, get-animations, get-window-rules, list-cursor-themes, sync-cursor, validate, detect-customizations, set, get-binds, set-bind, remove-bind"
+                    "error": "No command. Use: outputs, apply-output, persist-output, persist-layout, get-input, get-hot-corners, get-layout, get-animations, get-window-rules, list-cursor-themes, sync-cursor, validate, detect-customizations, set, get-binds, set-bind, remove-bind, get-alt-tab, set-alt-tab"
                 }
             )
         )
@@ -3375,6 +3464,8 @@ def main():
         "get-binds": lambda: cmd_get_binds(),
         "set-bind": lambda: cmd_set_bind(args),
         "remove-bind": lambda: cmd_remove_bind(args),
+        "get-alt-tab": lambda: cmd_get_alt_tab(),
+        "set-alt-tab": lambda: cmd_set_alt_tab(args),
     }
 
     fn = commands.get(cmd)

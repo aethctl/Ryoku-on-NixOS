@@ -15,10 +15,6 @@ Singleton {
         precision: {
             if ((Config.options?.time?.secondPrecision ?? false) || GlobalStates.screenLocked)
                 return SystemClock.Seconds;
-            // Cookie clock second hand needs sub-minute ticks without requiring global secondPrecision
-            if ((Config.options?.background?.widgets?.clock?.style ?? "cookie") === "cookie"
-                    && (Config.options?.background?.widgets?.clock?.cookie?.secondHandStyle ?? "hide") !== "hide")
-                return SystemClock.Seconds;
             return SystemClock.Minutes;
         }
     }

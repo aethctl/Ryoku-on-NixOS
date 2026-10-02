@@ -281,19 +281,38 @@ PanelWindow {
                         elide: Text.ElideRight
                     }
                 }
-                IrisIconButton {
-                    materialIcon: "keep"
-                    selected: root.pinned
-                    Accessible.name: root.pinned ? Translation.tr("Stop keeping open") : Translation.tr("Keep open beside windows")
-                    onClicked: Config.setNestedValue("iris.sidebars." + root.side + ".pinned", !root.pinned)
+                // Appearance › Button rows: the header's tools on one plate, concentric with it.
+                IrisControlPlate {
+                    id: headerTools
+                    Layout.alignment: Qt.AlignVCenter
+                    controlHeight: Math.round(34 * root.d)
+                    RowLayout {
+                        spacing: Math.round(2 * root.d)
+                        IrisIconButton {
+                            buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                            buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                            materialIcon: "keep"
+                            selected: root.pinned
+                            Accessible.name: root.pinned ? Translation.tr("Stop keeping open") : Translation.tr("Keep open beside windows")
+                            onClicked: Config.setNestedValue("iris.sidebars." + root.side + ".pinned", !root.pinned)
+                        }
+                        IrisIconButton {
+                            buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                            buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                            materialIcon: root.editing ? "check" : "tune"
+                            selected: root.editing
+                            Accessible.name: Translation.tr("Customize panel")
+                            onClicked: root.editing = !root.editing
+                        }
+                        IrisIconButton {
+                            buttonRadius: headerTools.framed ? headerTools.controlRadius : IrisStyle.radiusSmall
+                            buttonRadiusPressed: headerTools.framed ? headerTools.controlRadius : Math.max(3, IrisStyle.radiusSmall - 2)
+                            materialIcon: "close"
+                            Accessible.name: Translation.tr("Close panel")
+                            onClicked: root.close()
+                        }
+                    }
                 }
-                IrisIconButton {
-                    materialIcon: root.editing ? "check" : "tune"
-                    selected: root.editing
-                    Accessible.name: Translation.tr("Customize panel")
-                    onClicked: root.editing = !root.editing
-                }
-                IrisIconButton { materialIcon: "close"; Accessible.name: Translation.tr("Close panel"); onClicked: root.close() }
             }
             Flickable {
                 id: scroll

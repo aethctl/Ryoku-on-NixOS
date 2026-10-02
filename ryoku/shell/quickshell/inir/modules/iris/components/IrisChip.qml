@@ -13,11 +13,14 @@ IrisButton {
     readonly property real d: IrisStyle.density
     readonly property real inset: Math.round(12 * chip.d)
     property real labelCap: Math.round(200 * chip.d)
+    // A typeface choice names itself in its own face.
+    property string labelFamily: ""
 
     implicitHeight: Math.round(30 * chip.d)
     implicitWidth: chipRow.implicitWidth + chip.inset * 2
-    buttonRadius: height / 2
-    buttonRadiusPressed: height / 2
+    // Under Button rows a chip takes the bubbles' shape like the controls around it.
+    buttonRadius: IrisStyle.controlPlated ? IrisStyle.pieceRadius(height) : height / 2
+    buttonRadiusPressed: buttonRadius
     Accessible.name: chip.label
 
     Row {
@@ -57,6 +60,7 @@ IrisButton {
             elide: Text.ElideRight
             text: chip.label
             color: chip.foreground
+            font.family: chip.labelFamily.length > 0 ? chip.labelFamily : IrisStyle.fontMain
             font.pixelSize: IrisStyle.typeLabel
             font.weight: chip.selected || chip.emphasized ? IrisStyle.weight(Font.DemiBold) : IrisStyle.weight(Font.Medium)
         }

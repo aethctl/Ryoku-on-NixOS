@@ -64,7 +64,8 @@ Item {
         slot = root.ownerSlot(slot)
         const o = root.optionsFor(slot)
         if (root.isApp(slot)) return String(o?.place ?? IrisPieces.defaultPlace)
-        if (root.isExtra(slot)) return (o?.enable ?? false) ? String(o?.place ?? IrisPieces.defaultPlace) : "island"
+        if (root.isExtra(slot)) return (o?.enable ?? false) && !IrisPieces.listedOnIsland(slot.slice(6))
+            ? String(o?.place ?? IrisPieces.defaultPlace) : "island"
         return String(o?.place ?? "island")
     }
     function kindOf(slot: string): string {

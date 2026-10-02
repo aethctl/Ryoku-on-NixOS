@@ -27,8 +27,18 @@ Rectangle {
 
     implicitHeight: Math.round((root.pictured ? 52 : root.glyphOnly ? 32 : 28) * root.d)
     implicitWidth: root.glyphOnly ? root.count * (root.implicitHeight - 2 * root.inset) + 2 * root.inset : 0
-    radius: root.pictured ? IrisStyle.radiusTile : height / 2
-    color: IrisStyle.fillQuiet
+    // Appearance › Button rows: the track takes the controls' material and, as a capsule, the bubbles' shape with
+    // the thumb concentric; bare it is the quiet capsule it always was. Pictured tiles keep their corner.
+    readonly property real thumbRadius: root.pictured ? IrisStyle.radiusTile - root.inset
+        : IrisStyle.controlPlated ? IrisStyle.pieceRadius(root.height - 2 * root.inset) : (root.height - 2 * root.inset) / 2
+    radius: root.pictured ? IrisStyle.radiusTile : IrisStyle.controlPlated ? root.thumbRadius + root.inset : height / 2
+    color: IrisStyle.controlPlated ? IrisStyle.plateFillFor(IrisStyle.controlPlate) : IrisStyle.fillQuiet
+
+    IrisGlassEdge {
+        anchors.fill: parent
+        visible: (IrisStyle.controlPlate === "glass" || (IrisStyle.controlPlated && IrisStyle.edgeLit)) && shown
+        radius: root.radius
+    }
 
     function slotX(index: int): int {
         return root.inset + Math.round(index * root.slot)
@@ -50,7 +60,7 @@ Rectangle {
         x: root.slotX(Math.max(0, root.selectedIndex))
         // From the target slot, not from the animating x: tied to x the thumb stretched past the new slot first.
         width: root.slotX(Math.max(0, root.selectedIndex) + 1) - root.slotX(Math.max(0, root.selectedIndex))
-        radius: root.pictured ? IrisStyle.radiusTile - root.inset : height / 2
+        radius: root.thumbRadius
         color: IrisStyle.raised
         Behavior on x { NumberAnimation { duration: IrisStyle.moveDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.moveCurve } }
         Behavior on width { NumberAnimation { duration: IrisStyle.moveDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.moveCurve } }

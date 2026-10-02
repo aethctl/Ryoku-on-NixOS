@@ -191,9 +191,15 @@ QtObject {
         return root.extraIds.includes(id) ? "iris.bubbles.extras." + id : "iris.bubbles." + id
     }
     // An extra floats while it is on and placed off the Island; on with place "island" it rides the Island, as the stage reads it.
+    // One piece, one place. The Island's own list (Settings › Island › Bubbles in the Island) wins over a
+    // floating switch left on: a piece listed there is carried by the Island and its floating bubble is not drawn
+    // (a list and a switch both on had left three pieces on the frame while Settings showed them in the Island).
+    function listedOnIsland(id: string): bool {
+        return Array.from(Config.options?.iris?.bar?.pieces ?? []).map(entry => String(entry)).includes(id)
+    }
     function floats(options: var, id: string): bool {
         const extra = options?.extras?.[id]
-        return (extra?.enable ?? false) && String(extra?.place ?? root.defaultPlace) !== "island"
+        return (extra?.enable ?? false) && String(extra?.place ?? root.defaultPlace) !== "island" && !root.listedOnIsland(id)
     }
     // What the Island carries: its own list, and any extra switched on whose place is the Island (a Settings switch
     // can turn one on there without adding it to the list; it must not vanish).

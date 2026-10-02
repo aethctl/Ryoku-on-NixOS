@@ -115,8 +115,8 @@ Button {
 
     component RippleAnim: NumberAnimation {
         duration: rippleDuration
-        easing.type: Appearance?.animation.elementMoveEnter.type
-        easing.bezierCurve: Appearance?.animationCurves.standardDecel
+        easing.type: Appearance?.animation.elementMoveEnter.type ?? Easing.BezierSpline
+        easing.bezierCurve: Appearance?.animationCurves.standardDecel ?? [0, 0, 0, 1, 1, 1]
     }
 
     MouseArea {

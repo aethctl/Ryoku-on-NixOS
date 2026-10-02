@@ -257,6 +257,14 @@ Item {
         Loader {
             opacity: root.controlOpacity
             Layout.fillWidth: true
+            active: root.spec.installedFonts === true
+            visible: active
+            sourceComponent: installedFontsComponent
+        }
+
+        Loader {
+            opacity: root.controlOpacity
+            Layout.fillWidth: true
             active: root.swatched && !root.tiled
             visible: active
             sourceComponent: swatchComponent
@@ -770,6 +778,85 @@ Item {
                         color: chip.selected ? IrisStyle.text : IrisStyle.subtext
                     }
                 }
+            }
+        }
+    }
+
+    // Any font on the system, as Material's font selector offers: the chip names the one in use (or asks),
+    // and opens a search over the installed families, each drawn in its own face.
+    // The same plate, fill steps and ink as the face chips beside it (chipsComponent).
+    component FaceChip: IrisChip {
+        implicitHeight: Math.round(28 * root.d)
+        colBackground: IrisStyle.fillQuiet
+        colBackgroundHover: IrisStyle.fillHover
+        colBackgroundToggled: IrisStyle.fillActive
+        colBackgroundToggledHover: IrisStyle.fillActive
+        foreground: selected ? IrisStyle.text : IrisStyle.subtext
+    }
+
+    Component {
+        id: installedFontsComponent
+
+        ColumnLayout {
+            id: fonts
+            property bool open: false
+            property string query: ""
+            readonly property string current: String(root.value ?? "")
+            readonly property bool custom: fonts.current.length > 0 && !root.choices.some(choice => choice.value === fonts.current)
+            readonly property var families: {
+                if (!fonts.open) return []
+                const seen = {}
+                return Qt.fontFamilies().filter(family => {
+                    if (family.startsWith(".") || seen[family]) return false
+                    seen[family] = true
+                    return true
+                })
+            }
+            readonly property var matches: {
+                const words = fonts.query.trim().toLowerCase()
+                const found = words.length > 0 ? fonts.families.filter(family => family.toLowerCase().includes(words)) : fonts.families
+                return found.slice(0, 48)
+            }
+            spacing: Math.round(8 * root.d)
+
+            FaceChip {
+                glyph: fonts.custom ? "" : "search"
+                label: fonts.custom ? fonts.current : Translation.tr("Other font…")
+                labelFamily: fonts.custom ? fonts.current : ""
+                selected: fonts.custom
+                onClicked: fonts.open = !fonts.open
+            }
+            IrisField {
+                id: search
+                visible: fonts.open
+                Layout.fillWidth: true
+                implicitHeight: Math.round(36 * root.d)
+                font.pixelSize: IrisStyle.typeLabel
+                placeholderText: Translation.tr("Search installed fonts")
+                onTextChanged: fonts.query = search.text
+                onVisibleChanged: if (visible) search.forceActiveFocus()
+            }
+            Flow {
+                visible: fonts.open && fonts.matches.length > 0
+                Layout.fillWidth: true
+                spacing: Math.round(6 * root.d)
+                Repeater {
+                    model: fonts.matches
+                    FaceChip {
+                        required property string modelData
+                        label: modelData
+                        labelFamily: modelData
+                        labelCap: Math.round(220 * root.d)
+                        selected: modelData === fonts.current
+                        onClicked: { root.commit(modelData); fonts.open = false }
+                    }
+                }
+            }
+            IrisText {
+                visible: fonts.open && fonts.matches.length === 0
+                text: Translation.tr("No installed font matches")
+                color: IrisStyle.subtext
+                font.pixelSize: IrisStyle.typeMeta
             }
         }
     }

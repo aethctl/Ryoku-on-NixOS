@@ -7,6 +7,7 @@ import inir.modules.common.functions
 import QtQuick
 import QtQuick.Layouts
 import Qt5Compat.GraphicalEffects
+import Quickshell
 import Quickshell.Io
 
 import inir.modules.background.widgets.clock.dateIndicator
@@ -69,7 +70,12 @@ Item {
     readonly property list<string> clockNumbers: DateTime.time.split(/[: ]/)
     readonly property int clockHour: parseInt(clockNumbers[0]) % 12
     readonly property int clockMinute: DateTime.clock.minutes
-    readonly property int clockSecond: DateTime.clock.seconds
+    readonly property int clockSecond: secondsClock.seconds
+    // Its own seconds, only while the hand shows and the clock is seen: the shared DateTime clock stays on minutes.
+    SystemClock {
+        id: secondsClock
+        precision: root.secondHandStyle !== "hide" && root.powerActive ? SystemClock.Seconds : SystemClock.Minutes
+    }
 
     implicitWidth: implicitSize
     implicitHeight: implicitSize

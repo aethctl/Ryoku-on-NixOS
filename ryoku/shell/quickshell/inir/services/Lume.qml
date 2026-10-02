@@ -32,12 +32,18 @@ Singleton {
         return Quickshell.screens.find(screen => screen?.name === name) ?? null
     }
     function wallpaperOf(output: string): string {
-        return WallpaperLuma.imagePath(Wallpapers.internalPreviewFor(output, Wallpapers.currentMainWallpaperPath(output)))
+        return WallpaperLuma.imagePath(Wallpapers.internalPreviewFor(output, Wallpapers.desktopWallpaperPath(output)))
     }
 
     // {level, spread, color, luminance} of the wallpaper under a rect in output coordinates, null until read.
     function read(output: string, x: real, y: real, w: real, h: real): var {
-        return root.readFrom(root.wallpaperOf(output), output, x, y, w, h)
+        const sample = root.readFrom(root.wallpaperOf(output), output, x, y, w, h)
+        // "Only the backdrop" draws it under a black dim: Qt blends in sRGB, so every channel scales by (1 - dim).
+        const keep = 1 - Wallpapers.desktopDim
+        if (!sample || keep >= 1) return sample
+        const colour = Qt.rgba(sample.color.r * keep, sample.color.g * keep, sample.color.b * keep, 1)
+        return { level: sample.level * keep, spread: sample.spread * keep, color: colour,
+            luminance: ColorUtils.relativeLuminance(colour) }
     }
     // The same for a surface that shows its own image (Waffle's wallpaper, a lock background).
     function readFrom(path: string, output: string, x: real, y: real, w: real, h: real): var {

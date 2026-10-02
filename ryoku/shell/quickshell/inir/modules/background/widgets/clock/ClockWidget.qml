@@ -226,12 +226,12 @@ AbstractBackgroundWidget {
     readonly property color cookieInk: root.cookieBaseInk
     readonly property color cookieInfo: root.supportingOnFace(root.cookieInk, root.cookieFace)
 
-    // Local clock with seconds precision when needed (and power is active)
+    // Seconds and continuous motion run while the clock is seen: the desktop uncovered, or on ii's lock screen.
+    readonly property bool clockMotion: root.motionActive || (root.shellLocked && root.powerActive)
     SystemClock {
         id: displayClock
-        // Drop to minutes precision when power is reduced to save CPU
         precision: !root.irisFaced && (root.showSeconds || root.clockStyle === "instrument"
-            || GlobalStates.screenLocked) && root.powerActive
+            || GlobalStates.screenLocked) && root.clockMotion
             ? SystemClock.Seconds : SystemClock.Minutes
     }
 
@@ -417,7 +417,7 @@ AbstractBackgroundWidget {
                     implicitSize: Math.round(Number(root._readConfigKey("cookie.size") ?? 230)
                         * root.scaleFactor)
                     scaleFactor: root.scaleFactor
-                    powerActive: root.powerActive
+                    powerActive: root.clockMotion
                     colBackground: root.cookieFace
                     colOnBackground: root.cookieInk
                     colBackgroundInfo: root.cookieInfo
@@ -513,7 +513,7 @@ AbstractBackgroundWidget {
                 readonly property real desiredImplicitSize: side
                 readonly property real minutePosition: displayClock.date.getMinutes()
                     + displayClock.date.getSeconds() / 60
-                readonly property bool secondsLive: root.showSeconds && root.powerActive
+                readonly property bool secondsLive: root.showSeconds && root.clockMotion
                 readonly property real trackRadius: side / 2 - Math.max(12,
                     Math.round(18 * root.scaleFactor))
                 implicitWidth: side

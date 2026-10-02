@@ -88,8 +88,9 @@ Rectangle {
     readonly property string _irisMaterialName: String(Config.options?.iris?.widgets?.material ?? "glass")
     readonly property bool _irisGlass: root._iris && root._backgroundVisible && root._irisMaterialName === "glass"
     readonly property bool _irisClear: root._iris && root._irisMaterialName === "clear"
-    readonly property bool _irisRimHidden: root._irisClear
-        && !Boolean(Config.options?.iris?.widgets?.rim ?? false) && !GlobalStates.widgetEditMode
+    readonly property string _irisOutline: String(Config.options?.iris?.widgets?.outline ?? "auto")
+    readonly property bool _irisRimHidden: root._iris && !GlobalStates.widgetEditMode && (root._irisOutline === "none"
+        || (root._irisOutline !== "always" && root._irisClear && !Boolean(Config.options?.iris?.widgets?.rim ?? false)))
     readonly property real _irisStrength: Math.max(0, Math.min(100, Config.options?.iris?.widgets?.opacity ?? 100)) / 100
     readonly property bool _glass: root._irisGlass || !root._iris && !root._island && root._backgroundVisible
         && Appearance.blurBackendFor("widgets", Appearance.blurTopology.unsupported) === "wallpaper"
@@ -132,7 +133,8 @@ Rectangle {
         ? ColorUtils.mix(IrisStyle.surface, Appearance.colors.colPrimary, 0.82) : IrisStyle.surface
     readonly property color _irisFill: root._irisClear || root._irisGlass
         ? ColorUtils.applyAlpha(IrisStyle.surface, root._irisClear && !Boolean(Config.options?.iris?.widgets?.legibleAlways ?? false) ? 0
-            : IrisStyle.legibleVeil(root._irisMaterialName, root.regionBrightness, 0, root._irisStrength))
+            : IrisStyle.legibleVeil(root._irisMaterialName, root.regionBrightness, 0, 1)
+                * (Boolean(Config.options?.iris?.widgets?.legibleAlways ?? false) ? 1 : root._irisStrength))
         : ColorUtils.applyAlpha(
         root.colorMode === "dark" ? ColorUtils.mix(IrisStyle.text, IrisStyle.accent, 0.98) : root._irisMaterial,
         root._backgroundVisible ? Math.min(1, 0.72 + root._surfaceStrength * 0.28)

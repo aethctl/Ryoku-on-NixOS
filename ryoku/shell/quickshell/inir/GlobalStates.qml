@@ -244,6 +244,13 @@ Singleton {
     }
     onIrisEditSelectionChanged: if (irisEditSelection.length > 0) irisEditTarget = ""
     onIrisEditTargetChanged: if (irisEditTarget.length > 0) irisEditSelection = ""
+    // The in-place editors belong to iRiS: leaving the family ends them, or they are destroyed open and
+    // come back open when the family does.
+    function endIrisEditing(): void {
+        irisLockEdit = false
+        irisEdit = false
+        irisControlEdit = false
+    }
     onControlPanelOpenChanged: if (!controlPanelOpen) irisControlEdit = false
     onIrisControlEditChanged: if (!irisControlEdit) irisControlTab = "controls"
     // iRiS Studio, the panel form of Customize, is open. It and Customize on the shell never show together.

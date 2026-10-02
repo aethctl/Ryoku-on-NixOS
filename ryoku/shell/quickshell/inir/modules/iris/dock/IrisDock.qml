@@ -812,7 +812,7 @@ Item {
                                             borderColor: IrisStyle.textSecondary
                                             Behavior on along { NumberAnimation { duration: IrisStyle.morphDuration; easing.type: Easing.BezierSpline; easing.bezierCurve: IrisStyle.morphCurve } }
                                             Behavior on color { ColorAnimation { duration: IrisStyle.duration(140); easing.type: IrisStyle.feedbackEasing } }
-                                            pulsing: indicators.urgent && indicator.visible
+                                            pulsing: indicators.urgent
                                             halfPeriod: 650
                                         }
                                     }

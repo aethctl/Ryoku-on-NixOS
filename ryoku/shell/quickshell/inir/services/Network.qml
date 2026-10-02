@@ -78,6 +78,7 @@ Singleton {
 
     function rescanWifi(): void {
         wifiScanning = true;
+        getNetworks.running = true;
         rescanProcess.running = true;
     }
 
@@ -373,7 +374,7 @@ Singleton {
     Process {
         id: getNetworks
         running: false
-        command: ["nmcli", "-g", "ACTIVE,SIGNAL,FREQ,SSID,BSSID,SECURITY,RATE", "d", "w"]
+        command: ["nmcli", "-g", "ACTIVE,SIGNAL,FREQ,SSID,BSSID,SECURITY,RATE", "device", "wifi", "list", "--rescan", "no"]
         environment: ({
             LANG: "C",
             LC_ALL: "C"
