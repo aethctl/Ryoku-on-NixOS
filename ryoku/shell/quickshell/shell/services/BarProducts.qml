@@ -52,10 +52,11 @@ Singleton {
         if (root.builtins[id])
             root.brokenStyle = id;
     }
-    // A frame-family style owns the whole desktop (island, dock, popups) from
-    // one host screen, so it must load even where the user hid the bar.
+    // A whole-desktop style owns its controllers, islands, dock or popups from
+    // one host screen, so it must load even where the user hid the bar. Ricelin
+    // is Store-owned but follows the same primary-host contract as Iris/Python.
     function isFrameFamily(id) {
-        return id === "iris" || id === "python";
+        return id === "iris" || id === "python" || id === "ricelin";
     }
 
 

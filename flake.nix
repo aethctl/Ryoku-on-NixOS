@@ -327,6 +327,20 @@
         # Installer
         ryoku-install = ryokuInstall;
 
+        ryoku-barstyle-source-integrity = pkgs.runCommand
+          "ryoku-barstyle-source-integrity-check"
+          {
+            nativeBuildInputs = [ pkgs.python3 ];
+          }
+          ''
+            RYOKU_QSBAR_VARIANT=${./ryoku/shell/quickshell/shell/modules/bar/barstyles/qsbar/VariantRoot.qml} \
+            RYOKU_BAR_PRODUCTS=${./ryoku/shell/quickshell/shell/services/BarProducts.qml} \
+            RYOKU_PYTHON_BARSTYLE=${./ryoku/shell/quickshell/shell/modules/bar/barstyles/python} \
+              python3 ${./nix/tests/test-barstyle-source-integrity.py}
+
+            touch "$out"
+          '';
+
         ryoku-session-bootstrap = pkgs.runCommand
           "ryoku-session-bootstrap-check"
           {

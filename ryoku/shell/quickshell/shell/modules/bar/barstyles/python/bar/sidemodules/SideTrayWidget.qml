@@ -1,1 +1,245 @@
-import QtQuick\nimport QtQuick.Layouts\nimport QtQuick.Window\nimport QtQuick.Controls\nimport Quickshell\nimport Quickshell.Io\nimport Quickshell.Wayland\nimport shell.services\nimport "../../reusables"\nimport "../../"\n\nRectangle {\n    id: sideTrayWidgetRoot\n    property var barWindow\n    property bool isSolid: false\n    property bool distinctPills: barWindow ? (barWindow.distinctPills !== undefined ? barWindow.distinctPills : false) : false\n    property bool moduleActive: true\n    property bool isGrouped: false\n    property bool isCompact: isGrouped || (isSolid && distinctPills)\n    property bool suppressAnimation: false\n\n    property real targetY: 0\n    property bool showLayout: false\n\n    property bool isRightBar: barWindow ? (barWindow.barPosition === "right") : false\n    property bool isBottomAligned: true\n\n    readonly property real iconSize: barWindow ? barWindow.s(isCompact ? 15 : 16) : (isCompact ? 15 : 16)\n    readonly property real itemSpacing: barWindow ? barWindow.s(isCompact ? 8 : 10) : (isCompact ? 8 : 10)\n    readonly property real iconPadding: barWindow ? barWindow.s(isCompact ? 10 : 12) : (isCompact ? 10 : 12)\n    readonly property real totalPadding: iconPadding * 2\n    readonly property int itemCount: (moduleActive && trayRepeater.count > 0) ? trayRepeater.count : 0\n\n    property real baseWidth: barWindow ? (isGrouped ? barWindow.barHeight - 8 : ((isSolid && distinctPills) ? barWindow.barHeight - 6 : barWindow.barHeight)) : (isGrouped ? 22 : ((isSolid && distinctPills) ? 24 : 30))\n    property real targetWidth: baseWidth\n    width: targetWidth\n    Behavior on width {\n        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation\n        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }\n    }\n\n    property real baseHeight: itemCount > 0 ? (itemCount * iconSize + (itemCount - 1) * itemSpacing + totalPadding) : 0\n    property real targetHeight: baseHeight\n    height: targetHeight\n    Behavior on height {\n        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation\n        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }\n    }\n\n    property real targetX: isRightBar ? (parent ? (parent.width - targetWidth) : 0) : 0\n    x: targetX\n    Behavior on x {\n        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation\n        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }\n    }\n\n    y: targetY\n    Behavior on y {\n        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation\n        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }\n    }\n\n    onVisibleChanged: {\n        if (!visible) {\n            TrayMenuController.hide();\n        }\n    }\n\n    onModuleActiveChanged: {\n        if (!moduleActive) {\n            TrayMenuController.hide();\n        }\n    }\n\n    Connections {\n        target: barWindow || null\n        function onPositionChangingChanged() {\n            if (barWindow && barWindow.positionChanging) {\n                TrayMenuController.hide();\n            }\n        }\n        function onBarPositionChanged() {\n            TrayMenuController.hide();\n        }\n	function onIsRevealedChanged() {\n            if (barWindow && !barWindow.isRevealed && !TrayMenuController.menuHovered) {\n                TrayMenuController.hide();\n	     }\n\n        }\n\n    }\n\n    color: "transparent"\n    border.width: 0\n    border.color: "transparent"\n    clip: false\n\n    Rectangle {\n        id: bgRect\n        z: -1\n        anchors.fill: parent\n        radius: ThemeBackend.borderRadius\n        border.width: 0\n        color: sideTrayWidgetRoot.isGrouped ? "transparent" : (sideTrayWidgetRoot.isSolid ? (sideTrayWidgetRoot.distinctPills ? Qt.darker(ThemeBackend.surface0, 1.15) : "transparent") : ThemeBackend.base)\n        visible: height > 0\n    }\n\n    opacity: (showLayout && targetHeight > 0) ? ((barWindow && barWindow.barOpacity !== undefined) ? barWindow.barOpacity : 1.0) : 0.0\n    visible: opacity > 0\n    Behavior on opacity {\n        enabled: barWindow ? (!barWindow.positionChanging && !suppressAnimation) : true\n        NumberAnimation { duration: 140; easing.type: Easing.OutCubic }\n    }\n\n    Timer {\n        running: sideTrayWidgetRoot.moduleActive && barWindow && barWindow.isStartupReady && barWindow.isDataReady\n        interval: 100\n        onTriggered: sideTrayWidgetRoot.showLayout = true\n    }\n\n    transform: Translate {\n        y: sideTrayWidgetRoot.showLayout ? 0 : (barWindow ? barWindow.s(60) : 60)\n        Behavior on y {\n            enabled: barWindow && barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation\n            NumberAnimation { duration: 800; easing.type: Easing.OutQuint }\n        }\n    }\n\n    Column {\n        id: trayLayout\n        anchors.horizontalCenter: parent.horizontalCenter\n        anchors.top: sideTrayWidgetRoot.isBottomAligned ? undefined : parent.top\n        anchors.topMargin: sideTrayWidgetRoot.isBottomAligned ? 0 : sideTrayWidgetRoot.iconPadding\n        anchors.bottom: sideTrayWidgetRoot.isBottomAligned ? parent.bottom : undefined\n        anchors.bottomMargin: sideTrayWidgetRoot.isBottomAligned ? sideTrayWidgetRoot.iconPadding : 0\n        spacing: sideTrayWidgetRoot.itemSpacing\n\n        Repeater {\n            id: trayRepeater\n            model: sideTrayWidgetRoot.moduleActive ? Tray.items : null\n\n            onCountChanged: {\n                if (count === 0) {\n                    TrayMenuController.hide();\n                }\n            }\n\n            delegate: Image {\n                id: trayIcon\n                source: modelData.iconPath ? ("file://" + modelData.iconPath) : (modelData.iconName ? Icons.path(modelData.iconName, true) : "")\n                fillMode: Image.PreserveAspectFit\n\n                sourceSize: Qt.size(sideTrayWidgetRoot.iconSize, sideTrayWidgetRoot.iconSize)\n                width: sideTrayWidgetRoot.iconSize\n                height: sideTrayWidgetRoot.iconSize\n                anchors.horizontalCenter: parent.horizontalCenter\n\n                property bool isHovered: trayMouse.containsMouse\n                property bool initAnimTrigger: false\n                opacity: initAnimTrigger ? (isHovered ? 1.0 : (sideTrayWidgetRoot.isCompact ? 0.9 : 0.8)) : 0.0\n                scale: initAnimTrigger ? (isHovered ? 1.15 : 1.0) : 0.0\n\n                Component.onCompleted: {\n                    if (barWindow && !barWindow.startupCascadeFinished) {\n                        trayAnimTimer.interval = index * 45 + 180\n                        if (sideTrayWidgetRoot.moduleActive) trayAnimTimer.start()\n                    } else {\n                        initAnimTrigger = true\n                    }\n                }\n\n                Component.onDestruction: {\n                    if (trayMouse.containsMouse) {\n                        TrayMenuController.itemExited();\n                    }\n                    let idStr = modelData ? String(modelData.service) : String(index);\n                    if (TrayMenuController.activeItemId === idStr) {\n                        TrayMenuController.hide();\n                    }\n                }\n\n                Timer {\n                    id: trayAnimTimer\n                    running: false\n                    repeat: false\n                    onTriggered: trayIcon.initAnimTrigger = true\n                }\n\n                Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }\n                Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }\n\n                function openMenu(action) {\n                    TrayMenuController.cancelHide();\n                    let pt = trayIcon.mapToItem(null, 0, 0);\n                    let scr = (barWindow && barWindow.screen) ? barWindow.screen : null;\n                    let globX = isRightBar ? pt.x : (pt.x + width);\n                    let globY = pt.y + (height / 2);\n                    let idStr = modelData ? String(modelData.service) : String(index);\n\n                    if (action === "toggle") {\n                        TrayMenuController.toggle(idStr, scr, globX, globY, isRightBar, false, true);\n                    } else {\n                        TrayMenuController.itemEntered(idStr, scr, globX, globY, isRightBar, false, true);\n                    }\n                }\n\n                MouseArea {\n                    id: trayMouse\n                    anchors.fill: parent\n                    anchors.margins: -(barWindow ? barWindow.s(4) : 4)\n                    hoverEnabled: true\n                    cursorShape: Qt.PointingHandCursor\n                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton\n\n                    onEntered: {\n                        trayIcon.openMenu("show");\n                    }\n\n                    onExited: {\n                        TrayMenuController.itemExited();\n                    }\n\n                    onClicked: mouse => {\n                        if (mouse.button === Qt.LeftButton) {\n                            if (modelData.itemIsMenu) {\n                                trayIcon.openMenu("toggle");\n                            } else {\n                                Tray.activate(modelData.service);\n                            }\n                        } else if (mouse.button === Qt.MiddleButton) {\n                            Tray.send("tray.secondaryActivate", { service: modelData.service });\n                        } else if (mouse.button === Qt.RightButton) {\n                            if (modelData.menu) {\n                                trayIcon.openMenu("toggle");\n                            } else {\n                                Tray.activate(modelData.service);\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Window
+import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
+import Quickshell.Wayland
+import shell.services
+import "../../reusables"
+import "../../"
+
+Rectangle {
+    id: sideTrayWidgetRoot
+    property var barWindow
+    property bool isSolid: false
+    property bool distinctPills: barWindow ? (barWindow.distinctPills !== undefined ? barWindow.distinctPills : false) : false
+    property bool moduleActive: true
+    property bool isGrouped: false
+    property bool isCompact: isGrouped || (isSolid && distinctPills)
+    property bool suppressAnimation: false
+
+    property real targetY: 0
+    property bool showLayout: false
+
+    property bool isRightBar: barWindow ? (barWindow.barPosition === "right") : false
+    property bool isBottomAligned: true
+
+    readonly property real iconSize: barWindow ? barWindow.s(isCompact ? 15 : 16) : (isCompact ? 15 : 16)
+    readonly property real itemSpacing: barWindow ? barWindow.s(isCompact ? 8 : 10) : (isCompact ? 8 : 10)
+    readonly property real iconPadding: barWindow ? barWindow.s(isCompact ? 10 : 12) : (isCompact ? 10 : 12)
+    readonly property real totalPadding: iconPadding * 2
+    readonly property int itemCount: (moduleActive && trayRepeater.count > 0) ? trayRepeater.count : 0
+
+    property real baseWidth: barWindow ? (isGrouped ? barWindow.barHeight - 8 : ((isSolid && distinctPills) ? barWindow.barHeight - 6 : barWindow.barHeight)) : (isGrouped ? 22 : ((isSolid && distinctPills) ? 24 : 30))
+    property real targetWidth: baseWidth
+    width: targetWidth
+    Behavior on width {
+        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation
+        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+    }
+
+    property real baseHeight: itemCount > 0 ? (itemCount * iconSize + (itemCount - 1) * itemSpacing + totalPadding) : 0
+    property real targetHeight: baseHeight
+    height: targetHeight
+    Behavior on height {
+        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation
+        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+    }
+
+    property real targetX: isRightBar ? (parent ? (parent.width - targetWidth) : 0) : 0
+    x: targetX
+    Behavior on x {
+        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation
+        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+    }
+
+    y: targetY
+    Behavior on y {
+        enabled: barWindow ? (barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation) : !suppressAnimation
+        NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+    }
+
+    onVisibleChanged: {
+        if (!visible) {
+            TrayMenuController.hide();
+        }
+    }
+
+    onModuleActiveChanged: {
+        if (!moduleActive) {
+            TrayMenuController.hide();
+        }
+    }
+
+    Connections {
+        target: barWindow || null
+        function onPositionChangingChanged() {
+            if (barWindow && barWindow.positionChanging) {
+                TrayMenuController.hide();
+            }
+        }
+        function onBarPositionChanged() {
+            TrayMenuController.hide();
+        }
+	function onIsRevealedChanged() {
+            if (barWindow && !barWindow.isRevealed && !TrayMenuController.menuHovered) {
+                TrayMenuController.hide();
+	     }
+
+        }
+
+    }
+
+    color: "transparent"
+    border.width: 0
+    border.color: "transparent"
+    clip: false
+
+    Rectangle {
+        id: bgRect
+        z: -1
+        anchors.fill: parent
+        radius: ThemeBackend.borderRadius
+        border.width: 0
+        color: sideTrayWidgetRoot.isGrouped ? "transparent" : (sideTrayWidgetRoot.isSolid ? (sideTrayWidgetRoot.distinctPills ? Qt.darker(ThemeBackend.surface0, 1.15) : "transparent") : ThemeBackend.base)
+        visible: height > 0
+    }
+
+    opacity: (showLayout && targetHeight > 0) ? ((barWindow && barWindow.barOpacity !== undefined) ? barWindow.barOpacity : 1.0) : 0.0
+    visible: opacity > 0
+    Behavior on opacity {
+        enabled: barWindow ? (!barWindow.positionChanging && !suppressAnimation) : true
+        NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
+
+    Timer {
+        running: sideTrayWidgetRoot.moduleActive && barWindow && barWindow.isStartupReady && barWindow.isDataReady
+        interval: 100
+        onTriggered: sideTrayWidgetRoot.showLayout = true
+    }
+
+    transform: Translate {
+        y: sideTrayWidgetRoot.showLayout ? 0 : (barWindow ? barWindow.s(60) : 60)
+        Behavior on y {
+            enabled: barWindow && barWindow.startupCascadeFinished && !barWindow.positionChanging && !suppressAnimation
+            NumberAnimation { duration: 800; easing.type: Easing.OutQuint }
+        }
+    }
+
+    Column {
+        id: trayLayout
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: sideTrayWidgetRoot.isBottomAligned ? undefined : parent.top
+        anchors.topMargin: sideTrayWidgetRoot.isBottomAligned ? 0 : sideTrayWidgetRoot.iconPadding
+        anchors.bottom: sideTrayWidgetRoot.isBottomAligned ? parent.bottom : undefined
+        anchors.bottomMargin: sideTrayWidgetRoot.isBottomAligned ? sideTrayWidgetRoot.iconPadding : 0
+        spacing: sideTrayWidgetRoot.itemSpacing
+
+        Repeater {
+            id: trayRepeater
+            model: sideTrayWidgetRoot.moduleActive ? Tray.items : null
+
+            onCountChanged: {
+                if (count === 0) {
+                    TrayMenuController.hide();
+                }
+            }
+
+            delegate: Image {
+                id: trayIcon
+                source: modelData.iconPath ? ("file://" + modelData.iconPath) : (modelData.iconName ? Icons.path(modelData.iconName, true) : "")
+                fillMode: Image.PreserveAspectFit
+
+                sourceSize: Qt.size(sideTrayWidgetRoot.iconSize, sideTrayWidgetRoot.iconSize)
+                width: sideTrayWidgetRoot.iconSize
+                height: sideTrayWidgetRoot.iconSize
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                property bool isHovered: trayMouse.containsMouse
+                property bool initAnimTrigger: false
+                opacity: initAnimTrigger ? (isHovered ? 1.0 : (sideTrayWidgetRoot.isCompact ? 0.9 : 0.8)) : 0.0
+                scale: initAnimTrigger ? (isHovered ? 1.15 : 1.0) : 0.0
+
+                Component.onCompleted: {
+                    if (barWindow && !barWindow.startupCascadeFinished) {
+                        trayAnimTimer.interval = index * 45 + 180
+                        if (sideTrayWidgetRoot.moduleActive) trayAnimTimer.start()
+                    } else {
+                        initAnimTrigger = true
+                    }
+                }
+
+                Component.onDestruction: {
+                    if (trayMouse.containsMouse) {
+                        TrayMenuController.itemExited();
+                    }
+                    let idStr = modelData ? String(modelData.service) : String(index);
+                    if (TrayMenuController.activeItemId === idStr) {
+                        TrayMenuController.hide();
+                    }
+                }
+
+                Timer {
+                    id: trayAnimTimer
+                    running: false
+                    repeat: false
+                    onTriggered: trayIcon.initAnimTrigger = true
+                }
+
+                Behavior on opacity { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+
+                function openMenu(action) {
+                    TrayMenuController.cancelHide();
+                    let pt = trayIcon.mapToItem(null, 0, 0);
+                    let scr = (barWindow && barWindow.screen) ? barWindow.screen : null;
+                    let globX = isRightBar ? pt.x : (pt.x + width);
+                    let globY = pt.y + (height / 2);
+                    let idStr = modelData ? String(modelData.service) : String(index);
+
+                    if (action === "toggle") {
+                        TrayMenuController.toggle(idStr, scr, globX, globY, isRightBar, false, true);
+                    } else {
+                        TrayMenuController.itemEntered(idStr, scr, globX, globY, isRightBar, false, true);
+                    }
+                }
+
+                MouseArea {
+                    id: trayMouse
+                    anchors.fill: parent
+                    anchors.margins: -(barWindow ? barWindow.s(4) : 4)
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+
+                    onEntered: {
+                        trayIcon.openMenu("show");
+                    }
+
+                    onExited: {
+                        TrayMenuController.itemExited();
+                    }
+
+                    onClicked: mouse => {
+                        if (mouse.button === Qt.LeftButton) {
+                            if (modelData.itemIsMenu) {
+                                trayIcon.openMenu("toggle");
+                            } else {
+                                Tray.activate(modelData.service);
+                            }
+                        } else if (mouse.button === Qt.MiddleButton) {
+                            Tray.send("tray.secondaryActivate", { service: modelData.service });
+                        } else if (mouse.button === Qt.RightButton) {
+                            if (modelData.menu) {
+                                trayIcon.openMenu("toggle");
+                            } else {
+                                Tray.activate(modelData.service);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

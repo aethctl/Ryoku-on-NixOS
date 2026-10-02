@@ -1,1 +1,1578 @@
-import QtQuick\nimport QtQuick.Window\nimport QtQuick.Effects\nimport QtQuick.Layouts\nimport QtQuick.Controls\nimport Quickshell\nimport Quickshell.Io\nimport "../"\nimport "../reusables"\n\nItem {\n    id: root\n    focus: true\n\n    property int activationCounter: 0\n    property var appPaths: Caching\n    property int currentTab: 0\n    property int currentSubTab: 0\n    property int expandedTab: -1\n\n    property real colorBlend: 0.0\n    property color ambientPurple: Qt.tint(ThemeBackend.mauve, Qt.rgba(ThemeBackend.pink.r, ThemeBackend.pink.g, ThemeBackend.pink.b, colorBlend))\n    property color ambientBlue: Qt.tint(ThemeBackend.blue, Qt.rgba(ThemeBackend.sapphire.r, ThemeBackend.sapphire.g, ThemeBackend.sapphire.b, colorBlend))\n    property int chargingSoundHandle: -1\n\n    property real introBase: 0.0\n    property real introSidebar: 0.0\n    property real introContent: 0.0\n    property real introTabs: 0.0\n    property var tutorialSections: []\n\n    property var tabsModel: [\n        { id: "Welcome", key: "welcome", name: "Welcome", icon: "󰋜", file: "WelcomeTab.qml", iconOffsetX: -1 },\n        { id: "General", key: "general", name: "General", icon: "󰒓", file: "general/GeneralTab.qml", iconOffsetX: -1 },\n        {\n            id: "Display",\n            key: "display",\n            name: "Display",\n            icon: "󰃠",\n            file: "display/DisplayMainTab.qml",\n            iconOffsetX: -2\n        },\n        { id: "Theme", key: "theme", name: "Theme", icon: "✦", file: "theme/ThemeTab.qml", iconOffsetX: 0 },\n        {\n            id: "Bar",\n            key: "bar",\n            name: "Bar",\n            icon: "󰹑",\n            file: "bar/BarGeneralTab.qml",\n            iconOffsetX: -2,\n            subtabs: [\n                { id: "BarGeneral", key: "bar_general", name: "General", icon: "󰒓", file: "bar/BarGeneralTab.qml", iconOffsetX: -1 },\n                { id: "BarModules", key: "bar_modules", name: "Modules", icon: "󰮯", file: "bar/BarModulesTab.qml", iconOffsetX: -1 }\n            ]\n        },\n        { id: "Dock", key: "dock", name: "Dock", icon: "󰮯", file: "DockTab.qml", iconOffsetX: 0 },\n        { id: "Launcher", key: "launcher", name: "Launcher", icon: "󰵆", file: "LauncherTab.qml", iconOffsetX: 0 },\n        { id: "On-Screen Display", key: "osd", name: "On-Screen Display", icon: "󰕾", file: "OnScreenDisplayTab.qml", iconOffsetX: 0 },\n        { id: "Notifications", key: "notifications", name: "Notifications", icon: "󰂚", file: "notifications/NotificationsTab.qml", iconOffsetX: 0 },\n        { id: "Wellbeing", key: "wellbeing", name: "Wellbeing", icon: "󰄉", file: "wellbeing/DigitalWellbeingTab.qml", iconOffsetX: 0 },\n        { id: "About", key: "about", name: "About", icon: "", file: "AboutTab.qml", iconOffsetX: 0 }\n    ]\n\n    StackView.onStatusChanged: {\n        if (StackView.status === StackView.Active) {\n            activationCounter++;\n        }\n    }\n\n    function closePopup() { closeSequence.start() }\n\n    function s(val) {\n        return Scaler.s(val);\n    }\n\n    function getTabProgress(idx) {\n        if (introTabs >= 1.0) return 1.0;\n        if (introTabs <= 0.0) return 0.0;\n        let start = idx * 0.04;\n        let p = Math.min(1.0, Math.max(0.0, (introTabs - start) / 0.42));\n        if (p <= 0.0) return 0.0;\n        if (p >= 1.0) return 1.0;\n        let c1 = 0.85;\n        let c3 = c1 + 1;\n        return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);\n    }\n\n    function getTabOpacity(idx) {\n        if (introTabs >= 1.0) return 1.0;\n        if (introTabs <= 0.0) return 0.0;\n        let start = idx * 0.04;\n        let p = Math.min(1.0, Math.max(0.0, (introTabs - start) / 0.28));\n        return p;\n    }\n\n    function gotoTab(tabName, subTabName) {\n        if (tabName === undefined || tabName === null || tabName === "") return;\n        let num = parseInt(tabName);\n        if (!isNaN(num) && num >= 0 && num < tabsModel.length) {\n            currentTab = num;\n            expandedTab = (tabsModel[num].subtabs && tabsModel[num].subtabs.length > 0) ? num : -1;\n            if (subTabName !== undefined && subTabName !== null && subTabName !== "") {\n                let sNum = parseInt(subTabName);\n                currentSubTab = !isNaN(sNum) ? sNum : 0;\n            } else {\n                currentSubTab = 0;\n            }\n            return;\n        }\n        let lower = String(tabName).toLowerCase();\n        for (let i = 0; i < tabsModel.length; i++) {\n            let t = tabsModel[i];\n            if ((t.id && t.id.toLowerCase() === lower) ||\n                (t.name && t.name.toLowerCase() === lower) ||\n                (t.key && t.key.toLowerCase() === lower)) {\n                currentTab = i;\n                expandedTab = (t.subtabs && t.subtabs.length > 0) ? i : -1;\n                if (subTabName !== undefined && subTabName !== null && subTabName !== "") {\n                    let sLower = String(subTabName).toLowerCase();\n                    let sNum = parseInt(subTabName);\n                    if (!isNaN(sNum) && t.subtabs && sNum >= 0 && sNum < t.subtabs.length) {\n                        currentSubTab = sNum;\n                    } else if (t.subtabs) {\n                        let sIdx = t.subtabs.findIndex(st =>\n                            (st.id && st.id.toLowerCase() === sLower) ||\n                            (st.name && st.name.toLowerCase() === sLower) ||\n                            (st.key && st.key.toLowerCase() === sLower)\n                        );\n                        currentSubTab = sIdx !== -1 ? sIdx : 0;\n                    } else {\n                        currentSubTab = 0;\n                    }\n                } else {\n                    currentSubTab = 0;\n                }\n                return;\n            }\n\n            if (t.subtabs && Array.isArray(t.subtabs)) {\n                let sIdx = t.subtabs.findIndex(st =>\n                    (st.id && st.id.toLowerCase() === lower) ||\n                    (st.name && st.name.toLowerCase() === lower) ||\n                    (st.key && st.key.toLowerCase() === lower)\n                );\n                if (sIdx !== -1) {\n                    currentTab = i;\n                    expandedTab = i;\n                    currentSubTab = sIdx;\n                    return;\n                }\n            }\n        }\n    }\n\n    function resetAndPlayIntro() {\n        introBase = 0.0;\n        introSidebar = 0.0;\n        introContent = 0.0;\n        introTabs = 0.0;\n        startupSequence.restart();\n        Updater.checkUpdate();\n    }\n\n    Timer {\n        id: focusTimer\n        interval: 50\n        repeat: false\n        onTriggered: root.forceActiveFocus()\n    }\n\n    onVisibleChanged: {\n        if (visible) {\n            forceActiveFocus();\n            focusTimer.restart();\n            resetAndPlayIntro();\n        } else {\n            startupSequence.stop();\n            closeSequence.stop();\n            introBase = 0.0;\n            introSidebar = 0.0;\n            introContent = 0.0;\n            introTabs = 0.0;\n            if (root.chargingSoundHandle !== -1 && typeof Sounds !== "undefined") {\n                Sounds.stopSfx(root.chargingSoundHandle);\n                root.chargingSoundHandle = -1;\n            }\n        }\n    }\n\n    Component.onCompleted: {\n        if (visible) {\n            forceActiveFocus();\n            focusTimer.restart();\n            resetAndPlayIntro();\n        }\n    }\n\n    function nextTab() {\n        let parentTab = tabsModel[currentTab];\n        if (parentTab && parentTab.subtabs && parentTab.subtabs.length > 0 && expandedTab === currentTab) {\n            if (currentSubTab < parentTab.subtabs.length - 1) {\n                currentSubTab++;\n                return;\n            }\n        }\n        currentTab = (currentTab + 1) % tabsModel.length;\n        let nextParent = tabsModel[currentTab];\n        if (nextParent && nextParent.subtabs && nextParent.subtabs.length > 0) {\n            expandedTab = currentTab;\n            currentSubTab = 0;\n        } else {\n            expandedTab = -1;\n            currentSubTab = 0;\n        }\n    }\n\n    function prevTab() {\n        let parentTab = tabsModel[currentTab];\n        if (parentTab && parentTab.subtabs && parentTab.subtabs.length > 0 && expandedTab === currentTab) {\n            if (currentSubTab > 0) {\n                currentSubTab--;\n                return;\n            }\n        }\n        currentTab = (currentTab - 1 + tabsModel.length) % tabsModel.length;\n        let prevParent = tabsModel[currentTab];\n        if (prevParent && prevParent.subtabs && prevParent.subtabs.length > 0) {\n            expandedTab = currentTab;\n            currentSubTab = prevParent.subtabs.length - 1;\n        } else {\n            expandedTab = -1;\n            currentSubTab = 0;\n        }\n    }\n\n    Keys.onEscapePressed: (event) => {\n        closeSequence.start();\n        event.accepted = true;\n    }\n    Keys.onTabPressed: (event) => {\n        nextTab();\n        event.accepted = true;\n    }\n    Keys.onBacktabPressed: (event) => {\n        prevTab();\n        event.accepted = true;\n    }\n\n    SequentialAnimation on colorBlend {\n        loops: Animation.Infinite\n        running: root.visible\n        NumberAnimation { to: 1.0; duration: 15000; easing.type: Easing.InOutSine }\n        NumberAnimation { to: 0.0; duration: 15000; easing.type: Easing.InOutSine }\n    }\n\n    function saveLastTab() {\n        Quickshell.execDetached(["bash", "-c", "echo '" + currentTab + ":" + currentSubTab + "' > '" + Caching.getCacheDir("guide") + "/last_tab.txt'"]);\n    }\n\n    onCurrentTabChanged: saveLastTab()\n    onCurrentSubTabChanged: saveLastTab()\n\n    FileView {\n        id: lastTabWatcher\n        path: Caching.getCacheDir("guide") + "/last_tab.txt"\n        watchChanges: true\n        onFileChanged: reload()\n        onLoaded: {\n            try {\n                let val = text().trim();\n                if (val !== "") {\n                    if (val.indexOf(":") !== -1) {\n                        let parts = val.split(":");\n                        root.gotoTab(parts[0], parts[1]);\n                    } else {\n                        root.gotoTab(val);\n                    }\n                }\n            } catch(e) {}\n        }\n    }\n\n    FileView {\n        id: tutorialWatcher\n        path: Caching.serpantinumDir ? (Caching.assetsPath + "/tutorial.json") : ""\n        onLoaded: {\n            try {\n                let data = JSON.parse(text().trim());\n                if (Array.isArray(data)) {\n                    root.tutorialSections = data;\n                }\n            } catch(e) {}\n        }\n    }\n\n    ParallelAnimation {\n        id: startupSequence\n        running: false\n        NumberAnimation {\n            target: root\n            property: "introBase"\n            from: 0.0\n            to: 1.0\n            duration: 650\n            easing.type: Easing.OutExpo\n        }\n        SequentialAnimation {\n            PauseAnimation { duration: 60 }\n            NumberAnimation {\n                target: root\n                property: "introSidebar"\n                from: 0.0\n                to: 1.0\n                duration: 400\n                easing.type: Easing.OutCubic\n            }\n        }\n        SequentialAnimation {\n            PauseAnimation { duration: 100 }\n            NumberAnimation {\n                target: root\n                property: "introTabs"\n                from: 0.0\n                to: 1.0\n                duration: 550\n                easing.type: Easing.Linear\n            }\n        }\n        SequentialAnimation {\n            PauseAnimation { duration: 180 }\n            NumberAnimation {\n                target: root\n                property: "introContent"\n                from: 0.0\n                to: 1.0\n                duration: 650\n                easing.type: Easing.OutCubic\n            }\n        }\n    }\n\n    SequentialAnimation {\n        id: closeSequence\n        ScriptAction {\n            script: {\n                if (root.chargingSoundHandle !== -1 && typeof Sounds !== "undefined") {\n                    Sounds.stopSfx(root.chargingSoundHandle);\n                    root.chargingSoundHandle = -1;\n                }\n            }\n        }\n        ParallelAnimation {\n            NumberAnimation {\n                target: root\n                property: "introContent"\n                to: 0.0\n                duration: 150\n                easing.type: Easing.InExpo\n            }\n            NumberAnimation {\n                target: root\n                property: "introSidebar"\n                to: 0.0\n                duration: 150\n                easing.type: Easing.InExpo\n            }\n            NumberAnimation {\n                target: root\n                property: "introTabs"\n                to: 0.0\n                duration: 120\n                easing.type: Easing.InQuad\n            }\n        }\n        NumberAnimation {\n            target: root\n            property: "introBase"\n            to: 0.0\n            duration: 200\n            easing.type: Easing.InQuart\n        }\n        ScriptAction {\n            script: Quickshell.execDetached(["bash", Caching.scriptsPath + "/qs_manager.sh", "close"])\n        }\n    }\n\n    Item {\n        anchors.fill: parent\n        opacity: introBase\n        scale: 0.95 + (0.05 * introBase)\n\n        Rectangle {\n            anchors.fill: parent\n            radius: ThemeBackend.clampedBorderRadius\n            color: ThemeBackend.base\n\n            property real time: 0\n            NumberAnimation on time {\n                from: 0\n                to: Math.PI * 2\n                duration: 20000\n                loops: Animation.Infinite\n                running: root.visible\n            }\n\n            Rectangle {\n                id: sidebar\n                anchors.left: parent.left\n                anchors.top: parent.top\n                anchors.bottom: parent.bottom\n                width: root.s(260)\n\n                topLeftRadius: ThemeBackend.clampedBorderRadius\n                bottomLeftRadius: ThemeBackend.clampedBorderRadius\n                topRightRadius: 0\n                bottomRightRadius: 0\n\n                color: Qt.alpha(ThemeBackend.surface0, 0.4)\n                opacity: introSidebar\n                transform: Translate { x: root.s(-30) * (1.0 - introSidebar) }\n\n                ColumnLayout {\n                    anchors.fill: parent\n                    anchors.margins: root.s(15)\n                    spacing: root.s(10)\n\n                    Flickable {\n                        id: tabsFlickable\n                        Layout.fillWidth: true\n                        Layout.fillHeight: true\n                        contentHeight: tabsCol.implicitHeight + root.s(20)\n                        contentWidth: width\n                        clip: true\n                        boundsBehavior: Flickable.StopAtBounds\n\n                        ScrollBar.vertical: ScrollBar {\n                            active: tabsFlickable.moving || tabsFlickable.movingVertically\n                            width: root.s(4)\n                            policy: ScrollBar.AsNeeded\n                            contentItem: Rectangle {\n                                implicitWidth: root.s(4)\n                                radius: root.s(2)\n                                color: ThemeBackend.surface2\n                            }\n                        }\n\n                        Rectangle {\n                            id: activeHighlight\n                            z: 0\n                            radius: ThemeBackend.borderRadius\n                            color: ThemeBackend.mauve\n\n                            property Item activeGroupItem: (root.currentTab >= 0 && root.currentTab < tabsCol.tabItems.length) ? tabsCol.tabItems[root.currentTab] : null\n                            property bool isSubActive: root.currentTab === root.expandedTab && root.expandedTab !== -1\n\n                            property real targetX: isSubActive ? root.s(26) : 0\n                            property real targetY: {\n                                let baseY = activeGroupItem ? activeGroupItem.y : (root.currentTab * (root.s(44) + root.s(4)));\n                                if (isSubActive) {\n                                    return baseY + root.s(44) + root.s(4) + root.currentSubTab * (root.s(36) + root.s(4));\n                                }\n                                return baseY;\n                            }\n                            property real targetW: isSubActive ? (tabsCol.width - root.s(26)) : tabsCol.width\n                            property real targetH: isSubActive ? root.s(36) : root.s(44)\n\n                            x: targetX\n                            y: targetY\n                            width: targetW\n                            height: targetH\n\n                            opacity: root.getTabOpacity(root.currentTab)\n                            transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(root.currentTab)) }\n\n                            Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n                            Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n                            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n                            Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n                        }\n\n                        ColumnLayout {\n                            id: tabsCol\n                            width: tabsFlickable.width - (tabsFlickable.contentHeight > tabsFlickable.height ? root.s(6) : 0)\n                            spacing: root.s(4)\n\n                            readonly property var tabItems: [\n                                tabWelcome,\n                                tabGeneral,\n                                tabDisplay,\n                                tabTheme,\n                                tabBar,\n                                tabDock,\n                                tabLauncher,\n                                tabOsd,\n                                tabNotifications,\n                                tabWellbeing,\n                                tabAbout\n                            ]\n\n\n                            Rectangle {\n                                id: tabWelcome\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(0)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(0)) }\n\n                                property bool isDirectActive: root.currentTab === 0\n\n                                color: tabWelcomeMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabWelcomeMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabWelcome.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰋜"\n                                        iconOffsetX: root.tabsModel[0].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.welcome", "Welcome")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabWelcome.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabWelcome.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabWelcomeMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabWelcomeMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: root.gotoTab("welcome")\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabGeneral\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(1)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(1)) }\n\n                                property bool isDirectActive: root.currentTab === 1\n\n                                color: tabGeneralMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabGeneralMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabGeneral.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰒓"\n                                        iconOffsetX: root.tabsModel[1].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.general", "General")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabGeneral.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabGeneral.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabGeneralMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabGeneralMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 1;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabDisplay\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(2)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(2)) }\n\n                                property bool isDirectActive: root.currentTab === 2\n\n                                color: tabDisplayMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabDisplayMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabDisplay.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰃠"\n                                        iconOffsetX: root.tabsModel[2].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.display", "Display")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabDisplay.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabDisplay.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabDisplayMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabDisplayMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 2;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabTheme\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(3)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(3)) }\n\n                                property bool isDirectActive: root.currentTab === 3\n\n                                color: tabThemeMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabThemeMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabTheme.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "✦"\n                                        iconOffsetX: root.tabsModel[3].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.theme", "Theme")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabTheme.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabTheme.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabThemeMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabThemeMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 3;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            ColumnLayout {\n                                id: tabBar\n                                Layout.fillWidth: true\n                                spacing: 0\n\n                                opacity: root.getTabOpacity(4)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(4)) }\n\n                                property bool isExpanded: root.expandedTab === 4\n                                property real fullSubtabsHeight: 2 * root.s(36) + root.s(4) + root.s(8)\n                                property real expandProgress: isExpanded ? 1.0 : 0.0\n                                Behavior on expandProgress {\n                                    NumberAnimation { duration: 250; easing.type: Easing.OutCubic }\n                                }\n\n                                Rectangle {\n                                    id: tabHeaderBar\n                                    Layout.fillWidth: true\n                                    Layout.preferredHeight: root.s(44)\n                                    implicitHeight: root.s(44)\n                                    radius: ThemeBackend.borderRadius\n                                    z: 1\n\n                                    property bool isDirectActive: root.currentTab === 4 && !tabBar.isExpanded\n\n                                    color: tabBarMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                    Behavior on color { ColorAnimation { duration: 150 } }\n\n                                    scale: tabBarMa.pressed ? 0.98 : 1.0\n                                    Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                    RowLayout {\n                                        anchors.fill: parent\n                                        anchors.leftMargin: root.s(10) + (tabHeaderBar.isDirectActive ? root.s(4) : 0)\n                                        anchors.rightMargin: root.s(14)\n                                        spacing: root.s(10)\n\n                                        Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                        IconButton {\n                                            enabled: false\n                                            size: root.s(32)\n                                            Layout.preferredWidth: root.s(32)\n                                            Layout.preferredHeight: root.s(32)\n                                            Layout.alignment: Qt.AlignVCenter\n                                            cornerRadius: ThemeBackend.borderRadius\n                                            buttonIcon: "󰹑"\n                                            iconOffsetX: root.tabsModel[4].iconOffsetX ?? 0\n                                            iconFontSize: root.s(16)\n                                            accentColor: ThemeBackend.surface0\n                                            textColor: "#ffffff"\n                                        }\n\n                                        Text {\n                                            text: I18n.t("guide.tabs.bar", "Bar")\n                                            font.family: ThemeBackend.fontFamily\n                                            font.weight: tabHeaderBar.isDirectActive ? Font.Bold : Font.Medium\n                                            font.pixelSize: root.s(13)\n                                            color: tabHeaderBar.isDirectActive\n                                                ? ThemeBackend.crust\n                                                : (tabBarMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                            Layout.fillWidth: true\n                                            Layout.alignment: Qt.AlignVCenter\n                                            elide: Text.ElideRight\n                                            Behavior on color { ColorAnimation { duration: 150 } }\n                                        }\n\n                                        Text {\n                                            text: "󰅀"\n                                            font.family: ThemeBackend.fontFamily\n                                            font.pixelSize: root.s(14)\n                                            color: tabHeaderBar.isDirectActive\n                                                ? ThemeBackend.crust\n                                                : (tabBarMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                            Layout.alignment: Qt.AlignVCenter\n                                            rotation: tabBar.expandProgress * 180 - 180\n                                            Behavior on rotation { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }\n                                            Behavior on color { ColorAnimation { duration: 150 } }\n                                        }\n                                    }\n\n                                    MouseArea {\n                                        id: tabBarMa\n                                        anchors.fill: parent\n                                        hoverEnabled: true\n                                        cursorShape: Qt.PointingHandCursor\n                                        onClicked: {\n                                            if (root.expandedTab === 4) {\n                                                root.expandedTab = -1;\n                                            } else {\n                                                root.expandedTab = 4;\n                                                if (root.currentTab !== 4) {\n                                                    root.currentTab = 4;\n                                                    root.currentSubTab = 0;\n                                                }\n                                            }\n                                        }\n                                    }\n                                }\n\n                                Item {\n                                    id: barSubtabsWrapper\n                                    visible: tabBar.expandProgress > 0.001\n                                    Layout.fillWidth: true\n                                    Layout.preferredHeight: tabBar.fullSubtabsHeight * tabBar.expandProgress\n                                    implicitHeight: tabBar.fullSubtabsHeight * tabBar.expandProgress\n                                    opacity: Math.max(0.0, (tabBar.expandProgress - 0.15) / 0.85)\n                                    clip: true\n\n                                    RowLayout {\n                                        anchors.fill: parent\n                                        anchors.topMargin: root.s(4)\n                                        anchors.bottomMargin: root.s(4)\n                                        spacing: root.s(6)\n\n                                        Item {\n                                            Layout.preferredWidth: root.s(20)\n                                            Layout.fillHeight: true\n\n                                            Rectangle {\n                                                anchors.horizontalCenter: parent.horizontalCenter\n                                                anchors.top: parent.top\n                                                anchors.bottom: parent.bottom\n                                                anchors.topMargin: root.s(2)\n                                                anchors.bottomMargin: root.s(2)\n                                                width: Math.max(1, root.s(2))\n                                                radius: root.s(1)\n                                                color: Qt.rgba(ThemeBackend.surface2.r, ThemeBackend.surface2.g, ThemeBackend.surface2.b, 0.7)\n                                            }\n                                        }\n\n                                        ColumnLayout {\n                                            Layout.fillWidth: true\n                                            spacing: root.s(4)\n\n                                            Rectangle {\n                                                id: subtabBarGeneral\n                                                Layout.fillWidth: true\n                                                Layout.preferredHeight: root.s(36)\n                                                implicitHeight: root.s(36)\n                                                radius: ThemeBackend.borderRadius\n                                                z: 1\n\n                                                property bool isSubActive: root.currentTab === 4 && tabBar.isExpanded && root.currentSubTab === 0\n\n                                                color: subtabBarGeneralMa.containsMouse && !isSubActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                                scale: subtabBarGeneralMa.pressed ? 0.98 : 1.0\n                                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                                RowLayout {\n                                                    anchors.fill: parent\n                                                    anchors.leftMargin: root.s(8) + (subtabBarGeneral.isSubActive ? root.s(4) : 0)\n                                                    anchors.rightMargin: root.s(10)\n                                                    spacing: root.s(8)\n\n                                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n\n                                                    IconButton {\n                                                        enabled: false\n                                                        size: root.s(26)\n                                                        Layout.preferredWidth: root.s(26)\n                                                        Layout.preferredHeight: root.s(26)\n                                                        Layout.alignment: Qt.AlignVCenter\n                                                        cornerRadius: ThemeBackend.borderRadius\n                                                        buttonIcon: "󰒓"\n                                                        iconOffsetX: root.tabsModel[4].subtabs[0].iconOffsetX ?? 0\n                                                        iconFontSize: root.s(13)\n                                                        accentColor: ThemeBackend.surface0\n                                                        textColor: "#ffffff"\n                                                    }\n\n                                                    Text {\n                                                        text: I18n.t("guide.tabs.bar_general", "General")\n                                                        font.family: ThemeBackend.fontFamily\n                                                        font.weight: subtabBarGeneral.isSubActive ? Font.Bold : Font.Medium\n                                                        font.pixelSize: root.s(12)\n                                                        color: subtabBarGeneral.isSubActive ? ThemeBackend.crust : ThemeBackend.subtext0\n                                                        Layout.fillWidth: true\n                                                        Layout.alignment: Qt.AlignVCenter\n                                                        elide: Text.ElideRight\n                                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                                    }\n                                                }\n\n                                                MouseArea {\n                                                    id: subtabBarGeneralMa\n                                                    anchors.fill: parent\n                                                    hoverEnabled: true\n                                                    cursorShape: Qt.PointingHandCursor\n                                                    onClicked: {\n                                                        root.currentTab = 4;\n                                                        root.expandedTab = 4;\n                                                        root.currentSubTab = 0;\n                                                    }\n                                                }\n                                            }\n\n                                            Rectangle {\n                                                id: subtabBarModules\n                                                Layout.fillWidth: true\n                                                Layout.preferredHeight: root.s(36)\n                                                implicitHeight: root.s(36)\n                                                radius: ThemeBackend.borderRadius\n                                                z: 1\n\n                                                property bool isSubActive: root.currentTab === 4 && tabBar.isExpanded && root.currentSubTab === 1\n\n                                                color: subtabBarModulesMa.containsMouse && !isSubActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                                scale: subtabBarModulesMa.pressed ? 0.98 : 1.0\n                                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                                RowLayout {\n                                                    anchors.fill: parent\n                                                    anchors.leftMargin: root.s(8) + (subtabBarModules.isSubActive ? root.s(4) : 0)\n                                                    anchors.rightMargin: root.s(10)\n                                                    spacing: root.s(8)\n\n                                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }\n\n                                                    IconButton {\n                                                        enabled: false\n                                                        size: root.s(26)\n                                                        Layout.preferredWidth: root.s(26)\n                                                        Layout.preferredHeight: root.s(26)\n                                                        Layout.alignment: Qt.AlignVCenter\n                                                        cornerRadius: ThemeBackend.borderRadius\n                                                        buttonIcon: "󰮯"\n                                                        iconOffsetX: root.tabsModel[4].subtabs[1].iconOffsetX ?? 0\n                                                        iconFontSize: root.s(13)\n                                                        accentColor: ThemeBackend.surface0\n                                                        textColor: "#ffffff"\n                                                    }\n\n                                                    Text {\n                                                        text: I18n.t("guide.tabs.bar_modules", "Modules")\n                                                        font.family: ThemeBackend.fontFamily\n                                                        font.weight: subtabBarModules.isSubActive ? Font.Bold : Font.Medium\n                                                        font.pixelSize: root.s(12)\n                                                        color: subtabBarModules.isSubActive ? ThemeBackend.crust : ThemeBackend.subtext0\n                                                        Layout.fillWidth: true\n                                                        Layout.alignment: Qt.AlignVCenter\n                                                        elide: Text.ElideRight\n                                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                                    }\n                                                }\n\n                                                MouseArea {\n                                                    id: subtabBarModulesMa\n                                                    anchors.fill: parent\n                                                    hoverEnabled: true\n                                                    cursorShape: Qt.PointingHandCursor\n                                                    onClicked: {\n                                                        root.currentTab = 4;\n                                                        root.expandedTab = 4;\n                                                        root.currentSubTab = 1;\n                                                    }\n                                                }\n                                            }\n                                        }\n                                    }\n                                }\n                            }\n\n\n                            Rectangle {\n                                id: tabDock\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(5)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(5)) }\n\n                                property bool isDirectActive: root.currentTab === 5\n\n                                color: tabDockMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabDockMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabDock.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰮯"\n                                        iconOffsetX: root.tabsModel[5].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.dock", "Dock")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabDock.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabDock.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabDockMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabDockMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 5;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabLauncher\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(6)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(6)) }\n\n                                property bool isDirectActive: root.currentTab === 6\n\n                                color: tabLauncherMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabLauncherMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabLauncher.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰵆"\n                                        iconOffsetX: root.tabsModel[6].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.launcher", "Launcher")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabLauncher.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabLauncher.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabLauncherMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabLauncherMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: root.gotoTab("launcher")\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabOsd\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(7)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(7)) }\n\n                                property bool isDirectActive: root.currentTab === 7\n\n                                color: tabOsdMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabOsdMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabOsd.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰕾"\n                                        iconOffsetX: root.tabsModel[7].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.osd", "On-Screen Display")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabOsd.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabOsd.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabOsdMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabOsdMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 7;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabNotifications\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(8)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(8)) }\n\n                                property bool isDirectActive: root.currentTab === 8\n\n                                color: tabNotificationsMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabNotificationsMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabNotifications.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰂚"\n                                        iconOffsetX: root.tabsModel[8].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.notifications", "Notifications")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabNotifications.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabNotifications.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabNotificationsMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabNotificationsMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 8;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n                            Rectangle {\n                                id: tabWellbeing\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(9)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(9)) }\n\n                                property bool isDirectActive: root.currentTab === 9\n\n                                color: tabWellbeingMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabWellbeingMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabWellbeing.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: "󰄉"\n                                        iconOffsetX: root.tabsModel[9].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.wellbeing", "Wellbeing")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabWellbeing.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabWellbeing.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabWellbeingMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabWellbeingMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 9;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n\n\n                            Rectangle {\n                                id: tabAbout\n                                Layout.fillWidth: true\n                                Layout.preferredHeight: root.s(44)\n                                implicitHeight: root.s(44)\n                                radius: ThemeBackend.borderRadius\n                                z: 1\n\n                                opacity: root.getTabOpacity(10)\n                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(10)) }\n\n                                property bool isDirectActive: root.currentTab === 10\n\n                                color: tabAboutMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"\n                                Behavior on color { ColorAnimation { duration: 150 } }\n\n                                scale: tabAboutMa.pressed ? 0.98 : 1.0\n                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }\n\n                                RowLayout {\n                                    anchors.fill: parent\n                                    anchors.leftMargin: root.s(10) + (tabAbout.isDirectActive ? root.s(4) : 0)\n                                    anchors.rightMargin: root.s(14)\n                                    spacing: root.s(10)\n\n                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }\n\n                                    IconButton {\n                                        enabled: false\n                                        size: root.s(32)\n                                        Layout.preferredWidth: root.s(32)\n                                        Layout.preferredHeight: root.s(32)\n                                        Layout.alignment: Qt.AlignVCenter\n                                        cornerRadius: ThemeBackend.borderRadius\n                                        buttonIcon: ""\n                                        iconOffsetX: root.tabsModel[10].iconOffsetX ?? 0\n                                        iconFontSize: root.s(16)\n                                        accentColor: ThemeBackend.surface0\n                                        textColor: "#ffffff"\n                                    }\n\n                                    Text {\n                                        text: I18n.t("guide.tabs.about", "About")\n                                        font.family: ThemeBackend.fontFamily\n                                        font.weight: tabAbout.isDirectActive ? Font.Bold : Font.Medium\n                                        font.pixelSize: root.s(13)\n                                        color: tabAbout.isDirectActive\n                                            ? ThemeBackend.crust\n                                            : (tabAboutMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)\n                                        Layout.fillWidth: true\n                                        Layout.alignment: Qt.AlignVCenter\n                                        elide: Text.ElideRight\n                                        Behavior on color { ColorAnimation { duration: 150 } }\n                                    }\n                                }\n\n                                MouseArea {\n                                    id: tabAboutMa\n                                    anchors.fill: parent\n                                    hoverEnabled: true\n                                    cursorShape: Qt.PointingHandCursor\n                                    onClicked: {\n                                        root.expandedTab = -1;\n                                        root.currentTab = 10;\n                                        root.currentSubTab = 0;\n                                    }\n                                }\n                            }\n                        }\n                    }\n\n                    ClickButton {\n                        visible: Updater.updateAvailable\n                        Layout.fillWidth: true\n                        implicitHeight: root.s(38)\n                        cornerRadius: ThemeBackend.borderRadius\n                        buttonText: I18n.t("guide.update_available")\n                        buttonIcon: "󰚰"\n                        iconFontSize: root.s(16)\n                        textFontSize: root.s(13)\n                        accentColor: ThemeBackend.green\n                        textColor: ThemeBackend.crust\n                        opacity: root.getTabOpacity(10)\n                        transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(10)) }\n                        onClicked: {\n                            root.gotoTab("about");\n                        }\n                    }\n                }\n            }\n\n            Item {\n                id: contentArea\n                anchors.left: sidebar.right\n                anchors.right: parent.right\n                anchors.top: parent.top\n                anchors.bottom: parent.bottom\n                anchors.leftMargin: 1\n                anchors.rightMargin: 1\n                anchors.topMargin: 4\n                anchors.bottomMargin: 4\n\n                opacity: introContent\n                scale: 0.95 + (0.05 * introContent)\n                transform: Translate { y: root.s(20) * (1.0 - introContent) }\n\n                Repeater {\n                    id: contentRepeater\n                    model: root.tabsModel\n                    delegate: Item {\n                        id: tabContentWrapper\n                        anchors.fill: parent\n                        visible: root.currentTab === parentTabIndex\n\n                        property int parentTabIndex: index\n                        property var tabData: modelData\n                        property bool hasSubtabs: Boolean(tabData.subtabs && tabData.subtabs.length > 0)\n\n                        Loader {\n                            id: singleTabLoader\n                            anchors.fill: parent\n                            asynchronous: false\n                            active: !tabContentWrapper.hasSubtabs\n                            visible: !tabContentWrapper.hasSubtabs && root.currentTab === tabContentWrapper.parentTabIndex\n\n                            function ensureLoaded() {\n                                if (status === Loader.Null && tabData.file) {\n                                    setSource(tabData.file, {\n                                        "rootObj": root,\n                                        "tabIndex": tabContentWrapper.parentTabIndex\n                                    });\n                                }\n                            }\n\n                            Component.onCompleted: {\n                                if (root.currentTab === tabContentWrapper.parentTabIndex && !tabContentWrapper.hasSubtabs) ensureLoaded();\n                            }\n\n                            Connections {\n                                target: root\n                                function onCurrentTabChanged() {\n                                    if (root.currentTab === tabContentWrapper.parentTabIndex && !tabContentWrapper.hasSubtabs) singleTabLoader.ensureLoaded();\n                                }\n                            }\n                        }\n\n                        Repeater {\n                            model: tabContentWrapper.hasSubtabs ? tabData.subtabs : []\n\n                            delegate: Loader {\n                                id: subTabLoader\n                                anchors.fill: parent\n                                asynchronous: false\n                                property int subIndex: index\n                                property var subData: modelData\n                                visible: root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex\n\n                                function ensureLoaded() {\n                                    if (status === Loader.Null && subData.file) {\n                                        setSource(subData.file, {\n                                            "rootObj": root,\n                                            "tabIndex": tabContentWrapper.parentTabIndex\n                                        });\n                                        if (item && "subTabIndex" in item) {\n                                            item.subTabIndex = subIndex;\n                                        }\n                                    }\n                                }\n\n                                onLoaded: {\n                                    if (item && "subTabIndex" in item) {\n                                        item.subTabIndex = subIndex;\n                                    }\n                                }\n\n                                Component.onCompleted: {\n                                    if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) ensureLoaded();\n                                }\n\n                                Connections {\n                                    target: root\n                                    function onCurrentTabChanged() {\n                                        if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) subTabLoader.ensureLoaded();\n                                    }\n                                    function onCurrentSubTabChanged() {\n                                        if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) subTabLoader.ensureLoaded();\n                                    }\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n
+import QtQuick
+import QtQuick.Window
+import QtQuick.Effects
+import QtQuick.Layouts
+import QtQuick.Controls
+import Quickshell
+import Quickshell.Io
+import "../"
+import "../reusables"
+
+Item {
+    id: root
+    focus: true
+
+    property int activationCounter: 0
+    property var appPaths: Caching
+    property int currentTab: 0
+    property int currentSubTab: 0
+    property int expandedTab: -1
+
+    property real colorBlend: 0.0
+    property color ambientPurple: Qt.tint(ThemeBackend.mauve, Qt.rgba(ThemeBackend.pink.r, ThemeBackend.pink.g, ThemeBackend.pink.b, colorBlend))
+    property color ambientBlue: Qt.tint(ThemeBackend.blue, Qt.rgba(ThemeBackend.sapphire.r, ThemeBackend.sapphire.g, ThemeBackend.sapphire.b, colorBlend))
+    property int chargingSoundHandle: -1
+
+    property real introBase: 0.0
+    property real introSidebar: 0.0
+    property real introContent: 0.0
+    property real introTabs: 0.0
+    property var tutorialSections: []
+
+    property var tabsModel: [
+        { id: "Welcome", key: "welcome", name: "Welcome", icon: "󰋜", file: "WelcomeTab.qml", iconOffsetX: -1 },
+        { id: "General", key: "general", name: "General", icon: "󰒓", file: "general/GeneralTab.qml", iconOffsetX: -1 },
+        {
+            id: "Display",
+            key: "display",
+            name: "Display",
+            icon: "󰃠",
+            file: "display/DisplayMainTab.qml",
+            iconOffsetX: -2
+        },
+        { id: "Theme", key: "theme", name: "Theme", icon: "✦", file: "theme/ThemeTab.qml", iconOffsetX: 0 },
+        {
+            id: "Bar",
+            key: "bar",
+            name: "Bar",
+            icon: "󰹑",
+            file: "bar/BarGeneralTab.qml",
+            iconOffsetX: -2,
+            subtabs: [
+                { id: "BarGeneral", key: "bar_general", name: "General", icon: "󰒓", file: "bar/BarGeneralTab.qml", iconOffsetX: -1 },
+                { id: "BarModules", key: "bar_modules", name: "Modules", icon: "󰮯", file: "bar/BarModulesTab.qml", iconOffsetX: -1 }
+            ]
+        },
+        { id: "Dock", key: "dock", name: "Dock", icon: "󰮯", file: "DockTab.qml", iconOffsetX: 0 },
+        { id: "Launcher", key: "launcher", name: "Launcher", icon: "󰵆", file: "LauncherTab.qml", iconOffsetX: 0 },
+        { id: "On-Screen Display", key: "osd", name: "On-Screen Display", icon: "󰕾", file: "OnScreenDisplayTab.qml", iconOffsetX: 0 },
+        { id: "Notifications", key: "notifications", name: "Notifications", icon: "󰂚", file: "notifications/NotificationsTab.qml", iconOffsetX: 0 },
+        { id: "Wellbeing", key: "wellbeing", name: "Wellbeing", icon: "󰄉", file: "wellbeing/DigitalWellbeingTab.qml", iconOffsetX: 0 },
+        { id: "About", key: "about", name: "About", icon: "", file: "AboutTab.qml", iconOffsetX: 0 }
+    ]
+
+    StackView.onStatusChanged: {
+        if (StackView.status === StackView.Active) {
+            activationCounter++;
+        }
+    }
+
+    function closePopup() { closeSequence.start() }
+
+    function s(val) {
+        return Scaler.s(val);
+    }
+
+    function getTabProgress(idx) {
+        if (introTabs >= 1.0) return 1.0;
+        if (introTabs <= 0.0) return 0.0;
+        let start = idx * 0.04;
+        let p = Math.min(1.0, Math.max(0.0, (introTabs - start) / 0.42));
+        if (p <= 0.0) return 0.0;
+        if (p >= 1.0) return 1.0;
+        let c1 = 0.85;
+        let c3 = c1 + 1;
+        return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
+    }
+
+    function getTabOpacity(idx) {
+        if (introTabs >= 1.0) return 1.0;
+        if (introTabs <= 0.0) return 0.0;
+        let start = idx * 0.04;
+        let p = Math.min(1.0, Math.max(0.0, (introTabs - start) / 0.28));
+        return p;
+    }
+
+    function gotoTab(tabName, subTabName) {
+        if (tabName === undefined || tabName === null || tabName === "") return;
+        let num = parseInt(tabName);
+        if (!isNaN(num) && num >= 0 && num < tabsModel.length) {
+            currentTab = num;
+            expandedTab = (tabsModel[num].subtabs && tabsModel[num].subtabs.length > 0) ? num : -1;
+            if (subTabName !== undefined && subTabName !== null && subTabName !== "") {
+                let sNum = parseInt(subTabName);
+                currentSubTab = !isNaN(sNum) ? sNum : 0;
+            } else {
+                currentSubTab = 0;
+            }
+            return;
+        }
+        let lower = String(tabName).toLowerCase();
+        for (let i = 0; i < tabsModel.length; i++) {
+            let t = tabsModel[i];
+            if ((t.id && t.id.toLowerCase() === lower) ||
+                (t.name && t.name.toLowerCase() === lower) ||
+                (t.key && t.key.toLowerCase() === lower)) {
+                currentTab = i;
+                expandedTab = (t.subtabs && t.subtabs.length > 0) ? i : -1;
+                if (subTabName !== undefined && subTabName !== null && subTabName !== "") {
+                    let sLower = String(subTabName).toLowerCase();
+                    let sNum = parseInt(subTabName);
+                    if (!isNaN(sNum) && t.subtabs && sNum >= 0 && sNum < t.subtabs.length) {
+                        currentSubTab = sNum;
+                    } else if (t.subtabs) {
+                        let sIdx = t.subtabs.findIndex(st =>
+                            (st.id && st.id.toLowerCase() === sLower) ||
+                            (st.name && st.name.toLowerCase() === sLower) ||
+                            (st.key && st.key.toLowerCase() === sLower)
+                        );
+                        currentSubTab = sIdx !== -1 ? sIdx : 0;
+                    } else {
+                        currentSubTab = 0;
+                    }
+                } else {
+                    currentSubTab = 0;
+                }
+                return;
+            }
+
+            if (t.subtabs && Array.isArray(t.subtabs)) {
+                let sIdx = t.subtabs.findIndex(st =>
+                    (st.id && st.id.toLowerCase() === lower) ||
+                    (st.name && st.name.toLowerCase() === lower) ||
+                    (st.key && st.key.toLowerCase() === lower)
+                );
+                if (sIdx !== -1) {
+                    currentTab = i;
+                    expandedTab = i;
+                    currentSubTab = sIdx;
+                    return;
+                }
+            }
+        }
+    }
+
+    function resetAndPlayIntro() {
+        introBase = 0.0;
+        introSidebar = 0.0;
+        introContent = 0.0;
+        introTabs = 0.0;
+        startupSequence.restart();
+        Updater.checkUpdate();
+    }
+
+    Timer {
+        id: focusTimer
+        interval: 50
+        repeat: false
+        onTriggered: root.forceActiveFocus()
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            forceActiveFocus();
+            focusTimer.restart();
+            resetAndPlayIntro();
+        } else {
+            startupSequence.stop();
+            closeSequence.stop();
+            introBase = 0.0;
+            introSidebar = 0.0;
+            introContent = 0.0;
+            introTabs = 0.0;
+            if (root.chargingSoundHandle !== -1 && typeof Sounds !== "undefined") {
+                Sounds.stopSfx(root.chargingSoundHandle);
+                root.chargingSoundHandle = -1;
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        if (visible) {
+            forceActiveFocus();
+            focusTimer.restart();
+            resetAndPlayIntro();
+        }
+    }
+
+    function nextTab() {
+        let parentTab = tabsModel[currentTab];
+        if (parentTab && parentTab.subtabs && parentTab.subtabs.length > 0 && expandedTab === currentTab) {
+            if (currentSubTab < parentTab.subtabs.length - 1) {
+                currentSubTab++;
+                return;
+            }
+        }
+        currentTab = (currentTab + 1) % tabsModel.length;
+        let nextParent = tabsModel[currentTab];
+        if (nextParent && nextParent.subtabs && nextParent.subtabs.length > 0) {
+            expandedTab = currentTab;
+            currentSubTab = 0;
+        } else {
+            expandedTab = -1;
+            currentSubTab = 0;
+        }
+    }
+
+    function prevTab() {
+        let parentTab = tabsModel[currentTab];
+        if (parentTab && parentTab.subtabs && parentTab.subtabs.length > 0 && expandedTab === currentTab) {
+            if (currentSubTab > 0) {
+                currentSubTab--;
+                return;
+            }
+        }
+        currentTab = (currentTab - 1 + tabsModel.length) % tabsModel.length;
+        let prevParent = tabsModel[currentTab];
+        if (prevParent && prevParent.subtabs && prevParent.subtabs.length > 0) {
+            expandedTab = currentTab;
+            currentSubTab = prevParent.subtabs.length - 1;
+        } else {
+            expandedTab = -1;
+            currentSubTab = 0;
+        }
+    }
+
+    Keys.onEscapePressed: (event) => {
+        closeSequence.start();
+        event.accepted = true;
+    }
+    Keys.onTabPressed: (event) => {
+        nextTab();
+        event.accepted = true;
+    }
+    Keys.onBacktabPressed: (event) => {
+        prevTab();
+        event.accepted = true;
+    }
+
+    SequentialAnimation on colorBlend {
+        loops: Animation.Infinite
+        running: root.visible
+        NumberAnimation { to: 1.0; duration: 15000; easing.type: Easing.InOutSine }
+        NumberAnimation { to: 0.0; duration: 15000; easing.type: Easing.InOutSine }
+    }
+
+    function saveLastTab() {
+        Quickshell.execDetached(["bash", "-c", "echo '" + currentTab + ":" + currentSubTab + "' > '" + Caching.getCacheDir("guide") + "/last_tab.txt'"]);
+    }
+
+    onCurrentTabChanged: saveLastTab()
+    onCurrentSubTabChanged: saveLastTab()
+
+    FileView {
+        id: lastTabWatcher
+        path: Caching.getCacheDir("guide") + "/last_tab.txt"
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                let val = text().trim();
+                if (val !== "") {
+                    if (val.indexOf(":") !== -1) {
+                        let parts = val.split(":");
+                        root.gotoTab(parts[0], parts[1]);
+                    } else {
+                        root.gotoTab(val);
+                    }
+                }
+            } catch(e) {}
+        }
+    }
+
+    FileView {
+        id: tutorialWatcher
+        path: Caching.serpantinumDir ? (Caching.assetsPath + "/tutorial.json") : ""
+        onLoaded: {
+            try {
+                let data = JSON.parse(text().trim());
+                if (Array.isArray(data)) {
+                    root.tutorialSections = data;
+                }
+            } catch(e) {}
+        }
+    }
+
+    ParallelAnimation {
+        id: startupSequence
+        running: false
+        NumberAnimation {
+            target: root
+            property: "introBase"
+            from: 0.0
+            to: 1.0
+            duration: 650
+            easing.type: Easing.OutExpo
+        }
+        SequentialAnimation {
+            PauseAnimation { duration: 60 }
+            NumberAnimation {
+                target: root
+                property: "introSidebar"
+                from: 0.0
+                to: 1.0
+                duration: 400
+                easing.type: Easing.OutCubic
+            }
+        }
+        SequentialAnimation {
+            PauseAnimation { duration: 100 }
+            NumberAnimation {
+                target: root
+                property: "introTabs"
+                from: 0.0
+                to: 1.0
+                duration: 550
+                easing.type: Easing.Linear
+            }
+        }
+        SequentialAnimation {
+            PauseAnimation { duration: 180 }
+            NumberAnimation {
+                target: root
+                property: "introContent"
+                from: 0.0
+                to: 1.0
+                duration: 650
+                easing.type: Easing.OutCubic
+            }
+        }
+    }
+
+    SequentialAnimation {
+        id: closeSequence
+        ScriptAction {
+            script: {
+                if (root.chargingSoundHandle !== -1 && typeof Sounds !== "undefined") {
+                    Sounds.stopSfx(root.chargingSoundHandle);
+                    root.chargingSoundHandle = -1;
+                }
+            }
+        }
+        ParallelAnimation {
+            NumberAnimation {
+                target: root
+                property: "introContent"
+                to: 0.0
+                duration: 150
+                easing.type: Easing.InExpo
+            }
+            NumberAnimation {
+                target: root
+                property: "introSidebar"
+                to: 0.0
+                duration: 150
+                easing.type: Easing.InExpo
+            }
+            NumberAnimation {
+                target: root
+                property: "introTabs"
+                to: 0.0
+                duration: 120
+                easing.type: Easing.InQuad
+            }
+        }
+        NumberAnimation {
+            target: root
+            property: "introBase"
+            to: 0.0
+            duration: 200
+            easing.type: Easing.InQuart
+        }
+        ScriptAction {
+            script: Quickshell.execDetached(["bash", Caching.scriptsPath + "/qs_manager.sh", "close"])
+        }
+    }
+
+    Item {
+        anchors.fill: parent
+        opacity: introBase
+        scale: 0.95 + (0.05 * introBase)
+
+        Rectangle {
+            anchors.fill: parent
+            radius: ThemeBackend.clampedBorderRadius
+            color: ThemeBackend.base
+
+            property real time: 0
+            NumberAnimation on time {
+                from: 0
+                to: Math.PI * 2
+                duration: 20000
+                loops: Animation.Infinite
+                running: root.visible
+            }
+
+            Rectangle {
+                id: sidebar
+                anchors.left: parent.left
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                width: root.s(260)
+
+                topLeftRadius: ThemeBackend.clampedBorderRadius
+                bottomLeftRadius: ThemeBackend.clampedBorderRadius
+                topRightRadius: 0
+                bottomRightRadius: 0
+
+                color: Qt.alpha(ThemeBackend.surface0, 0.4)
+                opacity: introSidebar
+                transform: Translate { x: root.s(-30) * (1.0 - introSidebar) }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: root.s(15)
+                    spacing: root.s(10)
+
+                    Flickable {
+                        id: tabsFlickable
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        contentHeight: tabsCol.implicitHeight + root.s(20)
+                        contentWidth: width
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        ScrollBar.vertical: ScrollBar {
+                            active: tabsFlickable.moving || tabsFlickable.movingVertically
+                            width: root.s(4)
+                            policy: ScrollBar.AsNeeded
+                            contentItem: Rectangle {
+                                implicitWidth: root.s(4)
+                                radius: root.s(2)
+                                color: ThemeBackend.surface2
+                            }
+                        }
+
+                        Rectangle {
+                            id: activeHighlight
+                            z: 0
+                            radius: ThemeBackend.borderRadius
+                            color: ThemeBackend.mauve
+
+                            property Item activeGroupItem: (root.currentTab >= 0 && root.currentTab < tabsCol.tabItems.length) ? tabsCol.tabItems[root.currentTab] : null
+                            property bool isSubActive: root.currentTab === root.expandedTab && root.expandedTab !== -1
+
+                            property real targetX: isSubActive ? root.s(26) : 0
+                            property real targetY: {
+                                let baseY = activeGroupItem ? activeGroupItem.y : (root.currentTab * (root.s(44) + root.s(4)));
+                                if (isSubActive) {
+                                    return baseY + root.s(44) + root.s(4) + root.currentSubTab * (root.s(36) + root.s(4));
+                                }
+                                return baseY;
+                            }
+                            property real targetW: isSubActive ? (tabsCol.width - root.s(26)) : tabsCol.width
+                            property real targetH: isSubActive ? root.s(36) : root.s(44)
+
+                            x: targetX
+                            y: targetY
+                            width: targetW
+                            height: targetH
+
+                            opacity: root.getTabOpacity(root.currentTab)
+                            transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(root.currentTab)) }
+
+                            Behavior on x { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+                            Behavior on y { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+                            Behavior on width { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+                            Behavior on height { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+                        }
+
+                        ColumnLayout {
+                            id: tabsCol
+                            width: tabsFlickable.width - (tabsFlickable.contentHeight > tabsFlickable.height ? root.s(6) : 0)
+                            spacing: root.s(4)
+
+                            readonly property var tabItems: [
+                                tabWelcome,
+                                tabGeneral,
+                                tabDisplay,
+                                tabTheme,
+                                tabBar,
+                                tabDock,
+                                tabLauncher,
+                                tabOsd,
+                                tabNotifications,
+                                tabWellbeing,
+                                tabAbout
+                            ]
+
+
+                            Rectangle {
+                                id: tabWelcome
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(0)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(0)) }
+
+                                property bool isDirectActive: root.currentTab === 0
+
+                                color: tabWelcomeMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabWelcomeMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabWelcome.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰋜"
+                                        iconOffsetX: root.tabsModel[0].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.welcome", "Welcome")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabWelcome.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabWelcome.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabWelcomeMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabWelcomeMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.gotoTab("welcome")
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabGeneral
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(1)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(1)) }
+
+                                property bool isDirectActive: root.currentTab === 1
+
+                                color: tabGeneralMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabGeneralMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabGeneral.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰒓"
+                                        iconOffsetX: root.tabsModel[1].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.general", "General")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabGeneral.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabGeneral.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabGeneralMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabGeneralMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 1;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabDisplay
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(2)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(2)) }
+
+                                property bool isDirectActive: root.currentTab === 2
+
+                                color: tabDisplayMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabDisplayMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabDisplay.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰃠"
+                                        iconOffsetX: root.tabsModel[2].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.display", "Display")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabDisplay.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabDisplay.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabDisplayMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabDisplayMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 2;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabTheme
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(3)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(3)) }
+
+                                property bool isDirectActive: root.currentTab === 3
+
+                                color: tabThemeMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabThemeMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabTheme.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "✦"
+                                        iconOffsetX: root.tabsModel[3].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.theme", "Theme")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabTheme.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabTheme.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabThemeMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabThemeMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 3;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            ColumnLayout {
+                                id: tabBar
+                                Layout.fillWidth: true
+                                spacing: 0
+
+                                opacity: root.getTabOpacity(4)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(4)) }
+
+                                property bool isExpanded: root.expandedTab === 4
+                                property real fullSubtabsHeight: 2 * root.s(36) + root.s(4) + root.s(8)
+                                property real expandProgress: isExpanded ? 1.0 : 0.0
+                                Behavior on expandProgress {
+                                    NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+                                }
+
+                                Rectangle {
+                                    id: tabHeaderBar
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: root.s(44)
+                                    implicitHeight: root.s(44)
+                                    radius: ThemeBackend.borderRadius
+                                    z: 1
+
+                                    property bool isDirectActive: root.currentTab === 4 && !tabBar.isExpanded
+
+                                    color: tabBarMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                    Behavior on color { ColorAnimation { duration: 150 } }
+
+                                    scale: tabBarMa.pressed ? 0.98 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: root.s(10) + (tabHeaderBar.isDirectActive ? root.s(4) : 0)
+                                        anchors.rightMargin: root.s(14)
+                                        spacing: root.s(10)
+
+                                        Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                        IconButton {
+                                            enabled: false
+                                            size: root.s(32)
+                                            Layout.preferredWidth: root.s(32)
+                                            Layout.preferredHeight: root.s(32)
+                                            Layout.alignment: Qt.AlignVCenter
+                                            cornerRadius: ThemeBackend.borderRadius
+                                            buttonIcon: "󰹑"
+                                            iconOffsetX: root.tabsModel[4].iconOffsetX ?? 0
+                                            iconFontSize: root.s(16)
+                                            accentColor: ThemeBackend.surface0
+                                            textColor: "#ffffff"
+                                        }
+
+                                        Text {
+                                            text: I18n.t("guide.tabs.bar", "Bar")
+                                            font.family: ThemeBackend.fontFamily
+                                            font.weight: tabHeaderBar.isDirectActive ? Font.Bold : Font.Medium
+                                            font.pixelSize: root.s(13)
+                                            color: tabHeaderBar.isDirectActive
+                                                ? ThemeBackend.crust
+                                                : (tabBarMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                            Layout.fillWidth: true
+                                            Layout.alignment: Qt.AlignVCenter
+                                            elide: Text.ElideRight
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                        }
+
+                                        Text {
+                                            text: "󰅀"
+                                            font.family: ThemeBackend.fontFamily
+                                            font.pixelSize: root.s(14)
+                                            color: tabHeaderBar.isDirectActive
+                                                ? ThemeBackend.crust
+                                                : (tabBarMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                            Layout.alignment: Qt.AlignVCenter
+                                            rotation: tabBar.expandProgress * 180 - 180
+                                            Behavior on rotation { NumberAnimation { duration: 250; easing.type: Easing.OutCubic } }
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: tabBarMa
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            if (root.expandedTab === 4) {
+                                                root.expandedTab = -1;
+                                            } else {
+                                                root.expandedTab = 4;
+                                                if (root.currentTab !== 4) {
+                                                    root.currentTab = 4;
+                                                    root.currentSubTab = 0;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Item {
+                                    id: barSubtabsWrapper
+                                    visible: tabBar.expandProgress > 0.001
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: tabBar.fullSubtabsHeight * tabBar.expandProgress
+                                    implicitHeight: tabBar.fullSubtabsHeight * tabBar.expandProgress
+                                    opacity: Math.max(0.0, (tabBar.expandProgress - 0.15) / 0.85)
+                                    clip: true
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.topMargin: root.s(4)
+                                        anchors.bottomMargin: root.s(4)
+                                        spacing: root.s(6)
+
+                                        Item {
+                                            Layout.preferredWidth: root.s(20)
+                                            Layout.fillHeight: true
+
+                                            Rectangle {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                anchors.top: parent.top
+                                                anchors.bottom: parent.bottom
+                                                anchors.topMargin: root.s(2)
+                                                anchors.bottomMargin: root.s(2)
+                                                width: Math.max(1, root.s(2))
+                                                radius: root.s(1)
+                                                color: Qt.rgba(ThemeBackend.surface2.r, ThemeBackend.surface2.g, ThemeBackend.surface2.b, 0.7)
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: root.s(4)
+
+                                            Rectangle {
+                                                id: subtabBarGeneral
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: root.s(36)
+                                                implicitHeight: root.s(36)
+                                                radius: ThemeBackend.borderRadius
+                                                z: 1
+
+                                                property bool isSubActive: root.currentTab === 4 && tabBar.isExpanded && root.currentSubTab === 0
+
+                                                color: subtabBarGeneralMa.containsMouse && !isSubActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                                scale: subtabBarGeneralMa.pressed ? 0.98 : 1.0
+                                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: root.s(8) + (subtabBarGeneral.isSubActive ? root.s(4) : 0)
+                                                    anchors.rightMargin: root.s(10)
+                                                    spacing: root.s(8)
+
+                                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+
+                                                    IconButton {
+                                                        enabled: false
+                                                        size: root.s(26)
+                                                        Layout.preferredWidth: root.s(26)
+                                                        Layout.preferredHeight: root.s(26)
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        cornerRadius: ThemeBackend.borderRadius
+                                                        buttonIcon: "󰒓"
+                                                        iconOffsetX: root.tabsModel[4].subtabs[0].iconOffsetX ?? 0
+                                                        iconFontSize: root.s(13)
+                                                        accentColor: ThemeBackend.surface0
+                                                        textColor: "#ffffff"
+                                                    }
+
+                                                    Text {
+                                                        text: I18n.t("guide.tabs.bar_general", "General")
+                                                        font.family: ThemeBackend.fontFamily
+                                                        font.weight: subtabBarGeneral.isSubActive ? Font.Bold : Font.Medium
+                                                        font.pixelSize: root.s(12)
+                                                        color: subtabBarGeneral.isSubActive ? ThemeBackend.crust : ThemeBackend.subtext0
+                                                        Layout.fillWidth: true
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        elide: Text.ElideRight
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: subtabBarGeneralMa
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.currentTab = 4;
+                                                        root.expandedTab = 4;
+                                                        root.currentSubTab = 0;
+                                                    }
+                                                }
+                                            }
+
+                                            Rectangle {
+                                                id: subtabBarModules
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: root.s(36)
+                                                implicitHeight: root.s(36)
+                                                radius: ThemeBackend.borderRadius
+                                                z: 1
+
+                                                property bool isSubActive: root.currentTab === 4 && tabBar.isExpanded && root.currentSubTab === 1
+
+                                                color: subtabBarModulesMa.containsMouse && !isSubActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                                scale: subtabBarModulesMa.pressed ? 0.98 : 1.0
+                                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: root.s(8) + (subtabBarModules.isSubActive ? root.s(4) : 0)
+                                                    anchors.rightMargin: root.s(10)
+                                                    spacing: root.s(8)
+
+                                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 300; easing.type: Easing.OutQuint } }
+
+                                                    IconButton {
+                                                        enabled: false
+                                                        size: root.s(26)
+                                                        Layout.preferredWidth: root.s(26)
+                                                        Layout.preferredHeight: root.s(26)
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        cornerRadius: ThemeBackend.borderRadius
+                                                        buttonIcon: "󰮯"
+                                                        iconOffsetX: root.tabsModel[4].subtabs[1].iconOffsetX ?? 0
+                                                        iconFontSize: root.s(13)
+                                                        accentColor: ThemeBackend.surface0
+                                                        textColor: "#ffffff"
+                                                    }
+
+                                                    Text {
+                                                        text: I18n.t("guide.tabs.bar_modules", "Modules")
+                                                        font.family: ThemeBackend.fontFamily
+                                                        font.weight: subtabBarModules.isSubActive ? Font.Bold : Font.Medium
+                                                        font.pixelSize: root.s(12)
+                                                        color: subtabBarModules.isSubActive ? ThemeBackend.crust : ThemeBackend.subtext0
+                                                        Layout.fillWidth: true
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        elide: Text.ElideRight
+                                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: subtabBarModulesMa
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: {
+                                                        root.currentTab = 4;
+                                                        root.expandedTab = 4;
+                                                        root.currentSubTab = 1;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+
+                            Rectangle {
+                                id: tabDock
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(5)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(5)) }
+
+                                property bool isDirectActive: root.currentTab === 5
+
+                                color: tabDockMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabDockMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabDock.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰮯"
+                                        iconOffsetX: root.tabsModel[5].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.dock", "Dock")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabDock.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabDock.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabDockMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabDockMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 5;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabLauncher
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(6)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(6)) }
+
+                                property bool isDirectActive: root.currentTab === 6
+
+                                color: tabLauncherMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabLauncherMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabLauncher.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰵆"
+                                        iconOffsetX: root.tabsModel[6].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.launcher", "Launcher")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabLauncher.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabLauncher.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabLauncherMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabLauncherMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.gotoTab("launcher")
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabOsd
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(7)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(7)) }
+
+                                property bool isDirectActive: root.currentTab === 7
+
+                                color: tabOsdMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabOsdMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabOsd.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰕾"
+                                        iconOffsetX: root.tabsModel[7].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.osd", "On-Screen Display")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabOsd.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabOsd.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabOsdMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabOsdMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 7;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabNotifications
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(8)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(8)) }
+
+                                property bool isDirectActive: root.currentTab === 8
+
+                                color: tabNotificationsMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabNotificationsMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabNotifications.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰂚"
+                                        iconOffsetX: root.tabsModel[8].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.notifications", "Notifications")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabNotifications.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabNotifications.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabNotificationsMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabNotificationsMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 8;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                id: tabWellbeing
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(9)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(9)) }
+
+                                property bool isDirectActive: root.currentTab === 9
+
+                                color: tabWellbeingMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabWellbeingMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabWellbeing.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: "󰄉"
+                                        iconOffsetX: root.tabsModel[9].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.wellbeing", "Wellbeing")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabWellbeing.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabWellbeing.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabWellbeingMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabWellbeingMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 9;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+
+
+                            Rectangle {
+                                id: tabAbout
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: root.s(44)
+                                implicitHeight: root.s(44)
+                                radius: ThemeBackend.borderRadius
+                                z: 1
+
+                                opacity: root.getTabOpacity(10)
+                                transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(10)) }
+
+                                property bool isDirectActive: root.currentTab === 10
+
+                                color: tabAboutMa.containsMouse && !isDirectActive ? Qt.alpha(ThemeBackend.surface1, 0.5) : "transparent"
+                                Behavior on color { ColorAnimation { duration: 150 } }
+
+                                scale: tabAboutMa.pressed ? 0.98 : 1.0
+                                Behavior on scale { NumberAnimation { duration: 250; easing.type: Easing.OutQuint } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: root.s(10) + (tabAbout.isDirectActive ? root.s(4) : 0)
+                                    anchors.rightMargin: root.s(14)
+                                    spacing: root.s(10)
+
+                                    Behavior on anchors.leftMargin { NumberAnimation { duration: 400; easing.type: Easing.OutQuint } }
+
+                                    IconButton {
+                                        enabled: false
+                                        size: root.s(32)
+                                        Layout.preferredWidth: root.s(32)
+                                        Layout.preferredHeight: root.s(32)
+                                        Layout.alignment: Qt.AlignVCenter
+                                        cornerRadius: ThemeBackend.borderRadius
+                                        buttonIcon: ""
+                                        iconOffsetX: root.tabsModel[10].iconOffsetX ?? 0
+                                        iconFontSize: root.s(16)
+                                        accentColor: ThemeBackend.surface0
+                                        textColor: "#ffffff"
+                                    }
+
+                                    Text {
+                                        text: I18n.t("guide.tabs.about", "About")
+                                        font.family: ThemeBackend.fontFamily
+                                        font.weight: tabAbout.isDirectActive ? Font.Bold : Font.Medium
+                                        font.pixelSize: root.s(13)
+                                        color: tabAbout.isDirectActive
+                                            ? ThemeBackend.crust
+                                            : (tabAboutMa.containsMouse ? ThemeBackend.text : ThemeBackend.subtext0)
+                                        Layout.fillWidth: true
+                                        Layout.alignment: Qt.AlignVCenter
+                                        elide: Text.ElideRight
+                                        Behavior on color { ColorAnimation { duration: 150 } }
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: tabAboutMa
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        root.expandedTab = -1;
+                                        root.currentTab = 10;
+                                        root.currentSubTab = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    ClickButton {
+                        visible: Updater.updateAvailable
+                        Layout.fillWidth: true
+                        implicitHeight: root.s(38)
+                        cornerRadius: ThemeBackend.borderRadius
+                        buttonText: I18n.t("guide.update_available")
+                        buttonIcon: "󰚰"
+                        iconFontSize: root.s(16)
+                        textFontSize: root.s(13)
+                        accentColor: ThemeBackend.green
+                        textColor: ThemeBackend.crust
+                        opacity: root.getTabOpacity(10)
+                        transform: Translate { x: root.s(-24) * (1.0 - root.getTabProgress(10)) }
+                        onClicked: {
+                            root.gotoTab("about");
+                        }
+                    }
+                }
+            }
+
+            Item {
+                id: contentArea
+                anchors.left: sidebar.right
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.bottom: parent.bottom
+                anchors.leftMargin: 1
+                anchors.rightMargin: 1
+                anchors.topMargin: 4
+                anchors.bottomMargin: 4
+
+                opacity: introContent
+                scale: 0.95 + (0.05 * introContent)
+                transform: Translate { y: root.s(20) * (1.0 - introContent) }
+
+                Repeater {
+                    id: contentRepeater
+                    model: root.tabsModel
+                    delegate: Item {
+                        id: tabContentWrapper
+                        anchors.fill: parent
+                        visible: root.currentTab === parentTabIndex
+
+                        property int parentTabIndex: index
+                        property var tabData: modelData
+                        property bool hasSubtabs: Boolean(tabData.subtabs && tabData.subtabs.length > 0)
+
+                        Loader {
+                            id: singleTabLoader
+                            anchors.fill: parent
+                            asynchronous: false
+                            active: !tabContentWrapper.hasSubtabs
+                            visible: !tabContentWrapper.hasSubtabs && root.currentTab === tabContentWrapper.parentTabIndex
+
+                            function ensureLoaded() {
+                                if (status === Loader.Null && tabData.file) {
+                                    setSource(tabData.file, {
+                                        "rootObj": root,
+                                        "tabIndex": tabContentWrapper.parentTabIndex
+                                    });
+                                }
+                            }
+
+                            Component.onCompleted: {
+                                if (root.currentTab === tabContentWrapper.parentTabIndex && !tabContentWrapper.hasSubtabs) ensureLoaded();
+                            }
+
+                            Connections {
+                                target: root
+                                function onCurrentTabChanged() {
+                                    if (root.currentTab === tabContentWrapper.parentTabIndex && !tabContentWrapper.hasSubtabs) singleTabLoader.ensureLoaded();
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: tabContentWrapper.hasSubtabs ? tabData.subtabs : []
+
+                            delegate: Loader {
+                                id: subTabLoader
+                                anchors.fill: parent
+                                asynchronous: false
+                                property int subIndex: index
+                                property var subData: modelData
+                                visible: root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex
+
+                                function ensureLoaded() {
+                                    if (status === Loader.Null && subData.file) {
+                                        setSource(subData.file, {
+                                            "rootObj": root,
+                                            "tabIndex": tabContentWrapper.parentTabIndex
+                                        });
+                                        if (item && "subTabIndex" in item) {
+                                            item.subTabIndex = subIndex;
+                                        }
+                                    }
+                                }
+
+                                onLoaded: {
+                                    if (item && "subTabIndex" in item) {
+                                        item.subTabIndex = subIndex;
+                                    }
+                                }
+
+                                Component.onCompleted: {
+                                    if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) ensureLoaded();
+                                }
+
+                                Connections {
+                                    target: root
+                                    function onCurrentTabChanged() {
+                                        if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) subTabLoader.ensureLoaded();
+                                    }
+                                    function onCurrentSubTabChanged() {
+                                        if (root.currentTab === tabContentWrapper.parentTabIndex && root.currentSubTab === subIndex) subTabLoader.ensureLoaded();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
