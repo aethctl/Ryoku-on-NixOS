@@ -327,6 +327,24 @@
         # Installer
         ryoku-install = ryokuInstall;
 
+        ryoku-session-bootstrap = pkgs.runCommand
+          "ryoku-session-bootstrap-check"
+          {
+            nativeBuildInputs = [ pkgs.gnugrep ];
+          }
+          ''
+            for autostart in ${ryoku.desktopData}/share/ryoku/config/hypr/modules/autostart.lua \
+                             ${ryoku.desktopData}/share/ryoku/config/niri/autostart.kdl \
+                             ${ryoku.desktopData}/share/ryoku/config/mango/autostart.conf
+            do
+              grep -Fq 'command -v ryoku-nix-session-start' "$autostart"
+              grep -Fq 'command -v ryoku-power-cutover' "$autostart"
+              grep -Fq 'systemctl --user restart ryoku-session.target' "$autostart"
+            done
+
+            touch "$out"
+          '';
+
         ryoku-notification-ownership = pkgs.runCommand
           "ryoku-notification-ownership-check"
           {

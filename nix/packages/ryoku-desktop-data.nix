@@ -54,7 +54,7 @@ pkgs.stdenvNoCC.mkDerivation {
       substituteInPlace "$autostart" \
         --replace-fail \
           'ryoku-power-cutover session-start-logged' \
-          'ryoku-nix-session-start'
+          'if command -v ryoku-nix-session-start >/dev/null 2>&1; then ryoku-nix-session-start; elif command -v ryoku-power-cutover >/dev/null 2>&1; then ryoku-power-cutover session-start-logged; else systemctl --user restart ryoku-session.target; fi'
     done
 
 
