@@ -12,6 +12,7 @@ pkgs.rustPlatform.buildRustPackage rec {
   patches = [
     ../patches/ryotunes-spotify-mpris.patch
     ../patches/ryotunes-youtube-browser-auth.patch
+    ../patches/ryotunes-youtube-session-cookie-rotation.patch
   ];
 
   # Cargo dependencies include pinned librespot Git revisions.
