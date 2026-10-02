@@ -443,6 +443,17 @@ EOF
     lib.optional (builtins.hasAttr name pkgs)
       (builtins.getAttr name pkgs);
 
+  browserPackages =
+    if cfg.browser == "chromium" then [ pkgs.chromium ]
+    else if cfg.browser == "firefox" then [ pkgs.firefox ]
+    else [ ];
+
+  compositorSession = {
+    hyprland = "hyprland";
+    niri = "niri";
+    mango = "ryoku-mango";
+  };
+
   optionalRuntime =
     lib.concatMap optionalPkg [
       "adw-gtk3"
@@ -572,6 +583,7 @@ EOF
     gtk3
     starship
     fastfetch
+    btop
     yazi
     neovim
     tree-sitter
@@ -663,7 +675,7 @@ EOF
     glib
     libnotify
     xdg-utils
-  ] ++ optionalRuntime;
+  ] ++ optionalRuntime ++ browserPackages;
 
   # Number of direct packages in the final NixOS system profile.
   #
@@ -829,6 +841,35 @@ in
       description = ''
         Use Ryoku's public Ryotunes binary cache to avoid
         compiling the music application locally.
+      '';
+    };
+
+    defaultCompositor = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum [
+        "hyprland"
+        "niri"
+        "mango"
+      ]);
+      default = null;
+
+      description = ''
+        Graphical session Ryoku preselects at the display manager. All Ryoku
+        compositor providers remain installed so the Hub can switch between
+        them without a mutable package transaction. Null preserves the host's
+        existing display-manager preference.
+      '';
+    };
+
+    browser = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum [
+        "chromium"
+        "firefox"
+      ]);
+      default = null;
+
+      description = ''
+        Browser Ryoku installs and uses as the fallback browser role. Null
+        leaves browser ownership to the host and preserves existing systems.
       '';
     };
 
@@ -1330,6 +1371,13 @@ in
       runtimePackages;
 
 
+    # A fresh installer can choose the initial compositor while all three
+    # remain available for runtime switching. Manual integrations leave this
+    # null and keep the host's existing display-manager preference.
+    services.displayManager.defaultSession =
+      lib.mkIf (cfg.defaultCompositor != null)
+        (lib.mkOverride 900 compositorSession.${cfg.defaultCompositor});
+
     # Supply a greeter on No Desktop installs, preserving another login manager.
     services.displayManager.sessionPackages = [
       ryokuNiri
@@ -1374,6 +1422,7 @@ in
     environment.sessionVariables = {
       RYOKU_NIX_SYSTEM_BRIDGE = "1";
       RYOKU_DOCKER_HOST_MANAGED = "1";
+      RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
       RYOKU_UPDATE_BACKEND = "nix";
       RYOKU_I18N_DIR = "${ryokuDesktopData}/share/ryoku/i18n";
       RYOKU_NIX_FLAKE = cfg.updateFlake;
@@ -1837,6 +1886,7 @@ in
         RYOKU_DOCKER_HOST_MANAGED = "1";
 
         RYOKU_NIX_SYSTEM_BRIDGE = "1";
+        RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
         RYOKU_POLKIT_AGENT = "1";
         RYOKU_SYSTEMD_RUN = "${pkgs.systemd}/bin/systemd-run";
 

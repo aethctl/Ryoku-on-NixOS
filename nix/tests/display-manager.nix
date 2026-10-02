@@ -49,6 +49,19 @@ let
   greetd = evaluate {
     services.greetd.enable = true;
   };
+
+  mangoDefault = evaluate {
+    programs.ryoku.defaultCompositor = "mango";
+  };
+
+  userDefault = evaluate {
+    programs.ryoku.defaultCompositor = "mango";
+    services.displayManager.defaultSession = "niri";
+  };
+
+  firefoxBrowser = evaluate {
+    programs.ryoku.browser = "firefox";
+  };
 in
 
 # No Desktop installs have no Xserver. Ryoku's fallback SDDM must therefore
@@ -64,6 +77,15 @@ assert custom.services.displayManager.sddm.theme == "custom";
 assert !gdm.services.displayManager.sddm.enable;
 assert !lightdm.services.displayManager.sddm.enable;
 assert !greetd.services.displayManager.sddm.enable;
+
+# The installer-selected compositor beats provider defaults, while an explicit
+# host choice still beats the installer preference.
+assert mangoDefault.services.displayManager.defaultSession == "ryoku-mango";
+assert userDefault.services.displayManager.defaultSession == "niri";
+
+# Browser selection is declarative and reaches both PATH and the shell fallback.
+assert builtins.elem pkgs.firefox firefoxBrowser.environment.systemPackages;
+assert firefoxBrowser.environment.sessionVariables.RYOKU_DEFAULT_BROWSER == "firefox";
 
 # This is deliberately the real system closure, not a dummy runCommand.
 # Building this check forces NixOS' complete assertion machinery.

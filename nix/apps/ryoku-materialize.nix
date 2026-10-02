@@ -402,6 +402,6 @@ EOF
         "$(cat "$state/initial-backup-path")"
     fi
 
-    printf '\nLog out and start Hyprland to enter Ryoku.\n'
+    printf '\nLog out and start a Ryoku session (Hyprland, niri, or MangoWM).\n'
   '';
 }

@@ -39,8 +39,18 @@ legacy="$conf/hypr.json"
 fallback() {
 	case "$1" in
 	browser)
+		case "${RYOKU_DEFAULT_BROWSER:-}" in
+		chromium|firefox)
+			if command -v "$RYOKU_DEFAULT_BROWSER" >/dev/null 2>&1; then
+				echo "$RYOKU_DEFAULT_BROWSER"
+				return
+			fi
+			;;
+		esac
 		if command -v zen >/dev/null 2>&1; then echo "zen"
 		elif command -v zen-browser >/dev/null 2>&1; then echo "zen-browser"
+		elif command -v chromium >/dev/null 2>&1; then echo "chromium"
+		elif command -v firefox >/dev/null 2>&1; then echo "firefox"
 		else echo "chromium"; fi ;;
 	terminal) echo "kitty" ;;
 	editor)   echo "kitty -e nvim" ;;
