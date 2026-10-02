@@ -21,6 +21,8 @@ pkgs.writeShellApplication {
     flake_arg="/etc/nixos"
     assume_yes=0
     dry_run=0
+    compositor=""
+    browser=""
 
     # Bootstrap the public cache before the new NixOS generation
     # activates its declarative substituter configuration.
@@ -64,6 +66,8 @@ Usage:
 Options:
   --flake PATH[#HOST]   NixOS flake to configure (default: /etc/nixos)
   --source REF          Ryoku flake reference
+  --compositor NAME     Initial compositor: hyprland, niri, or mango
+  --browser NAME        Browser: chromium or firefox
   --dry-run             Show proposed changes without writing them
   -y, --yes             Skip confirmation
   -h, --help            Show this help
@@ -88,6 +92,22 @@ EOF
           source_ref="$2"
           shift 2
           ;;
+        --compositor)
+          [ "$#" -ge 2 ] || {
+            echo "ryoku-install: --compositor requires a value" >&2
+            exit 2
+          }
+          compositor="$2"
+          shift 2
+          ;;
+        --browser)
+          [ "$#" -ge 2 ] || {
+            echo "ryoku-install: --browser requires a value" >&2
+            exit 2
+          }
+          browser="$2"
+          shift 2
+          ;;
         --dry-run)
           dry_run=1
           shift
@@ -107,6 +127,64 @@ EOF
           ;;
       esac
     done
+
+    case "$compositor" in
+      ""|hyprland|niri|mango) ;;
+      *)
+        echo "ryoku-install: invalid compositor: $compositor" >&2
+        exit 2
+        ;;
+    esac
+
+    case "$browser" in
+      ""|chromium|firefox) ;;
+      *)
+        echo "ryoku-install: invalid browser: $browser" >&2
+        exit 2
+        ;;
+    esac
+
+    if [ -z "$compositor" ]; then
+      if [ "$assume_yes" -ne 1 ] && [ -t 0 ]; then
+        printf '\nInitial compositor\n'
+        printf '  1) Hyprland  (Ryoku default)\n'
+        printf '  2) niri      (scrollable tiling)\n'
+        printf '  3) MangoWM   (tags + scroller)\n'
+        printf 'Choose [1]: '
+        read -r answer
+        case "$answer" in
+          2) compositor="niri" ;;
+          3) compositor="mango" ;;
+          ""|1) compositor="hyprland" ;;
+          *)
+            echo "ryoku-install: invalid compositor selection" >&2
+            exit 2
+            ;;
+        esac
+      else
+        compositor="hyprland"
+      fi
+    fi
+
+    if [ -z "$browser" ]; then
+      if [ "$assume_yes" -ne 1 ] && [ -t 0 ]; then
+        printf '\nWeb browser\n'
+        printf '  1) Chromium   (Ryoku NixOS default)\n'
+        printf '  2) Firefox    (Gecko)\n'
+        printf 'Choose [1]: '
+        read -r answer
+        case "$answer" in
+          2) browser="firefox" ;;
+          ""|1) browser="chromium" ;;
+          *)
+            echo "ryoku-install: invalid browser selection" >&2
+            exit 2
+            ;;
+        esac
+      else
+        browser="chromium"
+      fi
+    fi
 
     case "$flake_arg" in
       *#*)
@@ -181,12 +259,16 @@ EOF
 
     cp "$flake_file" "$work_flake"
 
-    cat > "$work_module" <<'EOF'
+    cat > "$work_module" <<EOF
 # Managed by ryoku-install.
 { ... }:
 
 {
-  programs.ryoku.enable = true;
+  programs.ryoku = {
+    enable = true;
+    defaultCompositor = "$compositor";
+    browser = "$browser";
+  };
 }
 EOF
 
@@ -197,6 +279,8 @@ EOF
     printf 'Flake   %s\n' "$flake_root"
     printf 'Host    %s\n' "$host"
     printf 'Source  %s\n' "$source_ref"
+    printf 'WM      %s\n' "$compositor"
+    printf 'Browser %s\n' "$browser"
 
     printf '\nProposed flake.nix changes:\n'
     diff -u "$flake_file" "$work_flake" || true

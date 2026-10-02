@@ -2,7 +2,7 @@
 
 Ryoku on NixOS is the NixOS implementation of the Ryoku desktop.
 
-The desktop experience is shared with Ryoku on Arch: Hyprland or Niri, the
+The desktop experience is shared with Ryoku on Arch: Hyprland, niri or MangoWM, the
 Ryoku shell, Hub, Ryostore, theming, launcher, lockscreen, media surfaces and
 the wider Ryoku UI all remain Ryoku. The difference is how the operating system
 underneath is managed.
@@ -16,7 +16,7 @@ Ryoku on NixOS currently targets:
 
 - `x86_64-linux`
 - an existing flake-based NixOS installation
-- Hyprland or Niri on Wayland
+- Hyprland, niri or MangoWM on Wayland
 - a reasonably recent NixOS package set
 
 The installer integrates Ryoku into the system you already have. It does **not**
@@ -60,6 +60,8 @@ Useful installer options:
 ```text
 --flake PATH[#HOST]   NixOS flake to configure
 --source REF          Ryoku flake reference
+--compositor NAME     Initial compositor: hyprland, niri, or mango
+--browser NAME        Browser: chromium or firefox
 --dry-run             Show proposed changes without writing them
 -y, --yes             Skip confirmation
 -h, --help            Show help
@@ -74,7 +76,11 @@ creates an installer-managed `ryoku.nix` containing:
 { ... }:
 
 {
-  programs.ryoku.enable = true;
+  programs.ryoku = {
+    enable = true;
+    defaultCompositor = "hyprland";
+    browser = "chromium";
+  };
 }
 ```
 
@@ -159,7 +165,7 @@ The NixOS module provides the machine-facing integration needed by the Ryoku
 desktop, including:
 
 - Ryoku packages and runtime dependencies
-- the Ryoku Hyprland and Niri provider/portal package sets
+- the Ryoku Hyprland, niri and MangoWM provider/session package sets
 - PipeWire and WirePlumber integration
 - NetworkManager and Bluetooth integration
 - polkit and keyring support
@@ -176,11 +182,15 @@ Both compositor sessions and their Ryoku providers come from Ryoku's locked
 package set. ABI-sensitive Hyprland plugins therefore remain compatible with
 the Hyprland build in the same generation.
 
-At the display manager, choose either **Hyprland** or **Niri**. Both
-sessions use the same Ryoku shell and neutral desktop settings. The Hub's
-Window Manager page previews settings that the other compositor cannot express
-before changing the preferred compositor; on NixOS both implementations are
-already deployed, so no mutable package transaction is needed.
+At the display manager, choose **Hyprland**, **niri** or **MangoWM**. All three
+sessions use the same Ryoku shell and neutral desktop settings. The installer's
+`defaultCompositor` choice only preselects the initial session; every provider
+remains deployed, so Hub switching never needs a mutable package transaction.
+
+`browser` is similarly declarative. The installer can choose Chromium or
+Firefox, and the selected package becomes Ryoku's fallback browser role while a
+Hub Default Apps override still wins. Other optional applications remain owned
+by the host NixOS configuration rather than a second mutable provisioning ledger.
 
 ## Materialized user configuration
 
