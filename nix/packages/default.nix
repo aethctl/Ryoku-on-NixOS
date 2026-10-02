@@ -171,6 +171,10 @@ let
     inherit pkgs src qmlRoot;
   };
 
+  sidebarFx = import ./ryoku-sidebarfx.nix {
+    inherit pkgs src qmlRoot;
+  };
+
   mkPureQmlModule =
     {
       pname,
@@ -266,6 +270,10 @@ let
     cp -a \
       ${blobs}/${qmlRoot}/Ryoku/Blobs \
       "$out/${qmlRoot}/Ryoku/Blobs"
+
+    cp -a \
+      ${sidebarFx}/${qmlRoot}/Ryoku/SidebarFx \
+      "$out/${qmlRoot}/Ryoku/SidebarFx"
   '';
 
   bundle = pkgs.symlinkJoin {
@@ -342,6 +350,7 @@ in
     frameBars
     wmHyprlandQml
     blobs
+    sidebarFx
     qml
 
     xwaylandSatellite
