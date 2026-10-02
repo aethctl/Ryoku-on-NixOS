@@ -12,7 +12,7 @@ Names, so the parts are findable:
 
 | Part | Name | Where |
 |---|---|---|
-| The feature and its sidebar tab | **Stage** (`stage` quick-settings module) | `quickshell/shell/modules/stage/`, `QuickSettingsStage.qml` |
+| The feature and its sidebar card | **Stage** (`stage` left-sidebar card) | `quickshell/shell/modules/stage/`, `sidebar/cards/StageCard.qml` |
 | The cut-out engine helper | **`ryostage`** | `ryoku/shell/scripts/ryostage`, shipped to `/usr/bin` |
 | The daemon module | `stage` topic and verbs | `ryoku/shell/ipc/stage.go` |
 | The settings | `~/.config/ryoku/stage.json` | user-owned, GUI-managed, never materialized |
@@ -66,16 +66,15 @@ Tapping either keeps the menu open so the effect is seen at once.
   was off (one tap, no "enable Depth first"). Parallax off: `set-effect depth`.
 - While the engine cuts (first enable on a wallpaper), the Depth card reads the
   daemon's percentage; the switch stays on.
-- `Depth settings...` asks for the `quick-settings#stage` surface: the panel
-  opens (or switches) to the Stage tab on this monitor.
+- `Depth settings...` asks for the `sidebar-left#stage` surface: the left
+  sidebar opens (or switches) to the Stage card on this monitor.
 
-## The Stage tab
+## The Stage card
 
-`modules/bar/framebars/menus/quicksettings/QuickSettingsStage.qml`, built only
-from the sidebar's own kit (`QsTile`, `QsNavRow`, `QsSection`, `QsSeg`,
-`QsSlider`, `LinkToggle`, `RevealerButton`) plus the stage's preview card and
-angle dial, so it reads like the Home and Capture tabs. One column, one
-Flickable, 12 px margins, sections in the sidebar's eyebrow rhythm. Top to
+`modules/sidebar/cards/StageCard.qml`, one card on the left sidebar's Stage
+tab, built from the sidebar's own kit (`SidebarCardShell`, `Ryoku.Ui`
+controls) plus the stage's preview card and angle dial. One column, one
+Flickable, sections in the sidebar's eyebrow rhythm. Top to
 bottom:
 
 1. **Title** `Stage`.
@@ -89,7 +88,7 @@ place: `Turn on Depth to cut the subject out and shape it.` A first enable
 cuts in the current tier (Draft by default: the small model, seconds), so the
 first result is fast and quality is raised afterwards, with a confirm.
 
-4. **Cut quality** (`QsSection`): `Draft | Standard | Fine` (`QsSeg`), a
+4. **Cut quality** (a section): `Draft | Standard | Fine` (a segment), a
    caption under it naming the tier's model, size and whether it is installed
    (`Fine: 224 MB, installed`). Choosing another tier changes nothing yet: the
    segment shows the choice and a confirm row appears under the caption:
@@ -97,10 +96,10 @@ first result is fast and quality is raised afterwards, with a confirm.
    - model missing: `Fine needs a 224 MB download` with `Download` and
      `Cancel`; when the download lands the row becomes the Re-cut one;
    - while the engine runs: `Cutting in Fine, 40%` with `Stop`.
-   `Re-cut` writes the tier and refreshes; `Cancel` (or leaving the panel)
+   `Re-cut` writes the tier and refreshes; `Cancel` (or leaving the card)
    drops the choice and the segment snaps back to the tier in use.
-5. **Layers** (`QsSection`): one row per layer, the subject first. A row is
-   the layer's name on the left and `Behind | In front` (`QsSeg`) on the right;
+5. **Layers** (a section): one row per layer, the subject first. A row is
+   the layer's name on the left and `Behind | In front` (a segment) on the right;
    an added layer also has a remove cross, and, while Parallax is on, a
    `Drift` slider (near to far) under it. Below the rows, two half-width
    buttons `Cut a picture...` and `Add a PNG...`, and a quiet `Clear cut-outs`
@@ -108,11 +107,11 @@ first result is fast and quality is raised afterwards, with a confirm.
    <name>` with `Cut` and `Cancel`. `Clear cut-outs` shows `Remove every
    cut-out for this wallpaper` with `Clear` and `Cancel`. `Add a PNG...` is
    immediate (nothing runs).
-6. **Look** (`QsSection`): `Edge` (`QsSlider`, 0..1, value shown) and
-   `Shadow` (`QsSlider`) with the angle dial at the row's end and the degrees
+6. **Look** (a section): `Edge` (a slider, 0..1, value shown) and
+   `Shadow` (a slider) with the angle dial at the row's end and the degrees
    under it. Both live. A quiet `Reset to defaults` link at the end of the
    section puts edge, shadow, angle and every motion knob back.
-7. **Motion** (`QsSection`, Parallax only): `Preset` `Soft | Cinematic |
+7. **Motion** (a section, Parallax only): `Preset` `Soft | Cinematic |
    Beat` (one tap sets amount, idle, speed and music; highlighted only while
    every knob still matches); `Amount` `Subtle | Normal | Strong`; `Idle`
    `Still | Float | Breathe | Sway` with a `Speed` slider while not still;
@@ -122,7 +121,7 @@ first result is fast and quality is raised afterwards, with a confirm.
 
 The confirm rows share one component: a message on the left, one or two text
 buttons on the right, in the section's own width; nothing floats and nothing
-covers another control. Escape closes the panel as it always did.
+covers another control. Escape closes the sidebar as it always did.
 
 ## Edit widgets
 

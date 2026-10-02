@@ -987,29 +987,28 @@ func (d *daemon) handle(conn net.Conn) {
 var surfaceCommands = map[string]string{
 	// One bare kebab verb per shell surface, spelled to match its CustomShortcut
 	// id, so a compositor keybind reaches any surface as `ryoku-shell <id>` where
-	// no global-shortcuts protocol exists (niri). Flag surfaces land on ShellState
-	// through the surface bus's style-independent consumer; frame-menu surfaces
-	// land on the per-monitor FrameMenuManager. Both are the same transition a
-	// CustomShortcut press runs in-process.
+	// no global-shortcuts protocol exists (niri). Flag surfaces land on ShellState,
+	// sidebar surfaces on SidebarState, and frame menus on FrameMenuManager. Each
+	// is the same transition a CustomShortcut press runs in-process.
 	"bar-toggle":         "barToggle",
 	"launcher":           "launcher",
 	"overview":           "overview",
 	"visualizer":         "visualizer",
 	"visualizer-overlay": "visualizer-overlay",
 	"visualizer-place":   "visualizer-place",
-	"quicksettings":      "quick-settings",
+	"quicksettings":      "sidebar-left",
 	"wallpaper-menu":     "wallpaper",
 	"clipboard":          "clipboard",
-	"stash":              "stash",
-	"screenshot":         "quick-settings#capture",
-	"compress":           "stash#compress",
-	"install":            "stash#install",
-	// Preserved aliases so nothing scripted today breaks: the menu-prefixed
-	// spellings and the file-picker desktop entries (install-app.desktop,
-	// compress-video.desktop) land on the same surfaces they always have.
-	"menu screenshot":   "screenshot",
-	"menu stash":        "stash",
-	"menu app-launcher": "launcher",
+	"stash":              "sidebar-right",
+	"screenshot":         "sidebar-left#capture",
+	"compress":           "sidebar-right#compress",
+	"install":            "sidebar-right#install",
+	// Preserve established command spellings while routing retired quick-settings
+	// and stash chrome into their replacement sidebars.
+	"menu quick-settings": "sidebar-left",
+	"menu stash":          "sidebar-right",
+	"menu screenshot":     "screenshot",
+	"menu app-launcher":   "launcher",
 }
 
 // route resolves an IPC-style command to the single shell's IpcHandler config,
@@ -1049,12 +1048,12 @@ func (d *daemon) dispatch(line string) string {
 	routeCmd := cmd
 	switch cmd {
 	case "menu":
-		// menu close clears every open menu. App launcher and dedicated frame
-		// surfaces keep their established menu commands.
+		// menu close clears every open menu. App launcher and dedicated surface
+		// aliases keep their established menu commands.
 		switch {
 		case len(args) == 1 && args[0] == "close":
 			return d.menuClose()
-		case len(args) == 1 && (args[0] == "app-launcher" || args[0] == "screenshot" || args[0] == "stash"):
+		case len(args) == 1 && (args[0] == "app-launcher" || args[0] == "quick-settings" || args[0] == "screenshot" || args[0] == "stash"):
 			routeCmd = line
 		default:
 			if _, ok := menuID(line); !ok {

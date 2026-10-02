@@ -479,6 +479,21 @@ else
   say "skipping Ryoku.Blobs plugin (cmake/ninja not found)"
 fi
 
+sidebarfx_qtstamp="$qmldir/Ryoku/SidebarFx/.qt-version"
+if command -v cmake >/dev/null 2>&1 && command -v ninja >/dev/null 2>&1; then
+  if [ -n "$qtver" ] && [ "$(cat "$sidebarfx_qtstamp" 2>/dev/null)" = "$qtver" ] \
+     && [ -n "$(find "$qmldir/Ryoku/SidebarFx" -name '*.so' -print -quit 2>/dev/null)" ]; then
+    say "Ryoku.SidebarFx already built against Qt $qtver"
+  else
+    say "building Ryoku.SidebarFx plugin"
+    "$here/sidebarfx/build.sh" "$qmldir"
+    [ -n "$qtver" ] && printf '%s\n' "$qtver" > "$sidebarfx_qtstamp"
+    say "installed Ryoku.SidebarFx -> $qmldir/Ryoku/SidebarFx"
+  fi
+else
+  say "skipping Ryoku.SidebarFx plugin (cmake/ninja not found)"
+fi
+
 # Built beside Ryoku.Blobs; the daemon adds this dir to the picker's import path.
 # Always rebuilt: the picker changes with the checkout and ninja makes an
 # unchanged tree a no-op.
