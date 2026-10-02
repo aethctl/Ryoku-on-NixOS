@@ -94,6 +94,8 @@ func main() {
 		err = cmdPlugin(os.Args[2:])
 	case "doctor":
 		err = doctor.Run(os.Args[2:])
+	case "migrate-shell-config":
+		err = doctor.MigrateShellConfig()
 	case "verify":
 		err = doctor.Verify(os.Args[2:])
 	case "debug":

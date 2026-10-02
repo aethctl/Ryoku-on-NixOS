@@ -314,6 +314,22 @@ func doctorUsage() {
 	fmt.Print(i18n.Tf("Usage: ryoku doctor [--check] [--verbose] [--report [file]] [--explain]\n\n  (no args)        check, and apply the safe automatic fixes\n  --check, -n      report what is wrong without changing anything\n  --verbose, -v    also list the checks that passed and advisory notes\n  --report [file]  write a shareable diagnostic report for the maintainers\n                   (default: %s)\n  --explain        ask your cloud model (Groq/OpenRouter) to reason over the report\n  --json           emit findings as JSON (read-only; powers the Hub System Check)\n", reportPath("")))
 }
 
+// MigrateShellConfig applies only deterministic shell-store migrations. NixOS
+// materialization uses this narrow lane before the shell starts, so a new QML
+// tree never runs against an older shell.json while the rest of Doctor remains
+// an explicit repair operation.
+func MigrateShellConfig() error {
+	findings := []finding{
+		{i18n.T("shell config schema"), reconcileShellConfig(false)},
+		{i18n.T("sidebar settings rework"), reconcileSidebarRework(false)},
+	}
+	_, fails := printFindings(findings, false)
+	if fails > 0 {
+		return fmt.Errorf(i18n.T("%d shell config migration(s) failed"), fails)
+	}
+	return nil
+}
+
 // Run: check, apply the safe fixes; on anything it can't fix, write a
 // maintainer report so the user always has something to share.
 func Run(args []string) error {
@@ -1696,7 +1712,7 @@ func defaultFrameBarsFromLegacy(_ map[string]any) map[string]any {
 			"weather":   map[string]any{"anchor": "right", "minWidth": float64(320), "expansion": "never", "widgets": []any{"weather"}},
 		},
 		"surfaces": map[string]any{},
-		"dock": map[string]any{"pinned": []any{}},
+		"dock":     map[string]any{"pinned": []any{}},
 	}
 }
 
