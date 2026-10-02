@@ -6,7 +6,9 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 // capKey renders a capabilities/key value: hex words, most-significant first,
@@ -116,6 +118,39 @@ func TestClassifyMouseDevices(t *testing.T) {
 	}
 	if bt.Bus != "bluetooth" {
 		t.Errorf("bus = %q, want bluetooth", bt.Bus)
+	}
+}
+
+func TestMouseReaderFailureWaitsForPeriodicReconcile(t *testing.T) {
+	node := filepath.Join(t.TempDir(), "event0")
+	if err := os.WriteFile(node, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	manager := newMouseMapManager("", "", "", filepath.Join(t.TempDir(), "mousemap.json"), openMouseUinput)
+	var scans atomic.Int32
+	first := make(chan struct{})
+	var signaled atomic.Bool
+	manager.classify = func(string, string, string) []mouseDevice {
+		scans.Add(1)
+		if signaled.CompareAndSwap(false, true) {
+			close(first)
+		}
+		return []mouseDevice{{ID: "dead", Name: "dead", node: node}}
+	}
+
+	manager.start()
+	defer manager.stop()
+
+	select {
+	case <-first:
+	case <-time.After(time.Second):
+		t.Fatal("mouse discovery did not run")
+	}
+
+	time.Sleep(250 * time.Millisecond)
+	if got := scans.Load(); got != 1 {
+		t.Fatalf("reader death triggered %d immediate rescans, want 1", got)
 	}
 }
 

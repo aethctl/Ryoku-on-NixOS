@@ -611,6 +611,7 @@ type mouseMapManager struct {
 	byIDRoot     string
 	settingsPath string
 	openUinput   func() (*os.File, error)
+	classify     func(string, string, string) []mouseDevice
 
 	commands chan mouseCmd
 	done     chan struct{}
@@ -630,6 +631,7 @@ func newMouseMapManager(sysRoot, devRoot, byIDRoot, settingsPath string, openUin
 		byIDRoot:     byIDRoot,
 		settingsPath: settingsPath,
 		openUinput:   openUinput,
+		classify:     classifyMouseDevices,
 		commands:     make(chan mouseCmd),
 		done:         make(chan struct{}),
 		curMaps:      settings.Maps,
@@ -700,7 +702,7 @@ func (m *mouseMapManager) run(ctx context.Context) {
 	}
 
 	reconcile := func() bool {
-		devices := classifyMouseDevices(m.sysRoot, m.devRoot, m.byIDRoot)
+		devices := m.classify(m.sysRoot, m.devRoot, m.byIDRoot)
 		present := make(map[string]bool, len(devices))
 		for _, dev := range devices {
 			present[dev.ID] = true
@@ -757,9 +759,10 @@ func (m *mouseMapManager) run(ctx context.Context) {
 				reader.cancel()
 				delete(readers, id)
 			}
-			if reconcile() {
-				publish(nil)
-			}
+			// Do not immediately reconcile a failed reader. If an event node is
+			// still present but unreadable, recreating it here produces a tight
+			// open/fail/rescan loop across all of /sys/class/input. The regular
+			// device ticker retries it without turning one bad HID into idle CPU.
 		case press := <-events:
 			if captureArmed {
 				disarm()
