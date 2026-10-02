@@ -1196,7 +1196,7 @@ func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
 		defer mu.Unlock()
 		return clientRunning
 	}
-	go d.releaseQylockUnlockGuardWhenReady()
+	go d.releaseQylockUnlockGuardWhenReady("session-b")
 	defer close(d.quit)
 
 	select {
@@ -1227,8 +1227,8 @@ func TestUnlockFallbackGuardReleasedOnlyByReadyOwningSession(t *testing.T) {
 	present = true
 	mu.Unlock()
 	select {
-	case <-stopped:
-	case <-time.After(time.Second):
-		t.Fatal("unlock fallback watcher stopped after its first guard")
+	case unit := <-stopped:
+		t.Fatalf("one-shot unlock fallback watcher released a second guard: %s", unit)
+	case <-time.After(400 * time.Millisecond):
 	}
 }

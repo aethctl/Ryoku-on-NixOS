@@ -978,30 +978,60 @@ var (
 	}
 )
 
-func (d *daemon) releaseQylockUnlockGuardWhenReady() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+func (d *daemon) armQylockUnlockGuardRelease(session string) {
+	if session == "" {
+		return
+	}
+	d.unlockMu.Lock()
+	if d.unlockWatch == nil {
+		d.unlockWatch = map[string]bool{}
+	}
+	if d.unlockWatch[session] {
+		d.unlockMu.Unlock()
+		return
+	}
+	d.unlockWatch[session] = true
+	d.unlockMu.Unlock()
+	go d.releaseQylockUnlockGuardWhenReady(session)
+}
+
+func (d *daemon) releaseQylockUnlockGuardWhenReady(session string) {
+	defer func() {
+		d.unlockMu.Lock()
+		delete(d.unlockWatch, session)
+		d.unlockMu.Unlock()
+	}()
+
+	unit := "ryoku-qylock-unlock-guard-" + session + ".service"
+	if !qylockUnlockGuardActive(unit) {
+		return
+	}
+
+	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
+	checks := 0
 	for {
 		select {
 		case <-d.quit:
 			return
 		case <-ticker.C:
-			cycle := d.currentSleepCycle()
-			if cycle == nil || !cycle.ready() || !cycle.sessionActive() ||
-				lockProcessRunning() {
-				continue
-			}
-			session := lockSessionID()
-			if session == "" {
-				continue
-			}
-			unit := "ryoku-qylock-unlock-guard-" + session + ".service"
+		}
+		cycle := d.currentSleepCycle()
+		if cycle == nil || !cycle.ready() || !cycle.sessionActive() {
+			continue
+		}
+		if !lockProcessRunning() {
 			if !qylockUnlockGuardActive(unit) {
-				continue
+				return
 			}
 			if err := qylockUnlockGuardStop(unit); err != nil {
 				log.Printf("ryoku-shell: release qylock unlock sleep guard: %v", err)
 			}
+			return
+		}
+		checks++
+		if checks%20 == 0 && !qylockUnlockGuardActive(unit) {
+			return
 		}
 	}
 }
@@ -1011,7 +1041,6 @@ func (d *daemon) releaseQylockUnlockGuardWhenReady() {
 // budget is never consumed and an old hard block overlaps its replacement.
 func (d *daemon) startSleepWake() {
 	go d.superviseSleepWake()
-	go d.releaseQylockUnlockGuardWhenReady()
 }
 
 func applyWakeLighting(ctx context.Context) {

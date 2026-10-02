@@ -139,7 +139,7 @@ type daemon struct {
 	wmReady      bool
 	wmVersions   map[string]int // frame kind -> publishes since daemon start
 	wmTopic      *stateTopic
-	nightlight   *nightlightState   // night-light self-heal (nil until started)
+	nightlight   *nightlightState         // night-light self-heal (nil until started)
 	gateMu       sync.Mutex               // guards gateWant / gateWake
 	gateWant     map[string]bool          // component -> may run now (absent = yes)
 	gateWake     map[string]chan struct{} // wakes a parked supervisor when its gate opens
@@ -163,6 +163,8 @@ type daemon struct {
 	sleep        *sleepCycle // coordinated login1 suspend transaction; guarded by sleepMu
 	suspendReqMu sync.Mutex
 	suspendReq   map[string]*suspendRequest
+	unlockMu     sync.Mutex
+	unlockWatch  map[string]bool
 }
 
 func (d *daemon) currentSleepCycle() *sleepCycle {
@@ -1157,6 +1159,7 @@ func (d *daemon) dispatch(line string) string {
 		if cycle == nil {
 			return "err unlock-prepare: sleep guard is unavailable"
 		}
+		d.armQylockUnlockGuardRelease(args[1])
 		if err := cycle.prepareUnlock(); err != nil {
 			return "err unlock-prepare: " + err.Error()
 		}
