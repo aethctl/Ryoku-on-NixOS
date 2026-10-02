@@ -160,7 +160,7 @@ Item {
         if (r.ctl === "list") return "";
         if (r.ctl === "sw") return v ? "ON" : "OFF";
         if (r.ctl === "slid" && r.pct) return String(Math.round(v * 100));
-        if (r.ctl === "multi") return String((v || []).length);
+        if (r.ctl === "multi" || r.ctl === "ordered-multi") return String((v || []).length);
         if (r.ctl === "color") return String(v).toUpperCase();
         return String(v);
     }
@@ -171,7 +171,7 @@ Item {
         if (d === undefined) return "";
         if (r.ctl === "sw") return d ? "ON" : "OFF";
         if (r.ctl === "slid" && r.pct) return String(Math.round(d * 100));
-        if (r.ctl === "multi") return String((d || []).length);
+        if (r.ctl === "multi" || r.ctl === "ordered-multi") return String((d || []).length);
         return String(d);
     }
     function isChanged(r) {
@@ -179,7 +179,7 @@ Item {
         if (r.ctl === "reload-cover")
             return JSON.stringify(ReloadCoverModel.normalize(v)) !== JSON.stringify(ReloadCoverModel.normalize(d));
         if (d === undefined) return false;
-        if (r.ctl === "multi" || r.ctl === "list") return JSON.stringify(v || []) !== JSON.stringify(d || []);
+        if (r.ctl === "multi" || r.ctl === "ordered-multi" || r.ctl === "list") return JSON.stringify(v || []) !== JSON.stringify(d || []);
         return v !== d;
     }
     // A typed number is clamped into the row's own range and stored in the kind
@@ -279,7 +279,7 @@ Item {
     // band; everything else sits inline at the row's right.
     function ctlBlock(r) {
         var c = r.ctl, n = sheet.optsFor(r).length;
-        if (c === "chips" || c === "multi" || c === "layoutdemo" || c === "reload-cover" || c === "list") return true;
+        if (c === "chips" || c === "multi" || c === "ordered-multi" || c === "layoutdemo" || c === "reload-cover" || c === "list") return true;
         if (c === "seg" && n >= 3) return true;
         return false;
     }
@@ -470,6 +470,7 @@ Item {
                                             case "seg": return segC;
                                             case "chips": return chipsC;
                                             case "multi": return multiC;
+                                            case "ordered-multi": return orderedMultiC;
                                             case "list": return listC;
                                             case "pick": return pickC;
                                             case "reload-cover": return reloadCoverC;
@@ -637,6 +638,116 @@ Item {
                                                 var i = l.indexOf(k);
                                                 if (i >= 0) l.splice(i, 1); else l.push(k);
                                                 sheet.edited(srow.r.key, l);
+                                            }
+                                        }
+                                    }
+                                    Component {
+                                        id: orderedMultiC
+                                        Item {
+                                            id: ordered
+                                            anchors.fill: parent
+                                            readonly property var options: sheet.optsFor(srow.r)
+                                            readonly property var chosen: sheet.val(srow.r) || []
+                                            readonly property var entries: {
+                                                var out = [];
+                                                var seen = {};
+                                                for (var i = 0; i < ordered.chosen.length; i++) {
+                                                    var key = ordered.chosen[i];
+                                                    if (ordered.options.indexOf(key) < 0 || seen[key]) continue;
+                                                    seen[key] = true;
+                                                    out.push({ key: key, on: true, order: out.length });
+                                                }
+                                                var enabledCount = out.length;
+                                                for (var j = 0; j < ordered.options.length; j++) {
+                                                    var candidate = ordered.options[j];
+                                                    if (!seen[candidate])
+                                                        out.push({ key: candidate, on: false, order: -1 });
+                                                }
+                                                for (var n = 0; n < out.length; n++)
+                                                    out[n].enabledCount = enabledCount;
+                                                return out;
+                                            }
+                                            implicitHeight: orderedRows.implicitHeight
+
+                                            function toggle(key) {
+                                                var l = ordered.chosen.slice();
+                                                var i = l.indexOf(key);
+                                                if (i >= 0) l.splice(i, 1); else l.push(key);
+                                                sheet.edited(srow.r.key, l);
+                                            }
+                                            function move(key, delta) {
+                                                var l = ordered.chosen.slice();
+                                                var i = l.indexOf(key);
+                                                var j = i + delta;
+                                                if (i < 0 || j < 0 || j >= l.length) return;
+                                                var moved = l.splice(i, 1)[0];
+                                                l.splice(j, 0, moved);
+                                                sheet.edited(srow.r.key, l);
+                                            }
+
+                                            Column {
+                                                id: orderedRows
+                                                width: parent.width
+                                                spacing: 5
+                                                Repeater {
+                                                    model: ordered.entries
+                                                    Item {
+                                                        id: orderedEntry
+                                                        required property var modelData
+                                                        width: orderedRows.width
+                                                        height: 30
+                                                        Rectangle {
+                                                            anchors { left: parent.left; right: moveButtons.left; rightMargin: 6; top: parent.top; bottom: parent.bottom }
+                                                            radius: Tokens.radius
+                                                            color: orderedEntry.modelData.on ? Tokens.bone : (orderedTap.pressed ? Tokens.tint16 : orderedHover.hovered ? Tokens.tint10 : "transparent")
+                                                            border.width: Tokens.border
+                                                            border.color: orderedHover.hovered && !orderedEntry.modelData.on ? Tokens.lineStrong : Tokens.line
+                                                            Row {
+                                                                anchors { left: parent.left; leftMargin: 10; verticalCenter: parent.verticalCenter }
+                                                                spacing: 7
+                                                                Text {
+                                                                    text: orderedEntry.modelData.on ? (orderedEntry.modelData.order + 1) : "+"
+                                                                    color: orderedEntry.modelData.on ? Tokens.inkOnBone : Tokens.inkFaint
+                                                                    font.family: Tokens.mono; font.pixelSize: 9
+                                                                    anchors.verticalCenter: parent.verticalCenter
+                                                                }
+                                                                Text {
+                                                                    text: I18n.tr(orderedEntry.modelData.key)
+                                                                    color: orderedEntry.modelData.on ? Tokens.inkOnBone : Tokens.inkDim
+                                                                    font.family: Tokens.ui; font.pixelSize: 10; font.weight: Font.Medium
+                                                                    anchors.verticalCenter: parent.verticalCenter
+                                                                }
+                                                            }
+                                                            HoverHandler { id: orderedHover; cursorShape: Qt.PointingHandCursor }
+                                                            TapHandler { id: orderedTap; onTapped: ordered.toggle(orderedEntry.modelData.key) }
+                                                        }
+                                                        Row {
+                                                            id: moveButtons
+                                                            anchors { right: parent.right; verticalCenter: parent.verticalCenter }
+                                                            spacing: 4
+                                                            visible: orderedEntry.modelData.on
+                                                            Repeater {
+                                                                model: [
+                                                                    { glyph: "↑", delta: -1, armed: orderedEntry.modelData.order > 0 },
+                                                                    { glyph: "↓", delta: 1, armed: orderedEntry.modelData.order >= 0 && orderedEntry.modelData.order < orderedEntry.modelData.enabledCount - 1 }
+                                                                ]
+                                                                Rectangle {
+                                                                    id: moveButton
+                                                                    required property var modelData
+                                                                    width: 28; height: 28; radius: Tokens.radius
+                                                                    enabled: modelData.armed
+                                                                    opacity: enabled ? 1 : 0.28
+                                                                    color: moveTap.pressed ? Tokens.tint16 : moveHover.hovered ? Tokens.tint10 : "transparent"
+                                                                    border.width: Tokens.border
+                                                                    border.color: moveHover.hovered ? Tokens.lineStrong : Tokens.line
+                                                                    Text { anchors.centerIn: parent; text: moveButton.modelData.glyph; color: Tokens.inkDim; font.family: Tokens.ui; font.pixelSize: 12 }
+                                                                    HoverHandler { id: moveHover; enabled: moveButton.enabled; cursorShape: Qt.PointingHandCursor }
+                                                                    TapHandler { id: moveTap; enabled: moveButton.enabled; onTapped: ordered.move(orderedEntry.modelData.key, moveButton.modelData.delta) }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }

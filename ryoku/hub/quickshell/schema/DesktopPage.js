@@ -101,8 +101,8 @@ var rows = [{
         "group": "LEFT SIDEBAR",
         "key": "sidebars.left.cards",
         "label": "Cards",
-        "desc": "Cards shown in the left sidebar",
-        "ctl": "multi",
+        "desc": "Choose and order the cards in the left sidebar",
+        "ctl": "ordered-multi",
         "src": "shell",
         "opts": ["system","notifications","weather","media","capture","stage"]
     },{
@@ -118,8 +118,8 @@ var rows = [{
         "group": "RIGHT SIDEBAR",
         "key": "sidebars.right.cards",
         "label": "Cards",
-        "desc": "Cards shown in the right sidebar",
-        "ctl": "multi",
+        "desc": "Choose and order the cards in the right sidebar",
+        "ctl": "ordered-multi",
         "src": "shell",
         "opts": ["usage","tools","chat"]
     },{

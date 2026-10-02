@@ -577,6 +577,16 @@ Scope {
 
         anchors { top: true; left: true; right: true; bottom: true }
 
+        // The sidebar lives below this desktop surface. Keep the visual window
+        // fullscreen, but move its Wayland input region with the pushed desktop
+        // so the revealed sidebar strip can receive pointer events.
+        mask: Region {
+            x: Math.max(0, slideContent.x)
+            y: 0
+            width: Math.max(0, win.width - Math.abs(slideContent.x))
+            height: win.height
+        }
+
         // enabled desktopWidget-hosted plugins, filtered from the shared
         // Registry. drives the Repeater below so plugin tiles ride the
         // SAME wallpaper layer as the clock: one layer, one input
@@ -1646,7 +1656,7 @@ Scope {
                         "" + x, "" + y, "" + sc, "" + lk];
                     sizeProc.running = true;
                 }
-                onOpacityChanged: (id, op) => {
+                onPlacementOpacityChanged: (id, op) => {
                     const dw = win.placementOf(id);
                     const x = (dw.x !== undefined) ? dw.x : 80;
                     const y = (dw.y !== undefined) ? dw.y : 80;

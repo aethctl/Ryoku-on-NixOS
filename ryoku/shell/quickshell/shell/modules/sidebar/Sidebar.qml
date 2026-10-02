@@ -132,15 +132,10 @@ Scope {
         WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         anchors { top: true; bottom: true; left: true; right: true }
         mask: Region {
-            width: dismiss.width
+            x: root.side === "left" ? root.surfaceWidth : 0
+            y: 0
+            width: Math.max(0, dismiss.width - root.surfaceWidth)
             height: dismiss.height
-            Region {
-                intersection: Intersection.Subtract
-                x: root.side === "left" ? 0 : dismiss.width - root.surfaceWidth
-                y: 0
-                width: root.surfaceWidth
-                height: dismiss.height
-            }
         }
 
         MouseArea {

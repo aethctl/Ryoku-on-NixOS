@@ -150,7 +150,7 @@ Item {
         required property bool armed
         required property var action
 
-        implicitHeight: 78 * root.s
+        implicitHeight: 92 * root.s
         radius: Tokens.radius * root.s
         color: tile.active ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, tileTap.pressed ? 0.25 : tileHover.hovered ? 0.19 : 0.14)
             : tileTap.pressed ? Tokens.tint16 : tileHover.hovered ? Tokens.tint10 : Tokens.tint5

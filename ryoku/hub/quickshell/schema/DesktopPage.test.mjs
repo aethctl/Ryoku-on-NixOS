@@ -36,9 +36,9 @@ test("Sidebars exposes the complete shell-backed panel and card settings", () =>
         ["sidebars.push", "PANEL", "sw"],
         ["sidebars.wallpaperSlide", "PANEL", "slid"],
         ["sidebars.left.enabled", "LEFT SIDEBAR", "sw"],
-        ["sidebars.left.cards", "LEFT SIDEBAR", "multi"],
+        ["sidebars.left.cards", "LEFT SIDEBAR", "ordered-multi"],
         ["sidebars.right.enabled", "RIGHT SIDEBAR", "sw"],
-        ["sidebars.right.cards", "RIGHT SIDEBAR", "multi"]
+        ["sidebars.right.cards", "RIGHT SIDEBAR", "ordered-multi"]
     ]);
     for (const row of sidebarRows) {
         assert.equal(row.src, "shell", `${row.key} writes shell settings`);
