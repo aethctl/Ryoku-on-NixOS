@@ -239,7 +239,7 @@ Singleton {
 
     Process {
         id: _cleanupStale
-        command: ["pkill", "-f", "nmcli monitor"]
+        command: ["pkill", "-f", "(^|/)nmcli monitor$"]
         running: false
         onExited: subscriber.running = true
     }
@@ -247,7 +247,7 @@ Singleton {
     Process {
         id: subscriber
         running: false
-        command: ["nmcli", "monitor"]
+        command: ["python3", Directories.scriptsPath + "/daemon/parent-owned.py", "nmcli", "monitor"]
         // Auto-restart if the monitor process dies (can happen after lockscreen/suspend)
         onRunningChanged: if (!running && !root._destroying) running = true
         stdout: SplitParser {

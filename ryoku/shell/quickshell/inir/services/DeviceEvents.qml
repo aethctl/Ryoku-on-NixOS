@@ -217,7 +217,7 @@ Singleton {
     Process {
         id: udevCleanup
         running: root.allows("usb") || root.allows("drives")
-        command: ["pkill", "-f", "^(/usr/bin/)?udevadm monitor --udev --subsystem-match=usb/usb_device --subsystem-match=block$"]
+        command: ["pkill", "-f", "(^|/)udevadm monitor --udev --subsystem-match=usb/usb_device --subsystem-match=block$"]
         onExited: udevProbe.running = true
     }
     Component.onDestruction: udevMonitor.running = false
@@ -234,7 +234,7 @@ Singleton {
     Process {
         id: udevMonitor
         running: root.udevAvailable && (root.allows("usb") || root.allows("drives"))
-        command: ["udevadm", "monitor", "--udev", "--subsystem-match=usb/usb_device", "--subsystem-match=block"]
+        command: ["python3", Directories.scriptsPath + "/daemon/parent-owned.py", "udevadm", "monitor", "--udev", "--subsystem-match=usb/usb_device", "--subsystem-match=block"]
         stdout: SplitParser {
             onRead: line => {
                 if (!/\s(add|remove)\s/.test(line)) return

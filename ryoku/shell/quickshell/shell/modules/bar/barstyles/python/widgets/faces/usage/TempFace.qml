@@ -41,12 +41,11 @@ Item {
     }
 
     property real wavePhase: 0.0
-    NumberAnimation on wavePhase {
-        from: 0
-        to: Math.PI * 2
-        duration: 1800
-        loops: Animation.Infinite
+    Timer {
+        interval: 100
+        repeat: true
         running: root.visible
+        onTriggered: root.wavePhase = (root.wavePhase + Math.PI / 9) % (Math.PI * 2)
     }
 
     property real rawTemp: isNaN(SysData.temp) ? 0.0 : SysData.temp

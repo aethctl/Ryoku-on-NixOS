@@ -18,8 +18,8 @@ Item {
     property var currentTime: new Date()
 
     Timer {
-        interval: 16
-        running: true
+        interval: root.showSeconds ? 33 : 1000
+        running: root.visible
         repeat: true
         onTriggered: {
             root.currentTime = new Date();

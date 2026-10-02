@@ -119,6 +119,11 @@ Item {
         }
     }
 
+    Component.onDestruction: {
+        kbWatcher.running = false;
+        briWatcher.running = false;
+    }
+
     Process {
         id: kbWatcher
         running: true
