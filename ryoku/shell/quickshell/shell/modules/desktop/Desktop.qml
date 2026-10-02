@@ -637,6 +637,26 @@ Scope {
                 StageCfg.StageSession.markDirty();
         }
 
+        Item {
+            id: slideContent
+            x: Services.SidebarState.slideOffset(root.screen ? root.screen.name : "")
+            y: 0
+            width: parent.width
+            height: parent.height
+
+            Behavior on x {
+                enabled: !Services.Motion.reduce
+                NumberAnimation {
+                    duration: Services.SidebarState.isOpen(root.screen, "left")
+                        || Services.SidebarState.isOpen(root.screen, "right")
+                        ? Services.SidebarState.enterDuration : Services.SidebarState.exitDuration
+                    easing.type: Easing.Bezier
+                    easing.bezierCurve: Services.SidebarState.isOpen(root.screen, "left")
+                        || Services.SidebarState.isOpen(root.screen, "right")
+                        ? Services.SidebarState.enterCurve : Services.SidebarState.exitCurve
+                }
+            }
+
         // The base wallpaper painter: the reveal backdrop composites each new
         // frame over the old one through the preset the daemon attached to the
         // frame (a GPU mask shader), decoding capped at surface resolution.
@@ -704,12 +724,12 @@ Scope {
             // An invisible Image still decodes while its source is set: hold the
             // url back until a glass widget actually samples it, or this mirror
             // costs a full-screen decode on every box that has a wallpaper.
-            source: win.glassWanted ? root.wallpaperUrl : ""
+            source: slideContent.glassWanted ? root.wallpaperUrl : ""
             cache: false
             asynchronous: true
             sourceSize.width: Math.ceil(width * backdrop.screenDpr)
             sourceSize.height: Math.ceil(height * backdrop.screenDpr)
-            visible: win.glassWanted
+            visible: slideContent.glassWanted
             fillMode: {
                 switch (root.wallpaperFit) {
                 case "Contain": return Image.PreserveAspectFit;
@@ -1518,6 +1538,7 @@ Scope {
         Process {
             id: resetProc
             onRunningChanged: if (!resetProc.running) root._runResetQueue()
+        }
         }
     }
 
