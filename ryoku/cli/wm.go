@@ -39,6 +39,8 @@ func cmdWm(args []string) {
 		cmdWmAct(args[1:])
 	case "session":
 		cmdWmSession()
+	case "handles":
+		cmdWmHandles()
 	case "config":
 		cmdWmConfig(args[1:])
 	case "reset-paths":
@@ -51,7 +53,7 @@ func cmdWm(args []string) {
 }
 
 func wmUsage() {
-	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  caps              print the active provider's capability manifest (JSON)\n  state             print the active provider's current state (JSON)\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
+	fmt.Print(i18n.T("Usage: ryoku wm <command>\n\n  status            print the detected provider, its capabilities and workspace model\n  caps              print the active provider's capability manifest (JSON)\n  state             print the active provider's current state (JSON)\n  config [name]     print a provider's config dir and the files it owns (JSON)\n  reset-paths       print the config files a factory reset clears (one path per line)\n  handles           print the session IPC handle variables (one per line)\n  use <name>        preview and switch to another compositor (installs its package)\n  act <id> [args]   dispatch a window-manager action through the provider\n  session           print the provider's wayland-session desktop entry\n"))
 }
 
 func cmdWmStatus() {
@@ -162,6 +164,16 @@ func cmdWmSession() {
 		die("%v", err)
 	}
 	os.Stdout.Write(out)
+}
+
+// cmdWmHandles prints the environment variables a compositor session carries
+// as its live IPC handle, one per line: the names come from the seam so the
+// login cutover clears exactly the handles a session can hold, never a copy of
+// the list.
+func cmdWmHandles() {
+	for _, name := range wm.SessionHandles() {
+		fmt.Println(name)
+	}
 }
 
 // cmdWmConfig prints where a provider's config lives and which files belong to
