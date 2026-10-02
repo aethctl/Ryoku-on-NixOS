@@ -36,16 +36,26 @@ build() {
 package() {
   install -Dm755 "$srcdir/ryoku-shell" "$pkgdir/usr/bin/ryoku-shell"
   install -Dm755 "$srcdir/ryoku-livewall" "$pkgdir/usr/bin/ryoku-livewall"
-  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-reload-cover" \
-    "$pkgdir/usr/bin/ryoku-reload-cover"
+  # Every shell leaf script the bar, launcher, Hub, keybinds, recorder and the
+  # daemon call by bare name (ryoku-app, ryoku-cmd-*, ryoku-sysinfo, the recorder
+  # helpers, ...). They resolve on PATH with no compositor config tree, so a niri
+  # box that ships no compositor scripts still gets every one of them. A single
+  # glob, so a new script lands here with no packaging edit.
+  local s
+  for s in "$_repo"/ryoku/shell/scripts/ryoku-*; do
+    [[ -f $s ]] || continue
+    install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
+  done
+  # ryostage: the wallpaper engine's launcher. Not a ryoku-* name, so it installs
+  # beside the glob.
   install -Dm755 "$_repo/ryoku/shell/scripts/ryostage" \
     "$pkgdir/usr/bin/ryostage"
-  install -Dm755 "$_repo/ryoku/shell/scripts/ryoku-eq" \
-    "$pkgdir/usr/bin/ryoku-eq"
-  # the Stash sidebar's helpers: shell scripts, so they ship with the shell and
-  # resolve on PATH with no compositor config tree.
-  local s
-  for s in "$_repo"/ryoku/shell/scripts/stash-*.sh; do
+  # The .sh helpers the shell drives by bare name: the Stash sidebar's cobalt
+  # queue and its compress/install/download backends, the LocalSend LAN transfer,
+  # the clipboard-thumbnail generator. Shell scripts, not compositor config, so
+  # they ride the shell to PATH and resolve with no compositor config tree.
+  for s in "$_repo"/ryoku/shell/scripts/*.sh; do
+    [[ -f $s ]] || continue
     install -Dm755 "$s" "$pkgdir/usr/bin/${s##*/}"
   done
   install -d "$pkgdir/usr/share/ryoku/reload-cover"
