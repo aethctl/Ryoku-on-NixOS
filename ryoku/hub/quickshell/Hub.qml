@@ -507,6 +507,16 @@ Rectangle {
     // wm seam so no page forks a compositor CLI.
     readonly property var wmWindows: Settings.windows
     readonly property var wmConfigFiles: Settings.configFiles
+    function wmSettingsFilename() {
+        var files = hub.wmConfigFiles || [];
+        for (var i = 0; i < files.length; i++) {
+            var leaf = String(files[i]).split("/").pop();
+            var dot = leaf.lastIndexOf(".");
+            if (dot >= 0)
+                return "settings" + leaf.slice(dot);
+        }
+        return "desktop.json";
+    }
     function wmAct(action, args) { Settings.send("wm.act", { action: action, args: args || [] }); }
 
     // ── the store ─────────────────────────────────────────────────────────
@@ -699,6 +709,8 @@ Rectangle {
         return true;
     }
     function save() {
+        if (hyprSave.running)
+            return;
         var files = {};
         for (var k in defs) {
             if (draft[k] === undefined || committed[k] === undefined) continue;
@@ -718,9 +730,10 @@ Rectangle {
         // retranslates. Set it here too so this window switches deterministically.
         if (files.shell) I18n.configLang = hub.committed.language || "Auto";
         if (hub.hyprChanges().length) {
-            hyprSave.command = ["ryoku-hub", "desktop", "save", JSON.stringify(hub.hyprDraft)];
+            hub.wmSaveError = "";
+            hyprSave.pendingDraft = JSON.parse(JSON.stringify(hub.hyprDraft));
+            hyprSave.command = ["ryoku-hub", "desktop", "save", JSON.stringify(hyprSave.pendingDraft)];
             hyprSave.running = true;
-            hub.hyprCommitted = JSON.parse(JSON.stringify(hub.hyprDraft));
         }
         hub.captureLiveBaseline();
         hub.savePage();
@@ -791,7 +804,7 @@ Rectangle {
             if (by[order[i]].length)
                 out.push({ file: hub.fileFor(order[i]) + ".json", changes: by[order[i]] });
         var hc = hub.hyprChanges();
-        if (hc.length) out.push({ file: "settings.lua", changes: hc });
+        if (hc.length) out.push({ file: hub.wmSettingsFilename(), changes: hc });
         return out;
     }
 
@@ -849,15 +862,16 @@ Rectangle {
         }
     }
 
-    // ── hypr backend (the Lua pages) ─────────────────────────────────────
-    // Every Lua page persists through one nested object via ryoku-hub, not a
-    // JsonAdapter. Pages read and write dotted paths (appearance.gapsIn); the
-    // change shows up in the same dirty/diff/save the JSON pages use, grouped
-    // under settings.lua. Nothing is written until Save calls `hypr save`.
+    // ── window-manager backend ───────────────────────────────────────────
+    // Every compositor page persists through one nested object via ryoku-hub,
+    // not a JsonAdapter. Pages read and write dotted paths; the change shows up
+    // in the same dirty/diff/save the JSON pages use, grouped under the active
+    // provider's generated settings file. Nothing is written until Save.
     property var hyprCommitted: ({})
     property var hyprDraft: ({})
     property var hyprDefaults: ({})
     property bool wmLoaded: false
+    property string wmSaveError: ""
 
     // A bespoke page (e.g. Appearance > Theme) that owns its own edits can route
     // them through the shared action bar: it raises pageDirty while it holds
@@ -891,7 +905,20 @@ Rectangle {
             onStreamFinished: { try { hub.hyprDefaults = JSON.parse(this.text); } catch (e) {} }
         }
     }
-    Process { id: hyprSave }
+    Process {
+        id: hyprSave
+        property var pendingDraft: ({})
+        stderr: StdioCollector { id: hyprSaveStderr }
+        onExited: function(code) {
+            if (code === 0) {
+                hub.hyprCommitted = JSON.parse(JSON.stringify(pendingDraft));
+                hub.wmSaveError = "";
+            } else {
+                hub.wmSaveError = hyprSaveStderr.text.trim() || I18n.tr("Couldn't save window-manager settings.");
+            }
+            pendingDraft = ({});
+        }
+    }
 
     // live preview: the shell owns it, not the pages. A hypr edit applies to the
     // running compositor (throttled) so "previewing live" is honest; revert and
@@ -1528,6 +1555,18 @@ Rectangle {
         onReverted: hub.revert()
         onReset: hub.resetDefaults()
         onDiffRequested: diffPop.toggle()
+    }
+    Text {
+        visible: hub.wmSaveError !== ""
+        z: 70
+        anchors { right: parent.right; rightMargin: Tokens.s6; bottom: bar.top; bottomMargin: Tokens.s2 }
+        width: Math.min(560, implicitWidth)
+        text: hub.wmSaveError
+        color: Tokens.ink
+        font.family: Tokens.ui
+        font.pixelSize: Tokens.fSmall
+        wrapMode: Text.WordWrap
+        horizontalAlignment: Text.AlignRight
     }
 
     // ── catalogue overlay (font pick) ──────────────────────────────────────

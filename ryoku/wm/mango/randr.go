@@ -7,12 +7,20 @@ import (
 	"strings"
 )
 
-// randrDetail reads the editor detail for one output over wlr-randr, which
-// speaks the wlr-output-management-v1 protocol mango serves (verified in
-// src/main.c). IPC carries none of this: advertised modes, position, transform
-// and the EDID make/model come from the protocol instead. Best-effort: an
-// absent tool or a failed read yields ok=false and the lean IPC fields stand
-// alone.
+// wlr-randr speaks the wlr-output-management-v1 protocol mango serves
+// (verified in src/main.c). IPC carries none of the advertised modes, transform
+// or EDID make/model.
+type randrReadState uint8
+
+const (
+	randrUnavailable randrReadState = iota
+	randrParsed
+)
+
+type randrRead struct {
+	state randrReadState
+	text  string
+}
 
 type randrOutput struct {
 	x, y, transform int
@@ -23,17 +31,73 @@ type randrOutput struct {
 	physicalWidth   int
 }
 
-func randrDetail(name string) (randrOutput, bool) {
-	out, err := exec.Command("wlr-randr").Output()
+var runRandr = func() ([]byte, error) {
+	return exec.Command("wlr-randr").Output()
+}
+
+// A successful but empty parse is distinct from an unavailable client. The
+// display state can then keep mango's IPC geometry without pretending the
+// output-management query succeeded.
+func readRandr() randrRead {
+	out, err := runRandr()
 	if err != nil {
+		return randrRead{state: randrUnavailable}
+	}
+	return randrRead{state: randrParsed, text: string(out)}
+}
+
+func (r randrRead) detail(name string) (randrOutput, bool) {
+	if r.state != randrParsed {
 		return randrOutput{}, false
 	}
-	return parseRandr(string(out), name)
+	return parseRandr(r.text, name)
 }
 
 // parseRandr walks wlr-randr's output block for one named output: a header
 // line `NAME "make" "model"`, then indented `Enabled:`, `Position: x,y`,
-// `Transform:` and `Modes:` rows with `WxH px (current)` entries.
+// `Transform:` and `Modes:` rows with `WxH px, Hz (current)` entries.
+
+func randrHeaderIdentity(raw, name string) (string, string) {
+	rest := strings.TrimSpace(strings.TrimPrefix(raw, name))
+	parts := make([]string, 0, 2)
+
+	for strings.HasPrefix(rest, `"`) {
+		end := -1
+		escaped := false
+		for i := 1; i < len(rest); i++ {
+			switch {
+			case rest[i] == '"' && !escaped:
+				end = i
+			case rest[i] == '\\' && !escaped:
+				escaped = true
+			default:
+				escaped = false
+			}
+			if end >= 0 {
+				break
+			}
+		}
+		if end < 0 {
+			break
+		}
+		value, err := strconv.Unquote(rest[:end+1])
+		if err != nil {
+			break
+		}
+		parts = append(parts, value)
+		rest = strings.TrimSpace(rest[end+1:])
+	}
+
+	switch len(parts) {
+	case 0:
+		return "", ""
+	case 1:
+		return "", parts[0]
+	default:
+		return parts[0], strings.Join(parts[1:], " ")
+	}
+}
+
 func parseRandr(text, name string) (randrOutput, bool) {
 	var cur randrOutput
 	have, inBlock, inModes := false, false, false
@@ -48,11 +112,7 @@ func parseRandr(text, name string) (randrOutput, bool) {
 			if inBlock {
 				have = true
 				cur = randrOutput{enabled: true}
-
-				desc := strings.TrimSpace(strings.TrimPrefix(raw, name))
-				if unquoted, err := strconv.Unquote(desc); err == nil {
-					cur.model = unquoted
-				}
+				cur.make, cur.model = randrHeaderIdentity(raw, name)
 			}
 			continue
 		}
@@ -64,21 +124,16 @@ func parseRandr(text, name string) (randrOutput, bool) {
 			inModes = true
 			continue
 		}
-		if inModes && strings.Contains(trimmed, "px") {
-			mode, ok := randrMode(trimmed)
-			if !ok {
+		if inModes {
+			if mode, ok := parseRandrMode(trimmed); ok {
+				cur.modes = append(cur.modes, mode)
+				if strings.Contains(trimmed, "(current") {
+					cur.mode = mode
+				}
 				continue
 			}
-
-			cur.modes = append(cur.modes, mode)
-
-			if strings.Contains(trimmed, "current") {
-				cur.mode = mode
-			}
-
-			continue
+			inModes = false
 		}
-		inModes = false
 		k, v, ok := strings.Cut(trimmed, ":")
 		if !ok {
 			continue
@@ -114,30 +169,22 @@ func parseRandr(text, name string) (randrOutput, bool) {
 	return cur, have
 }
 
-func randrMode(line string) (string, bool) {
+func parseRandrMode(line string) (string, bool) {
 	fields := strings.Fields(line)
-
 	if len(fields) < 4 || fields[1] != "px," || fields[3] != "Hz" {
 		return "", false
 	}
-
-	dims := fields[0]
-	w, h, ok := strings.Cut(dims, "x")
-
+	width, height, ok := strings.Cut(fields[0], "x")
 	if !ok {
 		return "", false
 	}
-
-	wi, errW := strconv.Atoi(w)
-	hi, errH := strconv.Atoi(h)
-	hz, errHz := strconv.ParseFloat(fields[2], 64)
-
-	if errW != nil || errH != nil || errHz != nil ||
-		wi <= 0 || hi <= 0 || hz <= 0 {
+	w, werr := strconv.Atoi(width)
+	h, herr := strconv.Atoi(height)
+	hz, hzerr := strconv.ParseFloat(fields[2], 64)
+	if werr != nil || herr != nil || hzerr != nil || w <= 0 || h <= 0 || hz <= 0 {
 		return "", false
 	}
-
-	return dims + "@" + strconv.FormatFloat(hz, 'f', -1, 64), true
+	return fields[0] + "@" + strconv.FormatFloat(hz, 'f', -1, 64), true
 }
 
 // waylandTransformName folds wlr-randr's spelling ("normal", "_90",

@@ -122,7 +122,7 @@ func TestPackagesLeadWithTheVariant(t *testing.T) {
 	if compositorPackages[0] != "ryoku-desktop-mango" {
 		t.Fatalf("reclaim must start from the variant package, got %q", compositorPackages[0])
 	}
-	for _, want := range []string{"mangowm", "scenefx0.5", "xdg-desktop-portal-wlr", "wlsunset"} {
+	for _, want := range []string{"mangowm", "wlr-randr", "scenefx", "xdg-desktop-portal-wlr", "wlsunset"} {
 		found := false
 		for _, p := range compositorPackages {
 			if p == want {
