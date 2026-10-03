@@ -499,24 +499,184 @@ const startupStagger = 250 * time.Millisecond
 // and a leftover that ignores SIGTERM used to survive the session, so this waits
 // for the process to go and SIGKILLs what does not. It runs before every start,
 // since a stray can appear at any point.
+//
+// Each stray is taken down with its whole subtree: a watcher started as
+// `bash -c "... inotifywait"` without exec is a grandchild, and killing only
+// the surface reparents it to init, where it outlives every reload. Those
+// leaks are what made a plain `ps` show a dozen dead shells' helpers.
 func (d *daemon) reapStrays() int {
 	strays := d.strayPids()
-	if len(strays) == 0 {
+	n := len(strays)
+	targets := withDescendants(strays)
+	// Watchers orphaned by an earlier SIGKILL are no longer under any surface:
+	// systemd-user adopted them. Sweep those by signature too, so a reload does
+	// not leave a helper watching a path its shell is gone to serve.
+	targets = append(targets, orphanedWatchers()...)
+	if len(targets) == 0 {
 		return 0
 	}
-	signalAll(strays, syscall.SIGTERM)
-	strays = waitGone(strays, 3*time.Second)
-	if len(strays) > 0 {
+	signalAll(targets, syscall.SIGTERM)
+	left := waitGone(targets, 3*time.Second)
+	if len(left) > 0 {
 		// SIGTERM was ignored or the process is stuck in a syscall: take it out,
 		// because a second live shell is worse than a hard kill.
-		signalAll(strays, syscall.SIGKILL)
-		strays = waitGone(strays, time.Second)
+		signalAll(left, syscall.SIGKILL)
+		left = waitGone(left, time.Second)
 	}
-	return len(strays)
+	return n
+}
+
+// orphanedWatchers lists the shell's own helper processes that a dead surface
+// left behind: an inotifywait/keyboard/cava watcher reparented away from any
+// quickshell, so its shell died and it watches paths for nobody.
+func orphanedWatchers() []int {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil
+	}
+	var out []int
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join("/proc", e.Name(), "cmdline"))
+		if err != nil {
+			continue
+		}
+		if !isShellWatcher(string(raw)) {
+			continue
+		}
+		if !orphanedFromShell(pid) {
+			continue
+		}
+		out = append(out, pid)
+	}
+	return out
+}
+
+// isShellWatcher recognises the helper processes the shell spawns: the ryoku
+// python inotifywait watchers, the keyboard-lock daemon, and the cava analyser.
+func isShellWatcher(cmdline string) bool {
+	argv := strings.Split(strings.TrimRight(cmdline, "\x00"), "\x00")
+	if len(argv) == 0 {
+		return false
+	}
+	switch filepath.Base(argv[0]) {
+	case "inotifywait":
+		for _, a := range argv[1:] {
+			if strings.Contains(a, "ryoku-python") || strings.Contains(a, "ryoku/python") {
+				return true
+			}
+		}
+	case "python3", "python":
+		for _, a := range argv[1:] {
+			if strings.Contains(a, "keyboard_lock_state_daemon.py") {
+				return true
+			}
+		}
+	case "cava":
+		for _, a := range argv[1:] {
+			if strings.Contains(a, "ryoku-cava") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// orphanedFromShell walks a process's ancestors: a live helper sits under a
+// quickshell instance, so reaching init or a systemd without crossing one
+// means its shell died and left it behind.
+func orphanedFromShell(pid int) bool {
+	cur := pid
+	for range 8 {
+		ppid, err := parentPid(cur)
+		if err != nil || ppid <= 1 {
+			return true
+		}
+		comm, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(ppid), "comm"))
+		if err != nil {
+			return true
+		}
+		switch strings.TrimSpace(string(comm)) {
+		case "qs", "quickshell":
+			return false
+		case "systemd", "systemd-userwr":
+			return true
+		}
+		cur = ppid
+	}
+	return false
+}
+
+// parentPid reads a pid's parent from its /proc stat: the second field after
+// the parenthesised comm (ppid follows the state letter).
+func parentPid(pid int) (int, error) {
+	raw, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return 0, err
+	}
+	rest := raw[strings.LastIndex(string(raw), ")")+2:]
+	fields := strings.Fields(string(rest))
+	if len(fields) < 2 {
+		return 0, fmt.Errorf("short stat for %d", pid)
+	}
+	return strconv.Atoi(fields[1])
+}
+
+// withDescendants expands a pid set to include every process under it, so a
+// single signal wave takes a surface and the watchers it spawned.
+func withDescendants(roots []int) []int {
+	children := map[int][]int{}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return roots
+	}
+	for _, e := range entries {
+		pid, err := strconv.Atoi(e.Name())
+		if err != nil {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join("/proc", e.Name(), "stat"))
+		if err != nil {
+			continue
+		}
+		// ppid is the field after the comm, which may contain spaces: read past ')'.
+		rest := raw[strings.LastIndex(string(raw), ")")+2:]
+		fields := strings.Fields(string(rest))
+		if len(fields) < 2 {
+			continue
+		}
+		ppid, err := strconv.Atoi(fields[1])
+		if err != nil {
+			continue
+		}
+		children[ppid] = append(children[ppid], pid)
+	}
+	out := make([]int, 0, len(roots))
+	seen := map[int]bool{}
+	var walk func(int)
+	walk = func(pid int) {
+		if seen[pid] {
+			return
+		}
+		seen[pid] = true
+		out = append(out, pid)
+		for _, c := range children[pid] {
+			walk(c)
+		}
+	}
+	for _, r := range roots {
+		walk(r)
+	}
+	return out
 }
 
 // strayPids lists live quickshell processes that render a component this daemon
-// owns but are not its own children.
+// owns but are not its own children. A process running under a different HOME
+// or XDG_CONFIG_HOME is a deliberately isolated instance (a sandboxed nested
+// probe, a second user), not a leftover of this session, and is left alone.
 func (d *daemon) strayPids() []int {
 	entries, err := os.ReadDir("/proc")
 	if err != nil {
@@ -524,6 +684,11 @@ func (d *daemon) strayPids() []int {
 	}
 	mine := d.ownedPids()
 	self := os.Getpid()
+	myHome := os.Getenv("HOME")
+	myCfg := os.Getenv("XDG_CONFIG_HOME")
+	if myCfg == "" {
+		myCfg = myHome + "/.config"
+	}
 	var out []int
 	for _, e := range entries {
 		pid, err := strconv.Atoi(e.Name())
@@ -535,14 +700,46 @@ func (d *daemon) strayPids() []int {
 			continue
 		}
 		argv := strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
+		matches := false
 		for _, c := range components {
 			if selectsComponent(argv, qsSelect(c.name)) {
-				out = append(out, pid)
+				matches = true
 				break
 			}
 		}
+		if !matches {
+			continue
+		}
+		envRaw, err := os.ReadFile(filepath.Join("/proc", e.Name(), "environ"))
+		if err != nil {
+			continue // gone, or not ours to read: never kill what we cannot place
+		}
+		if !sameSessionEnv(string(envRaw), myHome, myCfg) {
+			continue
+		}
+		out = append(out, pid)
 	}
 	return out
+}
+
+// sameSessionEnv reports whether a /proc environ blob belongs to this daemon's
+// session: the same HOME and the same effective config directory.
+func sameSessionEnv(environ, home, cfgDir string) bool {
+	env := map[string]string{}
+	for _, kv := range strings.Split(environ, "\x00") {
+		if k, v, ok := strings.Cut(kv, "="); ok {
+			env[k] = v
+		}
+	}
+	h := env["HOME"]
+	if h != "" && h != home {
+		return false
+	}
+	c := env["XDG_CONFIG_HOME"]
+	if c == "" {
+		c = home + "/.config"
+	}
+	return c == cfgDir
 }
 
 // ownedPids: the quickshell children this daemon is supervising right now, so a
@@ -563,6 +760,9 @@ func (d *daemon) ownedPids() map[int]bool {
 // component sel names. Both selector forms count: a packaged daemon looks for
 // "-c shell" while a checkout's leftover reads "-p .../quickshell/shell", and
 // matching only its own form is why the reap used to miss the strays that matter.
+// Trailing instance flags (--no-duplicate, --log-times, -d) still describe an
+// instance drawing a desktop; only a subcommand (ipc, kill) after the selector
+// makes the process a client that must be left alone.
 func selectsComponent(argv, sel []string) bool {
 	if len(argv) < 3 || len(sel) < 2 {
 		return false
@@ -572,22 +772,37 @@ func selectsComponent(argv, sel []string) bool {
 	default:
 		return false
 	}
-	// a client invocation (`qs -c shell ipc call ...`) talks to an instance, it
-	// is not one; only a bare selector runs a config.
 	name := filepath.Base(sel[1])
 	for i := 1; i < len(argv)-1; i++ {
 		switch argv[i] {
 		case "-c", "--config":
-			if argv[i+1] == name && i+2 == len(argv) {
-				return true
+			if argv[i+1] == name {
+				return instanceTail(argv[i+2:])
 			}
 		case "-p", "--path":
-			if filepath.Base(argv[i+1]) == name && i+2 == len(argv) {
-				return true
+			if filepath.Base(argv[i+1]) == name {
+				return instanceTail(argv[i+2:])
 			}
 		}
 	}
 	return false
+}
+
+// instanceTail reports whether everything after a config selector is instance
+// options. A bare word that is not a known option's value is a subcommand, so
+// the process talks to an instance instead of being one.
+func instanceTail(tail []string) bool {
+	for i := 0; i < len(tail); i++ {
+		switch tail[i] {
+		case "-m", "--manifest", "--log-rules":
+			i++ // the next word is this option's value, not a subcommand
+		default:
+			if !strings.HasPrefix(tail[i], "-") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func signalAll(pids []int, sig syscall.Signal) {
