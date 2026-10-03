@@ -79,6 +79,23 @@ pkgs.stdenvNoCC.mkDerivation {
     mkdir -p "$cfg/quickshell/hub"
     cp -a ryoku/hub/quickshell/. "$cfg/quickshell/hub/"
 
+    # NixOS identity is a packaging invariant, not an upstream default. Upstream
+    # Hub releases may reintroduce the Arch label during syncs; rewrite it here
+    # as a final packaging step and fail the build if the Nix label disappears.
+    # This keeps every Ryoku-on-NixOS generation pinned to the correct identity.
+    hub_qml="$cfg/quickshell/hub/Hub.qml"
+    sed -Ei 's/RYOKU[[:space:]]+ARCH/RYOKU NIX/Ig' "$hub_qml"
+
+    if ! grep -Fq 'RYOKU NIX' "$hub_qml"; then
+      echo "Ryoku Nix branding guard: Hub header is not pinned to RYOKU NIX" >&2
+      exit 1
+    fi
+
+    if grep -Eiq 'RYOKU[[:space:]]+ARCH' "$hub_qml"; then
+      echo "Ryoku Nix branding guard: Arch Hub branding survived packaging" >&2
+      exit 1
+    fi
+
     # ── First-party Ryoku Quickshell apps ──────────────────────
 
     for appdir in ryoku/apps/*/; do
