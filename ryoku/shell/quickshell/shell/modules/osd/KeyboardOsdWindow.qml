@@ -113,7 +113,7 @@ PanelWindow {
     Connections {
         target: KeyboardLayout
 
-        function onSignatureChanged() {
+        function onVariantChanged() {
             win.showing = true
             hideTimer.restart()
         }

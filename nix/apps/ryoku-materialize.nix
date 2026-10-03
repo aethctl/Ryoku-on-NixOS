@@ -87,6 +87,7 @@ pkgs.writeShellApplication {
     export RYOKU_CONFIG_BASE="$base"
 
     ${ryoku.cli}/bin/ryoku materialize
+    ${ryoku.cli}/bin/ryoku migrate-shell-config
 
     niri_gpu="$config_home/niri/gpu.kdl"
 

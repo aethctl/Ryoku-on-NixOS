@@ -87,27 +87,31 @@ Item {
     // decay is still settling); on silence it would repaint a flat wave at
     // 60 Hz forever.
     Timer {
-        interval: 16
-        running: root.isVisVisible && (Cava.isPlaying || root.totalEnergy > 0.002)
+        interval: 33
+        running: root.isVisVisible && (Cava.processEnabled || root.totalEnergy > 0.002)
         repeat: true
         onTriggered: {
             let targets = root.processedBars;
             let current = root.smoothLevels;
             let updated = [];
             let sum = 0.0;
+            let maxDelta = 0.0;
 
             for (let i = 0; i < root.sampleCount; i++) {
                 let target = (targets && i < targets.length) ? targets[i] : 0.0;
                 let cur = (current && i < current.length) ? current[i] : 0.0;
-                let factor = target > cur ? 0.25 : 0.12;
+                let factor = target > cur ? 0.4 : 0.22;
                 let next = cur + (target - cur) * factor;
+                if (next < 0.001) next = 0.0;
                 updated.push(next);
                 sum += next;
+                maxDelta = Math.max(maxDelta, Math.abs(next - cur));
             }
 
             root.smoothLevels = updated;
             root.totalEnergy = sum / root.sampleCount;
-            waveCanvas.requestPaint();
+            if (maxDelta > 0.001 || root.totalEnergy > 0.002)
+                waveCanvas.requestPaint();
         }
     }
 

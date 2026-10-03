@@ -1962,7 +1962,9 @@ in
 
         # User applications are launched into independent app.slice scopes,
         # so the shell can safely own and clean up its complete process tree.
-        KillMode = "process";
+        # Keeping only the main process alive here leaked long-running watchers
+        # across shell restarts and left them charged to the new generation.
+        KillMode = "control-group";
         Slice = "session.slice";
       };
     };

@@ -35,9 +35,25 @@ get_locks() {
 }
 
 watch_locks() {
+    local watch_parent=$PPID
     if command -v python3 >/dev/null 2>&1; then
         exec python3 -u -c '
-import glob, os, select, struct, sys, time
+import ctypes, glob, os, select, signal, struct, sys, time
+
+# Quickshell can be replaced without explicitly reaping long-lived Process
+# children. Tie this watcher to its launching process at the kernel level so a
+# reload or crash cannot leave another input reader behind.
+_parent_pid = os.getppid()
+if _parent_pid <= 1:
+    os._exit(0)
+try:
+    _libc = ctypes.CDLL(None, use_errno=True)
+    if _libc.prctl(1, signal.SIGTERM, 0, 0, 0) != 0:  # PR_SET_PDEATHSIG
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG) failed")
+    if os.getppid() != _parent_pid:
+        os._exit(0)
+except Exception:
+    pass
 
 is_64bit = struct.calcsize("P") == 8
 event_fmt = "qqHHi" if is_64bit else "iiHHi"
@@ -86,12 +102,14 @@ fds = scan_devices()
 if fds:
     while True:
         try:
+            if os.getppid() != _parent_pid:
+                break
             if not fds:
                 time.sleep(1)
                 fds = scan_devices()
                 if not fds:
                     continue
-            rlist, _, _ = select.select(list(fds.keys()), [], [])
+            rlist, _, _ = select.select(list(fds.keys()), [], [], 1.0)
             for fd in rlist:
                 while True:
                     try:
@@ -133,6 +151,8 @@ else:
     num_paths = glob.glob("/sys/class/leds/*numlock*/brightness")
     count = 0
     while True:
+        if os.getppid() != _parent_pid:
+            break
         time.sleep(0.08)
         count += 1
         if count >= 60:
@@ -192,6 +212,7 @@ else:
     [ "$last_n" -eq -1 ] && last_n=0
 
     while true; do
+        kill -0 "$watch_parent" 2>/dev/null || return 0
         c=0
         for f in /sys/class/leds/*capslock*/brightness; do
             if [ -r "$f" ]; then

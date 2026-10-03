@@ -279,3 +279,59 @@ func TestReconcileSidebarRework(t *testing.T) {
 		t.Fatalf("clean store: status=%s detail=%q, want ok", r.status.label(), r.detail)
 	}
 }
+
+func TestMigrateShellConfigLaneConvergesPreSidebarStore(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	path := filepath.Join(sys.ConfigHome(), "ryoku", "shell.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home","stage"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebarLeftPanes":["stash"],"sidebarRightPanes":["weather"],"sidebarWidth":360,"theme":"paper"}`
+	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := MigrateShellConfig(); err != nil {
+		t.Fatalf("MigrateShellConfig: %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		t.Fatalf("migrated shell.json does not parse: %v", err)
+	}
+	for _, key := range []string{"sidebarLeftPanes", "sidebarRightPanes", "sidebarWidth"} {
+		if _, present := cfg[key]; present {
+			t.Errorf("retired key %s survived migration", key)
+		}
+	}
+	frameBars := cfg["frameBars"].(map[string]any)
+	if _, present := frameBars["menus"].(map[string]any)["quick-settings"]; present {
+		t.Error("retired quick-settings menu survived migration")
+	}
+	if _, present := frameBars["surfaces"].(map[string]any)["stash"]; present {
+		t.Error("retired stash surface survived migration")
+	}
+	if _, present := cfg["sidebars"]; !present {
+		t.Fatal("current sidebars object was not seeded")
+	}
+	if cfg["theme"] != "paper" {
+		t.Errorf("unrelated setting changed: theme=%v", cfg["theme"])
+	}
+
+	before := string(raw)
+	if err := MigrateShellConfig(); err != nil {
+		t.Fatalf("second MigrateShellConfig: %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != before {
+		t.Error("shell config migration lane is not idempotent")
+	}
+}

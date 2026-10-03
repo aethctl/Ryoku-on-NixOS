@@ -138,12 +138,12 @@ Item {
     function runSetup() {
         Spawn.run(["kitty", "--class", "ryoku-rashin-setup", "-e", "ryoku-rashin", "setup"]);
     }
-    // Open the dashboard the daemon actually serves. Two things used to send a
-    // user to a browser error they read as a 404: the port was hardcoded here
-    // while the daemon reads it from its own config, and the button opened the
-    // URL even with nothing listening. Take the port from `status --json` and
-    // start the daemon first when it is down; `ryoku-rashin serve` returns once
-    // the socket is up, so the browser never races it.
+    // Open the dashboard the daemon actually serves. If a systemd user unit is
+    // installed, it is the sole owner of the daemon. Spawning another `serve`
+    // process from the Hub can race the unit for the configured port and leaves
+    // that detached copy in the shell cgroup across restarts. Non-systemd
+    // sessions retain the detached fallback. The browser opens only after the
+    // daemon reports that it is actually listening.
     function openDashboard() {
         var url = "http://127.0.0.1:" + pg.port;
         if (pg.running) {
@@ -151,10 +151,13 @@ Item {
             return;
         }
         openProc.command = ["sh", "-c",
-            "ryoku-rashin serve --if-enabled >/dev/null 2>&1 & "
+            "if systemctl --user cat ryoku-rashin.service >/dev/null 2>&1; then "
+            + "systemctl --user start ryoku-rashin.service >/dev/null 2>&1; "
+            + "else ryoku-rashin serve --if-enabled >/dev/null 2>&1 & fi; "
             + "for i in 1 2 3 4 5 6 7 8 9 10; do "
-            + "ryoku-rashin status --json 2>/dev/null | grep -q '\"running\":true' && break; sleep 0.3; done; "
-            + "xdg-open " + url];
+            + "if ryoku-rashin status --json 2>/dev/null | grep -q '\"running\":true'; then "
+            + "xdg-open \"$1\"; exit 0; fi; sleep 0.3; done; exit 1",
+            "sh", url];
         openProc.running = true;
     }
     Process { id: openProc; onExited: pg.refresh() }

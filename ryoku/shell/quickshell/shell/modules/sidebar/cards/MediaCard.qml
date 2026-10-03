@@ -35,8 +35,10 @@ Item {
     function artist(player): string {
         if (!player)
             return "";
-        if (player.trackArtists && player.trackArtists.length > 0)
+        if (Array.isArray(player.trackArtists) && player.trackArtists.length > 0)
             return player.trackArtists.join(", ");
+        if (typeof player.trackArtists === "string" && player.trackArtists !== "")
+            return player.trackArtists;
         return player.trackArtist || "";
     }
 
