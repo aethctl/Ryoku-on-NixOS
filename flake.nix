@@ -106,8 +106,18 @@
           ryokuNixpkgs = pkgs;
         };
 
+      # Bootable Ryoku-on-NixOS live/install image. The live environment tracks
+      # the flake's nixos-unstable input; Ryoku-owned packages remain pinned to
+      # Ryoku's separate package universe. Both are locked by flake.lock.
+      nixosConfigurations.ryoku-iso = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = { inherit self ryokuInstall; };
+        modules = [ ./nix/iso ];
+      };
+
       packages.${system} = {
         ryoku-install = ryokuInstall;
+        ryoku-iso = self.nixosConfigurations.ryoku-iso.config.system.build.isoImage;
         ryoku-shell = ryoku.shell;
         ryoku-ui = ryoku.ui;
         ryoku-plugin-kit = ryoku.pluginKit;
