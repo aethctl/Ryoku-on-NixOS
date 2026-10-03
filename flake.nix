@@ -196,6 +196,26 @@
 
         # Core runtime
         ryoku-shell = ryoku.shell;
+
+        # Python is a bar style, not a second eagerly preloaded shell. Keep its
+        # panel stack demand-loaded and consume Ryoku's live settings stream
+        # instead of spawning a parallel inotify loop at idle.
+        ryoku-python-idle-contract = pkgs.runCommand
+          "ryoku-python-idle-contract-check"
+          { nativeBuildInputs = [ pkgs.gnugrep ]; }
+          ''
+            main=${./ryoku/shell/quickshell/shell/modules/bar/barstyles/python/Main.qml}
+
+            grep -Fq 'let cachedItem = ensureWidgetItem(newWidget, t);' "$main"
+            grep -Fq 'function syncLiveSettings()' "$main"
+            grep -Fq 'onSettingsLoaded() { masterWindow.syncLiveSettings(); }' "$main"
+
+            ! grep -Fq 'preloadStaggerTimer' "$main"
+            ! grep -Fq 'settingsWatcher' "$main"
+            ! grep -Fq 'inotifywait' "$main"
+
+            touch "$out"
+          '';
         ryoku-cli = ryoku.cli;
         ryoku-hub = ryoku.hub;
         ryoku-palette-bridge = ryoku.paletteBridge;
