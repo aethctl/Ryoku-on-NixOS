@@ -270,11 +270,15 @@ EOF
     mkdir -p "$user_qml"
 
     for module in Ui PluginKit FrameBars Blobs Wm; do
-      rm -rf -- "''${user_qml:?}/$module"
+      module_path="$user_qml/$module"
 
-      ln -s \
-        "$qml/Ryoku/$module" \
-        "$user_qml/$module"
+      # Legacy copies retain read-only Nix store modes. Never chmod symlinks.
+      if [ -d "$module_path" ] && [ ! -L "$module_path" ]; then
+        find "$module_path" -type d -exec chmod u+w {} +
+      fi
+
+      rm -rf -- "''${module_path:?}"
+      ln -s "$qml/Ryoku/$module" "$module_path"
     done
 
     # Hyprland's bundled plugins are immutable generation-owned packages.

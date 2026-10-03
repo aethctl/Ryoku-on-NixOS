@@ -32,7 +32,7 @@ const defaultLockSkin = "clockwork/orbital"
 // lockBundle finds the shipped qylock bundle: the package payload first, the
 // checkout on a dev box.
 func lockBundle() string {
-	if p := "/usr/share/ryoku/lockscreen/qylock"; sys.Exists(p) {
+	if p := sys.FindData("ryoku/lockscreen/qylock"); p != "" {
 		return p
 	}
 	if repo := sys.ResolveRepo(); repo != "" {
@@ -167,7 +167,7 @@ func needsLockscreenInstaller(lockerPresent, legacyTape bool) bool {
 // lockscreenInstaller finds the shipped installer: the package payload first,
 // the checkout on a dev box.
 func lockscreenInstaller() string {
-	if p := "/usr/share/ryoku/lockscreen/install-qylock"; sys.Exists(p) {
+	if p := sys.FindData("ryoku/lockscreen/install-qylock"); p != "" {
 		return p
 	}
 	if repo := sys.ResolveRepo(); repo != "" {

@@ -241,11 +241,16 @@ app bundles are the main area that still needs Nix-native adaptation.
 
 Ryoku on NixOS installs on top of an existing **flake-based NixOS system**.
 
-Run the installer as your normal user:
+Start the guided installer as your normal user:
 
 ```bash
 nix run github:aethctl/Ryoku-on-NixOS/main#install
 ```
+
+Choose Hyprland or Niri, Chromium or Firefox, Fish or Zsh, and the optional apps
+you want. Review your choices before installation begins.
+
+Use arrow keys to move, Enter to continue, Space to toggle apps and Esc to go back.
 
 The installer:
 

@@ -31,17 +31,53 @@ Run the installer as your normal user:
 nix run github:aethctl/Ryoku-on-NixOS/main#install
 ```
 
-The installer requests elevated privileges only when it needs to write system
-configuration or build/switch the NixOS generation.
+The default installer is a full-screen Ryoku terminal UI adapted from the Arch
+installer. It keeps the same visual language and keyboard-first flow while the
+backend remains NixOS-native. It does not partition disks, run Pacman, replace
+the bootloader, or mutate packages outside the host flake.
 
-For a preview first:
+The setup flow covers:
+
+1. the initial compositor: Hyprland or Niri,
+2. Chromium or Firefox,
+3. Fish or Zsh,
+4. optional applications and tool groups,
+5. a final review before the generation is built and switched.
+
+Required desktop contracts such as Kitty, Files, Neovim, btop, the Fish runtime,
+Node.js, Python and Ryoku's own services are kept installed. Optional choices
+are written to `programs.ryoku.optionalApps`, so removing a tool in the installer
+changes declarative NixOS state rather than running an imperative uninstall.
+
+The installer requests elevated privileges only when the backend needs to write
+system configuration or build/switch the NixOS generation.
+
+For a preview first, choose the same options normally and run the backend as a
+dry run at the final step:
+
+```bash
+nix run github:aethctl/Ryoku-on-NixOS/main#install -- --dry-run
+```
+
+The TUI still opens, but its final backend pass only prints the proposed
+`flake.nix` changes and generated `ryoku.nix`.
+
+For CI, SSH, scripting, or terminals where a full-screen interface is unwanted,
+the same transactional backend is available directly:
 
 ```bash
 nix run github:aethctl/Ryoku-on-NixOS/main#install -- \
+  --cli \
+  --flake /etc/nixos#my-host \
+  --compositor niri \
+  --browser firefox \
+  --shell zsh \
+  --apps prompt,fastfetch,yazi,cli-tools,docker \
+  --dry-run -y
 ```
 
-A dry run prints the proposed `flake.nix` changes and generated `ryoku.nix`
-without modifying the system.
+Passing `-y`, `--compositor`, `--browser`, `--shell` or `--apps` also selects
+the direct backend path for compatibility with the previous script installer.
 
 ### Custom flake path or host
 
@@ -60,21 +96,44 @@ Useful installer options:
 ```text
 --flake PATH[#HOST]   NixOS flake to configure
 --source REF          Ryoku flake reference
---dry-run             Show proposed changes without writing them
--y, --yes             Skip confirmation
+--dry-run             Preview the final backend transaction
+--cli                 Skip the TUI and use the backend directly
+--compositor NAME     Direct mode: hyprland or niri
+--browser NAME        Direct mode: chromium or firefox
+--shell NAME          Direct mode: fish or zsh
+--apps CSV            Direct mode: optional app IDs, or none
+-y, --yes             Direct mode and skip confirmation
 -h, --help            Show help
 ```
 
-## What the installer changes
+The optional catalogue currently includes Starship, Blesh, Fastfetch, Yazi,
+modern CLI tools, Lazygit, pavucontrol, SongRec, OpenRGB, image upscaling,
+LocalSend, Gamescope, GameMode, MangoHud, VM tooling, Docker, Flatpak, Go, pipx
+and mise. Choices that need a system service, such as Docker and Flatpak, toggle
+the corresponding NixOS module rather than merely placing a command on `PATH`.
+
+### What the installer changes
 
 The installer adds Ryoku as a flake input, imports the Ryoku NixOS module, and
-creates an installer-managed `ryoku.nix` containing:
+creates an installer-managed `ryoku.nix` containing the selected desktop state:
 
 ```nix
 { ... }:
 
 {
-  programs.ryoku.enable = true;
+  programs.ryoku = {
+    enable = true;
+    defaultCompositor = "niri";
+    browser = "firefox";
+    shell = "zsh";
+    optionalApps = [
+      "prompt"
+      "fastfetch"
+      "yazi"
+      "cli-tools"
+      "docker"
+    ];
+  };
 }
 ```
 
@@ -91,8 +150,9 @@ It then:
 3. switches only after the build succeeds,
 4. materializes the user-facing Ryoku configuration.
 
-If locking, building, or switching fails, the installer restores the backed-up
-configuration files.
+The installer hands the terminal to the backend for password prompts and build
+output, then returns to the result screen. If locking, building, or switching fails, the backend
+restores the installer-managed configuration files from its backup.
 
 ## Manual flake integration
 

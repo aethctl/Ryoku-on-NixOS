@@ -102,6 +102,7 @@ type reconciler struct {
 func reconcilers() []reconciler {
 	return []reconciler{
 		{i18n.T("interface language"), reconcileShellLanguage},
+		{i18n.T("NixOS generation integrity"), reconcileNixGeneration},
 		{i18n.T("swap kept out of snapshots"), reconcileSwapSubvolume},
 		{i18n.T("snapper configuration"), reconcileSnapper},
 		{i18n.T("snapshot read access"), reconcileSnapperAccess},
@@ -222,9 +223,57 @@ type finding struct {
 	res  recResult
 }
 
+func nixIrrelevantReconcilerNames() map[string]bool {
+	return map[string]bool{
+		i18n.T("limine boot menu layout"):    true,
+		i18n.T("limine boot entry"):          true,
+		i18n.T("alongside boot entry"):       true,
+		i18n.T("limine UKI boot tree"):       true,
+		i18n.T("limine kernel boot images"):  true,
+		i18n.T("boot menu dead entries"):     true,
+		i18n.T("boot partition headroom"):    true,
+		i18n.T("boot volume writability"):    true,
+		i18n.T("initramfs GPU trim"):         true,
+		i18n.T("limine autoboot"):            true,
+		i18n.T("limine snapshot sync"):       true,
+		i18n.T("updatedb snapshot prune"):    true,
+		i18n.T("pacman database lock"):       true,
+		i18n.T("pacman progress bar"):        true,
+		i18n.T("multilib repository"):        true,
+		i18n.T("conflicting Ryoku files"):    true,
+		i18n.T("stale install crypt mapper"): true,
+		i18n.T("ryoku package channel"):      true,
+		i18n.T("ryoku package database"):     true,
+		i18n.T("boot guard"):                 true,
+		i18n.T("shipped app packages"):       true,
+		i18n.T("retired app packages"):       true,
+		i18n.T("release control manifest"):   true,
+		i18n.T("NVIDIA update guard hook"):   true,
+		i18n.T("pending config (.pacnew)"):   true,
+		i18n.T("orphaned packages"):          true,
+	}
+}
+
+func platformReconcilers() []reconciler {
+	all := reconcilers()
+	if !sys.NixBackend() {
+		return all
+	}
+
+	hidden := nixIrrelevantReconcilerNames()
+	out := make([]reconciler, 0, len(all)-len(hidden))
+	for _, r := range all {
+		if !hidden[r.name] {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func runReconcilers(checkOnly bool) []finding {
-	out := make([]finding, 0, len(reconcilers()))
-	for _, r := range reconcilers() {
+	rs := platformReconcilers()
+	out := make([]finding, 0, len(rs))
+	for _, r := range rs {
 		out = append(out, finding{r.name, r.run(checkOnly)})
 	}
 	return out
@@ -2013,12 +2062,7 @@ func portalConfigCandidates(home string) []string {
 	} else {
 		dirs = append(dirs, filepath.Join(home, ".local/share"))
 	}
-	dataDirs := os.Getenv("XDG_DATA_DIRS")
-	if dataDirs == "" {
-		dataDirs = "/usr/local/share:/usr/share"
-	}
-	dirs = append(dirs, strings.Split(dataDirs, ":")...)
-	dirs = append(dirs, "/usr/share")
+	dirs = append(dirs, sys.DataDirs()...)
 	var out []string
 	seen := map[string]bool{}
 	for _, d := range dirs {
@@ -2137,11 +2181,12 @@ const defaultCursorTheme = "Bibata-Modern-Ice"
 // (where ryoku-cursors installs the Bibata family) first, then the two per-user
 // dirs a Hub-installed third-party theme can land in.
 func cursorSearchDirs() []string {
-	return []string{
-		"/usr/share/icons",
-		filepath.Join(sys.Home(), ".local", "share", "icons"),
-		filepath.Join(sys.Home(), ".icons"),
+	var dirs []string
+	for _, data := range sys.DataDirs() {
+		dirs = append(dirs, filepath.Join(data, "icons"))
 	}
+	dirs = append(dirs, filepath.Join(sys.Home(), ".icons"))
+	return dirs
 }
 
 // cursorThemeInstalled: is <theme>/cursors present under any search dir? a bare
@@ -2536,7 +2581,7 @@ func reconcileGreeterDisplayServer(checkOnly bool) recResult {
 	if !sys.Exists(greeterThemeDir) {
 		return okRes(i18n.T("no Ryoku greeter installed"))
 	}
-	if !sys.Exists("/usr/bin/weston") {
+	if !sys.Has("weston") {
 		return warnRes(i18n.T("the Wayland greeter needs weston, which is not installed yet")).
 			withFix("ryoku update")
 	}
@@ -2914,7 +2959,7 @@ func ryodecorsSource() string {
 			return p
 		}
 	}
-	if p := "/usr/share/ryoku/ryodecors"; sys.Exists(p) {
+	if p := sys.FindData("ryoku/ryodecors"); p != "" {
 		return p
 	}
 	return ""
@@ -3169,8 +3214,10 @@ func startShellDaemon() error {
 		return nil
 	}
 	shell := "ryoku-shell"
-	if sys.ResolveRepo() == "" && sys.Exists("/usr/bin/ryoku-shell") {
-		shell = "/usr/bin/ryoku-shell"
+	if sys.ResolveRepo() == "" {
+		if resolved := sys.FindExecutable("ryoku-shell"); resolved != "" {
+			shell = resolved
+		}
 	}
 	cmd := exec.Command(shell, "daemon")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

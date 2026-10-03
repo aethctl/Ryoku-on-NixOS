@@ -29,11 +29,7 @@ func vendorMimeLists() []string {
 	var out []string
 	dataHome := sys.Xdg("XDG_DATA_HOME", ".local/share")
 	out = append(out, filepath.Join(dataHome, "applications", "mimeapps.list"))
-	dirs := os.Getenv("XDG_DATA_DIRS")
-	if dirs == "" {
-		dirs = "/usr/local/share:/usr/share"
-	}
-	for _, d := range strings.Split(dirs, ":") {
+	for _, d := range sys.DataDirs() {
 		if d == "" {
 			continue
 		}

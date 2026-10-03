@@ -358,6 +358,81 @@ EOF
     lib.optional (builtins.hasAttr name pkgs)
       (builtins.getAttr name pkgs);
 
+  browserPackages =
+    if cfg.browser == "chromium" then [ pkgs.chromium ]
+    else if cfg.browser == "firefox" then [ pkgs.firefox ]
+    else [ ];
+
+  compositorSession = {
+    hyprland = "hyprland";
+    niri = "niri";
+  };
+
+  optionalAppIds = [
+    "prompt"
+    "bash-edit"
+    "fastfetch"
+    "yazi"
+    "cli-tools"
+    "git-tools"
+    "pavucontrol"
+    "songrec"
+    "openrgb"
+    "upscale"
+    "localsend"
+    "gamescope"
+    "gamemode"
+    "mangohud"
+    "vm"
+    "docker"
+    "flatpak"
+    "go"
+    "pytools"
+    "mise"
+  ];
+
+  # Preserve the package/service set existing Ryoku-on-NixOS systems already
+  # receive. The installer may opt into the additional supported tools without
+  # silently adding them to established hosts on upgrade.
+  defaultOptionalApps = [
+    "prompt"
+    "fastfetch"
+    "yazi"
+    "cli-tools"
+    "pavucontrol"
+    "songrec"
+    "openrgb"
+    "upscale"
+    "gamescope"
+    "gamemode"
+    "mangohud"
+    "vm"
+    "docker"
+    "mise"
+  ];
+
+  hasOptionalApp = id: lib.elem id cfg.optionalApps;
+
+  optionalAppPackages =
+    lib.optionals (hasOptionalApp "prompt") [ pkgs.starship ]
+    ++ lib.optionals (hasOptionalApp "bash-edit") (optionalPkg "blesh")
+    ++ lib.optionals (hasOptionalApp "fastfetch") [ pkgs.fastfetch ]
+    ++ lib.optionals (hasOptionalApp "yazi") [ pkgs.yazi ]
+    ++ lib.optionals (hasOptionalApp "cli-tools") [ pkgs.eza pkgs.bat pkgs.fzf pkgs.zoxide ]
+    ++ lib.optionals (hasOptionalApp "git-tools") [ pkgs.lazygit ]
+    ++ lib.optionals (hasOptionalApp "pavucontrol") [ pkgs.pavucontrol ]
+    ++ lib.optionals (hasOptionalApp "songrec") (optionalPkg "songrec")
+    ++ lib.optionals (hasOptionalApp "openrgb") (optionalPkg "openrgb")
+    ++ lib.optionals (hasOptionalApp "upscale") [ ryokuWaifu2x ]
+    ++ lib.optionals (hasOptionalApp "localsend") (optionalPkg "localsend")
+    ++ lib.optionals (hasOptionalApp "gamescope") (optionalPkg "gamescope")
+    ++ lib.optionals (hasOptionalApp "gamemode") (optionalPkg "gamemode")
+    ++ lib.optionals (hasOptionalApp "mangohud") (optionalPkg "mangohud")
+    ++ lib.optionals (hasOptionalApp "vm") [ pkgs.quickemu pkgs.qemu pkgs.spice-gtk pkgs.xorriso ]
+    ++ lib.optionals (hasOptionalApp "go") [ pkgs.go ]
+    ++ lib.optionals (hasOptionalApp "pytools") (optionalPkg "pipx")
+    ++ lib.optionals (hasOptionalApp "mise") [ pkgs.mise ];
+
   optionalRuntime =
     lib.concatMap optionalPkg [
       "adw-gtk3"
@@ -374,13 +449,8 @@ EOF
       "hyprsunset"
       "gammastep"
       "wtype"
-      "openrgb"
       "libqalculate"
-      "songrec"
       "ddcutil"
-      "gamescope"
-      "gamemode"
-      "mangohud"
       "gpu-screen-recorder"
       "hyprland-preview-share-picker"
     ];
@@ -433,14 +503,8 @@ EOF
 
     # Ryoku terminal / desktop baseline
     bash-completion
-    bat
-    eza
-    fzf
-    mise
-    zoxide
     gh
     desktop-file-utils
-    ryokuWaifu2x
 
     # ─────────────────────────────────────────────────────────
     # Compositor / shell
@@ -480,9 +544,8 @@ EOF
 
     kitty
     fish
-    starship
-    fastfetch
-    yazi
+    gtk3
+    btop
     neovim
     tree-sitter
     nautilus
@@ -492,10 +555,6 @@ EOF
     # Ryoport / local virtual machines
     # ─────────────────────────────────────────────────────────
 
-    quickemu
-    qemu
-    spice-gtk
-    xorriso
 
     # ─────────────────────────────────────────────────────────
     # Ryoku command dependencies
@@ -541,7 +600,6 @@ EOF
 
     upower
     power-profiles-daemon
-    pavucontrol
 
     # ─────────────────────────────────────────────────────────
     # Shell probes used by panels/settings
@@ -573,7 +631,7 @@ EOF
     glib
     libnotify
     xdg-utils
-  ] ++ optionalRuntime;
+  ] ++ optionalRuntime ++ optionalAppPackages ++ browserPackages;
 
   # Number of direct packages in the final NixOS system profile.
   #
@@ -586,6 +644,14 @@ EOF
         map toString config.environment.systemPackages
       )
     );
+
+  nixIntegrationPackages =
+    map
+      (pkg: {
+        name = lib.getName pkg;
+        path = toString pkg;
+      })
+      (lib.unique (config.environment.systemPackages ++ runtimePackages));
 
   # The Ryoku service can be requested before the display manager's
   # compositor process has exported WAYLAND_DISPLAY into systemd.
@@ -732,6 +798,45 @@ in
   options.programs.ryoku = {
     enable = lib.mkEnableOption "Ryoku desktop";
 
+    defaultCompositor = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum [
+        "hyprland"
+        "niri"
+      ]);
+      default = null;
+
+      description = ''
+        Graphical session Ryoku preselects at the display manager. All Ryoku
+        compositor providers remain installed so the Hub can switch between
+        them without a mutable package transaction. Null preserves the host's
+        existing display-manager preference.
+      '';
+    };
+
+    browser = lib.mkOption {
+      type = lib.types.nullOr (lib.types.enum [
+        "chromium"
+        "firefox"
+      ]);
+      default = null;
+
+      description = ''
+        Browser Ryoku installs and uses as the fallback browser role. Null
+        leaves browser ownership to the host and preserves existing systems.
+      '';
+    };
+
+    optionalApps = lib.mkOption {
+      type = lib.types.listOf (lib.types.enum optionalAppIds);
+      default = defaultOptionalApps;
+
+      description = ''
+        Optional Ryoku applications and tool groups supplied by the NixOS
+        integration. Required desktop contracts remain installed regardless of
+        this list. The graphical installer writes this option declaratively.
+      '';
+    };
+
     shell = lib.mkOption {
       type = lib.types.enum [
         "fish"
@@ -792,7 +897,7 @@ in
     programs.zsh = lib.mkIf (cfg.shell == "zsh") {
       enable = true;
 
-      shellAliases = {
+      shellAliases = lib.optionalAttrs (hasOptionalApp "cli-tools") {
         ls = "eza -lh --group-directories-first --icons=auto";
         lsa = "eza -lha --group-directories-first --icons=auto";
         lt = "eza --tree --level=2 --long --icons --git";
@@ -1122,9 +1227,11 @@ in
     # NixOS owns Docker installation. Ryoku may start it lazily for
     # its tightly-scoped Cobalt container workflow.
     virtualisation.docker = {
-      enable = lib.mkDefault true;
+      enable = lib.mkDefault (hasOptionalApp "docker");
       enableOnBoot = lib.mkDefault false;
     };
+
+    services.flatpak.enable = lib.mkDefault (hasOptionalApp "flatpak");
 
     hardware.bluetooth = {
       enable = lib.mkDefault true;
@@ -1198,27 +1305,52 @@ in
     # Ryoku's login greeter. Plasma enables SDDM on systems which ship it;
     # this overrides Plasma's default Breeze choice without overriding an
     # explicit user-selected SDDM theme.
+    services.displayManager.defaultSession = lib.mkIf (cfg.defaultCompositor != null)
+      (lib.mkDefault compositorSession.${cfg.defaultCompositor});
+
     services.displayManager.sessionPackages = [
       ryokuNiri
     ];
 
-    services.displayManager.sddm =
-      lib.mkIf config.services.displayManager.sddm.enable {
-        theme = lib.mkOverride 900 "ryoku";
+    services.displayManager.sddm = {
+      enable = lib.mkDefault (!(lib.any
+        (path: lib.attrByPath path false config)
+        [
+          (if lib.hasAttrByPath [ "services" "displayManager" "gdm" "enable" ] options
+           then [ "services" "displayManager" "gdm" "enable" ]
+           else [ "services" "xserver" "displayManager" "gdm" "enable" ])
+          [ "services" "xserver" "displayManager" "lightdm" "enable" ]
+          [ "services" "displayManager" "ly" "enable" ]
+          [ "services" "displayManager" "cosmic-greeter" "enable" ]
+          [ "services" "greetd" "enable" ]
+        ]));
 
-        extraPackages = [
-          ryokuSddmTheme
-          pkgs.qt6.qt5compat
-          pkgs.qt6.qtdeclarative
-          pkgs.qt6.qtmultimedia
-          pkgs.qt6.qtsvg
-        ];
-      };
+      theme = lib.mkIf config.services.displayManager.sddm.enable
+        (lib.mkOverride 900 "ryoku");
+
+      # A No Desktop NixOS install has no Xserver for SDDM to run on.
+      # Ryoku is Wayland-native, so when SDDM is active without Xserver,
+      # supply its Wayland greeter backend as the default. An explicit user
+      # choice still wins because this remains mkDefault.
+      wayland.enable = lib.mkIf
+        (config.services.displayManager.sddm.enable && !config.services.xserver.enable)
+        (lib.mkDefault true);
+
+      extraPackages = lib.mkIf config.services.displayManager.sddm.enable [
+        ryokuSddmTheme
+        pkgs.qt6.qt5compat
+        pkgs.qt6.qtdeclarative
+        pkgs.qt6.qtmultimedia
+        pkgs.qt6.qtsvg
+      ];
+    };
 
     # NixOS uses Ryoku's Nix-only update backend; the Arch transaction stays disabled.
     # Session scope also covers Hub instances launched directly.
     environment.sessionVariables = {
       RYOKU_NIX_SYSTEM_BRIDGE = "1";
+      RYOKU_NIX_INTEGRATION = "/etc/ryoku/nix-integration.json";
+      RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
       RYOKU_DOCKER_HOST_MANAGED = "1";
       RYOKU_UPDATE_BACKEND = "nix";
       RYOKU_I18N_DIR = "${ryokuDesktopData}/share/ryoku/i18n";
@@ -1243,6 +1375,21 @@ in
 
     environment.etc."ryoku/nix-system-package-count".text =
       "${toString systemPackageCount}\n";
+
+    environment.etc."ryoku/nix-integration.json".text = builtins.toJSON {
+      schema = 1;
+      version = self.lib.version;
+      flake = cfg.updateFlake;
+      host = config.networking.hostName;
+      input = cfg.updateInput;
+      configBase = "${ryokuDesktopData}/share/ryoku/config";
+      i18nDir = "${ryokuDesktopData}/share/ryoku/i18n";
+      browser = if cfg.browser == null then "" else cfg.browser;
+      defaultCompositor = if cfg.defaultCompositor == null then "" else cfg.defaultCompositor;
+      shell = cfg.shell;
+      optionalApps = cfg.optionalApps;
+      packages = nixIntegrationPackages;
+    };
 
     fonts.packages =
       [
@@ -1644,6 +1791,8 @@ in
         RYOKU_DOCKER_HOST_MANAGED = "1";
 
         RYOKU_NIX_SYSTEM_BRIDGE = "1";
+        RYOKU_NIX_INTEGRATION = "/etc/ryoku/nix-integration.json";
+        RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
         RYOKU_POLKIT_AGENT = "1";
         RYOKU_SYSTEMD_RUN = "${pkgs.systemd}/bin/systemd-run";
 

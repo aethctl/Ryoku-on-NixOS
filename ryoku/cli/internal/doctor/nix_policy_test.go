@@ -83,3 +83,18 @@ func TestNixHostOwnedReconcilersDoNotMutateHost(t *testing.T) {
 		})
 	}
 }
+
+func TestNixPlatformRegistryHidesArchOnlyChecks(t *testing.T) {
+	t.Setenv("RYOKU_UPDATE_BACKEND", "nix")
+
+	hidden := nixIrrelevantReconcilerNames()
+	for _, r := range platformReconcilers() {
+		if hidden[r.name] {
+			t.Fatalf("NixOS registry still contains Arch-only check %q", r.name)
+		}
+	}
+
+	if len(hidden) == 0 {
+		t.Fatal("expected an explicit set of Arch-only checks")
+	}
+}
