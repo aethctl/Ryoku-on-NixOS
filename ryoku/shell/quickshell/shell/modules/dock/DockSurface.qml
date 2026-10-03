@@ -97,30 +97,30 @@ PanelWindow {
     readonly property int perpSign: (dock.edge === "bottom" || dock.edge === "right") ? 1 : -1
     readonly property real perpPos: dock.perpRest + (dock.revealed ? 0 : dock.perpSign * dock.slideDist)
 
-    DockBand {
-        id: band
-        edge: dock.edge
-        screenName: dock.screenName
-        reservedDepth: dock.depth + dock.edgeGap
+        DockBand {
+            id: band
+            edge: dock.edge
+            screenName: dock.screenName
+            reservedDepth: dock.depth + dock.edgeGap
 
-        // Centre along the band's own axis; slide along the perpendicular one.
-        x: dock.horizontal ? Math.round((dock.width - band.implicitWidth) / 2) : dock.perpPos
-        y: dock.horizontal ? dock.perpPos : Math.round((dock.height - band.implicitHeight) / 2)
-        Behavior on x { enabled: !Perf.reduceMotion; NumberAnimation { duration: Motion.menuSlide; easing.type: Motion.menuSlideCurve } }
-        Behavior on y { enabled: !Perf.reduceMotion; NumberAnimation { duration: Motion.menuSlide; easing.type: Motion.menuSlideCurve } }
-    }
+            // Centre along the band's own axis; slide along the perpendicular one.
+            x: dock.horizontal ? Math.round((dock.width - band.implicitWidth) / 2) : dock.perpPos
+            y: dock.horizontal ? dock.perpPos : Math.round((dock.height - band.implicitHeight) / 2)
+            Behavior on x { enabled: !Perf.reduceMotion; NumberAnimation { duration: Motion.menuSlide; easing.type: Motion.menuSlideCurve } }
+            Behavior on y { enabled: !Perf.reduceMotion; NumberAnimation { duration: Motion.menuSlide; easing.type: Motion.menuSlideCurve } }
+        }
 
-    // The peek strip: a thin always-masked band at the very screen edge, so a
-    // hidden dock can still be revealed by pointer proximity. It tracks the band
-    // along the axis but stays pinned to the edge across it.
-    Item {
-        id: peekStrip
-        x: dock.horizontal ? band.x : (dock.edge === "left" ? 0 : dock.width - dock.edgeGap)
-        y: dock.horizontal ? (dock.edge === "top" ? 0 : dock.height - dock.edgeGap) : band.y
-        width: dock.horizontal ? band.width : dock.edgeGap
-        height: dock.horizontal ? dock.edgeGap : band.height
-        HoverHandler { id: peekHover }
-    }
+        // The peek strip: a thin always-masked band at the very screen edge, so a
+        // hidden dock can still be revealed by pointer proximity. It tracks the band
+        // along the axis but stays pinned to the edge across it.
+        Item {
+            id: peekStrip
+            x: dock.horizontal ? band.x : (dock.edge === "left" ? 0 : dock.width - dock.edgeGap)
+            y: dock.horizontal ? (dock.edge === "top" ? 0 : dock.height - dock.edgeGap) : band.y
+            width: dock.horizontal ? band.width : dock.edgeGap
+            height: dock.horizontal ? dock.edgeGap : band.height
+            HoverHandler { id: peekHover }
+        }
     // Input mask = band rect ∪ peek strip, so the empty margins and the magnify
     // headroom stay click-through.
     mask: Region {

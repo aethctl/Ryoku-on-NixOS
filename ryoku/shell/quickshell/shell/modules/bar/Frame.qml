@@ -123,6 +123,25 @@ Scope {
         return ((rail.enabled && root.railHasWidgets(rail, edge)) ? rail.size * root.uiScale : 1) + root.frameBorderPx;
     }
 
+    readonly property var sidebarRailClearances: !root.barEnabled ? ({
+        top: 0, left: 0, bottom: 0, right: 0
+    }) : root.sumiActive ? ({
+        top: overlay.railClearance("top"),
+        left: overlay.railClearance("left"),
+        bottom: overlay.railClearance("bottom"),
+        right: overlay.railClearance("right")
+    }) : (overlay.qsBarEdge === "bottom"
+        ? ({ top: 0, left: 0, bottom: 52, right: 0 })
+        : ({ top: 52, left: 0, bottom: 0, right: 0 }))
+
+    function syncSidebarRailClearances() {
+        if (root.modelData)
+            SidebarState.setRailClearances(root.modelData, root.sidebarRailClearances);
+    }
+
+    onSidebarRailClearancesChanged: root.syncSidebarRailClearances()
+    Component.onCompleted: Qt.callLater(root.syncSidebarRailClearances)
+
     // Four background reservation surfaces, mapped top, bottom, left, right in
     // that fixed order so the horizontal edges own the shared corners.
     FrameEdge { edge: "top";    screen: root.modelData; reserve: root.sumiActive ? root.edgeReserve("top") : 0 }
@@ -301,6 +320,7 @@ Scope {
             visible: !overlay.monFullscreen
             Keys.onEscapePressed: if (frameMenus.keyboardMode === "exclusive") frameMenus.closeAll()
 
+
             // Shared blob field for retained Ryoku-owned credential, voice,
             // stash, capture, and rail-card popouts.
             BlobGroup {
@@ -379,16 +399,7 @@ Scope {
                 group: blobGroup
                 topBar: !root.sumiActive || !root.barEnabled
                 barEdge: overlay.qsBarEdge
-                railClearances: !root.barEnabled ? ({
-                    top: 0, left: 0, bottom: 0, right: 0
-                }) : root.sumiActive ? ({
-                    top: overlay.railClearance("top"),
-                    left: overlay.railClearance("left"),
-                    bottom: overlay.railClearance("bottom"),
-                    right: overlay.railClearance("right")
-                }) : (overlay.qsBarEdge === "bottom"
-                    ? ({ top: 0, left: 0, bottom: 52, right: 0 })
-                    : ({ top: 52, left: 0, bottom: 0, right: 0 }))
+                railClearances: root.sidebarRailClearances
                 active: !overlay.monFullscreen
                 onSurfaceClosed: (id, context) => surfaceLifecycle.handleClosed(id, context)
 
@@ -507,6 +518,7 @@ Scope {
     Connections {
         target: root
         function onModelDataChanged() {
+            root.syncSidebarRailClearances();
             if (barStyleLoader.item)
                 barStyleLoader.item.modelData = root.modelData;
             if (qsbarHostLoader.item)

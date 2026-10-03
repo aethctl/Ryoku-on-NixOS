@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Ryoku.PluginKit
+import Ryoku.Ui.Singletons
 import "SidebarCatalog.js" as SidebarCatalog
 
 Item {
@@ -17,11 +18,26 @@ Item {
     property bool tabActive: false
     property int cardIndex: 0
     property string page: ""
+    property bool compact: false
+    property real viewportHeight: 0
 
     signal requestClose()
 
     readonly property var catalogEntry: SidebarCatalog.byId(root.cardId)
     readonly property bool pluginCard: root.pluginEntry !== null
+    readonly property var pluginManifest: root.pluginCard && root.pluginEntry.manifest
+        ? root.pluginEntry.manifest : ({})
+    readonly property string pluginName: {
+        var name = typeof root.pluginManifest.name === "string"
+            ? root.pluginManifest.name.trim() : "";
+        return name !== "" ? name : root.cardId;
+    }
+    readonly property string pluginDescription: typeof root.pluginManifest.description === "string"
+        ? root.pluginManifest.description.trim() : ""
+    readonly property bool pluginHasNativeCompact: root.pluginCard && pluginContent.item !== null
+        && ("compact" in pluginContent.item)
+    readonly property bool genericPluginSummary: root.pluginCard && root.compact
+        && pluginContent.item !== null && !root.pluginHasNativeCompact
     readonly property string versionQuery: pluginCard && pluginEntry.version
         ? "?v=" + encodeURIComponent(pluginEntry.version) : ""
     readonly property string stateHome: Quickshell.env("XDG_STATE_HOME")
@@ -31,6 +47,7 @@ Item {
         ? shellDir + "/quickshell/plugins/ryoku-plugins-place" : "ryoku-plugins-place"
 
     implicitHeight: builtinLoader.active && builtinLoader.item ? builtinLoader.item.implicitHeight
+        : root.genericPluginSummary ? genericSummary.implicitHeight
         : pluginContent.item ? pluginContent.item.implicitHeight : 0
     height: implicitHeight
     visible: implicitHeight > 0
@@ -47,6 +64,10 @@ Item {
             item.index = Qt.binding(function() { return root.cardIndex; });
         if ("page" in item)
             item.page = Qt.binding(function() { return root.page; });
+        if ("compact" in item)
+            item.compact = Qt.binding(function() { return root.compact; });
+        if ("viewportHeight" in item)
+            item.viewportHeight = Qt.binding(function() { return root.viewportHeight; });
     }
 
     function loadBuiltin() {
@@ -95,6 +116,35 @@ Item {
         function saveSettings() {}
     }
 
+    Column {
+        id: genericSummary
+        anchors { left: parent.left; right: parent.right; top: parent.top }
+        visible: root.genericPluginSummary
+        spacing: Math.round(Tokens.s1 * root.s)
+
+        Text {
+            width: parent.width
+            text: root.pluginName
+            textFormat: Text.PlainText
+            color: Tokens.ink
+            font.family: Tokens.ui
+            font.pixelSize: Math.round(Tokens.fRow * root.s)
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+        }
+
+        Text {
+            width: parent.width
+            visible: root.pluginDescription !== ""
+            text: root.pluginDescription
+            textFormat: Text.PlainText
+            color: Tokens.inkMuted
+            font.family: Tokens.ui
+            font.pixelSize: Math.round(Tokens.fSmall * root.s)
+            wrapMode: Text.WordWrap
+        }
+    }
+
     PluginObjectSlot {
         id: pluginService
         source: root.pluginCard
@@ -107,6 +157,8 @@ Item {
         anchors { left: parent.left; right: parent.right; top: parent.top }
         width: root.width
         height: item ? item.implicitHeight : 0
+        opacity: root.genericPluginSummary ? 0 : 1
+        enabled: !root.genericPluginSummary
         source: root.pluginCard
             ? "file://" + root.pluginEntry.dir + "/content/Widget.qml" + root.versionQuery : ""
         configure: function(content) {

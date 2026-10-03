@@ -1,6 +1,8 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as QQC
+import Quickshell
 import shell.services
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
@@ -14,23 +16,19 @@ Item {
     required property real reveal
     required property bool tabActive
     property int index: 0
+    property bool compact: false
+    readonly property bool wide: width >= 620 * s && !compact
+    readonly property real gap: Tokens.s4 * s
+    readonly property real pad: Tokens.s4 * s
+    readonly property var delaySteps: [0, 1, 3, 5, 10]
     signal requestClose()
 
-    readonly property real gap: Tokens.s3 * root.s
-    readonly property real pad: Tokens.s4 * root.s
-    readonly property var delaySteps: [0, 1, 3, 5, 10]
-    readonly property var codecSteps: ["h264", "hevc", "av1"]
-    readonly property var qualitySteps: ["medium", "high", "very_high", "ultra"]
-    readonly property var fpsSteps: [30, 60, 120]
-    readonly property var containerSteps: ["mp4", "mkv", "webm"]
-
-    implicitHeight: shell.implicitHeight
+    implicitHeight: content.implicitHeight
 
     function shoot(mode): void {
         root.requestClose();
         Capture.shoot(mode);
     }
-
     function record(mode): void {
         root.requestClose();
         if (mode === "screen")
@@ -38,382 +36,298 @@ Item {
         else
             Capture.recordTarget(mode, Recorder.recordArgs());
     }
-
+    function openRecordingSettings(): void {
+        root.requestClose();
+        Spawn.run(["ryoku-shell", "hub", "open", "recording"]);
+    }
     function cycleDelay(): void {
         const at = root.delaySteps.indexOf(Capture.delay);
         Capture.delay = root.delaySteps[(at + 1) % root.delaySteps.length];
     }
 
-    function codecLabel(codec): string {
-        return codec === "hevc" ? "HEVC" : codec === "av1" ? "AV1" : "H.264";
-    }
-
-    function qualityLabel(quality): string {
-        if (quality === "medium")
-            return I18n.tr("Medium");
-        if (quality === "high")
-            return I18n.tr("High");
-        if (quality === "ultra")
-            return I18n.tr("Ultra");
-        return I18n.tr("Very high");
-    }
-
-    component ModeTile: Rectangle {
-        id: modeTile
+    component Zone: Rectangle {
+        id: zone
+        required property string title
+        required property string description
         required property string glyph
-        required property string label
-        required property var action
-        property bool accent: false
-
-        implicitHeight: 76 * root.s
-        radius: Tokens.radius * root.s
-        color: modeTap.pressed ? Tokens.tint16 : modeHover.hovered
-            ? (modeTile.accent ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.18) : Tokens.tint10)
-            : modeTile.accent ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.11) : Tokens.tint5
+        default property alias body: zoneBody.data
+        implicitHeight: zoneContent.implicitHeight + root.pad * 2
+        radius: Tokens.radius * root.s * 2
+        color: Tokens.paperLift
         border.width: Tokens.border
-        border.color: modeTile.accent ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.48) : modeHover.hovered ? Tokens.lineStrong : Tokens.line
-        scale: modeTap.pressed ? 0.97 : modeHover.hovered && !Tokens.reduceMotion ? 1.02 : 1
-        Behavior on color { ColorAnimation { duration: Tokens.snap } }
-        Behavior on scale { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
+        border.color: Tokens.lineSoft
+
         Column {
-            anchors.centerIn: parent
-            spacing: Tokens.s2 * root.s
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: modeTile.glyph
-                color: modeTile.accent ? Tokens.sun : Tokens.inkDim
-                font.family: "Material Symbols Rounded"
-                font.pixelSize: 25 * root.s
+            id: zoneContent
+            anchors { left: parent.left; right: parent.right; top: parent.top; margins: root.pad }
+            spacing: Tokens.s4 * root.s
+            Column {
+                width: parent.width
+                spacing: Tokens.s2 * root.s
+                Text {
+                    text: zone.glyph
+                    color: Tokens.inkDim
+                    font.family: "Material Symbols Rounded"
+                    font.pixelSize: 28 * root.s
+                    Accessible.ignored: true
+                }
+                Text {
+                    width: parent.width
+                    text: zone.title
+                    color: Tokens.ink
+                    font.family: Tokens.display
+                    font.pixelSize: 26 * root.s
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    width: parent.width
+                    text: zone.description
+                    color: Tokens.inkMuted
+                    font.family: Tokens.ui
+                    font.pixelSize: Tokens.fSmall * root.s
+                    wrapMode: Text.WordWrap
+                }
             }
-            Text {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: modeTile.label
-                color: Tokens.ink
-                font.family: Tokens.ui
-                font.pixelSize: Tokens.fMicro * root.s
-                font.weight: Font.DemiBold
+            Column {
+                id: zoneBody
+                width: parent.width
+                spacing: Tokens.s3 * root.s
             }
         }
-        HoverHandler { id: modeHover; cursorShape: Qt.PointingHandCursor }
-        TapHandler { id: modeTap; onTapped: modeTile.action() }
     }
 
-    component ToggleRow: Rectangle {
-        id: toggleRow
+    component ModeButton: QQC.AbstractButton {
+        id: modeButton
         required property string glyph
-        required property string label
-        required property bool on
-        required property var action
-
-        implicitHeight: 48 * root.s
-        radius: Tokens.radius * root.s
-        color: toggleRow.on ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.10) : Tokens.tint5
-        border.width: Tokens.border
-        border.color: toggleRow.on ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.40) : Tokens.line
-        Row {
-            anchors.left: parent.left
-            anchors.right: toggleSwitch.left
-            anchors.leftMargin: root.pad
-            anchors.rightMargin: Tokens.s3 * root.s
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: Tokens.s2 * root.s
+        required property string hint
+        required property var actionFn
+        implicitHeight: Math.max(112 * root.s, modeCopy.implicitHeight + padding * 2)
+        padding: Tokens.s3 * root.s
+        hoverEnabled: true
+        Accessible.name: text
+        Accessible.description: hint
+        onClicked: actionFn()
+        background: Rectangle {
+            radius: Tokens.radius * root.s * 1.5
+            color: modeButton.down ? Tokens.bone : modeButton.hovered ? Tokens.tint10 : Tokens.tint5
+            border.width: Tokens.border
+            border.color: modeButton.visualFocus ? Tokens.bone : Tokens.lineSoft
+        }
+        contentItem: Column {
+            id: modeCopy
+            spacing: Tokens.s1 * root.s
             Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: toggleRow.glyph
-                color: toggleRow.on ? Tokens.sun : Tokens.inkDim
+                text: modeButton.glyph
+                color: modeButton.down ? Tokens.inkOnBone : Tokens.inkDim
                 font.family: "Material Symbols Rounded"
-                font.pixelSize: 20 * root.s
+                font.pixelSize: 23 * root.s
+                Accessible.ignored: true
             }
             Text {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - 30 * root.s
-                text: toggleRow.label
-                color: Tokens.ink
+                width: parent.width
+                text: modeButton.text
+                color: modeButton.down ? Tokens.inkOnBone : Tokens.ink
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fRow * root.s
+                font.weight: Font.DemiBold
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                width: parent.width
+                text: modeButton.hint
+                color: modeButton.down ? Tokens.inkOnBone : Tokens.inkMuted
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fSmall * root.s
-                font.weight: Font.Medium
-                elide: Text.ElideRight
+                wrapMode: Text.WordWrap
             }
         }
-        Sw {
-            id: toggleSwitch
-            anchors.right: parent.right
-            anchors.rightMargin: root.pad
-            anchors.verticalCenter: parent.verticalCenter
-            on: toggleRow.on
-            onToggled: toggleRow.action()
-        }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
     }
 
-    SidebarCardShell {
-        id: shell
+    Column {
+        id: content
         width: root.width
-        index: root.index
-        open: root.open
-        reveal: root.reveal
-        tabActive: root.tabActive
-        title: I18n.tr("Capture")
-        glyph: "photo_camera"
-        eyebrow: Recorder.anyActive ? I18n.tr("RECORDING") : Capture.selecting !== "" ? I18n.tr("SELECTING") : I18n.tr("SHOT + RECORD")
+        spacing: root.gap
 
-        Column {
+        Rectangle {
+            visible: Recorder.anyActive || Recorder.countingDown
             width: parent.width
-            spacing: root.gap
-
-            Rectangle {
-                visible: Recorder.anyActive || Recorder.countingDown
-                width: parent.width
-                implicitHeight: liveRow.implicitHeight + root.pad * 2
-                radius: Tokens.radius * root.s
-                color: Qt.rgba(Tokens.alert.r, Tokens.alert.g, Tokens.alert.b, 0.10)
-                border.width: Tokens.border
-                border.color: Qt.rgba(Tokens.alert.r, Tokens.alert.g, Tokens.alert.b, 0.48)
-
-                Row {
-                    id: liveRow
-                    anchors.left: parent.left
-                    anchors.right: liveControls.left
-                    anchors.leftMargin: root.pad
-                    anchors.rightMargin: Tokens.s3 * root.s
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Tokens.s3 * root.s
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 10 * root.s
-                        height: width
-                        radius: width / 2
-                        color: Tokens.alert
-                        SequentialAnimation on opacity {
-                            running: Recorder.active && !Recorder.paused
-                            loops: Animation.Infinite
-                            NumberAnimation { to: 0.22; duration: Tokens.dur(620) }
-                            NumberAnimation { to: 1; duration: Tokens.dur(620) }
-                        }
-                    }
-                    Column {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 20 * root.s
-                        spacing: Tokens.s1 * root.s
-                        Text {
-                            width: parent.width
-                            text: Recorder.countingDown ? I18n.tr("Recording in %1").arg(Recorder.countdownSec)
-                                : Recorder.paused ? I18n.tr("Recording paused") : I18n.tr("Recording")
-                            color: Tokens.ink
-                            font.family: Tokens.ui
-                            font.pixelSize: Tokens.fRow * root.s
-                            font.weight: Font.DemiBold
-                        }
-                        Text {
-                            width: parent.width
-                            text: Recorder.countingDown ? I18n.tr("Get the desktop ready") : Recorder.elapsedText
-                            color: Tokens.inkMuted
-                            font.family: Tokens.mono
-                            font.pixelSize: Tokens.fMicro * root.s
-                            font.features: ({ "tnum": 1 })
-                        }
-                    }
+            implicitHeight: liveContent.implicitHeight + root.pad * 2
+            radius: Tokens.radius * root.s * 2
+            color: Tokens.bone
+            Column {
+                id: liveContent
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: root.pad }
+                spacing: Tokens.s3 * root.s
+                Text {
+                    width: parent.width
+                    text: Recorder.countingDown ? I18n.tr("Recording in %1 seconds").arg(Recorder.countdownSec)
+                        : Recorder.paused ? I18n.tr("Recording paused") : I18n.tr("Recording in progress")
+                    color: Tokens.inkOnBone
+                    font.family: Tokens.ui
+                    font.pixelSize: 22 * root.s
+                    font.weight: Font.DemiBold
+                    wrapMode: Text.WordWrap
                 }
-                Row {
-                    id: liveControls
-                    anchors.right: parent.right
-                    anchors.rightMargin: root.pad
-                    anchors.verticalCenter: parent.verticalCenter
+                Text {
+                    text: Recorder.countingDown ? I18n.tr("Get your desktop ready") : Recorder.elapsedText
+                    color: Tokens.inkOnBone
+                    font.family: Tokens.mono
+                    font.pixelSize: Tokens.fRow * root.s
+                }
+                Flow {
+                    width: parent.width
                     spacing: Tokens.s2 * root.s
-                    Btn {
+                    SidebarButton {
+                        s: root.s
                         visible: !Recorder.countingDown
                         text: Recorder.paused ? I18n.tr("Resume") : I18n.tr("Pause")
-                        compact: true
                         onAct: Recorder.togglePause()
                     }
-                    Btn {
-                        text: Recorder.countingDown ? I18n.tr("Cancel") : I18n.tr("Stop")
-                        compact: true
-                        primary: true
+                    SidebarButton {
+                        s: root.s
+                        text: Recorder.countingDown ? I18n.tr("Cancel countdown") : I18n.tr("Stop recording")
                         onAct: Recorder.stop()
                     }
                 }
             }
+        }
 
-            Item {
-                width: parent.width
-                implicitHeight: Math.max(shotLabel.implicitHeight, shotOptions.implicitHeight)
+        Flow {
+            width: parent.width
+            spacing: Tokens.s2 * root.s
+            SidebarButton {
+                s: root.s
+                glyph: "timer"
+                text: Capture.delay === 0 ? I18n.tr("No delay") : I18n.tr("%1-second delay").arg(Capture.delay)
+                onAct: root.cycleDelay()
+            }
+            SidebarButton {
+                s: root.s
+                glyph: "folder_open"
+                text: I18n.tr("Open screenshots")
+                onAct: Qt.openUrlExternally("file://" + Capture.shotsDir)
+            }
+        }
+
+        Grid {
+            id: zones
+            width: parent.width
+            columns: root.wide ? 2 : 1
+            columnSpacing: root.gap
+            rowSpacing: root.gap
+            readonly property real zoneWidth: (width - columnSpacing * (columns - 1)) / columns
+
+            Zone {
+                width: zones.zoneWidth
+                title: I18n.tr("Screenshot")
+                description: I18n.tr("Choose exactly what goes into the picture.")
+                glyph: "photo_camera"
+
+                Grid {
+                    id: shots
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: Tokens.s2 * root.s
+                    rowSpacing: Tokens.s2 * root.s
+                    readonly property real modeWidth: (width - columnSpacing) / 2
+                    ModeButton { width: shots.modeWidth; glyph: "desktop_windows"; text: I18n.tr("All displays"); hint: I18n.tr("The whole desktop"); actionFn: () => root.shoot("all") }
+                    ModeButton { width: shots.modeWidth; glyph: "monitor"; text: I18n.tr("Display"); hint: I18n.tr("Pick a screen"); actionFn: () => root.shoot("monitor") }
+                    ModeButton { width: shots.modeWidth; glyph: "window"; text: I18n.tr("Window"); hint: I18n.tr("Pick an application"); actionFn: () => root.shoot("window") }
+                    ModeButton { width: shots.modeWidth; glyph: "screenshot_region"; text: I18n.tr("Region"); hint: I18n.tr("Draw a selection"); actionFn: () => root.shoot("region") }
+                }
                 Text {
-                    id: shotLabel
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: I18n.tr("SCREENSHOT")
+                    text: I18n.tr("Save to")
+                    color: Tokens.inkDim
+                    font.family: Tokens.ui
+                    font.pixelSize: Tokens.fSmall * root.s
+                }
+                SidebarSegments {
+                    s: root.s
+                    width: parent.width
+                    options: ["both", "clipboard", "file"]
+                    labels: ({ both: I18n.tr("Both"), clipboard: I18n.tr("Clipboard"), file: I18n.tr("Folder") })
+                    current: Capture.save
+                    onChose: value => Capture.save = value
+                }
+                SidebarToggle {
+                    s: root.s
+                    width: parent.width
+                    glyph: "auto_fix_high"
+                    text: I18n.tr("Open in editor")
+                    detail: I18n.tr("Annotate and beautify after capture")
+                    on: Capture.beautify
+                    onToggleRequested: Capture.beautify = !Capture.beautify
+                }
+                Text {
+                    width: parent.width
+                    text: Capture.save === "clipboard" && !Capture.beautify ? I18n.tr("Ready to paste from the clipboard") : Capture.shotsDir
+                    textFormat: Text.PlainText
                     color: Tokens.inkMuted
                     font.family: Tokens.ui
-                    font.pixelSize: Tokens.fMicro * root.s
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: Tokens.trackMark
-                }
-                Row {
-                    id: shotOptions
-                    anchors.right: parent.right
-                    spacing: Tokens.s2 * root.s
-                    Seg {
-                        width: 168 * root.s
-                        options: ["both", "clipboard", "file"]
-                        labels: ({ both: I18n.tr("Both"), clipboard: I18n.tr("Clip"), file: I18n.tr("Folder") })
-                        current: Capture.save
-                        onChose: value => Capture.save = value
-                    }
-                    Btn {
-                        text: I18n.tr("Delay %1s").arg(Capture.delay)
-                        compact: true
-                        onAct: root.cycleDelay()
-                    }
+                    font.pixelSize: Tokens.fSmall * root.s
+                    wrapMode: Text.WrapAnywhere
                 }
             }
 
-            Grid {
-                id: shotGrid
-                width: parent.width
-                columns: 4
-                columnSpacing: Tokens.s2 * root.s
-                rowSpacing: Tokens.s2 * root.s
-                readonly property real tileWidth: (width - columnSpacing * 3) / 4
-                ModeTile { width: shotGrid.tileWidth; glyph: "desktop_windows"; label: I18n.tr("All"); action: () => root.shoot("all") }
-                ModeTile { width: shotGrid.tileWidth; glyph: "monitor"; label: I18n.tr("Screen"); action: () => root.shoot("monitor") }
-                ModeTile { width: shotGrid.tileWidth; glyph: "window"; label: I18n.tr("Window"); action: () => root.shoot("window") }
-                ModeTile { width: shotGrid.tileWidth; glyph: "screenshot_region"; label: I18n.tr("Region"); action: () => root.shoot("region") }
-            }
+            Zone {
+                width: zones.zoneWidth
+                title: I18n.tr("Screen recording")
+                description: I18n.tr("Record a display, application or selected area.")
+                glyph: "videocam"
 
-            ToggleRow {
-                width: parent.width
-                glyph: "auto_fix_high"
-                label: I18n.tr("Beautify after")
-                on: Capture.beautify
-                action: () => Capture.beautify = !Capture.beautify
-            }
-
-            Rectangle { width: parent.width; height: Tokens.border; color: Tokens.lineSoft }
-
-            Item {
-                width: parent.width
-                implicitHeight: Math.max(recordLabel.implicitHeight, companionRow.implicitHeight)
-                Text {
-                    id: recordLabel
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: I18n.tr("RECORD")
-                    color: Tokens.inkMuted
-                    font.family: Tokens.ui
-                    font.pixelSize: Tokens.fMicro * root.s
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: Tokens.trackMark
+                Grid {
+                    id: recordings
+                    visible: !Recorder.anyActive && !Recorder.countingDown
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: Tokens.s2 * root.s
+                    rowSpacing: Tokens.s2 * root.s
+                    readonly property real modeWidth: (width - columnSpacing) / 2
+                    ModeButton { width: recordings.modeWidth; glyph: "monitor"; text: I18n.tr("Screen"); hint: I18n.tr("Active display"); actionFn: () => root.record("screen") }
+                    ModeButton { width: recordings.modeWidth; glyph: "desktop_windows"; text: I18n.tr("Display"); hint: I18n.tr("Pick a screen"); actionFn: () => root.record("monitor") }
+                    ModeButton { width: recordings.modeWidth; glyph: "window"; text: I18n.tr("Window"); hint: I18n.tr("Pick an application"); actionFn: () => root.record("window") }
+                    ModeButton { width: recordings.modeWidth; glyph: "screenshot_region"; text: I18n.tr("Region"); hint: I18n.tr("Draw a selection"); actionFn: () => root.record("region") }
                 }
-                Row {
-                    id: companionRow
-                    anchors.right: parent.right
-                    spacing: Tokens.s2 * root.s
-                    Btn {
-                        text: I18n.tr("Key presses")
-                        compact: true
-                        armed: !Recorder.anyActive
-                        onAct: Keypresses.toggle()
-                    }
-                    Btn {
-                        text: I18n.tr("Webcam")
-                        compact: true
-                        armed: !Recorder.anyActive
-                        onAct: Camera.toggle()
-                    }
-                }
-            }
-
-            Grid {
-                id: recordGrid
-                visible: !Recorder.anyActive && !Recorder.countingDown
-                width: parent.width
-                columns: 4
-                columnSpacing: Tokens.s2 * root.s
-                rowSpacing: Tokens.s2 * root.s
-                readonly property real tileWidth: (width - columnSpacing * 3) / 4
-                ModeTile { width: recordGrid.tileWidth; glyph: "monitor"; label: I18n.tr("Screen"); accent: true; action: () => root.record("screen") }
-                ModeTile { width: recordGrid.tileWidth; glyph: "desktop_windows"; label: I18n.tr("Monitor"); accent: true; action: () => root.record("monitor") }
-                ModeTile { width: recordGrid.tileWidth; glyph: "window"; label: I18n.tr("Window"); accent: true; action: () => root.record("window") }
-                ModeTile { width: recordGrid.tileWidth; glyph: "screenshot_region"; label: I18n.tr("Region"); accent: true; action: () => root.record("region") }
-            }
-
-            Grid {
-                visible: !Recorder.anyActive && !Recorder.countingDown
-                width: parent.width
-                columns: 2
-                columnSpacing: root.gap
-                rowSpacing: root.gap
-                ToggleRow {
-                    width: (parent.width - root.gap) / 2
-                    glyph: Recorder.optDesktopAudio ? "volume_up" : "volume_off"
-                    label: I18n.tr("Desktop audio")
+                SidebarToggle {
+                    s: root.s
+                    width: parent.width
+                    text: I18n.tr("Desktop audio")
+                    glyph: "volume_up"
                     on: Recorder.optDesktopAudio
-                    action: () => Recorder.optDesktopAudio = !Recorder.optDesktopAudio
+                    enabled: !Recorder.anyActive && !Recorder.countingDown
+                    onToggleRequested: Recorder.optDesktopAudio = !Recorder.optDesktopAudio
                 }
-                ToggleRow {
-                    width: (parent.width - root.gap) / 2
-                    glyph: Recorder.optMic ? "mic" : "mic_off"
-                    label: I18n.tr("Microphone")
+                SidebarToggle {
+                    s: root.s
+                    width: parent.width
+                    text: I18n.tr("Microphone")
+                    glyph: "mic"
                     on: Recorder.optMic
-                    action: () => Recorder.optMic = !Recorder.optMic
+                    enabled: !Recorder.anyActive && !Recorder.countingDown
+                    onToggleRequested: Recorder.optMic = !Recorder.optMic
                 }
-            }
-
-            Column {
-                visible: !Recorder.anyActive && !Recorder.countingDown
-                width: parent.width
-                spacing: Tokens.s3 * root.s
-
+                Flow {
+                    width: parent.width
+                    spacing: Tokens.s2 * root.s
+                    SidebarButton { s: root.s; compact: true; glyph: "keyboard"; text: I18n.tr("Key presses"); armed: !Recorder.anyActive; onAct: Keypresses.toggle() }
+                    SidebarButton { s: root.s; compact: true; glyph: "videocam"; text: I18n.tr("Webcam"); armed: !Recorder.anyActive; onAct: Camera.toggle() }
+                }
                 Text {
-                    text: I18n.tr("Recording quality")
-                    color: Tokens.ink
+                    width: parent.width
+                    text: (Recorder.recCodec === "hevc" ? "HEVC" : Recorder.recCodec === "av1" ? "AV1" : "H.264")
+                        + " / " + Recorder.recFps + " fps / " + Recorder.recContainer.toUpperCase()
+                    color: Tokens.inkMuted
                     font.family: Tokens.ui
-                    font.pixelSize: Tokens.fRow * root.s
-                    font.weight: Font.DemiBold
+                    font.pixelSize: Tokens.fSmall * root.s
+                    wrapMode: Text.WordWrap
                 }
-                Seg {
-                    width: parent.width
-                    options: root.codecSteps
-                    labels: ({ h264: "H.264", hevc: "HEVC", av1: "AV1" })
-                    current: Recorder.recCodec
-                    onChose: value => Recorder.setSetting("codec", value)
-                }
-                Seg {
-                    width: parent.width
-                    options: root.qualitySteps
-                    labels: ({ medium: I18n.tr("Medium"), high: I18n.tr("High"), very_high: I18n.tr("Very high"), ultra: I18n.tr("Ultra") })
-                    current: Recorder.recQuality
-                    onChose: value => Recorder.setSetting("quality", value)
-                }
-                Row {
-                    width: parent.width
-                    spacing: Tokens.s3 * root.s
-                    Seg {
-                        options: ["30", "60", "120"]
-                        labels: ({ "30": "30 fps", "60": "60 fps", "120": "120 fps" })
-                        current: String(Recorder.recFps)
-                        onChose: value => Recorder.setSetting("fps", Number(value))
-                    }
-                    Seg {
-                        options: root.containerSteps
-                        labels: ({ mp4: "MP4", mkv: "MKV", webm: "WEBM" })
-                        current: Recorder.recContainer
-                        onChose: value => Recorder.setSetting("container", value)
-                    }
-                }
-                ToggleRow {
-                    width: parent.width
-                    glyph: "mouse"
-                    label: I18n.tr("Record cursor")
-                    on: Recorder.recCursor
-                    action: () => Recorder.setSetting("cursor", !Recorder.recCursor)
-                }
-                ToggleRow {
-                    width: parent.width
-                    glyph: "compress"
-                    label: I18n.tr("Compact for Discord")
-                    on: Recorder.discordMode
-                    action: () => Recorder.discordMode = !Recorder.discordMode
+                SidebarButton {
+                    s: root.s
+                    width: Math.min(implicitWidth, parent.width)
+                    glyph: "tune"
+                    text: I18n.tr("Recording settings in Hub")
+                    onAct: root.openRecordingSettings()
                 }
             }
         }

@@ -12,7 +12,7 @@ Names, so the parts are findable:
 
 | Part | Name | Where |
 |---|---|---|
-| The feature and its sidebar card | **Stage** (`stage` left-sidebar card) | `quickshell/shell/modules/stage/`, `sidebar/cards/StageCard.qml` |
+| The feature, overview, and settings page | **Stage** (`stage` sidebar card; Desktop Scene in Hub) | `quickshell/shell/modules/stage/`, `sidebar/cards/StageCard.qml`, `ryoku/hub/quickshell/pages/DesktopScenePage.qml` |
 | The cut-out engine helper | **`ryostage`** | `ryoku/shell/scripts/ryostage`, shipped to `/usr/bin` |
 | The daemon module | `stage` topic and verbs | `ryoku/shell/ipc/stage.go` |
 | The settings | `~/.config/ryoku/stage.json` | user-owned, GUI-managed, never materialized |
@@ -32,96 +32,79 @@ widgets. **Parallax** is a switch inside Depth: the same cut, the same look,
 now drifting with the pointer over an inpainted backdrop. Nothing is configured
 twice.
 
-Two places, each with one job:
+Three places, each with one job:
 
-- **The Stage tab** (Super+Esc, the last rail icon): every setting, one
-  scrolling column, ordered by how often it is touched. Nothing here needs a
-  Done; every change is live and shows its value.
-- **The desktop** (right-click): the two switches, `Edit widgets` (arrange
-  widgets in front of or behind the subject), `Customize visualizer`, and
-  `Depth settings...`, which opens the Stage tab. Edit widgets is reached
-  from the desktop only; the tab is settings, the desktop is arrangement.
+- **The sidebar's Stage section** shows the current wallpaper, scene mode,
+  enabled widgets, and visualizer state. Its buttons open the corresponding Hub
+  view; the sidebar does not duplicate the editors.
+- **Ryoku Hub > Desktop Scene** owns Scene, Visualizer, and Widgets views.
+  Scene settings apply live, with an explicit confirmation for a re-cut or
+  clearing layers. The widget and visualizer views open their on-desktop editors.
+- **The desktop** (right-click) provides direct access to wallpaper, widgets,
+  and the visualizer. Its Depth row opens Desktop Scene in Hub. A widget's own
+  menu and the visualizer's edit bar each retain a Depth control for lifting that
+  widget above the in-front cut-outs or dropping it behind them.
 
 There is no shell editor. The bar, dock and menus keep their Hub pages.
 
 ## The desktop right-click menu
 
-```
-Edit widgets
-Customize visualizer
-Change wallpaper
-[Depth      (o)] [Parallax   ( )]     <- two switch cards, side by side
-Depth settings...                     <- opens Super+Esc on the Stage tab
-Settings
-Reload shell
-```
+The quick row contains Wallpaper, Widgets, Visualiser, and Search tiles.
+Below it, the Depth row shows Off, On, Parallax, or the current cutting
+percentage and opens **Ryoku Hub > Desktop Scene**. Quick controls opens the
+left sidebar. Settings opens Hub's Widgets view; Reload shell reloads the shell.
 
-The switches are the menu's own choice chips (a bone plate while on, the state
-in the label: `Depth, On`), under the rows and above `Depth settings...`.
-Tapping either keeps the menu open so the effect is seen at once.
+Plain, Depth, and Parallax are chosen in Hub's Scene view:
 
-- Depth on: `set-effect depth`. Depth off: `set-effect off` (Parallax's switch
-  falls with it).
-- Parallax on: `set-effect parallax`, and Depth's switch turns on with it if it
-  was off (one tap, no "enable Depth first"). Parallax off: `set-effect depth`.
-- While the engine cuts (first enable on a wallpaper), the Depth card reads the
-  daemon's percentage; the switch stays on.
-- `Depth settings...` asks for the `sidebar-left#stage` surface: the left
-  sidebar opens (or switches) to the Stage card on this monitor.
+- Plain: `set-effect off`.
+- Depth: `set-effect depth`.
+- Parallax: `set-effect parallax`.
 
-## The Stage card
+Depth and Parallax use the same cut-outs. The first enable cuts the current
+wallpaper if necessary; progress and Stop stay visible in Hub while the engine runs.
 
-`modules/sidebar/cards/StageCard.qml`, one card on the left sidebar's Stage
-tab, built from the sidebar's own kit (`SidebarCardShell`, `Ryoku.Ui`
-controls) plus the stage's preview card and angle dial. One column, one
-Flickable, sections in the sidebar's eyebrow rhythm. Top to
-bottom:
+## Stage overview and Hub settings
 
-1. **Title** `Stage`.
-2. **Preview**: the current wallpaper with its cut drawn over it; the ring
-   while the engine runs.
-3. **Two tiles**, side by side like Wi-Fi and Bluetooth on Home: `Depth`
-   (sub: `Off`, `On`, or the percentage while cutting) and `Parallax` (sub:
-   `Off`, `On`). The whole face toggles; the same rules as the menu switches.
-Everything below appears only while Depth is on. Off, one quiet line takes its
-place: `Turn on Depth to cut the subject out and shape it.` A first enable
-cuts in the current tier (Draft by default: the small model, seconds), so the
-first result is fast and quality is raised afterwards, with a confirm.
+`modules/sidebar/cards/StageCard.qml` is an overview. Its wallpaper preview,
+scene mode, widget count, enabled-widget list, and visualizer status describe
+what is on the desktop. Edit scene, Visualizer, and Widgets open the matching
+Desktop Scene view in Hub.
 
-4. **Cut quality** (a section): `Draft | Standard | Fine` (a segment), a
-   caption under it naming the tier's model, size and whether it is installed
-   (`Fine: 224 MB, installed`). Choosing another tier changes nothing yet: the
-   segment shows the choice and a confirm row appears under the caption:
-   - model installed: `Re-cut in Fine` with `Re-cut` and `Cancel`;
-   - model missing: `Fine needs a 224 MB download` with `Download` and
-     `Cancel`; when the download lands the row becomes the Re-cut one;
-   - while the engine runs: `Cutting in Fine, 40%` with `Stop`.
-   `Re-cut` writes the tier and refreshes; `Cancel` (or leaving the card)
-   drops the choice and the segment snaps back to the tier in use.
-5. **Layers** (a section): one row per layer, the subject first. A row is
-   the layer's name on the left and `Behind | In front` (a segment) on the right;
-   an added layer also has a remove cross, and, while Parallax is on, a
-   `Drift` slider (near to far) under it. Below the rows, two half-width
-   buttons `Cut a picture...` and `Add a PNG...`, and a quiet `Clear cut-outs`
-   link. `Cut a picture...` opens the picker, then shows `Cut from
-   <name>` with `Cut` and `Cancel`. `Clear cut-outs` shows `Remove every
-   cut-out for this wallpaper` with `Clear` and `Cancel`. `Add a PNG...` is
-   immediate (nothing runs).
-6. **Look** (a section): `Edge` (a slider, 0..1, value shown) and
-   `Shadow` (a slider) with the angle dial at the row's end and the degrees
-   under it. Both live. A quiet `Reset to defaults` link at the end of the
-   section puts edge, shadow, angle and every motion knob back.
-7. **Motion** (a section, Parallax only): `Preset` `Soft | Cinematic |
-   Beat` (one tap sets amount, idle, speed and music; highlighted only while
-   every knob still matches); `Amount` `Subtle | Normal | Strong`; `Idle`
-   `Still | Float | Breathe | Sway` with a `Speed` slider while not still;
-   `React to music` with an `Intensity` slider while on; `Follow mouse`; a
-   `Fine-tune pointer` revealer holding `Sensitivity`, `Range` and `Backdrop
-   drift` sliders (shown only while Follow mouse is on).
+`ryoku/hub/quickshell/pages/DesktopScenePage.qml` contains the editors. It uses
+two columns when there is room and one on smaller windows, with a scrolling
+viewport beneath the view selector.
 
-The confirm rows share one component: a message on the left, one or two text
-buttons on the right, in the section's own width; nothing floats and nothing
-covers another control. Escape closes the sidebar as it always did.
+### Scene
+
+- **Preview and mode:** the current wallpaper and Plain, Depth, or Parallax.
+  A running cut shows progress and a Stop button.
+- **Cut and layers:** Draft, Standard, or Fine quality; selecting a different
+  tier offers Download if its model is missing, then Re-cut. Layers can be
+  placed behind or in front of widgets; Parallax adds a drift control.
+  Cut a picture and Add a PNG add layers. Clear cut-outs asks for confirmation.
+- **Look:** edge softness, shadow strength, and shadow direction. Reset look
+  and motion restores those controls and motion settings, not cut quality,
+  widget layer placement, or the editor grid.
+- **Motion** (Parallax): Soft, Cinematic, or Beat presets; Subtle, Normal, or
+  Strong amount; Still, Float, Breathe, or Sway idle motion with an idle-speed
+  slider when moving; music response with an intensity slider when enabled.
+  Follow mouse exposes a Fine-tune pointer section with sensitivity, range,
+  and backdrop-drift sliders. A preset is highlighted only while its values match.
+- **Composition:** Open widget editor hands off to the desktop editor.
+
+### Visualizer and Widgets
+
+Visualizer includes visibility, style, depth relative to cut-outs, frame rate,
+adaptive quality, gain, and smoothing. Open visualizer editor hands off to its
+desktop placement and per-look controls.
+
+Widgets opens the desktop widget editor for placement, size, color, locking,
+depth, and installed plugin widgets. Both hand-offs close Hub only after the
+shell accepts the request; a failed hand-off leaves the page open with an error.
+
+Hub reads the stores but is not their writer. Typed shell IPC updates the
+canonical stage and visualizer settings; wallpaper effects and layers use the
+daemon's stage commands.
 
 ## Edit widgets
 
@@ -175,8 +158,8 @@ visualizer on if it is off and opens it. Its Done closes it.
 `mode` is `""` or `"widgets"`; `monitor` names the screen that opened it;
 `selected` is a widget id; `panel` is the drop-down that is open (`"add"`);
 `dirty` shows Reset. `escapeStep()` unwinds one level per press: the
-drop-down, then the selection, then the session. The Stage tab keeps its own
-pending confirm locally; it is a panel, not a session.
+drop-down, then the selection, then the session. Hub keeps pending scene
+confirmations locally; the settings page is not an edit session.
 
 ## Models: one catalogue, visible provenance
 
@@ -276,7 +259,7 @@ Global only; anything per-wallpaper is in the registry.
 | `motion.sensitivity` | `1.0` | the pointer's pull (0..2) |
 | `motion.range` | `1.0` | how far a layer may travel (0..2) |
 | `motion.backdrop` | `0` | the inpainted backdrop's own drift (0..1); above 0 a sliver of the base wallpaper shows at the trailing edge |
-| `front` | `[]` | widget ids drawn above the layers marked "in front" when the user lifts specific widgets from the desktop editor |
+| `front` | `[]` | widget ids (built-in, plugin tile, or `visualizer`) drawn above the layers marked "in front"; written by the `Depth` row in a widget's right-click menu or the visualiser's edit bar |
 
 The daemon reads `quality`; the shell reads the rest. On the first start after
 v2 a v1 `stage.json` (one still carrying `feather`, `lift`, `preset` or the
@@ -337,16 +320,14 @@ widget) and the visualizer's own surface is suppressed (cava keeps running);
 subject renderer, and no path that can draw the subject twice.
 While the engine cuts, the subject layer dims and draws its own progress ring.
 
-The Stage tab sits beside the stack, not in it: `QuickSettingsStage.qml`
-writes stage.json through `modules/stage/Singletons/Config.qml` (drag-y
-setters coalesce through one settle timer) and the daemon through
-`StageBackend`. Edit widgets is `modules/stage/StageWidgetsEditor.qml` (the
-toolbar), `StageOutline.qml` (the frame on every widget) and
-`StageAddPanel.qml` (the Add widget drop-down), mounted by the desktop surface,
-which lifts to the Top layer for the session. Config writes from its Reset go
-out as one write per file (`Config.setMany`), because a burst of single-key
-writes interleaves with the watcher's reloads of older versions and can put an
-old value back.
+Hub's Desktop Scene page sits beside the stack, not in it. It reads stage.json
+and sends typed `stage-settings` IPC requests to the shell's canonical
+`modules/stage/Singletons/Config.qml`; per-wallpaper changes go through the
+daemon's `StageBackend` contract. Drag updates coalesce before being sent.
+The desktop mounts `modules/desktop/WidgetEditBar.qml`, the widget outlines,
+and the picker, and lifts to the Top layer for the edit session. Reset writes
+each store as one update: bursts of single-key writes can interleave with a
+watcher's reload of an older version and put an old value back.
 
 ## Delivery
 

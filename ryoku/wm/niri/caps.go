@@ -13,9 +13,9 @@ import (
 //
 // The absences are niri's design, not gaps to fill later:
 //
-// CapWindowGeometry: a window reports its tile size but no on-screen position,
-// so the shell cannot draw windows where they are. It does not need to, because
-// CapNativeOverview is present and niri's own overview takes that job.
+// CapWindowGeometry: tiled windows still have no on-screen position, so the
+// shell cannot draw a general overview. Floating windows do report position and
+// size for persistence, while CapNativeOverview supplies the general overview.
 //
 // CapSubmap, CapGlobalShortcuts, CapFocusGrab, CapScreenShader, CapPlugins:
 // niri implements none of these protocols or subsystems.

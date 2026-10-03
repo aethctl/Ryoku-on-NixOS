@@ -67,6 +67,9 @@ func runAct(args []string) error {
 		}
 		return dispatch(`hl.dsp.window.float({ action = "toggle", window = ` + luaStr("address:"+id) + ` })`)
 
+	case wm.ActionWindowPlace:
+		return placeWindow(rest)
+
 	case wm.ActionWindowMoveToWorkspace:
 		id, err := arg(rest, 0, "window id")
 		if err != nil {
@@ -580,6 +583,103 @@ func followMouseMode() string {
 		return ""
 	}
 	return strconv.Itoa(o.Int)
+}
+
+// placeWindow applies the neutral output-local rectangle without ever falling
+// back to the focused window. Hyprland's move coordinates are global logical
+// coordinates, so the target output's logical origin is the only conversion.
+// Client geometry and monitor origins share that coordinate space; applying the
+// output scale again would double-scale a fractional output.
+func placeWindow(args []string) error {
+	id, x, y, width, height, output, err := windowPlacementArgs(args)
+	if err != nil {
+		return err
+	}
+
+	monitors, err := readMonitors()
+	if err != nil {
+		return fmt.Errorf("act %s: read outputs: %w", wm.ActionWindowPlace, err)
+	}
+	var target *hyprMonitor
+	for i := range monitors {
+		if monitors[i].Name == output {
+			target = &monitors[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("act %s: output %q does not exist", wm.ActionWindowPlace, output)
+	}
+	if target.Scale <= 0 {
+		return fmt.Errorf("act %s: output %q reported invalid scale %g", wm.ActionWindowPlace, output, target.Scale)
+	}
+
+	raw, err := ctl("clients", "-j")
+	if err != nil {
+		return fmt.Errorf("act %s: read windows: %w", wm.ActionWindowPlace, err)
+	}
+	var clients []struct {
+		Address  string `json:"address"`
+		Floating bool   `json:"floating"`
+	}
+	if err := json.Unmarshal(raw, &clients); err != nil {
+		return fmt.Errorf("act %s: decode windows: %w", wm.ActionWindowPlace, err)
+	}
+	floating, found := false, false
+	for _, client := range clients {
+		if client.Address == id {
+			floating, found = client.Floating, true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("act %s: window id %q does not exist", wm.ActionWindowPlace, id)
+	}
+
+	sel := luaStr("address:" + id)
+	if !floating {
+		if err := dispatch(`hl.dsp.window.float({ action = "toggle", window = ` + sel + ` })`); err != nil {
+			return fmt.Errorf("act %s: make window %q floating: %w", wm.ActionWindowPlace, id, err)
+		}
+	}
+	if err := dispatch(`hl.dsp.window.move({ monitor = ` + luaStr(output) + `, window = ` + sel + ` })`); err != nil {
+		return fmt.Errorf("act %s: move window %q to output %q: %w", wm.ActionWindowPlace, id, output, err)
+	}
+	if err := dispatch(`hl.dsp.window.resize({ x = ` + strconv.Itoa(width) + `, y = ` + strconv.Itoa(height) + `, exact = true, window = ` + sel + ` })`); err != nil {
+		return fmt.Errorf("act %s: resize window %q: %w", wm.ActionWindowPlace, id, err)
+	}
+	globalX, globalY := target.X+x, target.Y+y
+	if err := dispatch(`hl.dsp.window.move({ x = ` + strconv.Itoa(globalX) + `, y = ` + strconv.Itoa(globalY) + `, window = ` + sel + ` })`); err != nil {
+		return fmt.Errorf("act %s: position window %q: %w", wm.ActionWindowPlace, id, err)
+	}
+	return nil
+}
+
+func windowPlacementArgs(args []string) (id string, x, y, width, height int, output string, err error) {
+	id, err = arg(args, 0, "window id")
+	if err != nil {
+		return
+	}
+	names := []string{"x", "y", "width", "height"}
+	values := []*int{&x, &y, &width, &height}
+	for i := range names {
+		raw, argErr := arg(args, i+1, names[i])
+		if argErr != nil {
+			err = argErr
+			return
+		}
+		*values[i], err = strconv.Atoi(raw)
+		if err != nil {
+			err = fmt.Errorf("act %s: %s must be an integer, got %q", wm.ActionWindowPlace, names[i], raw)
+			return
+		}
+	}
+	if width <= 0 || height <= 0 {
+		err = fmt.Errorf("act %s: width and height must be positive, got %dx%d", wm.ActionWindowPlace, width, height)
+		return
+	}
+	output, err = arg(args, 5, "output name")
+	return
 }
 
 // arg names the missing value, so a bad keybind reports it instead of an index.

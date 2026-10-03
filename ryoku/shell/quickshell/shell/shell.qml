@@ -786,16 +786,122 @@ ShellRoot {
     // user drop a ring where they want it, so the shell hands them the shape.
     IpcHandler {
         target: "visualizer"
-        function place(): void {
+        function place(): string {
             const st = ShellState.forActive();
-            if (st)
-                root.placeVisualizer(true);
+            if (!st)
+                return "No active display is available";
+            root.placeVisualizer(true);
+            return "ok";
         }
-        function done(): void {
+        function done(): string {
             const st = ShellState.forActive();
-            if (st)
-                root.placeVisualizer(false);
+            if (!st)
+                return "No active display is available";
+            root.placeVisualizer(false);
+            return "ok";
         }
+        function setEnabled(value: bool): string { VizCfg.Config.setEnabled(value); return "ok"; }
+        function cycleStyle(direction: int): string {
+            if (direction !== -1 && direction !== 1)
+                return "Style direction must be -1 or 1";
+            VizCfg.Config.cycleStyle(direction);
+            return "ok";
+        }
+        function setFps(value: int): string {
+            if ([30, 45, 60].indexOf(value) < 0)
+                return "Frame rate must be 30, 45 or 60";
+            VizCfg.Config.setFps(value);
+            return "ok";
+        }
+        function setAdaptive(value: bool): string { VizCfg.Config.setAdaptive(value); return "ok"; }
+        function setGain(value: real): string {
+            if (!isFinite(value) || value < 0.5 || value > 2)
+                return "Gain must be between 0.5 and 2";
+            VizCfg.Config.setGain(value);
+            return "ok";
+        }
+        function setSmoothing(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 1)
+                return "Smoothing must be between 0 and 1";
+            VizCfg.Config.setSmoothing(value);
+            return "ok";
+        }
+    }
+
+    // Ryoku Settings edits the Stage file through the shell's canonical typed
+    // service. The Hub never becomes a second writer for stage.json.
+    IpcHandler {
+        target: "stage-settings"
+        function setQuality(value: string): string {
+            if (["draft", "standard", "fine"].indexOf(value) < 0)
+                return "Quality must be draft, standard or fine";
+            StageCfg.Config.setQuality(value);
+            return "ok";
+        }
+        function setEdge(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 1)
+                return "Edge softness must be between 0 and 1";
+            StageCfg.Config.setEdge(value);
+            return "ok";
+        }
+        function setShadow(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 1)
+                return "Shadow must be between 0 and 1";
+            StageCfg.Config.setShadow(value);
+            return "ok";
+        }
+        function setShadowAngle(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 360)
+                return "Shadow angle must be between 0 and 360";
+            StageCfg.Config.setShadowAngle(value);
+            return "ok";
+        }
+        function resetLook(): string { StageCfg.Config.resetLook(); return "ok"; }
+        function setAmount(value: string): string {
+            if (["subtle", "normal", "strong"].indexOf(value) < 0)
+                return "Amount must be subtle, normal or strong";
+            StageCfg.Config.setAmount(value);
+            return "ok";
+        }
+        function setIdle(value: string): string {
+            if (["none", "float", "breathe", "sway"].indexOf(value) < 0)
+                return "Idle motion must be none, float, breathe or sway";
+            StageCfg.Config.setIdle(value);
+            return "ok";
+        }
+        function setMusic(value: bool): string { StageCfg.Config.setMusic(value); return "ok"; }
+        function setMouse(value: bool): string { StageCfg.Config.setMouse(value); return "ok"; }
+        function setSpeed(value: real): string {
+            if (!isFinite(value) || value < 0.25 || value > 2)
+                return "Idle speed must be between 0.25 and 2";
+            StageCfg.Config.setSpeed(value);
+            return "ok";
+        }
+        function setMusicLevel(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 1)
+                return "Music intensity must be between 0 and 1";
+            StageCfg.Config.setMusicLevel(value);
+            return "ok";
+        }
+        function setSensitivity(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 2)
+                return "Pointer sensitivity must be between 0 and 2";
+            StageCfg.Config.setSensitivity(value);
+            return "ok";
+        }
+        function setRange(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 2)
+                return "Pointer range must be between 0 and 2";
+            StageCfg.Config.setRange(value);
+            return "ok";
+        }
+        function setBackdrop(value: real): string {
+            if (!isFinite(value) || value < 0 || value > 1)
+                return "Backdrop drift must be between 0 and 1";
+            StageCfg.Config.setBackdrop(value);
+            return "ok";
+        }
+        function setVisualizerFront(value: bool): string { StageCfg.Config.setFront("visualizer", value); return "ok"; }
     }
 
     // Enter or leave the desktop-widget editor without the right-click menu, so

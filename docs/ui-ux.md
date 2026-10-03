@@ -569,18 +569,19 @@ type.*
   ten workspace ids, so each desktop keeps its own 01..10; the same grouping
   drives the desktop-relative `Super+N` binds (`scripts/ryoku-workspace`). The
   gesture legend sits along the bottom margin as marginalia, not as buttons.
-- **left sidebar** a global push-aside panel under the desktop. Its pill tabs
-  select **Controls**, **Notices**, **Weather**, **Media**, **Capture**, and
-  **Stage** cards. Controls holds session actions, connectivity, audio,
-  brightness, battery, and power controls. The other cards keep their work in
-  the same Hub-styled card stack rather than opening separate frame menus.
-- **right sidebar** the companion push-aside panel with **Overview**, **Tools**,
-  and **Chat** tabs. Overview shows local screen time. Tools handles link
-  downloads, recent work, compression, and package installation with an in-shell
-  file picker. Chat uses the shared `Needle` service, so a conversation and an
-  in-flight answer survive a close and reopen. Both sidebars work under every
-  bar style, accept `sidebarCard` plugins, and are configured under Desktop >
-  Sidebars in the Hub. See `docs/sidebars.md`.
+- **Controls** a left-edge overlay with **System**, **Notifications**,
+  **Weather**, **Media**, **Capture**, and **Stage** selected by default. System
+  holds session actions, connectivity, audio, brightness, battery, and power
+  controls; the other sections keep related work in the same quiet paper/ink
+  frame.
+- **Companion** a right-edge overlay with **Usage**,
+  **Tools**, and **Chat** selected by default. Usage shows local screen time.
+  Tools handles downloads, recent work, compression, and package installation
+  with an in-shell file picker. Chat keeps its Rashin conversation across close
+  and reopen. Both surfaces are vertically centered by default, above normal
+  and fullscreen windows, and work under every bar style. Settings has Contents
+  and Layout & behavior pages, with Summary or Full controls for each built-in
+  and `sidebarCard` plugin. See `docs/sidebars.md`.
 - **wallpaper and theme menu** a carousel of the wallpaper library (four layouts:
   strips, grid, drift, hearthstone) with the current wall large and named, a
   colour-filter strip, a live tab for animated walls, and a bottom-centre frame
@@ -836,13 +837,13 @@ which process you are in.
   opening) and `effects` (200ms). A curve is a `cubic-bezier` control-point array
   handed to `easing.bezierCurve` beside a bezier `easing.type`; the shared
   expressive family keeps indicator, popout and frame-bar reveal motion coherent.
-- **The sidebars move as one spatial event.** `SidebarState` gives the panel
-  reveal and desktop offset the same 420ms enter curve
-  (`cubic-bezier(0.16, 1, 0.3, 1)`) and 260ms ease-out exit. `quick`,
-  `standard`, and `calm` scale those durations by 0.6, 1, and 1.5. The panel's
-  exclusive zone, desktop slide, and `DepthEdge` follow the same reveal
-  progress. Card bodies then fade and rise 24px with a 40ms index stagger. Both
-  `Motion.reduce` and `Tokens.reduceMotion` remove the motion.
+- **The sidebar surfaces move in small, local steps.** `SidebarState` scales
+  `Tokens.swap` for opening and `Tokens.move` for closing; `quick`, `standard`,
+  and `calm` apply multipliers of 0.6, 1, and 1.5. Both overlays fade in
+  and settle a short distance from their screen edge. Section pages crossfade;
+  selected navigation rows use a quiet bone plate. Hover, focus, and save
+  states ease between colours or opacity. Both `Motion.reduce`
+  and `Tokens.reduceMotion` remove every surface and chrome animation.
 - **Every shell token is already scaled.** Each one is defined as `dur(ms)`,
   which multiplies by `Perf.motionSpeed` (the user's tempo, `motionSpeed` in
   `performance.json`) and collapses to zero under reduce-motion, so the whole

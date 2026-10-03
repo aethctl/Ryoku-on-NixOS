@@ -12,18 +12,28 @@ import (
 
 func defaultSidebars() map[string]any {
 	return map[string]any{
-		"width":          float64(380),
-		"motion":         "standard",
-		"depth":          true,
-		"push":           true,
-		"wallpaperSlide": 1.15,
+		"motion": "standard",
 		"left": map[string]any{
-			"enabled": true,
-			"cards":   []any{"system", "notifications", "weather", "media", "capture", "stage"},
+			"enabled":       true,
+			"cards":         []any{"system", "notifications", "weather", "media", "capture", "stage"},
+			"width":         float64(1040),
+			"height":        float64(1000),
+			"heightMode":    "fixed",
+			"maxHeight":     float64(85),
+			"position":      "center",
+			"pinned":        false,
+			"presentations": map[string]any{},
 		},
 		"right": map[string]any{
-			"enabled": true,
-			"cards":   []any{"usage", "tools", "chat"},
+			"enabled":       true,
+			"cards":         []any{"usage", "tools", "chat"},
+			"width":         float64(1040),
+			"height":        float64(1000),
+			"heightMode":    "fixed",
+			"maxHeight":     float64(85),
+			"position":      "center",
+			"pinned":        false,
+			"presentations": map[string]any{},
 		},
 	}
 }
@@ -58,8 +68,9 @@ func reconcileSidebarRework(checkOnly bool) recResult {
 	return fixedRes(i18n.T("migrated shell.json to the sidebar settings schema"))
 }
 
-// migrateSidebarRework retires the two frame-bar leaves replaced by sidebars
-// and seeds the new top-level settings without disturbing sibling records.
+// migrateSidebarRework retires the frame-bar leaves replaced by sidebars and
+// the overlay-incompatible sidebar controls, then seeds missing sidebar settings
+// without disturbing sibling records.
 func migrateSidebarRework(raw []byte) ([]byte, bool, error) {
 	var top map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &top); err != nil {
@@ -126,6 +137,114 @@ func migrateSidebarRework(raw []byte) ([]byte, bool, error) {
 		}
 		top["sidebars"] = seed
 		changed = true
+	}
+
+	if sidebarsRaw, present := top["sidebars"]; present {
+		var sidebars map[string]json.RawMessage
+		if err := json.Unmarshal(sidebarsRaw, &sidebars); err != nil {
+			return nil, false, err
+		}
+		if sidebars == nil {
+			return nil, false, fmt.Errorf("sidebars config is null")
+		}
+		sidebarsChanged := false
+		legacyWidth, hadLegacyWidth := sidebars["width"]
+		for _, key := range []string{"width", "depth", "push", "parallax", "wallpaperSlide"} {
+			if _, found := sidebars[key]; found {
+				delete(sidebars, key)
+				sidebarsChanged = true
+			}
+		}
+
+		defaults := defaultSidebars()
+		if _, found := sidebars["motion"]; !found {
+			value, err := json.Marshal(defaults["motion"])
+			if err != nil {
+				return nil, false, err
+			}
+			sidebars["motion"] = value
+			sidebarsChanged = true
+		}
+		for _, side := range []string{"left", "right"} {
+			fallback := defaults[side].(map[string]any)
+			sideRaw, found := sidebars[side]
+			if !found {
+				seeded := fallback
+				if side == "left" && hadLegacyWidth {
+					seeded = make(map[string]any, len(fallback))
+					for key, value := range fallback {
+						seeded[key] = value
+					}
+					var width any
+					if err := json.Unmarshal(legacyWidth, &width); err != nil {
+						return nil, false, err
+					}
+					seeded["width"] = width
+				}
+				value, err := json.Marshal(seeded)
+				if err != nil {
+					return nil, false, err
+				}
+				sidebars[side] = value
+				sidebarsChanged = true
+				continue
+			}
+
+			var current map[string]json.RawMessage
+			if err := json.Unmarshal(sideRaw, &current); err != nil {
+				return nil, false, err
+			}
+			if current == nil {
+				return nil, false, fmt.Errorf("sidebars.%s config is null", side)
+			}
+			sideChanged := false
+			if _, exists := current["geometry"]; exists {
+				delete(current, "geometry")
+				sideChanged = true
+			}
+			var position string
+			if json.Unmarshal(current["position"], &position) == nil {
+				switch position {
+				case "top-left", "top-right":
+					current["position"] = json.RawMessage(`"top"`)
+					sideChanged = true
+				case "bottom-left", "bottom-right":
+					current["position"] = json.RawMessage(`"bottom"`)
+					sideChanged = true
+				}
+			}
+			for key, fallbackValue := range fallback {
+				if _, exists := current[key]; exists {
+					continue
+				}
+				if side == "left" && key == "width" && hadLegacyWidth {
+					current[key] = append(json.RawMessage(nil), legacyWidth...)
+				} else {
+					value, err := json.Marshal(fallbackValue)
+					if err != nil {
+						return nil, false, err
+					}
+					current[key] = value
+				}
+				sideChanged = true
+			}
+			if sideChanged {
+				value, err := json.Marshal(current)
+				if err != nil {
+					return nil, false, err
+				}
+				sidebars[side] = value
+				sidebarsChanged = true
+			}
+		}
+		if sidebarsChanged {
+			repacked, err := json.Marshal(sidebars)
+			if err != nil {
+				return nil, false, err
+			}
+			top["sidebars"] = repacked
+			changed = true
+		}
 	}
 	if !changed {
 		return nil, false, nil

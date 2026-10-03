@@ -577,6 +577,7 @@ Scope {
 
         anchors { top: true; left: true; right: true; bottom: true }
 
+
         // enabled desktopWidget-hosted plugins, filtered from the shared
         // Registry. drives the Repeater below so plugin tiles ride the
         // SAME wallpaper layer as the clock: one layer, one input
@@ -636,26 +637,6 @@ Scope {
             if (root.stageComposing)
                 StageCfg.StageSession.markDirty();
         }
-
-        Item {
-            id: slideContent
-            x: Services.SidebarState.slideOffset(root.screen ? root.screen.name : "")
-            y: 0
-            width: parent.width
-            height: parent.height
-
-            Behavior on x {
-                enabled: !Services.Motion.reduce
-                NumberAnimation {
-                    duration: Services.SidebarState.isOpen(root.screen, "left")
-                        || Services.SidebarState.isOpen(root.screen, "right")
-                        ? Services.SidebarState.enterDuration : Services.SidebarState.exitDuration
-                    easing.type: Easing.Bezier
-                    easing.bezierCurve: Services.SidebarState.isOpen(root.screen, "left")
-                        || Services.SidebarState.isOpen(root.screen, "right")
-                        ? Services.SidebarState.enterCurve : Services.SidebarState.exitCurve
-                }
-            }
 
         // The base wallpaper painter: the reveal backdrop composites each new
         // frame over the old one through the preset the daemon attached to the
@@ -724,12 +705,12 @@ Scope {
             // An invisible Image still decodes while its source is set: hold the
             // url back until a glass widget actually samples it, or this mirror
             // costs a full-screen decode on every box that has a wallpaper.
-            source: slideContent.glassWanted ? root.wallpaperUrl : ""
+            source: win.glassWanted ? root.wallpaperUrl : ""
             cache: false
             asynchronous: true
             sourceSize.width: Math.ceil(width * backdrop.screenDpr)
             sourceSize.height: Math.ceil(height * backdrop.screenDpr)
-            visible: slideContent.glassWanted
+            visible: win.glassWanted
             fillMode: {
                 switch (root.wallpaperFit) {
                 case "Contain": return Image.PreserveAspectFit;
@@ -1538,7 +1519,6 @@ Scope {
         Process {
             id: resetProc
             onRunningChanged: if (!resetProc.running) root._runResetQueue()
-        }
         }
     }
 

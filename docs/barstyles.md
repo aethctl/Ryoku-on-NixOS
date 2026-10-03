@@ -701,8 +701,8 @@ The wallpaper picker (Super+W) and the rail popout cards are frame surfaces,
 not bar widgets, so they are the same in every style. They normally anchor to
 the Sumi rail edges and read against the
 frame band. The two sidebars (Super+Escape left, Super+S right) are not frame
-menus at all: they are push-aside panels of their own (`docs/sidebars.md`),
-which is why they behave identically under every style. A folder style has no rails and hides the band, so `shell.qml` sets
+menus: they are independent screen-edge overlays (`docs/sidebars.md`), which is
+why they behave identically under every style. A folder style has no rails and hides the band, so `shell.qml` sets
 `topBar` on the per-monitor `FrameMenuManager`: side and bottom anchors fold up to
 the matching top edge or corner, the menus drop a small inset below the bar, and
 each menu paints its own card since the frame is not there to draw it. Nothing

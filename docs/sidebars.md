@@ -1,236 +1,214 @@
 # Sidebars
 
-Ryoku has two global push-aside sidebars. They are shell surfaces, not part of a
-bar style, so they work with every bar and on every supported compositor.
-`Super+Escape` toggles the left sidebar and `Super+S` toggles the right sidebar
-on the focused monitor. Repeating the bind, pressing Escape, or clicking the
-exposed desktop closes it. Opening one side closes the other side on that
-monitor.
+Ryoku has two global sidebar surfaces. They are part of the shell rather than a
+bar style, so every bar uses the same pair:
+
+- `Super+Escape` opens the **Control center** on the left screen edge.
+- `Super+S` opens **Companion** on the right screen edge.
+
+Both open on the focused display. Repeating the shortcut or using the close
+button closes the surface. Escape also closes it. Either unpinned sidebar closes
+on an outside click.
 
 The shell keeps the old shortcut command names at its boundary so compositor
 binds do not need special cases. In
 `ryoku/shell/quickshell/shell/shell.qml`, `quicksettings` routes to
 `sidebar-left` and `stash` routes to `sidebar-right`. Capture, compress, and
-install commands route to a sidebar tab or tool through the same surface bus.
+install requests use the same surface bus to open the relevant section.
 
-## Push-aside model
+## Surfaces
 
-Each side is a full-height `PanelWindow` owned by
-`ryoku/shell/quickshell/shell/modules/sidebar/Sidebar.qml`.
+`ryoku/shell/quickshell/shell/modules/sidebar/Sidebar.qml` owns both overlays.
+Each uses one `PanelWindow` on `WlrLayer.Overlay`, above normal and fullscreen
+windows, with no exclusive zone. The visible panel stays clear of bars and
+other screen rails and defaults to vertical centering on its own screen edge.
+The layer-shell namespaces are `ryoku-sidebar-left` and `ryoku-sidebar-right`.
 
-- The panel sits on `WlrLayer.Background`, underneath the desktop surface.
-- Its animated `exclusiveZone` is the configured width multiplied by reveal
-  progress. This moves tiled windows when `sidebars.push` is on.
-- The wallpaper and desktop widgets live in an inner item in
-  `ryoku/shell/quickshell/shell/modules/desktop/Desktop.qml`. Its `x` follows
-  `SidebarState.slideOffset()`, so the desktop rides over the panel while the
-  panel is revealed.
-- The sidebar surface extends by `sidebars.wallpaperSlide`, while the exclusive
-  zone stops at the panel width. The default factor, `1.15`, gives the desktop
-  edge a small parallax lead.
-- `Ryoku.SidebarFx.DepthEdge` paints the moving cast shadow, dark veil, and
-  one-pixel highlight inside the sidebar. It is provided by
-  `ryoku/shell/sidebarfx/` and isolated behind
-  `ryoku/shell/quickshell/shell/modules/sidebar/SidebarDepthEdge.qml`, so
-  `Sidebar.qml` can fall back to a QML gradient if the native module is
-  unavailable.
-- A transparent top-layer dismiss surface covers the screen outside the open
-  panel and closes the sidebar on a pointer press.
+An unpinned sidebar catches outside presses in the same window that draws its
+content. **Keep open** limits the input region to the visible panel instead, so
+the rest of the desktop remains usable. Screen rails remain outside the input
+region in either mode.
 
-The layer-shell namespaces are part of the compositor contract and must not be
-renamed casually:
+Both surfaces use `SidebarFrame.qml`: a rounded paper-and-ink boundary, larger
+headings, readable controls, and a vertical section rail. Neither is a native
+floating window. Size, placement, and contents are edited in Ryoku Hub.
 
-| Surface | Namespace |
-|---|---|
-| Left panel | `ryoku-sidebar-left` |
-| Right panel | `ryoku-sidebar-right` |
-| Outside-click surface | `ryoku-sidebar-dismiss` |
+## Contents and customization
 
-`ryoku/shell/quickshell/shell/services/SidebarState.qml` owns per-monitor open
-state, reveal progress, active tabs, cross-side exclusion, and surface-bus
-requests. Enter motion is 420 ms on cubic bezier `(0.16, 1, 0.3, 1)` and exit is
-260 ms ease-out before user motion scaling. Reduce-motion collapses both to zero.
+The built-in catalog contains nine sections:
+
+| Id | Label | Default surface | Contents |
+|---|---|---|---|
+| `system` | System | Control center | Connectivity, audio, brightness, battery, power profile, and session controls |
+| `notifications` | Notifications | Control center | Notification history and do-not-disturb |
+| `weather` | Weather | Control center | Current conditions, hourly forecast, daily ranges, and air conditions |
+| `media` | Media | Control center | Active-player metadata and transport controls |
+| `capture` | Capture | Control center | Screenshot and recording targets, destinations, and capture options |
+| `stage` | Stage | Control center | Wallpaper preview, scene status, widgets, and visualizer overview |
+| `usage` | Usage | Companion | Current and historical screen-time summaries |
+| `tools` | Tools | Companion | Downloads, recent jobs, compression, and package installation |
+| `chat` | Chat | Companion | Persistent Rashin conversation UI |
+
+**Ryoku Hub > Sidebars > Contents** lists all nine built-ins and installed
+`sidebarCard` plugins. A user can hide an entry, move it up or down, move it
+between sides, and choose its **Summary** or **Full controls** presentation.
+The ordered `cards` arrays are authoritative: omitted built-ins stay hidden and
+are not silently appended.
+
+Summary is a section's compact view; Full controls exposes its complete view.
+A plugin may implement its own compact view. If it does not, the host shows the
+manifest name and description for Summary while keeping the one real widget
+instance loaded and unchanged for Full controls.
+
+## Daily controls
+
+System is a dashboard rather than a list of settings. Its Wi-Fi and Bluetooth
+tiles open device lists inside the sidebar: scan for networks or devices,
+connect to a network with a password when needed, and pair or connect a device.
+Audio, brightness, power, and session controls stay alongside the status readouts.
+
+The **Audio mixer** button below volume and microphone opens controls for output
+devices, microphones, playing apps, and recording apps. Each source has its own
+mute, slider, editable percentage, and 1% steps. Changing a level keeps its mute
+state. **Use** selects the default output or microphone. Hover, press, and page
+animations respect reduced motion.
+
+Weather combines current conditions, the next hours, daily high/low ranges, and
+humidity, wind, precipitation, visibility, UV, and pressure. Its settings button
+opens the weather controls in Hub.
+
+Capture separates screenshots from recordings. Target tiles choose a display,
+window, or region; screenshot options choose the clipboard, a folder, or both,
+and optional annotation. Recording options include desktop audio and microphone;
+the detailed recorder settings open in Hub.
+
+Stage is an overview, not a second editor. It shows the current wallpaper,
+scene mode, enabled widgets, and visualizer state. **Edit scene**, **Visualizer**,
+and **Widgets** open the matching **Ryoku Hub > Desktop Scene** view.
+
+## Size and behavior
+
+**Ryoku Hub > Sidebars > Layout & behavior** provides:
+
+- compact and roomy presets, plus exact width and height;
+- **Fit content** or **Fixed size** height;
+- a maximum screen-height percentage in either height mode;
+- top, center, or bottom alignment on the sidebar's own screen edge;
+- **Keep open** pinning; and
+- quick, standard, or calm opening and closing motion.
+
+Both sides default to 1040 logical pixels wide, a height of 1000, and an 85%
+screen-height limit. Actual dimensions are clamped to the available display area
+after per-display UI scaling. A compact preset uses 720 by 720; roomy uses
+1280 by 1100.
+
+Hub's `SidebarWriter.qml` does not treat a successful write call as a saved
+setting. It waits for both the daemon reply and the subscribed settings frame to
+contain the expected value. The editor shows a saving state while confirmation
+is pending and reports rejection or timeout without replacing its last confirmed
+settings.
+
+Both panels fade and settle in from their own screen edge. Section pages
+crossfade, and controls provide hover and focus feedback. Opening and closing
+use the selected `sidebars.motion` tempo. Every surface and chrome animation is
+gated by both `Motion.reduce` and `Tokens.reduceMotion`; either reduced-motion
+flag turns the animation into an immediate state change.
 
 ## Settings
 
-The settings live under the top-level `sidebars` object in `shell.json`:
+The normalized settings live under `sidebars` in `shell.json`:
 
 ```json
 "sidebars": {
-  "width": 380,
   "motion": "standard",
-  "depth": true,
-  "push": true,
-  "wallpaperSlide": 1.15,
   "left": {
     "enabled": true,
-    "cards": ["system", "notifications", "weather", "media", "capture", "stage"]
+    "cards": ["system", "notifications", "weather", "media", "capture", "stage"],
+    "width": 1040,
+    "height": 1000,
+    "heightMode": "fixed",
+    "maxHeight": 85,
+    "position": "center",
+    "pinned": false,
+    "presentations": {}
   },
   "right": {
     "enabled": true,
-    "cards": ["usage", "tools", "chat"]
+    "cards": ["usage", "tools", "chat"],
+    "width": 1040,
+    "height": 1000,
+    "heightMode": "fixed",
+    "maxHeight": 85,
+    "position": "center",
+    "pinned": false,
+    "presentations": {}
   }
 }
 ```
 
-| Key | Default | Runtime meaning |
-|---|---:|---|
-| `sidebars.width` | `380` | Panel width in logical pixels, clamped to 280 through 560. |
-| `sidebars.motion` | `"standard"` | Motion multiplier: `quick` is 0.6, `standard` is 1, and `calm` is 1.5. |
-| `sidebars.depth` | `true` | Enables `DepthEdge` or its QML fallback. |
-| `sidebars.push` | `true` | Enables the animated exclusive zone. Off keeps the desktop reveal but does not reserve space for tiled windows. |
-| `sidebars.wallpaperSlide` | `1.15` | Desktop parallax factor, clamped to 1.0 through 1.4. |
-| `sidebars.left.enabled` | `true` | Shows and accepts requests for the left sidebar. |
-| `sidebars.left.cards` | `["system","notifications","weather","media","capture","stage"]` | Ordered left-side card ids. |
-| `sidebars.right.enabled` | `true` | Shows and accepts requests for the right sidebar. |
-| `sidebars.right.cards` | `["usage","tools","chat"]` | Ordered right-side card ids. |
+`presentations` maps a built-in or plugin id to `summary` or `expanded`; the
+editor labels the latter Full controls. Width is clamped to 300–1440 for the
+Control center and 380–1440 for Companion; height is 260–1200 and `maxHeight` is 40–95.
+The doctor removes retired native-window geometry and converts old corner
+positions to top or bottom alignment.
 
-`ryoku/shell/quickshell/shell/modules/sidebar/SidebarFrameBars.js` is the runtime
-normalizer and the source of these defaults. A persisted card array is
-authoritative. It keeps allowed built-in ids for that side and plugin-shaped ids,
-removes duplicates, and does not append omitted built-ins.
-`ryoku/shell/quickshell/shell/services/Config.qml` exposes the normalized result
-as `Config.sidebars`.
+`ryoku/shell/framebars/Sidebars.js` owns these defaults and normalizes persisted
+values through `Ryoku.FrameBars.Sidebars`. `Config.qml` exposes `Config.sidebars`;
+`ryoku/shell/ipc/settings.go` remains the sole writer for patches.
 
-Users edit the values in Ryoku Hub under **Desktop > Sidebars**. The rows are in
-`ryoku/hub/quickshell/schema/DesktopPage.js`, and the Hub defaults are in
-`ryoku/hub/quickshell/Hub.qml`. Saving patches the `sidebars.*` paths through the
-shell daemon. `ryoku/shell/ipc/settings.go` treats `sidebars` as passthrough data:
-it remains the sole writer, merges the patch, and echoes the tree without adding
-a second Go schema.
+## Section host contract
 
-## Built-in card contract
-
-A built-in card is an `Item` with `pragma ComponentBehavior: Bound`. The host in
-`ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardHost.qml` sets these
-members:
+A built-in section is an `Item` with `pragma ComponentBehavior: Bound`.
+`SidebarCardHost.qml` supplies:
 
 | Member | Direction | Meaning |
 |---|---|---|
-| `s: real` | host to card | Per-monitor UI scale. |
-| `open: bool` | host to card | Whether this side is requested open. |
-| `reveal: real` | host to card | Current reveal progress from 0 to 1. |
-| `tabActive: bool` | host to card | Whether the card's tab is selected. |
-| `width` | host to card | The inherited `Item.width`; the card reports `implicitHeight`. |
-| `index: int` | host to card, when declared | Position used for entrance staggering. |
-| `page: string` | host to card, when declared | Optional deep-link page such as a Tools action. |
-| `requestClose()` | card to host | Asks the owning sidebar to close. |
+| `s: real` | host to section | Per-display UI scale |
+| `open: bool` | host to section | Whether its surface is requested open |
+| `reveal: real` | host to section | Current reveal progress from 0 to 1 |
+| `tabActive: bool` | host to section | Whether its section is selected |
+| `compact: bool` | host to section | Summary when true, Expanded when false |
+| `viewportHeight: real` | host to section | Height available below the shared chrome |
+| `width` | host to section | Host-managed width; report `implicitHeight` |
+| `index: int` | host to section, when declared | Position in a grouped section |
+| `page: string` | host to section, when declared | Optional deep link such as a Tools action |
+| `requestClose()` | section to host | Ask the owning surface to close |
 
-The host binds the properties after loading the catalog source and forwards
-`requestClose()`. Cards should stop polling or other live work when `open` or
+The host binds these values after loading the catalog source and forwards
+`requestClose()`. Sections should stop polling or other live work when `open` or
 `tabActive` is false.
 
-Every built-in card puts its visible body in
-`ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardShell.qml`:
+Visible built-in content uses `SidebarCardShell.qml` as a small layout scaffold.
+It provides an optional heading and summary-aware spacing; the surface frame
+and chrome own the visual boundary.
 
-```qml
-SidebarCardShell {
-    width: root.width
-    index: root.index
-    open: root.open
-    reveal: root.reveal
-    tabActive: root.tabActive
-    title: I18n.tr("Weather")
-    glyph: "cloud"
-    eyebrow: I18n.tr("Current conditions")
+Plugins have a narrower public contract. See
+[`docs/plugins.md`, section 4](plugins.md#4-sidebar-card---lives-in-a-global-sidebar)
+for its entry points, optional compact contract, placement, and `pluginApi`.
 
-    // Card content is the default property.
-}
-```
-
-`title`, `glyph`, and `eyebrow` describe the header. `eyebrow` is optional.
-`index`, `open`, `reveal`, and `tabActive` drive the 40 ms stagger, fade, and
-24-pixel rise. The shell owns the `Tokens.paperLift` plate, hairline, grain,
-header, and entrance motion. A card must not paint another outer plate.
-
-Built-ins may import the Qt Quick modules and Quickshell modules they actually
-need, `Ryoku.Ui`, `Ryoku.Ui.Singletons`, and `shell.services`. Relative imports
-stay inside the sidebar module or point to the shared shell components and the
-feature singleton that owns the data. Do not import retired quick-settings,
-frame-menu, stash, `Qs*`, or Pill presentation code. Use services for data and
-`Ryoku.Ui` primitives for controls.
-
-Plugin cards have a public, narrower contract. Do not copy the built-in relative
-imports into a plugin. Follow section 4, **Sidebar card**, in
-[`docs/plugins.md`](plugins.md#4-sidebar-card---lives-in-a-global-sidebar) for
-entry points, public imports, placement, and `pluginApi`.
-
-## Built-in catalog
-
-`ryoku/shell/quickshell/shell/modules/sidebar/SidebarCatalog.js` is the single
-registry for built-in ids, sides, tab ids, labels, glyphs, and component sources.
-The persisted card arrays determine which catalog rows appear and in what order.
-
-| Id | Side | Tab id | Tab label | Glyph | Source |
-|---|---|---|---|---|---|
-| `system` | left | `controls` | Controls | `settings` | `cards/SystemCard.qml` |
-| `notifications` | left | `notices` | Notices | `notifications` | `cards/NotificationsCard.qml` |
-| `weather` | left | `weather` | Weather | `cloud` | `cards/WeatherCard.qml` |
-| `media` | left | `media` | Media | `play_circle` | `cards/MediaCard.qml` |
-| `capture` | left | `capture` | Capture | `photo_camera` | `cards/CaptureCard.qml` |
-| `stage` | left | `stage` | Stage | `graphic_eq` | `cards/StageCard.qml` |
-| `usage` | right | `overview` | Overview | `monitor_heart` | `cards/UsageCard.qml` |
-| `tools` | right | `tools` | Tools | `download` | `cards/ToolsCard.qml` |
-| `chat` | right | `chat` | Chat | `chat` | `cards/ChatCard.qml` |
-
-The source paths in the table are relative to the sidebar module directory.
-
-## Adding a built-in card
+## Adding a built-in section
 
 1. Add one component under
    `ryoku/shell/quickshell/shell/modules/sidebar/cards/`.
-2. Give its root the host properties and `requestClose()` signal above. Report
-   content height through `implicitHeight`.
-3. Wrap its visible body in `SidebarCardShell` and pass the motion properties.
-4. Add one row to
-   `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCatalog.js`.
-5. Add the id to the matching defaults in
-   `ryoku/shell/quickshell/shell/modules/sidebar/SidebarFrameBars.js` only when
-   the card should ship enabled. Keep the matching Hub card options and defaults
-   in sync.
-
-## Adding a `sidebarCard` plugin
-
-A plugin uses `service/Main.qml` for persistent logic and `content/Widget.qml`
-for its card view. Its placement selects a side, tab, order, label, and glyph.
-The shell discovers enabled `sidebarCard` placements in
-`ryoku/shell/quickshell/shell/modules/sidebar/SidebarPlugins.qml`, groups cards
-with the same plugin tab, and orders them by `order` and then id.
-
-Use the complete plugin contract in
-[`docs/plugins.md`, section 4](plugins.md#4-sidebar-card---lives-in-a-global-sidebar).
-That is the source of truth for manifests, public imports, `pluginApi`, settings,
-and installation. Built-in sidebar internals are not a plugin API.
+2. Declare the host members above, report content height through
+   `implicitHeight`, and put visible content in `SidebarCardShell`.
+3. Add its id, default surface, label, glyph, and source to
+   `SidebarCatalog.js`.
+4. Add the id to the appropriate defaults in `ryoku/shell/framebars/Sidebars.js`
+   only if it should ship selected. Keep Hub's customization choices in sync.
 
 ## File map
 
 | Path | Responsibility |
 |---|---|
-| `ryoku/shell/quickshell/shell/modules/sidebar/Sidebar.qml` | One side's layer-shell panel, exclusive zone, depth edge, Escape handling, and outside-click surface. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarDepthEdge.qml` | Optional import boundary around the native `DepthEdge`; a loader error leaves the QML fallback active. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarChrome.qml` | Header, pill tab rail, built-in and plugin tab resolution, and scrolling card stack. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardHost.qml` | Catalog loading, card property binding, close forwarding, and plugin content hosting. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardShell.qml` | Shared card plate, header, grain, and staggered entrance. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCatalog.js` | Built-in card registry and default tab grouping. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarFrameBars.js` | Defaults and normalization for the `sidebars` settings tree. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarPlugins.qml` | Discovery and ordering for enabled `sidebarCard` plugins. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/SystemCard.qml` | Connectivity, audio, brightness, battery, power-profile, and session controls. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/NotificationsCard.qml` | Notification history and do-not-disturb controls. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/WeatherCard.qml` | Current, hourly, and daily weather. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/MediaCard.qml` | Active-player metadata and transport controls. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/CaptureCard.qml` | Screenshot and recording actions plus recent captures. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/StageCard.qml` | Desktop stage and visualizer controls. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/UsageCard.qml` | Current and historical screen-time summaries. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/ToolsCard.qml` | Link downloads, recent jobs, compression, and package installation. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/ChatCard.qml` | Persistent Rashin conversation UI backed by the shared chat service. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/FilePickerOverlay.qml` | File browser used by the Tools compression and installation flows. |
-| `ryoku/shell/quickshell/shell/modules/sidebar/cards/CobaltSetupOverlay.qml` | Setup flow for the Tools download service. |
-| `ryoku/shell/quickshell/shell/services/SidebarState.qml` | Per-monitor open state, progress, tabs, motion, desktop offset, and surface-bus handling. |
-| `ryoku/shell/quickshell/shell/services/Config.qml` | Watched `shell.json` input and normalized `Config.sidebars`. |
-| `ryoku/shell/quickshell/shell/modules/desktop/Desktop.qml` | Wallpaper and widget slide wrapper. |
-| `ryoku/shell/quickshell/shell/shell.qml` | Per-monitor left and right mounts plus shortcut and IPC routing. |
-| `ryoku/shell/sidebarfx/README.md` | Native `Ryoku.SidebarFx` module summary. |
-| `ryoku/shell/sidebarfx/depthedge.hpp` and `ryoku/shell/sidebarfx/depthedge.cpp` | Scene-graph `DepthEdge` implementation. |
-| `ryoku/hub/quickshell/schema/DesktopPage.js` | Desktop > Sidebars controls. |
-| `ryoku/hub/quickshell/Hub.qml` | Hub factory defaults for every `sidebars.*` path. |
-| `ryoku/shell/ipc/settings.go` | Daemon persistence and passthrough patching. |
+| `ryoku/shell/quickshell/shell/modules/sidebar/Sidebar.qml` | Left and right overlays, screen bounds, input region, and dismissal |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarFrame.qml` | Shared rounded paper/ink frame |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarChrome.qml` | Header, section navigation, scrolling content, and customization entry points |
+| `ryoku/hub/quickshell/pages/SidebarsPage.qml` | Contents and layout/behavior editor |
+| `ryoku/hub/quickshell/pages/SidebarWriter.qml` | Confirmed daemon writes |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardHost.qml` | Built-in and plugin loading plus host-property binding |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCardShell.qml` | Built-in heading and content layout scaffold |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarCatalog.js` | Nine-section built-in registry |
+| `ryoku/shell/framebars/Sidebars.js` | Shared defaults and settings normalization |
+| `ryoku/shell/quickshell/shell/modules/sidebar/SidebarPlugins.qml` | Installed `sidebarCard` discovery and ordering |
+| `ryoku/shell/quickshell/shell/services/SidebarState.qml` | Per-display open state, selected section, motion, and surface-bus handling |

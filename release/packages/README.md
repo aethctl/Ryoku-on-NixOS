@@ -16,8 +16,6 @@ repo. Packages publish only from `main` release tags, never from `unstable-dev`.
   to `/usr/bin/ryoku`.
 - `ryoku-blobs` -- the `Ryoku.Blobs` QML plugin, to
   `/usr/lib/qt6/qml/Ryoku/Blobs`.
-- `ryoku-sidebarfx` -- the `Ryoku.SidebarFx` QML plugin, to
-  `/usr/lib/qt6/qml/Ryoku/SidebarFx`.
 - `skwd-paper-bin` -- the pinned upstream skwd-paper scene renderer (Wallpaper
   Engine wallpapers), a hard dependency of `ryogami`, into `/usr/bin`
   and `/usr/lib/skwd-paper`. A fixed-version binary rebuild like `ryoku-cursors`:
@@ -53,7 +51,7 @@ upstream artifact (a release binary and the release key material, respectively)
 rather than building from the checkout.
 
 makedepends across the set: `go` (ryoku-shell, ryoku-hub, ryoku),
-`cmake ninja qt6-shadertools qt6-declarative` (ryoku-blobs, ryoku-sidebarfx),
+`cmake ninja qt6-shadertools qt6-declarative` (ryoku-blobs),
 and `rust` + `git` (hyprland-preview-share-picker, asusctl), on top of the
 assumed `base-devel`.
 `ryoku-hub` (`github.com/BurntSushi/toml`) needs network at build time.

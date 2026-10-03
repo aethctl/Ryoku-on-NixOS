@@ -8,145 +8,85 @@ import shell.services
 
 Scope {
     id: root
-
     required property var screen
     required property string side
     property bool visible: true
-
     readonly property real s: Tokens.uiScaleFor(screen ? screen.name : "")
-    readonly property real panelWidth: Config.sidebars.width * s
-    readonly property real surfaceWidth: Math.max(1,
-        Math.round(panelWidth * reveal * Config.sidebars.wallpaperSlide))
+    readonly property var options: Config.sidebars[side]
     readonly property bool open: SidebarState.isOpen(screen, side)
-    readonly property real bleed: 48 * s
+    readonly property var clearances: SidebarState.railClearances(screen)
+    readonly property real gap: Tokens.s4 * s
+    readonly property real screenWidth: screen && screen.width > 0 ? screen.width : 1280
+    readonly property real screenHeight: screen && screen.height > 0 ? screen.height : 800
+    readonly property real availableWidth: Math.max(1, screenWidth - clearances.left - clearances.right - gap * 2)
+    readonly property real availableHeight: Math.max(1, screenHeight - clearances.top - clearances.bottom - gap * 2)
+    readonly property real wantedWidth: Math.min(availableWidth, options.width * s)
+    readonly property real heightCap: Math.min(availableHeight, screenHeight * options.maxHeight / 100)
+    readonly property real wantedHeight: Math.min(heightCap, options.heightMode === "fit"
+        ? Math.max(520 * s, chrome.fittedHeight) : options.height * s)
+    readonly property real panelX: side === "right"
+        ? screenWidth - clearances.right - gap - wantedWidth : clearances.left + gap
+    readonly property real panelY: options.position === "top" ? clearances.top + gap
+        : options.position === "bottom" ? screenHeight - clearances.bottom - gap - wantedHeight
+        : Math.max(clearances.top + gap, Math.min((screenHeight - wantedHeight) / 2,
+            screenHeight - clearances.bottom - gap - wantedHeight))
     property real reveal: open ? 1 : 0
 
     onRevealChanged: SidebarState.setProgress(screen, side, reveal)
     Component.onCompleted: SidebarState.setProgress(screen, side, reveal)
     Component.onDestruction: SidebarState.setProgress(screen, side, 0)
-
     Behavior on reveal {
         enabled: !Motion.reduce && !Tokens.reduceMotion
-        NumberAnimation {
-            duration: root.open ? SidebarState.enterDuration : SidebarState.exitDuration
-            easing.type: Easing.Bezier
-            easing.bezierCurve: root.open ? SidebarState.enterCurve : SidebarState.exitCurve
-        }
+        NumberAnimation { duration: root.open ? SidebarState.enterDuration : SidebarState.exitDuration; easing.type: Tokens.ease }
     }
 
     PanelWindow {
         id: panel
-
         screen: root.screen
-        visible: root.visible
-        implicitWidth: root.surfaceWidth
-        color: "transparent"
-        exclusionMode: ExclusionMode.Normal
-        exclusiveZone: Config.sidebars.push ? Math.round(root.panelWidth * root.reveal) : 0
-        WlrLayershell.layer: WlrLayer.Background
-        WlrLayershell.namespace: root.side === "left"
-            ? "ryoku-sidebar-left" : "ryoku-sidebar-right"
-        WlrLayershell.keyboardFocus: root.open
-            ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
-        anchors {
-            top: true
-            bottom: true
-            left: root.side === "left"
-            right: root.side === "right"
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            color: Tokens.paper
-        }
-
-        SidebarChrome {
-            x: root.side === "left" ? 0 : panel.width - width
-            width: root.panelWidth
-            height: panel.height
-            screen: root.screen
-            side: root.side
-            reveal: root.reveal
-            open: root.open
-        }
-
-        Loader {
-            id: depthEdge
-            x: root.side === "left" ? panel.width - root.bleed : 0
-            y: 0
-            width: root.bleed + 1
-            height: panel.height
-            active: Config.sidebars.depth
-            source: active ? "SidebarDepthEdge.qml" : ""
-            onLoaded: {
-                item.width = Qt.binding(function() { return depthEdge.width; });
-                item.height = Qt.binding(function() { return depthEdge.height; });
-                item.progress = Qt.binding(function() { return root.reveal; });
-                item.side = Qt.binding(function() { return root.side === "left" ? 0 : 1; });
-                item.intensity = 1;
-                item.radius = Qt.binding(function() { return Tokens.radius * root.s; });
-            }
-        }
-
-        Rectangle {
-            x: root.side === "left" ? panel.width - root.bleed : 0
-            y: 0
-            width: root.bleed + 1
-            height: panel.height
-            visible: Config.sidebars.depth && depthEdge.status !== Loader.Ready
-            opacity: root.reveal
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop {
-                    position: 0
-                    color: root.side === "left" ? "transparent" : Qt.rgba(0, 0, 0, 0.34)
-                }
-                GradientStop {
-                    position: 0.98
-                    color: root.side === "left" ? Qt.rgba(0, 0, 0, 0.34) : "transparent"
-                }
-                GradientStop {
-                    position: 1
-                    color: root.side === "left" ? Tokens.lineStrong : "transparent"
-                }
-            }
-        }
-
-        Shortcut {
-            sequence: "Escape"
-            enabled: root.open
-            onActivated: SidebarState.closeAll(root.screen)
-        }
-    }
-
-    PanelWindow {
-        id: dismiss
-
-        screen: root.screen
-        visible: root.visible && root.open
+        visible: root.visible && (root.open || root.reveal > 0.001)
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
         exclusiveZone: 0
-        WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.namespace: "ryoku-sidebar-dismiss"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
         anchors { top: true; bottom: true; left: true; right: true }
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.namespace: "ryoku-sidebar-" + root.side
+        WlrLayershell.keyboardFocus: !root.open ? WlrKeyboardFocus.None
+            : root.options.pinned ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.Exclusive
         mask: Region {
-            width: dismiss.width
-            height: dismiss.height
-            Region {
-                intersection: Intersection.Subtract
-                x: root.side === "left" ? 0 : dismiss.width - root.surfaceWidth
-                y: 0
-                width: root.surfaceWidth
-                height: dismiss.height
-            }
+            x: root.open && !root.options.pinned ? 0 : root.panelX
+            y: root.open && !root.options.pinned ? 0 : root.panelY
+            width: root.open && !root.options.pinned ? panel.width : root.wantedWidth
+            height: root.open && !root.options.pinned ? panel.height : root.wantedHeight
+            Region { intersection: Intersection.Subtract; width: panel.width; height: root.clearances.top }
+            Region { intersection: Intersection.Subtract; y: panel.height - root.clearances.bottom; width: panel.width; height: root.clearances.bottom }
+            Region { intersection: Intersection.Subtract; width: root.clearances.left; height: panel.height }
+            Region { intersection: Intersection.Subtract; x: panel.width - root.clearances.right; width: root.clearances.right; height: panel.height }
         }
-
         MouseArea {
             anchors.fill: parent
+            enabled: root.open && !root.options.pinned
             acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-            onPressed: SidebarState.closeAll(root.screen)
+            onPressed: mouse => {
+                if (mouse.x < surface.x || mouse.x >= surface.x + surface.width
+                        || mouse.y < surface.y || mouse.y >= surface.y + surface.height)
+                    Qt.callLater(() => SidebarState.closeSide(root.side, root.screen));
+            }
+        }
+        Item {
+            id: surface
+            x: root.panelX; y: root.panelY
+            width: root.wantedWidth; height: root.wantedHeight
+            opacity: root.reveal
+            transform: Translate { x: (1 - root.reveal) * Tokens.s5 * root.s * (root.side === "left" ? -1 : 1) }
+            SidebarFrame { anchors.fill: parent; s: root.s }
+            SidebarChrome {
+                id: chrome
+                anchors.fill: parent
+                screen: root.screen; side: root.side
+                reveal: root.reveal; open: root.open
+                maximumHeight: root.heightCap
+                onCloseRequested: SidebarState.closeSide(root.side, root.screen)
+            }
         }
     }
 }

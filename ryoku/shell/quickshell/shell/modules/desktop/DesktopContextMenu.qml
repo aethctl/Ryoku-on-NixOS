@@ -65,17 +65,18 @@ Item {
             st.launcherOpen = true;
         menu.close();
     }
-    // Quick controls opens the left sidebar; Depth settings deep-links Stage.
+    // Quick controls opens the left sidebar; depth and desktop settings open the
+    // scene editor in Ryoku Settings.
     function quickControls() {
         Services.ShellState.requestSurfaceActive("sidebar-left", undefined);
         menu.close();
     }
     function depthSettings() {
-        Services.ShellState.requestSurfaceActive("sidebar-left#stage", undefined);
+        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene"]);
         menu.close();
     }
     function openSettings() {
-        Spawn.run(["sh", "-c", "ryoku-hub config set section widgets; flock -n -o /tmp/ryoku-hub.lock qs -c hub"]);
+        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene-widgets"]);
         menu.close();
     }
     function refreshShell() {

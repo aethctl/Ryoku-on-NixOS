@@ -8,6 +8,7 @@ Item {
     id: root
 
     property var plugins: []
+    property var availablePlugins: []
 
     readonly property string shellDir: Quickshell.env("RYOKU_SHELL_DIR")
     readonly property string discoverScript: shellDir !== ""
@@ -26,6 +27,8 @@ Item {
     }
 
     function syncPlugins(all) {
+        root.availablePlugins = all.filter(plugin => plugin && plugin.placement
+            && plugin.placement.host === "sidebarCard");
         var next = [];
         for (var i = 0; i < all.length; ++i) {
             var plugin = all[i];

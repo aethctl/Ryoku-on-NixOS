@@ -41,7 +41,7 @@ Ryoku-owned surface host: it rides the shared `Popout` and mounts a body by
 `kind`, so credential prompts, voice, capture, and small rail cards all share
 one component. The menu manager, rather than a widget or IPC client, owns
 their lifecycle. The two sidebars (Super+Escape, Super+S) are not frame
-surfaces; they are push-aside panels of their own subsystem, see
+surfaces; they are screen-edge overlays of their own subsystem, see
 `docs/sidebars.md`.
 
 ## Input and focus

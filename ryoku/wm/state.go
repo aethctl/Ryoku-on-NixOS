@@ -39,14 +39,14 @@ type Output struct {
 	Model         string `json:"model,omitempty"`
 	PhysicalWidth int    `json:"physicalWidth,omitempty"`
 	Disabled      bool   `json:"disabled,omitempty"`
-	// Editor detail, filled only by a full state read (runState) for the display
-	// page, never by a watch frame: the panel's current and advertised modes, its
-	// logical position, wayland transform and VRR state. Mode is the physical
-	// "WxH@Hz" the editor sizes tiles from, since Width and Height above are the
-	// logical rectangle on a fractional-scale compositor. All omitempty, so a lean
-	// watch output stays byte-identical to before.
-	X         int      `json:"x,omitempty"`
-	Y         int      `json:"y,omitempty"`
+	// Logical output position is always present so global window geometry can
+	// round-trip through output-relative placement. The remaining editor detail
+	// is filled only by a full state read (runState), never by a watch frame:
+	// current and advertised modes, Wayland transform and VRR state.
+	// Mode is the physical "WxH@Hz" the editor sizes tiles from, since Width and
+	// Height above are the logical rectangle on a fractional-scale compositor.
+	X         int      `json:"x"`
+	Y         int      `json:"y"`
 	Transform int      `json:"transform,omitempty"`
 	VRR       bool     `json:"vrr,omitempty"`
 	Mode      string   `json:"mode,omitempty"`
@@ -85,8 +85,9 @@ type Window struct {
 	// Meaningful only with CapFocusHistory.
 	FocusOrder int  `json:"focusOrder"`
 	Floating   bool `json:"floating,omitempty"`
-	// Output-logical geometry, present only with CapWindowGeometry. The shell's
-	// overview and the screenshot picker draw windows where they are.
+	// Global logical geometry. Providers with CapWindowGeometry publish it for
+	// every window; a provider may still publish it for floating windows so
+	// native move/resize can be persisted without claiming general geometry.
 	X      int `json:"x,omitempty"`
 	Y      int `json:"y,omitempty"`
 	Width  int `json:"width,omitempty"`

@@ -5,6 +5,7 @@ import QtQuick
 import Quickshell
 import Ryoku.Ui.Singletons
 import "lib/screens.js" as Screens
+import "../modules/sidebar/SidebarCatalog.js" as Catalog
 
 Singleton {
     id: root
@@ -14,11 +15,24 @@ Singleton {
     readonly property real motionMultiplier: Config.sidebars.motion === "quick" ? 0.6
         : Config.sidebars.motion === "calm" ? 1.5 : 1.0
     readonly property int enterDuration: (Motion.reduce || Tokens.reduceMotion)
-        ? 0 : Math.round(Motion.dur(420) * motionMultiplier)
+        ? 0 : Math.round(Tokens.swap * motionMultiplier)
     readonly property int exitDuration: (Motion.reduce || Tokens.reduceMotion)
-        ? 0 : Math.round(Motion.dur(260) * motionMultiplier)
+        ? 0 : Math.round(Tokens.move * motionMultiplier)
     readonly property var enterCurve: [0.16, 1, 0.3, 1, 1, 1]
     readonly property var exitCurve: [0, 0, 0.58, 1, 1, 1]
+
+    function motionOpening(screen) {
+        var slice = root.sliceFor(screen);
+        return slice ? slice.openingIntent : false;
+    }
+
+    function motionDuration(screen) {
+        return root.motionOpening(screen) ? root.enterDuration : root.exitDuration;
+    }
+
+    function motionCurve(screen) {
+        return root.motionOpening(screen) ? root.enterCurve : root.exitCurve;
+    }
 
     readonly property bool anyOpen: {
         var revision = root.intentRevision;
@@ -69,6 +83,29 @@ Singleton {
         return side === "left" ? slice.leftProgress : slice.rightProgress;
     }
 
+
+    function railClearances(screen) {
+        var slice = root.sliceFor(screen);
+        if (!slice)
+            return { top: 0, left: 0, bottom: 0, right: 0 };
+        return {
+            top: slice.railTop,
+            left: slice.railLeft,
+            bottom: slice.railBottom,
+            right: slice.railRight
+        };
+    }
+
+    function setRailClearances(screen, clearances) {
+        var slice = root.sliceFor(screen);
+        if (!slice || !clearances)
+            return;
+        slice.railTop = Math.max(0, Number(clearances.top) || 0);
+        slice.railLeft = Math.max(0, Number(clearances.left) || 0);
+        slice.railBottom = Math.max(0, Number(clearances.bottom) || 0);
+        slice.railRight = Math.max(0, Number(clearances.right) || 0);
+    }
+
     function activeTab(screen, side) {
         var slice = root.sliceFor(screen);
         if (!slice || !root.validSide(side))
@@ -85,6 +122,14 @@ Singleton {
         else
             slice.rightTab = tab;
     }
+    function closeSide(side, screen) {
+        const slice = root.sliceFor(screen);
+        if (!slice || !root.validSide(side)) return;
+        slice.openingIntent = false;
+        if (side === "left") slice.leftOpen = false;
+        else slice.rightOpen = false;
+        root.intentRevision++;
+    }
 
     function setProgress(screen, side, value) {
         var slice = root.sliceFor(screen);
@@ -97,17 +142,27 @@ Singleton {
             slice.rightProgress = next;
     }
 
+    function sideForTab(side, tab) {
+        const entry = Catalog.byTab(tab);
+        if (!entry) return side;
+        const other = side === "left" ? "right" : "left";
+        if (Config.sidebars[side].cards.indexOf(entry.id) >= 0) return side;
+        return Config.sidebars[other].cards.indexOf(entry.id) >= 0 && root.sideEnabled(other) ? other : side;
+    }
+
     function open(side, screen, tab) {
+        side = root.sideForTab(side, tab);
         var slice = root.sliceFor(screen);
         if (!slice || !root.sideEnabled(side))
             return;
+        slice.openingIntent = true;
         if (side === "left") {
-            slice.rightOpen = false;
+            if (!Config.sidebars.right.pinned) slice.rightOpen = false;
             if (tab)
                 slice.leftTab = tab;
             slice.leftOpen = true;
         } else {
-            slice.leftOpen = false;
+            if (!Config.sidebars.left.pinned) slice.leftOpen = false;
             if (tab)
                 slice.rightTab = tab;
             slice.rightOpen = true;
@@ -116,6 +171,7 @@ Singleton {
     }
 
     function toggle(side, screen, tab) {
+        side = root.sideForTab(side, tab);
         var slice = root.sliceFor(screen);
         if (!slice || !root.sideEnabled(side))
             return;
@@ -126,6 +182,7 @@ Singleton {
             return;
         }
         if (opened) {
+            slice.openingIntent = false;
             if (side === "left")
                 slice.leftOpen = false;
             else
@@ -142,19 +199,12 @@ Singleton {
             return;
         if (!slice.leftOpen && !slice.rightOpen)
             return;
+        slice.openingIntent = false;
         slice.leftOpen = false;
         slice.rightOpen = false;
         root.intentRevision++;
     }
 
-    function slideOffset(screen) {
-        var slice = root.sliceFor(screen);
-        if (!slice)
-            return 0;
-        var scale = Tokens.uiScaleFor(root.screenName(screen));
-        var distance = Config.sidebars.width * scale * Config.sidebars.wallpaperSlide;
-        return distance * (slice.leftProgress - slice.rightProgress);
-    }
 
     function consumeRequest(requestedId, monitor, context) {
         var value = requestedId || "";
@@ -178,7 +228,7 @@ Singleton {
         function onSurfaceClosed(id, mon) {
             var base = (id || "").split("#")[0];
             if (base === "sidebar-left" || base === "sidebar-right")
-                root.closeAll(mon);
+                root.closeSide(base === "sidebar-left" ? "left" : "right", mon);
         }
     }
 
@@ -210,10 +260,15 @@ Singleton {
             required property var modelData
             property bool leftOpen: false
             property bool rightOpen: false
+            property bool openingIntent: false
             property real leftProgress: 0
             property real rightProgress: 0
             property string leftTab: "controls"
-            property string rightTab: "overview"
+            property string rightTab: "tools"
+            property real railTop: 0
+            property real railLeft: 0
+            property real railBottom: 0
+            property real railRight: 0
         }
     }
 }

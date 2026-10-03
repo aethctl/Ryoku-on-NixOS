@@ -7,6 +7,8 @@ import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "Singletons"
 import "schema/DesktopPage.js" as DesktopSchema
+import "schema/SidebarsPage.js" as SidebarsSchema
+import "schema/DesktopScenePage.js" as DesktopSceneSchema
 import "schema/BarStudioPage.js" as BarStudioSchema
 import "schema/WindowSettings.js" as WindowSettingsSchema
 import "schema/PluginsPage.js" as PluginsSchema
@@ -36,7 +38,8 @@ import Ryoku.FrameBars
 // pending-write diff); the action bar is the one surface whose absence eats an
 // edit, so it lives in the shell and no page can lose it.
 //
-// Nothing writes to disk except Save. Values live in `draft`; `committed` is
+// Modeled form values write only on Save. Dedicated studio pages own their
+// immediate service-backed writes. Values here live in `draft`; `committed` is
 // what the JsonAdapters hold from disk; the diff is draft against committed,
 // rendered in each file's own JSON syntax. Factory values live in `defs` and
 // only RESET reaches for them.
@@ -65,7 +68,19 @@ Rectangle {
         if (s === "windows") return "windowmanager";
         if (s === "cursor") return "input";
         if (s === "autostart" || s === "environment") return "session";
+        if (s === "sidebar" || s === "sidebars-left" || s === "sidebars-right") return "sidebars";
+        if (s === "stage" || s === "visualizer" || s === "widgets"
+                || s === "desktop-scene-visualizer" || s === "desktop-scene-widgets")
+            return "desktop-scene";
         return s;
+    }
+    function routeKeyFor(target) {
+        if (target === "sidebars-right") return "sidebars.right";
+        if (target === "sidebars-left" || target === "sidebar") return "sidebars.left";
+        if (target === "visualizer" || target === "desktop-scene-visualizer") return "visualizer";
+        if (target === "widgets" || target === "desktop-scene-widgets") return "widgets";
+        if (target === "stage" || target === "desktop-scene") return "stage";
+        return "";
     }
     // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
     // win over the remembered section. `sectionGet` is a Process, so on a cold
@@ -73,13 +88,21 @@ Rectangle {
     // restore silently drags the user back to wherever they were last -- the
     // handoff looked like it did nothing. Deep links come through here and latch.
     function navigate(target) {
+        var route = hub.routeKeyFor(target);
         target = hub.canonicalSection(target);
         if (!target || hub.pageFile(target) === "" || !hub.sectionAvailable(target))
             return;
         hub.navigated = true;
+        hub.routeKey = route;
         hub.section = target;
+        if (route !== "") {
+            hub.pendingFocusKey = route;
+            focusTimer.tries = 0;
+            focusTimer.restart();
+        }
     }
     property bool navigated: false
+    property string routeKey: ""
     property string query: ""
 
     // progressive disclosure: one global Advanced switch (in the rail) reveals the
@@ -113,6 +136,7 @@ Rectangle {
             { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
             { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
+            { key: "sidebars", name: "Sidebars", wired: true }, { key: "desktop-scene", name: "Desktop Scene", wired: true },
             { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
@@ -138,8 +162,8 @@ Rectangle {
     readonly property var jpName: ({
         "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
-        "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "launcher": "起動", "fastfetch": "情報",
-        "lockscreen": "施錠", "animations": "動き",
+        "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "sidebars": "側面", "desktop-scene": "舞台",
+        "launcher": "起動", "fastfetch": "情報", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "session": "起動", "performance": "性能", "rashin": "羅針",
         "updates": "更新", "nixos-info": "雪", "credits": "謝辞", "global": "全般", "import": "取込", "windowmanager": "合成"
@@ -162,7 +186,9 @@ Rectangle {
         "windowmanager": "compositor window manager wm wayland switch change swap session provider window windows rounding corners softness gaps border borders thickness colour tiling layout opacity transparency transparent dim blur shadow float snap resize animation spread offset",
         "plugins": "plugin plugins hyprland compositor hyprpm title bar titlebar hyprbars glass hyprglass image border imgborders cursor motion dynamic cursors focus flash hyprfocus key sound sounds keyboard keysounds typing click clicky thock creamy cherry mx topre mechvibes switch version abi mismatch rebuild build update add git repository install",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
-        "desktop": "desktop brand logo mark name widget board wallpaper",
+        "desktop": "desktop brand logo mark name wallpaper picker clipboard",
+        "sidebars": "sidebar sidebars controls companion cards sections order move summary full width height fit fixed alignment keep open pinned motion plugin",
+        "desktop-scene": "desktop stage scene depth parallax wallpaper cut layer model quality shadow edge visualizer spectrum widgets placement edit",
         "launcher": "launcher spotlight command palette greeting weather home",
         "fastfetch": "fetch neofetch terminal system info logo ascii emblem readout",
         "lockscreen": "lock screensaver signin greeter skin theme login",
@@ -187,7 +213,9 @@ Rectangle {
     // section -> its schema rows, the one source for both global search and the
     // compositor-driving classification, so the two cannot drift apart.
     readonly property var sectionRows: ({
-        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
+        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows,
+        "sidebars": SidebarsSchema.rows, "desktop-scene": DesktopSceneSchema.rows,
+        "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
         "input": InputSchema.rows, "keybinds": KeybindsSchema.rows,
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
@@ -495,7 +523,9 @@ Rectangle {
         return (prov && prov.length) ? base.concat(prov) : base;
     }
     function pageFile(s) {
-        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
+        var map = { "plugins": "PluginsPage", "profile": "ProfilePage", "bar-studio": "BarStudioPage", "desktop": "DesktopPage",
+            "sidebars": "SidebarsPage", "desktop-scene": "DesktopScenePage",
+            "session": "SessionPage", "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage", "appoverrides": "AppOverridesPage", "animations": "AnimationsPage", "input": "InputPage", "keybinds": "KeybindsPage", "dictation": "DictationPage", "displays": "DisplaysPage", "connections": "ConnectionsPage", "gpu": "GpuPage", "updates": "UpdatesPage", "rashin": "RashinPage", "recording": "RecordingPage", "performance": "PerformancePage", "launcher": "LauncherPage", "lockscreen": "LockscreenPage", "fastfetch": "FastfetchPage", "addons": "AddonsPage", "nixos-info": "NixOSInfoPage", "credits": "CreditsPage" };
         map.global = "GlobalPage";
         map["import"] = "ImportPage";
         map.windowmanager = "WindowManagerPage";
@@ -532,12 +562,6 @@ Rectangle {
         "surfaceColor": "#0f1115", "osdRadius": 28, "osdOpacity": 1,
         "fontFamily": "Space Grotesk", "fontSize": 11, "fontScale": 1.3,
         "frameBars": FrameBars.defaultConfig(),
-        "sidebars.width": 380, "sidebars.motion": "standard",
-        "sidebars.depth": true, "sidebars.push": true, "sidebars.wallpaperSlide": 1.15,
-        "sidebars.left.enabled": true,
-        "sidebars.left.cards": ["system", "notifications", "weather", "media", "capture", "stage"],
-        "sidebars.right.enabled": true,
-        "sidebars.right.cards": ["usage", "tools", "chat"],
         "weatherLocation": "", "weatherUnit": "auto", "formatLocale": "",
         "markText": "力", "markImage": "", "markTint": true, "name": "Ryoku",
         "reloadCover": ReloadCoverModel.empty(),
@@ -708,6 +732,7 @@ Rectangle {
         hub.draft = d;
         return true;
     }
+
     function save() {
         if (hyprSave.running)
             return;
@@ -1417,7 +1442,13 @@ Rectangle {
                 // hidden once parked, so the idle page stops taking hover
                 // (a stale tooltip was leaking through the overlay layer).
                 visible: opacity > 0.01
-                onLoaded: { if (item) item.hub = hub; pageHost.reveal(la); }
+                onLoaded: {
+                    if (item) {
+                        item.hub = hub;
+                        if (hub.routeKey !== "" && item.focusKey) item.focusKey(hub.routeKey);
+                    }
+                    pageHost.reveal(la);
+                }
             }
             Loader {
                 id: lb
@@ -1427,7 +1458,13 @@ Rectangle {
                 asynchronous: true
                 opacity: 0
                 visible: opacity > 0.01
-                onLoaded: { if (item) item.hub = hub; pageHost.reveal(lb); }
+                onLoaded: {
+                    if (item) {
+                        item.hub = hub;
+                        if (hub.routeKey !== "" && item.focusKey) item.focusKey(hub.routeKey);
+                    }
+                    pageHost.reveal(lb);
+                }
             }
         }
 

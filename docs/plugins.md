@@ -246,16 +246,14 @@ manage it from a terminal; see "Share it" below for export and share.
 
 ### 4. Sidebar card - lives in a global sidebar
 
-A sidebar card lives in the left or right global push-aside sidebar. Write the
-same two entry points as every other plugin: `service/Main.qml` for persistent
-logic and `content/Widget.qml` for the card view. There is no
-`content/Sidebar.qml`. Ryoku mounts `content/Widget.qml` inside the same card
-shell as built-in sidebar cards, so it supplies the plate, title treatment,
-motion, width, and placement.
+A `sidebarCard` plugin can live in the Controls or Companion screen-edge
+overlay. It uses the same entry points as every other plugin:
+`service/Main.qml` for persistent logic and `content/Widget.qml` for the view.
+There is no `content/Sidebar.qml`. Ryoku owns the surface frame, section
+navigation, width, placement, and motion.
 
-The card root must be an `Item` with `pragma ComponentBehavior: Bound`. It
-declares the properties and signal below; read host-set properties, never assign
-them:
+The root must be an `Item` with `pragma ComponentBehavior: Bound`. These are the
+core host-set members:
 
 ```qml
 pragma ComponentBehavior: Bound
@@ -280,37 +278,55 @@ Item {
 
 | Contract member | Meaning |
 | --- | --- |
-| `s` | UI scale multiplier. |
-| `open` | `true` once the sidebar is settled open. |
+| `s` | Per-display UI scale multiplier. |
+| `open` | Whether the owning sidebar is requested open. |
 | `reveal` | Current reveal progress from `0` to `1`. |
-| `tabActive` | Whether the card's tab is the visible tab. |
-| `width` | Host-managed card width. Report `implicitHeight`; do not assign the width. |
+| `tabActive` | Whether this plugin's section is selected. |
+| `width` | Host-managed width. Report `implicitHeight`; do not assign the width. |
 | `pluginApi` | `mainInstance`, `pluginSettings`, `pluginDir`, `stateDir`, and `saveSetting(key, value)`. |
-| `requestClose()` | Signal the card emits when its action should close the sidebar. |
+| `requestClose()` | Signal an action can emit to close the owning surface. |
+
+Two additional properties are optional. If declared, the host binds them:
+
+| Optional member | Meaning |
+| --- | --- |
+| `compact: bool` | `true` for Summary and `false` for Expanded. Use it to provide a deliberate compact layout. |
+| `viewportHeight: real` | Height available to the section below the shared chrome. Use it to cap an internal scroll region. |
+
+If `compact` is absent, Summary uses a generic host view built from the
+manifest name and its real description. The one real `Widget.qml` instance
+stays loaded and appears unchanged in Expanded, so the fallback does not clip
+the widget, duplicate its service state, or substitute fake content. A plugin
+that declares `compact` owns both presentations. Omitting `viewportHeight` is
+also valid.
+
+The host continues to drive `open`, `reveal`, `tabActive`, and optional
+`active` from the real sidebar state in either presentation. Service objects
+and their timers are not recreated when the user switches between Summary and
+Expanded.
 
 Sidebar placement is stored under the plugin's `sidebarCard` placement object:
 
-- `side`: `"left"` or `"right"`.
-- `tab`: the tab label; `"Plugins"` is the shared trailing plugin tab.
-- `order`: numeric order among cards in that tab.
-- `label`: the card's displayed label.
+- `side`: `"left"` for Controls or `"right"` for Companion;
+- `tab`: the section label; `"Plugins"` is the shared trailing plugin section;
+- `order`: numeric order among plugins in that section;
+- `label`: the displayed label; and
 - `glyph`: a Material Symbols Rounded ligature, default `"extension"`.
 
 Manifest suggestions use `"defaults": { "host": "sidebarCard", "sidebar": {
 "side": "left", "tab": "Plugins", "order": 10 } }`. The manifest declares
 `sidebarCard` in `hosts`, keeps `entryPoints.content` at
-`content/Widget.qml`, and uses `["compact"]` for
-`capabilities.densities`.
+`content/Widget.qml`, and may include `"compact"` in
+`capabilities.densities` when the widget supplies its own Summary view.
 
-The golden rule is unchanged: the plugin draws content, never its own plate,
-window chrome, position, or motion. R1-R11 are identical for sidebar cards;
-their public imports are still `QtQuick*`, `Quickshell*`, `Ryoku.PluginKit`,
-`Ryoku.PluginKit.Singletons`, and files inside the plugin folder.
-
+The plugin draws content, never its own window chrome, outer surface, position,
+or motion. R1-R11 are otherwise unchanged; public imports remain `QtQuick*`,
+`Quickshell*`, `Ryoku.PluginKit`, `Ryoku.PluginKit.Singletons`, and files inside
+the plugin folder.
 
 > Island and window hosts are planned but not built yet. `sidebarCard` is
-> shipped: declare only `framePopout`, `desktopWidget`, `topbarGlyph`, or
-> `sidebarCard` in your manifest today.
+> available: declare only `framePopout`, `desktopWidget`, `topbarGlyph`, or
+> `sidebarCard` in a manifest today.
 
 ---
 

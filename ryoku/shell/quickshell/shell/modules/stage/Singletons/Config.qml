@@ -41,12 +41,8 @@ Singleton {
     readonly property real speed: (root.motion && typeof root.motion.speed === "number") ? root.motion.speed : 1.0
     readonly property real amountFactor: root.amount === "subtle" ? 0.5 : root.amount === "strong" ? 1.8 : 1.0
 
-    // Parallax pointer + backdrop knobs the Stage tab's Motion section drives. The
-    // v2 settings table folded the old motion.{mouse,sensitivity,range} into
-    // motion.amount, but the ribbon exposes them directly, so they live back
-    // under `motion` as their own keys (default: a plain follow with unit gain).
-    // Follow mouse is on unless the key says false: a Parallax that ignores the
-    // pointer is the exception, not the default.
+    // Pointer and backdrop controls share the same motion object as idle and
+    // music response. A missing mouse key keeps pointer motion enabled.
     readonly property bool followMouse: !(root.motion && root.motion.mouse === false)
     readonly property real sensitivity: (root.motion && typeof root.motion.sensitivity === "number") ? root.motion.sensitivity : 1.0
     readonly property real range: (root.motion && typeof root.motion.range === "number") ? root.motion.range : 1.0
@@ -84,6 +80,13 @@ Singleton {
     function setEdge(v) { adapter.edge = Math.max(0, Math.min(1, v)); settle.restart(); }
     function setShadow(v) { adapter.shadow = Math.max(0, Math.min(1, v)); settle.restart(); }
     function setShadowAngle(v) { adapter.shadowAngle = Math.round(v); settle.restart(); }
+    function resetLook() {
+        adapter.edge = 0.15;
+        adapter.shadow = 0;
+        adapter.shadowAngle = 90;
+        adapter.motion = ({ amount: "normal", idle: "none", music: false, musicLevel: 0.6, speed: 1.0, mouse: true, sensitivity: 1.0, range: 1.0, backdrop: 0.0 });
+        settle.restart();
+    }
 
     // Grid step cycles through a small ladder; snap is a plain toggle. Written
     // eagerly (a deliberate editor pick, not a drag).

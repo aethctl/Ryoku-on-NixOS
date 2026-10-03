@@ -11,10 +11,14 @@ type Action string
 const (
 	// Window ids are whatever the state frames used; a caller round-trips one
 	// and never parses it.
-	ActionWindowFocus           Action = "window.focus"
-	ActionWindowClose           Action = "window.close"
-	ActionWindowFullscreen      Action = "window.fullscreen"
-	ActionWindowFloat           Action = "window.float"
+	ActionWindowFocus      Action = "window.focus"
+	ActionWindowClose      Action = "window.close"
+	ActionWindowFullscreen Action = "window.fullscreen"
+	ActionWindowFloat      Action = "window.float"
+	// ActionWindowPlace makes a window floating and sets its output-relative
+	// logical rectangle. Args are id, x, y, width, height, output; the id is the
+	// opaque handle published in Window.ID.
+	ActionWindowPlace           Action = "window.place"
 	ActionWindowMoveToWorkspace Action = "window.moveToWorkspace"
 
 	// ActionWindowSummon raises an already-open window to the current
@@ -108,7 +112,7 @@ const (
 // foreign-toplevel and need nothing.
 func (a Action) Capability() Capability {
 	switch a {
-	case ActionWindowFloat:
+	case ActionWindowFloat, ActionWindowPlace:
 		return CapWindowFloat
 	case ActionWindowMoveToWorkspace, ActionWindowSummon, ActionWorkspaceFocus, ActionWorkspaceCycle:
 		return CapWorkspaces

@@ -176,6 +176,7 @@ func TestActCyclesOneStepPerUnit(t *testing.T) {
 func TestActRejectsMissingArgs(t *testing.T) {
 	for _, args := range [][]string{
 		{"window.focus"},
+		{"window.place", "7", "0", "0", "700"},
 		{"window.moveToWorkspace", "7"},
 		{"workspace.focus"},
 		{"workspace.moveToOutput", "3"},

@@ -1,6 +1,16 @@
 # Changelog: ryoku/hub/
 
 ### Added
+- **Sidebars has its own page.** Contents, ordering, Summary/Full controls,
+  placement, size, and opening behavior are edited in Hub rather than inside
+  sidebar tabs. Saves wait for the daemon's reply and settings-frame confirmation
+  (`quickshell/pages/SidebarsPage.qml`, `quickshell/pages/SidebarWriter.qml`).
+- **Desktop Scene brings the editors together.** Scene, Visualizer, and Widgets
+  have dedicated views. The scene view includes layers, cut quality, shadow
+  direction, motion presets, idle speed, music intensity, and pointer tuning.
+  Visualizer and widget editors open on the desktop and close Hub after a
+  successful hand-off; the shell stays the writer of their settings
+  (`quickshell/pages/DesktopScenePage.qml`).
 - **Bar Studio knows Python.** The style shelf lists the ported serpantinum
   style, and while it is active the page carries a Python card that opens the
   style's own settings guide through the shell IPC, like the Shima and QS Bar

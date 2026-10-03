@@ -16,6 +16,8 @@ Item {
     required property real reveal
     required property bool tabActive
     property int index: 0
+    property bool compact: false
+    readonly property bool motionAllowed: !Tokens.reduceMotion && !Motion.reduce
     signal requestClose()
 
     readonly property var players: Mpris.players.values.filter(player => player && !Media.isWallpaper(player))
@@ -75,8 +77,20 @@ Item {
         else
             root.player.loopState = MprisLoopState.None;
     }
+    function finishPendingSeek(): void {
+        seekDebounce.stop();
+        if (root.player && root.player.canSeek && root.pendingSeek >= 0)
+            root.player.position = root.pendingSeek;
+        root.pendingSeek = -1;
+    }
 
-    onPlayerChanged: root.pendingSeek = -1
+
+    onPlayerChanged: {
+        seekDebounce.stop();
+        root.pendingSeek = -1;
+    }
+    onOpenChanged: if (!root.open) root.finishPendingSeek()
+    onTabActiveChanged: if (!root.tabActive) root.finishPendingSeek()
 
     Timer {
         interval: 500
@@ -87,11 +101,7 @@ Item {
     Timer {
         id: seekDebounce
         interval: 300
-        onTriggered: {
-            if (root.player && root.player.canSeek && root.pendingSeek >= 0)
-                root.player.position = root.pendingSeek;
-            root.pendingSeek = -1;
-        }
+        onTriggered: root.finishPendingSeek()
     }
 
     component TransportButton: Rectangle {
@@ -108,9 +118,9 @@ Item {
         color: transport.hero ? Tokens.bone : transportTap.pressed ? Tokens.tint16 : transportHover.hovered ? Tokens.tint10 : Tokens.tint5
         border.width: Tokens.border
         border.color: transport.hero ? Tokens.bone : transportHover.hovered ? Tokens.lineStrong : Tokens.line
-        scale: transportTap.pressed ? 0.96 : transportHover.hovered && !Tokens.reduceMotion ? 1.04 : 1
-        Behavior on color { ColorAnimation { duration: Tokens.snap } }
-        Behavior on scale { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
+        scale: root.motionAllowed ? (transportTap.pressed ? 0.96 : transportHover.hovered ? 1.04 : 1) : 1
+        Behavior on color { enabled: root.motionAllowed; ColorAnimation { duration: Tokens.snap } }
+        Behavior on scale { enabled: root.motionAllowed; NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
         Text {
             anchors.centerIn: parent
             text: transport.glyph
@@ -125,13 +135,15 @@ Item {
     SidebarCardShell {
         id: shell
         width: root.width
+        s: root.s
         index: root.index
         open: root.open
         reveal: root.reveal
         tabActive: root.tabActive
+        compact: root.compact
         title: I18n.tr("Media")
         glyph: "play_circle"
-        eyebrow: root.players.length > 1 ? I18n.tr("%1 PLAYERS").arg(root.players.length) : I18n.tr("NOW PLAYING")
+        eyebrow: root.players.length > 1 ? I18n.tr("%1 players").arg(root.players.length) : I18n.tr("Now playing")
 
         Column {
             width: parent.width
@@ -140,7 +152,7 @@ Item {
             Rectangle {
                 visible: root.player === null
                 width: parent.width
-                implicitHeight: emptyColumn.implicitHeight + Tokens.s7 * root.s
+                implicitHeight: emptyColumn.implicitHeight + (root.compact ? Tokens.s4 : Tokens.s7) * root.s
                 radius: Tokens.radius * root.s
                 color: Tokens.tint5
                 border.width: Tokens.border
@@ -154,7 +166,7 @@ Item {
                         text: "music_off"
                         color: Tokens.inkMuted
                         font.family: "Material Symbols Rounded"
-                        font.pixelSize: 40 * root.s
+                        font.pixelSize: (root.compact ? 28 : 40) * root.s
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
@@ -169,7 +181,7 @@ Item {
             Rectangle {
                 visible: root.player !== null
                 width: parent.width
-                implicitHeight: 236 * root.s
+                implicitHeight: (root.compact ? 126 : 236) * root.s
                 radius: Tokens.radius * root.s
                 clip: true
                 color: Tokens.paperLift
@@ -226,7 +238,7 @@ Item {
                         text: root.player ? root.player.trackTitle || I18n.tr("Untitled") : ""
                         color: Tokens.ink
                         font.family: Tokens.display
-                        font.pixelSize: Tokens.fHero * root.s
+                        font.pixelSize: (root.compact ? Tokens.fValue : Tokens.fHero) * root.s
                         font.weight: Font.Medium
                         elide: Text.ElideRight
                     }
@@ -240,11 +252,12 @@ Item {
                         elide: Text.ElideRight
                     }
                     Text {
+                        visible: !root.compact
                         width: parent.width
                         text: root.player ? (root.player.identity || root.player.dbusName || "") : ""
                         color: Tokens.inkMuted
                         font.family: Tokens.ui
-                        font.pixelSize: Tokens.fMicro * root.s
+                        font.pixelSize: Tokens.fSmall * root.s
                         font.letterSpacing: Tokens.trackLabel
                         elide: Text.ElideRight
                     }
@@ -252,7 +265,7 @@ Item {
             }
 
             Item {
-                visible: root.players.length > 1
+                visible: !root.compact && root.players.length > 1
                 width: parent.width
                 implicitHeight: Math.max(playerName.implicitHeight, playerSwitch.implicitHeight)
                 Text {
@@ -264,7 +277,7 @@ Item {
                     text: root.player ? root.player.identity || root.player.dbusName : ""
                     color: Tokens.inkMuted
                     font.family: Tokens.ui
-                    font.pixelSize: Tokens.fMicro * root.s
+                    font.pixelSize: Tokens.fSmall * root.s
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
@@ -278,7 +291,7 @@ Item {
             }
 
             Column {
-                visible: root.player !== null
+                visible: !root.compact && root.player !== null
                 width: parent.width
                 spacing: Tokens.s2 * root.s
                 Slid {
@@ -300,7 +313,7 @@ Item {
                         text: root.fmt(root.position)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * root.s
+                        font.pixelSize: Tokens.fSmall * root.s
                         font.features: ({ "tnum": 1 })
                     }
                     Text {
@@ -309,7 +322,7 @@ Item {
                         text: root.fmt(root.length)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * root.s
+                        font.pixelSize: Tokens.fSmall * root.s
                         font.features: ({ "tnum": 1 })
                     }
                 }
@@ -320,6 +333,7 @@ Item {
                 anchors.horizontalCenter: parent.horizontalCenter
                 spacing: Tokens.s3 * root.s
                 TransportButton {
+                    visible: !root.compact
                     glyph: root.player && root.player.shuffle ? "shuffle_on" : "shuffle"
                     armed: !!(root.player && root.player.shuffleSupported)
                     action: () => { if (root.player) root.player.shuffle = !root.player.shuffle; }
@@ -341,6 +355,7 @@ Item {
                     action: () => { if (root.player) root.player.next(); }
                 }
                 TransportButton {
+                    visible: !root.compact
                     glyph: root.loopGlyph()
                     armed: !!(root.player && root.player.loopSupported)
                     action: () => root.cycleLoop()

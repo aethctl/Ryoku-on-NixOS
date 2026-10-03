@@ -6,12 +6,15 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import shell.services
+import ".."
 
 Item {
     id: root
 
     property real s: 1
     property bool open: false
+    readonly property bool motionAllowed: !Motion.reduce && !Tokens.reduceMotion
     property string mode: "compress"
     signal cancelled()
     signal confirmed(var paths)
@@ -29,7 +32,7 @@ Item {
     opacity: root.open ? 1 : 0
     z: 40
 
-    Behavior on opacity { NumberAnimation { duration: Tokens.dur(150); easing.type: Tokens.ease } }
+    Behavior on opacity { enabled: root.motionAllowed; NumberAnimation { duration: Tokens.dur(150); easing.type: Tokens.ease } }
 
     onOpenChanged: {
         if (!root.open)
@@ -127,10 +130,7 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: Tokens.radius * root.s
-        color: Tokens.paperLift
-        border.width: Tokens.border
-        border.color: Tokens.lineStrong
+        color: Tokens.paper
 
         Column {
             anchors.fill: parent
@@ -168,7 +168,7 @@ Item {
                         text: root.selCount === 0 ? I18n.tr("Choose one or more files") : I18n.tr("%1 selected").arg(root.selCount)
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * root.s
+                        font.pixelSize: Tokens.fSmall * root.s
                     }
                 }
             }
@@ -199,7 +199,7 @@ Item {
                     elide: Text.ElideLeft
                     color: Tokens.inkDim
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * root.s
+                    font.pixelSize: Tokens.fSmall * root.s
                 }
             }
 
@@ -211,7 +211,7 @@ Item {
                 model: files
                 spacing: Tokens.s1 * root.s
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded; motionEnabled: !Motion.reduce && !Tokens.reduceMotion }
 
                 delegate: Rectangle {
                     id: fileRow
@@ -227,9 +227,9 @@ Item {
                     border.width: Tokens.border
                     border.color: fileRow.selected ? Tokens.sun
                         : rowHover.hovered ? Tokens.lineStrong : Tokens.lineSoft
-                    scale: rowTap.pressed && !Tokens.reduceMotion ? 0.98 : 1
-                    Behavior on scale { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
-                    Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                    scale: rowTap.pressed && root.motionAllowed ? 0.98 : 1
+                    Behavior on scale { enabled: root.motionAllowed; NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
+                    Behavior on color { enabled: root.motionAllowed; ColorAnimation { duration: Tokens.snap } }
 
                     Text {
                         font.family: "Material Symbols Rounded"
@@ -280,7 +280,9 @@ Item {
                 width: parent.width
                 spacing: Tokens.s2 * root.s
 
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: !Motion.reduce && !Tokens.reduceMotion
                     id: cancelButton
                     text: I18n.tr("Cancel")
                     onAct: root.cancelled()
@@ -289,7 +291,9 @@ Item {
                     width: Math.max(0, parent.width - cancelButton.width - confirmButton.width - parent.spacing * 2)
                     height: 1
                 }
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: !Motion.reduce && !Tokens.reduceMotion
                     id: confirmButton
                     text: root.selCount > 0
                         ? (root.mode === "install" ? I18n.tr("Install %1").arg(root.selCount) : I18n.tr("Compress %1").arg(root.selCount))

@@ -8,6 +8,7 @@ Rectangle {
     property bool primary: false
     property bool armed: true
     property bool compact: false
+    property bool motionEnabled: !Tokens.reduceMotion
     // A TapHandler is passive: it never takes focus from a TextInput, so a
     // field's editingFinished (and its commit into the draft) does not fire
     // when the user types and then clicks the button directly. The commit-on-
@@ -19,7 +20,8 @@ Rectangle {
     signal act()
     Keys.onPressed: event => {
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
-            activate();
+            if (btn.armed && !event.isAutoRepeat)
+                btn.act();
             event.accepted = true;
         }
     }
@@ -34,8 +36,8 @@ Rectangle {
     color: primary && armed ? Tokens.bone : (tap.pressed && armed ? Tokens.tint16 : (bh.hovered && armed ? Tokens.tint10 : "transparent"))
     border.width: Tokens.border
     border.color: activeFocus ? Tokens.bone : (primary && armed ? Tokens.bone : (bh.hovered && armed ? Tokens.lineStrong : Tokens.line))
-    Behavior on color { ColorAnimation { duration: Tokens.snap } }
-    Behavior on opacity { NumberAnimation { duration: Tokens.snap } }
+    Behavior on color { enabled: btn.motionEnabled; ColorAnimation { duration: Tokens.snap } }
+    Behavior on opacity { enabled: btn.motionEnabled; NumberAnimation { duration: Tokens.snap } }
 
     Text {
         id: lab

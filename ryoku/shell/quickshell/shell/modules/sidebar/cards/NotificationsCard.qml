@@ -14,6 +14,8 @@ Item {
     required property real reveal
     required property bool tabActive
     property int index: 0
+    property bool compact: false
+    readonly property bool motionAllowed: !Tokens.reduceMotion && !Motion.reduce
     signal requestClose()
 
     readonly property var notices: root.open && root.tabActive ? Notifs.history : []
@@ -59,9 +61,9 @@ Item {
         color: noticeHover.hovered ? Tokens.tint10 : Tokens.tint5
         border.width: Tokens.border
         border.color: noticeHover.hovered ? Tokens.lineStrong : Tokens.line
-        scale: closeTap.pressed ? 0.985 : noticeHover.hovered && !Tokens.reduceMotion ? 1.006 : 1
-        Behavior on color { ColorAnimation { duration: Tokens.snap } }
-        Behavior on scale { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
+        scale: root.motionAllowed ? (closeTap.pressed ? 0.985 : noticeHover.hovered ? 1.006 : 1) : 1
+        Behavior on color { enabled: root.motionAllowed; ColorAnimation { duration: Tokens.snap } }
+        Behavior on scale { enabled: root.motionAllowed; NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
 
         HoverHandler { id: noticeHover }
 
@@ -86,7 +88,7 @@ Item {
                     text: notice.notification ? notice.notification.appName || I18n.tr("Notification") : I18n.tr("Notification")
                     color: Tokens.inkDim
                     font.family: Tokens.ui
-                    font.pixelSize: Tokens.fMicro * root.s
+                    font.pixelSize: Tokens.fSmall * root.s
                     font.weight: Font.DemiBold
                     font.letterSpacing: Tokens.trackLabel
                     elide: Text.ElideRight
@@ -99,7 +101,7 @@ Item {
                     text: Notifs.timeLabel(notice.notification)
                     color: Tokens.inkMuted
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * root.s
+                    font.pixelSize: Tokens.fSmall * root.s
                 }
                 Row {
                     id: actionCluster
@@ -163,14 +165,18 @@ Item {
                 font.family: Tokens.ui
                 font.pixelSize: Tokens.fSmall * root.s
                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                maximumLineCount: root.compact ? 2 : 12
+                elide: root.compact ? Text.ElideRight : Text.ElideNone
             }
             Flow {
                 width: parent.width
                 spacing: Tokens.s2 * root.s
-                visible: notice.actions.length > 0
+                visible: !root.compact && notice.actions.length > 0
                 Repeater {
                     model: notice.actions
-                    delegate: Btn {
+                    delegate: SidebarButton {
+                        s: root.s
+                        motionEnabled: root.motionAllowed
                         required property var modelData
                         text: modelData.text
                         compact: true
@@ -185,13 +191,15 @@ Item {
     SidebarCardShell {
         id: shell
         width: root.width
+        s: root.s
         index: root.index
         open: root.open
         reveal: root.reveal
         tabActive: root.tabActive
+        compact: root.compact
         title: I18n.tr("Notifications")
         glyph: "notifications"
-        eyebrow: root.notices.length === 0 ? I18n.tr("ALL CLEAR") : I18n.tr("%1 RECENT").arg(root.notices.length)
+        eyebrow: root.notices.length === 0 ? I18n.tr("All clear") : I18n.tr("%1 recent").arg(root.notices.length)
 
         Column {
             width: parent.width
@@ -199,7 +207,7 @@ Item {
 
             Rectangle {
                 width: parent.width
-                implicitHeight: 64 * root.s
+                implicitHeight: (root.compact ? 54 : 64) * root.s
                 radius: Tokens.radius * root.s
                 color: Flags.dnd ? Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.14) : Tokens.tint5
                 border.width: Tokens.border
@@ -236,17 +244,19 @@ Item {
                             text: Flags.dnd ? I18n.tr("Banners are paused") : I18n.tr("Banners are live")
                             color: Tokens.inkMuted
                             font.family: Tokens.ui
-                            font.pixelSize: Tokens.fMicro * root.s
+                            font.pixelSize: Tokens.fSmall * root.s
                         }
                     }
                 }
-                Sw {
+                SidebarToggle {
+                    s: root.s; compact: true
+                    Accessible.name: I18n.tr("Do not disturb")
                     id: dndSwitch
                     anchors.right: parent.right
                     anchors.rightMargin: root.pad
                     anchors.verticalCenter: parent.verticalCenter
                     on: Flags.dnd
-                    onToggled: Toggles.toggleDnd()
+                    onToggleRequested: Toggles.toggleDnd()
                 }
             }
 
@@ -257,13 +267,15 @@ Item {
                     id: historyLabel
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: I18n.tr("History")
+                    text: root.compact ? I18n.tr("Recent") : I18n.tr("History")
                     color: Tokens.ink
                     font.family: Tokens.ui
                     font.pixelSize: Tokens.fRow * root.s
                     font.weight: Font.DemiBold
                 }
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: root.motionAllowed
                     id: clearButton
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
@@ -280,7 +292,7 @@ Item {
             Rectangle {
                 visible: root.notices.length === 0
                 width: parent.width
-                implicitHeight: emptyColumn.implicitHeight + Tokens.s6 * root.s
+                implicitHeight: emptyColumn.implicitHeight + (root.compact ? Tokens.s3 : Tokens.s6) * root.s
                 radius: Tokens.radius * root.s
                 color: Tokens.tint5
                 border.width: Tokens.border
@@ -307,7 +319,7 @@ Item {
             }
 
             Repeater {
-                model: root.notices
+                model: root.compact ? root.notices.slice(0, 2) : root.notices
                 delegate: Notice {
                     required property var modelData
                     width: parent.width

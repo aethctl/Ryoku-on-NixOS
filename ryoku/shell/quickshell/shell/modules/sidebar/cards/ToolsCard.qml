@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import QtQuick.Controls as QQC
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import shell.services
@@ -16,6 +17,9 @@ Item {
     required property bool tabActive
     property int index: 0
     property string page: ""
+    property bool compact: false
+    property real viewportHeight: 0
+    readonly property bool motionAllowed: !Tokens.reduceMotion && !Motion.reduce
     signal requestClose()
     signal pick(string mode)
 
@@ -24,7 +28,9 @@ Item {
     property bool pickerOpen: false
     property string pickerMode: "compress"
 
-    implicitHeight: card.implicitHeight
+    implicitHeight: root.pickerOpen || root.setupOpen
+        ? Math.max(240 * root.s, Math.min(560 * root.s, root.viewportHeight > 0 ? root.viewportHeight : card.implicitHeight))
+        : card.implicitHeight
 
     readonly property bool engineNeedsSetup: Stash.dockerState === "setup" || Stash.dockerState === "missing"
     readonly property string engineSub: {
@@ -67,6 +73,8 @@ Item {
 
     property string lastPage: ""
     function applyPage() {
+        if (!root.tabActive)
+            return;
         if (root.page === root.lastPage)
             return;
         root.lastPage = root.page;
@@ -75,140 +83,154 @@ Item {
     }
 
     onPageChanged: root.applyPage()
-    onTabActiveChanged: {
-        if (!root.tabActive)
-            root.lastPage = "";
-        else
-            root.applyPage();
-    }
+    onTabActiveChanged: if (root.tabActive) root.applyPage()
     Component.onCompleted: root.applyPage()
+
+    component ToolSection: Column {
+        id: section
+        property string title
+        default property alias content: body.data
+        spacing: Tokens.s3 * root.s
+        Text {
+            width: parent.width
+            text: section.title
+            color: Tokens.ink
+            font.family: Tokens.ui
+            font.pixelSize: Tokens.fRow * root.s
+            font.weight: Font.DemiBold
+            wrapMode: Text.WordWrap
+        }
+        Column {
+            id: body
+            width: parent.width
+            spacing: Tokens.s2 * root.s
+        }
+    }
 
     SidebarCardShell {
         id: card
+        visible: !root.pickerOpen && !root.setupOpen
         width: root.width
+        s: root.s
         index: root.index
         open: root.open
         reveal: root.reveal
         tabActive: root.tabActive
+        compact: root.compact
         title: I18n.tr("Stash tools")
         glyph: "download"
-        eyebrow: I18n.tr("DOWNLOADS & PACKAGES")
+        eyebrow: I18n.tr("Downloads and packages")
 
         Column {
             width: parent.width
-            spacing: Tokens.s5 * root.s
-
-            Section {
+            spacing: (root.compact ? Tokens.s3 : Tokens.s5) * root.s
+            Flow {
                 width: parent.width
-                title: I18n.tr("DOWNLOAD")
+                spacing: Tokens.s2 * root.s
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: root.motionAllowed
+                    compact: true
+                    text: I18n.tr("Compress video…")
+                    onAct: root.openPicker("compress")
+                }
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: root.motionAllowed
+                    compact: true
+                    text: I18n.tr("Install app…")
+                    onAct: root.openPicker("install")
+                }
+            }
+
+
+            ToolSection {
+                width: parent.width
+                title: I18n.tr("Download")
 
                 Column {
                     width: parent.width
                     spacing: Tokens.s3 * root.s
 
-                    Rectangle {
+                    Item {
                         width: parent.width
-                        implicitHeight: engineBody.implicitHeight + Tokens.s4 * root.s * 2
-                        radius: Tokens.radius * root.s
-                        color: Tokens.tint5
-                        border.width: Tokens.border
-                        border.color: Stash.cobaltState === "error" ? Tokens.alert : Tokens.lineSoft
+                        height: Math.max(engineState.implicitHeight, engineSwitch.implicitHeight)
 
-                        Row {
-                            id: engineBody
+                        Text {
+                            id: engineState
                             anchors.left: parent.left
+                            anchors.right: engineSwitch.left
+                            anchors.rightMargin: Tokens.s3 * root.s
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: I18n.tr("Cobalt engine") + ": " + root.engineSub
+                            color: Stash.cobaltState === "error" ? Tokens.alert : Tokens.inkDim
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fSmall * root.s
+                            font.weight: Font.Medium
+                            wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                        }
+
+                        SidebarToggle {
+                            s: root.s; compact: true
+                            Accessible.name: I18n.tr("Cobalt engine")
+                            id: engineSwitch
                             anchors.right: parent.right
-                            anchors.top: parent.top
-                            anchors.margins: Tokens.s4 * root.s
-                            spacing: Tokens.s3 * root.s
-
-                            Rectangle {
-                                width: 38 * root.s
-                                height: width
-                                radius: Tokens.radius * root.s
-                                color: Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.13)
-                                Text {
-                                    font.family: "Material Symbols Rounded"
-                                    anchors.centerIn: parent
-                                    text: Stash.cobaltState === "starting" ? "progress_activity" : "bolt"
-                                    color: Tokens.sun
-                                    font.pixelSize: 20 * root.s
-                                    RotationAnimation on rotation {
-                                        running: Stash.cobaltState === "starting" && !Tokens.reduceMotion
-                                        loops: Animation.Infinite
-                                        from: 0
-                                        to: 360
-                                        duration: 900
-                                    }
+                            anchors.verticalCenter: parent.verticalCenter
+                            readonly property bool engineOn: Stash.cobaltState === "running" || Stash.cobaltState === "starting"
+                            on: engineOn
+                            enabled: Stash.setupState !== "running"
+                            onToggleRequested: {
+                                if (engineSwitch.engineOn) {
+                                    Stash.setEngine(false);
+                                    return;
                                 }
-                            }
-
-                            Column {
-                                width: parent.width - 38 * root.s - engineSwitch.width - parent.spacing * 2
-                                spacing: Tokens.s1 * root.s
-                                Text {
-                                    width: parent.width
-                                    text: I18n.tr("Cobalt engine")
-                                    color: Tokens.ink
-                                    font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fRow * root.s
-                                    font.weight: Font.DemiBold
+                                if (root.engineNeedsSetup || Stash.dockerState === "unknown") {
+                                    root.setupOpen = true;
+                                    Stash.startSetup();
+                                    return;
                                 }
-                                Text {
-                                    width: parent.width
-                                    text: root.engineSub
-                                    color: Stash.cobaltState === "error" ? Tokens.alert : Tokens.inkMuted
-                                    font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fSmall * root.s
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-
-                            Sw {
-                                id: engineSwitch
-                                anchors.verticalCenter: parent.verticalCenter
-                                readonly property bool engineOn: Stash.cobaltState === "running" || Stash.cobaltState === "starting"
-                                on: engineOn
-                                enabled: Stash.setupState !== "running"
-                                onToggled: {
-                                    if (engineSwitch.engineOn) {
-                                        Stash.setEngine(false);
-                                        return;
-                                    }
-                                    if (root.engineNeedsSetup || Stash.dockerState === "unknown") {
-                                        root.setupOpen = true;
-                                        Stash.startSetup();
-                                        return;
-                                    }
-                                    Stash.setEngine(true);
-                                }
+                                Stash.setEngine(true);
                             }
                         }
                     }
 
-                    Row {
+                    QQC.TextField {
+                        id: urlField
                         width: parent.width
-                        spacing: Tokens.s2 * root.s
-
-                        Field {
-                            id: urlField
-                            width: parent.width - downloadButton.width - parent.spacing
-                            placeholder: I18n.tr("Paste a link to download")
-                            tabular: true
-                            text: root.urlText
-                            onEdited: value => root.urlText = value
-                            onAccepted: root.startDownload()
-                        }
-                        Btn {
-                            id: downloadButton
-                            text: I18n.tr("Download")
-                            primary: true
-                            armed: root.urlText.trim().length > 0
-                            onAct: root.startDownload()
+                        height: 48 * root.s
+                        placeholderText: I18n.tr("Paste a link to download")
+                        Accessible.name: I18n.tr("Download URL")
+                        font.family: Tokens.ui
+                        font.pixelSize: Tokens.fRow * root.s
+                        color: Tokens.ink
+                        placeholderTextColor: Tokens.inkMuted
+                        selectionColor: Tokens.bone
+                        selectedTextColor: Tokens.inkOnBone
+                        selectByMouse: true
+                        text: root.urlText
+                        onTextEdited: root.urlText = text
+                        onAccepted: root.startDownload()
+                        background: Rectangle {
+                            radius: Tokens.radius * root.s * 1.5
+                            color: Tokens.tint5
+                            border.width: Tokens.border
+                            border.color: urlField.activeFocus ? Tokens.bone : Tokens.line
                         }
                     }
 
-                    Seg {
+                    SidebarButton {
+                        s: root.s
+                        motionEnabled: root.motionAllowed
+                        id: downloadButton
+                        width: parent.width
+                        text: I18n.tr("Download")
+                        primary: true
+                        armed: root.urlText.trim().length > 0
+                        onAct: root.startDownload()
+                    }
+
+                    SidebarSegments {
+                        s: root.s
                         width: parent.width
                         options: ["auto", "audio", "mute"]
                         labels: ({ auto: I18n.tr("Auto"), audio: I18n.tr("Audio"), mute: I18n.tr("Mute") })
@@ -216,75 +238,56 @@ Item {
                         onChose: key => Stash.dlMode = key
                     }
 
-                    Rectangle {
+                    Text {
+                        visible: !root.compact
                         width: parent.width
-                        implicitHeight: siteBody.implicitHeight + Tokens.s3 * root.s * 2
-                        radius: Tokens.radius * root.s
-                        color: Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.07)
-                        border.width: Tokens.border
-                        border.color: Tokens.lineSoft
-
-                        Column {
-                            id: siteBody
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.top: parent.top
-                            anchors.margins: Tokens.s3 * root.s
-                            spacing: Tokens.s1 * root.s
-                            Text {
-                                text: Stash.cobaltState === "running"
-                                    ? I18n.tr("WORKS WITH %1 SITES").arg(Stash.supportedSites.length)
-                                    : I18n.tr("POWERED BY YT-DLP")
-                                color: Tokens.sun
-                                font.family: Tokens.mono
-                                font.pixelSize: Tokens.fTiny * root.s
-                                font.weight: Font.DemiBold
-                                font.letterSpacing: Tokens.trackMark
-                            }
-                            Text {
-                                width: parent.width
-                                text: Stash.cobaltState === "running"
-                                    ? Stash.supportedSites.map(site => site === "twitter" ? "x" : site).join("  ·  ")
-                                    : I18n.tr("Works with 1000+ sites, including YouTube, Twitter/X, Reddit, TikTok, and more.")
-                                wrapMode: Text.WordWrap
-                                color: Tokens.inkDim
-                                font.family: Tokens.mono
-                                font.pixelSize: Tokens.fTiny * root.s
-                                lineHeight: 1.3
-                            }
-                        }
+                        text: Stash.cobaltState === "running"
+                            ? I18n.tr("Works with %1 sites: %2")
+                                .arg(Stash.supportedSites.length)
+                                .arg(Stash.supportedSites.map(site => site === "twitter" ? "x" : site).join(", "))
+                            : I18n.tr("Works with 1000+ sites, including YouTube, Twitter/X, Reddit, TikTok, and more.")
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                        color: Tokens.inkMuted
+                        font.family: Tokens.ui
+                        font.pixelSize: Tokens.fSmall * root.s
+                        lineHeight: 1.3
                     }
                 }
             }
 
-            Section {
+            ToolSection {
                 width: parent.width
                 visible: Stash.queueModel.count > 0
-                title: I18n.tr("QUEUE")
+                title: I18n.tr("Queue")
 
                 Column {
                     width: parent.width
-                    spacing: Tokens.s2 * root.s
+                    spacing: 0
 
                     Repeater {
                         model: Stash.queueModel
-                        delegate: Rectangle {
+                        delegate: Item {
                             id: queueRow
                             required property var model
                             required property int index
                             width: parent.width
-                            implicitHeight: queueBody.implicitHeight + Tokens.s3 * root.s * 2
-                            radius: Tokens.radius * root.s
-                            color: Tokens.tint5
-                            border.width: Tokens.border
-                            border.color: queueRow.model.state === "error" ? Tokens.alert : Tokens.lineSoft
+                            implicitHeight: queueBody.implicitHeight + Tokens.s2 * root.s * 2
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.right: parent.right
+                                anchors.top: parent.top
+                                height: Tokens.border
+                                visible: queueRow.index > 0
+                                color: Tokens.lineSoft
+                            }
 
                             Column {
                                 id: queueBody
                                 anchors.left: parent.left
                                 anchors.right: parent.right
                                 anchors.top: parent.top
-                                anchors.margins: Tokens.s3 * root.s
+                                anchors.topMargin: Tokens.s2 * root.s
                                 spacing: Tokens.s2 * root.s
 
                                 Item {
@@ -311,28 +314,34 @@ Item {
                                         anchors.verticalCenter: parent.verticalCenter
                                         spacing: Tokens.s1 * root.s
 
-                                        Text {
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            text: queueRow.model.state === "running" ? queueRow.model.pct + "%"
-                                                : queueRow.model.state === "error" ? (queueRow.model.msg && queueRow.model.msg.length > 0 ? queueRow.model.msg : I18n.tr("failed"))
-                                                : queueRow.model.state === "done" ? I18n.tr("done")
-                                                : queueRow.model.state === "queued" ? I18n.tr("queued")
-                                                : queueRow.model.state
-                                            color: queueRow.model.state === "error" ? Tokens.alert : Tokens.inkMuted
-                                            font.family: Tokens.mono
-                                            font.pixelSize: Tokens.fTiny * root.s
-                                        }
                                         IconBtn {
                                             visible: queueRow.model.state === "error"
                                             glyph: "↻"
                                             onAct: Stash.retryJob(queueRow.index)
                                         }
                                         IconBtn {
-                                            visible: queueRow.model.state === "done" || queueRow.model.state === "error"
+                                            visible: queueRow.model.state === "queued"
+                                                || queueRow.model.state === "done"
+                                                || queueRow.model.state === "error"
                                             glyph: "×"
                                             onAct: Stash.dismissJob(queueRow.index)
                                         }
                                     }
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: queueRow.model.state === "running" ? queueRow.model.pct + "%"
+                                        : queueRow.model.state === "error" ? (queueRow.model.msg && queueRow.model.msg.length > 0 ? queueRow.model.msg : I18n.tr("failed"))
+                                        : queueRow.model.state === "done" ? I18n.tr("done")
+                                        : queueRow.model.state === "queued" ? I18n.tr("queued")
+                                        : queueRow.model.state
+                                    color: queueRow.model.state === "error" ? Tokens.alert : Tokens.inkMuted
+                                    font.family: Tokens.ui
+                                    font.pixelSize: Tokens.fSmall * root.s
+                                    wrapMode: queueRow.model.state === "error"
+                                        ? Text.WrapAtWordBoundaryOrAnywhere : Text.NoWrap
+                                    elide: Text.ElideRight
                                 }
 
                                 Rectangle {
@@ -346,7 +355,13 @@ Item {
                                         height: parent.height
                                         radius: parent.radius
                                         color: Tokens.sun
-                                        Behavior on width { NumberAnimation { duration: Tokens.move; easing.type: Tokens.ease } }
+                                        Behavior on width {
+                                            enabled: root.motionAllowed
+                                            NumberAnimation {
+                                                duration: Tokens.move
+                                                easing.type: Tokens.ease
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -355,13 +370,14 @@ Item {
                 }
             }
 
-            Section {
+            ToolSection {
                 width: parent.width
-                title: I18n.tr("RECENTLY DOWNLOADED")
+                visible: !root.compact
+                title: I18n.tr("Recently downloaded")
 
                 Column {
                     width: parent.width
-                    spacing: Tokens.s3 * root.s
+                    spacing: 0
 
                     Text {
                         width: parent.width
@@ -373,85 +389,82 @@ Item {
                         wrapMode: Text.WordWrap
                     }
 
-                    Flow {
-                        id: recentGrid
+                    Column {
                         width: parent.width
-                        spacing: Tokens.s2 * root.s
+                        spacing: 0
 
                         Repeater {
                             model: Stash.recentFiles
-                            delegate: Rectangle {
-                                id: fileTile
+                            delegate: Item {
+                                id: fileRow
                                 required property var modelData
-                                width: (recentGrid.width - recentGrid.spacing) / 2
-                                height: 82 * root.s
-                                radius: Tokens.radius * root.s
-                                color: fileHover.hovered ? Tokens.tint10 : Tokens.tint5
-                                border.width: Tokens.border
-                                border.color: fileHover.hovered ? Tokens.lineStrong : Tokens.lineSoft
-                                y: fileHover.hovered && !Tokens.reduceMotion ? -2 * root.s : 0
-                                Behavior on y { NumberAnimation { duration: Tokens.snap; easing.type: Tokens.easeSnap } }
-                                Behavior on color { ColorAnimation { duration: Tokens.snap } }
+                                required property int index
+                                width: parent.width
+                                height: 48 * root.s
+
+                                Rectangle {
+                                    anchors.fill: parent
+                                    color: fileHover.hovered ? Tokens.tint5 : "transparent"
+                                    Behavior on color {
+                                        enabled: root.motionAllowed
+                                        ColorAnimation { duration: Tokens.snap }
+                                    }
+                                }
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    height: Tokens.border
+                                    visible: fileRow.index > 0
+                                    color: Tokens.lineSoft
+                                }
 
                                 Text {
+                                    id: fileIcon
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 22 * root.s
+                                    horizontalAlignment: Text.AlignHCenter
                                     font.family: "Material Symbols Rounded"
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.leftMargin: Tokens.s3 * root.s
-                                    anchors.topMargin: Tokens.s3 * root.s
-                                    text: root.fileGlyph(fileTile.modelData.name)
+                                    text: root.fileGlyph(fileRow.modelData.name)
                                     color: Tokens.sun
-                                    font.pixelSize: 20 * root.s
+                                    font.pixelSize: 18 * root.s
                                 }
-                                IconBtn {
-                                    anchors.right: parent.right
-                                    anchors.top: parent.top
-                                    anchors.rightMargin: Tokens.s1 * root.s
-                                    anchors.topMargin: Tokens.s1 * root.s
-                                    glyph: "×"
-                                    onAct: Stash.removeFile(fileTile.modelData.path)
-                                }
+
                                 Text {
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: Tokens.s3 * root.s
-                                    text: fileTile.modelData.name
+                                    anchors.left: fileIcon.right
+                                    anchors.right: removeFile.left
+                                    anchors.leftMargin: Tokens.s2 * root.s
+                                    anchors.rightMargin: Tokens.s2 * root.s
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: fileRow.modelData.name
                                     elide: Text.ElideMiddle
                                     color: Tokens.ink
                                     font.family: Tokens.ui
-                                    font.pixelSize: Tokens.fTiny * root.s
+                                    font.pixelSize: Tokens.fSmall * root.s
                                     font.weight: Font.Medium
                                 }
 
-                                HoverHandler { id: fileHover; cursorShape: Qt.PointingHandCursor }
-                                TapHandler { onTapped: Stash.openFile(fileTile.modelData.path) }
+                                IconBtn {
+                                    id: removeFile
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    glyph: "×"
+                                    onAct: Stash.removeFile(fileRow.modelData.path)
+                                }
+
+                                HoverHandler {
+                                    id: fileHover
+                                    cursorShape: Qt.PointingHandCursor
+                                }
+                                TapHandler { onTapped: Stash.openFile(fileRow.modelData.path) }
                             }
                         }
                     }
                 }
             }
 
-            Section {
-                width: parent.width
-                title: I18n.tr("CONVERT & INSTALL")
-
-                Row {
-                    width: parent.width
-                    spacing: Tokens.s2 * root.s
-                    Btn {
-                        width: (parent.width - parent.spacing) / 2
-                        text: I18n.tr("Compress video…")
-                        onAct: root.openPicker("compress")
-                    }
-                    Btn {
-                        width: (parent.width - parent.spacing) / 2
-                        text: I18n.tr("Install app…")
-                        primary: true
-                        onAct: root.openPicker("install")
-                    }
-                }
-            }
         }
     }
 

@@ -4,8 +4,8 @@ Ryoku is one desktop that runs on more than one window manager. The shell, the
 Hub, the CLI and the lockscreen are the same code on every compositor; only a
 provider underneath differs.
 
-Today there are two: Hyprland and niri. A third is a new provider and a new
-package, and nothing else.
+Today there are three: Hyprland, niri and MangoWM. A fourth is a new provider
+and a new package, and nothing else.
 
 This page is the contract in table form. The same job as a walkthrough, with the
 traps that cost time on the second compositor, is in
@@ -19,7 +19,7 @@ signature, or an `isNiri`-style test anywhere else. Consumers ask what the
 compositor *can do*, never which one it is.
 
 A provider is one binary, `ryoku-wm-<name>`, shipped by
-`ryoku-desktop-<name>`. It implements ten verbs:
+`ryoku-desktop-<name>`. It implements eleven verbs:
 
 |Verb|Answers|
 |---|---|
@@ -33,6 +33,14 @@ A provider is one binary, `ryoku-wm-<name>`, shipped by
 |`binds <store>`|the keybinds only this compositor has, resolved against the store, for the cheatsheet's compositor section|
 |`outputs <layout>`|apply a display layout|
 |`session`|the `wayland-session` desktop entry|
+|`environment <pid>`|export the provider's opaque handle from one verified session process|
+
+`act window.place <id> <x> <y> <width> <height> <output>` is the neutral
+floating-window placement contract. The id is copied unchanged from `state`;
+coordinates are output-relative logical pixels. A provider makes the window
+floating, moves it to the named output, sizes it and positions it. Missing
+windows, outputs and invalid dimensions are errors rather than a fallback to the
+focused window.
 
 `apply --preview` writes nothing and reports what it could not honour. That
 report is what `ryoku wm use` and the Hub show before a switch, so the cost of
@@ -64,44 +72,79 @@ it cannot perform is worse than omitting it: the desktop would offer a control
 that does nothing. The Hub gates settings rows on these, so a row is never shown
 with nothing behind it.
 
-Shared by both providers:
+Shared by all three providers:
 
     animations  focusHistory  keyboardLayoutSwitch  layerRules  monitorConfig
     nightLight  outputPower  paletteBorder  sessionExit  touchpadToggle
-    windowFloat  windowRules  windowWorkspaceMap  workspaceMoveToOutput  workspaces
+    windowFloat  windowRules  windowWorkspaceMap  workspaces
 
-Hyprland only:
+Hyprland and niri (MangoWM's tags are fixed slots that live on one monitor, so
+it has nothing to move):
 
-    configReload  cursorSet  focusGrab  globalShortcuts  liveConfigEval
-    plugins  screenShader  specialWorkspace  submap  tiledLayout  windowGeometry
+    workspaceMoveToOutput
 
-niri only:
+Hyprland and MangoWM (niri's config is file-only and niri has no key modes,
+special tag, per-workspace layouts or general tiled-window geometry):
+
+    configReload  liveConfigEval  specialWorkspace  submap  tiledLayout
+    windowGeometry
+
+niri and MangoWM (each has a real overview of its own, so the shell's stands
+aside; Hyprland's overview is the shell's):
 
     nativeOverview
 
-The absences are each compositor's design, not gaps to fill later. The ones that
-change what a user sees on niri:
+Hyprland only:
 
-- **`nativeOverview`** is why the shell's own overview stands aside. niri has a
-  real overview, so `Super+Tab` is the compositor's, not the shell's.
-- **`windowGeometry`** is absent because a niri window reports a tile size but
-  no on-screen position. Nothing needs it once the native overview has the job.
-- **`globalShortcuts`** is absent because niri implements no such protocol, so
-  keybinds reach shell surfaces by running `ryoku-shell <verb>` instead. Every
-  shell surface is reachable that way on any compositor, which is what makes the
-  absence survivable rather than fatal.
-- **`liveConfigEval`** and **`configReload`** are absent because niri's config is
-  file-only and niri watches it. There is nothing to evaluate and nothing to
-  trigger; the Hub applies on save rather than previewing live.
+    cursorSet  focusGrab  globalShortcuts  outputHdr  outputMirror
+    persistentScreenCapture  plugins  screenShader
+
+niri only:
+
+    columnFill  overviewBackdrop  overviewState
+
+MangoWM claims no capability of its own: it is the intersection of what
+Hyprland and niri each have, plus niri's overview. The absences are each
+compositor's design, not gaps to fill later. The ones that change what a user
+sees on a compositor that lacks them:
+
+- **`nativeOverview`** is why the shell's own overview stands aside. niri and
+  MangoWM have a real overview, so `Super+Tab` is the compositor's, not the
+  shell's.
+- **`windowGeometry`** is absent on niri because tiled windows do not expose an
+  on-screen position. Floating windows do expose their output-local tile
+  rectangle; the provider converts it to global logical geometry so native
+  move/resize placement can be persisted without claiming general geometry.
+  Mango's client JSON carries x/y/w/h for every window.
+- **`globalShortcuts`** is absent on niri and MangoWM because neither implements
+  the protocol, so keybinds reach shell surfaces by running `ryoku-shell
+  <verb>` instead. Every shell surface is reachable that way on any compositor,
+  which is what makes the absence survivable rather than fatal.
+- **`liveConfigEval`** and **`configReload`** are absent on niri because its
+  config is file-only and niri watches it: there is nothing to evaluate and
+  nothing to trigger, so the Hub applies on save rather than previewing live.
+  MangoWM has both (`mmsg dispatch setoption,<key>,<value>` for the scalar
+  keys, `reload_config` for the rest), so the Hub's live appearance preview
+  works there the way it does on Hyprland.
+- **`persistentScreenCapture`** is absent because niri tears its outputs down
+  and recreates them on a config reload or a mode change. A one-shot capture is
+  fine; a layer-shell surface that captures the whole screen and lives for the
+  session races an output leaving under it, and the Qt client segfaults
+  resolving the vanished screen. The launcher's blurred frost is gated on this,
+  so on niri the card opens over a solid drawer instead of taking the shell
+  down. MangoWM keeps the gate off for now: a reload on the headless probe did
+  not recreate outputs, but a mode change on real hardware has not been proven
+  safe, and a solid drawer is the honest floor.
 - **`submap`**, **`specialWorkspace`**, **`screenShader`**, **`plugins`** and
   **`cursorSet`** have no niri equivalent, so the binds and settings that need
-  them are reported by `apply` rather than silently dropped.
+  them are reported by `apply` rather than silently dropped. MangoWM has the
+  first two (key modes and the special tag) and lacks the rest.
 
 `nightLight` is the one shared capability the desktop drives through named
 actions rather than a settings row:
 
 - `nightlight.on <K>` warms the screen to a colour temperature; the provider runs
-  its own detached backend (`hyprsunset` on Hyprland, `gammastep` on niri).
+  its own detached backend (`hyprsunset` on Hyprland, `wlsunset` on niri).
 - `nightlight.off` stops that backend, and the compositor restores the gamma when
   it goes away.
 
@@ -115,7 +158,7 @@ named action, plus a Hub switch that reads it live:
   file and re-emits `off` into the config it watches.
 
 `paletteBorder` is the shared capability that keeps the window border tracking
-the wallpaper, driven by a named action both providers honour:
+the wallpaper, driven by a named action every provider honours:
 
 - `decoration.borderColors <active> <inactive>` recolours the border from the
   live palette. Hyprland pushes the colours into the running config through
@@ -148,20 +191,60 @@ compositor is left alone:
   that cannot evaluate its config live has no equivalent, so game mode still
   boosts power there and leaves the look untouched.
 
+## Lock, lid and sleep
+
+This stack is deliberately almost all compositor-neutral, and the one part that
+cannot be sits behind the seam like everything else. Four owners, no overlap:
+
+|Owner|Owns|
+|---|---|
+|**qylock**|the lock surface only, through Quickshell's `WlSessionLock` -- the Wayland session-lock protocol every provider serves, so the same lock runs on any compositor. The greeter is SDDM rendering the same skin; both halves are qylock.|
+|**the shell daemon**|the fail-closed login1 transaction behind `ryoku-shell suspend`: the foreground-bound daemon owns one delay inhibitor and hard `sleep` block, secure lock-before-suspend, output wake on resume, and lighting restore. Before the singleton moves it proves the outgoing session's qylock; all other online same-user sessions have direct session-scoped qylock clients and login1 observers. Only the foreground session may request sleep or unlock. Lost login1 signal or owner connections reconnect in-process without dropping valid protection. Display work reaches the compositor solely through the seam's `output.power`, with a deadline on each wake attempt.|
+|**`hypridle`**|the idle timers only -- dim, lock, screen-off, suspend. A suspend timer calls `ryoku-shell suspend`; hypridle never talks to login1 itself.|
+|**`ryoku-clamshell`**|lid ownership for the active graphical session: a `handle-lid-switch` inhibitor, the docked AC-plus-external decision, and routing every non-docked close through `ryoku-shell suspend`. It drops ownership when that session becomes inactive, reacquires it when active, and recovers across login1 restarts.|
+
+The lid's panel handoff is the one compositor-shaped piece: Hyprland binds the
+lid switch to `ryoku-clamshell lid close|open` from
+`ryoku/hyprland/modules/lid.lua`; niri sends both native `lid-close` and
+`lid-open` switch events to the helper and retains its native output topology.
+Only the active Ryoku session inhibits logind, so without a live owner logind's
+safe fallback suspends on lid close. ACPI supplies live physical state when
+available; UPower seeds an already-closed startup otherwise, but its
+asynchronous value cannot veto a compositor edge. An open edge cancels a close
+still waiting on dock or power state. No provider gains a capability for this:
+a compositor that serves
+`WlSessionLock` and switch events needs nothing further.
+
+The logind drop-in that backs the sessionless lid fallback and the delay budget
+is delivered by both lanes: the package ships it and a checkout deploy seeds
+it, and an unowned copy is adopted on the next update rather than left to
+collide with the package. A system watcher selects one confirmed active Ryoku
+session per user and binds that user's target, idle and clamshell owners to its
+login1 activity; stale compositor variables in a lingering user manager cannot
+take ownership. Login plus live deploy, update, and package cutovers hold a
+durable login1 sleep block, reload the active compositor config, replace the
+shell, wait for its inhibitor readiness, verify idle and clamshell, and restore
+Ryogami before releasing protection. Package hooks do that for every logged-in
+Ryoku user. Doctor repair only stages a complete qylock generation under the
+generation guard; the next managed shell activation performs the handoff. A
+failed live cutover remains blocked until its retry succeeds or the machine
+reboots. A staged checkout deploy does not reload live logind. See
+`docs/updates.md`.
+
 ## Where the config lives
 
 Each provider owns a directory under `~/.config`, and `ryoku/wm/detect.go` is the
 only place that mapping exists. `ryoku wm config [name]` prints it, which is how
 scripts read it without keeping a second copy.
 
-|  |Hyprland|niri|
-|---|---|---|
-|Directory|`hypr/`|`niri/`|
-|Repo payload|`ryoku/hyprland/`|`ryoku/niri/`|
-|Entry|`hyprland.lua`, authored Lua|`config.kdl`, includes the rest|
-|Generated by `apply`|`settings.lua`, `rebinds.lua`|`settings.kdl`, `rebinds.kdl`|
-|Seeded, machine-owned|`monitors.lua`, `gpu.lua`, `keyboard.lua`, `user.lua`|the same names as `.kdl`, plus `monitors_user.kdl`|
-|Portal backend|`hyprland`|`gnome`|
+|  |Hyprland|niri|MangoWM|
+|---|---|---|---|
+|Directory|`hypr/`|`niri/`|`mango/`|
+|Repo payload|`ryoku/hyprland/`|`ryoku/niri/`|`ryoku/mango/`|
+|Entry|`hyprland.lua`, authored Lua|`config.kdl`, includes the rest|`config.conf`, sources the rest|
+|Generated by `apply`|`settings.lua`, `rebinds.lua`|`settings.kdl`, `rebinds.kdl`|`settings.conf`, `rebinds.conf`|
+|Seeded, machine-owned|`monitors.lua`, `gpu.lua`, `keyboard.lua`, `user.lua`|the same names as `.kdl`, plus `monitors_user.kdl`|the same names as `.conf`, plus `monitors_user.conf`|
+|Portal backend|`hyprland`|`gnome`|`wlr`|
 
 Two niri rules shape its tree:
 
@@ -173,23 +256,35 @@ Two niri rules shape its tree:
   seeds, then the generated config, then `user.kdl`. A value you set in
   `user.kdl` beats both.
 
+MangoWM's tree follows the same shape with weaker guarantees: a missing
+`source=` is an error log line the session boots through, and the last
+definition of a duplicated value or chord wins (measured on a live instance),
+so the order in `config.conf` is the override chain exactly like niri's. Ryoku
+still ships every file and writes both generated ones even when empty, so the
+tree is whole from first login and the error log stays clean. mango also caps a
+config line's value at 255 bytes, which is why the generated rebinds report an
+over-long custom bind instead of emitting a truncated line.
+
 niri also has no unbind. A duplicate chord in one `binds` block is a hard error,
 so `rebinds.kdl` is the single, total keybind set: the shipped defaults with
 rebinds applied, unbinds removed, and one winner per chord. There is no seeded
-bind block to subtract from.
+bind block to subtract from. Mango warns on a duplicate chord and keeps the
+last, which degrades silently, so `rebinds.conf` holds the same total-set
+discipline for the opposite reason.
 
-Two seeds are Hyprland-only in practice. `ryoku-gpu` writes a render-device pin
-into `gpu.lua` because Hyprland needs one on a multi-GPU box; niri picks its own
-render device, so no pin is written for it. The tool does write niri's
-software-cursor route into `gpu.kdl` on a multi-GPU machine, because the
-cross-GPU cursor plane fails niri's atomic commit there.
-`ryoku-monitor` is the same story for `monitors.lua`. Both seeds still exist on
-niri, because `config.kdl` has to be able to include them, and both are yours to
-fill in by hand if you ever need to.
+Two seeds are compositor-specific in practice. `ryoku-gpu` keeps its policy in
+the Hyprland pin file (`gpu.lua`, the store the Hub GPU page and doctor audit)
+and mirrors the decision into each compositor's own dialect: mango gets
+`env=WLR_DRM_DEVICES,...` plus the software-cursor route in `gpu.conf` on every
+multi-GPU box, because wlroots opens the cards in list order; niri picks its
+own render device, so its `gpu.kdl` only ever carries the cursor half.
+`ryoku-monitor` is the same story for `monitors.lua`. Every seed still exists
+on every provider, because each entry file has to be able to include or source
+it, and each is yours to fill in by hand if you ever need to.
 
 What a variant package ships is the same rule seen from the packaging side: a
 compositor's payload dir holds only what speaks that compositor's own IPC
-(`ryoku-monitor`, `ryoku-workspace`, `ryoku-cursor-track` under
+(`ryoku-monitor`, `ryoku-workspace` under
 `ryoku/hyprland/scripts/`). Anything the shell, the Hub, the launcher or a
 keybind calls by bare name on every compositor lives in `ryoku/shell/scripts/`
 or `system/hardware/` and ships with the shell or the base package, and it
@@ -220,6 +315,15 @@ plain pacman transaction, which is what lets `ryoku rollback` undo the switch.
 Both variants may be installed at once, so the switch never removes the desktop
 you are leaving unless you ask it to: a second switch is a config change with no
 package transaction at all. The Hub offers the same flow on its Global page.
+
+A checkout box installs nothing: the switch declares the target ready and the
+user picks it at the greeter. That promise is only true when the greeter can
+actually boot the session, so `deployedProvider` (and the Hub's matching
+`wmDeployed`) require `wm.SessionReady`: the compositor binary is installed
+and a greeter directory lists `<name>.desktop`. A deployed provider binary and
+a config tree are not enough on their own -- they are exactly what a checkout
+leaves behind, and a switch built on them alone told the user to log out and
+pick a session that was never there.
 
 Keeping the old compositor installed means switching back needs no download, at
 the cost of its packages staying on disk. Removing it reclaims those, which

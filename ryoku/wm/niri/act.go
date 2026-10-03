@@ -96,6 +96,9 @@ func runAct(args []string) error {
 		}
 		return perform(action("ToggleWindowFloating", map[string]any{"id": id}))
 
+	case wm.ActionWindowPlace:
+		return placeWindow(rest)
+
 	case wm.ActionWindowMoveToWorkspace:
 		id, err := argID(rest, 0, "window id")
 		if err != nil {
@@ -812,6 +815,100 @@ func focusedWorkspaceID() (uint64, error) {
 		}
 	}
 	return 0, fmt.Errorf("act %s: no focused workspace", wm.ActionWindowSummon)
+}
+
+// Relative moves avoid niri's working-area origin for absolute positions.
+// The shared placement contract uses output-local client geometry instead.
+func placeWindow(args []string) error {
+	id, x, y, width, height, output, err := windowPlacementArgs(args)
+	if err != nil {
+		return err
+	}
+
+	raw, err := request("Outputs")
+	if err != nil {
+		return fmt.Errorf("act %s: read outputs: %w", wm.ActionWindowPlace, err)
+	}
+	var outputs map[string]niriOutput
+	if err := decode(raw, "Outputs", &outputs); err != nil {
+		return fmt.Errorf("act %s: decode outputs: %w", wm.ActionWindowPlace, err)
+	}
+	target, ok := outputs[output]
+	if !ok {
+		return fmt.Errorf("act %s: output %q does not exist", wm.ActionWindowPlace, output)
+	}
+	if target.Logical == nil {
+		return fmt.Errorf("act %s: output %q is disabled", wm.ActionWindowPlace, output)
+	}
+	if target.Logical.Scale <= 0 {
+		return fmt.Errorf("act %s: output %q reported invalid scale %g", wm.ActionWindowPlace, output, target.Logical.Scale)
+	}
+
+	steps := []struct {
+		label string
+		req   any
+	}{
+		{"make floating", action("MoveWindowToFloating", map[string]any{"id": id})},
+		{"move to output", action("MoveWindowToMonitor", map[string]any{"id": id, "output": output})},
+		{"set width", action("SetWindowWidth", map[string]any{"id": id, "change": map[string]any{"SetFixed": width}})},
+		{"set height", action("SetWindowHeight", map[string]any{"id": id, "change": map[string]any{"SetFixed": height}})},
+	}
+	for _, step := range steps {
+		if err := perform(step.req); err != nil {
+			return fmt.Errorf("act %s: %s window %d: %w", wm.ActionWindowPlace, step.label, id, err)
+		}
+	}
+	windows, err := readWindows()
+	if err != nil {
+		return fmt.Errorf("act %s: read placement geometry: %w", wm.ActionWindowPlace, err)
+	}
+	for _, window := range windows {
+		if window.ID != id {
+			continue
+		}
+		if !window.IsFloating || window.Layout.TilePosInWorkspaceView == nil {
+			return fmt.Errorf("act %s: window %d has no floating geometry", wm.ActionWindowPlace, id)
+		}
+		layout := window.Layout
+		dx := float64(x) - layout.TilePosInWorkspaceView[0] - layout.WindowOffsetInTile[0]
+		dy := float64(y) - layout.TilePosInWorkspaceView[1] - layout.WindowOffsetInTile[1]
+		if err := perform(action("MoveFloatingWindow", map[string]any{
+			"id": id,
+			"x":  map[string]any{"AdjustFixed": dx},
+			"y":  map[string]any{"AdjustFixed": dy},
+		})); err != nil {
+			return fmt.Errorf("act %s: position window %d: %w", wm.ActionWindowPlace, id, err)
+		}
+		return nil
+	}
+	return fmt.Errorf("act %s: window %d does not exist", wm.ActionWindowPlace, id)
+}
+
+func windowPlacementArgs(args []string) (id uint64, x, y, width, height int, output string, err error) {
+	id, err = argID(args, 0, "window id")
+	if err != nil {
+		return
+	}
+	names := []string{"x", "y", "width", "height"}
+	values := []*int{&x, &y, &width, &height}
+	for i := range names {
+		raw, argErr := arg(args, i+1, names[i])
+		if argErr != nil {
+			err = argErr
+			return
+		}
+		*values[i], err = strconv.Atoi(raw)
+		if err != nil {
+			err = fmt.Errorf("act %s: %s must be an integer, got %q", wm.ActionWindowPlace, names[i], raw)
+			return
+		}
+	}
+	if width <= 0 || height <= 0 {
+		err = fmt.Errorf("act %s: width and height must be positive, got %dx%d", wm.ActionWindowPlace, width, height)
+		return
+	}
+	output, err = arg(args, 5, "output name")
+	return
 }
 
 // arg names the missing value, so a bad keybind reports it instead of an index.

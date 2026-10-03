@@ -4,12 +4,14 @@ import QtQuick
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import shell.services
+import ".."
 
 Item {
     id: root
 
     property real s: 1
     property bool open: false
+    readonly property bool motionAllowed: !Motion.reduce && !Tokens.reduceMotion
     signal closed()
 
     readonly property bool busy: Stash.setupState === "running"
@@ -20,6 +22,7 @@ Item {
     z: 50
 
     Behavior on opacity {
+        enabled: root.motionAllowed
         NumberAnimation {
             duration: Tokens.dur(140)
             easing.type: Tokens.ease
@@ -38,13 +41,11 @@ Item {
         width: Math.min(parent.width - Tokens.s5 * root.s * 2, 330 * root.s)
         implicitHeight: content.implicitHeight + Tokens.s5 * root.s * 2
         height: implicitHeight
-        radius: Tokens.radius * root.s
-        color: Tokens.paperLift
-        border.width: Tokens.border
-        border.color: Tokens.lineStrong
-        scale: root.open ? 1 : 0.96
+        color: Tokens.paper
+        scale: !root.motionAllowed || root.open ? 1 : 0.96
 
         Behavior on scale {
+            enabled: root.motionAllowed
             NumberAnimation {
                 duration: Tokens.dur(180)
                 easing.type: Tokens.ease
@@ -177,7 +178,7 @@ Item {
                                 text: stepRow.msg
                                 color: stepRow.stepState === "failed" ? Tokens.alert : Tokens.inkMuted
                                 font.family: Tokens.mono
-                                font.pixelSize: Tokens.fTiny * root.s
+                                font.pixelSize: Tokens.fSmall * root.s
                                 wrapMode: Text.WrapAnywhere
                             }
                         }
@@ -189,18 +190,24 @@ Item {
                 anchors.right: parent.right
                 spacing: Tokens.s2 * root.s
 
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: !Motion.reduce && !Tokens.reduceMotion
                     text: Stash.setupState === "done" ? I18n.tr("Done") : I18n.tr("Close")
                     armed: !root.busy
                     onAct: root.closed()
                 }
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: !Motion.reduce && !Tokens.reduceMotion
                     visible: Stash.setupState === "failed"
                     text: I18n.tr("Retry")
                     primary: true
                     onAct: Stash.startSetup()
                 }
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: !Motion.reduce && !Tokens.reduceMotion
                     visible: Stash.setupState === "idle"
                     text: I18n.tr("Start setup")
                     primary: true

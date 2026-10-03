@@ -5,7 +5,6 @@ import Quickshell.Io
 import Ryoku.FrameBars
 import Ryoku.Ui.Singletons
 import "lib/displaybar.js" as DisplayBar
-import "../modules/sidebar/SidebarFrameBars.js" as SidebarFrameBars
 
 // live shell appearance config. one source of truth for the look knobs Ryoku
 // Settings' Shell section edits, plus the shipped defaults the shell falls back
@@ -35,7 +34,9 @@ Singleton {
     property alias frameBars: adapter.frameBars
     readonly property var normalizedFrameBars: FrameBars.normalize(frameBars, BarCatalog, MenuCatalog)
 
-    readonly property var sidebars: SidebarFrameBars.normalize(adapter.sidebars)
+    // JsonAdapter's nested lists are QML sequences rather than JavaScript arrays.
+    property var _sidebars: ({})
+    readonly property var sidebars: Sidebars.normalize(_sidebars)
 
     // barStyle: which bar design renders. "qsbar" is the default QS Bar top bar
     // (a shipped folder style under modules/bar/barstyles/qsbar); "sumi" is the
@@ -240,16 +241,20 @@ Singleton {
     property var themePalette: null
     function refreshThemePalette() {
         var pal = null;
+        var sidebarOptions = ({});
         var t = file.text();
         if (t) {
             try {
                 var o = JSON.parse(t);
                 if (o && typeof o.themePalette === "object" && o.themePalette !== null)
                     pal = o.themePalette;
+                if (o && o.sidebars && typeof o.sidebars === "object")
+                    sidebarOptions = o.sidebars;
             } catch (e) {
             }
         }
         themePalette = pal;
+        _sidebars = sidebarOptions;
     }
 
     // brand: the desktop's mark + name, user-overridable from Ryoku Settings ->
@@ -289,7 +294,6 @@ Singleton {
             property string formatLocale: ""
             property string screenShader: ""
             property var frameBars: FrameBars.defaultConfig()
-            property var sidebars: ({})
             property string barStyle: "qsbar"
             property string launcherTarget: "studio"
             property var obi: ({})

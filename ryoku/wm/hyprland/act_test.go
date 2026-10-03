@@ -179,6 +179,7 @@ func TestActOutputEnablePreservesLayout(t *testing.T) {
 func TestActRejectsMissingArgs(t *testing.T) {
 	for _, args := range [][]string{
 		{"window.focus"},
+		{"window.place", "0xabc", "0", "0", "700"},
 		{"window.moveToWorkspace", "0xabc"},
 		{"workspace.focus"},
 		{"workspace.moveToOutput", "9"},
@@ -361,6 +362,62 @@ func TestActOutputCycleRunsMonitorToggle(t *testing.T) {
 	}
 	if strings.TrimSpace(string(got)) != "toggle" {
 		t.Errorf("ryoku-monitor args = %q, want toggle", got)
+	}
+}
+
+// Placement receives output-local logical pixels. Hyprland's dispatcher takes
+// global logical coordinates, so only the output origin is added; fractional
+// scale must not be applied a second time.
+func TestWindowPlaceConvertsOutputLocalCoordinates(t *testing.T) {
+	var dispatches []string
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		switch {
+		case len(args) == 3 && args[0] == "monitors":
+			return []byte(`[{"id":2,"name":"DP-2","x":1600,"y":50,"width":2560,"height":1440,"scale":1.5}]`), nil
+		case len(args) == 2 && args[0] == "clients":
+			return []byte(`[{"address":"0xabc","floating":false}]`), nil
+		case len(args) == 2 && args[0] == "dispatch":
+			dispatches = append(dispatches, args[1])
+			return nil, nil
+		default:
+			t.Fatalf("unexpected hyprctl args: %q", args)
+			return nil, nil
+		}
+	})
+	defer restore()
+
+	if err := runAct([]string{"window.place", "0xabc", "100", "180", "700", "520", "DP-2"}); err != nil {
+		t.Fatalf("window.place: %v", err)
+	}
+	if len(dispatches) != 4 {
+		t.Fatalf("dispatch count = %d, want float, output, size, position: %q", len(dispatches), dispatches)
+	}
+	last := dispatches[len(dispatches)-1]
+	if !strings.Contains(last, "x = 1700") || !strings.Contains(last, "y = 230") {
+		t.Errorf("position dispatcher = %q, want global logical 1700,230", last)
+	}
+	if strings.Contains(last, "1750") || strings.Contains(last, "320") {
+		t.Errorf("position dispatcher double-applied output scale: %q", last)
+	}
+}
+
+func TestWindowPlaceRejectsInvalidOutputScaleBeforeMutation(t *testing.T) {
+	dispatched := false
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		if len(args) == 3 && args[0] == "monitors" {
+			return []byte(`[{"id":2,"name":"DP-2","scale":0}]`), nil
+		}
+		dispatched = true
+		return nil, nil
+	})
+	defer restore()
+
+	err := runAct([]string{"window.place", "0xabc", "0", "0", "700", "520", "DP-2"})
+	if err == nil || !strings.Contains(err.Error(), "invalid scale") {
+		t.Fatalf("window.place invalid scale error = %v", err)
+	}
+	if dispatched {
+		t.Error("window.place mutated the compositor after invalid output geometry")
 	}
 }
 

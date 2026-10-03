@@ -253,10 +253,33 @@ Singleton {
         root._call("wm.act", { action: action, args: args, id: id });
     }
 
+    // Acknowledged action variant for mutations that must not be persisted
+    // until the compositor confirms them. cb(success, error) runs exactly once
+    // for a reply; capability rejection is an immediate failure.
+    function _actStatus(action, cap, args, cb) {
+        if (cap !== "" && root.caps[cap] !== true) {
+            if (cb) cb(false, "unsupported capability: " + cap);
+            return;
+        }
+        const id = ++root._nextId;
+        root._pending[id] = { status: true, callback: cb, deadline: Date.now() + 8000 };
+        statusExpiry.running = true;
+        root._call("wm.act", { action: action, args: args, id: id });
+    }
+
     function focusWindow(id) { root._act("window.focus", "", [String(id)]); }
     function closeWindow(id) { root._act("window.close", "", [String(id)]); }
     function focusApp(appId) { root._act("app.focus", "", [String(appId)]); }
     function floatWindow(id) { root._act("window.float", "windowFloat", [String(id)]); }
+    // Position is output-relative and all dimensions are logical pixels. The
+    // provider validates the opaque id and output rather than silently falling
+    // back to the focused window or output. cb(success, error) is optional.
+    function placeWindow(id, x, y, width, height, output, cb) {
+        root._actStatus("window.place", "windowFloat", [
+            String(id), String(Math.round(x)), String(Math.round(y)),
+            String(Math.round(width)), String(Math.round(height)), String(output)
+        ], cb);
+    }
     function moveWindowToWorkspace(id, ws) { root._act("window.moveToWorkspace", "workspaces", [String(id), String(ws)]); }
 
     function focusWorkspace(ws) { root._act("workspace.focus", "workspaces", [String(ws)]); }
@@ -341,12 +364,79 @@ Singleton {
         try {
             const r = JSON.parse(line);
             if (r && r.id !== undefined && root._pending[r.id] !== undefined) {
-                const cb = root._pending[r.id];
+                const pending = root._pending[r.id];
                 delete root._pending[r.id];
-                if (cb) cb((r.ok && typeof r.result === "string") ? r.result : "");
+                if (typeof pending === "function") {
+                    pending((r.ok && typeof r.result === "string") ? r.result : "");
+                } else if (pending && pending.status === true && pending.callback) {
+                    pending.callback(r.ok === true, r.ok === true ? "" : String(r.error || "window-manager action failed"));
+                }
             }
+            if (!root._hasStatusPending())
+                statusExpiry.running = false;
         } catch (e) {
         }
+    }
+
+    function _hasStatusPending() {
+        const ids = Object.keys(root._pending);
+        for (let i = 0; i < ids.length; i++) {
+            const pending = root._pending[ids[i]];
+            if (pending && pending.status === true)
+                return true;
+        }
+        return false;
+    }
+
+    function _dropQueuedStatusCalls(failed) {
+        if (!ctl.queued.length)
+            return;
+        const kept = [];
+        const lines = ctl.queued.split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line.length)
+                continue;
+            const jsonAt = line.indexOf(" ", 5);
+            if (jsonAt < 0) {
+                kept.push(line);
+                continue;
+            }
+            try {
+                const args = JSON.parse(line.slice(jsonAt + 1));
+                if (args && failed[String(args.id)] === true)
+                    continue;
+            } catch (e) {
+            }
+            kept.push(line);
+        }
+        ctl.queued = kept.length ? kept.join("\n") + "\n" : "";
+    }
+
+    function _failStatusPending(error, expiredOnly) {
+        const now = Date.now();
+        const failed = ({});
+        const ids = Object.keys(root._pending);
+        for (let i = 0; i < ids.length; i++) {
+            const id = ids[i];
+            const pending = root._pending[id];
+            if (!pending || pending.status !== true
+                    || (expiredOnly === true && pending.deadline > now))
+                continue;
+            failed[String(id)] = true;
+            delete root._pending[id];
+            if (pending.callback)
+                pending.callback(false, error);
+        }
+        root._dropQueuedStatusCalls(failed);
+        statusExpiry.running = root._hasStatusPending();
+    }
+
+    Timer {
+        id: statusExpiry
+        interval: 500
+        repeat: true
+        onTriggered: root._failStatusPending("window-manager action timed out", true)
     }
 
     Socket {
@@ -382,6 +472,12 @@ Singleton {
             flush();
             queued = "";
         }
-        onConnectionStateChanged: if (connected) flushQueued()
+        onConnectionStateChanged: {
+            if (connected) {
+                flushQueued();
+            } else {
+                root._failStatusPending("window-manager control connection closed");
+            }
+        }
     }
 }

@@ -135,7 +135,7 @@ Item {
         Config.set(menu.scope + "Scale", n);
     }
     function openSettings() {
-        Spawn.run(["sh", "-c", "ryoku-hub config set section widgets; flock -n -o /tmp/ryoku-hub.lock qs -c hub"]);
+        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene-widgets"]);
         menu.close();
     }
     function refreshShell() {

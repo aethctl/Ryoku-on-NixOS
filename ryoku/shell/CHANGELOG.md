@@ -3,16 +3,27 @@
 ## Unreleased
 
 ### New
-- **Push-aside sidebars put the desktop in motion.** `Super+Escape` opens the
-  left controls sidebar and `Super+S` opens the right companion sidebar. The
-  screen slides over panels underneath, with a native depth edge and an
-  exclusive zone that moves tiled windows aside. Hub-styled cards cover system
-  controls, notifications, weather, media, capture, stage, usage, tools, and
-  Rashin chat. Contributors can add cards through the `sidebarCard` plugin host,
-  and Desktop > Sidebars in Ryoku Hub controls width, motion, depth, window push,
-  wallpaper parallax, enabled sides, and card order.
-  (`quickshell/shell/modules/sidebar/`, `sidebarfx/`,
-  `../hub/quickshell/schema/DesktopPage.js`)
+- **Per-source audio and microphone controls.** The **Audio mixer** button below
+  System's volume and microphone controls opens output devices, microphones,
+  playing apps, and recording apps. Each has independent mute and level, an
+  editable percentage, and 1% steps; devices can be chosen as the default.
+  Level changes preserve mute. Subtle hover, press, and page-entry animations
+  respect reduced motion.
+  (`quickshell/shell/modules/sidebar/cards/SystemAudioPage.qml`,
+  `quickshell/shell/modules/sidebar/cards/SystemAudioRow.qml`)
+- **Larger, clearer global sidebars.** `Super+Escape` opens the Control center
+  on the left and `Super+S` opens Companion on the right. Both use matching
+  screen-edge chrome, readable type, a section rail, and labelled controls.
+  System has an informative dashboard with Wi-Fi discovery and connection,
+  Bluetooth discovery and pairing, and audio, brightness, and session controls.
+  Weather includes hourly forecasts, daily ranges, and air conditions; Capture
+  shows screenshot and recording targets and options instead of an empty page.
+  Stage is a wallpaper and widget overview; scene, motion, visualizer, and widget
+  editing now live in Hub. Sidebar contents, placement, size, and behavior also
+  live in Hub, with confirmed saves, card ordering, and movement between sides.
+  Retired native-window geometry is removed by the doctor.
+  (`quickshell/shell/modules/sidebar/`, `../hub/quickshell/pages/SidebarsPage.qml`,
+  `../hub/quickshell/pages/DesktopScenePage.qml`)
 - **A fifth bar style: Python.** The serpantinum shell (by ilyamiro, AGPL-3.0)
   is ported into the style folder as `python`: a top or edge bar of pill
   widgets that open into one morphing stage, with the ported network, sound,

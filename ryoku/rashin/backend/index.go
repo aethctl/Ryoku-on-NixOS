@@ -241,7 +241,7 @@ func guiMapBody() string {
 }
 
 // ryokuPackages are queried for installed versions in desktop.md.
-var ryokuPackages = []string{"ryoku-shell", "ryoku-hub", "ryoku", "ryoku-blobs", "ryoku-sidebarfx", "ryoku-desktop", "ryoku-rashin"}
+var ryokuPackages = []string{"ryoku-shell", "ryoku-hub", "ryoku", "ryoku-blobs", "ryoku-desktop", "ryoku-rashin"}
 
 func desktopBody() string {
 	var b strings.Builder
@@ -303,7 +303,7 @@ func barCatalogFile() string {
 	const rel = "quickshell/shell/modules/bar/barstyles/qsbar/core/widgets.json"
 	cands := []string{
 		filepath.Join(configHome(), rel),
-		filepath.Join("/usr/share/ryoku/config", rel),
+		filepath.Join(baseConfigDir(), rel),
 	}
 	if repo := recordedCheckout(); repo != "" {
 		cands = append(cands, filepath.Join(repo, "ryoku", "shell", rel))

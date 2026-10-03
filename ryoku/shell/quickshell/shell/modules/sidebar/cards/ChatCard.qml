@@ -17,10 +17,14 @@ Item {
     required property real reveal
     required property bool tabActive
     property int index: 0
+    property bool compact: false
+    property real viewportHeight: 0
+    readonly property bool motionAllowed: !Tokens.reduceMotion && !Motion.reduce
     signal requestClose()
 
     property bool modelPickerOpen: false
     property bool historyOpen: false
+    property bool needleMarkedOpen: false
 
     implicitHeight: card.implicitHeight
 
@@ -29,34 +33,48 @@ Item {
             Qt.callLater(transcript.positionViewAtEnd);
     }
 
-    Component.onCompleted: {
-        Needle.noteOpened();
-        composer.forceFocus();
-        root.scrollEnd();
+    function syncPresence() {
+        const active = root.open && root.tabActive;
+        if (active === root.needleMarkedOpen)
+            return;
+        root.needleMarkedOpen = active;
+        if (active) {
+            Needle.noteOpened();
+            composer.forceFocus();
+            root.scrollEnd();
+        } else {
+            Needle.noteClosed();
+        }
     }
-    Component.onDestruction: Needle.noteClosed()
-    onOpenChanged: if (root.open && root.tabActive) composer.forceFocus()
-    onTabActiveChanged: if (root.tabActive) { Needle.noteOpened(); composer.forceFocus(); root.scrollEnd(); }
+
+    Component.onCompleted: root.syncPresence()
+    Component.onDestruction: if (root.needleMarkedOpen) Needle.noteClosed()
+    onOpenChanged: root.syncPresence()
+    onTabActiveChanged: root.syncPresence()
 
     Connections {
         target: Needle
+        enabled: root.open && root.tabActive
         function onTouched() { root.scrollEnd(); }
     }
 
     SidebarCardShell {
         id: card
         width: root.width
+        s: root.s
         index: root.index
         open: root.open
         reveal: root.reveal
         tabActive: root.tabActive
+        compact: root.compact
         title: I18n.tr("Needle")
         glyph: "chat"
-        eyebrow: Needle.currentAgent.length > 0 ? Needle.currentAgent : I18n.tr("RASHIN")
+        eyebrow: Needle.currentAgent.length > 0 ? Needle.currentAgent : I18n.tr("Rashin")
 
         Item {
             width: parent.width
-            height: 690 * root.s
+            height: Math.max(240 * root.s, Math.min((root.compact ? 520 : 690) * root.s,
+                root.viewportHeight > 0 ? root.viewportHeight : 690 * root.s))
 
             DropArea {
                 anchors.fill: parent
@@ -87,8 +105,8 @@ Item {
                     color: modelHover.hovered ? Tokens.tint10 : Tokens.tint5
                     border.width: Tokens.border
                     border.color: modelHover.hovered ? Tokens.lineStrong : Tokens.lineSoft
-                    scale: modelTap.pressed && !Tokens.reduceMotion ? 0.98 : 1
-                    Behavior on scale { NumberAnimation { duration: Tokens.snap } }
+                    scale: root.motionAllowed && modelTap.pressed ? 0.98 : 1
+                    Behavior on scale { enabled: root.motionAllowed; NumberAnimation { duration: Tokens.snap } }
 
                     Text {
                         font.family: "Material Symbols Rounded"
@@ -109,7 +127,7 @@ Item {
                         text: root.modelLabel()
                         color: Tokens.ink
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * root.s
+                        font.pixelSize: Tokens.fSmall * root.s
                         elide: Text.ElideMiddle
                     }
                     Text {
@@ -148,7 +166,7 @@ Item {
                             text: approvalMode.autoRead ? I18n.tr("READ-ONLY") : I18n.tr("ASK EACH")
                             color: approvalMode.autoRead ? Tokens.sun : Tokens.inkDim
                             font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny * root.s
+                            font.pixelSize: Tokens.fSmall * root.s
                             font.weight: Font.DemiBold
                         }
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
@@ -189,7 +207,7 @@ Item {
                 onCountChanged: if (stick) Qt.callLater(positionViewAtEnd)
                 onContentHeightChanged: if (stick) Qt.callLater(positionViewAtEnd)
                 onMovementEnded: stick = atYEnd
-                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded; motionEnabled: root.motionAllowed }
 
                 delegate: Item {
                     id: transcriptRow
@@ -225,6 +243,7 @@ Item {
                         MessageView {
                             width: transcriptRow.width
                             s: root.s
+                            compact: root.compact
                             role: transcriptRow.role
                             body: transcriptRow.body
                             thought: transcriptRow.thought
@@ -270,11 +289,13 @@ Item {
 
             Column {
                 anchors.centerIn: transcript
-                width: Math.min(transcript.width - Tokens.s6 * root.s, 300 * root.s)
+                width: Math.min(transcript.width - Tokens.s6 * root.s,
+                    (root.compact ? 300 : 440) * root.s)
                 spacing: Tokens.s3 * root.s
                 visible: Needle.convo.count === 0
 
                 Rectangle {
+                    visible: !root.compact && transcript.height > 280 * root.s
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 70 * root.s
                     height: width
@@ -295,10 +316,11 @@ Item {
                     text: Needle.ready ? I18n.tr("Ask the needle") : I18n.tr("Connect an AI")
                     color: Tokens.ink
                     font.family: Tokens.display
-                    font.pixelSize: Tokens.fHero * root.s
+                    font.pixelSize: (root.compact || transcript.height < 220 * root.s ? Tokens.fValue : Tokens.fHero) * root.s
                 }
                 Text {
                     width: parent.width
+                    visible: transcript.height > 130 * root.s
                     horizontalAlignment: Text.AlignHCenter
                     text: Needle.ready
                         ? I18n.tr("It knows this machine, your desktop, and the Ryoku source. Drop in an image to ask about it.")
@@ -311,7 +333,7 @@ Item {
                 }
                 Column {
                     width: parent.width
-                    visible: Needle.ready
+                    visible: Needle.ready && !root.compact && transcript.height > 330 * root.s
                     spacing: Tokens.s2 * root.s
                     Repeater {
                         model: [
@@ -337,7 +359,7 @@ Item {
                                 text: prompt.modelData
                                 color: Tokens.inkDim
                                 font.family: Tokens.ui
-                                font.pixelSize: Tokens.fTiny * root.s
+                                font.pixelSize: Tokens.fSmall * root.s
                                 elide: Text.ElideRight
                             }
                             HoverHandler { id: promptHover; cursorShape: Qt.PointingHandCursor }
@@ -345,7 +367,9 @@ Item {
                         }
                     }
                 }
-                Btn {
+                SidebarButton {
+                    s: root.s
+                    motionEnabled: root.motionAllowed
                     anchors.horizontalCenter: parent.horizontalCenter
                     visible: !Needle.ready
                     text: I18n.tr("Open setup")
@@ -354,13 +378,13 @@ Item {
                 }
                 Text {
                     width: parent.width
-                    visible: !Needle.ready
+                    visible: !Needle.ready && transcript.height > 220 * root.s
                     horizontalAlignment: Text.AlignHCenter
                     text: I18n.tr("Or add an API key to ~/.config/ryoku/rashin.env")
                     wrapMode: Text.WordWrap
                     color: Tokens.inkFaint
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * root.s
+                    font.pixelSize: Tokens.fSmall * root.s
                 }
             }
 
@@ -383,7 +407,8 @@ Item {
                         radius: width / 2
                         color: Tokens.sun
                         SequentialAnimation on opacity {
-                            running: workingStrip.visible && !Tokens.reduceMotion
+                            running: root.open && root.tabActive
+                                && workingStrip.visible && root.motionAllowed
                             loops: Animation.Infinite
                             NumberAnimation { from: 0.3; to: 1; duration: 520 }
                             NumberAnimation { from: 1; to: 0.3; duration: 520 }
@@ -411,6 +436,7 @@ Item {
     ModelPickerView {
         anchors.fill: parent
         s: root.s
+        wide: !root.compact
         open: root.modelPickerOpen
         onClosed: root.modelPickerOpen = false
     }
@@ -431,7 +457,8 @@ Item {
         anchors.right: parent.right
         anchors.topMargin: Tokens.s5 * root.s
         anchors.rightMargin: Tokens.s5 * root.s
-        width: Math.min(parent.width - Tokens.s6 * root.s, 310 * root.s)
+        width: Math.min(parent.width - Tokens.s6 * root.s,
+            (root.compact ? 310 : 430) * root.s)
         height: Math.min((Needle.sessions.length + 1) * 42 * root.s + Tokens.s4 * root.s, 420 * root.s)
         radius: Tokens.radius * root.s
         color: Tokens.paperLift
@@ -487,7 +514,7 @@ Item {
                 clip: true
                 model: Needle.sessions
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded; motionEnabled: root.motionAllowed }
                 delegate: Rectangle {
                     id: sessionRow
                     required property var modelData
@@ -594,7 +621,7 @@ Item {
                     text: I18n.tr("NEEDS YOUR OK")
                     color: Tokens.sun
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * approvalRoot.s
+                    font.pixelSize: Tokens.fSmall * approvalRoot.s
                     font.weight: Font.DemiBold
                     font.letterSpacing: Tokens.trackMark
                 }
@@ -605,7 +632,7 @@ Item {
                 text: approvalRoot.command
                 color: Tokens.ink
                 font.family: Tokens.mono
-                font.pixelSize: Tokens.fTiny * approvalRoot.s
+                font.pixelSize: Tokens.fSmall * approvalRoot.s
                 wrapMode: Text.WrapAnywhere
                 maximumLineCount: 4
                 elide: Text.ElideRight
@@ -615,7 +642,9 @@ Item {
                 spacing: Tokens.s2 * approvalRoot.s
                 Repeater {
                     model: approvalRoot.options
-                    delegate: Btn {
+                    delegate: SidebarButton {
+                        s: approvalRoot.s
+                        motionEnabled: root.motionAllowed
                         id: permissionButton
                         required property var modelData
                         text: String(permissionButton.modelData.name || permissionButton.modelData.id)
@@ -631,6 +660,7 @@ Item {
     component MessageView: Item {
         id: messageRoot
         property real s: 1
+        property bool compact: false
         property string role: "agent"
         property string body: ""
         property string thought: ""
@@ -696,7 +726,7 @@ Item {
                 text: messageRoot.isUser ? I18n.tr("YOU") : I18n.tr("NEEDLE")
                 color: messageRoot.isUser ? Tokens.inkMuted : Tokens.sun
                 font.family: Tokens.mono
-                font.pixelSize: Tokens.fTiny * messageRoot.s
+                font.pixelSize: Tokens.fSmall * messageRoot.s
                 font.weight: Font.DemiBold
                 font.letterSpacing: Tokens.trackMark
             }
@@ -704,7 +734,7 @@ Item {
             Rectangle {
                 visible: messageRoot.isUser
                 anchors.right: parent.right
-                width: Math.min(parent.width, 310 * messageRoot.s)
+                width: Math.min(parent.width, (messageRoot.compact ? 310 : 480) * messageRoot.s)
                 implicitHeight: userBody.implicitHeight + Tokens.s4 * messageRoot.s * 2
                 radius: Tokens.radius * messageRoot.s
                 color: Qt.rgba(Tokens.sun.r, Tokens.sun.g, Tokens.sun.b, 0.13)
@@ -775,7 +805,7 @@ Item {
                                 text: messageRoot.live ? I18n.tr("Thinking…") : I18n.tr("Thought")
                                 color: messageRoot.live ? Tokens.sun : Tokens.inkMuted
                                 font.family: Tokens.mono
-                                font.pixelSize: Tokens.fTiny * messageRoot.s
+                                font.pixelSize: Tokens.fSmall * messageRoot.s
                                 font.weight: Font.DemiBold
                             }
                             Text {
@@ -874,9 +904,11 @@ Item {
                                             text: answerBlock.modelData.lang || I18n.tr("code")
                                             color: Tokens.inkMuted
                                             font.family: Tokens.mono
-                                            font.pixelSize: Tokens.fTiny * messageRoot.s
+                                            font.pixelSize: Tokens.fSmall * messageRoot.s
                                         }
-                                        Btn {
+                                        SidebarButton {
+                                            s: messageRoot.s
+                                            motionEnabled: root.motionAllowed
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
                                             text: I18n.tr("Copy")
@@ -894,7 +926,7 @@ Item {
                                         color: Tokens.ink
                                         selectionColor: Tokens.tint16
                                         font.family: Tokens.mono
-                                        font.pixelSize: Tokens.fTiny * messageRoot.s
+                                        font.pixelSize: Tokens.fSmall * messageRoot.s
                                     }
                                 }
                             }
@@ -902,7 +934,9 @@ Item {
                     }
                 }
 
-                Btn {
+                SidebarButton {
+                    s: messageRoot.s
+                    motionEnabled: root.motionAllowed
                     visible: !messageRoot.open && messageRoot.body.length > 0
                     text: I18n.tr("Copy answer")
                     compact: true
@@ -997,7 +1031,7 @@ Item {
                         text: toolRoot.input
                         color: Tokens.inkMuted
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * toolRoot.s
+                        font.pixelSize: Tokens.fSmall * toolRoot.s
                         elide: Text.ElideMiddle
                     }
                 }
@@ -1012,7 +1046,7 @@ Item {
                         text: I18n.tr("AUTO")
                         color: Tokens.inkFaint
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * toolRoot.s
+                        font.pixelSize: Tokens.fSmall * toolRoot.s
                     }
                     Text {
                         font.family: "Material Symbols Rounded"
@@ -1020,7 +1054,8 @@ Item {
                         color: toolRoot.failed ? Tokens.alert : Tokens.sun
                         font.pixelSize: Tokens.fSmall * toolRoot.s
                         RotationAnimation on rotation {
-                            running: toolRoot.running && !Tokens.reduceMotion
+                            running: root.open && root.tabActive
+                                && toolRoot.running && root.motionAllowed
                             from: 0
                             to: 360
                             duration: 900
@@ -1061,7 +1096,7 @@ Item {
                     wrapMode: TextEdit.WrapAnywhere
                     color: Tokens.inkDim
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * toolRoot.s
+                    font.pixelSize: Tokens.fSmall * toolRoot.s
                 }
             }
 
@@ -1088,7 +1123,7 @@ Item {
                             text: String(diffRow.modelData.path || "")
                             color: Tokens.sun
                             font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny * toolRoot.s
+                            font.pixelSize: Tokens.fSmall * toolRoot.s
                             elide: Text.ElideMiddle
                         }
                         Text {
@@ -1097,7 +1132,7 @@ Item {
                             text: "− " + String(diffRow.modelData.old || "").replace(/\s+$/, "").split("\n").slice(0, 4).join("\n− ")
                             color: Tokens.alert
                             font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny * toolRoot.s
+                            font.pixelSize: Tokens.fSmall * toolRoot.s
                             wrapMode: Text.WrapAnywhere
                         }
                         Text {
@@ -1106,7 +1141,7 @@ Item {
                             text: "+ " + String(diffRow.modelData.new || "").replace(/\s+$/, "").split("\n").slice(0, 4).join("\n+ ")
                             color: Tokens.ink
                             font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny * toolRoot.s
+                            font.pixelSize: Tokens.fSmall * toolRoot.s
                             wrapMode: Text.WrapAnywhere
                         }
                     }
@@ -1226,7 +1261,7 @@ Item {
                 model: composerRoot.slashMatches
                 currentIndex: composerRoot.paletteIndex
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded; motionEnabled: root.motionAllowed }
                 delegate: Rectangle {
                     id: commandRow
                     required property var modelData
@@ -1244,7 +1279,7 @@ Item {
                         text: "/" + commandRow.modelData.name
                         color: Tokens.sun
                         font.family: Tokens.mono
-                        font.pixelSize: Tokens.fTiny * composerRoot.s
+                        font.pixelSize: Tokens.fSmall * composerRoot.s
                         elide: Text.ElideRight
                     }
                     Text {
@@ -1255,7 +1290,7 @@ Item {
                         text: commandRow.modelData.description
                         color: Tokens.inkMuted
                         font.family: Tokens.ui
-                        font.pixelSize: Tokens.fTiny * composerRoot.s
+                        font.pixelSize: Tokens.fSmall * composerRoot.s
                         elide: Text.ElideRight
                     }
                     HoverHandler { cursorShape: Qt.PointingHandCursor; onHoveredChanged: if (hovered) composerRoot.paletteIndex = commandRow.index }
@@ -1419,12 +1454,16 @@ Item {
         id: pickerRoot
         property real s: 1
         property bool open: false
+        property bool wide: false
         signal closed()
         visible: opacity > 0.01
         enabled: pickerRoot.open
         opacity: pickerRoot.open ? 1 : 0
         z: 70
-        Behavior on opacity { NumberAnimation { duration: Tokens.dur(140); easing.type: Tokens.ease } }
+        Behavior on opacity {
+            enabled: root.motionAllowed
+            NumberAnimation { duration: Tokens.dur(140); easing.type: Tokens.ease }
+        }
 
         Rectangle {
             anchors.fill: parent
@@ -1436,7 +1475,8 @@ Item {
             anchors.top: parent.top
             anchors.right: parent.right
             anchors.margins: Tokens.s5 * pickerRoot.s
-            width: Math.min(parent.width - Tokens.s6 * pickerRoot.s, 330 * pickerRoot.s)
+            width: Math.min(parent.width - Tokens.s6 * pickerRoot.s,
+                (pickerRoot.wide ? 520 : 330) * pickerRoot.s)
             height: Math.min(500 * pickerRoot.s, parent.height - Tokens.s6 * pickerRoot.s)
             radius: Tokens.radius * pickerRoot.s
             color: Tokens.paperLift
@@ -1477,7 +1517,7 @@ Item {
                     text: I18n.tr("AGENT")
                     color: Tokens.inkMuted
                     font.family: Tokens.mono
-                    font.pixelSize: Tokens.fTiny * pickerRoot.s
+                    font.pixelSize: Tokens.fSmall * pickerRoot.s
                     font.letterSpacing: Tokens.trackMark
                 }
                 Repeater {
@@ -1513,7 +1553,7 @@ Item {
                             text: backendRow.active ? "✓" : backendRow.available ? "" : I18n.tr("needs adapter")
                             color: backendRow.active ? Tokens.sun : Tokens.inkFaint
                             font.family: Tokens.mono
-                            font.pixelSize: Tokens.fTiny * pickerRoot.s
+                            font.pixelSize: Tokens.fSmall * pickerRoot.s
                         }
                         HoverHandler { id: backendHover; enabled: backendRow.available; cursorShape: Qt.PointingHandCursor }
                         TapHandler {
@@ -1543,7 +1583,7 @@ Item {
                     model: pickerPanel.filteredModels
                     boundsBehavior: Flickable.StopAtBounds
                     cacheBuffer: 900
-                    ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded }
+                    ScrollBar.vertical: ScrollRail { policy: ScrollBar.AsNeeded; motionEnabled: root.motionAllowed }
                     delegate: Rectangle {
                         id: modelRow
                         required property var modelData
