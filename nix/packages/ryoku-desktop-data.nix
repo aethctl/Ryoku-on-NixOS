@@ -84,15 +84,15 @@ pkgs.stdenvNoCC.mkDerivation {
     # as a final packaging step and fail the build if the Nix label disappears.
     # This keeps every Ryoku-on-NixOS generation pinned to the correct identity.
     hub_qml="$cfg/quickshell/hub/Hub.qml"
-    sed -Ei 's/RYOKU[[:space:]]+ARCH/RYOKU NIX/Ig' "$hub_qml"
+    sed -Ei 's/RYOKU[[:space:]]+(ARCH|NIXOS)/RYOKU NIX/Ig' "$hub_qml"
 
-    if ! grep -Fq 'RYOKU NIX' "$hub_qml"; then
+    if ! grep -Fq 'I18n.tr("RYOKU NIX")' "$hub_qml"; then
       echo "Ryoku Nix branding guard: Hub header is not pinned to RYOKU NIX" >&2
       exit 1
     fi
 
-    if grep -Eiq 'RYOKU[[:space:]]+ARCH' "$hub_qml"; then
-      echo "Ryoku Nix branding guard: Arch Hub branding survived packaging" >&2
+    if grep -Eiq 'RYOKU[[:space:]]+(ARCH|NIXOS)' "$hub_qml"; then
+      echo "Ryoku Nix branding guard: non-Nix Hub branding survived packaging" >&2
       exit 1
     fi
 
