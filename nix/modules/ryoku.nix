@@ -1960,11 +1960,12 @@ in
         Restart = "always";
         RestartSec = 2;
 
-        # User applications are launched into independent app.slice scopes,
-        # so the shell can safely own and clean up its complete process tree.
-        # Keeping only the main process alive here leaked long-running watchers
-        # across shell restarts and left them charged to the new generation.
-        KillMode = "control-group";
+        # Do not tear down the whole service cgroup when the shell restarts:
+        # applications launched from shell actions may still be descendants on
+        # an existing session. The daemon now reaps stale Quickshell instances
+        # and their helper trees itself, so KillMode=process avoids killing user
+        # applications without bringing the old watcher leaks back.
+        KillMode = "process";
         Slice = "session.slice";
       };
     };
