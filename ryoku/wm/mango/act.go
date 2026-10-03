@@ -78,6 +78,8 @@ func runAct(args []string) error {
 			return err
 		}
 		return dispatch("togglefloating", clientSuffix(id))
+	case wm.ActionWindowPlace:
+		return placeWindow(rest)
 	case wm.ActionWindowMoveToWorkspace:
 		id, err := argID(rest, 0, "window id")
 		if err != nil {
@@ -247,6 +249,92 @@ func runAct(args []string) error {
 		return fmt.Errorf("act %s: mango does not support %s", act, capability)
 	}
 	return fmt.Errorf("act: unknown action %q", act)
+}
+
+// placeWindow applies the neutral output-local logical rectangle to one
+// specific client. Mango reports client and monitor geometry in the same global
+// logical coordinate space, so only the target monitor origin is added here.
+func placeWindow(args []string) error {
+	id, x, y, width, height, output, err := windowPlacementArgs(args)
+	if err != nil {
+		return err
+	}
+
+	var clients clientsEnvelope
+	if err := get("all-clients", &clients); err != nil {
+		return fmt.Errorf("act %s: read windows: %w", wm.ActionWindowPlace, err)
+	}
+	var client *mangoClient
+	for i := range clients.Clients {
+		if clients.Clients[i].ID == id {
+			client = &clients.Clients[i]
+			break
+		}
+	}
+	if client == nil {
+		return fmt.Errorf("act %s: window id %d does not exist", wm.ActionWindowPlace, id)
+	}
+
+	var monitors monitorsEnvelope
+	if err := get("all-monitors", &monitors); err != nil {
+		return fmt.Errorf("act %s: read outputs: %w", wm.ActionWindowPlace, err)
+	}
+	var target *mangoMonitor
+	for i := range monitors.Monitors {
+		if monitors.Monitors[i].Name == output {
+			target = &monitors.Monitors[i]
+			break
+		}
+	}
+	if target == nil {
+		return fmt.Errorf("act %s: output %q does not exist", wm.ActionWindowPlace, output)
+	}
+
+	targetClient := clientSuffix(id)
+	if !client.IsFloating {
+		if err := dispatch("togglefloating", targetClient); err != nil {
+			return fmt.Errorf("act %s: make window %d floating: %w", wm.ActionWindowPlace, id, err)
+		}
+	}
+	if client.Monitor != output {
+		if err := dispatch("tagmon", output, "1", targetClient); err != nil {
+			return fmt.Errorf("act %s: move window %d to output %q: %w", wm.ActionWindowPlace, id, output, err)
+		}
+	}
+	if err := dispatch("resizewin", strconv.Itoa(width), strconv.Itoa(height), targetClient); err != nil {
+		return fmt.Errorf("act %s: resize window %d: %w", wm.ActionWindowPlace, id, err)
+	}
+	if err := dispatch("movewin", strconv.Itoa(target.X+x), strconv.Itoa(target.Y+y), targetClient); err != nil {
+		return fmt.Errorf("act %s: position window %d: %w", wm.ActionWindowPlace, id, err)
+	}
+	return nil
+}
+
+func windowPlacementArgs(args []string) (id, x, y, width, height int, output string, err error) {
+	id, err = argID(args, 0, "window id")
+	if err != nil {
+		return
+	}
+	names := []string{"x", "y", "width", "height"}
+	values := []*int{&x, &y, &width, &height}
+	for i := range values {
+		raw, argErr := arg(args, i+1, names[i])
+		if argErr != nil {
+			err = argErr
+			return
+		}
+		*values[i], err = strconv.Atoi(raw)
+		if err != nil {
+			err = fmt.Errorf("act %s: %s must be an integer, got %q", wm.ActionWindowPlace, names[i], raw)
+			return
+		}
+	}
+	if width <= 0 || height <= 0 {
+		err = fmt.Errorf("act %s: width and height must be positive, got %dx%d", wm.ActionWindowPlace, width, height)
+		return
+	}
+	output, err = arg(args, 5, "output name")
+	return
 }
 
 // clientSuffix is the `client,<id>` tail that targets one window.

@@ -114,7 +114,6 @@
         ryoku-framebars = ryoku.frameBars;
         ryoku-wm-hyprland-qml = ryoku.wmHyprlandQml;
         ryoku-blobs = ryoku.blobs;
-        ryoku-sidebarfx = ryoku.sidebarFx;
 
         ryoku-qml = ryoku.qml;
 
@@ -230,7 +229,6 @@
         ryoku-framebars = ryoku.frameBars;
         ryoku-wm-hyprland-qml = ryoku.wmHyprlandQml;
         ryoku-blobs = ryoku.blobs;
-        ryoku-sidebarfx = ryoku.sidebarFx;
         ryoku-qml = ryoku.qml;
 
         # Desktop integration

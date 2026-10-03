@@ -57,6 +57,57 @@ func TestActEmitsMangoDispatchers(t *testing.T) {
 	}
 }
 
+func TestActPlacesWindowOnOutput(t *testing.T) {
+	var got []string
+	restore := stubRequest(t, func(cmd string) (json.RawMessage, error) {
+		switch cmd {
+		case "get all-clients":
+			return json.RawMessage(`{"clients":[{"id":7,"monitor":"eDP-1","is_floating":false}]}`), nil
+		case "get all-monitors":
+			return json.RawMessage(`{"monitors":[{"name":"eDP-1","x":0,"y":0},{"name":"DP-1","x":1920,"y":-120}]}`), nil
+		default:
+			got = append(got, cmd)
+			return json.RawMessage(`{"success":true}`), nil
+		}
+	})
+	defer restore()
+
+	if err := runAct([]string{"window.place", "7", "40", "50", "900", "700", "DP-1"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"dispatch togglefloating,client,7",
+		"dispatch tagmon,DP-1,1,client,7",
+		"dispatch resizewin,900,700,client,7",
+		"dispatch movewin,1960,-70,client,7",
+	}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("place emitted %q, want %q", strings.Join(got, " "), strings.Join(want, " "))
+	}
+}
+
+func TestActPlaceRejectsInvalidTarget(t *testing.T) {
+	restore := stubRequest(t, func(cmd string) (json.RawMessage, error) {
+		switch cmd {
+		case "get all-clients":
+			return json.RawMessage(`{"clients":[{"id":7,"monitor":"eDP-1","is_floating":true}]}`), nil
+		case "get all-monitors":
+			return json.RawMessage(`{"monitors":[{"name":"eDP-1"}]}`), nil
+		default:
+			t.Fatalf("unexpected compositor mutation: %s", cmd)
+			return nil, nil
+		}
+	})
+	defer restore()
+
+	if err := runAct([]string{"window.place", "7", "0", "0", "0", "700", "eDP-1"}); err == nil {
+		t.Fatal("zero width must be rejected")
+	}
+	if err := runAct([]string{"window.place", "7", "0", "0", "900", "700", "DP-9"}); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Fatalf("missing output: %v", err)
+	}
+}
+
 // A reload with no live session is a successful no-op: apply has already
 // written the tree the next login reads, and the seam's contract (niri's
 // watcher owns the same step) is that the file swap lands without a
@@ -129,6 +180,7 @@ func TestActRejectsMissingArgs(t *testing.T) {
 	for _, args := range [][]string{
 		{"window.close"},
 		{"window.focus"},
+		{"window.place", "7", "0", "0", "700"},
 		{"workspace.focus"},
 		{"window.summon"},
 		{"window.moveToWorkspace", "1"},
