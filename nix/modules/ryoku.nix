@@ -27,7 +27,7 @@ let
   # plugin bundle must all come from Ryoku's own locked package set.
   ryokuHyprland = ryokuPkgs.ryoku-hyprland;
   ryokuHyprlandPortal = ryokuPkgs.ryoku-xdg-desktop-portal-hyprland;
-  ryokuNiri = ryokuNixpkgs.niri;
+  ryokuNiri = ryokuPkgs.ryoku-niri;
   ryokuMango = ryokuPkgs.ryoku-mango;
   ryokuXwaylandSatellite = ryokuPkgs.ryoku-xwayland-satellite;
   ryokuMatugen = ryokuPkgs.ryoku-matugen;

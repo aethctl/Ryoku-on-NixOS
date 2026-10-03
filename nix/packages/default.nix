@@ -34,6 +34,17 @@ let
     provider = "mango";
   };
 
+  # Niri 26.04 retains layer-shell surfaces when a physical output is
+  # removed, so repeated DPMS/hotplug cycles accumulate their buffers.
+  # Upstream PR #4485 fixes #1457 by cleaning each output's layer map before
+  # removing the output from the layout. Keep the patch vendored and pinned so
+  # Ryoku builds remain reproducible while the upstream fix is still open.
+  ryokuNiri = pkgs.niri.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ../patches/niri-output-layer-cleanup.patch
+    ];
+  });
+
   # Ryoku 0.82.2 targets Mango 0.17.4. The package in Ryoku's
   # deliberately pinned nixpkgs universe is still 0.16.1, so keep
   # the dependency ABI from that universe while updating the source.
@@ -306,6 +317,7 @@ let
   };
 in
 {
+  niri = ryokuNiri;
   mango = ryokuMango;
 
   inherit

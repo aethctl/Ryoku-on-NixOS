@@ -138,6 +138,7 @@
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
         ryoku-wm-mango = ryoku.wmMango;
+        ryoku-niri = ryoku.niri;
         ryoku-mango = ryoku.mango;
         ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
 
@@ -256,6 +257,7 @@
         ryoku-wm-hyprland = ryoku.wmHyprland;
         ryoku-wm-niri = ryoku.wmNiri;
         ryoku-wm-mango = ryoku.wmMango;
+        ryoku-niri = ryoku.niri;
         ryoku-mango = ryoku.mango;
         ryoku-xwayland-satellite = ryoku.xwaylandSatellite;
         ryoku-helpers = ryoku.helpers;
