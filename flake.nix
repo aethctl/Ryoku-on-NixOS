@@ -93,8 +93,14 @@
       ryokuMaterialize = import ./nix/apps/ryoku-materialize.nix {
         inherit pkgs ryoku;
       };
+
+      ryokuInstallBackend = import ./nix/apps/ryoku-install-backend.nix {
+        inherit pkgs;
+      };
+
       ryokuInstall = import ./nix/apps/ryoku-install.nix {
         inherit pkgs;
+        backend = ryokuInstallBackend;
       };
     in
     {
@@ -117,6 +123,7 @@
 
       packages.${system} = {
         ryoku-install = ryokuInstall;
+        ryoku-install-backend = ryokuInstallBackend;
         ryoku-iso = self.nixosConfigurations.ryoku-iso.config.system.build.isoImage;
         ryoku-shell = ryoku.shell;
         ryoku-ui = ryoku.ui;
@@ -200,6 +207,24 @@
       };
 
       checks.${system} = {
+        ryoku-installer-options = import ./nix/tests/installer-options.nix {
+          inherit pkgs;
+          module = self.nixosModules.default;
+        };
+
+        ryoku-installer-transaction = pkgs.runCommand "ryoku-installer-transaction-check"
+          { nativeBuildInputs = [ pkgs.python3 ]; }
+          ''
+            RYOKU_INSTALL_TEST_BACKEND=${ryokuInstallBackend}/bin/ryoku-install-backend \
+              python3 ${./nix/tests/test-installer-transaction.py}
+            touch "$out"
+          '';
+
+        ryoku-installer-wrapper = import ./nix/tests/installer-wrapper.nix {
+          inherit pkgs;
+          installer = ryokuInstall;
+        };
+
         ryoku-display-manager = import ./nix/tests/display-manager.nix {
           inherit pkgs;
           module = self.nixosModules.default;
@@ -358,6 +383,7 @@
 
         # Installer
         ryoku-install = ryokuInstall;
+        ryoku-install-backend = ryokuInstallBackend;
 
         ryoku-barstyle-source-integrity = pkgs.runCommand
           "ryoku-barstyle-source-integrity-check"
