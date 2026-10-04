@@ -13,6 +13,8 @@ pkgs.rustPlatform.buildRustPackage rec {
     ../patches/ryotunes-spotify-mpris.patch
     ../patches/ryotunes-youtube-browser-auth.patch
     ../patches/ryotunes-youtube-session-cookie-rotation.patch
+    ../patches/ryotunes-youtube-auth-resilience.patch
+    ../patches/ryotunes-youtube-auth-persistence.patch
   ];
 
   # Cargo dependencies include pinned librespot Git revisions.
