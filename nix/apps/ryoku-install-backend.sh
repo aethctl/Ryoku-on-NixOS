@@ -251,7 +251,7 @@ render_iso_target() {
 EOF_FLAKE
 
   cat > "$outdir/configuration.nix" <<EOF_CONFIG
-{ ... }:
+{ pkgs, ... }:
 
 {
   imports = [ ./hardware-configuration.nix ];
@@ -261,6 +261,7 @@ $boot_block
   networking.hostName = $nix_host;
   networking.networkmanager.enable = true;
 
+  nix.package = pkgs.nixVersions.latest;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
   zramSwap.enable = true;
 

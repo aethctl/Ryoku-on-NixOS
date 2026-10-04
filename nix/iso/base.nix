@@ -65,7 +65,7 @@
     git
     gnugrep
     jq
-    nix
+    nixVersions.latest
     nixos-install-tools
     parted
     rsync

@@ -54,6 +54,7 @@ class ISOInstallerTests(unittest.TestCase):
         self.assertIn('defaultCompositor = "niri"', output)
         self.assertIn('browser = "firefox"', output)
         self.assertIn('shell = "zsh"', output)
+        self.assertIn('nix.package = pkgs.nixVersions.latest', output)
         self.assertIn('"prompt"', output)
         self.assertIn('"go"', output)
         self.assertIn("boot.loader.systemd-boot.enable = true", output)
