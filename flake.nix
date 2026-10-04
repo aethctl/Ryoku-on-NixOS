@@ -93,8 +93,14 @@
       ryokuMaterialize = import ./nix/apps/ryoku-materialize.nix {
         inherit pkgs ryoku;
       };
+
+      ryokuInstallBackend = import ./nix/apps/ryoku-install-backend.nix {
+        inherit pkgs;
+      };
+
       ryokuInstall = import ./nix/apps/ryoku-install.nix {
         inherit pkgs;
+        backend = ryokuInstallBackend;
       };
     in
     {
@@ -106,8 +112,23 @@
           ryokuNixpkgs = pkgs;
         };
 
+      # Bootable Ryoku-on-NixOS live/install image. The live environment tracks
+      # the flake's nixos-unstable input; Ryoku-owned packages remain pinned to
+      # Ryoku's separate package universe. Both are locked by flake.lock.
+      nixosConfigurations.ryoku-iso = nixpkgs.lib.nixosSystem {
+        inherit system;
+        specialArgs = {
+          inherit self ryokuInstall;
+          ryokuIsoNixpkgsRev = nixpkgs.rev or "";
+          ryokuIsoRyokuRev = self.rev or "";
+        };
+        modules = [ ./nix/iso ];
+      };
+
       packages.${system} = {
         ryoku-install = ryokuInstall;
+        ryoku-install-backend = ryokuInstallBackend;
+        ryoku-iso = self.nixosConfigurations.ryoku-iso.config.system.build.isoImage;
         ryoku-shell = ryoku.shell;
         ryoku-ui = ryoku.ui;
         ryoku-plugin-kit = ryoku.pluginKit;
@@ -190,6 +211,38 @@
       };
 
       checks.${system} = {
+        ryoku-installer-options = import ./nix/tests/installer-options.nix {
+          inherit pkgs;
+          module = self.nixosModules.default;
+        };
+
+        ryoku-installer-transaction = pkgs.runCommand "ryoku-installer-transaction-check"
+          { nativeBuildInputs = [ pkgs.python3 ]; }
+          ''
+            RYOKU_INSTALL_TEST_BACKEND=${ryokuInstallBackend}/bin/ryoku-install-backend \
+              python3 ${./nix/tests/test-installer-transaction.py}
+            touch "$out"
+          '';
+
+        ryoku-installer-iso = pkgs.runCommand "ryoku-installer-iso-check"
+          { nativeBuildInputs = [ pkgs.python3 pkgs.gnugrep ]; }
+          ''
+            RYOKU_INSTALL_TEST_BACKEND=${ryokuInstallBackend}/bin/ryoku-install-backend \
+              python3 ${./nix/tests/test-installer-iso.py}
+
+            backend=${./nix/apps/ryoku-install-backend.sh}
+            grep -Fq -- '--confirm-disk' "$backend"
+            grep -Fq 'nixos-install' "$backend"
+            grep -Fq 'Type the exact disk path' "$backend"
+            grep -Fq 'refusing to erase the disk backing the live installer' "$backend"
+            touch "$out"
+          '';
+
+        ryoku-installer-wrapper = import ./nix/tests/installer-wrapper.nix {
+          inherit pkgs;
+          installer = ryokuInstall;
+        };
+
         ryoku-display-manager = import ./nix/tests/display-manager.nix {
           inherit pkgs;
           module = self.nixosModules.default;
@@ -348,6 +401,7 @@
 
         # Installer
         ryoku-install = ryokuInstall;
+        ryoku-install-backend = ryokuInstallBackend;
 
         ryoku-barstyle-source-integrity = pkgs.runCommand
           "ryoku-barstyle-source-integrity-check"
