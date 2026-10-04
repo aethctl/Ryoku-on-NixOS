@@ -1,4 +1,4 @@
-{ self, pkgs, lib, modulesPath, ... }:
+{ self, pkgs, lib, modulesPath, ryokuIsoNixpkgsRev ? "", ryokuIsoRyokuRev ? "", ... }:
 
 {
   imports = [
@@ -34,7 +34,23 @@
   # it. Installer/profile code can therefore install that revision rather than
   # silently chasing a moving Git branch.
   environment.etc."ryoku/source".source = self;
-  environment.sessionVariables.RYOKU_INSTALL_SOURCE = "path:/etc/ryoku/source";
+  environment.sessionVariables = {
+    RYOKU_INSTALL_SOURCE = "path:/etc/ryoku/source";
+
+    # A clean release ISO installs the exact revisions used to build the
+    # image. Dirty development images deliberately fall back to their embedded
+    # Ryoku source so the installer never claims an older Git commit matches
+    # uncommitted code in the image.
+    RYOKU_INSTALL_TARGET_SOURCE =
+      if ryokuIsoRyokuRev != ""
+      then "github:aethctl/Ryoku-on-NixOS/${ryokuIsoRyokuRev}"
+      else "path:/etc/ryoku/source";
+
+    RYOKU_INSTALL_NIXPKGS_SOURCE =
+      if ryokuIsoNixpkgsRev != ""
+      then "github:NixOS/nixpkgs/${ryokuIsoNixpkgsRev}"
+      else "github:NixOS/nixpkgs/nixos-unstable";
+  };
   nix.registry.ryoku.flake = self;
 
   # ──────────────────────────────────────────────────────────────────────────

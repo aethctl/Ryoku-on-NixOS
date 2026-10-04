@@ -46,13 +46,19 @@ class TransactionTests(unittest.TestCase):
                    'if [ "$TEST_FAILURE" = interrupt ]; then kill -TERM "$PPID"; exit 1; fi\n'
                    '[ "$TEST_FAILURE" != "$1" ]\n')
             script("systemctl", "exit 0\n")
-            backend = re.sub(r"    run_root\(\) \{.*?\n    \}",
-                             '    run_root() { "$@"; }',
-                             backend, count=1, flags=re.S)
+            backend = re.sub(
+                r"(?ms)^[ \t]*run_root\(\) \{.*?^[ \t]*\}",
+                'run_root() { "$@"; }',
+                backend,
+                count=1,
+            )
             backend = backend.replace('/run/current-system/sw/bin', str(bindir))
             backend = backend.replace('/var/backups/ryoku-nixos', str(root / "backups"))
-            backend = backend.replace('    set -euo pipefail',
-                                      '    export PATH="' + str(bindir) + ':$PATH"\n    set -euo pipefail', 1)
+            backend = backend.replace(
+                'set -euo pipefail',
+                'export PATH="' + str(bindir) + ':$PATH"\nset -euo pipefail',
+                1,
+            )
             test_backend = script("backend", backend.partition("\n")[2])
             calls = root / "calls"
             env = dict(os.environ, TEST_CALLS=str(calls), TEST_FAILURE=failure)

@@ -7,13 +7,15 @@ This directory owns the bootable Ryoku live/install image.
 - `base.nix` is the stable boot/install foundation. It owns ISO boot support,
   current Nix, flakes, networking, installation tools, and the embedded Ryoku
   source tree.
-- `profile.nix` is the maintainer-facing live-session layer. Put the graphical
-  session, installer UI/autostart, branding, wallpaper, and live-only hardware
-  conveniences here.
-- `default.nix` composes the two layers and exposes the existing `ryoku-install`
-  helper for development and recovery.
+- `profile.nix` owns live-session behavior. The console ISO currently launches
+  the guided terminal installer once on TTY1; a maintainer can layer graphical
+  live-session branding or a terminal launcher here later.
+- `default.nix` composes the live image and exposes the same `ryoku-install`
+  package used on an existing NixOS host.
 
-Keep target-system installation logic out of `base.nix`.
+Keep target-system installation logic in the installer backend, not in
+`base.nix`. That keeps one installation implementation regardless of how the
+live session is presented.
 
 ## Building
 
@@ -26,22 +28,53 @@ nix build .#ryoku-iso
 The ISO is exposed as `packages.x86_64-linux.ryoku-iso` and the underlying
 NixOS configuration as `nixosConfigurations.ryoku-iso`.
 
-## Installer contract
+## One installer, two modes
 
-The live image and the installed system are separate systems.
+`ryoku-install` is the single guided terminal installer.
 
-A fresh-disk installer should:
+On an already-installed flake-based NixOS system, run it normally. The backend
+edits the selected host configuration transactionally, builds the new
+generation, and switches only after validation.
 
-1. partition and format the selected target disk;
-2. mount the target filesystem tree at `/mnt`;
-3. generate or write the target hardware and NixOS flake configuration;
-4. enable the Ryoku NixOS module in that target configuration;
-5. run `nixos-install --flake /mnt/etc/nixos#<host>`;
-6. never use `nixos-rebuild switch` as the final bare-metal installation step.
+On the live ISO, TTY1 launches:
 
-The existing `ryoku-install` command is intentionally retained for installing
-Ryoku onto an already-installed flake-based NixOS system. It is not the
-fresh-disk installer.
+```bash
+ryoku-install --iso
+```
+
+ISO mode performs a complete fresh installation:
+
+1. choose a whole target disk;
+2. choose ext4 or Btrfs;
+3. set hostname, username and password;
+4. require exact target-disk confirmation before destructive work;
+5. create a GPT layout appropriate for UEFI or BIOS;
+6. format and mount the target under `/mnt`;
+7. generate hardware configuration;
+8. write a flake-based NixOS + Ryoku target configuration;
+9. lock the target inputs;
+10. run `nixos-install --flake ...`, never `nixos-rebuild switch` against the
+    disposable live system;
+11. unmount the target and ask the user to remove the installation media.
+
+Quitting the installer returns to the normal live shell. Run
+`ryoku-install --iso` to reopen it.
+
+## Disk-safety contract
+
+The ISO installer intentionally refuses several convenient-but-dangerous
+shortcuts:
+
+- only whole `/dev` disks are accepted;
+- the disk backing the live installer is excluded;
+- disks with mounted filesystems are refused;
+- target disks smaller than 16 GiB are refused;
+- interactive installs require typing the exact disk path before erasure;
+- `--iso --yes` still requires a matching `--confirm-disk DEVICE` token;
+- `--dry-run` never partitions, formats, mounts or invokes `nixos-install`.
+
+Partition-table destruction cannot be rolled back after confirmation. Failures
+after mounting are cleaned up by unmounting the target tree.
 
 ## Live image guarantees
 
@@ -53,7 +86,11 @@ The live environment:
 - includes NetworkManager, Git, disk/install tools, and OpenSSH;
 - embeds the exact Ryoku source used to build the ISO at `/etc/ryoku/source`;
 - registers that embedded source as the `ryoku` flake registry entry;
-- exports `RYOKU_INSTALL_SOURCE=path:/etc/ryoku/source` for live/recovery use.
+- exports `RYOKU_INSTALL_SOURCE=path:/etc/ryoku/source` for live/recovery use;
+- on clean builds, gives the target installer exact Ryoku and nixpkgs revisions;
+- on dirty developer builds, deliberately falls back to the embedded Ryoku
+  source rather than claiming an older Git revision represents uncommitted
+  code.
 
 Ryoku-owned packages continue to use the independently pinned
 `ryokuPackagesNixpkgs` input so updating the live ISO base does not silently

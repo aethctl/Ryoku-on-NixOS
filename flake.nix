@@ -117,7 +117,11 @@
       # Ryoku's separate package universe. Both are locked by flake.lock.
       nixosConfigurations.ryoku-iso = nixpkgs.lib.nixosSystem {
         inherit system;
-        specialArgs = { inherit self ryokuInstall; };
+        specialArgs = {
+          inherit self ryokuInstall;
+          ryokuIsoNixpkgsRev = nixpkgs.rev or "";
+          ryokuIsoRyokuRev = self.rev or "";
+        };
         modules = [ ./nix/iso ];
       };
 
@@ -217,6 +221,20 @@
           ''
             RYOKU_INSTALL_TEST_BACKEND=${ryokuInstallBackend}/bin/ryoku-install-backend \
               python3 ${./nix/tests/test-installer-transaction.py}
+            touch "$out"
+          '';
+
+        ryoku-installer-iso = pkgs.runCommand "ryoku-installer-iso-check"
+          { nativeBuildInputs = [ pkgs.python3 pkgs.gnugrep ]; }
+          ''
+            RYOKU_INSTALL_TEST_BACKEND=${ryokuInstallBackend}/bin/ryoku-install-backend \
+              python3 ${./nix/tests/test-installer-iso.py}
+
+            backend=${./nix/apps/ryoku-install-backend.sh}
+            grep -Fq -- '--confirm-disk' "$backend"
+            grep -Fq 'nixos-install' "$backend"
+            grep -Fq 'Type the exact disk path' "$backend"
+            grep -Fq 'refusing to erase the disk backing the live installer' "$backend"
             touch "$out"
           '';
 

@@ -105,6 +105,7 @@ var flow = []step{
 type options struct {
 	flake, source string
 	dryRun        bool
+	iso           bool
 }
 
 func defaultOptions() options {
@@ -187,7 +188,12 @@ func (m *model) startInstall() tea.Cmd {
 	args := []string{
 		"--flake", m.opts.flake, "--source", m.opts.source,
 		"--compositor", m.picks["compositor"], "--browser", m.picks["browser"],
-		"--shell", m.picks["shell"], "--apps", appArg, "--yes",
+		"--shell", m.picks["shell"], "--apps", appArg,
+	}
+	if m.opts.iso {
+		args = append(args, "--iso")
+	} else {
+		args = append(args, "--yes")
 	}
 	if m.opts.dryRun {
 		args = append(args, "--dry-run")
@@ -423,21 +429,38 @@ func (m model) reviewBody() string {
 	if len(apps) > 0 {
 		av = fmt.Sprintf("%d selected", len(apps))
 	}
-	lines := []string{
-		bold(cBrand, "Ready to configure Ryoku on NixOS"), "",
-		row("flake", m.opts.flake), row("source", m.opts.source), row("compositor", m.picks["compositor"]),
-		row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
-		fg(cGreen, "✓ builds the generation before switching"),
-		fg(cGreen, "✓ backs up installer-managed Nix files"),
-		fg(cGreen, "✓ leaves disks, boot layout and unrelated modules alone"),
+
+	var lines []string
+	if m.opts.iso {
+		lines = []string{
+			bold(cBrand, "Ready for full Ryoku installation"), "",
+			row("source", m.opts.source), row("compositor", m.picks["compositor"]),
+			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
+			fg(cGreen, "✓ disk and filesystem selection happens next"),
+			fg(cGreen, "✓ installs a flake-based NixOS target under /mnt"),
+			bold(cYell, "! the selected target disk will be erased only after exact-path confirmation"),
+		}
+	} else {
+		lines = []string{
+			bold(cBrand, "Ready to configure Ryoku on NixOS"), "",
+			row("flake", m.opts.flake), row("source", m.opts.source), row("compositor", m.picks["compositor"]),
+			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
+			fg(cGreen, "✓ builds the generation before switching"),
+			fg(cGreen, "✓ backs up installer-managed Nix files"),
+			fg(cGreen, "✓ leaves disks, boot layout and unrelated modules alone"),
+		}
 	}
 	if m.opts.dryRun {
-		lines = append(lines, "", bold(cYell, "DRY RUN · no files will be written"))
+		lines = append(lines, "", bold(cYell, "DRY RUN · no files or disks will be changed"))
 	}
 	return strings.Join(lines, "\n")
 }
 func (m model) wizardBody() string {
 	s := m.cur()
+	desc := s.desc
+	if m.opts.iso && s.key == "review" {
+		desc = "Review Ryoku choices. Disk selection and destructive confirmation happen in the next stage."
+	}
 	var body string
 	switch s.key {
 	case "apps":
@@ -447,7 +470,7 @@ func (m model) wizardBody() string {
 	default:
 		body = m.choiceBody(s, 68)
 	}
-	content := bold(cBrand, s.title) + "\n" + fg(cSub, s.desc) + "\n\n" + body
+	content := bold(cBrand, s.title) + "\n" + fg(cSub, desc) + "\n\n" + body
 	card := sty().Width(72).Border(border()).BorderForeground(cSub).Padding(1, 2).Render(content)
 	if m.w < 100 {
 		return card
@@ -489,11 +512,21 @@ func (m model) installBody() string {
 	return sty().Width(88).Border(border()).BorderForeground(cSub).Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
 }
 func (m model) welcomeBody() string {
+	var title, line1, line2, line3 string
+	if m.opts.iso {
+		title = "Install Ryoku on NixOS"
+		line1 = "A full NixOS + Ryoku installation from the live ISO."
+		line2 = "Choose the desktop here; disk and filesystem selection follows."
+		line3 = "Nothing is erased until you type the exact target disk path."
+	} else {
+		title = "Ryoku for NixOS"
+		line1 = "The same Ryoku installer language, adapted for a declarative host."
+		line2 = "No partitioning. No pacstrap. No mutable package transaction."
+		line3 = "Your flake is edited, built, then switched only after validation."
+	}
 	card := sty().Border(border()).BorderForeground(cSub).Padding(1, 3).Render(
-		bold(cBrand, "Ryoku for NixOS") + "\n\n" +
-			fg(cText, "The same Ryoku installer language, adapted for a declarative host.") + "\n" +
-			fg(cSub, "No partitioning. No pacstrap. No mutable package transaction.") + "\n" +
-			fg(cSub, "Your flake is edited, built, then switched only after validation."))
+		bold(cBrand, title) + "\n\n" +
+			fg(cText, line1) + "\n" + fg(cSub, line2) + "\n" + fg(cSub, line3))
 	return lipgloss.JoinVertical(lipgloss.Center, logoBlock(), "", fg(cDim, "NIXOS EDITION"), "", "", card)
 }
 func (m model) render() string {
@@ -513,7 +546,11 @@ func (m model) render() string {
 		if m.cur().key == "apps" {
 			foot = keyHint("↑↓/jk", "move") + fg(cDim, "  ·  ") + keyHint("space", "toggle") + fg(cDim, "  ·  ") + keyHint("a/n", "all/none") + fg(cDim, "  ·  ") + keyHint("enter", "next")
 		} else if m.cur().key == "review" {
-			foot = keyHint("enter", "build & switch") + fg(cDim, "  ·  ") + keyHint("esc", "back")
+			action := "build & switch"
+			if m.opts.iso {
+				action = "continue to disk install"
+			}
+			foot = keyHint("enter", action) + fg(cDim, "  ·  ") + keyHint("esc", "back")
 		} else {
 			foot = keyHint("↑↓/jk", "move") + fg(cDim, "  ·  ") + keyHint("enter", "select") + fg(cDim, "  ·  ") + keyHint("esc", "back")
 		}
@@ -522,6 +559,9 @@ func (m model) render() string {
 		foot = keyHint("ctrl+c", "cancel")
 	case "done":
 		title := "Ryoku is ready"
+		if m.opts.iso {
+			title = "Ryoku is installed"
+		}
 		if m.opts.dryRun {
 			title = "Dry run complete"
 		}
@@ -549,12 +589,15 @@ func usage() {
 Interactive options:
   --flake PATH[#HOST]   NixOS flake to configure (default: /etc/nixos)
   --source REF          Ryoku flake reference
-  --dry-run             Run the backend without writing files
+  --iso                 Full disk installation mode used by the Ryoku ISO
+  --dry-run             Run the backend without writing files or disks
   snapshot              Print representative screens without installing
 
 Automation / compatibility:
   --cli ...             Run ryoku-install-backend directly
   -y, --yes             Also selects the direct backend path
+  --disk/--filesystem/--hostname/--username/--firmware/--confirm-disk
+                        are accepted by the direct ISO backend
   --compositor/--browser/--shell/--apps are accepted by the direct backend`)
 }
 
@@ -567,6 +610,9 @@ func parseOptions(args []string) (options, bool, []string, error) {
 		switch a {
 		case "--cli":
 			direct = true
+		case "--iso":
+			o.iso = true
+			backendArgs = append(backendArgs, a)
 		case "-y", "--yes":
 			direct = true
 			backendArgs = append(backendArgs, a)
@@ -585,7 +631,7 @@ func parseOptions(args []string) (options, bool, []string, error) {
 		case "--dry-run":
 			o.dryRun = true
 			backendArgs = append(backendArgs, a)
-		case "--compositor", "--browser", "--shell", "--apps":
+		case "--compositor", "--browser", "--shell", "--apps", "--disk", "--filesystem", "--hostname", "--username", "--firmware", "--confirm-disk":
 			if i+1 >= len(args) {
 				return o, false, nil, fmt.Errorf("%s requires a value", a)
 			}

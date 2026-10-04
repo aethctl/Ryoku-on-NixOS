@@ -84,3 +84,42 @@ func TestBackendOnlyOptionsSelectDirectMode(t *testing.T) {
 		t.Fatalf("backend args = %v", args)
 	}
 }
+
+func TestISOFlagKeepsInteractiveTUI(t *testing.T) {
+	opts, direct, args, err := parseOptions([]string{"--iso"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if direct {
+		t.Fatal("--iso alone must keep the interactive TUI")
+	}
+	if !opts.iso {
+		t.Fatal("--iso did not set ISO mode")
+	}
+	if !reflect.DeepEqual(args, []string{"--iso"}) {
+		t.Fatalf("backend args = %v", args)
+	}
+
+	m := newModel(opts)
+	m.w, m.h = 112, 40
+	if got := m.render(); got == "" {
+		t.Fatal("ISO welcome rendered empty")
+	}
+}
+
+func TestISODiskAutomationSelectsDirectBackend(t *testing.T) {
+	opts, direct, args, err := parseOptions([]string{
+		"--iso", "--disk", "/dev/vda", "--filesystem", "ext4",
+		"--hostname", "ryoku-test", "--username", "tester",
+		"--confirm-disk", "/dev/vda", "--yes",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !opts.iso || !direct {
+		t.Fatalf("opts=%+v direct=%v", opts, direct)
+	}
+	if len(args) < 2 || args[0] != "--iso" {
+		t.Fatalf("backend args = %v", args)
+	}
+}
