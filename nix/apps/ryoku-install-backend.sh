@@ -19,6 +19,7 @@ target_username=""
 confirm_disk=""
 firmware_choice="auto"
 target_root="${RYOKU_INSTALL_TARGET_ROOT:-/mnt}"
+iso_work=""
 
 # Bootstrap the public cache before the new NixOS generation
 # activates its declarative substituter configuration.
@@ -170,7 +171,7 @@ choose_install_disk() {
     printf '  %d) %-16s %8s  %s\n' "${#disks[@]}" "$path" "$human" "${model:-Unknown disk}"
   done < <(
     lsblk -J -b -d -o PATH,SIZE,MODEL,TYPE,RO |
-      jq -r '.blockdevices[] | select(.type == "disk" and (.ro == false or .ro == 0)) | [.path, (.size|tostring), (.model // "")] | @tsv'
+      jq -r '.blockdevices[] | select(.type == "disk" and (.ro == false or .ro == 0) and ((.size | tonumber) >= 17179869184)) | [.path, (.size|tostring), (.model // "")] | @tsv'
   )
 
   [ "${#disks[@]}" -gt 0 ] || die "no writable installation disks found"
@@ -287,7 +288,7 @@ EOF_CONFIG
 }
 
 install_iso() {
-  local firmware password_hash iso_work typed
+  local firmware password_hash typed
   local root_part boot_part
   local target_source_ref target_nixpkgs_ref
 
@@ -400,6 +401,7 @@ install_iso() {
 
   if findmnt -rn "$target_root" >/dev/null 2>&1; then
     rm -rf "$iso_work"
+    iso_work=""
     die "$target_root is already mounted; unmount it before installing"
   fi
 
@@ -407,6 +409,7 @@ install_iso() {
   if [ "$assume_yes" -eq 1 ]; then
     [ "$confirm_disk" = "$install_disk" ] || {
       rm -rf "$iso_work"
+      iso_work=""
       die "--iso --yes requires --confirm-disk $install_disk"
     }
   else
@@ -426,7 +429,9 @@ install_iso() {
     if findmnt -rn "$target_root" >/dev/null 2>&1; then
       run_root umount -R "$target_root" >/dev/null 2>&1 || true
     fi
-    rm -rf "$iso_work"
+    if [ -n "${iso_work:-}" ]; then
+      rm -rf "$iso_work"
+    fi
     exit "$status"
   }
   trap iso_cleanup EXIT
@@ -480,7 +485,9 @@ install_iso() {
 
   if [ -e /etc/ryoku/source ]; then
     run_root mkdir -p "$target_root/etc/ryoku/source"
-    run_root cp -RL /etc/ryoku/source/. "$target_root/etc/ryoku/source/"
+    # Preserve source-tree symlinks exactly. Dereferencing them breaks on
+    # intentionally relative compatibility links in the repository.
+    run_root cp -a /etc/ryoku/source/. "$target_root/etc/ryoku/source/"
   fi
 
   echo "@@RYOKU_STEP lock"
@@ -499,6 +506,7 @@ install_iso() {
 
   trap - EXIT INT TERM
   rm -rf "$iso_work"
+  iso_work=""
 
   echo "@@RYOKU_DONE"
   printf '\nRyoku installation complete.\n'
