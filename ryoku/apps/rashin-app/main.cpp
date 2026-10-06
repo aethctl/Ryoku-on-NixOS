@@ -358,6 +358,23 @@ void startup(GtkApplication *application, gpointer data) {
 
 void activate(GtkApplication *application, gpointer data) {
     auto *state = static_cast<AppState *>(data);
+
+    // WebKitGTK derives its internal page scale from GTK's font DPI.
+    // Ryoku already handles display scaling at the compositor/GTK surface
+    // level, so letting WebKit apply the session DPI again can shrink or
+    // enlarge the web console independently of the native window.
+    //
+    // Keep the embedded dashboard at the CSS baseline of 96 DPI. GTK and
+    // Wayland remain responsible for mapping the window onto the output.
+    if (GtkSettings *gtk_settings = gtk_settings_get_default()) {
+        gint reported_dpi = -1;
+        g_object_get(gtk_settings, "gtk-xft-dpi", &reported_dpi, nullptr);
+
+        g_print("rashin-app: GTK xft DPI = %.2f\n",
+                reported_dpi > 0 ? reported_dpi / 1024.0 : -1.0);
+
+        g_object_set(gtk_settings, "gtk-xft-dpi", 96 * 1024, nullptr);
+    }
     if (state->window) {
         gtk_window_present(GTK_WINDOW(state->window));
         return;
