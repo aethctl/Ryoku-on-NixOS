@@ -3,6 +3,42 @@
 ## Unreleased
 
 ### Added
+- **`ryoku update` is a clean console now, not a wall of logs.** A terminal
+  run shows a header, one line per step with its time and what it found, a
+  live line for the step in flight, a progress bar, and a closing card; the
+  raw output of pacman, git, the builds and the doctor lands in
+  `~/.local/state/ryoku/update-log.txt` instead. Only `error:`, `warning:` and
+  `note:` lines, a `.pacnew` and the doctor's findings reach the screen. A
+  failure shows the error, the last lines the work printed and the rollback
+  snapshot. `ryoku update -v` streams the raw output instead
+  (`internal/updater/console.go`, `internal/updater/capture.go`).
+- **`ryoku update --gui` runs an update from Ryoku Settings, no terminal.** It
+  starts the run in the background under a pseudo terminal; sudo's password
+  and any question come back through the Hub (`--auth` takes the password on
+  stdin, over a FIFO), and `--cancel` stops a run (`internal/updater/gui.go`).
+- **An update watches itself.** Every two seconds the run rewrites its
+  run-state with a heartbeat, the line its work last printed, and a read of
+  its own process tree: output or CPU time is progress, three minutes of
+  neither is a stall, and the newest command in the tree is named. A stopped
+  run (Ctrl-C, `--cancel`) hands back what it quiesced (the shell, the sleep
+  guard) and lets a committing package transaction finish on its own
+  (`internal/updater/watch.go`, `internal/updater/abort.go`).
+- **Updates and repairs cover the desktop they blank.** `ryoku update`'s
+  packaged teardown and `ryoku doctor`'s daemon restart both raise the reload
+  cover before stopping the shell, so the swap and cold reload run behind the
+  animation instead of a grey flicker; headless calls fail fast and proceed
+  uncovered (`internal/updater/update.go`, `internal/doctor/doctor.go`).
+- **`ryoku doctor` retires Shima's stored frame music choice.** The
+  `inir.iris.surround.music` key chose between a wave Ryoku never hosts and the
+  frame; the switch now drives the frame on its own, so the key is removed from
+  `shell.json` while every sibling setting stays as it was.
+  (`internal/doctor/reconcile_shima_frame_music.go`)
+- **`ryoku doctor` cleans up the retired panel state and shortcut.** The
+  sidebar migration removes obsolete layout records, and the Ask-keybind
+  migration removes only the orphaned retired-surface rebind while preserving
+  every current custom shortcut and neighbouring shell setting.
+  (`internal/doctor/reconcile_sidebar_rework.go`,
+  `internal/doctor/reconcile_ask_keybind.go`)
 - **`ryoku doctor` removes the retired Ryoku Motion package.** `ryomotion`, the
   screen-demo recorder, shipped as a hard depend once, so a box installed before
   it was dropped still carries it and pacman never removes it on its own. The new
@@ -52,6 +88,77 @@
   `internal/sys/release.go`, `internal/updater/release.go`).
 
 ### Fixed
+- **A fresh install's first niri login starts.** The installer runs
+  `ryoku materialize` before a neutral store exists on a box with the default
+  keyboard layout, and materialize skipped rendering a compositor's generated
+  includes without one. niri treats a missing include as a hard parse error, so
+  the first login came up a grey screen with a config error until a later login
+  wrote the files. Materialize now renders the provider's defaults into a laid
+  tree that has no generated files, a fork or a laid edit of one still wins
+  over defaults, and `ryoku doctor`'s config-tree check reports a laid tree
+  whose includes are missing instead of reading it as healthy
+  (`internal/updater/materialize.go`, `internal/doctor/reconcile_config_tree.go`).
+- **`ryoku doctor` clears what it used to report on every run.** The TPM
+  units that fail only for want of NvPCRs are re-run once the TPM carries the
+  new udev mark, instead of sitting in "failed services" until reboot. A
+  `.pacnew` whose live file nobody has written since before the box was
+  installed (it is still an older package's file, pacman's own timestamp) is
+  now applied, since that loses nothing; a config written on the box stays a
+  review for `pacdiff` (`internal/doctor/reconcile_tpm_nvpcr.go`,
+  `internal/doctor/doctor.go`).
+- **The update console no longer stacks copies of the running step.** While
+  a step runs something under sudo, sudo switches the terminal to raw mode,
+  so a plain newline stopped returning to the left edge; every redraw then
+  wrapped and stranded a copy of "Deploying the desktop". The console now
+  writes explicit carriage returns and turns autowrap off while it redraws.
+  A doctor finding about `.pacnew` files also shows once, not as a doubled
+  "! !" plus its detail line (`internal/updater/console.go`).
+- **The Hub no longer sticks on a phantom "Applying updates".** Code that
+  narrated outside an update (`ryoku track`'s channel move, the updater's own
+  tests) wrote a "running" run-state with no owner, and the Updates page could
+  never leave it. Only a run that has begun writes the file now, it names its
+  pid, the doctor's stale-run check reads that pid, and the updater's tests
+  run against a throwaway runtime dir (`internal/updater/runstate.go`,
+  `internal/doctor/doctor.go`).
+- **A packaged update's log keeps the package transaction.** The stage2
+  hand-off reopened `update-log.txt` truncated, so the log held only the
+  deploy and the doctor (`internal/updater/upgradelog.go`).
+- **`ryoku doctor` stops listing every shipped file.** Its stray-file scan
+  asked pacman who owns each of the hundred-odd shipped system paths with
+  pacman's output on the terminal, so every run printed a wall of
+  "<path> is owned by ryoku-desktop" lines. It reads only the answer now
+  (`internal/doctor/doctor.go`).
+- **A checkout's update runs the doctor it just built.** `ryoku update` on a
+  source checkout ran `/usr/bin/ryoku doctor`, the packaged CLI the box was
+  installed from, which a channel update never moves, so every doctor fix
+  pushed to the channel stayed out of the update. It now runs the CLI deploy
+  just built into `~/.local/bin` (`internal/updater/update.go`).
+- **The shell comes back after a reboot on a box that left the dev loop.**
+  `ryoku doctor` cleared the home builds a dev deploy or `ryoku recovery`
+  left in `~/.local/bin`, but not the user units still running them: a
+  `user_edits` fork of the rewritten shell unit, the live copy it re-laid, and
+  Rashin's home unit. After the next login the shell unit failed on a missing
+  binary and the desktop had no shell. The same pass now puts those units back
+  on the packaged ones (keeping Rashin enabled), drops the deploy's drop-ins,
+  treats ryogami's home build as residue, and removes the retired dev-switch
+  `ryoku` fish wrapper that otherwise turns every `ryoku` command into
+  "Unknown command". (`internal/doctor/reconcile_dev_residue.go`)
+- **`ryoku update` says what pacman actually failed on.** A failed Ryoku
+  transaction reported only "exit status 1": pacman's real reason (a signature
+  rejection, a package conflict, a broken dependency) lived in the rendered
+  stream and was thrown away, so the Hub's failure card and the terminal's
+  last line said nothing a support channel could act on. The
+  `error:` lines are now carried into the returned error, the raw firehose
+  lands in `~/.local/state/ryoku/update-log.txt` on the packaged path too
+  (stage2 appends to the same file), and the failure hint names that path
+  (`internal/updater/upgradelog.go`, `internal/updater/update.go`).
+- **`ryoku doctor` drops a Wi-Fi profile's access-point pin.** A profile saved
+  by the old Hub band picker carried `802-11-wireless.bssid`, which locks the
+  client to one AP; on a multi-AP 5 GHz network the association cycles as the
+  access points steer and the pin forces back, reading as "5 GHz keeps
+  reconnecting". Every pinned Wi-Fi profile loses the pin, so it roams again
+  inside its band (`internal/doctor/reconcile_wifi_bssid_pin.go`).
+
 - **`ryoku update` survives a private `/var/lib/ryoku`.** The power-cutover
   preflight statted the adoption marker as the user; with the state dir at
   0700 (a drifted mode the kill switch used to leave behind) the stat failed
@@ -162,8 +269,8 @@
   and points the override back at your real account shell, refreshing the
   running session so it takes effect without a logout
   (`internal/doctor/reconcile_login_shell.go`).
-- **The Rashin AI assistant is on by default now.** The needle (Super+S) and its
-  dashboard used to sit dormant until you found the switch in the Hub; a fresh
+- **The Rashin AI assistant is on by default now.** Ask and the dashboard used
+  to sit dormant until you found the switch in the Hub; a fresh
   box now brings the daemon up at boot. `ryoku-rashin disable` turns it off for
   good (recorded as `optedOut`, so an update never flips it back on), `enable`
   turns it back on. A new `ryoku-rashin ensure` is the quiet default-on
@@ -841,9 +948,9 @@
 - **Flatpak works out of the box, and its apps update with everything else.**
   Ryoku already shipped the `flatpak` client in `base.packages`, which means it
   is in the ISO's offline closure and installs with no network. What it never
-  shipped was a configured remote: the only thing that ever added flathub was
-  `stash-install.sh`, per-user, and only while installing a `.flatpak` bundle the
-  user had already downloaded. So a fresh box had the client and no catalogue, and
+  shipped was a configured remote: only the legacy bundle installer added
+  flathub, per-user, and only while installing a `.flatpak` bundle the user had
+  already downloaded. So a fresh box had the client and no catalogue, and
   `flatpak install` had nothing to search. A new reconciler adds the system
   flathub remote, and `ryoku update` gained a Flatpak pass so those apps stop
   rotting a release behind.
@@ -1125,12 +1232,6 @@
   restart` reported success while starting nothing, so doctor's shell-daemon
   reconciler pushed a restart into a void. It now imports the live session's
   env into the user manager first (`internal/doctor/doctor.go`).
-- **Doctor moves a persisted Stash sidebar to the right.** The Stash board is now
-  the floating Features page on the right, but a box that persisted frameBars
-  still carried `surfaces.stash.anchor: "left"` (the old full-span default), which
-  normalize keeps, so the page would grow from the wrong edge. Doctor flips that
-  one leaf to `right` in place, leaving every other key untouched
-  (`internal/doctor/reconcile_stash_sidebar.go`, `internal/doctor/doctor.go`).
 - **Doctor installs the missing in-session lockscreen.** Only the ISO installer
   ever laid down the qylock lock, so a box that predates the step (or where it
   failed) had a dead lock button and suspended without locking, silently:

@@ -27,11 +27,18 @@ hl.on("hyprland.start", function()
     -- previous one answers `start` with "already active" while its surfaces are
     -- bound to the dead compositor, so the login lands on bare Hyprland with no
     -- shell. daemon-reload first, so a freshly materialized unit is visible.
+    -- Raise the reload cover before anything else touches the session: the
+    -- greeter's unlock animation has just ended, the shell services restart
+    -- below, and without the cover the desktop loads grey and flickers while
+    -- every QML surface comes up. begin blocks until the cover is painted
+    -- (or fails fast headless), then the session chain proceeds behind it.
     -- session-start owns the guarded service restart and does not return until
-    -- the shell and lid owners have proved readiness. Portals restart last:
+    -- the shell and lid owners have proved readiness; the fresh shell finishes
+    -- the cover once wallpaper and desktop report ready on every screen.
+    -- Portals restart last:
     -- they are only PartOf=graphical-session.target and a stale frontend would
     -- otherwise proxy every ScreenCast request to the dead session backend.
-    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; ryoku-power-cutover session-start-logged && systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
+    hl.exec_cmd("dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; ryoku-reload-cover begin boot || true; ryoku-power-cutover session-start-logged && systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-hyprland.service xdg-desktop-portal-gtk.service")
     -- Polkit authentication is answered by the shell's own agent (the island
     -- that matches the rest of the desktop), so the stock Qt agent must not
     -- take the session's single agent slot. Stopping it is idempotent and
@@ -80,9 +87,8 @@ hl.on("hyprland.start", function()
     -- Welcome tour and first-boot keyboard hint: the tour once per tour
     -- version, the hint exactly once ever. The behaviour lives in
     -- ryoku-session-intro so every compositor's autostart calls the same
-    -- script: mango's config grammar truncates a value at 255 characters,
-    -- so an inline chain there silently loses its tail. Bump the tour
-    -- version in the helper when the tour changes materially (beta 18 = 18).
+    -- script. Bump the tour version in the helper when the tour changes
+    -- materially (beta 18 = 18).
     hl.exec_cmd("command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro welcome")
     hl.exec_cmd("command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro keys-hint")
 end)

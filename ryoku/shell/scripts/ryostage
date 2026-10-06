@@ -91,10 +91,26 @@ inpaint_python() {
 model_cached() { [[ -n "$(find "$models" -name "$1.onnx" -print -quit 2>/dev/null)" ]]; }
 
 cmd_check() {
-    if rembg_python && model_cached "$default_model"; then
-        printf 'available\n'
-        return 0
+    local model="${1:-}"
+    if ! rembg_python; then
+        printf 'runtime missing\n'
+        return 1
     fi
+    if [[ -n $model ]]; then
+        if model_cached "$model"; then
+            printf 'available\n'
+            return 0
+        fi
+        printf 'model %s missing\n' "$model"
+        return 1
+    fi
+    local m
+    for m in "${curated[@]}"; do
+        if model_cached "$m"; then
+            printf 'available\n'
+            return 0
+        fi
+    done
     printf 'missing\n'
     return 1
 }
@@ -432,7 +448,7 @@ cmd_remove() {
 }
 
 case "${1:-}" in
-check) cmd_check ;;
+check) cmd_check "${2:-}" ;;
 models)
     shift
     cmd_models "$@"

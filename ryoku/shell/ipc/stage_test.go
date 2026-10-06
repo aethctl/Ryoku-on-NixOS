@@ -26,7 +26,7 @@ echo "$*" >> "$STAGE_STUB_LOG"
 cmd="${1:-}"; shift || true
 case "$cmd" in
   check)
-    if [[ -n "${STAGE_STUB_MISSING:-}" ]]; then echo missing; exit 1; fi
+    if [[ -n "${STAGE_STUB_MISSING:-}" ]]; then echo "${STAGE_STUB_CHECK_REASON:-missing}"; exit 1; fi
     echo available; exit 0 ;;
   models)
     echo '[{"id":"u2netp","tier":"draft","label":"Draft","installed":true}]'; exit 0 ;;
@@ -305,6 +305,139 @@ func TestStageEffectSwitchNeverRecuts(t *testing.T) {
 	}
 	if n := countCalls(logf, "inpaint"); n != 1 {
 		t.Fatalf("inpaint ran %d times after depth->parallax->depth, want still 1", n)
+	}
+}
+
+// TestStagePurgedArtifactsRetryOnWake pins the ghost-entry self-heal: a wall
+// left ON whose artifacts vanished is re-cut by a plain wake (no force, no
+// gen), because the registry says the user still wants the scene.
+func TestStagePurgedArtifactsRetryOnWake(t *testing.T) {
+	home := stageHome(t)
+	logf := writeStageStub(t)
+
+	wall := filepath.Join(home, "w.png")
+	writeFile(t, wall, "wp")
+	reg := stageWalls{Walls: map[string]stageWall{wall: {Effect: stageEffectDepth}}}
+	if err := saveStageWalls(reg); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &daemon{stageSig: make(chan struct{}, 1)}
+	d.showWall(wall)
+	d.reconcileStage(false, false)
+
+	if n := countCalls(logf, "cut"); n != 1 {
+		t.Fatalf("a purged wall on a plain wake ran %d cuts, want the self-heal to run 1", n)
+	}
+	if !isFile(stageSubjectOut(wall)) {
+		t.Fatal("the self-heal did not produce a subject")
+	}
+	if f := d.buildStageFrame(); f.Notice != "" {
+		t.Fatalf("a healed cut still noticed %q, want silence", f.Notice)
+	}
+}
+
+// TestStageBlockedCutNotices pins the loud failure: when the engine cannot cut
+// (the tier's model is missing), the enable still records the effect but the
+// frame carries the helper's reason instead of dying mute, and the next good
+// reconcile clears it.
+func TestStageBlockedCutNotices(t *testing.T) {
+	home := stageHome(t)
+	logf := writeStageStub(t)
+	t.Setenv("STAGE_STUB_MISSING", "1")
+	t.Setenv("STAGE_STUB_CHECK_REASON", "model u2netp missing")
+
+	wall := filepath.Join(home, "w.png")
+	writeFile(t, wall, "wp")
+	d := &daemon{stageSig: make(chan struct{}, 1)}
+	d.showWall(wall)
+
+	d.stageSetEffect(stageEffectDepth)
+	d.reconcileStage(d.stageForce.Swap(false), d.stageGen.Swap(false))
+
+	if n := countCalls(logf, "cut"); n != 0 {
+		t.Fatalf("an unavailable engine ran %d cuts, want 0", n)
+	}
+	f := d.buildStageFrame()
+	if f.Walls[wall].Effect != stageEffectDepth {
+		t.Fatalf("the enable did not record the effect: %+v", f.Walls[wall])
+	}
+	if f.Notice != "model u2netp missing" {
+		t.Fatalf("notice = %q, want the helper's reason", f.Notice)
+	}
+
+	// The model lands: a retry cuts, and the notice clears.
+	t.Setenv("STAGE_STUB_MISSING", "")
+	d.reconcileStage(true, false)
+	if n := countCalls(logf, "cut"); n != 1 {
+		t.Fatalf("after the model appeared, cut ran %d times, want 1", n)
+	}
+	if f := d.buildStageFrame(); f.Notice != "" {
+		t.Fatalf("notice = %q after a good reconcile, want cleared", f.Notice)
+	}
+}
+
+// TestStageProbeAsksForTheTierModel pins the model-aware guard: a fine-tier
+// box is probed for birefnet-general-lite, not the default draft model, so an
+// installed fine tier no longer reads as "engine missing".
+func TestStageProbeAsksForTheTierModel(t *testing.T) {
+	home := stageHome(t)
+	logf := writeStageStub(t)
+	cfg := filepath.Join(home, ".config", "ryoku")
+	if err := os.MkdirAll(cfg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(cfg, "stage.json"), `{"quality":"fine"}`)
+
+	wall := filepath.Join(home, "w.png")
+	writeFile(t, wall, "wp")
+	reg := stageWalls{Walls: map[string]stageWall{wall: {Effect: stageEffectDepth}}}
+	if err := saveStageWalls(reg); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &daemon{stageSig: make(chan struct{}, 1)}
+	d.showWall(wall)
+	d.reconcileStage(false, false)
+
+	b, err := os.ReadFile(logf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), "check birefnet-general-lite") {
+		t.Fatalf("the probe did not ask for the fine-tier model, calls:\n%s", b)
+	}
+	if n := countCalls(logf, "cut"); n != 1 {
+		t.Fatalf("a fine-tier box with the model available ran %d cuts, want 1", n)
+	}
+}
+
+// TestStageClearTakesWallOff pins the clear verb's registry contract: the
+// generated artifacts go, the wall records Plain, and the next plain wake does
+// not re-cut (an off wall is no ghost for the self-heal).
+func TestStageClearTakesWallOff(t *testing.T) {
+	home := stageHome(t)
+	logf := writeStageStub(t)
+
+	wall := filepath.Join(home, "w.png")
+	writeFile(t, wall, "wp")
+	d := &daemon{stageSig: make(chan struct{}, 1)}
+	d.showWall(wall)
+	d.stageSetEffect(stageEffectDepth)
+	d.reconcileStage(d.stageForce.Swap(false), d.stageGen.Swap(false))
+	cuts := countCalls(logf, "cut")
+
+	d.stageClear()
+	d.reconcileStage(false, false)
+
+	if isFile(stageSubjectOut(wall)) {
+		t.Fatal("clear left subject.png behind")
+	}
+	if f := d.buildStageFrame(); f.Walls[wall].Effect != stageEffectOff {
+		t.Fatalf("clear left the wall on %+v, want off", f.Walls[wall])
+	}
+	if n := countCalls(logf, "cut"); n != cuts {
+		t.Fatalf("the wake after clear re-cut (%d cuts, was %d), want none", n, cuts)
 	}
 }
 

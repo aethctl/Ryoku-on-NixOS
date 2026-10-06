@@ -4,110 +4,37 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"reflect"
 	"ryoku-cli/internal/sys"
 	"testing"
 )
-
-const canonicalSidebarsJSON = `{
-	"motion": "standard",
-	"left": {
-		"enabled": true,
-		"cards": ["system", "notifications", "weather", "media", "capture", "stage"],
-		"width": 1040,
-		"height": 1000,
-		"heightMode": "fixed",
-		"maxHeight": 85,
-		"position": "center",
-		"pinned": false,
-		"presentations": {}
-	},
-	"right": {
-		"enabled": true,
-		"cards": ["usage", "tools", "chat"],
-		"width": 1040,
-		"height": 1000,
-		"heightMode": "fixed",
-		"maxHeight": 85,
-		"position": "center",
-		"pinned": false,
-		"presentations": {}
-	}
-}`
 
 func TestMigrateSidebarRework(t *testing.T) {
 	tests := []struct {
 		name    string
 		in      string
-		want    string
 		changed bool
 		wantErr bool
 	}{
 		{
-			name:    "retired leaves removed and defaults seeded",
-			in:      `{"frameBars":{"version":1,"menus":{"quick-settings":{"anchor":"left","modules":["home","stage"]},"wallpaper":{"anchor":"bottom"}},"surfaces":{"stash":{"anchor":"right","panes":["stash"]},"future":{"anchor":"top"}},"dock":{"pinned":["firefox"]}},"fontScale":1.3}`,
-			want:    `{"frameBars":{"version":1,"menus":{"wallpaper":{"anchor":"bottom"}},"surfaces":{"future":{"anchor":"top"}},"dock":{"pinned":["firefox"]}},"fontScale":1.3,"sidebars":` + canonicalSidebarsJSON + `}`,
+			name:    "retires global tree and original frame surfaces",
+			in:      `{"frameBars":{"version":1,"rails":{"top":{"enabled":true}},"menus":{"quick-settings":{"anchor":"left","modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic","left":{"cards":["weather"],"geometry":{"DP-1":{"x":2}}},"right":{"pinned":true}},"custom":{"nested":[1,2,3]},"fontScale":1.3}`,
 			changed: true,
 		},
 		{
-			name:    "missing frame bars seeds defaults",
-			in:      `{"weatherLocation":"Oslo","fontScale":0.96}`,
-			want:    `{"weatherLocation":"Oslo","fontScale":0.96,"sidebars":` + canonicalSidebarsJSON + `}`,
+			name:    "retires malformed sidebar tree as one obsolete value",
+			in:      `{"sidebars":"not-an-object","weatherLocation":"Oslo"}`,
 			changed: true,
 		},
 		{
-			name: "legacy width moves only to Controls and empty lists survive",
-			in:   `{"frameBars":{"menus":{"quick-settings":{},"theme":{"anchor":"right"}},"surfaces":{"stash":{},"system":{"anchor":"right"}}},"sidebars":{"width":512,"motion":"calm","depth":false,"push":false,"parallax":1.2,"wallpaperSlide":1.3,"left":{"enabled":false,"cards":[]},"right":{"enabled":true,"cards":[]},"extension":{"future":true}},"custom":{"nested":[1,2,3]}}`,
-			want: `{"frameBars":{"menus":{"theme":{"anchor":"right"}},"surfaces":{"system":{"anchor":"right"}}},"sidebars":{
-				"motion":"calm",
-				"left":{"enabled":false,"cards":[],"width":512,"height":1000,"heightMode":"fixed","maxHeight":85,"position":"center","pinned":false,"presentations":{}},
-				"right":{"enabled":true,"cards":[],"width":1040,"height":1000,"heightMode":"fixed","maxHeight":85,"position":"center","pinned":false,"presentations":{}},
-				"extension":{"future":true}
-			},"custom":{"nested":[1,2,3]}}`,
-			changed: true,
-		},
-		{
-			name:    "quick-settings leaf retires while empty sidebar object is normalized",
-			in:      `{"frameBars":{"menus":{"quick-settings":{"future":true}},"surfaces":{"future":{"anchor":"top"}}},"sidebars":{}}`,
-			want:    `{"frameBars":{"menus":{},"surfaces":{"future":{"anchor":"top"}}},"sidebars":` + canonicalSidebarsJSON + `}`,
-			changed: true,
-		},
-		{
-			name:    "stash leaf retires while empty sidebar object is normalized",
-			in:      `{"frameBars":{"menus":{"theme":{"anchor":"right"}},"surfaces":{"stash":{"future":true}}},"sidebars":{}}`,
-			want:    `{"frameBars":{"menus":{"theme":{"anchor":"right"}},"surfaces":{}},"sidebars":` + canonicalSidebarsJSON + `}`,
-			changed: true,
-		},
-		{
-			name:    "current store is unchanged",
-			in:      `{"frameBars":{"menus":{"theme":{"anchor":"right"}},"surfaces":{"future":{"anchor":"top"}}},"sidebars":` + canonicalSidebarsJSON + `,"custom":{"nested":[1,2,3]}}`,
+			name:    "clean store is unchanged",
+			in:      `{"frameBars":{"menus":{"theme":{"anchor":"right"}},"surfaces":{"future":{"anchor":"top"}}},"custom":{"nested":[1,2,3]}}`,
 			changed: false,
 		},
-		{
-			name:    "invalid json errors",
-			in:      `not json`,
-			wantErr: true,
-		},
-		{
-			name:    "null top level errors",
-			in:      `null`,
-			wantErr: true,
-		},
-		{
-			name:    "malformed retired parent errors",
-			in:      `{"frameBars":{"menus":"not-an-object"}}`,
-			wantErr: true,
-		},
-		{
-			name:    "malformed surface parent errors",
-			in:      `{"frameBars":{"surfaces":"not-an-object"}}`,
-			wantErr: true,
-		},
-		{
-			name:    "malformed side config errors",
-			in:      `{"sidebars":{"left":"not-an-object"}}`,
-			wantErr: true,
-		},
+		{name: "invalid json errors", in: `not json`, wantErr: true},
+		{name: "null top level errors", in: `null`, wantErr: true},
+		{name: "malformed frame bars errors", in: `{"frameBars":"not-an-object"}`, wantErr: true},
+		{name: "malformed menus errors", in: `{"frameBars":{"menus":"not-an-object"}}`, wantErr: true},
+		{name: "malformed surfaces errors", in: `{"frameBars":{"surfaces":"not-an-object"}}`, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -125,100 +52,63 @@ func TestMigrateSidebarRework(t *testing.T) {
 			if changed != tt.changed {
 				t.Fatalf("changed = %v, want %v", changed, tt.changed)
 			}
-			if !tt.changed {
+			if !changed {
 				if out != nil {
 					t.Fatalf("no-op migration returned output: %s", out)
 				}
 				return
 			}
 
-			var got, want map[string]any
-			if err := json.Unmarshal(out, &got); err != nil {
-				t.Fatalf("migrated JSON does not parse: %v", err)
-			}
-			if err := json.Unmarshal([]byte(tt.want), &want); err != nil {
-				t.Fatalf("test expectation does not parse: %v", err)
-			}
-			var original map[string]any
-			if err := json.Unmarshal([]byte(tt.in), &original); err != nil {
+			var before, after map[string]any
+			if err := json.Unmarshal([]byte(tt.in), &before); err != nil {
 				t.Fatal(err)
 			}
-			originalSides, _ := original["sidebars"].(map[string]any)
-			for _, side := range []string{"left", "right"} {
-				prior, _ := originalSides[side].(map[string]any)
-				actual, _ := got["sidebars"].(map[string]any)[side].(map[string]any)
-				expected, _ := want["sidebars"].(map[string]any)[side].(map[string]any)
-				for _, key := range []string{"width", "height"} {
-					if _, supplied := prior[key]; supplied || (side == "left" && key == "width" && originalSides["width"] != nil) {
-						continue
-					}
-					delete(actual, key)
-					delete(expected, key)
+			if err := json.Unmarshal(out, &after); err != nil {
+				t.Fatalf("migrated JSON does not parse: %v", err)
+			}
+			if _, present := after["sidebars"]; present {
+				t.Fatal("retired global sidebars tree survived")
+			}
+			if before["weatherLocation"] != nil && after["weatherLocation"] != before["weatherLocation"] {
+				t.Fatalf("weather location changed: before=%v after=%v", before["weatherLocation"], after["weatherLocation"])
+			}
+			if before["custom"] != nil {
+				got, _ := json.Marshal(after["custom"])
+				want, _ := json.Marshal(before["custom"])
+				if string(got) != string(want) {
+					t.Fatalf("unrelated custom settings changed: before=%s after=%s", want, got)
 				}
 			}
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("migrated store = %#v, want %#v", got, want)
+			if frameBars, ok := after["frameBars"].(map[string]any); ok {
+				if menus, ok := frameBars["menus"].(map[string]any); ok {
+					if _, present := menus["quick-settings"]; present {
+						t.Fatal("retired quick-settings frame menu survived")
+					}
+					if _, present := menus["theme"]; !present {
+						t.Fatal("sibling frame menu was removed")
+					}
+				}
+				if surfaces, ok := frameBars["surfaces"].(map[string]any); ok {
+					for _, key := range []string{"stash", "system"} {
+						if _, present := surfaces[key]; present {
+							t.Fatalf("retired %s frame surface survived", key)
+						}
+					}
+					if _, present := surfaces["future"]; !present {
+						t.Fatal("sibling frame surface was removed")
+					}
+				}
+				if _, present := frameBars["rails"]; !present && before["frameBars"] != nil {
+					beforeFrameBars, _ := before["frameBars"].(map[string]any)
+					if _, hadRails := beforeFrameBars["rails"]; hadRails {
+						t.Fatal("unrelated frame rails were removed")
+					}
+				}
 			}
-
 			if second, changed, err := migrateSidebarRework(out); err != nil || changed || second != nil {
-				t.Errorf("second migration must be a no-op: changed=%v out=%s err=%v", changed, second, err)
+				t.Fatalf("second migration must be a no-op: changed=%v out=%s err=%v", changed, second, err)
 			}
 		})
-	}
-}
-
-func TestMigrateSidebarReworkMovesWidthWhenLeftSideIsMissing(t *testing.T) {
-	out, changed, err := migrateSidebarRework([]byte(`{"sidebars":{"width":444,"right":{"enabled":true,"cards":[],"width":601}}}`))
-	if err != nil || !changed {
-		t.Fatalf("migration failed: changed=%v err=%v", changed, err)
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal(out, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	sidebars := cfg["sidebars"].(map[string]any)
-	left := sidebars["left"].(map[string]any)
-	right := sidebars["right"].(map[string]any)
-	if left["width"] != float64(444) {
-		t.Errorf("left width = %v, want migrated 444", left["width"])
-	}
-	if right["width"] != float64(601) {
-		t.Errorf("right width = %v, want preserved 601", right["width"])
-	}
-	if cards := right["cards"].([]any); len(cards) != 0 {
-		t.Errorf("right cards = %v, want intentional empty list", cards)
-	}
-	if _, present := sidebars["width"]; present {
-		t.Error("legacy global width survived migration")
-	}
-}
-
-func TestMigrateSidebarReworkRetiresNativeGeometry(t *testing.T) {
-	raw := []byte(`{"sidebars":{"left":{"cards":["media"],"width":612,"position":"top-left","geometry":{"DP-1":{"x":2,"y":3,"width":380,"height":520}}},"right":{"cards":[],"position":"bottom-right","pinned":true}},"other":{"keep":7}}`)
-	out, changed, err := migrateSidebarRework(raw)
-	if err != nil || !changed {
-		t.Fatalf("migration failed: changed=%v err=%v", changed, err)
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal(out, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	sides := cfg["sidebars"].(map[string]any)
-	left, right := sides["left"].(map[string]any), sides["right"].(map[string]any)
-	if _, present := left["geometry"]; present {
-		t.Fatal("retired native-window geometry survived")
-	}
-	if left["position"] != "top" || right["position"] != "bottom" {
-		t.Fatalf("edge alignment was not migrated: left=%v right=%v", left["position"], right["position"])
-	}
-	if left["width"] != float64(612) || !reflect.DeepEqual(left["cards"], []any{"media"}) || right["pinned"] != true {
-		t.Fatal("migration lost authored dimensions, contents or keep-open preference")
-	}
-	if !reflect.DeepEqual(cfg["other"], map[string]any{"keep": float64(7)}) {
-		t.Fatal("migration changed unrelated settings")
-	}
-	if second, changed, err := migrateSidebarRework(out); err != nil || changed || second != nil {
-		t.Fatalf("migration is not idempotent: changed=%v out=%s err=%v", changed, second, err)
 	}
 }
 
@@ -235,7 +125,7 @@ func TestReconcileSidebarRework(t *testing.T) {
 		t.Fatalf("missing shell.json: status=%s detail=%q, want ok", r.status.label(), r.detail)
 	}
 
-	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"future":{"anchor":"top"}}},"theme":"paper"}`
+	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic"},"theme":"paper"}`
 	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -257,6 +147,9 @@ func TestReconcileSidebarRework(t *testing.T) {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		t.Fatalf("rewritten shell.json does not parse: %v", err)
 	}
+	if _, present := cfg["sidebars"]; present {
+		t.Fatal("fix left the retired global sidebar tree in place")
+	}
 	frameBars := cfg["frameBars"].(map[string]any)
 	menus := frameBars["menus"].(map[string]any)
 	if _, present := menus["quick-settings"]; present {
@@ -266,8 +159,10 @@ func TestReconcileSidebarRework(t *testing.T) {
 		t.Error("fix removed a sibling menu")
 	}
 	surfaces := frameBars["surfaces"].(map[string]any)
-	if _, present := surfaces["stash"]; present {
-		t.Error("fix left the retired stash surface in place")
+	for _, key := range []string{"stash", "system"} {
+		if _, present := surfaces[key]; present {
+			t.Errorf("fix left the retired %s surface in place", key)
+		}
 	}
 	if _, present := surfaces["future"]; !present {
 		t.Error("fix removed a sibling surface")
@@ -316,8 +211,8 @@ func TestMigrateShellConfigLaneConvergesPreSidebarStore(t *testing.T) {
 	if _, present := frameBars["surfaces"].(map[string]any)["stash"]; present {
 		t.Error("retired stash surface survived migration")
 	}
-	if _, present := cfg["sidebars"]; !present {
-		t.Fatal("current sidebars object was not seeded")
+	if _, present := cfg["sidebars"]; present {
+		t.Fatal("retired global sidebars object survived migration")
 	}
 	if cfg["theme"] != "paper" {
 		t.Errorf("unrelated setting changed: theme=%v", cfg["theme"])

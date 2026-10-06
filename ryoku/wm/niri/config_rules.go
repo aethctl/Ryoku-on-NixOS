@@ -77,6 +77,9 @@ func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps
 		b.WriteString("}\n\n")
 	}
 	writeOpacityRules(b, a)
+	for _, r := range builtinWindowRules {
+		writeRuleBlock(b, "", r.title, r.props)
+	}
 	for _, r := range rules {
 		if props := windowRuleProps(r); len(props) > 0 {
 			writeRuleBlock(b, r.Class, r.Title, props)
@@ -87,6 +90,19 @@ func writeWindowRules(b *strings.Builder, a Appearance, rules []WindowRule, apps
 			writeRuleBlock(b, ao.Class, ao.Title, props)
 		}
 	}
+}
+
+// builtinWindowRules are the desktop's own windows, matched by the title each
+// sets, floated at their designed size the way ryoku/hyprland/modules/
+// window_rules.lua floats them. They go out before the user's rules, so a
+// user rule on the same title wins (niri takes the last match).
+var builtinWindowRules = []struct {
+	title string
+	props []string
+}{
+	// The Rashin companion window (ryoku/apps/rashin-app) opens as a floating
+	// 1280x820 sheet, centred, like the Hyprland float-rashin-app rule.
+	{"^Rashin$", []string{"open-floating true", "default-column-width { fixed 1280; }", "default-window-height { fixed 820; }"}},
 }
 
 // writeOpacityRules emits the global opacity as a matchless window-rule and the

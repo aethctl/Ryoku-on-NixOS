@@ -53,10 +53,8 @@ export PATH="$bin:$PATH"
 
 conf="$tmp/gpu.lua"
 niri="$tmp/gpu.kdl"
-mango="$tmp/gpu.conf"
 run() { RYOKU_GPU_DRM_ROOT="$drm" RYOKU_GPU_DRI_DIR="$dri" RYOKU_GPU_CONF="$conf" \
-        RYOKU_GPU_NIRI_CONF="$niri" RYOKU_GPU_MANGO_CONF="$mango" \
-        RYOKU_ASSUME_LAPTOP="${LAPTOP:-1}" "$gpu" "$@"; }
+        RYOKU_GPU_NIRI_CONF="$niri" RYOKU_ASSUME_LAPTOP="${LAPTOP:-1}" "$gpu" "$@"; }
 verdict() { run check-pin; }
 
 # --- 1. laptop default: persist pins the dGPU, check-pin goes missing-pin -> ok
@@ -116,8 +114,7 @@ printf '2000000000\n' >"$drm1/card0/device/mem_info_vram_total"
 printf '2000000000\n' >"$drm1/card0/device/mem_info_vis_vram_total"
 printf 'connected\n' >"$drm1/card0-eDP-1/status"
 [[ "$(RYOKU_GPU_DRM_ROOT="$drm1" RYOKU_GPU_DRI_DIR="$dri1" RYOKU_GPU_CONF="$tmp/conf-solo" \
-     RYOKU_GPU_NIRI_CONF="$niri" RYOKU_GPU_MANGO_CONF="$tmp/mango-solo" \
-     RYOKU_ASSUME_LAPTOP=1 "$gpu" check-pin)" == "ok" ]] \
+     RYOKU_GPU_NIRI_CONF="$niri" RYOKU_ASSUME_LAPTOP=1 "$gpu" check-pin)" == "ok" ]] \
   || fail "single-GPU box must be ok"
 
 # --- 9. an eGPU on a laptop with no stored choice pins (missing-pin -> ok)
@@ -131,8 +128,7 @@ echo removable >"$drme/card9/device/removable"
 ln -s card9 "$dri/ryoku-gpu-0000-06-00-0"
 rm -f "$tmp/conf-egpu"   # fresh conf: no forced marker from case 7
 egpu() { RYOKU_GPU_DRM_ROOT="$drme" RYOKU_GPU_DRI_DIR="$dri" RYOKU_GPU_CONF="$tmp/conf-egpu" \
-         RYOKU_GPU_NIRI_CONF="$niri" RYOKU_GPU_MANGO_CONF="$tmp/mango-egpu" \
-         RYOKU_ASSUME_LAPTOP=1 "$gpu" "$@"; }
+         RYOKU_GPU_NIRI_CONF="$niri" RYOKU_ASSUME_LAPTOP=1 "$gpu" "$@"; }
 [[ "$(egpu check-pin)" == "missing-pin" ]] || fail "unpinned eGPU laptop must report missing-pin"
 egpu persist >/dev/null
 [[ "$(egpu check-pin)" == "ok" ]] || fail "eGPU pin on a laptop must be ok, got $(egpu check-pin)"
@@ -154,27 +150,5 @@ if run order --effective >/dev/null 2>&1; then
   fail "order --effective must exit 1 on an unpinned machine"
 fi
 
-# --- 11. the mango drop-in mirrors the pin file on every path: same device
-# order, same mode stamp, and every multi-GPU box keeps the software-cursor
-# route whether pinned or not.
-run mode performance >/dev/null
-grep -q "^env=WLR_DRM_DEVICES,$dri/ryoku-gpu-0000-02-00-0:$dri/ryoku-gpu-0000-01-00-0$" "$mango" \
-  || fail "mango pin must mirror the dGPU-first order, got: $(cat "$mango")"
-grep -q '# ryoku-gpu-mode: performance' "$mango" || fail "mango mirror lost the mode stamp"
-grep -q '^env=WLR_NO_HARDWARE_CURSORS,1$' "$mango" || fail "pinned multi-GPU box lost the cursor route"
-run mode hybrid >/dev/null
-grep -Eq '^env=WLR_DRM_DEVICES' "$mango" && fail "mango kept a pin the policy cleared"
-grep -q '# ryoku-gpu-mode: hybrid' "$mango" || fail "mango lost the hybrid stamp"
-grep -q '^env=WLR_NO_HARDWARE_CURSORS,1$' "$mango" || fail "unpinned multi-GPU box lost the cursor route"
-run mode passthrough >/dev/null
-grep -q "^env=WLR_DRM_DEVICES,$dri/ryoku-gpu-0000-01-00-0$" "$mango" \
-  || fail "mango must mirror the passthrough solo pin, got: $(cat "$mango")"
-grep -q 'ryoku-gpu-0000-02-00-0' "$mango" && fail "mango passthrough kept the dGPU in the list"
-# a single-GPU box gets the placeholder with no cursor line: there is no
-# cross-GPU scanout to route around.
-RYOKU_GPU_DRM_ROOT="$drm1" RYOKU_GPU_DRI_DIR="$dri1" RYOKU_GPU_CONF="$tmp/conf-solo" \
-  RYOKU_GPU_NIRI_CONF="$tmp/gpu-solo.kdl" RYOKU_GPU_MANGO_CONF="$tmp/mango-solo" \
-  RYOKU_ASSUME_LAPTOP=1 "$gpu" persist >/dev/null
-grep -Eq '^env=' "$tmp/mango-solo" && fail "single-GPU mango file must carry no env line"
 
 echo "gpu-pin-policy: all cases passed"

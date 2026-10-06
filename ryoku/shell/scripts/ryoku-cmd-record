@@ -201,10 +201,14 @@ prepare_audio() {
 
 json_escape() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
 
+# The status file exists exactly while a capture runs (cleanup_session removes
+# it on every exit), so the shell watches it to learn of a capture the moment it
+# starts, from any entry point, and reads the launch time from it to keep the
+# clock honest across a reload or a start it did not make itself.
 write_status() {
   local pid="$1"
-  printf '{"recorderPid":%s,"requestedAudioMode":"%s","activeAudioMode":"%s","audioFallback":%s}\n' \
-    "$pid" "$(json_escape "$AUDIO_MODE")" "$(json_escape "$ACTIVE_AUDIO_MODE")" "$AUDIO_FALLBACK" \
+  printf '{"recorderPid":%s,"startedAt":%s,"requestedAudioMode":"%s","activeAudioMode":"%s","audioFallback":%s}\n' \
+    "$pid" "$EPOCHSECONDS" "$(json_escape "$AUDIO_MODE")" "$(json_escape "$ACTIVE_AUDIO_MODE")" "$AUDIO_FALLBACK" \
     >"$STATUS_FILE" 2>/dev/null || true
 }
 

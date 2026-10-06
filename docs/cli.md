@@ -61,8 +61,29 @@ anything else changes). What it actually runs depends on the world:
   `ryoku update --system` runs it too (the full `pacman -Syu`, `yay -Sua`, and
   `flatpak update`) for a box that wants one command.
 
-Throughout, it publishes progress to `$XDG_RUNTIME_DIR/ryoku-update.json` so the
-shell's update island can show the run.
+On a terminal the run is a curated console: a header, one line per step with
+its time and anything it found, a live line for the step in flight, a progress
+bar, and a closing card. Everything the steps and their tools print (pacman,
+git, the builds, the doctor) goes to `~/.local/state/ryoku/update-log.txt`
+instead; the console surfaces only `error:`, `warning:` and `note:` lines, a
+`.pacnew`, and the doctor's findings. On failure the card shows the error, the
+last lines the work printed, and the rollback snapshot.
+
+- `ryoku update -v` (`--verbose`) streams the raw output instead, pacman's own
+  progress bars included.
+- `ryoku update --gui` is the Hub's path: it starts the run in the background
+  under a pseudo terminal and returns. The password sudo needs and any question
+  come back through the Hub's Updates page (`--auth` hands it the password on
+  stdin), and `--cancel` stops a run: what it quiesced is given back, and a
+  package transaction already committing finishes on its own. Ctrl-C on a
+  terminal run stops it the same way.
+
+Throughout, it publishes progress to `$XDG_RUNTIME_DIR/ryoku-update.json`:
+the steps with their timings, the line the running work last printed, and a
+watchdog read of its own process tree every two seconds (output or CPU time
+is progress; three minutes of neither is a stall). Only a run that has begun
+writes the file, and it names its pid, so the Hub never sits on a run that is
+gone.
 
 ### `ryoku status [--json]`
 
@@ -347,5 +368,5 @@ State the CLI keeps under `$XDG_STATE_HOME/ryoku` (default `~/.local/state/ryoku
 - `doctor-report.txt` the latest diagnostic report `doctor` wrote (also the
   default target of `ryoku doctor --report`).
 
-Runtime: `$XDG_RUNTIME_DIR/ryoku-update.json` is the update island's progress
-file, written by `update`.
+Runtime: `$XDG_RUNTIME_DIR/ryoku-update.json` is the update's progress file,
+written by `update` and drawn by the Hub's Updates page.

@@ -128,6 +128,11 @@ conf_val() { [ -r "$greeter_conf" ] && sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:
 # user's pick; this file is how the pick reaches the greeter, which runs as the
 # unprivileged sddm user and cannot read a per-user home.
 greeter_primary_file="${RYOKU_GREETER_PRIMARY_FILE:-/var/lib/ryoku/greeter-primary}"
+# The session's numlock choice, published by the compositor provider on every
+# apply. Same reason as greeter-primary: the greeter runs as sddm and cannot
+# read a per-user desktop.json, so without this hand-off the keypad is forced
+# on for everyone and the LED state carries into the session's lock screen.
+greeter_numlock_file="${RYOKU_GREETER_NUMLOCK_FILE:-/var/lib/ryoku/greeter-numlock}"
 greeter_primary="${RYOKU_GREETER_PRIMARY:-$(conf_val PRIMARY)}"
 greeter_appid="${RYOKU_GREETER_APPID:-$(conf_val APPID)}"
 greeter_appid="${greeter_appid:-sddm-greeter-qt6}"
@@ -160,13 +165,24 @@ choose_primary() {
 # hand it carries one; without it the login pointer never renders (issue #191).
 shell_ini() { printf '[shell]\ncursor-theme=%s\ncursor-size=%s\n\n' "${XCURSOR_THEME:-Bibata-Modern-Ice}" "${XCURSOR_SIZE:-24}"; }
 
-# The keypad must type digits at the login field. SDDM's [General] Numlock knob
-# is inert under the Wayland greeter (its keyboard backend's sendChanges() is
-# empty), and the skin's keyboard.numLock assignment reaches the same dead end,
-# so weston's own lock key is the only channel that lands. Without it the
-# keypad sends navigation keysyms (KP_End, not KP_1) and a PIN-style password
-# never reaches the field.
-keyboard_ini() { printf '[keyboard]\nnumlock-on=true\n\n'; }
+# The keypad should type digits at the login field for users who want it:
+# SDDM's [General] Numlock knob is inert under the Wayland greeter (its keyboard
+# backend's sendChanges() is empty), and the skin's keyboard.numLock assignment
+# reaches the same dead end, so weston's own lock key is the only channel that
+# lands. But forcing it on is wrong for a compact laptop whose numlock overlay
+# turns letter keys into digits, and the LED state carries into the session and
+# its lock screen, so the session's published choice wins when there is one;
+# with no hand-off yet (fresh install, PIN login) the keypad stays a keypad.
+keyboard_ini() {
+  local on=true
+  if [ -r "$greeter_numlock_file" ]; then
+    case "$(tr -d '[:space:]' <"$greeter_numlock_file")" in
+      off) on=false ;;
+      *) on=true ;;
+    esac
+  fi
+  printf '[keyboard]\nnumlock-on=%s\n\n' "$on"
+}
 
 # Match the session's touchpad feel: Hyprland enables tap-to-click by default,
 # weston does not (enable-tap defaults off), so a clickpad that taps to click in

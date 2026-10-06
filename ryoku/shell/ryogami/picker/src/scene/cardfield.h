@@ -158,7 +158,7 @@ private:
     float flipPhase(float x, float y) const;
     float filterRollFor(qint64 cell, const QString &key, float x, float y);
     void filterStorm();
-    void pushFilterOld(std::vector<CardInstance> &instances);
+    void pushFilterOld(std::vector<CardInstance> &instances, CardRenderNode *node);
     bool advanceFilterSwap(double dt);
 
     void schedulePreview();

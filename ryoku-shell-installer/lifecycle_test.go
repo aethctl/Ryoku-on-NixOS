@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -50,5 +51,25 @@ func TestDryRunWritesNoState(t *testing.T) {
 	e.markStepDone("legacy")
 	if loadState(home) != nil {
 		t.Fatal("dry runs must not write state")
+	}
+}
+
+// A resume skips the payload step, so every later step must still find the
+// checkout by absolute path: the session step joined an empty payload into
+// "bash ryoku/lockscreen/sddm/setup", relative to wherever the installer was
+// invoked from, and failed with 127 on every resumed run.
+func TestNewEngineAnchorsPayloadOnResume(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", "")
+	f := &facts{homeDir: home, prevRun: &runState{Completed: []string{"payload"}}}
+	e := newEngine(f, defaultPlan(f), true, "main", "")
+	want := filepath.Join(home, ".cache", "ryoku-shell-install", "repo")
+	if e.payload != want {
+		t.Fatalf("resume payload = %q, want %q", e.payload, want)
+	}
+	// The override wins over the cache path.
+	e2 := newEngine(f, defaultPlan(f), true, "main", "/srv/checkout")
+	if e2.payload != "/srv/checkout" {
+		t.Fatalf("override payload = %q, want /srv/checkout", e2.payload)
 	}
 }

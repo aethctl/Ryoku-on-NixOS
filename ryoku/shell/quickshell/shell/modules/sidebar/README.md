@@ -1,30 +1,30 @@
 # Sidebar module
 
-- `Sidebar.qml` owns both screen-edge overlays, screen bounds, input regions,
-  and outside-click dismissal.
-- `SidebarFrame.qml` draws the shared rounded paper/ink boundary.
-- `SidebarChrome.qml` draws the header, section navigation, content viewport,
-  and the Customize in Hub entry point.
-- Sidebar customization lives in
-  `ryoku/hub/quickshell/pages/SidebarsPage.qml`; `SidebarWriter.qml` waits for
-  the daemon reply and settings-frame confirmation before accepting a save.
-- `SidebarButton.qml`, `SidebarToggle.qml`, and `SidebarSegments.qml` provide
-  the sidebar's labelled interaction controls.
-- `SidebarCatalog.js` registers the nine built-in sections.
-- `SidebarCardHost.qml` loads built-ins and plugins and binds their runtime
-  contract. Plugin `compact` and `viewportHeight` properties are optional.
-- `SidebarCardShell.qml` is the built-in heading and content-layout scaffold;
-  it does not paint an outer plate.
-- `ryoku/shell/framebars/Sidebars.js` normalizes the persisted settings through
-  the shared `Ryoku.FrameBars.Sidebars` module.
-- `SidebarPlugins.qml` discovers installed `sidebarCard` plugins.
-- `cards/` contains the built-in section implementations and supporting
-  overlays.
+Controls is the compact top-left panel shared by every bar style and compositor.
 
-To add a built-in section, create one component in `cards/`, place its visible
-content in `SidebarCardShell`, declare the host properties and
-`requestClose()` signal, and add one registry row to `SidebarCatalog.js`. Add
-its id to `ryoku/shell/framebars/Sidebars.js` defaults only when it should ship selected.
+- `Sidebar.qml` owns placement, the content window, and click-away input.
+- `SidebarFrame.qml` and `SidebarChrome.qml` provide the shared surface and header.
+- `ControlsBoard.qml` composes the four sections.
+- `ControlsHero.qml` and `Vital*.qml` present native system activity.
+- `ControlsConnections.qml` and `ConnectionTile.qml` present Wi-Fi, Bluetooth,
+  Ethernet, and VPN state.
+- `ControlsLevels.qml`, `LevelSlider.qml`, `MixerDrawer.qml`, `MixerRow.qml`, and
+  `BrightnessDrawer.qml` provide fine audio and per-display brightness controls.
+- `ControlsBar.qml`, `HoldButton.qml`, and `ControlsSettingsPopup.qml` own the
+  hold-to-activate session actions, quick toggles, and gear popup.
+- `cards/SystemWifiPage.qml` and `cards/SystemBluetoothPage.qml` are the remaining
+  built-in detail pages.
+- `ExtensionsBoard.qml` uses `SidebarCardHost.qml` for installed plugins;
+  `SidebarPlugins.qml` discovers and orders them while the panel is open.
+- `shell/services/SidebarState.qml` owns per-display Controls state and routing.
 
-Contributor plugins use the `sidebarCard` host documented in
-[`docs/plugins.md`](../../../../../../docs/plugins.md#4-sidebar-card---lives-in-a-global-sidebar).
+Capture is a separate surface under `shell/modules/capture/`; Ask and its desktop
+bubble are under `shell/modules/ask/`. Do not route either back through Controls.
+
+The root shell loads surfaces asynchronously and unloads them after closing.
+Gate live work on the owning surface's active state. The built-in layout is
+fixed; do not add style variants or panel layout settings to Hub.
+
+See [`docs/sidebars.md`](../../../../../../docs/sidebars.md) for behavior and the
+[`sidebarCard` contract](../../../../../../docs/plugins.md#4-sidebar-card---lives-in-a-global-sidebar)
+for contributor plugins. All sidebar cards appear under Controls > Extensions.

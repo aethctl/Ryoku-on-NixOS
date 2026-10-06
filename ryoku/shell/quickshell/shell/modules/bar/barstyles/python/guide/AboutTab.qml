@@ -154,7 +154,7 @@ Item {
                             }
 
                             Text {
-                                text: "Based on Serpantinum by ilyamiro"
+                                text: I18n.t("guide.about.based_on")
                                 font.family: ThemeBackend.fontFamily
                                 font.pixelSize: rootObj.s(11)
                                 color: ThemeBackend.overlay0
@@ -184,7 +184,7 @@ Item {
                         Text {
                             Layout.alignment: Qt.AlignLeft
                             Layout.bottomMargin: rootObj.s(4)
-                            text: "Ryoku update available v" + Updater.remoteVersion
+                            text: I18n.t("guide.about.update_available") + Updater.remoteVersion
                             font.family: ThemeBackend.fontFamily
                             font.weight: Font.Bold
                             font.pixelSize: rootObj.s(18)

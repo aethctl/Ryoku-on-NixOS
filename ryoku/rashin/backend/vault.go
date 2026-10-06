@@ -47,6 +47,16 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"(Arch Linux, the Ryoku desktop, managed by Ryoku). Read it before exploring\n" +
 	"the filesystem or guessing where things live.\n" +
 	"\n" +
+	"## Who you are\n" +
+	"\n" +
+	"A session opened here is Rashin's Ryoku lane: you are the Needle, the resident\n" +
+	"agent of this machine, and every question in this lane is about the machine,\n" +
+	"its desktop, or how to work on it. Be direct and technical. A \"how do I\"\n" +
+	"question asks for guidance, not for you to change anything; when you do make a\n" +
+	"change, say what changed and how to see or undo it. The map in `desktop.md`\n" +
+	"names the window manager that runs here (Hyprland or niri): read it, never\n" +
+	"assume one.\n" +
+	"\n" +
 	"## The one rule\n" +
 	"\n" +
 	"Read `desktop.md` before searching the filesystem. It maps every subsystem to\n" +
@@ -73,6 +83,24 @@ const AgentsTemplate = "# Ryoku system vault\n" +
 	"- `logs.md` generated: where the logs live and the one command that gathers them.\n" +
 	"- `memory/` durable notes agents author and keep across sessions.\n" +
 	"- `journal/` dated notes, one file per day named `YYYY-MM-DD.md`.\n" +
+	"- `wiki/` shipped, read only: the plain-language guides for someone new to\n" +
+	"  Linux, Ryoku, Hyprland in Lua, niri in KDL, Quickshell QML and the Go tools\n" +
+	"  (`wiki/README.md` is the index). Cite the matching page when the user is new.\n" +
+	"\n" +
+	"## Skills, guides and the code index\n" +
+	"\n" +
+	"- The `ryoku` skill (linked into your skills dir) is how you change this\n" +
+	"  desktop. Read the guide that matches the ask: `gui.md` (the GUI map),\n" +
+	"  `bar.md` (the bar and dock), `wm.md` (the window-manager seam: `ryoku wm`,\n" +
+	"  where each compositor's config is authored and where a user's change goes),\n" +
+	"  `plugins.md` and `build.md` (building a widget, a plugin, or a change to the\n" +
+	"  Go tools the Ryoku way), `feature.md` (the ladder before writing code), and\n" +
+	"  `troubleshoot.md` (break/fix).\n" +
+	"- The Ryoku source is indexed by prowl: `prowl-agent search|find|def|outline|\n" +
+	"  references` (or the `search_code` tool) answers where code lives, cited to\n" +
+	"  file:line, before any grep. `ryoku-repo.md` is its map.\n" +
+	"- `ryoku owner <path>` decides where an edit belongs; `ryoku-rashin logs <app>`\n" +
+	"  gathers the logs; `ryoku doctor` reports and repairs drift.\n" +
 	"\n" +
 	"## Rules\n" +
 	"\n" +
@@ -173,7 +201,7 @@ func VaultTree() ([]VaultFile, error) {
 			Path:      rel,
 			Size:      fi.Size(),
 			Mtime:     fi.ModTime(),
-			Generated: generatedFiles[rel],
+			Generated: generatedFiles[rel] || isWikiPage(rel),
 		})
 		return nil
 	})
@@ -281,7 +309,7 @@ func EnsureVault() error {
 			return err
 		}
 	}
-	return nil
+	return syncWiki(root)
 }
 
 // atomicWrite writes via a temp file in the same directory then renames, so a

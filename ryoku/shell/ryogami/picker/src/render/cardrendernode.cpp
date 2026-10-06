@@ -95,8 +95,14 @@ bool CardRenderNode::ensurePreview(QRhi *rhi, QRhiResourceUpdateBatch *batch)
     if (!m_preview || m_preview->pixelSize() != wanted) {
         if (m_preview)
             m_preview.release()->deleteLater();
+        m_previewUploaded = false;
         m_preview.reset(rhi->newTexture(QRhiTexture::RGBA8, wanted));
-        m_preview->create();
+        if (!m_preview->create()) {
+            // A failed texture must not enter the bindings: leave nothing
+            // bound and retry the size next frame.
+            m_preview.reset();
+            return changed;
+        }
         changed = true;
         if (m_previewImage.isNull()) {
             QImage blank(wanted, QImage::Format_RGBA8888);
@@ -104,7 +110,7 @@ bool CardRenderNode::ensurePreview(QRhi *rhi, QRhiResourceUpdateBatch *batch)
             batch->uploadTexture(m_preview.get(), blank);
         }
     }
-    if (!m_previewImage.isNull()) {
+    if (!m_previewImage.isNull() && m_preview) {
         batch->uploadTexture(m_preview.get(), m_previewImage);
         m_previewImage = QImage();
         m_previewUploaded = true;
@@ -147,7 +153,13 @@ void CardRenderNode::buildPipeline(QRhi *rhi)
     m_pipeline->setRenderPassDescriptor(m_pipelinePass.get());
     m_pipeline->setSampleCount(renderTarget()->sampleCount());
     m_pipelineSamples = renderTarget()->sampleCount();
-    m_pipeline->create();
+    if (!m_pipeline->create()) {
+        // Drop the failed pipeline so the next frame retries; drawing through
+        // it is undefined per backend and can flash garbage over the window.
+        m_pipeline.reset();
+        m_pipelinePass.reset();
+        m_pipelineSamples = 0;
+    }
 }
 
 void CardRenderNode::buildScenePipeline(QRhi *rhi)
@@ -156,7 +168,44 @@ void CardRenderNode::buildScenePipeline(QRhi *rhi)
     configureCardPipeline(m_scenePipeline.get());
     m_scenePipeline->setRenderPassDescriptor(m_transition.renderPassDescriptor());
     m_scenePipeline->setSampleCount(1);
-    m_scenePipeline->create();
+    if (!m_scenePipeline->create())
+        m_scenePipeline.reset();
+}
+
+bool CardRenderNode::ensureBindings(QRhi *rhi, bool texturesChanged)
+{
+    if (!m_bindings || texturesChanged) {
+        m_bindings.reset(rhi->newShaderResourceBindings());
+        const auto stages = QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage;
+        m_bindings->setBindings({
+            QRhiShaderResourceBinding::uniformBuffer(0, stages, m_uniformBuffer.get()),
+            QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage,
+                                                      m_near.texture(), m_near.mipLevels() > 1 ? m_mipSampler.get() : m_flatSampler.get()),
+            QRhiShaderResourceBinding::sampledTexture(2, QRhiShaderResourceBinding::FragmentStage,
+                                                      m_far.texture(), m_far.mipLevels() > 1 ? m_mipSampler.get() : m_flatSampler.get()),
+            QRhiShaderResourceBinding::sampledTexture(3, QRhiShaderResourceBinding::FragmentStage,
+                                                      m_preview.get(), m_flatSampler.get()),
+        });
+        if (!m_bindings->create()) {
+            m_bindings.reset();
+            return false;
+        }
+        m_pipeline.reset();
+        m_scenePipeline.reset();
+    }
+    return true;
+}
+
+void CardRenderNode::sanitize(std::vector<CardInstance> &instances, int nearLayers, int farLayers)
+{
+    for (CardInstance &inst : instances) {
+        if (inst.misc[0] == CardTex::Near && quint32(nearLayers) <= inst.misc[1])
+            inst.misc[0] = CardTex::None;
+        else if (inst.misc[0] == CardTex::Far && quint32(farLayers) <= inst.misc[1])
+            inst.misc[0] = CardTex::None;
+        else if (inst.misc[0] == CardTex::Preview && !m_preview)
+            inst.misc[0] = CardTex::None;
+    }
 }
 
 void CardRenderNode::updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, QRhi *rhi,
@@ -172,7 +221,10 @@ void CardRenderNode::updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, Q
         if (buffer)
             buffer.release()->deleteLater();
         buffer.reset(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, capacity));
-        buffer->create();
+        if (!buffer->create()) {
+            buffer.reset();
+            return;
+        }
     }
     batch->updateDynamicBuffer(buffer.get(), 0, bytes, data.data());
 }
@@ -189,19 +241,32 @@ void CardRenderNode::prepare()
     texturesChanged |= m_far.commit(rhi, batch);
     texturesChanged |= ensurePreview(rhi, batch);
 
+    // Instances are resolved on the GUI thread against the tiers as they were
+    // before this frame's commit. When a grown texture array fails to
+    // allocate and a tier falls back to the old size, every reference to a
+    // removed layer must drop: sampling an out-of-range array layer is
+    // undefined per backend and flashes arbitrary colours through the field.
+    sanitize(m_instances, m_near.liveLayers(), m_far.liveLayers());
+    sanitize(m_transitionFrom, m_near.liveLayers(), m_far.liveLayers());
+
     // A mip filter on a single-level texture reads black on GL, so those tiers get their own sampler.
     if (!m_mipSampler) {
         m_mipSampler.reset(rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::Linear,
                                            QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
-        m_mipSampler->create();
         m_flatSampler.reset(rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
                                             QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
-        m_flatSampler->create();
+        if (!m_mipSampler->create() || !m_flatSampler->create()) {
+            m_mipSampler.reset();
+            m_flatSampler.reset();
+        }
     }
     if (!m_uniformBuffer) {
         m_uniformBuffer.reset(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(Uniforms)));
-        m_uniformBuffer->create();
+        if (!m_uniformBuffer->create())
+            m_uniformBuffer.reset();
     }
+    if (!m_mipSampler || !m_flatSampler || !m_uniformBuffer)
+        return; // nothing bound yet; the next frame retries
 
     const bool active = transitionActive();
 
@@ -222,22 +287,8 @@ void CardRenderNode::prepare()
     u.opacity = active ? 1.0f : float(inheritedOpacity());
     batch->updateDynamicBuffer(m_uniformBuffer.get(), 0, sizeof(Uniforms), &u);
 
-    if (!m_bindings || texturesChanged) {
-        m_bindings.reset(rhi->newShaderResourceBindings());
-        const auto stages = QRhiShaderResourceBinding::VertexStage | QRhiShaderResourceBinding::FragmentStage;
-        m_bindings->setBindings({
-            QRhiShaderResourceBinding::uniformBuffer(0, stages, m_uniformBuffer.get()),
-            QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage,
-                                                      m_near.texture(), m_near.mipLevels() > 1 ? m_mipSampler.get() : m_flatSampler.get()),
-            QRhiShaderResourceBinding::sampledTexture(2, QRhiShaderResourceBinding::FragmentStage,
-                                                      m_far.texture(), m_far.mipLevels() > 1 ? m_mipSampler.get() : m_flatSampler.get()),
-            QRhiShaderResourceBinding::sampledTexture(3, QRhiShaderResourceBinding::FragmentStage,
-                                                      m_preview.get(), m_flatSampler.get()),
-        });
-        m_bindings->create();
-        m_pipeline.reset();
-        m_scenePipeline.reset();
-    }
+    if (!ensureBindings(rhi, texturesChanged))
+        return;
 
     QRhiRenderPassDescriptor *pass = renderTarget()->renderPassDescriptor();
     if (!m_pipeline || !m_pipelinePass || !m_pipelinePass->isCompatible(pass)
@@ -256,9 +307,9 @@ void CardRenderNode::prepare()
     commandBuffer()->resourceUpdate(batch);
 
     // Runs after the node's own batch; it borrows the live preview texture as the incoming layer.
-    if (m_sandyPass) {
+    if (m_sandyPassActive) {
         m_sandy.setPreviewTextures(m_previewUploaded ? m_preview.get() : nullptr, nullptr);
-        m_sandy.prepare(rhi, commandBuffer(), renderTarget(), *m_sandyPass, m_near, m_far, mvp, float(inheritedOpacity()));
+        m_sandy.prepare(rhi, commandBuffer(), renderTarget(), m_sandyPassData, m_near, m_far, mvp, float(inheritedOpacity()));
     }
 
     // The two scenes are drawn offscreen here, before the main render pass begins.
@@ -310,7 +361,7 @@ void CardRenderNode::render(const RenderState *)
         cb->draw(6, quint32(m_instances.size()));
     }
 
-    if (m_sandyPass && m_sandy.active())
+    if (m_sandyPassActive && m_sandy.active())
         m_sandy.render(cb, size);
 }
 

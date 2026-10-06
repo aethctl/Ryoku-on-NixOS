@@ -1296,12 +1296,8 @@ func TestMigrateShellConfig(t *testing.T) {
 	if _, present := surfaces["system"]; present {
 		t.Error("retired system sidebar was recreated")
 	}
-	var wantSidebars map[string]any
-	if err := json.Unmarshal([]byte(canonicalSidebarsJSON), &wantSidebars); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(cfg["sidebars"], wantSidebars) {
-		t.Errorf("sidebars = %#v, want %#v", cfg["sidebars"], wantSidebars)
+	if _, present := cfg["sidebars"]; present {
+		t.Error("shell config migration seeded the retired global sidebars tree")
 	}
 	for _, key := range []string{"sidebarLeftPanes", "sidebarRightPanes", "sidebarWidth"} {
 		if _, ok := cfg[key]; ok {
@@ -2030,9 +2026,9 @@ func TestReconcileStaleUpdateRun(t *testing.T) {
 
 	// hermetic: a dev box's real `ryoku update` (or a sandbox where process
 	// scans stall) must not steer the result.
-	prev := updateProcessLive
-	updateProcessLive = func() bool { return false }
-	t.Cleanup(func() { updateProcessLive = prev })
+	prev := runOwnerLive
+	runOwnerLive = func(int) bool { return false }
+	t.Cleanup(func() { runOwnerLive = prev })
 
 	// no run-state at all: nothing to do.
 	if res := reconcileStaleUpdateRun(true); res.status != recOK {

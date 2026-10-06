@@ -311,9 +311,9 @@ func (p *videoPlayer) Pause(paused bool) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	for _, cmd := range p.procs {
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, sig)
+	for _, lp := range p.procs {
+		if lp.cmd.Process != nil {
+			_ = syscall.Kill(-lp.cmd.Process.Pid, sig)
 		}
 	}
 }

@@ -19,7 +19,7 @@ Singleton {
 
     // Actions that only mean something in another family.
     readonly property var otherFamilyActions: ["toggle-bar-autohide", "toggle-dock", "toggle-dashboard", "toggle-media-controls",
-        "wallpaper-coverflow", "open-sidebar-left", "open-sidebar-right", "switch-family-iris"]
+        "wallpaper-coverflow", "open-sidebar-left", "switch-family-iris"]
     readonly property var categoryAreas: ({ system: "System", tools: "Tools", media: "Media", appearance: "Appearance", settings: "General", setup: "System" })
     readonly property var aliases: ({
         bt: ["bluetooth"], wifi: ["wi-fi", "wireless", "network"], wlan: ["wi-fi", "network"], dnd: ["disturb", "silent"],

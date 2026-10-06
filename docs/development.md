@@ -76,6 +76,36 @@ Edit the repo, deploy, test on the running system.
   every `system/hardware/*/ryoku-*`), and invoked by name from Lua autostart or
   a keybind.
 
+## Branches and pushing
+
+Two branches, two jobs. Work goes to one; a release moves the other.
+
+- **`unstable-dev` is where work lands.** Every push publishes the testing
+  channel (`[ryoku]` packages built and signed by **Publish [ryoku] repo**), so
+  a tester on `ryoku track unstable` gets it on the next `ryoku update`. Push
+  with `git push origin unstable-dev`; after the push the version bot adds a
+  `[skip ci]` bump commit, so `git fetch origin && git rebase origin/unstable-dev`
+  before the next push. Batch small commits: each push is a publish cycle.
+- **`main` is the stable channel users run, and nothing is pushed to it.** It
+  advances only when a release is cut, by fast-forwarding to a commit
+  `unstable-dev` already carries (`docs/updates.md`, "Publishing: releases and
+  channels"). There are no hotfix commits on `main`: a fix goes to
+  `unstable-dev` and ships with the next release. The `pre-push` hook enforces
+  this: a push that moves `main` is refused unless it is the release
+  fast-forward, named as such:
+
+      git fetch origin unstable-dev
+      RYOKU_RELEASE_PUSH=1 git push origin unstable-dev:main
+
+  Even with the variable set, the hook refuses a `main` that would not be a
+  fast-forward, a target `origin/unstable-dev` does not carry, and any deletion.
+  The **Stable Release** workflow then tags `main`; it is the only thing that
+  commits there (a `VERSION` bump), and that commit is merged back into
+  `unstable-dev` before the next release fast-forward (`CONTRIBUTING.md`,
+  "Release notes").
+- **Any other branch is yours.** Push it freely, open a pull request against
+  `unstable-dev`, and merge it there (never squash: it drops the release notes).
+
 ## How a change reaches users
 
 Where a change lives decides whether, and how, it reaches an installed machine.
@@ -124,14 +154,22 @@ every supported install has run it, so the set stays small instead of piling up.
 
 ## Commit gates
 
-Every commit passes the hooks in `.githooks/`; never use `--no-verify`.
+Every commit passes the hooks in `.githooks/`; never use `--no-verify`. A fresh
+clone wires them once with `git config core.hooksPath .githooks`; the path is
+relative to the worktree, so each worktree runs the hooks of the tree it has
+checked out (a worktree sitting on `main` runs `main`'s copy until the next
+release fast-forwards it).
 
 - `commit-msg`: subject is `[area] scope: summary` with area in
   `global | installation | system | ryoku | docs | test | tooling | release`
   (shell uses `[global]`). No em-dash, no authorship/attribution trailer.
 - `pre-commit`: no em-dash in text files, valid bash syntax on staged scripts,
   no filler comment lines.
-- `pre-push`: shellcheck when installed.
+- `pre-push`: `main` moves only as the release fast-forward
+  (`RYOKU_RELEASE_PUSH=1`, onto a commit `origin/unstable-dev` carries), is
+  never rewritten or deleted; shellcheck with CI's flags when installed; subjects
+  of 72 characters or fewer; PKGBUILD dependencies resolve and the vendored
+  window-manager seam copies match when a push touches them.
 
 One logical change per commit. Update the matching `CHANGELOG.md` in the area you
 touched, and keep the change documented where future readers will look.

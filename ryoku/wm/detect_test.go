@@ -27,21 +27,21 @@ func TestLeafScriptsDir(t *testing.T) {
 // halves must report none.
 func TestSessionGap(t *testing.T) {
 	bin := t.TempDir()
-	mango := filepath.Join(bin, "mango")
-	if err := os.WriteFile(mango, []byte("#!/bin/sh\n"), 0o755); err != nil {
+	niri := filepath.Join(bin, "niri")
+	if err := os.WriteFile(niri, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
 
 	entries := t.TempDir()
-	if err := os.WriteFile(filepath.Join(entries, "mango.desktop"), []byte("[Desktop Entry]\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(entries, "niri.desktop"), []byte("[Desktop Entry]\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	orig := sessionEntryDirs
 	t.Cleanup(func() { sessionEntryDirs = orig })
 	sessionEntryDirs = func() []string { return []string{entries} }
 
-	if got := SessionGap(ProviderMango); got != "" {
+	if got := SessionGap(ProviderNiri); got != "" {
 		t.Errorf("installed compositor + entry = %q, want ready", got)
 	}
 	if got := SessionGap("nobody"); got != "compositor" {
@@ -49,15 +49,15 @@ func TestSessionGap(t *testing.T) {
 	}
 
 	// The entry disappears: the greeter has nothing to offer.
-	os.Remove(filepath.Join(entries, "mango.desktop"))
-	if got := SessionGap(ProviderMango); got != "entry" {
+	os.Remove(filepath.Join(entries, "niri.desktop"))
+	if got := SessionGap(ProviderNiri); got != "entry" {
 		t.Errorf("compositor without a session entry = %q, want entry", got)
 	}
 
 	// The compositor disappears: the entry would launch nothing.
-	os.WriteFile(filepath.Join(entries, "mango.desktop"), []byte("[Desktop Entry]\n"), 0o644)
+	os.WriteFile(filepath.Join(entries, "niri.desktop"), []byte("[Desktop Entry]\n"), 0o644)
 	t.Setenv("PATH", t.TempDir())
-	if got := SessionGap(ProviderMango); got != "compositor" {
+	if got := SessionGap(ProviderNiri); got != "compositor" {
 		t.Errorf("entry without a compositor = %q, want compositor", got)
 	}
 }

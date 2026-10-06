@@ -100,6 +100,12 @@ ShellRoot {
     property string frontAction: "shot"
     property bool recordAudio: envAudio
     property bool colorPicking: false
+    property bool keypressesActive: false
+    property bool webcamActive: false
+    property bool keypressesTouched: false
+    property bool webcamTouched: false
+    property bool overlaysHidden: false
+    property string delayedAction: ""
     // True between a real front press and its release, so a stray release cannot
     // commit a region on its own.
     property bool frontPressed: false
@@ -114,9 +120,8 @@ ShellRoot {
         { id: "record", icon: "video",  label: I18n.tr("Record") }
     ]
     // RYOSHOT_OPEN=<path>: skip selection and open that image straight in the
-    // beautify editor (the capture card's "Beautify after" hands the saved shot
-    // here). fromFile makes Escape / close quit, since there is no live capture
-    // to fall back to an editing phase over.
+    // beautify editor. fromFile makes Escape / close quit, since there is no live
+    // capture to fall back to an editing phase over.
     readonly property string openPath: Quickshell.env("RYOSHOT_OPEN") || ""
     property bool fromFile: false
     readonly property string homeDir: Quickshell.env("HOME")
@@ -210,9 +215,15 @@ ShellRoot {
         onTriggered: { Config.toolStyle = root.toolStyle; Config.save(); }
     }
 
+    // The store announces loaded() after every write as well as the first read;
+    // only the first read seeds the session, or a bar toggle that persists itself
+    // would snap the chosen action back to the remembered one.
+    property bool configAdopted: false
     Connections {
         target: Config
         function onLoaded() {
+            if (root.configAdopted) return;
+            root.configAdopted = true;
             if (Config.toolStyle && typeof Config.toolStyle === "object")
                 root.toolStyle = Config.toolStyle;
             root.selectTool(root.activeTool);
@@ -552,6 +563,82 @@ ShellRoot {
         Config.save();
     }
 
+    function cycleDelay() {
+        var delays = [0, 1, 3, 5, 10];
+        var index = delays.indexOf(Config.delaySeconds);
+        Config.delaySeconds = delays[(index + 1) % delays.length];
+        Config.save();
+    }
+
+    function toggleRecordMic() {
+        Config.recordMic = !Config.recordMic;
+        Config.save();
+    }
+
+    function toggleKeypresses() {
+        keypressesTouched = true;
+        keypressesActive = !keypressesActive;
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "keypresses", "toggle"]);
+    }
+
+    function toggleWebcam() {
+        webcamTouched = true;
+        webcamActive = !webcamActive;
+        Quickshell.execDetached(["qs", "-c", "shell", "ipc", "call", "camera", "toggle"]);
+    }
+
+    function openScreenshotsFolder() {
+        Quickshell.execDetached(["xdg-open", root.saveRoot]);
+    }
+
+    function physicalRegion() {
+        if (!globalSel) return null;
+        var g = globalSel;
+        var w = anchorOverlay();
+        var sc = (w && w.modelData && w.modelData.name) ? Wm.outputScale(w.modelData.name) : 1;
+        var x = Math.round(g.x * sc);
+        var y = Math.round(g.y * sc);
+        var width = Math.round(g.w * sc);
+        var height = Math.round(g.h * sc);
+        return {
+            grim: x + "," + y + " " + width + "x" + height,
+            record: width + "x" + height + "+" + x + "+" + y
+        };
+    }
+
+    function beginDelayedFront() {
+        delayedAction = frontAction;
+        overlaysHidden = true;
+        delayTimer.interval = Config.delaySeconds * 1000;
+        delayTimer.restart();
+    }
+
+    function finishDelayedCapture(action, path, ok) {
+        if (!ok) { Qt.quit(); return; }
+        switch (action) {
+        case "edit":
+            root.exported = true;
+            Quickshell.execDetached(["sh", "-c",
+                "sleep 0.4; exec flock -n -o /tmp/ryoshot.lock env RYOSHOT_OPEN=\"$1\" qs -c ryoshot",
+                "sh", path]);
+            root.quitSoon();
+            break;
+        case "ocr":
+            root.exported = true;
+            Quickshell.execDetached(["ryoku-cmd-ocr", "--file", path]);
+            root.quitSoon();
+            break;
+        case "search":
+            root.shutter();
+            searchProc.run(path);
+            break;
+        default:
+            root.shutter();
+            root.notifyShot(I18n.tr("Screenshot saved"), path);
+            root.copyImageAndQuit(path);
+        }
+    }
+
     /**
      * A region has landed in the front: carry out the chosen action. Edit hands
      * the grab to the annotator; the rest run their capture and quit, so the
@@ -559,6 +646,7 @@ ShellRoot {
      */
     function dispatchFront() {
         if (!globalSel || globalSel.w < 1 || globalSel.h < 1) { globalSel = null; return; }
+        if (Config.delaySeconds > 0) { beginDelayedFront(); return; }
         // The choice was persisted when it was picked; saving here would race the
         // quit and drop the write.
         // Shot keeps ryoshot's own flow: the markup bar, whose logo opens
@@ -588,17 +676,15 @@ ShellRoot {
     }
 
     // Hand the region to the shell's recorder. GSR's -region takes physical global
-    // pixels; globalSel is in logical compositor coordinates, so scale it up by the
-    // anchor output's factor so this path agrees with the capture card. The daemon
-    // owns gpu-screen-recorder and the floating island.
+    // pixels; globalSel is in logical compositor coordinates, so scale it by the
+    // anchor output's factor. The daemon owns gpu-screen-recorder and the floating
+    // island.
     function doRecordRegion() {
-        if (!globalSel) { Qt.quit(); return; }
-        var g = globalSel;
-        var w = anchorOverlay();
-        var sc = (w && w.modelData && w.modelData.name) ? Wm.outputScale(w.modelData.name) : 1;
-        var geo = Math.round(g.w * sc) + "x" + Math.round(g.h * sc) + "+" + Math.round(g.x * sc) + "+" + Math.round(g.y * sc);
-        var args = ["ryoku-shell", "record", "start", "--region", "--geometry", geo];
+        var region = physicalRegion();
+        if (!region) { Qt.quit(); return; }
+        var args = ["ryoku-shell", "record", "start", "--region", "--geometry", region.record];
         if (root.recordAudio) args.push("--with-desktop-audio");
+        if (Config.recordMic) args.push("--with-microphone-audio");
         root.exported = true;
         console.log("ryoshot: record " + args.join(" "));
         Quickshell.execDetached(args);
@@ -630,8 +716,7 @@ ShellRoot {
         root.quitSoon();
     }
 
-    // Match Capture.qml's pattern exactly so both capture paths drop identically
-    // named files in the same folder: a UTC stamp + "_screenshot.png".
+    // Captures use a UTC stamp plus "_screenshot.png" in the configured folder.
     function timestampName() {
         var d = new Date();
         function p(n) { return (n < 10 ? "0" : "") + n; }
@@ -971,6 +1056,69 @@ ShellRoot {
     }
 
     Process {
+        id: keypressStateProc
+        command: ["qs", "-c", "shell", "ipc", "prop", "get", "keypresses", "active"]
+        stdout: StdioCollector { id: keypressStateOut }
+        Component.onCompleted: running = true
+        onExited: (code) => {
+            if (code !== 0 || root.keypressesTouched) return;
+            var value = keypressStateOut.text.trim().toLowerCase();
+            root.keypressesActive = value === "true" || value === "1";
+        }
+    }
+
+    Process {
+        id: webcamStateProc
+        command: ["qs", "-c", "shell", "ipc", "prop", "get", "camera", "active"]
+        stdout: StdioCollector { id: webcamStateOut }
+        Component.onCompleted: running = true
+        onExited: (code) => {
+            if (code !== 0 || root.webcamTouched) return;
+            var value = webcamStateOut.text.trim().toLowerCase();
+            root.webcamActive = value === "true" || value === "1";
+        }
+    }
+
+    Timer {
+        id: delayTimer
+        repeat: false
+        onTriggered: {
+            var action = root.delayedAction;
+            root.delayedAction = "";
+            if (action === "record") {
+                root.doRecordRegion();
+                return;
+            }
+            var region = root.physicalRegion();
+            if (!region) { Qt.quit(); return; }
+            delayedGrabProc.run(region.grim, root.defaultPath, action);
+        }
+    }
+
+    Process {
+        id: delayedGrabProc
+        property string action: ""
+        property string outputFile: ""
+
+        function run(geometry, outputPath, pendingAction) {
+            action = pendingAction;
+            outputFile = outputPath;
+            command = ["sh", "-c",
+                "mkdir -p \"$(dirname \"$2\")\" && exec grim -g \"$1\" \"$2\"",
+                "sh", geometry, outputPath];
+            running = true;
+        }
+
+        onExited: (code) => {
+            var finishedAction = action;
+            var finishedPath = outputFile;
+            action = "";
+            outputFile = "";
+            root.finishDelayedCapture(finishedAction, finishedPath, code === 0);
+        }
+    }
+
+    Process {
         id: bgDialog
         stdout: StdioCollector { id: bgOut }
         function open() {
@@ -1149,7 +1297,7 @@ ShellRoot {
             id: win
             required property var modelData
             screen: modelData
-            visible: !root.dialogMode
+            visible: !root.dialogMode && !root.overlaysHidden
 
             anchors { top: true; left: true; right: true; bottom: true }
             color: "transparent"
@@ -1223,6 +1371,10 @@ ShellRoot {
                     actions: root.frontActions
                     activeAction: root.frontAction
                     audioOn: root.recordAudio
+                    micOn: Config.recordMic
+                    keypressesOn: root.keypressesActive
+                    webcamOn: root.webcamActive
+                    delaySeconds: Config.delaySeconds
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.bottom
                     anchors.bottomMargin: 28
@@ -1230,6 +1382,11 @@ ShellRoot {
                     onColorPickRequested: root.startColorPick()
                     onFullscreenRequested: root.frontMonitor({ x: win.modelData.x, y: win.modelData.y, w: win.width, h: win.height })
                     onAudioToggled: root.recordAudio = !root.recordAudio
+                    onDelayCycled: root.cycleDelay()
+                    onMicToggled: root.toggleRecordMic()
+                    onKeypressesToggled: root.toggleKeypresses()
+                    onWebcamToggled: root.toggleWebcam()
+                    onFolderRequested: root.openScreenshotsFolder()
                     onCloseRequested: Qt.quit()
                 }
 

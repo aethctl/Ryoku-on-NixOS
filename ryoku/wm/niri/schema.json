@@ -159,11 +159,12 @@
     "page": "windowmanager"
   },
   {
-    "tab": "Layout",
-    "group": "FRAMES",
+    "tab": "Look",
+    "group": "TITLE BARS",
     "key": "wm.niri.preferNoCsd",
-    "label": "Server-side window frames",
-    "desc": "Ask apps to drop their title bars so niri draws frames",
+    "label": "Hide app title bars",
+    "desc": "Asks apps to remove their own decorations. GTK apps without server-side decoration support may keep them; reopen apps after changing this.",
+    "keywords": "titlebar titlebars csd client-side decorations",
     "ctl": "sw",
     "src": "desktop.json",
     "page": "windowmanager"

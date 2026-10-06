@@ -84,7 +84,7 @@ Rectangle {
         property color accentColor: ThemeBackend.mauve
         property bool initAnimTrigger: false
 
-        property real animValue: value
+        property real animValue: Math.round(value * 20) / 20
         Behavior on animValue { NumberAnimation { duration: 600; easing.type: Easing.OutQuint } }
 
         property real fillRatio: Math.max(0.0, Math.min(1.0, isNaN(animValue) ? 0.0 : animValue))
@@ -113,68 +113,16 @@ Rectangle {
         }
         Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
 
-        Canvas {
-            id: pillCanvas
+        WaveSurface {
             anchors.fill: parent
-            renderTarget: Canvas.FramebufferObject
-            renderStrategy: Canvas.Cooperative
-
-            onPaint: {
-                var ctx = getContext("2d");
-                ctx.clearRect(0, 0, width, height);
-                if (pillRoot.fillRatio <= 0) return;
-
-                ctx.save();
-                var r = pillRoot.radius;
-                ctx.beginPath();
-                ctx.moveTo(r, 0);
-                ctx.lineTo(width - r, 0);
-                ctx.quadraticCurveTo(width, 0, width, r);
-                ctx.lineTo(width, height - r);
-                ctx.quadraticCurveTo(width, height, width - r, height);
-                ctx.lineTo(r, height);
-                ctx.quadraticCurveTo(0, height, 0, height - r);
-                ctx.lineTo(0, r);
-                ctx.quadraticCurveTo(0, 0, r, 0);
-                ctx.closePath();
-                ctx.clip();
-
-                ctx.beginPath();
-                ctx.moveTo(0, pillRoot.fillY);
-                if (pillRoot.waveAmp > 0) {
-                    var cp1y = pillRoot.fillY + Math.sin(sideSysMonRoot.globalWavePhase) * pillRoot.waveAmp;
-                    var cp2y = pillRoot.fillY + Math.cos(sideSysMonRoot.globalWavePhase + Math.PI) * pillRoot.waveAmp;
-                    ctx.bezierCurveTo(width * 0.33, cp2y, width * 0.66, cp1y, width, pillRoot.fillY);
-                    ctx.lineTo(width, height);
-                    ctx.lineTo(0, height);
-                } else {
-                    ctx.lineTo(width, pillRoot.fillY);
-                    ctx.lineTo(width, height);
-                    ctx.lineTo(0, height);
-                }
-                ctx.closePath();
-
-                var grad = ctx.createLinearGradient(0, 0, 0, height);
-                grad.addColorStop(0, Qt.lighter(pillRoot.accentColor, 1.25).toString());
-                grad.addColorStop(1, pillRoot.accentColor.toString());
-                ctx.fillStyle = grad;
-                ctx.globalAlpha = 0.95;
-                ctx.fill();
-                ctx.restore();
-            }
-
-            Connections {
-                target: sideSysMonRoot
-                enabled: sideSysMonRoot.isSysVisible && pillRoot.waveAmp > 0
-                function onGlobalWavePhaseChanged() { pillCanvas.requestPaint(); }
-            }
-
-            Connections {
-                target: pillRoot
-                enabled: sideSysMonRoot.isSysVisible
-                function onFillRatioChanged() { pillCanvas.requestPaint(); }
-                function onAccentColorChanged() { pillCanvas.requestPaint(); }
-            }
+            visible: pillRoot.fillRatio > 0
+            fill: pillRoot.fillRatio
+            amp: pillRoot.waveAmp
+            phase: sideSysMonRoot.globalWavePhase
+            radius: pillRoot.radius
+            alpha: 0.95
+            colorTop: Qt.lighter(pillRoot.accentColor, 1.25)
+            colorBottom: pillRoot.accentColor
         }
 
         Text {

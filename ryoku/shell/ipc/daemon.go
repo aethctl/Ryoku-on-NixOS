@@ -50,7 +50,10 @@ var reloadCoverOutput = func(ctx context.Context) ([]byte, error) {
 }
 
 var reloadCoverBegin = func() string {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// The launcher polls ~4.4 s for the cover to map and close before it
+	// gives up; a shorter deadline would kill a cover that is one poll away
+	// from ready and strand the reload with no animation.
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
 	defer cancel()
 	out, err := reloadCoverOutput(ctx)
 	if err != nil {
@@ -114,6 +117,7 @@ type daemon struct {
 	stageForce   atomic.Bool          // a pending forced regenerate (effect/quality change, refresh, re-cut)
 	stageGen     atomic.Bool          // a pending enable: reuse an existing cut, else generate
 	stageBusy    atomic.Bool          // a cut/inpaint is in flight (for the status/topic)
+	stageNotice  atomic.Value         // why the last reconcile could not produce a cut ("" when fine)
 	ledsSig      chan struct{}        // coalescing wake for the OpenRGB worker
 	widgetSig    chan struct{}        // coalescing wake for the widget-occupancy gate
 	quit         chan struct{}
@@ -556,7 +560,8 @@ func orphanedWatchers() []int {
 }
 
 // isShellWatcher recognises the helper processes the shell spawns: the ryoku
-// python inotifywait watchers, the keyboard-lock daemon, and the cava analyser.
+// python inotifywait watchers, the keyboard-lock daemons (the packaged script
+// and the python watcher it execs), and the cava analyser.
 func isShellWatcher(cmdline string) bool {
 	argv := strings.Split(strings.TrimRight(cmdline, "\x00"), "\x00")
 	if len(argv) == 0 {
@@ -571,7 +576,15 @@ func isShellWatcher(cmdline string) bool {
 		}
 	case "python3", "python":
 		for _, a := range argv[1:] {
-			if strings.Contains(a, "keyboard_lock_state_daemon.py") {
+			if strings.Contains(a, "keyboard_lock_state_daemon.py") ||
+				strings.Contains(a, "ryoku-python") ||
+				strings.Contains(a, "/sys/class/leds/*capslock*") {
+				return true
+			}
+		}
+	case "bash":
+		for _, a := range argv[1:] {
+			if strings.Contains(a, "kb_locks.sh") {
 				return true
 			}
 		}
@@ -1200,11 +1213,9 @@ func (d *daemon) handle(conn net.Conn) {
 }
 
 var surfaceCommands = map[string]string{
-	// One bare kebab verb per shell surface, spelled to match its CustomShortcut
-	// id, so a compositor keybind reaches any surface as `ryoku-shell <id>` where
-	// no global-shortcuts protocol exists (niri). Flag surfaces land on ShellState,
-	// sidebar surfaces on SidebarState, and frame menus on FrameMenuManager. Each
-	// is the same transition a CustomShortcut press runs in-process.
+	// Surface verbs resolve to ids handled by the shell's openSurface route.
+	// Ask subcommands deep-link into a mode; menu aliases preserve established
+	// command spellings.
 	"bar-toggle":         "barToggle",
 	"launcher":           "launcher",
 	"overview":           "overview",
@@ -1214,14 +1225,13 @@ var surfaceCommands = map[string]string{
 	"quicksettings":      "sidebar-left",
 	"wallpaper-menu":     "wallpaper",
 	"clipboard":          "clipboard",
-	"stash":              "sidebar-right",
-	"screenshot":         "sidebar-left#capture",
-	"compress":           "sidebar-right#compress",
-	"install":            "sidebar-right#install",
-	// Preserve established command spellings while routing retired quick-settings
-	// and stash chrome into their replacement sidebars.
+	"screenshot":         "screenshot",
+	"ask":                "ask",
+	"ask chat":           "ask#chat",
+	"ask tools":          "ask#tools",
+	"compress":           "ask#tools/compress",
+	"install":            "ask#tools/install",
 	"menu quick-settings": "sidebar-left",
-	"menu stash":          "sidebar-right",
 	"menu screenshot":     "screenshot",
 	"menu app-launcher":   "launcher",
 }
@@ -1268,7 +1278,7 @@ func (d *daemon) dispatch(line string) string {
 		switch {
 		case len(args) == 1 && args[0] == "close":
 			return d.menuClose()
-		case len(args) == 1 && (args[0] == "app-launcher" || args[0] == "quick-settings" || args[0] == "screenshot" || args[0] == "stash"):
+		case len(args) == 1 && (args[0] == "app-launcher" || args[0] == "quick-settings" || args[0] == "screenshot"):
 			routeCmd = line
 		default:
 			if _, ok := menuID(line); !ok {
@@ -1276,6 +1286,15 @@ func (d *daemon) dispatch(line string) string {
 			}
 			routeCmd = line
 		}
+	case "ask":
+		if len(args) == 0 {
+			break
+		}
+		if len(args) == 1 && (args[0] == "chat" || args[0] == "tools") {
+			routeCmd = line
+			break
+		}
+		return "err ask: expected chat or tools"
 	case "bar":
 		// The data-layout verbs (list/catalog/move/show/hide/set/position/form/
 		// defaults/settings) take a verb first; the reveal grammar takes an edge

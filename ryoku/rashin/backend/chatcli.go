@@ -26,7 +26,9 @@ import (
 // base64 payload a user message carries.
 
 func chatWSURL() string {
-	return fmt.Sprintf("ws://127.0.0.1:%d/ws/chat", LoadConfig().Port)
+	// The shell's bar and the terminal are the Ryoku lane; name it rather than
+	// lean on the default.
+	return fmt.Sprintf("ws://127.0.0.1:%d/ws/chat?lane=ryoku", LoadConfig().Port)
 }
 
 func emitChat(frame map[string]any) {

@@ -337,7 +337,7 @@ Item {
                     }
                 } catch(e) {}
             }
-            fetchGithubHtml(cleanUser, year);
+            root.fetchGithubHtml(cleanUser, year);
         };
         xhr.send();
     }

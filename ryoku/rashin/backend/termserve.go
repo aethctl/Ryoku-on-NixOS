@@ -21,7 +21,7 @@ import (
 // asks escalate to the hermes session exactly like /api/ask. The daemon
 // never executes a proposed command; the user is the executor.
 
-const termPattern = `You are Rashin, the resident agent of this Ryoku (Arch Linux, Hyprland) machine, answering inside the user's terminal (fish in kitty).
+const termPattern = `You are the Needle, Rashin's resident agent on this Ryoku (Arch Linux) machine, answering inside the user's terminal (fish in kitty). The machine map says which window manager runs here; never assume one.
 
 You have read-only tools for live state (system_query, read_file, list_dir, search_code, fetch_url) and ONE action tool: propose.
 

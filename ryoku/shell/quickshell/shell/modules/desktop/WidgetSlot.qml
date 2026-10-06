@@ -46,8 +46,23 @@ Item {
     // one way, as a signal, like menuRequested.
     signal dropped(rect box)
     // emitted whenever a resize (the corner bracket or Ctrl+wheel) persists a
-    // new scale, so the edit session can mark itself dirty.
+    // new scale, so the desktop can record the gesture's walk-back.
     signal resized()
+
+    // The placement a gesture (drag, corner resize, Ctrl+wheel scale) started
+    // from, captured on press / first wheel. The desktop reads it when the
+    // gesture commits, pushes it into the Stage Editor's undo stack, and
+    // clears it, so a drag or resize walks back exactly like the reference's
+    // own canvas does.
+    property var gestureBefore: null
+    function _captureGesture() {
+        slot.gestureBefore = {
+            Anchor: Config[slot.widget + "Anchor"],
+            X: Config[slot.widget + "X"],
+            Y: Config[slot.widget + "Y"],
+            Scale: Config[slot.widget + "Scale"]
+        };
+    }
 
     default property alias content: holder.data
 
@@ -258,6 +273,7 @@ Item {
             if (slot.locked)
                 return;
             grip.leftDown = true;
+            slot._captureGesture();
             const p = slot.mapToItem(slot.parent, mouse.x, mouse.y);
             grip.grabOX = p.x - slot.x;
             grip.grabOY = p.y - slot.y;
@@ -346,6 +362,8 @@ Item {
         enabled: !slot.locked
         acceptedModifiers: Qt.ControlModifier
         onWheel: event => {
+            if (slot.gestureBefore === null)
+                slot._captureGesture();
             const step = event.angleDelta.y > 0 ? 1.06 : 1 / 1.06;
             const ns = Math.max(0.5, Math.min(2.5, slot.scaleCfg * step));
             Config.setLive(slot.widget + "Scale", ns);
@@ -410,6 +428,7 @@ Item {
                 const p = hgrip.mapToItem(slot.parent, mouse.x, mouse.y);
                 slot.resizeStartDiag = Math.max(1, Math.hypot(p.x - ox, p.y - oy));
                 slot.resizing = true;
+                slot._captureGesture();
             }
             onPositionChanged: (mouse) => {
                 if (!slot.resizing)

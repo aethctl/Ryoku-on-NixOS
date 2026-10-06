@@ -154,15 +154,18 @@ it under `~/.local/lib/qt6/qml`, and only the daemon injects that path
 `QML_IMPORT_PATH`. `hyprland/modules/env.lua` sets it for the session. If an
 import fails in dev and works on an installed box, that is why.
 
-### The one sanctioned brand takeover
+### The web dashboard is a Ryoku surface too
 
-**Rashin** (`hub/pages/RashinPage.qml`) fronts the Rashin/Hermes dashboard
-(`127.0.0.1:3600`), so it deliberately wears that product's identity instead of
-the Hub's: the warm poster palette and Archivo Black type mirrored from
-`ryoku/rashin/backend/web/css/base.css`, kept in one local palette object at the
-top of the page plus a bundled `fonts/archivo-black.ttf`. It is a page-scoped
-brand takeover, not drift; keep it in step with that `base.css`, and do not copy
-the pattern into another page.
+Rashin's console (`ryoku/rashin/web`, a Svelte app served on `127.0.0.1:3600`
+and hosted by the `rashin-app` window) is HTML, so it cannot import `Tokens`,
+but it follows them. `GET /api/theme` resolves the same Material roles through
+the same chain (a named scheme, then the wallpaper while Match wallpaper is on,
+then the signature default), and `src/app.css` maps them onto its variables
+under the `Tokens` names:
+`--paper`, `--ink`, `--bone`, `--sun`, `--alert`, the hairlines and tints. The
+type is the same four families, bundled as subset woff2. The Hub's Rashin page
+reads `Tokens` like any other page. There is no brand takeover left: if the
+dashboard needs a value, it takes it from the palette, never a hex of its own.
 
 ### What follows the wallpaper, and what does not
 
@@ -191,6 +194,16 @@ doing that arithmetic itself.
   soot.
 - **The 力 seal is never derived.** `Theme.brand` is a fixed vermillion, and
   `Tokens.alert` is the same red. A sun is a sun on any wallpaper.
+- **Rashin wears a sibling seal, not the 力.** Its mark (`assets/brand/rashin-mark.svg`)
+  is the same tile carrying 十, the cross that ends 針 (needle) and is also the
+  compass card at its four cardinals; the north-south stroke is the needle,
+  with north painted in the brand vermillion and the pivot left as tile. One
+  geometry, three cuts: the colour master (app icon, lockup), a one-colour
+  evenodd master, and a small cut without the pivot for 16 to 32 px (the
+  console favicon and the Ask bar's header). On black paper the tile
+  disappears and only the needle shows; that is the intended reversed form.
+  The lockup (`rashin-lockup.svg`) sets Rashin in Space Grotesk Medium with
+  the 羅針 gloss at a shared baseline; below 48 px tall use the mark alone.
 - **App content carries no accent at all.** The Hub, ryowalls, ryovm and ryostore
   are paper and ink. Emphasis is inversion: a surface flips to bone and its ink
   flips to dark. The frame carries the accent; the content does not compete with
@@ -393,7 +406,7 @@ not look broken; it looks fine and then eats the edit on the way out.
 
 `Hub.qml` owns the frame, so a page only writes its content:
 
-- **The rail.** A masthead (力 seal, `RYOKU ARCH`, `SETTINGS`),
+- **The rail.** A masthead (力 seal, `RYOKU`, `SETTINGS`),
   a search field, then eight groups. A group header is its zero-padded index and
   name in tracked mono (`01 OVERVIEW`, `02 DEVICES`, `03 LOOK`, `04 COMPOSITOR`,
   `05 DESKTOP`, `06 KEYS & APPS`, `07 SYSTEM`, `08 EXTEND`, and a nameless ninth
@@ -486,7 +499,7 @@ and per-monitor visibility from `ShellState`.
   `shell/modules/bar/popouts/`: clicking a status widget (network, Bluetooth,
   battery, audio, system monitor, recording, music, voice) grows its live
   controls out of the bar. The monitor-local menu manager owns those cards and
-  the bounded frame menus. The global left and right sidebars live in
+  the bounded frame menus. The global Controls panel lives in
   `ryoku/shell/quickshell/shell/modules/sidebar/`; see `docs/sidebars.md`.
 - **dock** an app island cluster on a screen edge, its own shell surface
   (`shell/modules/dock/DockSurface.qml`, one per monitor) rather than a part of
@@ -524,9 +537,9 @@ and per-monitor visibility from `ShellState`.
   widget's own menu. A drag draws a faint grid and centre guides under the
   widgets, and the release flashes the edges and any centre line it snapped to.
   The desktop's own right-click menu toggles each widget, opens the visualiser
-  placement, and reaches Settings and Reload shell. Configured in Ryoku
-  Settings' Desktop Widgets page, where each widget is a live preview card rather
-  than a name in a list.
+  placement, and reaches Settings and Reload shell. Each widget is configured in
+  place -- select it while arranging to set its size, look and position, or open
+  its own right-click menu for everything else.
 - **the desktop spectrum** the audio visualiser, described in full below.
 
 ### Summoned
@@ -535,11 +548,11 @@ and per-monitor visibility from `ShellState`.
 |---|---|---|
 |**launcher**|`Super+Space`|the app launcher and command palette|
 |**overview**|`Super+Tab`|the full-screen workspace expo|
-|**left sidebar**|`Super+Escape`|desktop controls, notices, weather, media, capture, and stage|
-|**right sidebar**|`Super+S`|usage, tools, and Rashin chat|
+|**Controls**|`Super+Escape`|live system activity, connections, levels, and session actions|
+|**ryoshot capture bar**|`Super+Shift+S`|Shot, Edit, OCR, Search, Record, and capture options in one floating bar|
+|**Ask**|`Alt+Space`|quick Rashin answers, chat, tools, web search, and the optional desktop bubble|
 |**clipboard**|`Super+V`|clipboard history at the bottom edge, with fuzzy search and a starred pane|
 |**wallpaper and theme menu**|`Super+W`|the wallpaper carousel and theme picker|
-|**ryoshot**|`Super+Shift+S`|capture, annotate, pin|
 |**visualiser placement**|`Super+Alt+M`|grab the spectrum box and aim it|
 |**voice**|`Super+grave`|speech to text with a live mic wave|
 |**Ryoku Settings**|`Super+,`|the Hub|
@@ -569,19 +582,21 @@ type.*
   ten workspace ids, so each desktop keeps its own 01..10; the same grouping
   drives the desktop-relative `Super+N` binds (`scripts/ryoku-workspace`). The
   gesture legend sits along the bottom margin as marginalia, not as buttons.
-- **Controls** a left-edge overlay with **System**, **Notifications**,
-  **Weather**, **Media**, **Capture**, and **Stage** selected by default. System
-  holds session actions, connectivity, audio, brightness, battery, and power
-  controls; the other sections keep related work in the same quiet paper/ink
-  frame.
-- **Companion** a right-edge overlay with **Usage**,
-  **Tools**, and **Chat** selected by default. Usage shows local screen time.
-  Tools handles downloads, recent work, compression, and package installation
-  with an in-shell file picker. Chat keeps its Rashin conversation across close
-  and reopen. Both surfaces are vertically centered by default, above normal
-  and fullscreen windows, and work under every bar style. Settings has Contents
-  and Layout & behavior pages, with Summary or Full controls for each built-in
-  and `sidebarCard` plugin. See `docs/sidebars.md`.
+- **Controls** is a compact top-left panel. Vitals is a native mini system
+  monitor with per-core load, temperatures, memory, GPU, network and disk.
+  Connections summarizes Wi-Fi, Bluetooth, Ethernet and VPN. Levels keeps fine
+  volume and brightness controls with inline per-application audio and
+  per-display brightness drawers. Its bottom bar combines hold-to-activate
+  session actions, quick toggles, Extensions, and a gear popup.
+- **ryoshot capture bar** is the single entry point for screenshots and screen
+  recording. Its settings popover owns the 0/1/3/5/10-second delay,
+  clipboard/file/both saving, editor handoff, desktop and microphone audio,
+  key-press and webcam overlays, the screenshots folder, and the link to Hub >
+  Recording. Controls does not duplicate any of these capture options.
+- **Ask** is a Raycast-style Rashin bar for quick streaming answers, full chat,
+  tools and web search. `\`, `?` and `/` select Ask, Web and Tools; Tab cycles
+  modes. A pinned chat bubble can be dragged, edge-snapped and dismissed, with
+  its position stored under `ask.bubble`. See `docs/sidebars.md`.
 - **wallpaper and theme menu** a carousel of the wallpaper library (four layouts:
   strips, grid, drift, hearthstone) with the current wall large and named, a
   colour-filter strip, a live tab for animated walls, and a bottom-centre frame
@@ -668,8 +683,17 @@ through the same `Ryoku.Ui.SpectrumField`, so the preview is the exact geometry
 the wallpaper draws and the two cannot drift; only the ramp differs, since app
 content carries no accent.
 
-There are eleven looks, eight that grow from an edge of their box and three that
-are polar:
+There are twelve looks: eight that grow from an edge of their box, three that
+are polar, and one that is not a box at all. `aura` is an edge field, drawn by
+`ryoku/ui/AuraField` and `shaders/aura.frag` instead of the spectrum shader:
+twelve eased sectors (folded and followed in `lib/aura.js`) flow along chosen
+screen edges as one organic current, a rail, an open frame or a joined
+perimeter. It owns four small vocabularies -- material (silk, aurora, contour,
+liquid), movement (flow, ribbon, cells, filament), effect (clean, shimmer,
+echo, prism, bloom, caustic, afterglow) and colour mode (flow, spectrum, pulse,
+static) -- plus reach, span, taper and corner blending, and it paints a
+wallpaper-lit triad unless all three stops are pinned. Its motion twin is
+`AuraMotion`, which runs the same adaptive idle/halve rules as `Motion`.
 
 |Look|Kind|What it is|
 |---|---|---|
@@ -684,8 +708,9 @@ are polar:
 |`radial`|polar|rounded polar bars and a per-angle ramp around a bass-pulsed inner ring|
 |`orb`|polar|a glass sphere: a barely-there body, a wobbling lit rim and ripples inside|
 |`spiral`|polar|bands laid along an Archimedean spiral over one and a half turns|
+|`aura`|field|a living current of light flowing along the screen's edges, twelve sectors deep|
 
-Every look lives in a box, and the box goes anywhere. `x` and `y` place its top
+Every look but `aura` lives in a box, and the box goes anywhere. `x` and `y` place its top
 left corner as fractions of the screen, `w` and `h` size it, `grow` says which of
 its edges the bands rise from (up, down, center, left or right), and `angle` turns
 the whole thing about its centre. A polar look centres in the box and takes its
@@ -721,8 +746,8 @@ crosses none of them, which `place.test.mjs` pins as an invariant, and the place
 guides stay honest without the gestures having to invert a projection.
 
 The box is placed by hand rather than by numbers. `Super+Alt+M`, the Move
-visualiser row in the desktop's right-click menu, or the Hub's Place on the desktop
-button starts placement mode. The box takes an outline, a grip on its corner and a
+visualiser row in the desktop's right-click menu, or the Edit widgets toolbar's
+`Visualizer...` button starts placement mode. The box takes an outline, a grip on its corner and a
 dot on a stem above its top edge: a drag anywhere moves it, the grip or the wheel
 sizes it, and the dot turns it through a full circle. Each step writes to
 `visualizer.json` as it happens, and right click, Escape or the keybind ends it.
@@ -731,12 +756,17 @@ An editing bar (`EditBar.qml`) comes with it, fixed to the bottom of the screen 
 stepping to the top when the box would be under it: a readout of the thing being
 moved is the one thing on screen that must not move with it. It carries the look
 itself, and the knobs you judge by eye rather than by number: the current look drawn
-as a silhouette (click for a tray of all eleven, or wheel the chip to walk them),
+as a silhouette (click for a tray of all thirteen, or wheel the chip to walk them),
 bands, mirror, peak caps, gain, smoothing, the live angle with a SQUARE reset, the
-two leans with a LEVEL reset, the size, FLIP and DONE. `F` flips, `M` mirrors, `P`
-toggles peak caps, `R` squares, `[` and `]` walk the looks. The point is that a look
+two leans with a LEVEL reset, the size, a gear that opens a square drawer of
+everything the bar has no room for (`SettingsPopup.qml`: playback, shape, and the
+field's deep knobs, scrollable, dimming what the current look ignores), FLIP and
+DONE. `F` flips, `M` mirrors, `P`
+toggles peak caps, `R` squares, `S` opens the drawer, `[` and `]` walk the looks.
+The point is that a look
 is tuned where you can see it,
-on the wallpaper, instead of behind the Hub's window; the Hub keeps the full board.
+on the wallpaper, instead of behind the Hub's window; the Hub keeps the look
+picker and the enable switch.
 
 The bar is built from `Ryoku.Ui`'s own controls (`Btn`, `Step`, `Sw`, `Slid`,
 `Gallery`) at the shell's own token metrics, so it is the shell's idiom at the
@@ -837,13 +867,13 @@ which process you are in.
   opening) and `effects` (200ms). A curve is a `cubic-bezier` control-point array
   handed to `easing.bezierCurve` beside a bezier `easing.type`; the shared
   expressive family keeps indicator, popout and frame-bar reveal motion coherent.
-- **The sidebar surfaces move in small, local steps.** `SidebarState` scales
+- **The Controls surface moves in small, local steps.** `SidebarState` scales
   `Tokens.swap` for opening and `Tokens.move` for closing; `quick`, `standard`,
-  and `calm` apply multipliers of 0.6, 1, and 1.5. Both overlays fade in
-  and settle a short distance from their screen edge. Section pages crossfade;
-  selected navigation rows use a quiet bone plate. Hover, focus, and save
-  states ease between colours or opacity. Both `Motion.reduce`
-  and `Tokens.reduceMotion` remove every surface and chrome animation.
+  and `calm` apply multipliers of 0.6, 1, and 1.5. The panel fades in and settles
+  a short distance from its screen edge. Detail pages crossfade; selected rows
+  use a quiet bone plate. Hover, focus, and save states ease between colours or
+  opacity. Both `Motion.reduce` and `Tokens.reduceMotion` remove every surface
+  and chrome animation.
 - **Every shell token is already scaled.** Each one is defined as `dur(ms)`,
   which multiplies by `Perf.motionSpeed` (the user's tempo, `motionSpeed` in
   `performance.json`) and collapses to zero under reduce-motion, so the whole

@@ -113,6 +113,10 @@ func (d *daemon) applyWEReason(reason, weID string, outputs []string, mute map[s
 // No guards, persistence or hooks: restore and live property edits repaint through it.
 func (d *daemon) driveWE(weID, itemDir string, outputs []string, mute map[string]bool, volume map[string]int) error {
 	fit := contentFit()
+	// skwd-paper owns the screen from here on: drop any ryogami-live player on
+	// these outputs, or its background surface keeps committing underneath the
+	// scene and the two producers fight over the output.
+	d.video.StopOutputs(stopTargets(outputs))
 	props := d.workshop.props.overrides(weID)
 	policy := d.buildRendererPolicy()
 	if policy != nil {

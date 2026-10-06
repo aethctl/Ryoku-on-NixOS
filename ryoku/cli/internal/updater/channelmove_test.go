@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"ryoku-cli/internal/sys"
+
+	wm "ryoku-wm"
 )
 
 // pacmanOp reports whether any recorded call runs `pacman <op>`.
@@ -38,7 +40,7 @@ func TestMoveRyokuSetDropsUnservedSplitMeta(t *testing.T) {
 	runRyokuMove = func(set []string) error { movedSet = set; return nil }
 	t.Cleanup(func() { runRyokuMove = oldMove })
 
-	oldSet, oldServed := ryokuSetForMove, servedSetForMove
+	oldSet, oldServed, oldPkg := ryokuSetForMove, servedSetForMove, pkgInstalledForMove
 	ryokuSetForMove = func() ([]string, error) {
 		return []string{"ryoku/ryoku-desktop", "ryoku/ryogami"}, nil
 	}
@@ -46,7 +48,10 @@ func TestMoveRyokuSetDropsUnservedSplitMeta(t *testing.T) {
 		// the target channel serves the set but NOT the compositor split meta.
 		return map[string]bool{"ryoku-desktop": true, "ryogami": true}
 	}
-	t.Cleanup(func() { ryokuSetForMove, servedSetForMove = oldSet, oldServed })
+	pkgInstalledForMove = func(string) bool { return true } // packaged box: no base add
+	t.Cleanup(func() {
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove = oldSet, oldServed, oldPkg
+	})
 
 	var dropped []string
 	oldInstalled, oldRemove := splitMetaInstalled, splitMetaRemove
@@ -106,10 +111,13 @@ func TestRetargetChannelReinstallsDroppedMetaOnFailure(t *testing.T) {
 	privileged = func(argv ...string) error { priv = append(priv, argv); return nil }
 	t.Cleanup(func() { privileged = oldPriv })
 
-	oldSet, oldServed := ryokuSetForMove, servedSetForMove
+	oldSet, oldServed, oldPkg := ryokuSetForMove, servedSetForMove, pkgInstalledForMove
 	ryokuSetForMove = func() ([]string, error) { return []string{"ryoku/ryoku-desktop"}, nil }
 	servedSetForMove = func() map[string]bool { return map[string]bool{"ryoku-desktop": true} } // target predates the split
-	t.Cleanup(func() { ryokuSetForMove, servedSetForMove = oldSet, oldServed })
+	pkgInstalledForMove = func(string) bool { return true }                                     // packaged box: no base add
+	t.Cleanup(func() {
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove = oldSet, oldServed, oldPkg
+	})
 
 	oldInstalled, oldRemove := splitMetaInstalled, splitMetaRemove
 	splitMetaInstalled = func(name string) bool { return name == "ryoku-desktop-hyprland" }
@@ -136,5 +144,112 @@ func TestRetargetChannelReinstallsDroppedMetaOnFailure(t *testing.T) {
 	}
 	if !reinstalled {
 		t.Fatalf("dropped meta not reinstalled from the restored channel; privileged calls: %v", priv)
+	}
+}
+
+// A box migrating onto packages from a retired checkout has no ryoku-desktop
+// installed, and the installed-only set would move nothing: the track message
+// promises the switch installs the base. The move must add the umbrella plus
+// the active compositor variant, or the box is left with its source lane gone
+// and no packaged base to update from.
+func TestMoveRyokuSetAddsPackagedBaseWhenMigrating(t *testing.T) {
+	var movedSet []string
+	oldMove := runRyokuMove
+	runRyokuMove = func(set []string) error { movedSet = set; return nil }
+	t.Cleanup(func() { runRyokuMove = oldMove })
+
+	oldPriv := privileged
+	privileged = func(...string) error { return nil }
+	t.Cleanup(func() { privileged = oldPriv })
+
+	oldSet, oldServed, oldPkg, oldDetect :=
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove, detectCompositorForMove
+	ryokuSetForMove = func() ([]string, error) { return []string{"ryoku/ryogami"}, nil }
+	servedSetForMove = func() map[string]bool {
+		return map[string]bool{"ryoku-desktop": true, "ryoku-desktop-niri": true, "ryogami": true}
+	}
+	pkgInstalledForMove = func(name string) bool { return name != ryokuDesktopPkg } // no base yet
+	detectCompositorForMove = func() string { return "niri" }
+	t.Cleanup(func() {
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove, detectCompositorForMove =
+			oldSet, oldServed, oldPkg, oldDetect
+	})
+
+	set, err := moveRyokuSetToChannel()
+	if err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	want := []string{
+		ryokuRepo + "/ryoku-desktop",
+		ryokuRepo + "/ryoku-desktop-niri",
+		ryokuRepo + "/ryogami",
+	}
+	if !reflect.DeepEqual(movedSet, want) {
+		t.Fatalf("moved set = %v, want the base + detected variant first, then %v", movedSet, want)
+	}
+	if !reflect.DeepEqual(set, want) {
+		t.Fatalf("returned set = %v, want %v", set, want)
+	}
+}
+
+func TestMoveRyokuSetMigratesRetiredVariant(t *testing.T) {
+	if wm.RetiredCompositor().VariantPackage == "" {
+		t.Skip("NixOS keeps MangoWM supported; no compositor is retired")
+	}
+	legacy := wm.RetiredCompositor()
+	var movedSet, dropped []string
+
+	oldPriv := privileged
+	privileged = func(...string) error { return nil }
+	t.Cleanup(func() { privileged = oldPriv })
+
+	oldMove := runRyokuMove
+	runRyokuMove = func(set []string) error {
+		movedSet = append([]string(nil), set...)
+		return nil
+	}
+	t.Cleanup(func() { runRyokuMove = oldMove })
+
+	oldSet, oldServed, oldPkg, oldDetect :=
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove, detectCompositorForMove
+	ryokuSetForMove = func() ([]string, error) {
+		return []string{ryokuRepo + "/" + ryokuDesktopPkg, ryokuRepo + "/ryogami"}, nil
+	}
+	servedSetForMove = func() map[string]bool {
+		return map[string]bool{
+			ryokuDesktopPkg:                         true,
+			ryokuDesktopPkg + "-" + wm.ProviderNiri: true,
+			"ryogami":                               true,
+		}
+	}
+	pkgInstalledForMove = func(name string) bool { return name == ryokuDesktopPkg }
+	detectCompositorForMove = func() string { return wm.ProviderNiri }
+	t.Cleanup(func() {
+		ryokuSetForMove, servedSetForMove, pkgInstalledForMove, detectCompositorForMove =
+			oldSet, oldServed, oldPkg, oldDetect
+	})
+
+	oldInstalled, oldRemove := splitMetaInstalled, splitMetaRemove
+	splitMetaInstalled = func(name string) bool { return name == legacy.VariantPackage }
+	splitMetaRemove = func(name string) error {
+		dropped = append(dropped, name)
+		return nil
+	}
+	t.Cleanup(func() { splitMetaInstalled, splitMetaRemove = oldInstalled, oldRemove })
+
+	set, err := moveRyokuSetToChannel()
+	if err != nil {
+		t.Fatalf("move: %v", err)
+	}
+	wantSet := []string{
+		ryokuRepo + "/" + ryokuDesktopPkg + "-" + wm.ProviderNiri,
+		ryokuRepo + "/" + ryokuDesktopPkg,
+		ryokuRepo + "/ryogami",
+	}
+	if !reflect.DeepEqual(set, wantSet) || !reflect.DeepEqual(movedSet, wantSet) {
+		t.Fatalf("moved set = %v, returned set = %v, want %v", movedSet, set, wantSet)
+	}
+	if want := []string{legacy.VariantPackage}; !reflect.DeepEqual(dropped, want) {
+		t.Fatalf("dropped variants = %v, want %v", dropped, want)
 	}
 }

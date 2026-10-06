@@ -304,7 +304,7 @@ func cmdWmUse(args []string) {
 		// compositor in place and "keep" means what it says. A box whose packages
 		// predate that still declares the shared virtual as a conflict and pacman
 		// refuses the install under --noconfirm; only then drop it first.
-		if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+		if err := sys.Sudo(wmSwitchInstallArgs(pkg)...); err != nil {
 			out := "ryoku-desktop-" + active
 			if active == "" || active == name || !packageInstalled(out) {
 				die(i18n.T("could not install %s: %v"), pkg, err)
@@ -312,7 +312,7 @@ func cmdWmUse(args []string) {
 			if err := sys.Sudo("pacman", "-Rdd", "--noconfirm", out); err != nil {
 				die(i18n.T("could not install %s, and could not remove %s first: %v"), pkg, out, err)
 			}
-			if err := sys.Sudo("pacman", "-S", "--needed", "--noconfirm", pkg); err != nil {
+			if err := sys.Sudo(wmSwitchInstallArgs(pkg)...); err != nil {
 				die(i18n.T("could not install %s after removing %s: %v"), pkg, out, err)
 			}
 		}
@@ -346,6 +346,15 @@ func cmdWmUse(args []string) {
 // laySwitchConfig brings the target desktop up as a desktop: materialize lays
 // the shipped tree, the doctor reconciles the rest (session target, portal
 // routing, wallpaper). Running `ryoku doctor` by hand was the switch's own gap.
+// wmSwitchInstallArgs is the compositor-switch install transaction. It carries
+// the same overwrite allowlist as every other Ryoku package lane so a machine
+// seeded by an older ISO or checkout cannot fail on an unowned path that the
+// package now owns. It deliberately remains a plain -S transaction: switching
+// compositor must not refresh databases or turn into a system upgrade.
+func wmSwitchInstallArgs(pkg string) []string {
+	return []string{"pacman", "-S", "--needed", "--noconfirm", "--overwrite", updater.RyokuOverwriteGlob, pkg}
+}
+
 func laySwitchConfig() error {
 	if err := updater.Materialize(); err != nil {
 		return err

@@ -24,6 +24,7 @@ Item {
     property string errorText: ""
 
     readonly property bool busy: root.pendingCallId >= 0
+    readonly property bool motionAllowed: root.active && !Tokens.reduceMotion && !Motion.reduce
     readonly property var multiBandSsids: {
         const bands = ({});
         const aps = Network.accessPoints || [];
@@ -279,13 +280,34 @@ Item {
         }
 
         Rectangle {
+            visible: root.scanning
+            width: parent.width
+            height: Tokens.s1 * root.s
+            radius: height / 2
+            color: Tokens.bone
+            opacity: root.motionAllowed ? 0.24 : 1
+
+            SequentialAnimation on opacity {
+                running: root.active && root.scanning && root.motionAllowed
+                loops: Animation.Infinite
+                NumberAnimation { from: 0.24; to: 0.86; duration: Tokens.move; easing.type: Tokens.ease }
+                NumberAnimation { from: 0.86; to: 0.24; duration: Tokens.move; easing.type: Tokens.ease }
+            }
+        }
+
+        Rectangle {
             width: parent.width
             implicitHeight: statusBody.implicitHeight + Tokens.s4 * root.s * 2
             height: implicitHeight
             radius: Tokens.radius * root.s * 2
-            color: Tokens.paperLift
+            color: Network.activeSsid !== "" ? Tokens.bone : Tokens.paperLift
             border.width: Tokens.border
-            border.color: Tokens.lineSoft
+            border.color: Network.activeSsid !== "" ? Tokens.bone : Tokens.lineSoft
+
+            Behavior on color {
+                enabled: root.motionAllowed
+                ColorAnimation { duration: Tokens.snap }
+            }
 
             Row {
                 id: statusBody
@@ -299,11 +321,11 @@ Item {
                     width: 52 * root.s
                     height: width
                     radius: width / 2
-                    color: Network.wifiConnectivity === "Connected" ? Tokens.bone : Tokens.tint10
+                    color: Network.activeSsid !== "" ? Tokens.inkOnBone : Tokens.tint10
                     Text {
                         anchors.centerIn: parent
                         text: !Network.wifiPresent || !Network.wifiRadio ? "wifi_off" : root.signalGlyph(Network.wifi.strength)
-                        color: Network.wifiConnectivity === "Connected" ? Tokens.inkOnBone : Tokens.inkDim
+                        color: Network.activeSsid !== "" ? Tokens.bone : Tokens.inkDim
                         font.family: "Material Symbols Rounded"
                         font.pixelSize: 25 * root.s
                     }
@@ -319,7 +341,7 @@ Item {
                             : Network.activeSsid ? Network.activeSsid
                             : Network.wifiConnectivity === "Connecting" ? I18n.tr("Connecting…")
                             : I18n.tr("Ready to connect")
-                        color: Tokens.ink
+                        color: Network.activeSsid !== "" ? Tokens.inkOnBone : Tokens.ink
                         font.family: Tokens.ui
                         font.pixelSize: Tokens.fValue * root.s
                         font.weight: Font.DemiBold
@@ -332,19 +354,42 @@ Item {
                             : Network.activeSsid ? I18n.tr("Connected · %1% signal").arg(Network.wifi.strength || 0)
                             : root.scanning ? I18n.tr("Searching for nearby networks…")
                             : I18n.tr("Choose a network below.")
-                        color: Tokens.inkMuted
+                        color: Network.activeSsid !== "" ? Tokens.inkOnBone : Tokens.inkMuted
                         font.family: Tokens.ui
                         font.pixelSize: Tokens.fSmall * root.s
                         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                     }
                 }
-                SidebarButton {
+                QQC.AbstractButton {
                     id: disconnectButton
-                    s: root.s
-                    compact: true
                     visible: Network.activeSsid !== ""
-                    text: I18n.tr("Disconnect")
-                    onAct: Network.disconnectWifi()
+                    hoverEnabled: true
+                    implicitWidth: disconnectLabel.implicitWidth + Tokens.s3 * root.s * 2
+                    width: implicitWidth
+                    height: (Tokens.rowH - Tokens.s2) * root.s
+                    Accessible.name: I18n.tr("Disconnect")
+                    onClicked: Network.disconnectWifi()
+                    background: Rectangle {
+                        radius: Tokens.radius * root.s * 1.5
+                        color: disconnectButton.down || disconnectButton.hovered ? Tokens.inkOnBone : "transparent"
+                        border.width: Tokens.border
+                        border.color: Tokens.inkOnBone
+                        Behavior on color {
+                            enabled: root.motionAllowed
+                            ColorAnimation { duration: Tokens.snap }
+                        }
+                    }
+                    contentItem: Text {
+                        id: disconnectLabel
+                        text: I18n.tr("Disconnect")
+                        color: disconnectButton.down || disconnectButton.hovered ? Tokens.bone : Tokens.inkOnBone
+                        font.family: Tokens.ui
+                        font.pixelSize: Tokens.fBody * root.s
+                        font.weight: Font.Medium
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    HoverHandler { cursorShape: Qt.PointingHandCursor }
                 }
             }
         }
@@ -382,9 +427,20 @@ Item {
                     implicitHeight: Math.max(64 * root.s, apCopy.implicitHeight + Tokens.s3 * root.s * 2)
                     height: implicitHeight
                     radius: Tokens.radius * root.s * 1.5
-                    color: apRow.modelData.saved ? Tokens.tint10 : Tokens.tint5
+                    color: apRow.selected ? Tokens.bone
+                        : apHover.hovered ? Tokens.tint10
+                        : apRow.modelData.saved ? Tokens.tint10 : Tokens.tint5
                     border.width: Tokens.border
-                    border.color: apRow.selected ? Tokens.bone : Tokens.lineSoft
+                    border.color: apRow.selected ? Tokens.bone : apHover.hovered ? Tokens.lineStrong : Tokens.lineSoft
+
+                    Behavior on color {
+                        enabled: root.motionAllowed
+                        ColorAnimation { duration: Tokens.snap }
+                    }
+                    Behavior on border.color {
+                        enabled: root.motionAllowed
+                        ColorAnimation { duration: Tokens.snap }
+                    }
 
                     Text {
                         id: apIcon
@@ -394,7 +450,7 @@ Item {
                         width: 30 * root.s
                         horizontalAlignment: Text.AlignHCenter
                         text: root.signalGlyph(apRow.modelData.strength)
-                        color: Tokens.inkDim
+                        color: apRow.selected ? Tokens.inkOnBone : Tokens.inkDim
                         font.family: "Material Symbols Rounded"
                         font.pixelSize: 23 * root.s
                     }
@@ -409,7 +465,7 @@ Item {
                         Text {
                             width: parent.width
                             text: apRow.modelData.ssid || ""
-                            color: Tokens.ink
+                            color: apRow.selected ? Tokens.inkOnBone : Tokens.ink
                             font.family: Tokens.ui
                             font.pixelSize: Tokens.fRow * root.s
                             font.weight: Font.DemiBold
@@ -417,11 +473,11 @@ Item {
                         }
                         Text {
                             width: parent.width
-                            text: (root.isOpen(apRow.modelData) ? I18n.tr("Open") : String(apRow.modelData.security || "Secure"))
+                            text: (root.isOpen(apRow.modelData) ? I18n.tr("Open") : String(apRow.modelData.security || I18n.tr("Secure")))
                                 + (apRow.modelData.saved ? " · " + I18n.tr("Saved") : "")
                                 + (root.multiBandSsids[apRow.modelData.ssid] && apRow.modelData.band ? " · " + I18n.tr("%1 GHz").arg(apRow.modelData.band) : "")
                                 + " · " + I18n.tr("%1% signal").arg(apRow.modelData.strength || 0)
-                            color: Tokens.inkMuted
+                            color: apRow.selected ? Tokens.inkOnBone : Tokens.inkMuted
                             font.family: Tokens.ui
                             font.pixelSize: Tokens.fSmall * root.s
                             elide: Text.ElideRight
@@ -439,6 +495,7 @@ Item {
                         armed: !root.busy
                         onAct: root.choose(apRow.modelData)
                     }
+                    HoverHandler { id: apHover }
                 }
             }
 

@@ -5,7 +5,32 @@ for finer detail.
 
 ## Unreleased
 
+### Removed
+- The mango compositor is gone: its provider, config tree, packages,
+  installer choice, deploy steps, tests and docs. Ryoku ships Hyprland and
+  niri. A box that still carries the mango variant is moved onto the variant
+  for its running (or installed) compositor by `ryoku update` and the doctor,
+  which then remove the mango packages, config and provider binary once the
+  user is no longer in a mango session.
+
 ### Fixed
+- The doctor's reverse-PRIME warning (#270, a black panel after login on a
+  hybrid-GPU laptop) now also fires when a forced or drifted GPU render pin
+  coexists with a stored hybrid or passthrough choice, which previously
+  silenced the check.
+- Lock, suspend, lid-close and wake now share one fail-closed lifecycle across
+  Hyprland and niri. Lockscreen generations change atomically during updates,
+  every sleep waits for compositor-secure qylock, and output recovery retries
+  after resume without leaving an unlock gap during daemon restarts.
+- The desktop behaves the same on niri as on Hyprland: the night light, window
+  borders, the app and brightness keybinds, the colour picker, the recorder and
+  the launcher tools, idle management, the lid policy and Super+P all work on a
+  packaged niri box, and Ryoku Hub offers niri's own customization (blur,
+  frames, animations, layer rules, input tuning) with no Hyprland-only controls
+  or wording. The dev deploy now lays only the live compositor's scripts, so a
+  checkout no longer hides what a package is missing.
+- Project documentation now uses the Ryoku name and the canonical
+  `ryoku-dev/ryoku` repository URL.
 - The Now playing widget now respects Power Saver, reduced motion, and the shared
   audio-animation policy instead of keeping its private waveform and decorative
   animations running. Song information and playback controls remain available.
@@ -17,6 +42,24 @@ for finer detail.
   mutable channels current without changing frozen distro snapshots.
 
 ### Added
+- **`main` is pushed only as the release fast-forward.** The `pre-push` hook now
+  refuses every push that moves `main` unless it is named as the release
+  (`RYOKU_RELEASE_PUSH=1 git push origin unstable-dev:main`), and even then
+  insists on a fast-forward onto a commit `origin/unstable-dev` carries; a
+  rewrite or deletion of `main` is refused outright. Work and fixes land on
+  `unstable-dev`, which publishes the testing channel on every push. The hook's
+  ShellCheck pass uses CI's flags (`-x -s bash --severity=warning`), so a
+  rolling box's info-level rules no longer refuse what CI accepts; the release
+  push covers every script `main` is missing. `docs/development.md`,
+  "Branches and pushing", and `CONTRIBUTING.md` carry the procedure.
+- **The installer now asks which window manager, browser, and apps you want.**
+  New ISO installs offer a choice of compositor (Hyprland, niri, MangoWM),
+  exactly one of the three shipped browsers (Zen, Chromium, Firefox), and a
+  keep/remove checklist over every optional app and tool; rows that back a
+  desktop feature are marked required and refused. Removed apps are recorded
+  in the doctor's provisioning ledger, and `ryoku doctor`/`ryoku verify` now
+  treat that ledger as a removal on every lane, so the update manifest leaves
+  them deleted. (See `installation/CHANGELOG.md` for the installer detail.)
 - **Plain-language GitHub release notes, generated from commit notes.** A change
   users notice gets a `Note: New|Fixed|Removed: ...` trailer on its commit;
   `bin/ryoku-release-notes` collects these between releases and the

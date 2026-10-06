@@ -28,9 +28,18 @@ Singleton {
     property var commands: []
     property var sessions: []
     property var usage: null
+    // The live session's id, so the history drawer can mark where you are.
+    property string currentSession: ""
     // Approvals with no tool row yet (a permission that arrived before its
     // tool_call), rendered as trailing cards.
     property var standalonePerms: []
+
+    // Recent quick asks (the launcher's \resume history), newest first. The
+    // Ask bar's history drawer reads this; it reloads when an ask completes.
+    property var recentAsks: []
+    // Resolved fast-lane state (`backend --json`): provider, model, label,
+    // available providers, and whether asks fall back to the session lane.
+    property var quickLane: null
 
     // All chat-capable agents (agent --json) for the "what's answering" picker.
     property var backends: []
@@ -90,7 +99,7 @@ Singleton {
     }
 
     function setApprovals(mode) {
-        if (mode !== "read-only" && mode !== "ask")
+        if (mode !== "read-only" && mode !== "ask" && mode !== "auto")
             return;
         root.approvalsMode = mode;
         root._send({ type: "approvals", mode: mode });
@@ -124,11 +133,27 @@ Singleton {
     function noteOpened() {
         root.loadReady();
         root.loadBackends();
+        root.loadRecentAsks();
+        root.loadQuickLane();
         if (!follow.running && !followRestart.running)
             follow.running = true;
     }
 
     function noteClosed() {}
+
+    function loadRecentAsks() { recentProc.running = true; }
+
+    // Point the fast ask lane at a provider (`backend <provider>`); the config
+    // lands a moment later, so re-read the resolved state once it settles and
+    // refresh the history so the drawer's lane markers follow the switch.
+    function setQuickLane(provider) {
+        if (!provider)
+            return;
+        Quickshell.execDetached(["ryoku-rashin", "backend", String(provider)]);
+        backendReload.restart();
+    }
+
+    function loadQuickLane() { backendProc.running = true; }
 
     // ---- inbound (frame -> reducer -> projection) ----------------------------
 
@@ -158,6 +183,7 @@ Singleton {
         root.commands = st.commands || [];
         root.sessions = st.history || [];
         root.usage = st.usage;
+        root.currentSession = st.session && st.session.id ? String(st.session.id) : "";
         root.bannerState = st.banner ? String(st.banner.state || "") : "";
         var items = st.items || [];
         var perms = st.permissions || [];
@@ -308,6 +334,40 @@ Singleton {
     function loadReady() { readyProc.running = true; }
 
     Process {
+        id: recentProc
+        command: ["ryoku-rashin", "ask", "--recent"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var arr;
+                try { arr = JSON.parse(String(line)); } catch (e) { return; }
+                if (Array.isArray(arr))
+                    root.recentAsks = arr;
+            }
+        }
+    }
+
+    Process {
+        id: backendProc
+        command: ["ryoku-rashin", "backend", "--json"]
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: (line) => {
+                var f;
+                try { f = JSON.parse(String(line)); } catch (e) { return; }
+                if (f && f.available)
+                    root.quickLane = f;
+                root.loadRecentAsks();
+            }
+        }
+    }
+    Timer {
+        id: backendReload
+        interval: 400
+        onTriggered: root.loadQuickLane()
+    }
+
+    Process {
         id: backendsProc
         command: ["ryoku-rashin", "agent", "--json"]
         stdout: SplitParser {
@@ -333,5 +393,7 @@ Singleton {
     Component.onCompleted: {
         root.loadReady();
         root.loadBackends();
+        root.loadRecentAsks();
+        root.loadQuickLane();
     }
 }

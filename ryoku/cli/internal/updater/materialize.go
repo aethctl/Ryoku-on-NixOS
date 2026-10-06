@@ -109,28 +109,46 @@ var applyProvider = func(name, store string) error {
 // generated state, so their absence means nothing. Best-effort per provider:
 // a tree whose provider binary is absent stays as it was, never a failed
 // materialize.
+//
+// A missing neutral store is not a reason to skip: the installer only seeds
+// desktop.json for a keyboard that is not the default layout, so a us-layout
+// install reaches its first login with the store absent, and the provider
+// renders its own defaults from an unreadable path. Refusing to render then
+// left the hard-included files missing and the first niri login dead on
+// arrival (#331). With no store to render *from*, though, a render is a first
+// render only while nothing has ever been authored: the provider mirrors its
+// bytes into user_edits, so a copy sitting there means settings already have
+// an owner (a fork, or a Hub edit the overlay just laid), and defaults would
+// speak over it. That case is left to the overlay and the next store-driven
+// apply.
 func applyGenerated(configHome string) {
 	store := filepath.Join(configHome, "ryoku", "desktop.json")
-	if !sys.Exists(store) {
-		return // no neutral store to render from: the seeds are the right config
-	}
+	hasStore := sys.Exists(store)
 	for _, name := range wm.Providers() {
 		dir := wm.ConfigDir(name)
 		if dir == "" || !sys.Exists(filepath.Join(configHome, dir)) {
 			continue // tree not laid down: nothing to complete
 		}
 		missing := false
+		authored := false
 		for _, rel := range wm.GeneratedConfig(name) {
 			if d, _, ok := strings.Cut(rel, "/"); !ok || d != dir {
-				continue // a user_edits fork mirror, not generated state
+				// a user_edits copy: the provider's mirror, a fork, or an edit
+				// the overlay just laid: settings already have an owner.
+				if sys.Exists(filepath.Join(configHome, rel)) {
+					authored = true
+				}
+				continue
 			}
 			if !sys.Exists(filepath.Join(configHome, rel)) {
 				missing = true
-				break
 			}
 		}
 		if !missing {
 			continue
+		}
+		if !hasStore && authored {
+			continue // a first render with no store would speak over the owner
 		}
 		if err := applyProvider(name, store); err != nil {
 			fmt.Printf(i18n.T("note: could not render %s's generated config (%v); run `ryoku doctor` inside a %s session\n"), name, err, name)

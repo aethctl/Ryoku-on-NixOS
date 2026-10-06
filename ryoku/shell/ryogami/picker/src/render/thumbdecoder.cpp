@@ -46,7 +46,6 @@ bool blankFrame(const QImage &image)
     }
     return true;
 }
-
 QImage decodeScaled(const QString &path, QSize box, QSize &sourceOut)
 {
     QImageReader reader(path);
@@ -66,6 +65,30 @@ QImage decodeScaled(const QString &path, QSize box, QSize &sourceOut)
         image = image.scaled(box, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     sourceOut = source.isValid() ? source : image.size();
     return std::move(image).convertToFormat(QImage::Format_RGBA8888);
+}
+
+// Pads the image out to the full tile box, smearing the edge pixels into the
+// border. Blurred cards and the backdrop sample past their content edges and
+// across whole mip levels; texels no upload covers hold whatever the driver
+// left in that VRAM, so the flash of arbitrary colour some machines show while
+// scrolling is undefined memory that reads as clean black on others.
+QImage padToBox(const QImage &image, QSize box)
+{
+    if (image.size() == box)
+        return image;
+    QImage padded(box, QImage::Format_RGBA8888);
+    constexpr int bpp = 4;
+    for (int y = 0; y < image.height(); ++y) {
+        uchar *dst = padded.scanLine(y);
+        const uchar *src = image.constScanLine(y);
+        std::memcpy(dst, src, size_t(image.width()) * bpp);
+        for (int x = image.width(); x < box.width(); ++x)
+            std::memcpy(dst + size_t(x) * bpp, src + size_t(image.width() - 1) * bpp, bpp);
+    }
+    for (int y = image.height(); y < box.height(); ++y)
+        std::memcpy(padded.scanLine(y), padded.constScanLine(image.height() - 1),
+                    size_t(box.width()) * bpp);
+    return padded;
 }
 
 }
@@ -136,14 +159,15 @@ void ThumbDecoder::request(const QString &key, const QString &path, const QStrin
             m_inflight.remove(token);
             return;
         }
-
-        Result result{tier, TierImage{key, {}}, source};
-        result.image.levels.reserve(size_t(levels));
-        result.image.levels.push_back(std::move(image));
+        const QSize content = image.size();
+        QImage base = padToBox(image, box);
+        Result result{tier, TierImage{key, content, {}}, source};
+        result.image.levels.push_back(std::move(base));
         for (int level = 1; level < levels; ++level) {
-            const QImage &prev = result.image.levels.back();
-            const QSize next(std::max(1, prev.width() / 2), std::max(1, prev.height() / 2));
-            result.image.levels.push_back(prev.scaled(next, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+            const QSize next(std::max(1, box.width() / (1 << level)),
+                             std::max(1, box.height() / (1 << level)));
+            result.image.levels.push_back(result.image.levels[size_t(level - 1)].scaled(
+                next, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
         }
         finish(std::move(result), token);
     }, priority);

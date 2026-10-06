@@ -34,10 +34,6 @@ Singleton {
     property alias frameBars: adapter.frameBars
     readonly property var normalizedFrameBars: FrameBars.normalize(frameBars, BarCatalog, MenuCatalog)
 
-    // JsonAdapter's nested lists are QML sequences rather than JavaScript arrays.
-    property var _sidebars: ({})
-    readonly property var sidebars: Sidebars.normalize(_sidebars)
-
     // barStyle: which bar design renders. "qsbar" is the default QS Bar top bar
     // (a shipped folder style under modules/bar/barstyles/qsbar); "sumi" is the
     // built-in painted left rail; any other id is an installed store folder
@@ -161,6 +157,42 @@ Singleton {
     readonly property bool styleOwnsFeedback:
         root.styleOwnsFeedbackFor("")
 
+    readonly property var askBubble: {
+        const ask = adapter.ask && typeof adapter.ask === "object" ? adapter.ask : ({});
+        const bubble = ask.bubble && typeof ask.bubble === "object" ? ask.bubble : ({});
+        const x = Number(bubble.x);
+        const y = Number(bubble.y);
+        return {
+            enabled: bubble.enabled === true,
+            x: Math.max(0, Math.min(1, isFinite(x) ? x : 0.94)),
+            y: Math.max(0, Math.min(1, isFinite(y) ? y : 0.68)),
+            screen: String(bubble.screen || "")
+        };
+    }
+
+    function patchAskBubble(key, value) {
+        if (["enabled", "x", "y", "screen"].indexOf(key) < 0)
+            return;
+        let clean = value;
+        if (key === "x" || key === "y") {
+            const number = Number(value);
+            clean = Math.max(0, Math.min(1, isFinite(number) ? number : root.askBubble[key]));
+        } else if (key === "enabled") {
+            clean = value === true;
+        } else {
+            clean = String(value || "");
+        }
+        const next = Object.assign({}, root.askBubble);
+        next[key] = clean;
+        adapter.ask = { bubble: next };
+        shaderCtl.queued += "call settings.patch "
+            + JSON.stringify({ path: "ask.bubble." + key, value: clean }) + "\n";
+        if (shaderCtl.connected)
+            shaderCtl.flushQueued();
+        else
+            shaderCtl.connected = true;
+    }
+
     // typography: a scale that grows or shrinks the whole shell (the bar text
     // and the surfaces around it), keeping the readout legible without overflow.
     property alias fontScale:  adapter.fontScale
@@ -241,20 +273,16 @@ Singleton {
     property var themePalette: null
     function refreshThemePalette() {
         var pal = null;
-        var sidebarOptions = ({});
         var t = file.text();
         if (t) {
             try {
                 var o = JSON.parse(t);
                 if (o && typeof o.themePalette === "object" && o.themePalette !== null)
                     pal = o.themePalette;
-                if (o && o.sidebars && typeof o.sidebars === "object")
-                    sidebarOptions = o.sidebars;
             } catch (e) {
             }
         }
         themePalette = pal;
-        _sidebars = sidebarOptions;
     }
 
     // brand: the desktop's mark + name, user-overridable from Ryoku Settings ->
@@ -322,6 +350,14 @@ Singleton {
                 "paneRadius": 12,
                 "cardRadius": 9,
                 "pruneWeekly": false
+            })
+            property var ask: ({
+                "bubble": {
+                    "enabled": false,
+                    "x": 0.94,
+                    "y": 0.68,
+                    "screen": ""
+                }
             })
         }
     }

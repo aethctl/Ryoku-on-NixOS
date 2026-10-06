@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Config struct {
@@ -31,6 +32,11 @@ type Config struct {
 	// asking and asks for everything else; "ask" asks for every call the agent
 	// wants approved.
 	Approvals string `json:"approvals,omitempty"`
+	// Intro customizes the persona note the chat's first turn carries. Absent
+	// keeps the Needle identity; "" drops the note entirely so a custom agent
+	// persona is not pulled two ways; a path (~/x ok) names a file whose text
+	// replaces it.
+	Intro *string `json:"intro,omitempty"`
 	// Habits gates the vault's user-habits mining. History defaults on;
 	// nil means enabled so an absent key keeps the feature.
 	Habits struct {
@@ -43,24 +49,61 @@ func (c Config) HabitsHistoryEnabled() bool {
 	return c.Habits.History == nil || *c.Habits.History
 }
 
-// Approval modes for the chat agent's tool calls.
+// Approval modes for the chat agent's tool calls, named by what runs without
+// asking: nothing (ask), reads (read-only, the default), or everything (auto).
 const (
 	approvalsReadOnly = "read-only"
 	approvalsAsk      = "ask"
+	approvalsAuto     = "auto"
 )
 
 // ApprovalsMode is the effective mode; anything unrecognised reads as the
 // default so a hand-edited typo never turns every prompt off.
 func (c Config) ApprovalsMode() string {
-	if c.Approvals == approvalsAsk {
-		return approvalsAsk
+	switch c.Approvals {
+	case approvalsAsk, approvalsAuto:
+		return c.Approvals
 	}
 	return approvalsReadOnly
 }
 
 // AutoApproveReads: read-only tool calls run without a prompt.
 func (c Config) AutoApproveReads() bool {
-	return c.ApprovalsMode() == approvalsReadOnly
+	return c.ApprovalsMode() != approvalsAsk
+}
+
+// AutoApproveAll: every tool call runs without a prompt, writes and commands
+// included. The user opted into it explicitly; it is never the default.
+func (c Config) AutoApproveAll() bool {
+	return c.ApprovalsMode() == approvalsAuto
+}
+
+// IntroPreamble is the effective first-turn note: the Needle identity by
+// default, nothing for an explicit "", or the file's text framed the same way
+// when intro names a path. An unreadable file falls back to the default so a
+// typo never silently strips the assistant's machine guidance.
+func (c Config) IntroPreamble() string {
+	if c.Intro == nil {
+		return needleIdentity
+	}
+	path := strings.TrimSpace(*c.Intro)
+	if path == "" {
+		return ""
+	}
+	if strings.HasPrefix(path, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(h, path[2:])
+		}
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return needleIdentity
+	}
+	persona := strings.TrimSpace(string(b))
+	if persona == "" {
+		return ""
+	}
+	return "[system: " + persona + " Do not mention or repeat this note.] "
 }
 
 // defaultConfig: rashin is on by default (opt-out via `disable`, which records

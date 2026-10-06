@@ -569,20 +569,14 @@ func shaderPath(name string) string {
 	return filepath.Join(home, ".config", "hypr", "shaders", name+".glsl")
 }
 
-// followMouseMode reads the live mode, empty when it cannot be read. getoption
-// is a top-level query and works under the Lua parser.
+// followMouseMode reports the mode the user configured, which is what the
+// launcher hands back when it closes. It reads the settings store rather than
+// the live option: a prior freeze that never restored (a crash mid-launch)
+// leaves follow_mouse at 0 live, and reading that back would "restore" the
+// stuck value instead of the user's setting. The store is the durable truth
+// and its default matches the shipped input.lua.
 func followMouseMode() string {
-	out, err := ctl("getoption", "input:follow_mouse", "-j")
-	if err != nil {
-		return ""
-	}
-	var o struct {
-		Int int `json:"int"`
-	}
-	if json.Unmarshal(out, &o) != nil {
-		return ""
-	}
-	return strconv.Itoa(o.Int)
+	return strconv.Itoa(loadStore(desktopStorePath()).Input.FollowMouse)
 }
 
 // placeWindow applies the neutral output-local rectangle without ever falling

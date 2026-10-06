@@ -36,6 +36,11 @@ tmp="$(mktemp "$f.XXXXXX")"
 trap 'rm -f "$tmp"' EXIT
 
 id="${1:?id required}"; field="${2:?field required}"; shift 2
+jq 'with_entries(.value |=
+	if ((.sidebarCard.side // "") == "right")
+	then .sidebarCard.side = "left"
+	else .
+	end)' "$f" >"$tmp" && mv "$tmp" "$f"
 
 # manifest path for a plugin. dev override dirs first, then the data dir
 # (same order discover.sh uses). non-zero when none found.
@@ -69,7 +74,7 @@ seed_entry() {
 	sidebar="$(jq -c '. as $root
 		| if (.defaults.sidebar | type) == "object" then
 			(($root.defaults.sidebar | {
-				side: (.side // "left"),
+				side: "left",
 				tab: (.tab // "Plugins"),
 				order: (.order // 10)
 			}) + {
@@ -110,8 +115,8 @@ framePopout)
 		"$f" >"$tmp" && mv "$tmp" "$f"
 	;;
 sidebarCard)
-	side="${1:?side}"; tab="${2:-Plugins}"; order="${3:-10}"; label="${4:-}"; glyph="${5:-}"
-	jq --arg id "$id" --arg side "$side" --arg tab "$tab" --argjson order "$order" --arg label "$label" --arg glyph "$glyph" \
+	_side="${1:?side}"; tab="${2:-Plugins}"; order="${3:-10}"; label="${4:-}"; glyph="${5:-}"
+	jq --arg id "$id" --arg side "left" --arg tab "$tab" --argjson order "$order" --arg label "$label" --arg glyph "$glyph" \
 		'.[$id] = ((.[$id] // {}) + {
 			enabled: ((.[$id].enabled) // true),
 			host: ((.[$id].host) // "sidebarCard"),

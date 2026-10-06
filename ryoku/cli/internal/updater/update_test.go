@@ -52,6 +52,8 @@ func TestWantedSnapperHelpers(t *testing.T) {
 // stale answers, run-state carries the prompt, awaitAnswer reads + consumes.
 func TestPromptAnswerRoundTrip(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	progress.begin(pkgSteps) // a prompt is only ever raised inside a run
+	t.Cleanup(progress.idle)
 
 	// stale answer from a previous prompt must not satisfy this one.
 	if err := os.WriteFile(answerPath(), []byte("Install"), 0o644); err != nil {
@@ -438,5 +440,25 @@ func TestDropSplitMetasNotServed(t *testing.T) {
 	removed = nil
 	if got := dropSplitMetasNotServed(map[string]bool{"ryoku-desktop-hyprland": true}); len(got) != 0 || len(removed) != 0 {
 		t.Fatalf("a served meta must stay, got %v removed %v", got, removed)
+	}
+}
+
+// The doctor an update runs is the CLI that update just moved: the home build
+// deploy.sh laid down on a checkout, never a home build on a packaged box.
+func TestDoctorBinFollowsWhatTheUpdateMoved(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	built := filepath.Join(home, ".local", "bin", "ryoku")
+	if err := os.MkdirAll(filepath.Dir(built), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(built, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := doctorBin(true); got != built {
+		t.Errorf("checkout: doctorBin = %q, want the deployed %q", got, built)
+	}
+	if got := doctorBin(false); got == built {
+		t.Errorf("packaged: doctorBin ran the stale home build %q", got)
 	}
 }

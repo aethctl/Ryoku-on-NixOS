@@ -127,14 +127,22 @@ truth for the live desktop.
 - `rashin/` Ryoku Rashin, the optional agent OS (off by default): `backend/`
   (`ryoku-rashin`, one Go program that maintains the markdown knowledge vault at
   `~/.local/share/ryoku/rashin/`, serves the embedded dashboard on
-  `127.0.0.1:3600`, and bridges the Hermes agent over ACP) with its hand-authored
-  web dashboard embedded under `backend/web/` (no build step), and the `rashin`
+  `127.0.0.1:3600`, and bridges the Hermes agent over ACP), `web/` (the Rashin
+  console: one Svelte 5 + bits-ui app that is the companion window's UI and the
+  dashboard, built with Vite into `backend/web/dist`, which is committed and
+  embedded so no node runs on an installed box), and the `rashin`
   terminal command (the same binary under a second name: natural language to a
   ready-to-run command plan on the fish prompt, with a `conf.d/rashin.fish`
-  weave). The Hub's `RashinPage.qml` is the control surface (enable, one-click
-  Hermes setup, open dashboard); built by the shell's `deploy.sh`. See
-  `docs/rashin.md` and `docs/rashin-terminal.md`.
-- `assets/` `brand/` the 力 logo and icons, `wallpapers/` the shipped wallpaper
+  weave), `skills/ryoku/` (the agent skill `ryoku-rashin wire` links into every
+  harness: the GUI map, the bar, plugins, the window-manager seam, building the
+  Ryoku way, the feature ladder, break/fix), and `wiki/` (the plain-language
+  guides for someone new, mirrored into the vault as `wiki/` and rendered by
+  the console). The Hub's `RashinPage.qml` is the control surface (enable,
+  one-click Hermes setup, open dashboard); built by the shell's `deploy.sh`.
+  See `docs/rashin.md` and `docs/rashin-terminal.md`.
+- `assets/` `brand/` the 力 logo and icons and Rashin's seal (`rashin-mark*.svg`,
+  `rashin-lockup.svg`; the app icon and the console favicon link to them),
+  `wallpapers/` the shipped wallpaper
   set (installs to `~/Pictures/Wallpapers`), and `ryodecors/` the decor art the
   `Decor`/`Placard` components render (installs to `~/Pictures/ryodecors`, kept
   current by `ryoku doctor`; bake more with `bin/art/ryodither`).

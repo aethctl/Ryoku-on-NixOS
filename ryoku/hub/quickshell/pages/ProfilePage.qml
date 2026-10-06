@@ -106,6 +106,16 @@ Item {
     // an absent/empty profile.json renders exactly the stock marble plate.
     function f(path, def) { return ProfileStore.get(path, def); }
 
+    // The version the seam reports already carries its v (Hyprland answers
+    // "v0.56.2"); strip one so the dossier reads one v, not two.
+    function wmVersion(v) {
+        return v === "-" ? "" : v.replace(/^v+/, "");
+    }
+    // The dossier foot is bottom-anchored inside the dossier's own margins, so
+    // on a short window it climbs into the live column. Its absolute top is the
+    // line the telemetry must stop above.
+    readonly property real footTop: dossier.y + foot.y - Tokens.s3
+
     // ── edit-mode helpers ────────────────────────────────────────────────────
     // A block reads on unless profile.json turns it off. In EDIT mode an off
     // block stays rendered but ghosted (a bring-it-back affordance); at rest it
@@ -338,6 +348,8 @@ Item {
         property string name: ""
         property string k: ""
         property bool big: true
+        property bool showSub: true
+        property real figure: 30
         spacing: -1
         Text {
             text: co.name
@@ -350,7 +362,7 @@ Item {
             text: pg.statBig(co.k)
             color: Tokens.ink
             font.family: Tokens.ui
-            font.pixelSize: co.big ? 30 : Tokens.fRow
+            font.pixelSize: co.big ? co.figure : Tokens.fRow
             font.weight: Font.Medium
             font.features: ({ "tnum": 1 })
         }
@@ -359,6 +371,7 @@ Item {
             color: Tokens.inkDim
             font.family: Tokens.mono
             font.pixelSize: Tokens.fMicro
+            visible: co.showSub
         }
     }
 
@@ -732,7 +745,7 @@ Item {
                     }
                     SpecRow {
                         k: I18n.tr("Compositor")
-                        v: SysInfo.sysWM + (SysInfo.sysWmVer && SysInfo.sysWmVer !== "-" ? " v" + SysInfo.sysWmVer : "")
+                        v: SysInfo.sysWM + (SysInfo.sysWmVer && SysInfo.sysWmVer !== "-" ? " v" + pg.wmVersion(SysInfo.sysWmVer) : "")
                     }
                     SpecRow {
                         k: I18n.tr("Uptime")
@@ -849,13 +862,25 @@ Item {
         readonly property real fH: hero.height
         readonly property real cx: Tokens.s6 + Tokens.s5
         readonly property real leadFrom: cx + 172
+        // The column lives between the head and the bottom-anchored foot, so the
+        // pins distribute over the real space instead of hard-coded pixels: the
+        // stock 64px pitch until the foot climbs close, then compact (the sub
+        // lines drop) and micro (the figures shrink) fallbacks.
+        readonly property real span: pg.footTop - 338
+        readonly property bool full: span >= 3 * 64 + 62
+        readonly property bool micro: !full && (span - 49) / 3 < 50
+        readonly property real gap: full ? 64
+            : micro ? Math.min(64, Math.max(40, Math.floor((span - 40) / 3)))
+            : Math.min(64, Math.max(50, Math.floor((span - 49) / 3)))
+        readonly property real rowH: full ? 62 : (micro ? 40 : 49)
+        readonly property real firstY: Math.max(316, Math.min(338, pg.footTop - (3 * gap + rowH)))
         // cy: the callout's y; (fx, fy): the face point it reads; sx: leader start x.
         readonly property var pins: [
-            { x: cx, sx: leadFrom, cy: 338, fx: 0.36, fy: 0.26, k: "core", name: I18n.tr("CORE"), big: true },
-            { x: cx, sx: leadFrom, cy: 402, fx: 0.30, fy: 0.40, k: "gpu", name: "GPU", big: true },
-            { x: cx, sx: leadFrom, cy: 466, fx: 0.28, fy: 0.54, k: "mem", name: I18n.tr("MEMORY"), big: true },
-            { x: cx, sx: leadFrom, cy: 530, fx: 0.40, fy: 0.70, k: "net", name: I18n.tr("NETWORK"), big: true },
-            { x: 372, sx: 372, cy: 398, fx: 0.47, fy: 0.44, k: "frac", name: "亀裂 · " + I18n.tr("FRACTURE"), big: false }
+            { x: cx, sx: leadFrom, cy: firstY, fx: 0.36, fy: 0.26, k: "core", name: I18n.tr("CORE"), big: true },
+            { x: cx, sx: leadFrom, cy: firstY + gap, fx: 0.30, fy: 0.40, k: "gpu", name: "GPU", big: true },
+            { x: cx, sx: leadFrom, cy: firstY + 2 * gap, fx: 0.28, fy: 0.54, k: "mem", name: I18n.tr("MEMORY"), big: true },
+            { x: cx, sx: leadFrom, cy: firstY + 3 * gap, fx: 0.40, fy: 0.70, k: "net", name: I18n.tr("NETWORK"), big: true },
+            { x: 372, sx: 372, cy: firstY + Math.round(gap * 0.94), fx: 0.47, fy: 0.44, k: "frac", name: "亀裂 · " + I18n.tr("FRACTURE"), big: false }
         ]
 
         // Eyebrow for the live column, with the never-still pulse.
@@ -895,6 +920,10 @@ Item {
             onHeightChanged: requestPaint()
             Component.onCompleted: requestPaint()
             Connections {
+                target: telem
+                function onPinsChanged() { leads.requestPaint(); }
+            }
+            Connections {
                 target: hero
                 function onXChanged() { leads.requestPaint(); }
                 function onWidthChanged() { leads.requestPaint(); }
@@ -908,7 +937,7 @@ Item {
                     const p = telem.pins[i];
                     const dx = telem.fL + p.fx * telem.fW;
                     const dy = telem.fT + p.fy * telem.fH;
-                    const sy = p.cy + (p.big ? 30 : 22);
+                    const sy = p.cy + (p.big ? (telem.micro ? 26 : 30) : 22);
                     ctx.strokeStyle = Qt.rgba(Tokens.ink.r, Tokens.ink.g, Tokens.ink.b, 0.3);
                     ctx.lineWidth = 1;
                     ctx.beginPath();
@@ -932,6 +961,8 @@ Item {
                 name: modelData.name
                 k: modelData.k
                 big: modelData.big
+                showSub: telem.full
+                figure: telem.micro ? 22 : 30
             }
         }
     }

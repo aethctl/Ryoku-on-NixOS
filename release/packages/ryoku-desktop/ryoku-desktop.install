@@ -128,6 +128,19 @@ _bt_reset_unit() {
   mkdir -p /var/lib/ryoku && : >"$marker"
 }
 
+# enable the BlueZ pairing agent once via --global (#308), so every user picks
+# it up on next login: BLE HID devices that confirm a passkey (gamepads,
+# keyboards) cannot bond without a registered agent, and the panel's pairing
+# silently fails without one. Marker keeps it one-shot: a user who later
+# disables the unit stays disabled across upgrades.
+_bt_agent_unit() {
+  [ -e /usr/lib/systemd/user/ryoku-bt-agent.service ] || return 0
+  local marker=/var/lib/ryoku/bt-agent-enabled
+  [ -e "$marker" ] && return 0
+  systemctl --global enable ryoku-bt-agent.service 2>/dev/null || true
+  mkdir -p /var/lib/ryoku && : >"$marker"
+}
+
 # enable the config bootstrap once via --global, so every user picks it up on next
 # login (the units live in /usr/lib/systemd/user). A plain package install lays
 # nothing into ~/.config, and a session with no laid-down config is a bare
@@ -167,6 +180,7 @@ post_install() {
   _logind_lid
   _ai_usage_timer
   _bt_reset_unit
+  _bt_agent_unit
   _bootstrap
   _boot_theme
   _hint
@@ -183,6 +197,7 @@ post_upgrade() {
   _logind_lid
   _ai_usage_timer
   _bt_reset_unit
+  _bt_agent_unit
   _boot_theme
   _network_kill_units
   _hint

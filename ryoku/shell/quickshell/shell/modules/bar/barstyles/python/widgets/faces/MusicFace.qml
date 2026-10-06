@@ -294,7 +294,7 @@ Item {
 
                     SequentialAnimation {
                         loops: Animation.Infinite
-                        running: titleTextMain.implicitWidth > titleClip.width
+                        running: root.isMediaActive && titleTextMain.implicitWidth > titleClip.width
 
                         PauseAnimation { duration: 3000 }
                         NumberAnimation {

@@ -5,14 +5,14 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui.Singletons
 
-// Quick-capture controller for the frame's capture card: pick a delay, a save
+// Quick-capture controller for the bar's capture popout: pick a delay, a save
 // target and a mode, take the shot and be done. With "Beautify after" on, the
 // saved shot then opens in ryoshot's beautify editor (RYOSHOT_OPEN) for polish
 // instead of ending at the file. The delay / save / beautify choices persist
-// (capture.json) so the card remembers them across sessions, shared across every
+// (capture.json) so the popout remembers them across sessions, shared across every
 // daemon that reads this singleton.
 //
-// Screen RECORDING is deliberately NOT owned here. The card's record zone drives
+// Screen RECORDING is deliberately NOT owned here. The popout's record zone drives
 // the existing Recorder singleton (GPU Screen Recorder, the record island,
 // Discord, camera). The only recording thing this file does is hand a picked
 // target (monitor, window or region) to Recorder.start.

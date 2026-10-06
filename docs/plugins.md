@@ -170,9 +170,9 @@ Dropped in the **middle** of that screen instead, the popout becomes a centred
 surface: it floats in the middle of the display, all four corners rounded, with
 no hover edge. A centred popout opens only when it is asked for, by
 `ryoku-shell plugin <id>` or a click, which makes it the placement
-for a modal view. It shares the middle of the screen with quick settings
-(`Super+Escape`) and the stash (`Super+S`), but the shell only ever shows one
-surface at a time, so they take turns rather than overlap.
+for a modal view. It shares the modal layer with Ryoku's global shell surfaces,
+but the shell only ever shows one modal surface at a time, so they take turns
+rather than overlap.
 
 - Ryoku handles the **hover trigger, the open/close animation, and the fuse into
   the frame**.
@@ -246,11 +246,10 @@ manage it from a terminal; see "Share it" below for export and share.
 
 ### 4. Sidebar card - lives in a global sidebar
 
-A `sidebarCard` plugin can live in the Controls or Companion screen-edge
-overlay. It uses the same entry points as every other plugin:
-`service/Main.qml` for persistent logic and `content/Widget.qml` for the view.
-There is no `content/Sidebar.qml`. Ryoku owns the surface frame, section
-navigation, width, placement, and motion.
+A `sidebarCard` plugin lives in Extensions inside Controls. It uses the same
+entry points as every other plugin: `service/Main.qml` for logic and
+`content/Widget.qml` for the view. There is no `content/Sidebar.qml`. Ryoku owns
+the surface frame, navigation, width, placement, and motion.
 
 The root must be an `Item` with `pragma ComponentBehavior: Bound`. These are the
 core host-set members:
@@ -290,34 +289,24 @@ Two additional properties are optional. If declared, the host binds them:
 
 | Optional member | Meaning |
 | --- | --- |
-| `compact: bool` | `true` for Summary and `false` for Expanded. Use it to provide a deliberate compact layout. |
-| `viewportHeight: real` | Height available to the section below the shared chrome. Use it to cap an internal scroll region. |
+| `compact: bool` | The Extensions view supplies `false`; provide the full widget. |
+| `viewportHeight: real` | Height available below the shared chrome. Use it to cap an internal scroll region. |
 
-If `compact` is absent, Summary uses a generic host view built from the
-manifest name and its real description. The one real `Widget.qml` instance
-stays loaded and appears unchanged in Expanded, so the fallback does not clip
-the widget, duplicate its service state, or substitute fake content. A plugin
-that declares `compact` owns both presentations. Omitting `viewportHeight` is
-also valid.
-
-The host continues to drive `open`, `reveal`, `tabActive`, and optional
-`active` from the real sidebar state in either presentation. Service objects
-and their timers are not recreated when the user switches between Summary and
-Expanded.
+The host drives `open`, `reveal`, `tabActive`, and optional `active` from the
+real panel state. Stop timers and other live work when inactive. Sidebar plugin
+instances unload with the owning panel; persistent external work belongs in
+the backend rather than a hidden QML view.
 
 Sidebar placement is stored under the plugin's `sidebarCard` placement object:
 
-- `side`: `"left"` for Controls or `"right"` for Companion;
-- `tab`: the section label; `"Plugins"` is the shared trailing plugin section;
-- `order`: numeric order among plugins in that section;
-- `label`: the displayed label; and
-- `glyph`: a Material Symbols Rounded ligature, default `"extension"`.
+- `side` is accepted for existing manifests, normalized to `"left"`, and otherwise ignored;
+- `order` is the numeric order in the Extensions view;
+- `label` is the displayed label; and
+- `glyph` is a Material Symbols Rounded ligature, default `"extension"`.
 
 Manifest suggestions use `"defaults": { "host": "sidebarCard", "sidebar": {
-"side": "left", "tab": "Plugins", "order": 10 } }`. The manifest declares
-`sidebarCard` in `hosts`, keeps `entryPoints.content` at
-`content/Widget.qml`, and may include `"compact"` in
-`capabilities.densities` when the widget supplies its own Summary view.
+"side": "left", "order": 10 } }`. The manifest declares `sidebarCard` in
+`hosts` and keeps `entryPoints.content` at `content/Widget.qml`.
 
 The plugin draws content, never its own window chrome, outer surface, position,
 or motion. R1-R11 are otherwise unchanged; public imports remain `QtQuick*`,
@@ -536,9 +525,9 @@ value for it, and `undefined` must not become your poll interval.
   widget's defaults are just `{ "host": "topbarGlyph", "icon": "...", "label":
   "..." }`, plus an optional `"bar": { "section": "left|center|right" }` for
   the lane it first lands in. A sidebar card uses `{ "host": "sidebarCard",
-  "sidebar": { "side": "left|right", "tab": "Plugins", "order": 10 } }`.
-  `icon` and sidebar `glyph` values are Material Symbols Rounded ligature names
-  (`vpn_lock`, `extension`, ...).
+  "sidebar": { "side": "left", "tab": "Plugins", "order": 10 } }`; the host
+  normalizes any other `side` value to `"left"`. `icon` and sidebar `glyph`
+  values are Material Symbols Rounded ligature names (`vpn_lock`, `extension`, ...).
 - `official` - leave `false`. Only first-party Ryoku plugins set `true`; every
   other plugin lists under QS Bar Settings > Community and carries the store's
   community warning.
@@ -599,8 +588,8 @@ unsandboxed with your permissions. R1..R11 are what keep it honest.
   it), or install it from Ryostore itself. Never hand-copy into
   `~/.local/share/ryoku/plugins/`: a folder without a receipt is not loaded.
 - **Enable & place**: Ryoku Settings → Plugins. The user toggles it on, picks a
-  host, and sets the host placement: edge for a frame popout, or side, tab and
-  order for a sidebar card. Placement saves to
+  host, and sets the host placement: edge for a frame popout, or order in
+  Controls > Extensions for a sidebar card. Placement saves to
   `~/.config/ryoku/plugins.json`; the shell watches that file and retunes live -
   no restart.
 - **Desktop widgets** are then moved/resized/hidden directly on the wallpaper

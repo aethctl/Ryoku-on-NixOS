@@ -16,8 +16,9 @@ import (
 )
 
 // acp.go speaks the Agent Client Protocol: newline-delimited JSON-RPC 2.0
-// over the hermes acp child's stdio. One conn drives one hermes session whose
-// cwd is the vault, so terminal hermes and the dashboard share one memory.
+// over the hermes acp child's stdio. One conn drives one hermes session in
+// one lane's cwd: the vault for the Ryoku lane, so terminal hermes and the
+// dashboard share one memory, and a bare directory for the plain chat lane.
 
 type PermOption struct {
 	ID   string `json:"id"`
@@ -94,7 +95,7 @@ type acpConn struct {
 	mu        sync.Mutex
 	pending   map[int64]chan rpcMsg
 	sessionID string
-	vault     string
+	cwd       string
 	closed    bool
 	// eventsDone: the reader closed the event stream; emit becomes a no-op.
 	eventsDone bool
@@ -122,7 +123,61 @@ type acpConn struct {
 	// models as ACP configOptions (omp) instead of the legacy models block.
 	modelOption string
 
+	// errTail holds the agent's own stderr, bounded. An ACP error like
+	// session/new's bare "Internal error" carries no cause; the agent always
+	// writes the real reason to its log stream. The tail rides on the failure
+	// so `ryoku-rashin logs` and the banner show what actually broke.
+	errTail *tailBuffer
+
 	events chan AcpEvent
+}
+
+// acpStderrTailBytes bounds the agent-stderr tail kept per connection.
+const acpStderrTailBytes = 8192
+
+// tailBuffer is a goroutine-safe ring of the last bytes written to it.
+type tailBuffer struct {
+	mu  sync.Mutex
+	buf []byte
+	max int
+}
+
+func newTailBuffer(max int) *tailBuffer {
+	return &tailBuffer{max: max}
+}
+
+func (t *tailBuffer) Write(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.buf = append(t.buf, p...)
+	if over := len(t.buf) - t.max; over > 0 {
+		t.buf = t.buf[over:]
+	}
+	return len(p), nil
+}
+
+func (t *tailBuffer) String() string {
+	if t == nil {
+		return ""
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.TrimSpace(string(t.buf))
+}
+
+// reason condenses the tail to its last line, short enough to ride inside a
+// one-line error banner.
+func (t *tailBuffer) reason() string {
+	lines := strings.Split(t.String(), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			if len(l) > 200 {
+				l = l[:200]
+			}
+			return l
+		}
+	}
+	return ""
 }
 
 // hermesConfigStamp fingerprints the files hermes loads at startup.
@@ -190,7 +245,14 @@ func (c *acpConn) request(method string, params any) (json.RawMessage, error) {
 		return nil, errors.New("acp connection closed")
 	}
 	if resp.Error != nil {
-		return nil, fmt.Errorf("acp %s: %s", method, resp.Error.Message)
+		msg := resp.Error.Message
+		// Hermes answers a failed session/new with a bare "Internal error";
+		// its log stream carries the real cause. Ride the last line along so
+		// the banner and `ryoku-rashin logs` can name what broke.
+		if why := c.errTail.reason(); why != "" {
+			msg += ": " + why
+		}
+		return nil, fmt.Errorf("acp %s: %s", method, msg)
 	}
 	return resp.Result, nil
 }
@@ -323,11 +385,11 @@ func (c *acpConn) reconcileModel(st modelState, method string) {
 // acpClientVersion is the latest ACP protocol version this client speaks.
 const acpClientVersion = 1
 
-// Initialize performs the ACP handshake and opens the vault session. It sends
+// Initialize performs the ACP handshake and opens the lane's session in cwd. It sends
 // our client info and the version we speak, then records what the agent
 // negotiated back so optional methods stay gated to what the agent supports.
-func (c *acpConn) Initialize(vault string) error {
-	c.vault = vault
+func (c *acpConn) Initialize(cwd string) error {
+	c.cwd = cwd
 	c.protoVersion = acpClientVersion
 	res, err := c.request("initialize", map[string]any{
 		"protocolVersion": acpClientVersion,
@@ -343,7 +405,7 @@ func (c *acpConn) Initialize(vault string) error {
 		return err
 	}
 	c.applyInitResult(res)
-	return c.openSession("session/new", map[string]any{"cwd": vault, "mcpServers": prowlMCPServers()})
+	return c.openSession("session/new", map[string]any{"cwd": cwd, "mcpServers": prowlMCPServers()})
 }
 
 // applyInitResult records the negotiated protocol version and the agent's
@@ -394,9 +456,9 @@ func (c *acpConn) openSession(method string, params map[string]any) error {
 	return nil
 }
 
-// NewSession abandons the current session for a fresh one in the vault.
+// NewSession abandons the current session for a fresh one in the same cwd.
 func (c *acpConn) NewSession() error {
-	return c.openSession("session/new", map[string]any{"cwd": c.vault, "mcpServers": prowlMCPServers()})
+	return c.openSession("session/new", map[string]any{"cwd": c.cwd, "mcpServers": prowlMCPServers()})
 }
 
 // LoadSession switches to a stored session; hermes replays its transcript as
@@ -407,7 +469,7 @@ func (c *acpConn) LoadSession(id string) error {
 	}
 	c.emit(AcpEvent{Type: "replay_start"})
 	err := c.openSession("session/load", map[string]any{
-		"sessionId": id, "cwd": c.vault, "mcpServers": prowlMCPServers(),
+		"sessionId": id, "cwd": c.cwd, "mcpServers": prowlMCPServers(),
 	})
 	c.emit(AcpEvent{Type: "replay_end"})
 	return err
@@ -726,14 +788,18 @@ func (c *acpConn) handleAgentRequest(msg rpcMsg) {
 	}
 }
 
-// autoApproval returns the allow-once option to answer with when the user
-// lets read-only calls run unasked and this call only reads the machine.
+// autoApproval returns the allow-once option to answer with when the mode
+// lets this call run unasked: every call in auto mode, read-only calls in
+// read-only mode, none in ask mode.
 func autoApproval(call acpToolCall, opts []PermOption) string {
-	if !LoadConfig().AutoApproveReads() {
-		return ""
-	}
-	if ok, _ := readOnlyToolCall(call.Kind, call.Title, call.RawInput); !ok {
-		return ""
+	cfg := LoadConfig()
+	if !cfg.AutoApproveAll() {
+		if !cfg.AutoApproveReads() {
+			return ""
+		}
+		if ok, _ := readOnlyToolCall(call.Kind, call.Title, call.RawInput); !ok {
+			return ""
+		}
 	}
 	for _, o := range opts {
 		if o.Kind == "allow_once" {
@@ -819,17 +885,17 @@ func (c *acpConn) handleUpdate(params json.RawMessage) {
 	}
 }
 
-// startACP spawns the configured chat agent's ACP command with the vault as its
-// working directory. Hermes is the recommended default; resolveChatBackend
+// startACP spawns the configured chat agent's ACP command in a lane's cwd, its
+// working directory and the source of its context file. Hermes is the recommended default; resolveChatBackend
 // falls back to it when a chosen agent's adapter is absent.
-func startACP(vault string) (*acpConn, error) {
+func startACP(cwd string) (*acpConn, error) {
 	b, ok := resolveChatBackend(LoadConfig())
 	if !ok {
 		return nil, errors.New("no chat agent available; install Hermes (recommended) or a supported ACP agent")
 	}
 	stamp := hermesConfigStamp()
 	cmd := exec.Command(b.Argv[0], b.Argv[1:]...)
-	cmd.Dir = vault
+	cmd.Dir = cwd
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -838,11 +904,16 @@ func startACP(vault string) (*acpConn, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.Stderr = nil // hermes logs to stderr; silence rather than corrupt ndjson
+	// Hermes logs to its own stderr, never the ndjson stream; keep a bounded
+	// tail so a bare agent error (session/new's "Internal error") can carry
+	// the cause the agent actually wrote.
+	tail := newTailBuffer(acpStderrTailBytes)
+	cmd.Stderr = tail
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	c := newACPConn(stdin, stdout, stdin)
+	c.errTail = tail
 	c.configStamp = stamp
 	c.agentName = b.Name
 	go func() { _ = cmd.Wait() }()

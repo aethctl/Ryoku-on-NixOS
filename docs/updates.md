@@ -35,6 +35,14 @@ reports what that lane is holding (`N system package(s) waiting`), `ryoku
 status` prints it as `system:`, and the Hub lists it under SYSTEM PACKAGES;
 `ryoku update --system` runs both lanes in one command for those who want that.
 
+The desktop package's post-transaction power cutover also makes a direct
+`pacman -Syu` safe while graphical sessions are live. One temporary login1 sleep
+block covers the logind reload; then each Ryoku user session (never
+the SDDM greeter or another desktop) stops the old lid/idle/shell owners,
+must report its new sleep guard ready before the block is released. The first
+release that introduces the hook schedules the same adoption after pacman drops
+its database lock, because libalpm discovers hooks before extracting packages.
+
 - A **dev box** runs the checkout: `ryoku deploy` builds the binaries and lays
   `ryoku/` into `~/.config`. `ryoku update` on it tracks `origin/main` (the git
   channel) and redeploys.
@@ -75,13 +83,24 @@ picks up a new Ryotunes (`internal/ryotunesrelease`, `internal/updater/ryotunes.
 ## `ryoku update`
 
 Snapper pre-snapshot, then the channel (git fast-forward, or the `[ryoku]`
-package set), then stage2 through the just-installed binary: quiesce the shell,
-`ryoku materialize`, reload the compositor, restart the shell, `ryoku doctor`,
-snapper post-snapshot. Each stage publishes to
-`$XDG_RUNTIME_DIR/ryoku-update.json` (the
-ordered steps, the current label, a live log tail, and, on failure, the error
-and the pre-update snapshot), so the update island and the Hub's Updates page
-render a determinate run and a one-click rollback.
+package set), then stage2 through the just-installed binary. Package hooks first
+adopt every live Ryoku session; on the hook's first release, stage2 invokes the
+same all-session helper synchronously. For the invoking active session, stage2
+holds a durable login1 sleep block, stops the old shell, idle and clamshell
+owners, materializes config, binds `ryoku-session.target` to the exact login1
+session, and requires the compositor's power bindings to reload. It starts the
+new shell, waits for `sleep-ready`, verifies idle and clamshell, and restores a
+previously running Ryogami before releasing protection. Any earlier failure
+leaves the durable block active until retry or reboot. Longer `ryoku doctor` and
+index work follows. A snapper post-snapshot closes the run. Each stage
+publishes to `$XDG_RUNTIME_DIR/ryoku-update.json` (the ordered steps and their
+timings, the current label, the line the running work last printed, a
+heartbeat with the run's own watchdog verdict, and, on failure, the error and
+the pre-update snapshot), so the Hub's Updates page renders a determinate run,
+notices a stalled or vanished one, and offers a one-click rollback. The Hub
+drives its own runs (`ryoku update --gui`) without a terminal; the terminal
+shows a curated console and keeps the raw output in
+`~/.local/state/ryoku/update-log.txt` (`ryoku update -v` streams it instead).
 
 The database refresh happens before the set is read, so a rollback onto a frozen
 release only ever asks for packages that release actually served; targets are
@@ -189,9 +208,10 @@ file on every update, wiping edits made afterward. Idempotent.
 `reconcileMimeDefaults` clears the default-app map an older release froze into
 `~/.config/mimeapps.list`: entries that only copy Ryoku's shipped values are
 dropped (the file goes if that is all it held), and anything the user chose
-stays. Ryoku's map ships to `/usr/share/applications/mimeapps.list` now, the
-bottom of the XDG mimeapps chain, so it sets the defaults without ever
-outranking a user's pick.
+stays. Ryoku's map ships to `/usr/local/share/applications/mimeapps.list`, the
+site layer of the XDG mimeapps chain, so it sets the defaults without ever
+outranking a user's pick and without colliding with a distro package that
+owns `/usr/share/applications/mimeapps.list` (#295).
 `reconcileShellInstances` clears a desktop that is running twice: a shell surface
 orphaned by a daemon that was killed keeps drawing, and Quickshell allows a second
 instance of one config, so the replacement draws over it. It keeps the instance
@@ -212,13 +232,25 @@ plugin whose receipts no longer match the installed headers through the provider
 the next login, and names the toolchain to install when a box has none. Gated on
 `CapPlugins`, so a compositor with no plugin system (niri) is a no-op. See
 `docs/hyprland-plugins.md`.
+`reconcileManifest` converges the box's package set to the release's control
+manifest. It reads the channel's `manifest.json`, diffs it against the baseline
+the box last converged to (saved with the names installed at that moment), and
+installs what the release wants that this box never received, which is what
+makes a package added to a set reach every box on the next update without a hard
+depend, and heals a box that has been missing one all along. A name present at
+the baseline and gone now was deleted by the user and stays gone; a name the
+release retired is reported, never uninstalled. The deliver-once apps stay
+`reconcileShippedApps'` lane, so one update never runs two transactions over the
+same names. Best-effort: a box with no mirror or no network reports what did not
+land and the update moves on. `ryoku verify` answers the same diff read-only, so
+two machines can be compared line by line.
 
-## Two compositors
+## More than one compositor
 
-A box can have both compositors installed and switch between them. Update, doctor
+A box can have every compositor installed and switch between them. Update, doctor
 and recovery reach the compositor only through the seam (`ryoku/wm/`), so none of
 them names one. Update and doctor keep the inactive compositor's config
-untouched; recovery deliberately resets both when both are installed.
+untouched; recovery deliberately resets every installed one.
 
 - **`ryoku update`** re-lays the base config, then reloads the active compositor
   through `wm.Open()` (`update.go` `pauseConfigAutoreload`/`reloadConfig` call
@@ -237,7 +269,7 @@ untouched; recovery deliberately resets both when both are installed.
 - **`ryoku recovery`** clears the `user_edits` overlay and the neutral Hub
   stores, then removes every path that `ryoku wm reset-paths` prints: each
   provider's generated config plus its hand-edit files (`wm.ResetPaths` over
-  `wm.Providers`), for both compositors when both are installed. It runs that
+  `wm.Providers`), for every installed compositor. It runs that
   command from the freshly fetched checkout first (`go run . wm reset-paths`), so
   a broken installed build cannot skew the list, then redeploys the shipped
   defaults. The per-machine seeds (monitors, gpu, keyboard) and saved rices are
@@ -264,8 +296,8 @@ mount the repo domain serves (`repo.ryoku.dev/stable/<key>` is bucket object
 | `channels/testing/x86_64/` | **testing** | every push to `unstable-dev` |
 
 So a box on stable moves between named releases, and can be put back on any
-earlier one, on either variant: the `[ryoku]` packages are one `x86_64` build
-that both variants install, the frozen release directories are never pruned,
+earlier one, on any variant: the `[ryoku]` packages are one `x86_64` build
+that every variant installs, the frozen release directories are never pruned,
 and the ledger's `images` map names the Arch and CachyOS ISO of each release
 (derived from the per-ISO manifests in the bucket, so it heals on every
 rebuild) for a reinstall of an older release. Each build carries a strictly
@@ -273,10 +305,14 @@ increasing package version (`core.r<commit-count>.g<sha>`) that the Ryoku
 upgrade moves to, and the `ryoku-desktop` package writes `/etc/ryoku-release`
 (`RELEASE=`, `CHANNEL=`, `VERSION=`, `COMMIT=`) so a box can say which release
 it runs; `release.json` beside each channel's db says which one the channel
-serves.
+serves, and `manifest.json` beside it lists every package the release is made
+of, by lane (base, dev, hardware, AUR, first-party, compositor, provisioned),
+generated from the checkout by `build-repo.sh` and never hand-edited.
 
-A release is a tag: `main` advances only by fast-forward from `unstable-dev`,
-and publishing nothing on that push. The maintainer runs **Stable Release**
+A release is a tag: `main` advances only by fast-forward from `unstable-dev`
+(`RYOKU_RELEASE_PUSH=1 git push origin unstable-dev:main`; the `pre-push` hook
+refuses every other push to `main`, see `docs/development.md`, "Branches and
+pushing"), and publishing nothing on that push. The maintainer runs **Stable Release**
 (`bump_type: none` tags the `VERSION` main already carries; a bump rewrites it
 first), which tags `main`, publishes `releases/<tag>/`, moves the stable
 pointer onto it, records the ledger entry, and dispatches both release ISOs
@@ -290,12 +326,14 @@ release is tagged.**
 On a packaged box the channel is nothing but the `Server` line of the `[ryoku]`
 stanza, so there is no second state to drift from it:
 
-- `ryoku track unstable-dev` turns any box into a **testing box**: it follows the
+- `ryoku track unstable` turns any box into a **testing box**: it follows the
   `testing` channel, rebuilt on every push to `unstable-dev`, so a tester gets
-  each push as signed packages through `ryoku update`. `ryoku track main` returns
-  it to **stable** (named releases). The two are aliases for `ryoku track testing`
-  and `ryoku track stable`.
-- `ryoku track stable | testing | v<tag>` rewrites that line and runs an update
+  each push as signed packages through `ryoku update`. `ryoku track stable`
+  returns it to **stable** (named releases). `unstable` is the user-facing name
+  of the `testing` channel (its internal key -- the repo path, the `[ryoku]`
+  `Server`, the channel-intent file -- stays `testing`); `ryoku track testing`
+  still works as a quiet synonym.
+- `ryoku track stable | unstable | v<tag>` rewrites that line and runs an update
   that moves the Ryoku set to what the channel serves, down as well as up: the
   databases are force-refreshed (a frozen release's db is older than the
   channel's, so pacman would keep the cached one), then the installed
@@ -309,7 +347,7 @@ stanza, so there is no second state to drift from it:
 - The doctor names the channel it finds and warns, without touching it, when
   `[ryoku]` points at a mirror Ryoku does not publish.
 
-`ryoku track main | unstable-dev --source` is the developer path: it builds and
+`ryoku track stable | unstable --source` is the developer path: it builds and
 tracks a git checkout instead of packages (see `docs/development.md`). A box
 already on a checkout is migrated onto packages by a plain track without
 `--source`: the checkout is retired as the update source (the `~/ryoku-arch`
@@ -350,6 +388,17 @@ island (when the channel serves the next line) and the Hub's Updates page.
   in a package (then materialized) or seeded by the installer. A file only
   `deploy.sh` lays, or one no path lays, reaches no user. `ryoku-dev-verify-delivery`
   fails the commit on such an orphan.
+- **A package the release is made of must reach every box on update.** A name in
+  a `system/packages/*.packages` set, the AUR set, or `release/packages/` is
+  carried to a packaged box by the control manifest: `build-repo.sh` generates
+  `manifest.json` at publish time and the doctor's `reconcileManifest` converges
+  each box to it on `ryoku update`, so adding a package to a set needs no hard
+  depend and no per-box install step. A box's own removals are respected (a name
+  present when its baseline was saved and gone now stays gone), and `ryoku
+  verify` reports the box-vs-release diff so two machines can be proved the same
+  one. The container-install gate fails a publish whose channel serves no
+  manifest, because a reconciler with nothing to converge to is inert, not
+  delivered.
 - **A removed or renamed `shell.json` key, or a changed default that must reach
   existing users, needs a `doctor` reconciler** (materialize never edits a user's
   `shell.json`). An additive key needs nothing.
@@ -358,7 +407,7 @@ island (when the channel serves the next line) and the Hub's Updates page.
   laying Ryoku's defaults where an app writes the user's choice resets that
   choice on each update: `~/.config/mimeapps.list` did exactly that to default
   apps. Ship such defaults one layer down where the format provides one
-  (`/usr/share/applications/mimeapps.list` for mime defaults), or make the file
+  (`/usr/local/share/applications/mimeapps.list` for mime defaults), or make the file
   a `generatedSeed` if it has no layering. The same rule read the other way:
   a rice used to copy its emblem over the shipped
   `fastfetch/fastfetch-emblem.png`, and every update put the brand mark back.
@@ -381,6 +430,43 @@ island (when the channel serves the next line) and the Hub's Updates page.
   exists. An install-once path silently pins every existing box to the release
   it was installed with: the lock shipped fixes for weeks that no updated box
   ever received.
+- **A system path a package owns may exist unowned first, and the update adopts
+  it.** The ISO installer and `ryoku/shell/deploy.sh` seed some paths before a
+  package owns them: the privileged helpers and their polkit rules, the Plymouth
+  theme, the shipped boot configs and lockscreen bundle, the boot hook, the
+  modules-load and udev rules, the default-apps mimeapps map, and the logind
+  lid-switch drop-in `/etc/systemd/logind.conf.d/10-ryoku-lid.conf`. An unowned
+  copy collides with the package on the next transaction ("exists in
+  filesystem") and aborts the whole atomic `-Syu`, so every ryoku pacman
+  transaction -- `ryoku update`, the channel move, and the compositor switch
+  (`ryoku wm use`) -- passes `--overwrite` for the seeded globs
+  (`updater.RyokuOverwriteGlob`, fed by `unownedFiles`) and the doctor clears
+  the same paths on a box already wedged (`reconcileConflictingRyokuFiles`,
+  `ryokuSystemGlobs` -- the glob itself, split). Either way the package adopts
+  the path and later updates own it normally; `deploy.sh` keeps its own copy of
+  the list (`_rovw`) in sync.
+- **Generated power policy and long-running helpers must be adopted as one live
+  transaction.** `hypridle.conf` is rendered state, not materialized payload,
+  and a running shell-script daemon keeps executing its old file after the
+  package replaces it. Paired libalpm hooks preserve the pre-transaction
+  executor and synchronously adopt every live Ryoku user after install,
+  downgrade, or removal. The shared lifecycle helper selects one confirmed
+  active Ryoku session per user, watches login1 activity/logout, and keeps its
+  watcher retryable through D-Bus outages. Package stage two, login, and
+  checkout deploy use the same durable login1 block while activating logind's
+  sessionless fallback, proving old owners stopped, requiring the compositor
+  bindings to reload, and replacing shell, idle, clamshell and wallpaper
+  owners. Doctor instead stages a complete qylock repair under the generation
+  guard for the next managed shell activation. Live-cutover protection releases
+  only after the new shell reports its inhibitor state and service ownership is
+  verified; failure remains blocked until a successful retry or reboot. The
+  first package release cannot load its
+  newly extracted hook: an updater-owned transaction suppresses the deferred
+  install-script job and stage two invokes the all-session helper synchronously,
+  while direct pacman installs schedule an unlimited-retry transient after the
+  database lock drops. A `--no-reload` checkout deploy stages the drop-in
+  without changing live logind, so the running session never mixes old and new
+  halves.
 - **One master per setting.** Two stores that both claim a value drift, and the
   next sync of either undoes the other: the colour master is `shell.json`
   `theme.theme` (the daemon shadows it into `theme.json` `followWallpaper` on

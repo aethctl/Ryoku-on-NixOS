@@ -12,6 +12,7 @@ anchor
 anim
 appearance
 apps
+ask
 attributes
 audio
 author
@@ -33,6 +34,7 @@ brightness
 bssid
 btop
 call
+camera
 cancel
 capacity
 catalog
@@ -285,7 +287,6 @@ sound
 ssid
 stage
 standard
-stash
 state
 status
 strength

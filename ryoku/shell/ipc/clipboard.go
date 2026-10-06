@@ -635,12 +635,16 @@ func (s *clipState) publish() {
 }
 
 // browserInternalMime reports a selection type that carries no user content.
-// Chromium publishes a private frame/tab token as well as the real write, and
-// sometimes as a write of its own; the token is a marker for the browser, not
-// something the user copied, so a write offering only markers is skipped rather
-// than stored as an entry of its own.
+// Chromium publishes private marker formats alongside the real write, and
+// sometimes as a write of its own: the frame/tab token
+// (chromium/x-internal-source-rfh-token) and the provenance marker
+// (chromium/x-source-url) each landed in the history as junk of their own.
+// Every chromium/x- type is a Chromium-private format no other application can
+// consume, so the whole prefix is treated as a marker rather than a blocklist
+// that has to grow with each Chromium release; a write offering only markers
+// is skipped rather than stored as an entry of its own.
 func browserInternalMime(t string) bool {
-	return strings.HasPrefix(t, "chromium/x-internal-")
+	return strings.HasPrefix(t, "chromium/x-")
 }
 
 // pickBestMime chooses which offered type to store, matching the reference

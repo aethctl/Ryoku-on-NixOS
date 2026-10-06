@@ -3,3 +3,5 @@ StageLayer StageLayer.qml
 StageOutline StageOutline.qml
 StagePreviewCard StagePreviewCard.qml
 StageAngleDial StageAngleDial.qml
+StageEditorHost StageEditorHost.qml
+StageWidgetProvider StageWidgetProvider.qml

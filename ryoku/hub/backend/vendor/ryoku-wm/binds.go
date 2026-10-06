@@ -155,6 +155,8 @@ var catalogue = []CatalogBind{
 
 	// Shell
 	{ID: "shell.launcher", Category: "Shell", Label: "App launcher", Chord: "SUPER + Space", Kind: BindShell},
+	{ID: "shell.ask", Category: "Shell", Label: "Ask Rashin", Hint: "AI chat bar", Chord: "ALT + Space", Kind: BindShell},
+	{ID: "shell.rashin", Category: "Shell", Label: "Rashin", Hint: "The AI companion app; a second press focuses it", Chord: "SUPER + ALT + Space", Kind: BindShell},
 	{ID: "shell.cheatsheet", Category: "Shell", Label: "Keybind cheatsheet", Hint: "Press again to close", Chord: "SUPER + K", Kind: BindShell},
 	{ID: "shell.lock", Category: "Shell", Label: "Lock the screen", Chord: "SUPER + L", Kind: BindShell},
 	{ID: "shell.quicksettings", Category: "Shell", Label: "Quick settings", Hint: "Power, logout, restart, shutdown, wifi", Chord: "SUPER + Escape", Kind: BindShell},
@@ -167,8 +169,7 @@ var catalogue = []CatalogBind{
 	{ID: "shell.visualizerPlace", Category: "Shell", Label: "Place the visualiser", Hint: "Drag the ring or orb into place", Chord: "SUPER + ALT + M", Kind: BindShell},
 	{ID: "shell.voice", Category: "Shell", Label: "Voice typing", Hint: "Speech to text; tap again to stop", Chord: "SUPER + grave", Kind: BindShell},
 	{ID: "shell.settings", Category: "Shell", Label: "Ryoku settings", Chord: "SUPER + comma", Kind: BindShell},
-	{ID: "shell.stash", Category: "Shell", Label: "Stash", Hint: "Screen time and downloads", Chord: "SUPER + S", Kind: BindShell},
-	{ID: "shell.screenshot", Category: "Shell", Label: "Screenshot", Hint: "Capture, annotate and beautify", Chord: "SUPER + SHIFT + S", Kind: BindShell},
+	{ID: "shell.screenshot", Category: "Shell", Label: "Capture", Hint: "Screenshot and recording", Chord: "SUPER + SHIFT + S", Kind: BindShell},
 	{ID: "shell.screenshotPrint", Category: "Shell", Label: "Screenshot", Chord: "Print", Kind: BindShell},
 	{ID: "shell.screenshotMonitor", Category: "Shell", Label: "Screenshot, whole screen", Chord: "SHIFT + Print", Kind: BindShell},
 	{ID: "shell.colorPicker", Category: "Shell", Label: "Pick a colour", Chord: "SUPER + SHIFT + C", Kind: BindShell},

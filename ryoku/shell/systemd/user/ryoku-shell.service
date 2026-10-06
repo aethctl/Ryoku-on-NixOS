@@ -10,7 +10,7 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-# the dev deploy rewrites this to ~/.local/bin; the package ships /usr/bin.
+# the dev deploy repoints the Exec lines at ~/.local/bin with a drop-in; the package ships /usr/bin.
 # set here, not only via the session env: an import that does not land would
 # silently drop the polkit agent back to the stock one.
 Environment=RYOKU_POLKIT_AGENT=1

@@ -40,6 +40,7 @@ type ChatBackendInfo struct {
 // wired, who can drive the chat, and the paste snippet for anything else.
 type Manifest struct {
 	Skill        ManifestItem      `json:"skill"`
+	Wiki         ManifestItem      `json:"wiki"`
 	Prowl        ManifestItem      `json:"prowl"`
 	Vault        []ManifestItem    `json:"vault"`
 	MCP          []any             `json:"mcp"`
@@ -109,6 +110,15 @@ func BuildManifest(cfg Config) Manifest {
 		skill.Path = tildeAbbrev(filepath.Join(skillDir, "SKILL.md"))
 	}
 
+	wiki := ManifestItem{
+		Label: "wiki", Kind: "wiki", Owner: "read-only",
+		Desc:   "the plain-language guides for someone new: Linux, the desktop, Hyprland in Lua, niri in KDL, Quickshell QML, the Go tools, Rashin",
+		Exists: wikiSourceDir() != "",
+	}
+	if wiki.Exists {
+		wiki.Path = tildeAbbrev(filepath.Join(VaultDir(), "wiki", "README.md"))
+	}
+
 	prowl := ManifestItem{Label: "prowl", Kind: "tool", Owner: "tool",
 		Desc: "cited code intelligence, reindexed each run: search/find/def/references/outline/impact"}
 	if bin, ok := findProwl(); ok {
@@ -118,6 +128,7 @@ func BuildManifest(cfg Config) Manifest {
 
 	return Manifest{
 		Skill:        skill,
+		Wiki:         wiki,
 		Prowl:        prowl,
 		Vault:        vaultManifest(),
 		MCP:          prowlMCPServers(),

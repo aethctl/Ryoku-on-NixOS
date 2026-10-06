@@ -11,7 +11,7 @@ function initialState() {
         items: [], // ordered stream: {kind:'msg'|'tool', ...}
         permissions: [], // pending approvals, keyed by requestId
         banner: { state: "starting", error: "" },
-        approvals: "read-only", // "read-only" auto-approves read-only tools
+        approvals: "read-only", // what runs unasked: "ask" nothing, "read-only" reads, "auto" everything
         busy: false,
         seq: 0,
         models: [],
@@ -139,7 +139,7 @@ function applyEvent(state, ev) {
         s.permissions = state.permissions.filter(function (p) { return p.requestId !== ev.requestId; });
         return s;
     case "approvals":
-        s.approvals = ev.mode === "ask" ? "ask" : "read-only";
+        s.approvals = ev.mode === "ask" || ev.mode === "auto" ? ev.mode : "read-only";
         return s;
     case "turn_end": {
         var anyOpen = state.items.some(function (it) { return it.open; });

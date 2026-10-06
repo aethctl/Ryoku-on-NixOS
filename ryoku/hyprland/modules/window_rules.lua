@@ -105,6 +105,15 @@ hl.window_rule({
 	center = true,
 })
 
+
+hl.window_rule({
+    name   = "float-rashin-app",
+    match  = { title = "^(Rashin)$" },
+    float  = true,
+    size   = fit(1280, 820),
+    center = true,
+})
+
 hl.window_rule({
     -- The update and rollback logs are started from Ryoku Settings itself
     -- (UpdatesPage, and the bar's update widget), and a tiled window always

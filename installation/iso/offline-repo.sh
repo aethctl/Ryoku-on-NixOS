@@ -72,8 +72,10 @@ mapfile -t PKGS < <(
     vulkan-icd-loader lib32-vulkan-icd-loader \
     broadcom-wl-dkms
   # The desktop set plus the hardware-only ASUS Aura provider: the target
-  # installer selects asusctl only on a matching laptop.
-  printf '%s\n' ryoku-keyring ryoku-desktop asusctl
+  # installer selects asusctl only on a matching laptop. Both compositor
+  # variants bake because the TUI offers each one and an offline install has no
+  # network to fetch a missing variant.
+  printf '%s\n' ryoku-keyring ryoku-desktop ryoku-desktop-hyprland ryoku-desktop-niri asusctl
 )
 # dedupe, keep order.
 mapfile -t PKGS < <(printf '%s\n' "${PKGS[@]}" | awk '!seen[$0]++')
@@ -360,7 +362,7 @@ bake_aur_set || log "AUR bake: stopped early; the repo check below will catch an
 # Integrity: every cached package must be a complete, readable archive before it
 # goes into the repo. `pacman -Sw --needed` skips a file that already exists by
 # name, and $CACHE is persistent, so a download truncated by one network hiccup
-# (most likely on a big package like the ryomotion Electron app) sits corrupt in
+# (most likely on a big package) sits corrupt in
 # the cache forever and ships in every ISO -- the "truncated <pkg>" error that
 # bricks the offline pacstrap. bsdtar -tf reads the whole archive, so a short
 # file fails here; delete it and re-fetch, bounded. A still-broken package fails
@@ -410,7 +412,7 @@ aur_expected=()
 mapfile -t aur_expected < <(read_list "$pkgdir/aur.packages")
 for req in nvidia-open nvidia-open-dkms nvidia-utils libva-nvidia-driver \
            mesa vulkan-radeon vulkan-intel vulkan-icd-loader \
-           ryoku-keyring ryoku-desktop \
+           ryoku-keyring ryoku-desktop ryoku-desktop-hyprland ryoku-desktop-niri \
            "${aur_expected[@]}"; do
   repo_has_pkg "$req" || missing+=("$req")
 done
@@ -461,7 +463,11 @@ EOF
     read_list "$pkgdir/dev.packages"
     [[ $VARIANT == cachyos ]] && read_list "$pkgdir/cachyos.packages"
     read_section "$hw" vm
-    printf '%s\n' amd-ucode intel-ucode ryoku-keyring ryoku-desktop
+    # both variants are named so the compositor virtual is already satisfied:
+    # an unqualified ryoku-desktop with two providers in the repo makes pacman
+    # prompt for a choice, which a build script cannot answer.
+    printf '%s\n' amd-ucode intel-ucode ryoku-keyring ryoku-desktop \
+      ryoku-desktop-hyprland ryoku-desktop-niri
   } | awk '!seen[$0]++' )
 
   local resolved

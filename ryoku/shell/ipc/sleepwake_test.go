@@ -54,7 +54,7 @@ func fakeInitiallyHungPowerProvider(t *testing.T, countPath string) {
 	provider := filepath.Join(bin, "ryoku-wm-testwm")
 	script := "#!/usr/bin/env bash\n" +
 		"if [[ \"$1\" == caps ]]; then printf '%s' '{\"name\":\"testwm\",\"supports\":[\"outputPower\"]}'; exit 0; fi\n" +
-		"n=0; [[ -r \"" + countPath + "\" ]] && n=$(<\"" + countPath + "\"); n=$((n+1)); printf '%s' \"$n\" >\"" + countPath + "\"\n" +
+		"n=0; [[ -r \"" + countPath + "\" ]] && n=$(<\"" + countPath + "\"); n=$((n+1)); tmp=\"" + countPath + ".tmp.$$\"; printf '%s' \"$n\" >\"$tmp\"; mv -f \"$tmp\" \"" + countPath + "\"\n" +
 		"if (( n == 1 )); then exec sleep 10; fi\n" +
 		"exit 0\n"
 	if err := os.WriteFile(provider, []byte(script), 0o755); err != nil {
@@ -572,6 +572,85 @@ func TestSuspendTransactionDropsBlockAfterSecureLock(t *testing.T) {
 	}
 	if block.held() {
 		t.Fatal("block inhibitor remained held during the coordinated suspend")
+	}
+}
+
+// TestSuspendWaitsForLogin1ToSeeTheRelease pins the #324 race: the daemon's
+// Suspend call must not overtake logind observing the closed block fd, so the
+// transaction polls the inhibitor list and only calls Suspend once the list
+// stops naming this process.
+func TestSuspendWaitsForLogin1ToSeeTheRelease(t *testing.T) {
+	oldPoll := blockReleasePoll
+	blockReleasePoll = 2 * time.Millisecond
+	defer func() { blockReleasePoll = oldPoll }()
+	events := make(chan string, 8)
+	block := &fakeSleepInhibitor{events: events, name: "block", heldState: true}
+	seen := 0
+	cycle := &sleepCycle{
+		delay: &fakeSleepInhibitor{heldState: true, max: 15 * time.Second},
+		block: block,
+		lock:  func(time.Time) error { return nil },
+		blockCleared: func(context.Context) (bool, error) {
+			seen++
+			if seen < 3 {
+				events <- "check"
+				return false, nil
+			}
+			events <- "check"
+			return true, nil
+		},
+		suspend: func(context.Context) error {
+			events <- "suspend"
+			return nil
+		},
+		now:  time.Now,
+		logf: func(string, ...any) {},
+	}
+
+	if err := cycle.requestSuspend(); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"block.release", "check", "check", "check", "suspend"}
+	for _, w := range want {
+		if got := <-events; got != w {
+			t.Fatalf("event = %q, want %q", got, w)
+		}
+	}
+}
+
+// TestSuspendAbortsWhenReleaseIsNeverSeen pins the denial bound: if login1
+// keeps reporting the released block, the transaction gives up inside its
+// window, never calls Suspend (so it cannot be denied again), and restores
+// the guard for the next attempt.
+func TestSuspendAbortsWhenReleaseIsNeverSeen(t *testing.T) {
+	block := &fakeSleepInhibitor{name: "block", heldState: true}
+	oldWait, oldPoll := blockReleaseWait, blockReleasePoll
+	blockReleaseWait, blockReleasePoll = 60*time.Millisecond, 5*time.Millisecond
+	defer func() { blockReleaseWait, blockReleasePoll = oldWait, oldPoll }()
+	suspendCalls := 0
+	cycle := &sleepCycle{
+		delay: &fakeSleepInhibitor{heldState: true, max: 15 * time.Second},
+		block: block,
+		lock:  func(time.Time) error { return nil },
+		blockCleared: func(context.Context) (bool, error) {
+			return false, nil
+		},
+		suspend: func(context.Context) error {
+			suspendCalls++
+			return nil
+		},
+		now:  time.Now,
+		logf: func(string, ...any) {},
+	}
+
+	if err := cycle.requestSuspend(); err == nil {
+		t.Fatal("a never-confirmed release was reported as success")
+	}
+	if suspendCalls != 0 {
+		t.Fatalf("login1 was called %d times after an unconfirmed release", suspendCalls)
+	}
+	if !block.held() {
+		t.Fatal("the aborted transaction left the sleep block down")
 	}
 }
 

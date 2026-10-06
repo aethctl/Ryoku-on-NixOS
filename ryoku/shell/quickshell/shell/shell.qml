@@ -13,6 +13,7 @@ import Quickshell
 import shell.services
 import "modules/visualizer/Singletons" as VizCfg
 import "modules/stage/Singletons" as StageCfg
+import "modules/stage" as StageEditor
 import "components"
 import "modules/wallpaper"
 import "modules/wallpaper/Singletons" as WallCfg
@@ -30,6 +31,7 @@ import Quickshell.Wayland
 import "modules/osd"
 import "modules/notifications"
 import "modules/capture"
+import "modules/ask"
 import "modules/confirm"
 import Ryoku.Ui.Singletons
 
@@ -105,6 +107,10 @@ ShellRoot {
         path: root.reloadStatePath
         blockLoading: true
         printErrors: false
+        // One read at load, never again: a shell that was already up when a
+        // reload armed the cover must not steal the next instance's finish by
+        // re-reading the token mid-teardown.
+        watchChanges: false
         onLoaded: {
             try {
                 const token = JSON.parse(text() || "{}").token;
@@ -245,15 +251,49 @@ ShellRoot {
                 dockLaneCenter: dockLoader.item ? dockLoader.item.bandCenter : 0
             }
 
-            Sidebar {
-                screen: perScreen.modelData
-                side: "left"
-                visible: Config.sidebars.left.enabled
+            LazyLoader {
+                id: controlsLoader
+                property bool open: SidebarState.isOpen(perScreen.modelData)
+                property bool showNow: false
+                activeAsync: open || controlsHold.running
+                onItemChanged: if (item) Qt.callLater(() => controlsLoader.showNow = controlsLoader.open)
+                onOpenChanged: {
+                    showNow = open && item !== null;
+                    if (!open && active) controlsHold.restart();
+                }
+                Sidebar {
+                    screen: perScreen.modelData
+                    active: controlsLoader.showNow
+                }
             }
-            Sidebar {
+            Timer { id: controlsHold; interval: SidebarState.exitDuration + 48 }
+
+
+            LazyLoader {
+                id: askLoader
+                property bool open: perScreen.st ? perScreen.st.askOpen : false
+                property bool showNow: false
+                activeAsync: open || askHold.running
+                onItemChanged: if (item) Qt.callLater(() => askLoader.showNow = askLoader.open)
+                onOpenChanged: {
+                    showNow = open && item !== null;
+                    if (!open && active) askHold.restart();
+                }
+                AskBar {
+                    screen: perScreen.modelData
+                    active: askLoader.showNow
+                    mode: perScreen.st ? perScreen.st.askMode : "ask"
+                    tool: perScreen.st ? perScreen.st.askTool : ""
+                    onRequestClose: if (perScreen.st) perScreen.st.askOpen = false
+                    onModeChangeRequested: mode => ShellState.setAskMode(perScreen.modelData, mode)
+                }
+            }
+            Timer { id: askHold; interval: 15000 }
+
+            AskBubble {
                 screen: perScreen.modelData
-                side: "right"
-                visible: Config.sidebars.right.enabled
+                enabled: Config.askBubble.enabled
+                    && Config.askBubble.screen === perScreen.modelData.name
             }
 
             // The dock: a resident per-monitor surface on the edge opposite the
@@ -484,6 +524,13 @@ ShellRoot {
         }
     }
 
+    // The Stage Editor: the ported desktop chrome, mounted once (it is
+    // per-screen inside) and driven by the Edit widgets session. Built only
+    // while that session is on (docs/stage.md).
+    StageEditor.StageEditorHost {
+    }
+
+
     // The single surface-toggle mapping. Every shell surface id resolves to one
     // transition here: a per-monitor ShellState flip, a global config toggle, or
     // a request onto the shared surface bus. A CustomShortcut press and the
@@ -527,17 +574,17 @@ ShellRoot {
             if (st)
                 st.clipboardOpen = !st.clipboardOpen;
             break;
-        case "stash":
-            ShellState.requestSurfaceActive("sidebar-right", undefined);
-            break;
         case "screenshot":
-            ShellState.requestSurfaceActive("sidebar-left#capture", undefined);
+            Quickshell.execDetached(["sh", "-c", "flock -n -o /tmp/ryoshot.lock qs -c ryoshot"]);
+            break;
+        case "ask":
+            ShellState.requestSurfaceActive("ask", undefined);
             break;
         case "compress":
-            ShellState.requestSurfaceActive("sidebar-right#compress", undefined);
+            ShellState.requestSurfaceActive("ask#tools/compress", undefined);
             break;
         case "install":
-            ShellState.requestSurfaceActive("sidebar-right#install", undefined);
+            ShellState.requestSurfaceActive("ask#tools/install", undefined);
             break;
         }
     }
@@ -554,6 +601,7 @@ ShellRoot {
             case "launcher":
             case "overview":
             case "clipboard":
+            case "screenshot":
             case "visualizer":
             case "visualizer-overlay":
             case "visualizer-place":
@@ -960,6 +1008,11 @@ ShellRoot {
         }
         function toggle(): void { Keypresses.toggle(); }
     }
+    IpcHandler {
+        target: "camera"
+        readonly property bool active: Camera.active
+        function toggle(): void { Camera.toggle(); }
+    }
     // Surface global shortcuts dispatch through the mapping above so compositor
     // global shortcuts and the `ryoku-shell <id>` fallback behave identically.
     CustomShortcut {
@@ -978,23 +1031,18 @@ ShellRoot {
         onPressed: root.toggleSurface("clipboard")
     }
     CustomShortcut {
-        name: "stash"
-        description: I18n.tr("Open the right sidebar on the active monitor")
-        onPressed: root.toggleSurface("stash")
-    }
-    CustomShortcut {
-        name: "screenshot"
-        description: I18n.tr("Open the capture tab in the left sidebar")
-        onPressed: root.toggleSurface("screenshot")
+        name: "ask"
+        description: I18n.tr("Ask Rashin")
+        onPressed: root.toggleSurface("ask")
     }
     CustomShortcut {
         name: "compress"
-        description: I18n.tr("Open the right sidebar's file picker to compress media")
+        description: I18n.tr("Open Tools to compress media")
         onPressed: root.toggleSurface("compress")
     }
     CustomShortcut {
         name: "install"
-        description: I18n.tr("Open the right sidebar's file picker to install a package")
+        description: I18n.tr("Open Tools to install a package")
         onPressed: root.toggleSurface("install")
     }
 

@@ -56,7 +56,6 @@ QQC.AbstractButton {
             elide: Text.ElideRight
         }
     }
-    QQC.ToolTip.visible: hovered && (label.truncated || text === "")
-    QQC.ToolTip.text: Accessible.name
+    CornerTip { s: root.s; visible: root.hovered && (label.truncated || root.text === ""); text: root.Accessible.name }
     HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

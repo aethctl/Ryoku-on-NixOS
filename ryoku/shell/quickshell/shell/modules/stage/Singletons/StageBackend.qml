@@ -90,12 +90,15 @@ Singleton {
     }
 
     readonly property string sockPath: (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-shell.sock"
-    property var frame: ({ current: "", busy: false, stage: "", percent: 0, walls: {} })
+    property var frame: ({ current: "", busy: false, stage: "", percent: 0, notice: "", walls: {} })
 
     readonly property string current: root.frame.current || ""
     readonly property bool busy: root.frame.busy === true
     readonly property string stage: root.frame.stage || ""
     readonly property int percent: (typeof root.frame.percent === "number") ? root.frame.percent : 0
+    // Why the last reconcile could not produce a cut ("" when the pipeline is
+    // fine): the daemon names the missing model/runtime instead of dying mute.
+    readonly property string notice: root.frame.notice || ""
     readonly property string effect: root.effectFor(root.current)
 
     // Optimistic per-layer overlay so a front/depth flip shows instantly instead

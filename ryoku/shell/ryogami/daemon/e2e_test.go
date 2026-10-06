@@ -48,6 +48,7 @@ func startDaemon(t *testing.T) *testDaemon {
 		"XDG_CACHE_HOME="+filepath.Join(root, "cache"),
 		"XDG_STATE_HOME="+filepath.Join(root, ".local", "state"),
 		"XDG_DATA_HOME="+filepath.Join(root, ".local", "share"),
+		"XDG_PICTURES_DIR="+filepath.Join(root, "Pictures"),
 	)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)

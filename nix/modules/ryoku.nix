@@ -343,6 +343,13 @@ EOF
       ${self}/system/hardware/ddc/60-ryoku-i2c.rules \
       "$rules/60-ryoku-i2c.rules"
 
+    # Ryoku does not build PCR-signed UKIs. Tell systemd that NvPCR setup is
+    # unavailable instead of failing the TPM setup/login measurement units on
+    # every boot. The upstream rule is command-free, so it is portable as-is.
+    install -Dm644 \
+      ${self}/system/hardware/tpm/60-ryoku-tpm-nvpcr.rules \
+      "$rules/60-ryoku-tpm-nvpcr.rules"
+
     install -Dm644 \
       ${self}/system/hardware/input/62-ryoku-qmk-hid.rules \
       "$rules/62-ryoku-qmk-hid.rules"
@@ -1384,6 +1391,34 @@ in
         Policy = {
           AutoEnable = lib.mkDefault true;
         };
+      };
+    };
+
+    # BlueZ needs a persistent session agent for HID devices that confirm a
+    # numeric passkey. Upstream ships this as a user unit around bluetoothctl;
+    # NixOS owns bluetoothd as a system service, so the user agent only needs
+    # immutable executable paths and restart semantics here.
+    systemd.user.services.ryoku-bt-agent = {
+      description = "Ryoku Bluetooth pairing agent (BlueZ default agent)";
+
+      wantedBy = [
+        "default.target"
+      ];
+
+      unitConfig = {
+        ConditionPathExistsGlob = "/sys/class/bluetooth/*";
+      };
+
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${pkgs.writeShellScript "ryoku-bt-agent" ''
+          set -euo pipefail
+          ${pkgs.coreutils}/bin/tail -f /dev/null | \
+            ${pkgs.bluez}/bin/bluetoothctl --agent KeyboardDisplay
+        ''}";
+        Restart = "on-failure";
+        RestartSec = 2;
+        Slice = "session.slice";
       };
     };
 

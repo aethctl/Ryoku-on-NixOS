@@ -21,6 +21,9 @@ import Ryoku.PluginKit
 import shell.services as Services
 import "../stage"
 import "../stage/Singletons" as StageCfg
+import stage as Stage
+import stage.modules.ii.editMode as StageEdit
+import stage.modules.common as StageIsland
 import "../visualizer/Singletons" as VizCfg
 import "../visualizer" as Viz
 import "../wallpaper" as WallpaperMod
@@ -79,13 +82,19 @@ Scope {
     // The editor grid the bar drives; slots snap to it while composing.
     readonly property real editGridSize: StageCfg.Config.editGridSize
     readonly property bool editGridSnap: StageCfg.Config.editGridSnap
-    // Snapshot the layout when a compose session opens so Reset can restore it.
-    // The edit bar lives on its own surface now and takes no keyboard, so the
-    // desktop layer no longer grabs the keyboard for it.
-    onStageComposingChanged: {
-        if (root.stageComposing)
-            root._snapshot();
-    }
+    // The Stage Editor's shrink: when the ported chrome is framing THIS
+    // monitor, the desktop is drawn as the card the toolbar frames (a scale +
+    // translate about the usable area's centre), on the mode's one animated
+    // scalar, so the desktop and the chrome shrink as one rectangle across two
+    // scene graphs. Off the edited screen it stays the identity. desktopContent
+    // carries the matrix.
+    readonly property bool stageEditing: Stage.GlobalStates.editModeMonitor === root.monitorName
+        && (Stage.GlobalStates.editMode || Stage.GlobalStates.editProgress > 0)
+    readonly property matrix4x4 stageMatrix: root.stageEditing
+        ? StageEdit.EditModeInsets.editMatrixFor(root.monitorName,
+            win.width, win.height,
+            Stage.GlobalStates.editProgress, Stage.GlobalStates.editDrawerProgress)
+        : Qt.matrix4x4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
     // Human titles for every framed widget: the built-ins by name, then the
     // hosted rosters' own labels, so a frame never reads "irisClock".
     function widgetTitle(w) {
@@ -172,75 +181,6 @@ Scope {
                 out.push(rows[r]);
         }
         return out;
-    }
-    // Add-drop-down toggle: on enables (a built-in flag, a plugin placement, or
-    // the visualizer), off runs the same Remove path. Every toggle marks the
-    // session dirty so Reset appears.
-    function stageAddToggle(id) {
-        if (id === "visualizer") {
-            VizCfg.Config.setEnabled(!VizCfg.Config.enabled);
-            StageCfg.StageSession.markDirty();
-            return;
-        }
-        if (id.indexOf("plugin:") === 0) {
-            const pid = id.slice(7);
-            const on = (win.desktopPluginIds || []).indexOf(pid) >= 0;
-            paletteProc.command = [root.placeTool, pid, "enabled", on ? "false" : "true"];
-            paletteProc.running = true;
-            StageCfg.StageSession.markDirty();
-            return;
-        }
-        Config.set(id + "Enabled", !Config[id + "Enabled"]);
-        StageCfg.StageSession.markDirty();
-    }
-    // A picker row's tune affordance. The inspector only speaks for slot-hosted
-    // scopes (built-ins, iRiS faces, Python faces), so the two scopes with their
-    // own editors route there instead: the visualizer opens its Placer, a plugin
-    // tile opens its own right-click menu.
-    function stageCustomize(id) {
-        if (id === "visualizer") {
-            // The Placer owns its own surface; leave the compose session the
-            // way the old toolbar's `Visualizer...` row did (docs/stage.md).
-            if (!VizCfg.Config.enabled)
-                VizCfg.Config.setEnabled(true);
-            StageCfg.StageSession.leave();
-            if (root.stageState)
-                root.stageState.visualizerPlacing = true;
-            return;
-        }
-        if (id.indexOf("plugin:") === 0) {
-            const pid = id.slice(7);
-            const e = win.desktopPlugins.find(pp => pp.id === pid) || null;
-            if (!e)
-                return;
-            const dw = (e.placement && e.placement.desktopWidget) || {};
-            // The menu rides the menu surface; drop the picker first so the
-            // edit-bar surface stops swallowing the whole screen's input.
-            editBar.pickerOpen = false;
-            root.openPluginMenu(pid, dw.locked === true, 180, 140,
-                e.manifest, e.placement);
-            return;
-        }
-        // The inspector rides its own surface, but the open picker would keep
-        // the edit-bar surface swallowing the whole screen's input.
-        editBar.pickerOpen = false;
-        root.openInspector(id);
-    }
-    // The built-in slot behind a widget id, for placing its Settings menu.
-    // Read through the loaders: a disabled widget has no slot item.
-    function _builtinSlot(id) {
-        switch (id) {
-        case "clock": return clockLoader.item;
-        case "calendar": return calendarLoader.item;
-        case "music": return musicLoader.item;
-        case "aio": return aioLoader.item;
-        case "stats": return statsLoader.item;
-        case "weather": return weatherLoader.item;
-        case "notes": return notesLoader.item;
-        case "dayprogress": return dayprogressLoader.item;
-        case "shape": return shapeLoader.item;
-        }
-        return null;
     }
     // The live WidgetSlot for a built-in or iRiS scope. Every slot rides a
     // full-screen host, so its x/y/width/height are already monitor pixels the
@@ -344,16 +284,6 @@ Scope {
     readonly property bool inspectorShowing:
         inspectorLoader.item && inspectorLoader.item.showing === true
 
-    // The Edit widgets bar rides a work-area surface, so a dock that reserves an
-    // exclusive zone already sits outside it. A dock that reserves nothing (the
-    // iRiS dock with reserve-space off) still paints there, so lift the bar by the
-    // visible dock depth the work area does not account for. The Ryoku dock steps
-    // aside entirely while widgets are edited, so it never needs clearing here.
-    readonly property real editBarDockClear: {
-        if (Services.Config.barStyle !== "iris" || IrisFrame.dockEdge !== "bottom")
-            return 0;
-        return Math.max(0, IrisFrame.inset("bottom") - IrisFrame.reserve("bottom", true));
-    }
     // Off-surface open of a widget's right-click menu (the `desktop menu` IPC /
     // niri routing). Lands near the top-left of this monitor's canvas.
     Connections {
@@ -375,120 +305,74 @@ Scope {
         const s = root.slotFor(id);
         root.openWidgetMenu(id, s ? s.x : 120, s ? s.y : 120);
     }
-    // A widget frame's Remove button: hide the built-in and drop any selection.
+    // The provider while the chrome frames this screen, else null: the
+    // walk-back of a desktop edit is the provider's to record, since it owns
+    // the snapshot/restore vocabulary for every widget kind.
+    function stageProvider() {
+        return (root.stageComposing && Stage.GlobalStates.editMode)
+            ? StageIsland.Config.widgetProvider : null;
+    }
+    // A widget frame's Remove button: hide the built-in and drop any
+    // selection, recorded so the chrome's undo brings it back.
     function stageRemoveWidget(id) {
+        const p = root.stageProvider();
+        const before = p ? p.snapshot(id) : null;
         Config.set(id + "Enabled", false);
         if (StageCfg.StageSession.selected === id)
             StageCfg.StageSession.deselect();
-        StageCfg.StageSession.markDirty();
+        if (before)
+            Stage.GlobalStates.editHistoryPush({
+                undo: () => p.restore(id, before),
+                redo: () => p.restore(id, null)
+            });
     }
-    // Reset snapshot (docs/stage.md, "Edit widgets"): the widgets Config and the
-    // placed plugin set as they were when this session opened, captured on enter
-    // and written back on resetRequested.
-    // The keys a compose session snapshots. Built-ins are listed by hand (they
-    // carry bespoke keys); every hosted face derives its full set from its
-    // roster prefix, so a new widget or a new per-widget knob is covered the
-    // moment it lands in Config instead of being silently left out of Reset.
-    readonly property var _hostedSuffixes: [
-        "Enabled", "Scale", "Anchor", "X", "Y", "Locked", "Opacity", "Bg",
-        "Color", "Color2", "Gradient", "Style", "Opts", "Pad", "Radius",
-        "Border", "BorderOpacity", "BackingOpacity"]
-    readonly property var _irisExtraSuffixes: ["Size"]
-    readonly property var _pythonExtraSuffixes: ["Variant"]
-    readonly property var _widgetKeys: root._buildWidgetKeys()
-    function _buildWidgetKeys() {
-        const keys = [
-            "clockEnabled", "clockDesign", "clock24h", "clockSeconds", "clockAccent", "clockScale", "clockAnchor", "clockX", "clockY", "clockLocked", "clockOpacity", "clockBg", "clockRadius", "clockColor", "clockColor2", "clockGradient", "dateShow", "dateDesign", "widgetFont",
-            "calendarEnabled", "calendarStyle", "calendarWeeks", "calendarWeekNumbers", "calendarHolidayRegion", "calendarScale", "calendarAnchor", "calendarX", "calendarY", "calendarLocked", "calendarOpacity", "calendarColor", "calendarColor2", "calendarGradient",
-            "musicEnabled", "musicStyle", "musicLyrics", "musicViz", "musicScale", "musicAnchor", "musicX", "musicY", "musicLocked", "musicOpacity", "musicApp", "musicShape", "musicVideo", "musicVideoFile", "musicColor", "musicColor2", "musicGradient",
-            "aioEnabled", "aioStyle", "aioScale", "aioAnchor", "aioX", "aioY", "aioLocked", "aioOpacity", "aioColor", "aioColor2", "aioGradient",
-            "statsEnabled", "statsScale", "statsAnchor", "statsX", "statsY", "statsLocked", "statsOpacity", "statsColor", "statsColor2", "statsGradient",
-            "weatherEnabled", "weatherDesign", "weatherScale", "weatherAnchor", "weatherX", "weatherY", "weatherLocked", "weatherOpacity", "weatherColor", "weatherColor2", "weatherGradient",
-            "notesEnabled", "notesScale", "notesAnchor", "notesX", "notesY", "notesLocked", "notesOpacity", "notesWidth", "notesHeight", "notesColor", "notesColor2", "notesGradient",
-            "dayprogressEnabled", "dayprogressStyle", "dayprogressShowDate", "dayprogressScale", "dayprogressAnchor", "dayprogressX", "dayprogressY", "dayprogressLocked", "dayprogressOpacity", "dayprogressColor", "dayprogressColor2", "dayprogressGradient",
-            "shapeEnabled", "shapeKind", "shapeOutline", "shapeScale", "shapeAnchor", "shapeX", "shapeY", "shapeLocked", "shapeOpacity", "shapeColor", "shapeColor2", "shapeGradient"
-        ];
-        const hosted = [];
-        for (var i = 0; i < IrisRoster.faces.length; i++)
-            hosted.push({ p: IrisRoster.faces[i].prefix, x: root._irisExtraSuffixes });
-        for (var j = 0; j < PythonRoster.faces.length; j++)
-            hosted.push({ p: PythonRoster.faces[j].prefix, x: root._pythonExtraSuffixes });
-        for (var h = 0; h < hosted.length; h++) {
-            const sfx = root._hostedSuffixes.concat(hosted[h].x);
-            for (var k = 0; k < sfx.length; k++)
-                keys.push(hosted[h].p + sfx[k]);
-        }
-        return keys;
-    }
-    property var _snapConfig: null
-    property var _snapPlugins: null
-    property bool _snapViz: false
-    property var _resetQueue: []
-    property var _settingsQueue: []
-    function _snapshot() {
-        const c = {};
-        const ks = root._widgetKeys;
-        for (var i = 0; i < ks.length; i++)
-            c[ks[i]] = Config[ks[i]];
-        root._snapConfig = c;
-        const pl = {};
-        const dps = win.desktopPlugins || [];
-        for (var j = 0; j < dps.length; j++) {
-            const p = dps[j];
-            const dw = (p.placement && p.placement.desktopWidget) || {};
-            pl[p.id] = { x: dw.x, y: dw.y, scale: dw.scale, locked: dw.locked === true, opacity: dw.opacity };
-        }
-        root._snapPlugins = pl;
-        root._snapViz = VizCfg.Config.enabled;
-    }
-    function _restore() {
-        if (root._snapConfig) {
-            const c = root._snapConfig;
-            const ks = root._widgetKeys;
-            const back = {};
-            for (var i = 0; i < ks.length; i++)
-                if (Config[ks[i]] !== c[ks[i]])
-                    back[ks[i]] = c[ks[i]];
-            Config.setMany(back);
-        }
-        if (VizCfg.Config.enabled !== root._snapViz)
-            VizCfg.Config.setEnabled(root._snapViz);
-        const q = [];
-        const snap = root._snapPlugins || {};
-        const nowIds = win.desktopPluginIds || [];
-        for (var n = 0; n < nowIds.length; n++)
-            if (!snap.hasOwnProperty(nowIds[n]))
-                q.push([root.placeTool, nowIds[n], "enabled", "false"]);
-        for (var pid in snap) {
-            const s = snap[pid];
-            if (nowIds.indexOf(pid) < 0)
-                q.push([root.placeTool, pid, "enabled", "true"]);
-            const cmd = [root.placeTool, pid, "desktopWidget",
-                "" + (s.x !== undefined ? s.x : 80), "" + (s.y !== undefined ? s.y : 80)];
-            const hasScale = s.scale !== undefined;
-            const hasLocked = s.locked !== undefined;
-            const hasOpacity = s.opacity !== undefined;
-            // positional args: pad an earlier one with "" (= keep existing) when
-            // only a later one is present, so opacity lands in slot 5.
-            if (hasScale || hasLocked || hasOpacity)
-                cmd.push(hasScale ? "" + s.scale : "");
-            if (hasLocked || hasOpacity)
-                cmd.push(hasLocked ? "" + (s.locked === true) : "");
-            if (hasOpacity)
-                cmd.push("" + s.opacity);
-            q.push(cmd);
-        }
-        root._resetQueue = q;
-        root._runResetQueue();
-    }
-    function _runResetQueue() {
-        if (resetProc.running)
+    // The Stage Editor's walk-back covers Ryoku's own gestures too: a slot
+    // records the placement a drag or resize started from
+    // (WidgetSlot.gestureBefore) and the desktop turns the commit into one
+    // undo entry, so Ctrl+Z in the chrome steps a widget back exactly like the
+    // reference's canvas steps its own. The four placement keys are the whole
+    // document for a built-in or a hosted face; plugin tiles go through the
+    // provider's snapshot/restore, since their write is the place tool's.
+    function stageRecordGesture(s) {
+        if (!root.stageComposing || s.gestureBefore === null)
             return;
-        if (!root._resetQueue || root._resetQueue.length === 0)
+        const w = s.widget;
+        const before = s.gestureBefore;
+        s.gestureBefore = null;
+        const after = {
+            Anchor: Config[w + "Anchor"], X: Config[w + "X"],
+            Y: Config[w + "Y"], Scale: Config[w + "Scale"]
+        };
+        if (JSON.stringify(before) === JSON.stringify(after))
             return;
-        const next = root._resetQueue.shift();
-        resetProc.command = next;
-        resetProc.running = true;
+        Stage.GlobalStates.editHistoryPush({
+            undo: () => root._stageApplyPlacement(w, before),
+            redo: () => root._stageApplyPlacement(w, after)
+        });
+    }
+    function _stageApplyPlacement(w, p) {
+        const patch = {};
+        patch[w + "Anchor"] = p.Anchor;
+        patch[w + "X"] = p.X;
+        patch[w + "Y"] = p.Y;
+        patch[w + "Scale"] = p.Scale;
+        Config.setMany(patch);
+    }
+    // A plugin gesture commits through the place tool, which is asynchronous:
+    // the Registry still holds the old placement the moment the gesture
+    // releases, and that is the before-state. Undo restores it; redo queues
+    // the same command back through the provider's serial queue.
+    function stageRecordPluginGesture(pid, cmd) {
+        const p = root.stageProvider();
+        if (!p)
+            return;
+        const before = p.snapshot("plugin:" + pid);
+        if (!before)
+            return;
+        Stage.GlobalStates.editHistoryPush({
+            undo: () => p.restore("plugin:" + pid, before),
+            redo: () => p.enqueue(cmd)
+        });
     }
     function _runSettingsQueue() {
         if (settingsProc.running)
@@ -634,9 +518,16 @@ Scope {
             if (Math.abs(box.y + box.height / 2 - guides.height / 2) < gs / 2)
                 h.push(guides.height / 2);
             guides.flash(v, h);
-            if (root.stageComposing)
-                StageCfg.StageSession.markDirty();
         }
+
+        // The Stage Editor's card: every visible layer of the desktop (wallpaper,
+        // stage, widgets, editor frames) in one container that carries the mode's
+        // shrink matrix, so the desktop becomes the object the chrome frames and
+        // the widgets under the cursor scale together. Identity when not editing.
+        Item {
+            id: desktopContent
+            anchors.fill: parent
+            transform: Matrix4x4 { matrix: root.stageMatrix }
 
         // The base wallpaper painter: the reveal backdrop composites each new
         // frame over the old one through the preset the daemon attached to the
@@ -799,8 +690,8 @@ Scope {
                 scaleCfg: Config.clockScale
                 pad: Config.clockBg === "none" ? 0 : Math.round(24 * Config.clockScale)
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(clockSlot); }
+                onResized: root.stageRecordGesture(clockSlot)
                 Clock {}
             }
             }
@@ -830,8 +721,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.calendarScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(calendarSlot); }
+                onResized: root.stageRecordGesture(calendarSlot)
                 CalendarWidget {
                     style: Config.calendarStyle
                     weeks: Config.calendarWeeks
@@ -871,8 +762,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.musicScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(musicSlot); }
+                onResized: root.stageRecordGesture(musicSlot)
                 MusicWidget {
                     style: Config.musicStyle
                     showLyrics: Config.musicLyrics
@@ -915,8 +806,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.aioScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(aioSlot); }
+                onResized: root.stageRecordGesture(aioSlot)
                 AioWidget {
                     style: Config.aioStyle
                     s: Config.aioScale
@@ -950,8 +841,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.statsScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(statsSlot); }
+                onResized: root.stageRecordGesture(statsSlot)
                 StatsWidget {
                     s: Config.statsScale
                     active: statsSlot.visible
@@ -984,8 +875,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.weatherScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(weatherSlot); }
+                onResized: root.stageRecordGesture(weatherSlot)
                 WeatherWidget {
                     design: Config.weatherDesign
                     s: Config.weatherScale
@@ -1019,8 +910,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.notesScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(notesSlot); }
+                onResized: root.stageRecordGesture(notesSlot)
                 // notes is the first built-in editable widget: while its pad holds
                 // focus the layer must grab the keyboard (bump kbWanted), and drop
                 // the grab the instant it blurs, or the desktop is stranded.
@@ -1060,8 +951,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.dayprogressScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(dayprogressSlot); }
+                onResized: root.stageRecordGesture(dayprogressSlot)
                 DayProgressWidget {
                     s: Config.dayprogressScale
                 }
@@ -1093,8 +984,8 @@ Scope {
                 bg: "none"
                 scaleCfg: Config.shapeScale
                 onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                onDropped: (box) => win.flashDrop(box)
-                onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(shapeSlot); }
+                onResized: root.stageRecordGesture(shapeSlot)
                 ShapeWidget {
                     s: Config.shapeScale
                 }
@@ -1145,8 +1036,8 @@ Scope {
                             borderOpacity: Config[irisLoader.modelData.prefix + "BorderOpacity"]
                             backingOpacity: Config[irisLoader.modelData.prefix + "BackingOpacity"]
                             onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                            onDropped: (box) => win.flashDrop(box)
-                            onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                            onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(irisSlot); }
+                            onResized: root.stageRecordGesture(irisSlot)
                             IrisFaceWidget {
                                 faceId: irisLoader.modelData.id
                                 kind: irisLoader.modelData.kind
@@ -1198,8 +1089,8 @@ Scope {
                             borderOpacity: Config[pythonLoader.modelData.prefix + "BorderOpacity"]
                             backingOpacity: Config[pythonLoader.modelData.prefix + "BackingOpacity"]
                             onMenuRequested: (x, y, w) => root.openWidgetMenu(w, x, y)
-                            onDropped: (box) => win.flashDrop(box)
-                            onResized: if (root.stageComposing) StageCfg.StageSession.markDirty()
+                            onDropped: (box) => { win.flashDrop(box); root.stageRecordGesture(pythonSlot); }
+                            onResized: root.stageRecordGesture(pythonSlot)
                             PythonFaceWidget {
                                 faceId: pythonLoader.modelData.id
                                 prefix: pythonLoader.modelData.prefix
@@ -1262,18 +1153,20 @@ Scope {
                 radius: slot.dw.radius || 26
 
                 onMoved: (x, y) => {
-                    persist.command = [root.placeTool, slot.pid, "desktopWidget", "" + x, "" + y];
+                    const cmd = [root.placeTool, slot.pid, "desktopWidget", "" + x, "" + y];
+                    root.stageRecordPluginGesture(slot.pid, cmd);
+                    persist.command = cmd;
                     persist.running = true;
-                    if (root.stageComposing) StageCfg.StageSession.markDirty();
                 }
                 onResized: (sc) => {
                     const x = (slot.dw.x !== undefined) ? slot.dw.x : Math.round(slot.x);
                     const y = (slot.dw.y !== undefined) ? slot.dw.y : Math.round(slot.y);
                     const lk = (slot.dw.locked === true);
-                    persist.command = [root.placeTool, slot.pid, "desktopWidget",
+                    const cmd = [root.placeTool, slot.pid, "desktopWidget",
                         "" + x, "" + y, "" + sc, "" + lk];
+                    root.stageRecordPluginGesture(slot.pid, cmd);
+                    persist.command = cmd;
                     persist.running = true;
-                    if (root.stageComposing) StageCfg.StageSession.markDirty();
                 }
                 onMenuRequested: (mx, my, id) => {
                     root.openPluginMenu(id, slot.dw.locked === true, mx, my,
@@ -1344,11 +1237,17 @@ Scope {
                     onPicked: { StageCfg.StageSession.select(slot.pid); StageCfg.StageSession.closePanel(); }
                     onSettings: root.openPluginMenu(slot.pid, slot.dw.locked === true, slot.x, slot.y, slot.entry ? slot.entry.manifest : null, slot.entry ? slot.entry.placement : null)
                     onRemove: {
+                        const p = root.stageProvider();
+                        const before = p ? p.snapshot("plugin:" + slot.pid) : null;
                         hide.command = [root.placeTool, slot.pid, "enabled", "false"];
                         hide.running = true;
                         if (StageCfg.StageSession.selected === slot.pid)
                             StageCfg.StageSession.deselect();
-                        StageCfg.StageSession.markDirty();
+                        if (p && before)
+                            Stage.GlobalStates.editHistoryPush({
+                                undo: () => p.restore("plugin:" + slot.pid, before),
+                                redo: () => p.restore("plugin:" + slot.pid, null)
+                            });
                     }
                 }
             }
@@ -1411,6 +1310,7 @@ Scope {
                     wid: modelData
                 }
             }
+        }
         }
 
         Process { id: paletteProc }
@@ -1505,21 +1405,6 @@ Scope {
         }
         Process { id: sizeProc }
         Process { id: opacityProc }
-        // Reset (docs/stage.md, "Edit widgets"): restore the snapshot taken when
-        // the session opened. Config keys write directly; plugin re-place and
-        // unplace commands run one at a time through this Process.
-        Connections {
-            target: StageCfg.StageSession
-            function onResetRequested() {
-                if (!root.stageComposing)
-                    return;
-                root._restore();
-            }
-        }
-        Process {
-            id: resetProc
-            onRunningChanged: if (!resetProc.running) root._runResetQueue()
-        }
     }
 
     // The desktop's right-click menus (bare wallpaper, a widget, a plugin tile)
@@ -1678,36 +1563,17 @@ Scope {
         }
     }
 
-    // The Edit widgets bar on its own layer-shell surface (docs/stage.md). With
-    // exclusiveZone 0 its geometry already excludes the bars and any dock or
-    // frame-style island that reserves a zone (a dock that reserves nothing is
-    // cleared by editBarDockClear), so the bar rests bottom-centre in the work area on
-    // every bar style (the recording-island idiom). While the picker is closed only
-    // the bar takes input, so the widgets under it still drag; while it is open the
-    // whole surface takes input (a press off the panel closes it) and the surface
-    // takes keyboard on demand for the picker's search field and Up/Down/Space/Esc.
-    PanelWindow {
-        id: editBarWin
-        screen: root.screen
-        visible: root.stageComposing
-        color: "transparent"
-        exclusiveZone: 0
-        WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.namespace: "ryoku-widgets-editbar"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-        anchors { top: true; bottom: true; left: true; right: true }
-        mask: editBar.pickerOpen ? null : editBarMask
-        Region { id: editBarMask; item: editBar.barItem }
-
-        WidgetEditBar {
-            id: editBar
-            anchors.fill: parent
-            monitor: root.screen ? root.screen.name : ""
-            items: root.addItems
-            dockClearance: root.editBarDockClear
-            onDone: StageCfg.StageSession.leave()
-            onAddToggle: id => root.stageAddToggle(id)
-            onCustomize: id => root.stageCustomize(id)
+    // The Stage Editor's store bridge, mounted while the chrome frames this
+    // screen: the ported drawer then lists and edits Ryoku's real widgets
+    // (widgets.json, plugins.json, the visualizer) instead of the island's own
+    // copy of the reference's store (docs/stage.md).
+    Loader {
+        active: root.stageComposing
+        sourceComponent: StageWidgetProvider {
+            monitor: root.monitorName
+            rows: root.addItems
+            placeTool: root.placeTool
+            wallpaperPath: root.wallpaperPath
         }
     }
 }

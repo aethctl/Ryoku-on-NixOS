@@ -7,6 +7,7 @@ import Quickshell.Io
 import inir.modules.common
 import inir.services
 import inir.services.deferred
+import shell.services as Ryoku
 
 Singleton {
     id: root
@@ -18,6 +19,11 @@ Singleton {
     property string _knownLayoutName: ""
     property string _lockSource: "unknown"
     property bool _destroying: false
+    // The evdev monitor is a singleton's child: a hot style switch unloads
+    // the scene that reads it, the singleton keeps the daemon. Only the
+    // frame family (iris) draws lock and layout indicators, so the daemon
+    // follows the active style and stops when that style does.
+    readonly property bool styleActive: Ryoku.Config.barStyle === "iris"
     property bool _numLockReliable: false
     property var _lastRawNumLockState: null
     property string lockStateDaemonPath: Directories.payloadPath("scripts/daemon/keyboard_lock_state_daemon.py")
@@ -278,31 +284,33 @@ Singleton {
         }
 
         onExited: (exitCode, exitStatus) => {
-            if (exitCode === 0) {
-                if (!evdevMonitorProc.running)
-                    evdevMonitorProc.running = true;
+            // A good probe publishes the state through _handleEvdevOutput,
+            // which flips the source and starts the bound monitor. Anything
+            // else falls back to sysfs.
+            if (exitCode === 0 && root.usingEvdev)
                 return;
-            }
-
-            root._log("evdev probe exited", exitCode, exitStatus);
+            if (exitCode !== 0)
+                root._log("evdev probe exited", exitCode, exitStatus);
             root._enableSysfsFallback();
         }
     }
 
+    // The monitor's `running` is bound to style and source, so a crash only
+    // needs a beat before the binding is re-evaluated into a restart.
     Timer {
         id: evdevRestartTimer
         interval: 1000
         running: false
         repeat: false
         onTriggered: {
-            if (!root._destroying && root.usingEvdev && !evdevMonitorProc.running)
+            if (!root._destroying && root.styleActive && root.usingEvdev && !evdevMonitorProc.running)
                 evdevMonitorProc.running = true;
         }
     }
 
     Process {
         id: evdevMonitorProc
-        running: false
+        running: root.styleActive && root.usingEvdev
         command: ["/usr/bin/python3", "-u", root.lockStateDaemonPath]
 
         stdout: SplitParser {
@@ -314,7 +322,7 @@ Singleton {
         }
 
         onExited: (exitCode, exitStatus) => {
-            if (root._destroying)
+            if (root._destroying || !root.styleActive)
                 return;
 
             root._log("evdev monitor exited", exitCode, exitStatus);
@@ -373,7 +381,7 @@ Singleton {
 
     Timer {
         interval: 8000
-        running: !root.usingEvdev
+        running: root.styleActive && !root.usingEvdev
         repeat: true
         onTriggered: root.refreshLedPaths()
     }
@@ -424,6 +432,16 @@ Singleton {
     Component.onCompleted: {
         root._knownLayoutName = root.currentLayoutName;
         evdevProbeProc.running = true;
+    }
+
+    onStyleActiveChanged: {
+        if (root.styleActive) {
+            if (!evdevMonitorProc.running && !evdevProbeProc.running)
+                evdevProbeProc.running = true;
+        } else {
+            root.capsLockPaths = [];
+            root.numLockPaths = [];
+        }
     }
 
     Component.onDestruction: root._destroying = true

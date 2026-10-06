@@ -3,6 +3,21 @@
 ## Unreleased
 
 ### Added
+- `rashin-app/`: **The window opens on the Ryoku lane.** The first sheet is the
+  machine agent; Chat and the new Wiki sheet sit beside it.
+- `rashin-app/`: **The window carries Rashin's own icon.** `logo.svg` links to
+  the brand seal (`assets/brand/rashin-mark.svg`), which the package and the
+  dev deploy both install as `rashin-app` in the hicolor theme; it was
+  falling back to the Ryoku 力 mark.
+- `rashin-app/`: **Rashin, the AI companion window.** A GTK3 + WebKitGTK
+  host for the console `ryoku-rashin` serves: it waits on a paper boot page
+  until the daemon answers, loads the chat, opens outside links in the
+  browser, grants notifications, remembers its size, and stays single
+  instance. The console itself is `ryoku/rashin/web` (Svelte 5 + bits-ui +
+  the Libraries.dev effects): the shared agent chat as a workspace, the
+  fast-lane Ask, and every dashboard sheet. It opens from Super+Alt+Space or
+  the launcher and wears the desktop's live palette. Every fact is the
+  daemon's; the app only asks and paints (`apps/rashin-app/`).
 - **A Ryostore fastfetch preset can bring its own renderer.** A preset that
   needs to draw something fastfetch cannot (icat PNGs, for one) names an
   executable in its own product folder with a `// ryoku:renderer` comment and

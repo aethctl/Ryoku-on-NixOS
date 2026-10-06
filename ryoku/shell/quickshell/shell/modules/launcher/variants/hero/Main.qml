@@ -322,14 +322,35 @@ Scope {
         pointerFocusForced = false;
         if (root.savedFollowMouse !== "")
             root._restoreFollowMouse();
-        else
+        else {
             root.restorePending = true;
+            followMouseRecovery.restart();
+        }
     }
 
     function _restoreFollowMouse() {
         root.restorePending = false;
+        followMouseRecovery.stop();
         if (root.savedFollowMouse !== "")
             Wm.setFocusFollowsMouse(root.savedFollowMouse);
+    }
+
+    // A lost reply (daemon restart, dropped socket) must not leave hover
+    // focus switched off forever: ask the provider again. The action reports
+    // the configured mode before it writes, so a probe-freeze hands back the
+    // user's own value and the second call puts it back.
+    Timer {
+        id: followMouseRecovery
+        interval: 1500
+        onTriggered: {
+            if (!root.restorePending)
+                return;
+            root.restorePending = false;
+            Wm.setFocusFollowsMouse("0", function (configured) {
+                if (configured !== "")
+                    Wm.setFocusFollowsMouse(configured);
+            });
+        }
     }
 
     function stateDump() {

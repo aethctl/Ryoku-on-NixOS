@@ -75,7 +75,20 @@ var (
 // come from Arch or CachyOS, whichever the box installed, and stay the user's
 // to take with `sudo pacman -Syu`; the run reports what is waiting there.
 // `--system` runs that lane too, in one command.
-func Update(args []string) error {
+func Update(args []string) (err error) {
+	// The Hub's plumbing: start a background run, hand it the password, stop it.
+	if len(args) > 0 {
+		switch args[0] {
+		case "--gui":
+			return guiUpdate(args[1:])
+		case "--gui-host":
+			return guiHost(args[1:])
+		case "--auth":
+			return deliverSecret(len(args) > 1 && args[1] == "--cancel")
+		case "--cancel":
+			return cancelRun()
+		}
+	}
 	stage2 := len(args) >= 2 && args[0] == "--stage2"
 	channelSwitch := false
 	withSystem := false
@@ -120,15 +133,22 @@ func Update(args []string) error {
 			"(an update that runs out of disk can leave the system half-upgraded)"), free)
 	}
 
-	// Cache the sudo credential once, on the terminal, before any step needs it.
-	// The pre-snapshot, pacman, yay and the post snapshot all escalate, several
-	// through pipes or RunOut where a prompt cannot be seen; one prompt up front is
-	// what users were doing by hand with `sudo -v && ryoku update`.
+	// Cache the sudo credential once, on the terminal, before any step needs it
+	// and before the console takes the screen: every later escalation runs where
+	// a prompt cannot be seen. A Hub-driven run asks once the run has begun,
+	// through the Hub (authorizeGUI).
 	primeSudo()
-	stopKeepalive := sudoKeepalive()
-	defer stopKeepalive()
+
+	// The raw firehose lands in the per-update log on every path: the terminal
+	// only ever shows the curated console, and a run that fails must still
+	// leave the real output behind for support to read.
+	logPath := startUpdateLog(false)
+	defer stopUpdateLog()
 
 	checkout := sys.ResolveRepo() != ""
+	con = openConsole(verboseLog, channelLine(checkout), releaseLine(checkout),
+		func() string { return i18n.T("now on ") + releaseLine(checkout) })
+	defer settleConsole(&err)
 	switch {
 	case checkout:
 		progress.begin(gitSteps)
@@ -137,6 +157,15 @@ func Update(args []string) error {
 	default:
 		progress.begin(pkgSteps)
 	}
+	trapStop()
+	if updateUI() == "hub" {
+		if err := authorizeGUI(); err != nil {
+			progress.fail(err)
+			return err
+		}
+	}
+	stopKeepalive := sudoKeepalive()
+	defer stopKeepalive()
 
 	progress.at("snapshot")
 	pre := snapperPre(snapshotDesc())
@@ -145,8 +174,6 @@ func Update(args []string) error {
 	// checkout: update through the git channel. packaged: pacman + a hand-off
 	// to the freshly installed binary (stage2).
 	if checkout {
-		logPath := startUpdateLog()
-		defer stopUpdateLog()
 		if err := channelUpdate(); err != nil {
 			progress.fail(err)
 			return err
@@ -156,13 +183,9 @@ func Update(args []string) error {
 		upgradeRyotunes()
 		progress.at("doctor")
 		offerSnapperHelpers()
-		runFreshDoctor()
+		runFreshDoctor(true)
 		progress.at("finalize")
 		snapperPost(pre, "ryoku-update")
-		progress.logf(i18n.T("Update complete"))
-		if logPath != "" {
-			fmt.Println("  " + sys.Dim(i18n.T("full log: ")+logPath))
-		}
 		return finishRun()
 	}
 
@@ -231,6 +254,9 @@ func Update(args []string) error {
 					if pre != "" {
 						hint = i18n.T("see `ryoku rollback` (pre-update snapshot ") + pre + ")"
 					}
+					if logPath != "" {
+						hint += i18n.T("; the full package output is in ") + logPath
+					}
 					e := fmt.Errorf(i18n.T("the Ryoku package upgrade failed; %s: %w"), hint, err)
 					progress.fail(e)
 					return e
@@ -251,12 +277,18 @@ func Update(args []string) error {
 	}
 
 	// exec replaces this process with the freshly installed binary; on any
-	// failure fall through and finish in-process, exactly as before.
+	// failure fall through and finish in-process, exactly as before. The
+	// console hands the terminal back first: the captured descriptors close on
+	// exec, and stage2 captures anew.
 	if sys.Exists("/usr/bin/ryoku") {
 		hand := []string{"ryoku", "update", "--stage2", pre}
 		if withSystem {
 			hand = append(hand, "--system")
 		}
+		if verboseLog {
+			hand = append(hand, "--verbose")
+		}
+		con.handoff()
 		if err := syscall.Exec("/usr/bin/ryoku", hand, os.Environ()); err != nil {
 			fmt.Fprintf(os.Stderr, i18n.T("warning: could not hand off to the updated binary: %v\n"), err)
 		}
@@ -313,10 +345,12 @@ func humanBytes(n uint64) string {
 // Several of those prompts cannot be seen or answered: the pre-snapshot runs
 // through RunOut (no tty), pacman's runs through the curated output pipe, and yay
 // and flatpak escalate on their own -- an unseen prompt there is exactly why users
-// learned to run `sudo -v` by hand first. No tty -> skip (a GUI or timer run has
-// no terminal to prompt on); a NOPASSWD box sees nothing. Best-effort.
+// learned to run `sudo -v` by hand first. No tty -> skip (a timer run has no
+// terminal to prompt on), and a Hub-driven run asks through the Hub instead
+// (its pseudo terminal has nobody at it); a NOPASSWD box sees nothing.
+// Best-effort.
 func primeSudo() {
-	if !sys.StdinIsTTY() {
+	if updateUI() == "hub" || !sys.StdinIsTTY() {
 		return
 	}
 	_ = sys.Run("sudo", "-v")
@@ -324,10 +358,10 @@ func primeSudo() {
 
 // sudoKeepalive refreshes the cached credential every minute so a long
 // transaction (a large AUR compile) cannot let it lapse mid-run and re-prompt
-// where the prompt is invisible. `-n` never prompts, so once the credential is
-// gone this is a silent no-op, and RunOut keeps its "a password is required" off
-// the terminal. The returned stop func ends the refresher; the stage1->stage2
-// exec replaces the process, so a stop it never reaches leaks nothing.
+// where the prompt is invisible. `-n` never prompts; once the credential is gone
+// the console stops animating, so the prompt sudo will print next stays
+// readable. The returned stop func ends the refresher; the stage1->stage2 exec
+// replaces the process, so a stop it never reaches leaks nothing.
 func sudoKeepalive() func() {
 	if !sys.StdinIsTTY() {
 		return func() {}
@@ -341,7 +375,9 @@ func sudoKeepalive() func() {
 			case <-stop:
 				return
 			case <-t.C:
-				_, _ = sys.RunOut("sudo", "-n", "-v")
+				if _, err := sys.RunOut("sudo", "-n", "-v"); err != nil {
+					con.hold()
+				}
 			}
 		}
 	}()
@@ -364,12 +400,35 @@ func snapshotDesc() string {
 	return "ryoku-update (from " + v + ")"
 }
 
+// channelLine heads the console: the channel this box follows, and whether it
+// builds from a checkout.
+func channelLine(checkout bool) string {
+	if checkout {
+		return ryokuChannel() + " · " + i18n.T("source checkout")
+	}
+	return sys.DisplayChannel(ryokuChannel())
+}
+
+// releaseLine names what the box runs: the release and its name on a packaged
+// install, the checkout's version and commit on a source box.
+func releaseLine(checkout bool) string {
+	if checkout {
+		repo := sys.ResolveRepo()
+		return "v" + readVersion(repo) + " · " + gitShort(repo, "HEAD")
+	}
+	rel := sys.ReadRelease()
+	if rel.Release == "" {
+		return sys.InstalledVersion()
+	}
+	return strings.TrimSpace(withSpace(rel.Name) + rel.Release)
+}
+
 // runRyokuUpgrade moves the Ryoku set, sleep-inhibited (a lid-close or idle
 // suspend mid-transaction cannot corrupt it). It returns any "exists in
 // filesystem" conflict paths so a failed run can clear unowned strays and
 // retry. The argv, and why it is not a sysupgrade, live in ryokuset.go.
 func runRyokuUpgrade(set []string) ([]string, error) {
-	return runUpgradeCollecting("Ryoku", "Ryoku package upgrade", ryokuInstallArgs(set))
+	return runUpgradeCollecting("Ryoku package upgrade", ryokuInstallArgs(set))
 }
 
 // runSystemLane is `ryoku update --system`: the user's lane, opted into. It is
@@ -379,7 +438,7 @@ func runRyokuUpgrade(set []string) ([]string, error) {
 func runSystemLane(pending []updateItem) {
 	progress.at("system")
 	progress.logf(i18n.T("Updating %d system package(s) (pacman -Syu, kernel included)"), len(pending))
-	if err := runInhibited(i18n.T("System"), "System package upgrade", systemUpgradeArgs()); err != nil {
+	if err := runInhibited("System package upgrade", systemUpgradeArgs()); err != nil {
 		fmt.Fprintf(os.Stderr, i18n.T("warning: the system upgrade reported errors: %v\n"), err)
 	}
 	if sys.Has("yay") {
@@ -410,7 +469,7 @@ func runSystemLane(pending []updateItem) {
 // is the whole failure this split has to avoid.
 func reportSystemLane(pending []updateItem) {
 	if len(pending) == 0 {
-		progress.logf(i18n.T("The base system is current; nothing waiting outside the Ryoku set"))
+		progress.detailf(i18n.T("The base system is current; nothing waiting outside the Ryoku set"))
 		return
 	}
 	progress.logf(i18n.T("%d system package(s) waiting from your distribution (kernel included): take them with `sudo pacman -Syu`"), len(pending))
@@ -454,12 +513,16 @@ func dbRejection(err error) bool {
 	return false
 }
 
-// splitMetapackages are the compositor-split metas the 0.73.x packaging
-// introduced. A release that predates the split does not serve them, and their
-// exact-version pins on six packages make any downgrade transaction
-// unsatisfiable, so moving across the split has to drop them first; the
-// downgrade of ryoku-desktop itself re-ties the graph afterwards (#271).
-var splitMetapackages = []string{"ryoku-desktop-hyprland", "ryoku-desktop-niri"}
+// splitMetapackages are compositor variants that may have exact-version pins
+// the target channel cannot satisfy. Removing an unserved meta with -Rdd lets
+// the channel transaction replace it without touching the compositor itself.
+var splitMetapackages = func() []string {
+	metas := []string{"ryoku-desktop-hyprland", "ryoku-desktop-niri"}
+	if retired := wm.RetiredCompositor().VariantPackage; retired != "" {
+		metas = append(metas, retired)
+	}
+	return metas
+}()
 
 // Seams over the live box, replaced in tests.
 var (
@@ -505,24 +568,26 @@ func unownedFiles(paths []string) []string {
 	return out
 }
 
-// ryokuOverwriteGlob names the ryoku-desktop-owned paths that the ISO installer
+// RyokuOverwriteGlob names the ryoku-desktop-owned paths that the ISO installer
 // and ryoku/shell/deploy.sh seed unowned before the package began owning them:
-// the privileged helpers (ryoku-dns, ryoku-network-kill, ryoku-boot-apply,
-// ryoku-wifi-powersave), their polkit rules, the Plymouth splash theme, the
-// ryoku-owned systemd units, the mkinitcpio install hooks the HOOKS drop-in
-// names, the shipped boot configs under /usr/share/ryoku/boot, and the logind
-// lid-switch drop-in. Every ryoku-desktop (re)install --overwrites these, or the
-// first upgrade that starts owning a seeded path aborts the whole transaction
-// ("exists in filesystem") and blocks every update until the files are removed
-// by hand. Keep in sync with the doctor's ryokuSystemGlobs, which clears the
-// same paths on an already-wedged box.
-const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
+// the privileged helpers, their polkit rules, Plymouth theme, systemd units,
+// initcpio hooks, boot configs, lockscreen bundle, logind drop-in, boot hooks,
+// modules-load policy, udev rules, and the default-app MIME map. A package
+// transition must be able to adopt these paths without an exists-in-filesystem
+// failure. Keep this in sync with the doctor's system ownership repair.
+const RyokuOverwriteGlob = "/usr/bin/ryoku-*," +
 	"/usr/lib/systemd/system/ryoku-*," +
 	"/usr/lib/initcpio/install/ryoku-*," +
 	"/usr/share/polkit-1/rules.d/*ryoku*.rules," +
 	"/usr/share/plymouth/themes/ryoku/*," +
 	"/usr/share/ryoku/boot/*," +
-	"/etc/systemd/logind.conf.d/10-ryoku-lid.conf"
+	"/usr/share/ryoku/lockscreen/ryoku-*," +
+	"/usr/share/ryoku/lockscreen/install-qylock," +
+	"/etc/systemd/logind.conf.d/10-ryoku-lid.conf," +
+	"/etc/boot/hooks/post.d/*ryoku*," +
+	"/etc/modules-load.d/*ryoku*," +
+	"/usr/lib/udev/rules.d/*ryoku*.rules," +
+	"/usr/local/share/applications/mimeapps.list"
 
 // systemUpgradeArgs is the user's lane, run only by `ryoku update --system`:
 // the full sysupgrade, kernel included, exactly what `sudo pacman -Syu` does
@@ -530,12 +595,12 @@ const ryokuOverwriteGlob = "/usr/bin/ryoku-*," +
 // owns cannot abort the transaction here either.
 func systemUpgradeArgs() []string {
 	return []string{"sudo", "env", "SNAP_PAC_SKIP=y", "RYOKU_MANAGED_UPDATE=1",
-		"pacman", "-Syu", "--noconfirm", "--overwrite", ryokuOverwriteGlob}
+		"pacman", "-Syu", "--noconfirm", "--overwrite", RyokuOverwriteGlob}
 }
 
 // runAURUpgrade runs `yay -Sua` under the same sleep inhibitor.
 func runAURUpgrade() error {
-	return runInhibited("AUR", "AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
+	return runInhibited("AUR package upgrade", []string{"yay", "-Sua", "--noconfirm"})
 }
 
 // flatpakUpdatable reports whether a flatpak update is worth attempting at all:
@@ -555,34 +620,37 @@ func flatpakUpdatable() bool {
 // same sleep inhibitor as the package steps, since a suspend mid-deploy leaves a
 // half-written app tree.
 func runFlatpakUpgrade() error {
-	return runInhibited("Flatpak", "Flatpak app upgrade",
+	return runInhibited("Flatpak app upgrade",
 		[]string{"flatpak", "update", "--noninteractive", "--assumeyes"})
 }
 
-// runInhibited runs argv while holding a logind sleep+idle block, so a suspend
-// mid-upgrade cannot interrupt a package transaction. Degrades to running argv
-// directly when systemd-inhibit is unavailable. On a real terminal it renders a
-// curated view of the output (phase is the header label); for pipes, logs, and
-// --verbose it streams raw so nothing that scrapes the output breaks.
-func runInhibited(phase, why string, argv []string) error {
-	full := argv
-	if sys.Has("systemd-inhibit") {
-		head := []string{"systemd-inhibit", "--what=sleep:idle", "--who=ryoku update", "--why=" + why, "--mode=block"}
-		full = append(head, argv...)
-	}
-	if verboseLog || !sys.StdoutIsTTY() {
-		return sys.Run(full[0], full[1:]...)
-	}
-	return renderUpgrade(phase, full)
-}
-
-// finishRun publishes the terminal "done" state, holds it briefly so a watching
-// GUI catches the completion, then clears the run so the island folds away.
+// finishRun publishes the terminal "done" state. A terminal run holds it
+// briefly so a watching Hub catches the completion, then clears it; a
+// Hub-driven run leaves it for the Hub to show until the user dismisses it.
 func finishRun() error {
 	progress.finish()
+	if updateUI() == "hub" {
+		return nil
+	}
 	time.Sleep(1200 * time.Millisecond)
 	progress.idle()
 	return nil
+}
+
+// settleConsole ends the console with the run: the terminal gets its
+// descriptors back, and a failure the console already showed in full is
+// marked so main does not print it a second time. While a stop is unwinding,
+// the stop handler owns the exit; returning here would race it out of the
+// process before it gives back what the run quiesced.
+func settleConsole(err *error) {
+	if stopping.Load() {
+		select {}
+	}
+	failed := con.reported()
+	con.close()
+	if *err != nil && failed {
+		*err = reportedError{*err}
+	}
 }
 
 // updateStage2 finishes an update after the package transactions: deploy the
@@ -590,13 +658,19 @@ func finishRun() error {
 // runs in the freshly installed binary (a new process after the exec handoff),
 // so it re-begins the packaged step list and marks the pre-handoff steps done
 // to keep one continuous progress bar.
-func updateStage2(pre string, withSystem bool) error {
+func updateStage2(pre string, withSystem bool) (err error) {
 	// A fresh process after the exec handoff: re-cache the credential (a no-op
 	// inside the timeout) so materialize, the post snapshot and doctor never
 	// prompt where it cannot be seen.
 	primeSudo()
-	stopKeepalive := sudoKeepalive()
-	defer stopKeepalive()
+	// The exec handoff closed stage1's log handle, so re-open the same file in
+	// append mode: a deploy or doctor failure after the package transaction
+	// must land in the one log support asks for.
+	startUpdateLog(true)
+	defer stopUpdateLog()
+	con = openConsole(verboseLog, channelLine(false), releaseLine(false),
+		func() string { return i18n.T("now on ") + releaseLine(false) })
+	defer settleConsole(&err)
 	// Re-begin the SAME step list stage1 published, or the island would lose
 	// the steps that already ran when a --system run hands over.
 	steps := pkgSteps
@@ -604,6 +678,9 @@ func updateStage2(pre string, withSystem bool) error {
 		steps = systemSteps
 	}
 	progress.begin(steps)
+	trapStop()
+	stopKeepalive := sudoKeepalive()
+	defer stopKeepalive()
 	progress.setSnapshot(pre)
 	progress.markDone("snapshot", "packages")
 	if withSystem {
@@ -627,7 +704,7 @@ func updateStage2(pre string, withSystem bool) error {
 	armBootGuard(pre)
 
 	progress.at("apply")
-	progress.logf(i18n.T("Applying the new configuration"))
+	progress.detailf(i18n.T("Applying the new configuration"))
 	if err := ensurePackagePowerCutover(); err != nil {
 		progress.fail(err)
 		return err
@@ -654,6 +731,7 @@ func updateStage2(pre string, withSystem bool) error {
 		progress.fail(err)
 		return err
 	}
+	onAbort("sleep-guard", func() { _ = cutoverGuard.Release() })
 	// Every later failure used to return with the durable block still live:
 	// the leaked guard denies every suspend with logind's "Operation denied
 	// due to active block inhibitor" until logout (#282, #285). The explicit
@@ -684,6 +762,7 @@ func updateStage2(pre string, withSystem bool) error {
 			progress.fail(err)
 			return err
 		}
+		onAbort("generation-guard", func() { _ = runPowerHelper("ryoku-power-cutover", "generation-guard-stop") })
 	}
 	// stop the shell first: a live quickshell would hot-reload the half-copied
 	// tree mid-swap, re-instantiating the new QML against whatever plugin .so
@@ -692,6 +771,24 @@ func updateStage2(pre string, withSystem bool) error {
 	if err := stopShell(); err != nil {
 		progress.fail(err)
 		return err
+	}
+	// The Hub went down with the shell; a Hub-driven run brings it back on its
+	// Updates page however the run ends, so the user sees how it went.
+	reopened := false
+	reopen := func() {
+		if !reopened {
+			reopened = true
+			reopenHub()
+		}
+	}
+	defer reopen()
+	if shellExpected {
+		onAbort("shell", func() {
+			_ = reloadConfig()
+			_ = startShell()
+			restartWallpaper(wallpaperWasActive)
+			reopen()
+		})
 	}
 	if graphicalPresent {
 		// The first rollout can encounter a pre-guard wrapper. With its launcher
@@ -735,7 +832,7 @@ func updateStage2(pre string, withSystem bool) error {
 
 	if shellExpected {
 		progress.at("reload")
-		progress.logf(i18n.T("Reloading the desktop"))
+		progress.detailf(i18n.T("Reloading the desktop"))
 		// One clean reload picks up the new config and restores auto-reload. The
 		// lid owner comes back as soon as the new shell answers sleep-ready;
 		// long-running reindex, doctor, and snapshot work starts only afterward.
@@ -763,6 +860,8 @@ func updateStage2(pre string, withSystem bool) error {
 			}
 		}
 		restartWallpaper(wallpaperWasActive)
+		dropAbort("shell")
+		reopen()
 	}
 	// Either the foreground shell owns the normal sleep block, or every
 	// inactive graphical session is qylock-secured and observed while logind
@@ -778,11 +877,13 @@ func updateStage2(pre string, withSystem bool) error {
 			progress.fail(err)
 			return err
 		}
+		dropAbort("generation-guard")
 	}
 	if err := cutoverGuard.Release(); err != nil {
 		progress.fail(err)
 		return err
 	}
+	dropAbort("sleep-guard")
 	_ = powerCutoverLock.Close()
 	powerCutoverLock = nil
 	rashinReindex()
@@ -791,11 +892,10 @@ func updateStage2(pre string, withSystem bool) error {
 
 	progress.at("doctor")
 	offerSnapperHelpers()
-	runFreshDoctor()
+	runFreshDoctor(false)
 
 	progress.at("finalize")
 	snapperPost(pre, "ryoku-update")
-	progress.logf(i18n.T("Update complete"))
 	return finishRun()
 }
 
@@ -1067,7 +1167,7 @@ func rashinReindex() {
 	if !sys.Has("ryoku-rashin") {
 		return
 	}
-	fmt.Println(i18n.T("==> Reindexing the Rashin vault"))
+	progress.detailf(i18n.T("Reindexing the Rashin vault"))
 	if err := sys.Run(pkgBin("ryoku-rashin"), "index"); err != nil {
 		fmt.Fprintf(os.Stderr, i18n.T("warning: rashin reindex failed: %v\n"), err)
 	}
@@ -1092,9 +1192,9 @@ func prowlRefresh() {
 	}
 	switch prowlDecide(true, prowlPacmanOwned(path)) {
 	case prowlManaged:
-		fmt.Println(i18n.T("==> prowl is managed by pacman; refreshed with the system packages"))
+		progress.detailf(i18n.T("prowl is managed by pacman; refreshed with the system packages"))
 	case prowlSelfUpdate:
-		fmt.Println(i18n.T("==> Updating prowl"))
+		progress.detailf(i18n.T("Updating prowl"))
 		if err := sys.Run(path, "update"); err != nil {
 			fmt.Fprintf(os.Stderr, i18n.T("warning: prowl update failed: %v\n"), err)
 		}
@@ -1204,10 +1304,10 @@ func offerSnapperHelpers() {
 	}
 	detail := strings.Join(want, " + ") + i18n.T(" back the rollback safety net (") + strings.Join(blurbs, ", ") + ")."
 	if !askInstall(i18n.T("Enable snapshot helpers?"), detail, want) {
-		fmt.Printf(i18n.T("==> Snapshot helpers skipped (%s); ryoku doctor keeps recommending them\n"), strings.Join(want, ", "))
+		progress.logf(i18n.T("Snapshot helpers skipped (%s); ryoku doctor keeps recommending them"), strings.Join(want, ", "))
 		return
 	}
-	fmt.Printf(i18n.T("==> Installing snapshot helpers: %s\n"), strings.Join(want, ", "))
+	progress.logf(i18n.T("Installing snapshot helpers: %s"), strings.Join(want, ", "))
 	for _, p := range want {
 		tool := "ryoku-pkg-add"
 		if p == "limine-snapper-sync" {
@@ -1223,17 +1323,14 @@ func offerSnapperHelpers() {
 // (RYOKU_UPDATE_UI=hub) -> ask through the run-state prompt and wait.
 // plain terminal -> y/N. non-interactive -> decline.
 func askInstall(title, detail string, pkgs []string) bool {
-	if os.Getenv("RYOKU_UPDATE_UI") == "hub" {
+	if updateUI() == "hub" {
 		publishPrompt("snapper-helpers", title, detail, []string{"Install", "Skip"})
 		choice, ok := awaitAnswer(120 * time.Second)
-		progress.publish("running") // clear the prompt; resume the step view
+		progress.resume()
 		return ok && choice == "Install"
 	}
 	if sys.StdinIsTTY() {
-		fmt.Printf(i18n.T("%s install %s? [y/N] "), title, strings.Join(pkgs, ", "))
-		var resp string
-		_, _ = fmt.Scanln(&resp)
-		resp = strings.ToLower(strings.TrimSpace(resp))
+		resp := con.ask(fmt.Sprintf(i18n.T("%s install %s? [y/N]"), title, strings.Join(pkgs, ", ")))
 		return resp == "y" || resp == "yes"
 	}
 	return false
@@ -1243,12 +1340,26 @@ func askInstall(title, detail string, pkgs []string) bool {
 // reconcilers shipped in this release run inside the same update. same
 // command users run by hand; calling it here keeps doctor one thing instead
 // of a copy baked into update. best-effort: a finding never fails update.
-func runFreshDoctor() {
-	fmt.Println(i18n.T("==> Running doctor"))
-	// pkgBin, not PATH: on a box with ~/.local/bin residue the bare name is the
-	// STALE CLI, whose doctor predates the reconcilers this release ships --
-	// including the residue scan that would clear that very shadow.
-	_ = sys.Run(pkgBin("ryoku"), "doctor")
+func runFreshDoctor(checkout bool) {
+	progress.detailf(i18n.T("Running ryoku doctor"))
+	_ = sys.Run(doctorBin(checkout), "doctor")
+}
+
+// doctorBin is the CLI that was just updated. A packaged box's is /usr/bin:
+// ~/.local/bin residue there is a STALE CLI whose doctor predates the
+// reconcilers this release ships, including the residue scan that would clear
+// that very shadow. A checkout box is the reverse: deploy.sh just built the
+// CLI into ~/.local/bin, and /usr/bin holds whatever release the box was
+// installed from, which a channel update never moves.
+func doctorBin(checkout bool) string {
+	if checkout {
+		if home, err := os.UserHomeDir(); err == nil {
+			if p := filepath.Join(home, ".local", "bin", "ryoku"); sys.Exists(p) {
+				return p
+			}
+		}
+	}
+	return pkgBin("ryoku")
 }
 
 // Rollback is the way back, on two levels. `--to <tag>` moves the Ryoku set
@@ -1959,6 +2070,17 @@ func pkgBin(name string) string {
 	return name
 }
 
+// BeginReloadCover raises the reload cover over the still-live desktop so a
+// teardown and the config or binary swap that follows never show grey or
+// flicker. Best-effort: without a session (TTY updates, headless probes) or
+// with a cover already up, the launcher fast-fails and the caller proceeds
+// uncovered, exactly as before.
+func BeginReloadCover() {
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	_ = exec.CommandContext(ctx, pkgBin("ryoku-reload-cover"), "begin").Run()
+}
+
 // stopShell quiesces the desktop for a config swap: ask the daemon to quit,
 // wait for it to go, then drop orphaned surfaces still holding a config's
 // single-instance lock (one survivor kills the fresh daemon's components).
@@ -1969,6 +2091,7 @@ func stopShell() error {
 	if !sys.Has("ryoku-shell") {
 		return nil
 	}
+	BeginReloadCover()
 	// Under systemd the unit would respawn the daemon two seconds after the
 	// quit below and the update would race its own quiesce. Stopping the unit
 	// is a no-op where it does not exist yet.

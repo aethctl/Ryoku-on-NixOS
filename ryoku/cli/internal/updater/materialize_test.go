@@ -686,7 +686,12 @@ func TestApplyGeneratedCompletesLaidTrees(t *testing.T) {
 	if got := run(t, home); len(got) != 0 {
 		t.Fatalf("absent trees must not be created, got %v", got)
 	}
-	if got := run(t, lay(t, false, incomplete)); len(got) != 0 {
-		t.Fatalf("no neutral store must not trigger an apply, got %v", got)
+	// The installer seeds desktop.json only for a non-default keyboard, so a
+	// us-layout install's materialize runs with the store absent. The provider
+	// renders its own defaults from an unreadable store path, so the
+	// hard-included generated files still land and the first login parses
+	// (#331): a missing store must never skip the render.
+	if got := run(t, lay(t, false, incomplete)); len(got) != 1 || got[0] != incomplete {
+		t.Fatalf("a laid tree with no store must still render its generated defaults, got %v", got)
 	}
 }

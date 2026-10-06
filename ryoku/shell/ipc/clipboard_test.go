@@ -126,11 +126,15 @@ func TestPickBestMime(t *testing.T) {
 		{[]string{"image/tiff", "image/jpeg"}, "image/jpeg"},
 		{[]string{"application/x-thing"}, "application/x-thing"},
 		// A browser's private marker is never stored as an entry of its own, and
-		// never wins the fallback against a real type offered beside it.
+		// never wins the fallback against a real type offered beside it. Every
+		// chromium/x- type is private, not just the x-internal- family.
 		{[]string{"chromium/x-internal-source-rfh-token"}, ""},
-		{[]string{"chromium/x-internal-source-url"}, ""},
+		{[]string{"chromium/x-source-url"}, ""},
+		{[]string{"chromium/x-web-custom-data"}, ""},
+		{[]string{"chromium/x-source-url", "image/png"}, "image/png"},
+		{[]string{"chromium/x-source-url", "text/plain"}, "text/plain"},
+		{[]string{"chromium/x-source-url", "chromium/x-internal-source-rfh-token"}, ""},
 		{[]string{"chromium/x-internal-source-rfh-token", "image/png"}, "image/png"},
-		{[]string{"chromium/x-internal-source-rfh-token", "text/plain"}, "text/plain"},
 		{nil, ""},
 	}
 	for _, c := range cases {

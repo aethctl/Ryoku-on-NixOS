@@ -117,7 +117,7 @@ func channelUpdate() error {
 	ch := ryokuChannel()
 
 	progress.at("channel")
-	progress.logf(i18n.T("Updating Ryoku (channel: %s)"), ch)
+	progress.detailf(i18n.T("Fetching origin/%s"), ch)
 	gitFetch(repo, ch)
 	// report what the sync actually did; "Update complete" alone hid a box that
 	// redeployed the same commit every time.
@@ -126,27 +126,17 @@ func channelUpdate() error {
 		return err
 	}
 	if after := gitShort(repo, "HEAD"); after != before {
-		progress.logf(i18n.T("Advanced %s -> %s (v%s %s)"), before, after, readVersion(repo), ch)
+		progress.logf(i18n.T("Advanced %s → %s (v%s %s)"), before, after, readVersion(repo), ch)
 	} else {
 		progress.logf(i18n.T("Already on the latest %s (v%s, %s)"), ch, readVersion(repo), before)
 	}
 
 	progress.at("deploy")
-	progress.logf(i18n.T("Deploying the desktop from the checkout"))
-	if err := deployRun(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
+	progress.detailf(i18n.T("Deploying the desktop from the checkout"))
+	if err := sys.Run(filepath.Join(repo, "ryoku", "shell", "deploy.sh")); err != nil {
 		return fmt.Errorf(i18n.T("deploy from %s failed: %w"), repo, err)
 	}
 	return nil
-}
-
-// deployRun renders deploy.sh as a quiet spinner on a real terminal (its
-// build/install chatter is not something a user needs to read), and streams it
-// raw for pipes, logs, and --verbose.
-func deployRun(path string) error {
-	if verboseLog || !sys.StdoutIsTTY() {
-		return sys.Run(path)
-	}
-	return renderQuiet([]string{path})
 }
 
 // readVersion reads the checkout's VERSION file (e.g. 0.50.8-beta.19), the

@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# The Stage Editor's wallpaper seam: the ported chrome's services shell out to
+# a switchwall-style helper; Ryoku's wallpaper is ryogami's and its theme is
+# the daemon's, so this translates the island's flags into Ryoku's own writes.
+# One writer each: the picture goes through ryogami, the palette knobs through
+# the daemon's settings.patch (the sole writer of shell.json).
+#
+# Recognised flags (unknown ones are ignored, the way the reference's own
+# script tolerates a newer caller): --mode dark|light, --image PATH,
+# --noswitch (mode-only, no picture), --type scheme-*, --lockscreen,
+# --lightmode, --refresh-frame, --request-seq N.
+set -uo pipefail
+
+mode=""
+image=""
+noswitch=0
+type=""
+lockscreen=0
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mode) mode="${2:-}"; shift 2 ;;
+        --image) image="${2:-}"; shift 2 ;;
+        --type) type="${2:-}"; shift 2 ;;
+        --noswitch) noswitch=1; shift ;;
+        --lockscreen) lockscreen=1; shift ;;
+        --lightmode|--refresh-frame|--request-seq)
+            # The light-mode pairing and the poster refresh have no Ryoku
+            # meaning (one wallpaper, live-painted); the request sequence is
+            # the island's own echo guard.
+            [[ $1 == "--request-seq" ]] && shift 2 || shift ;;
+        *) shift ;;
+    esac
+done
+
+sock="${XDG_RUNTIME_DIR:-/tmp}/ryoku-shell.sock"
+patch() { # path, json value
+    printf 'call settings.patch %s\n' \
+        "{\"path\":\"$1\",\"value\":$2}" | timeout 3 socat - "UNIX-CONNECT:$sock" >/dev/null 2>&1
+}
+
+# Ryoku keeps no separate lockscreen wallpaper edit surface here (the lock's
+# own editor lives in Hub), so a lockscreen write is a no-op.
+if [[ $lockscreen -eq 1 ]]; then
+    exit 0
+fi
+if [[ -n $mode && $noswitch -eq 1 && -z $image ]]; then
+    # A mode-only call (the Style tab's light/dark switch). A wallpaper apply
+    # also carries --mode (the reference regenerates its palette in it);
+    # Ryoku's daemon regenerates on the wallpaper change itself, so applying
+    # a picture must not pin the machine's light/dark mode.
+    case "$mode" in
+        dark) patch "theme.matugen.mode" '"Dark"' ;;
+        light) patch "theme.matugen.mode" '"Light"' ;;
+    esac
+fi
+
+if [[ -n $type ]]; then
+    # The island's scheme names map onto Ryoku's matugen scheme_type; the
+    # wallpaper-derived default ("auto") is Ryoku's dynamic Wallpaper scheme.
+    case "$type" in
+        scheme-auto) patch "theme.theme" '"Wallpaper"' ;;
+        scheme-*)
+            t="${type#scheme-}"
+            case "$t" in
+                tonal-spot) t="TonalSpot" ;;
+                fruit-salad) t="FruitSalad" ;;
+                *) t="$(tr '[:lower:]' '[:upper:]' <<< "${t:0:1}")${t:1}" ;;
+            esac
+            patch "theme.matugen.scheme_type" "\"$t\""
+            ;;
+    esac
+fi
+
+if [[ $noswitch -eq 0 && -n $image ]]; then
+    command -v ryogami >/dev/null 2>&1 && exec ryogami wallpaper set "$image"
+fi
+exit 0

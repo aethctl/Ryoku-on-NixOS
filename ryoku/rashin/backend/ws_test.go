@@ -7,7 +7,7 @@ import (
 )
 
 func TestTranscriptRecordsConversationOnly(t *testing.T) {
-	h := newChatHub()
+	h := newChatHub(ryokuLane())
 	h.broadcast(wsOut{Type: "state", State: "busy"})
 	h.broadcast(wsOut{Type: "user_text", Text: "q"})
 	h.broadcast(wsOut{Type: "agent_text", Text: "a"})
@@ -24,7 +24,7 @@ func TestTranscriptRecordsConversationOnly(t *testing.T) {
 }
 
 func TestTranscriptCapKeepsTail(t *testing.T) {
-	h := newChatHub()
+	h := newChatHub(ryokuLane())
 	for i := range transcriptCap + 10 {
 		h.broadcast(wsOut{Type: "tool", ID: fmt.Sprint("t", i), Status: "completed"})
 	}
@@ -39,7 +39,7 @@ func TestTranscriptCapKeepsTail(t *testing.T) {
 // A joiner replays the conversation, not every chunk: a run of chunks is one
 // frame and a tool call is one frame with its latest fields.
 func TestTranscriptCoalescesChunksAndToolUpdates(t *testing.T) {
-	h := newChatHub()
+	h := newChatHub(ryokuLane())
 	h.broadcast(wsOut{Type: "agent_thought", Text: "check "})
 	h.broadcast(wsOut{Type: "agent_thought", Text: "logs"})
 	h.broadcast(wsOut{Type: "tool", ID: "t1", Title: "$ journalctl -b", Kind: "execute", Status: "pending", Input: "journalctl -b", Auto: true})
@@ -61,7 +61,7 @@ func TestTranscriptCoalescesChunksAndToolUpdates(t *testing.T) {
 }
 
 func TestOpenApprovalsTrackedApartFromTranscript(t *testing.T) {
-	h := newChatHub()
+	h := newChatHub(ryokuLane())
 	h.broadcast(wsOut{Type: "permission", RequestID: "1", ToolID: "t1", Title: "rm x"})
 	h.broadcast(wsOut{Type: "permission", RequestID: "2", ToolID: "t2", Title: "mv a b"})
 	h.broadcast(wsOut{Type: "permission_resolved", RequestID: "1", Outcome: "allowed"})

@@ -167,7 +167,11 @@ Item {
                     height: width
                     x: (root.width / 2) + rDist * Math.sin(angleRad) - width / 2
                     y: (root.height / 2) - rDist * Math.cos(angleRad) - height / 2
-                    visible: intensity > 0.001
+                    // A desktop clock must read at a glance: every number sits
+                    // on the dial at a base brightness, and the nearest hand's
+                    // beam lifts it toward full on top. The old face hid each
+                    // digit until a hand swept near it, so most of the dial
+                    // read blank.
 
                     Rectangle {
                         anchors.centerIn: parent
@@ -186,7 +190,7 @@ Item {
                         font.pixelSize: Math.min(root.width, root.height) * 0.054
                         font.weight: Font.Bold
                         color: numDelegate.intensity > 0.5 ? root.numberColor : numDelegate.activeColor
-                        opacity: numDelegate.intensity
+                        opacity: 0.45 + 0.55 * numDelegate.intensity
                     }
                 }
             }

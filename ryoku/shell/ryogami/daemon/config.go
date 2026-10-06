@@ -84,21 +84,48 @@ func resolvePath(p string) string {
 	return p
 }
 
+// picturesRoot resolves the Pictures folder through XDG so a localized desktop
+// (~/Imagens, ~/Bilder, ...) is honored; the session exports the variable at
+// login and the English default stays the fallback where it is unset.
+func picturesRoot() string {
+	if d := os.Getenv("XDG_PICTURES_DIR"); d != "" {
+		return d
+	}
+	return filepath.Join(home(), "Pictures")
+}
+
+// picturesSub picks the Pictures subfolder that actually holds a library: the
+// XDG root first, then the English default for users whose collection predates
+// localization (a generated ~/Imagens left empty while ~/Pictures kept the
+// files). With neither present it answers the XDG path so a fresh install
+// grows its library in the right folder.
+func picturesSub(sub string) string {
+	xdg := filepath.Join(picturesRoot(), sub)
+	if dirExists(xdg) {
+		return xdg
+	}
+	def := filepath.Join(home(), "Pictures", sub)
+	if def != xdg && dirExists(def) {
+		return def
+	}
+	return xdg
+}
+
 func (c config) wallpaperDir() string {
 	if p := resolvePath(c.Paths.Wallpaper); p != "" {
 		return p
 	}
-	return filepath.Join(home(), "Pictures", "Wallpapers")
+	return picturesSub("Wallpapers")
 }
 
 func (c config) videoDir() string {
 	if p := resolvePath(c.Paths.VideoWallpaper); p != "" {
 		return p
 	}
-	// Ryoku keeps clips in ~/Pictures/livewalls (the switcher and the old live
+	// Ryoku keeps clips in <Pictures>/livewalls (the switcher and the old live
 	// stack both scanned it); fall back to the shared wallpaper dir only when
 	// that folder is absent, mirroring upstream's shared-dir default.
-	if live := filepath.Join(home(), "Pictures", "livewalls"); dirExists(live) {
+	if live := picturesSub("livewalls"); dirExists(live) {
 		return live
 	}
 	return c.wallpaperDir()

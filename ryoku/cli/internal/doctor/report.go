@@ -57,7 +57,7 @@ func compositorDiagnosticPackages() []string {
 	if name := wm.Detect().Name; byName[name] != nil {
 		return byName[name]
 	}
-	return []string{"hyprland", "xdg-desktop-portal-hyprland", "niri", "xwayland-satellite", "xdg-desktop-portal-gnome", "mangowm", "xdg-desktop-portal-wlr", "wlsunset"}
+	return []string{"hyprland", "xdg-desktop-portal-hyprland", "niri", "xwayland-satellite", "xdg-desktop-portal-gnome"}
 }
 
 // gatherReport: one self-contained text report. doctor findings, then the

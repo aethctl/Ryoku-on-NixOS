@@ -203,6 +203,18 @@ func TestLayoutExtrasEmitted(t *testing.T) {
 	}
 }
 
+func TestPreferNoCSD(t *testing.T) {
+	if out := string(genSettings(defaultStore())); !strings.Contains(out, "\nprefer-no-csd\n") {
+		t.Errorf("the default must ask apps to hide client-side title bars\n%s", out)
+	}
+
+	s := defaultStore()
+	s.Niri.PreferNoCSD = false
+	if out := string(genSettings(s)); strings.Contains(out, "prefer-no-csd") {
+		t.Errorf("prefer-no-csd must be absent when app title bars are enabled\n%s", out)
+	}
+}
+
 // The overview backdrop colour and the workspace shadow. niri draws the shadow by
 // default, so an untouched shadow stays silent, a disabled one turns off, and a
 // retuned one carries its fields.

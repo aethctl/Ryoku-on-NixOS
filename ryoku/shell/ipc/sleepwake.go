@@ -35,9 +35,14 @@ var (
 	// login1 can reject Inhibit briefly while the previous sleep operation is
 	// still finishing. Retry in-order so an acquire can never overtake a later
 	// PrepareForSleep(true) edge.
-	sleepGuardRetry       = 2 * time.Second
-	login1CallWait        = 2 * time.Second
-	sleepReconnectStep    = 100 * time.Millisecond
+	sleepGuardRetry    = 2 * time.Second
+	login1CallWait     = 2 * time.Second
+	sleepReconnectStep = 100 * time.Millisecond
+	// The released block fd is observed by logind asynchronously (it polls
+	// the fd); Suspend must not overtake that observation or login1 denies
+	// the daemon's own transaction. Poll its inhibitor list to confirm.
+	blockReleaseWait      = 2 * time.Second
+	blockReleasePoll      = 25 * time.Millisecond
 	errLogin1OwnerRestart = errors.New("login1 D-Bus owner changed")
 	errLogin1SignalLost   = errors.New("login1 signal stream ended")
 )
@@ -174,6 +179,7 @@ type sleepCycle struct {
 	disconnected    <-chan struct{}
 	sessionPath     dbus.ObjectPath
 	activeCheck     func(context.Context) (bool, error)
+	blockCleared    func(context.Context) (bool, error)
 	activeMu        sync.RWMutex
 	active          bool
 	sessionBound    bool
@@ -488,6 +494,21 @@ func (s *sleepCycle) requestSuspendContext(requestCtx context.Context) error {
 	}
 
 	s.block.release()
+	// logind watches the block fd on its own schedule: a Suspend that
+	// overtook the close is denied by the daemon's own inhibitor (the #324
+	// race). Do not call Suspend until login1's inhibitor list stops naming
+	// this process as a sleep blocker.
+	clearCtx, clearCancel := context.WithTimeout(requestCtx, blockReleaseWait)
+	cleared := s.awaitBlockCleared(clearCtx)
+	clearCancel()
+	if err := requestCtx.Err(); err != nil {
+		s.restoreProtectionLocked()
+		return err
+	}
+	if !cleared {
+		s.restoreProtectionLocked()
+		return fmt.Errorf("request suspend: login1 still reports the released block inhibitor")
+	}
 	ctx, cancel := context.WithTimeout(requestCtx, login1CallWait)
 	defer cancel()
 	if err := s.suspend(ctx); err != nil {
@@ -500,12 +521,58 @@ func (s *sleepCycle) requestSuspendContext(requestCtx context.Context) error {
 	return nil
 }
 
+// restoreProtectionLocked re-holds the guard after an aborted suspend
+// transaction and reports failure through the retry channel.
+func (s *sleepCycle) restoreProtectionLocked() {
+	if !s.protectLocked() {
+		s.logf("ryoku-shell: aborted suspend and sleep protection could not be restored")
+		s.requestProtectionRetry()
+	}
+}
+
+// awaitBlockCleared waits until login1's inhibitor list no longer carries a
+// sleep block held by this process. A nil blockCleared check (tests, a login1
+// without the property) is treated as cleared so the call never wedges.
+func (s *sleepCycle) awaitBlockCleared(ctx context.Context) bool {
+	if s.blockCleared == nil {
+		return true
+	}
+	for {
+		cleared, err := s.blockCleared(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return false
+			}
+			s.logf("ryoku-shell: reading login1 inhibitors: %v", err)
+			cleared = true // a list we cannot read must not stall the suspend
+		}
+		if cleared {
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(blockReleasePoll):
+		}
+	}
+}
+
 type login1SessionInfo struct {
 	ID   string
 	UID  uint32
 	User string
 	Seat string
 	Path dbus.ObjectPath
+}
+
+// login1InhibitorRow decodes one ListInhibitors entry, signature (ssssuu).
+type login1InhibitorRow struct {
+	What string
+	Who  string
+	Why  string
+	Mode string
+	UID  uint32
+	PID  uint32
 }
 
 func login1SessionProperty(
@@ -847,6 +914,20 @@ func (d *daemon) connectSleepGuard() (_ *connectedSleepGuard, err error) {
 		suspend: func(ctx context.Context) error {
 			return conn.Object(login1Bus, login1Path).
 				CallWithContext(ctx, login1Interface+".Suspend", 0, false).Err
+		},
+		blockCleared: func(ctx context.Context) (bool, error) {
+			var rows []login1InhibitorRow
+			if err := conn.Object(login1Bus, login1Path).
+				CallWithContext(ctx, login1Interface+".ListInhibitors", 0).Store(&rows); err != nil {
+				return false, err
+			}
+			pid := uint32(os.Getpid())
+			for _, r := range rows {
+				if r.What == "sleep" && r.Mode == "block" && r.PID == pid {
+					return false, nil
+				}
+			}
+			return true, nil
 		},
 		sleepingCheck: func(ctx context.Context) (bool, error) {
 			var value dbus.Variant

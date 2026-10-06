@@ -7,6 +7,7 @@ import Quickshell.Io
 Item {
     id: root
 
+    property bool active: false
     property var plugins: []
     property var availablePlugins: []
 
@@ -20,38 +21,59 @@ Item {
 
     width: 0
     height: 0
+    onActiveChanged: {
+        if (root.active) root.reload();
+        else discover.running = false;
+    }
 
     function reload() {
         discover.running = false;
-        discover.running = true;
+        discover.running = root.active;
+    }
+
+    function normalizedEntry(plugin) {
+        if (!plugin)
+            return plugin;
+        const result = {};
+        for (const key in plugin)
+            result[key] = plugin[key];
+        const placement = {};
+        const sourcePlacement = plugin.placement || {};
+        for (const placementKey in sourcePlacement)
+            placement[placementKey] = sourcePlacement[placementKey];
+        const sidebarCard = {};
+        const sourceCard = sourcePlacement.sidebarCard || {};
+        for (const cardKey in sourceCard)
+            sidebarCard[cardKey] = sourceCard[cardKey];
+        sidebarCard.side = "left";
+        placement.sidebarCard = sidebarCard;
+        result.placement = placement;
+        return result;
     }
 
     function syncPlugins(all) {
         root.availablePlugins = all.filter(plugin => plugin && plugin.placement
-            && plugin.placement.host === "sidebarCard");
-        var next = [];
-        for (var i = 0; i < all.length; ++i) {
-            var plugin = all[i];
-            var placement = plugin && plugin.placement ? plugin.placement : null;
+            && plugin.placement.host === "sidebarCard").map(root.normalizedEntry);
+        const next = [];
+        for (let i = 0; i < all.length; ++i) {
+            const plugin = all[i];
+            const placement = plugin && plugin.placement ? plugin.placement : null;
             if (placement && placement.enabled === true && placement.host === "sidebarCard")
-                next.push(plugin);
+                next.push(root.normalizedEntry(plugin));
         }
         root.plugins = next;
     }
 
-    function cards(side) {
-        var result = [];
-        for (var i = 0; i < root.plugins.length; ++i) {
-            var plugin = root.plugins[i];
-            var placement = plugin.placement || {};
-            var card = placement.sidebarCard || {};
-            var cardSide = card.side === "right" ? "right" : "left";
-            if (cardSide !== side)
-                continue;
-            var tab = typeof card.tab === "string" && card.tab.trim() !== ""
+    function cards() {
+        const result = [];
+        for (let i = 0; i < root.plugins.length; ++i) {
+            const plugin = root.plugins[i];
+            const placement = plugin.placement || {};
+            const card = placement.sidebarCard || {};
+            const tab = typeof card.tab === "string" && card.tab.trim() !== ""
                 ? card.tab.trim() : "Plugins";
-            var manifest = plugin.manifest || {};
-            var defaults = manifest.defaults || {};
+            const manifest = plugin.manifest || {};
+            const defaults = manifest.defaults || {};
             result.push({
                 id: plugin.id,
                 label: card.label || manifest.name || plugin.id,
@@ -71,7 +93,7 @@ Item {
     Process {
         id: discover
         command: ["bash", root.discoverScript, "--all"]
-        running: true
+        running: root.active
         stdout: StdioCollector {
             onStreamFinished: {
                 var parsed = [];
@@ -84,7 +106,7 @@ Item {
     FileView {
         path: (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config"))
             + "/ryoku/plugins.json"
-        watchChanges: true
+        watchChanges: root.active
         atomicWrites: true
         printErrors: false
         onFileChanged: root.reload()
@@ -92,7 +114,7 @@ Item {
 
     FileView {
         path: root.stateHome + "/ryoku/store/revision.json"
-        watchChanges: true
+        watchChanges: root.active
         atomicWrites: true
         printErrors: false
         onFileChanged: root.reload()

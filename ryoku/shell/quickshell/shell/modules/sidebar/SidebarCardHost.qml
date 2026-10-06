@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.PluginKit
 import Ryoku.Ui.Singletons
+import shell.services
 import "SidebarCatalog.js" as SidebarCatalog
 
 Item {
@@ -12,7 +13,7 @@ Item {
 
     required property string cardId
     property var pluginEntry: null
-    property real s: 1
+    required property real s
     property bool open: false
     property real reveal: 0
     property bool tabActive: false
@@ -20,13 +21,36 @@ Item {
     property string page: ""
     property bool compact: false
     property real viewportHeight: 0
+    property bool initialized: false
 
     signal requestClose()
+    function normalizedEntry(entry) {
+        if (!entry)
+            return null;
+        const result = {};
+        for (const key in entry)
+            result[key] = entry[key];
+        const placement = {};
+        const sourcePlacement = entry.placement || {};
+        for (const placementKey in sourcePlacement)
+            placement[placementKey] = sourcePlacement[placementKey];
+        const sidebarCard = {};
+        const sourceCard = sourcePlacement.sidebarCard || {};
+        for (const cardKey in sourceCard)
+            sidebarCard[cardKey] = sourceCard[cardKey];
+        sidebarCard.side = "left";
+        placement.sidebarCard = sidebarCard;
+        result.placement = placement;
+        return result;
+    }
+
+    readonly property var effectivePluginEntry: root.normalizedEntry(root.pluginEntry)
 
     readonly property var catalogEntry: SidebarCatalog.byId(root.cardId)
     readonly property bool pluginCard: root.pluginEntry !== null
-    readonly property var pluginManifest: root.pluginCard && root.pluginEntry.manifest
-        ? root.pluginEntry.manifest : ({})
+    readonly property string builtinSource: root.catalogEntry ? root.catalogEntry.source : ""
+    readonly property var pluginManifest: root.pluginCard && root.effectivePluginEntry.manifest
+        ? root.effectivePluginEntry.manifest : ({})
     readonly property string pluginName: {
         var name = typeof root.pluginManifest.name === "string"
             ? root.pluginManifest.name.trim() : "";
@@ -38,8 +62,8 @@ Item {
         && ("compact" in pluginContent.item)
     readonly property bool genericPluginSummary: root.pluginCard && root.compact
         && pluginContent.item !== null && !root.pluginHasNativeCompact
-    readonly property string versionQuery: pluginCard && pluginEntry.version
-        ? "?v=" + encodeURIComponent(pluginEntry.version) : ""
+    readonly property string versionQuery: pluginCard && effectivePluginEntry.version
+        ? "?v=" + encodeURIComponent(effectivePluginEntry.version) : ""
     readonly property string stateHome: Quickshell.env("XDG_STATE_HOME")
         || (Quickshell.env("HOME") + "/.local/state")
     readonly property string shellDir: Quickshell.env("RYOKU_SHELL_DIR")
@@ -74,7 +98,7 @@ Item {
         builtinLoader.source = "";
         if (!root.catalogEntry || root.pluginCard)
             return;
-        builtinLoader.setSource(Qt.resolvedUrl(root.catalogEntry.source), {
+        builtinLoader.setSource(Qt.resolvedUrl(root.builtinSource), {
             s: root.s,
             open: root.open,
             reveal: root.reveal,
@@ -83,7 +107,8 @@ Item {
         });
     }
 
-    Component.onCompleted: loadBuiltin()
+    onBuiltinSourceChanged: if (root.initialized) root.loadBuiltin()
+    Component.onCompleted: { root.initialized = true; root.loadBuiltin(); }
 
     Loader {
         id: builtinLoader
@@ -100,17 +125,20 @@ Item {
 
     property var pluginApi: QtObject {
         readonly property var mainInstance: pluginService.item
-        readonly property var pluginSettings: root.pluginEntry && root.pluginEntry.placement
-            && root.pluginEntry.placement.settings ? root.pluginEntry.placement.settings : ({})
-        readonly property string pluginDir: root.pluginEntry ? root.pluginEntry.dir : ""
+        readonly property var pluginSettings: root.effectivePluginEntry
+            && root.effectivePluginEntry.placement
+            && root.effectivePluginEntry.placement.settings
+            ? root.effectivePluginEntry.placement.settings : ({})
+        readonly property string pluginDir: root.effectivePluginEntry
+            ? root.effectivePluginEntry.dir : ""
         readonly property string stateDir: root.stateHome + "/ryoku/plugins/"
-            + (root.pluginEntry ? root.pluginEntry.id : "")
+            + (root.effectivePluginEntry ? root.effectivePluginEntry.id : "")
         function saveSetting(key, value) {
-            if (!root.pluginEntry)
+            if (!root.effectivePluginEntry)
                 return;
             var object = {};
             object[String(key)] = value;
-            settingWrite.command = [root.placeTool, root.pluginEntry.id, "settings", JSON.stringify(object)];
+            settingWrite.command = [root.placeTool, root.effectivePluginEntry.id, "settings", JSON.stringify(object)];
             settingWrite.running = true;
         }
         function saveSettings() {}
@@ -148,7 +176,7 @@ Item {
     PluginObjectSlot {
         id: pluginService
         source: root.pluginCard
-            ? "file://" + root.pluginEntry.dir + "/service/Main.qml" + root.versionQuery : ""
+            ? "file://" + root.effectivePluginEntry.dir + "/service/Main.qml" + root.versionQuery : ""
         configure: function(service) { service.pluginApi = root.pluginApi; }
     }
 
@@ -160,7 +188,7 @@ Item {
         opacity: root.genericPluginSummary ? 0 : 1
         enabled: !root.genericPluginSummary
         source: root.pluginCard
-            ? "file://" + root.pluginEntry.dir + "/content/Widget.qml" + root.versionQuery : ""
+            ? "file://" + root.effectivePluginEntry.dir + "/content/Widget.qml" + root.versionQuery : ""
         configure: function(content) {
             content.pluginApi = root.pluginApi;
             root.bindContract(content);

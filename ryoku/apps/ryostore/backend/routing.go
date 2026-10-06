@@ -10,6 +10,7 @@ var storeSections = map[string]struct{}{
 	"discover": {}, "library": {}, "rices": {}, "lockscreens": {},
 	"barstyles": {}, "fastfetch": {}, "plugins": {}, "bundles": {}, "decors": {},
 	"launcher-images": {}, "fastfetch-emblems": {}, "ryotunes-skins": {},
+	"vesktop-themes": {},
 }
 
 func storeSection(section string) bool {

@@ -8,6 +8,7 @@ import (
 
 	"ryoku-cli/internal/sys"
 	i18n "ryoku-i18n"
+	wm "ryoku-wm"
 )
 
 // The one place that moves the Ryoku set onto a package channel.
@@ -51,11 +52,26 @@ var privileged = func(argv ...string) error {
 // need; --needed leaves a package already at the channel's version alone.
 // SNAP_PAC_SKIP because the interactive path brackets the run with a snapper
 // pair and the guard wants no snapshot noise; --overwrite adopts the paths the
-// installer and deploy.sh seed unowned (see ryokuOverwriteGlob).
+// installer and deploy.sh seed unowned (see RyokuOverwriteGlob).
 func ryokuMoveArgs(set []string) []string {
 	args := []string{"env", "SNAP_PAC_SKIP=y", "RYOKU_MANAGED_UPDATE=1",
-		"pacman", "-S", "--needed", "--noconfirm", "--overwrite", ryokuOverwriteGlob}
+		"pacman", "-S", "--needed", "--noconfirm", "--overwrite", RyokuOverwriteGlob}
 	return append(args, set...)
+}
+
+func prependMissingMoveTargets(set []string, targets ...string) []string {
+	present := make(map[string]bool, len(set))
+	for _, name := range set {
+		present[name] = true
+	}
+	prefix := make([]string, 0, len(targets))
+	for _, name := range targets {
+		if !present[name] {
+			prefix = append(prefix, name)
+			present[name] = true
+		}
+	}
+	return append(prefix, set...)
 }
 
 // moveRyokuSetToChannel performs the pacman side of a channel move against the
@@ -73,6 +89,48 @@ func moveRyokuSetToChannel() ([]string, error) {
 	set, err := ryokuSetForMove()
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("cannot read the [ryoku] repository, so there is nothing safe to move: %w"), err)
+	}
+	retired := wm.RetiredCompositor()
+	if retired.VariantPackage != "" && splitMetaInstalled(retired.VariantPackage) {
+		name := detectCompositorForMove()
+		supported := false
+		for _, candidate := range wm.Providers() {
+			if candidate == name {
+				supported = true
+				break
+			}
+		}
+		if !supported {
+			name = ""
+			for _, candidate := range wm.Providers() {
+				if pkgInstalledForMove(ryokuDesktopPkg + "-" + candidate) {
+					name = candidate
+					break
+				}
+			}
+		}
+		if name == "" {
+			name = wm.Providers()[0]
+		}
+		set = prependMissingMoveTargets(set, ryokuRepo+"/"+ryokuDesktopPkg+"-"+name)
+	}
+	// A box migrating onto packages (a checkout retired by `ryoku track`) has
+	// no ryoku-desktop installed, and the set above is installed-only: without
+	// this the move would run, succeed, and install nothing -- the track
+	// message promises the switch installs the base, and a box left with its
+	// source lane retired and no packaged base cannot update at all. The
+	// umbrella pulls the compositor virtual; naming the active variant makes
+	// the choice deterministic on a box that has no provider installed yet
+	// (the same pair the ISO installer lays, lib/deploy.sh).
+	if !pkgInstalledForMove(ryokuDesktopPkg) {
+		name := detectCompositorForMove()
+		if name == "" {
+			name = wm.Providers()[0] // the shipped default variant
+		}
+		set = prependMissingMoveTargets(set,
+			ryokuRepo+"/"+ryokuDesktopPkg,
+			ryokuRepo+"/"+ryokuDesktopPkg+"-"+name,
+		)
 	}
 	// A channel that predates the compositor split carries no
 	// ryoku-desktop-hyprland/niri; their exact-version pins would fail the
@@ -93,14 +151,18 @@ func moveRyokuSetToChannel() ([]string, error) {
 	return set, nil
 }
 
-// The two read-only pacman queries the move makes, as seams: both hit the real
-// /etc/pacman.conf, so a test pins them without a live database.
+// The read-only queries the move makes, as seams: they hit the live database
+// and the running session, so a test pins them without either.
+const ryokuDesktopPkg = "ryoku-desktop"
+
 var (
 	ryokuSetForMove = func() ([]string, error) {
 		set, _, err := installedRyokuSet(true)
 		return set, err
 	}
-	servedSetForMove = repoServedSet
+	servedSetForMove        = repoServedSet
+	pkgInstalledForMove     = sys.PkgInstalled
+	detectCompositorForMove = func() string { return wm.Detect().Name }
 )
 
 // lastDroppedMetas holds the split metas the most recent move removed with -Rdd.
@@ -111,15 +173,15 @@ var lastDroppedMetas []string
 // runRyokuMove executes the one channel-move transaction, sleep-inhibited so a
 // lid-close or idle suspend mid-transaction cannot corrupt it, and root-aware so
 // it holds from the boot guard (which is already root) as well as an interactive
-// `ryoku track` (which escalates). runInhibited renders the curated view on a
-// terminal and streams raw with no TTY, so the boot service needs no UI. A var
+// `ryoku track` (which escalates). Inside an update the console curates its
+// output; from `ryoku track` and the boot service it streams as it is. A var
 // so a test records the set without a live pacman.
 var runRyokuMove = func(set []string) error {
 	argv := ryokuMoveArgs(set)
 	if os.Geteuid() != 0 {
 		argv = append([]string{"sudo"}, argv...)
 	}
-	return runInhibited("Ryoku", i18n.T("Ryoku channel move"), argv)
+	return runInhibited(i18n.T("Ryoku channel move"), argv)
 }
 
 // retargetChannel makes a channel move transactional: record the current

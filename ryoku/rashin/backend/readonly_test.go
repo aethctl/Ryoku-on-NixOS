@@ -234,3 +234,32 @@ func TestReadOnlyToolCall(t *testing.T) {
 		}
 	}
 }
+
+// The three approval tiers answer the same two questions differently: does a
+// read run unasked, does a write. A stale or mistyped mode is the default.
+func TestApprovalsModes(t *testing.T) {
+	cases := []struct {
+		stored string
+		mode   string
+		reads  bool
+		all    bool
+	}{
+		{"", "read-only", true, false},
+		{"read-only", "read-only", true, false},
+		{"ask", "ask", false, false},
+		{"auto", "auto", true, true},
+		{"yolo", "read-only", true, false},
+	}
+	for _, c := range cases {
+		cfg := Config{Approvals: c.stored}
+		if got := cfg.ApprovalsMode(); got != c.mode {
+			t.Errorf("Approvals=%q: mode %q, want %q", c.stored, got, c.mode)
+		}
+		if got := cfg.AutoApproveReads(); got != c.reads {
+			t.Errorf("Approvals=%q: AutoApproveReads %v, want %v", c.stored, got, c.reads)
+		}
+		if got := cfg.AutoApproveAll(); got != c.all {
+			t.Errorf("Approvals=%q: AutoApproveAll %v, want %v", c.stored, got, c.all)
+		}
+	}
+}

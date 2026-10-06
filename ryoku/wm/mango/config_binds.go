@@ -139,6 +139,8 @@ func defaultBinds() map[string]mangoBind {
 		// Shell. Surfaces reach the compositor-agnostic ryoku-shell bus; the qs
 		// surfaces bind exactly as they do on niri.
 		"shell.launcher":          {cmd: "spawn,ryoku-shell launcher"},
+		"shell.ask":               {cmd: "spawn,ryoku-shell ask"},
+		"shell.rashin":            {cmd: "spawn_shell,ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app"},
 		"shell.cheatsheet":        {cmd: "spawn_shell,pkill -x -f 'qs -c keys' 2>/dev/null || " + qmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys"},
 		"shell.lock":              {cmd: "spawn,ryoku-shell lock"},
 		"shell.quicksettings":     {cmd: "spawn,ryoku-shell quicksettings"},
@@ -151,7 +153,6 @@ func defaultBinds() map[string]mangoBind {
 		"shell.visualizerPlace":   {cmd: "spawn,ryoku-shell visualizer-place"},
 		"shell.voice":             {cmd: "spawn,ryoku-shell voice"},
 		"shell.settings":          {cmd: "spawn,ryoku-shell hub open"},
-		"shell.stash":             {cmd: "spawn,ryoku-shell stash"},
 		"shell.screenshot":        {cmd: "spawn_shell," + qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot"},
 		"shell.screenshotPrint":   {cmd: "spawn_shell," + qmlEnv + " flock -n -o /tmp/ryoshot.lock qs -c ryoshot"},
 		"shell.screenshotMonitor": {cmd: "spawn_shell," + qmlEnv + " flock -n -o /tmp/ryoshot.lock env RYOSHOT_MODE=monitor qs -c ryoshot"},

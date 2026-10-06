@@ -79,11 +79,10 @@ profiles, and a detail panel, network runs Wi-Fi, and the rest follow suit. They
 share one skin from a card kit (`shell/modules/bar/popouts/PopoutCard.qml` and its siblings),
 so every card opens, reads, and dismisses the same way.
 
-Super+Escape and Super+S open the two screen-edge sidebar overlays. They are not
-frame menus: their cards and catalog live in the sidebar subsystem
-(`shell/modules/sidebar/`, see `docs/sidebars.md`). Adding a card is one entry
-in `SidebarCatalog.js` plus one component under `sidebar/cards/`; users reorder
-and hide cards from Ryoku Hub > Sidebars > Contents.
+Super+Escape and Super+S open Controls and Today in the top-left and top-right
+corners. They are not frame menus and their layout is shared by every bar style
+(`shell/modules/sidebar/`, see `docs/sidebars.md`). Installed sidebar plugins
+appear under Extensions; placement and enablement live in Ryoku Hub > Add-ons.
 
 `ryoku-shell menu <id>` opens a catalogued menu on the active monitor;
 `MenuCatalog.js` holds the valid IDs, and anything else is rejected before it

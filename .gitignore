@@ -15,6 +15,8 @@
 /ryoku/apps/ryovm/remote/ryossh
 /ryoku/apps/ryovm/mon/ryovm-mon
 /ryoku/apps/ryostore/backend/ryostore
+/ryoku/apps/rashin-app/build/
+/ryoku/rashin/web/node_modules/
 /ryoku/shell/plugin/build/
 /ryoku/shell/sidebarfx/build/
 /ryoku/shell/ryogami/picker/build/

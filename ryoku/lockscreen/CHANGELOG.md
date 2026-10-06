@@ -34,6 +34,14 @@
   this root installer). Honors `RYOKU_DRYRUN`; `ryoku keyring` changes it later.
 
 ### Fixed
+- **The login keypad follows the user's numlock choice.** The greeter forced
+  weston's numlock on for every machine, and that LED state carried into the
+  session and its lock screen, so a laptop whose letter keys the keypad
+  overlays typed the wrong characters at the password field (issue #321). The
+  compositor provider now publishes the session's effective choice to
+  `/var/lib/ryoku/greeter-numlock` on every apply and the greeter reads it;
+  with no hand-off yet (a first login) the keypad stays a keypad.
+  (`sddm/ryoku-greeter`)
 - **Lock and unlock are serialized per login1 session and qylock generation.**
   Lid, idle and manual requests share a session-scoped launch guard. A stable
   launcher leases the selected client generation before entering replaceable

@@ -21,17 +21,20 @@ const (
 const PointerBlock = pointerBegin + "\n" +
 	"## Ryoku Rashin system vault\n" +
 	"\n" +
-	"This machine runs Ryoku (Arch Linux, Hyprland desktop). A maintained map of the\n" +
-	"system lives at `~/.local/share/ryoku/rashin/`. Before exploring the machine or\n" +
-	"guessing paths, read `AGENTS.md` there: it says where every config lives, which\n" +
-	"binary owns it, and how to reload it. Write durable notes to `memory/` and\n" +
-	"dated notes to `journal/YYYY-MM-DD.md`. For code questions prefer `prowl`\n" +
-	"(cited code intelligence, reindexed each run): `prowl search \"<question>\"`,\n" +
-	"`find`, `def`, `references`, `outline`, `impact` -- one call instead of grepping.\n" +
-	"The `ryoku` agent skill (safety rules, a bar and dock guide, and the command\n" +
-	"catalogue) is wired into this agent's skills directory; read it before\n" +
-	"customising the desktop. Answer a desktop \"how do I\" question GUI-first: name\n" +
-	"the Ryoku Hub page, shell picker, or QS Bar Settings before naming any command.\n" +
+	"This machine runs Ryoku (Arch Linux with the Ryoku desktop on Hyprland or niri;\n" +
+	"`ryoku wm status` says which). A maintained map of the system lives at\n" +
+	"`~/.local/share/ryoku/rashin/`. Before exploring the machine or guessing paths,\n" +
+	"read `AGENTS.md` there: it says where every config lives, which binary owns it,\n" +
+	"and how to reload it. Write durable notes to `memory/` and dated notes to\n" +
+	"`journal/YYYY-MM-DD.md`. For code questions prefer `prowl` (cited code\n" +
+	"intelligence, reindexed each run): `prowl search \"<question>\"`, `find`, `def`,\n" +
+	"`references`, `outline`, `impact` -- one call instead of grepping. The `ryoku`\n" +
+	"agent skill (safety rules, the GUI map, the bar and dock, the window-manager\n" +
+	"seam, building the Ryoku way, and the command catalogue) is wired into this\n" +
+	"agent's skills directory; read it before customising the desktop, and cite the\n" +
+	"vault's `wiki/` pages to someone new. Answer a desktop \"how do I\" question\n" +
+	"GUI-first: name the Ryoku Hub page, shell picker, or QS Bar Settings before\n" +
+	"naming any command.\n" +
 	pointerEnd
 
 // Agent is a detected coding CLI and its vault-pointer wiring state.

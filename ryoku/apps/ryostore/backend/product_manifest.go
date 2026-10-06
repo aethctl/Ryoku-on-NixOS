@@ -264,6 +264,10 @@ func validateProductManifest(category string, entry ProductEntry, manifest Produ
 		sources[file.Source] = struct{}{}
 		destinations[file.Destination] = struct{}{}
 	}
+	if category == vesktopThemesCategory {
+		_, err := vesktopThemeManifestFile(manifest.Files)
+		return err
+	}
 	return nil
 }
 
@@ -274,7 +278,7 @@ func productUpdateAvailable(installedVersion, availableVersion string) bool {
 func validProductCategory(category string) bool {
 	switch category {
 	case "rices", "lockscreens", "barstyles", "fastfetch", "plugins", "bundles", "decors",
-		"launcher-images", "fastfetch-emblems", "ryotunes-skins":
+		"launcher-images", "fastfetch-emblems", "ryotunes-skins", vesktopThemesCategory:
 		return true
 	default:
 		return false

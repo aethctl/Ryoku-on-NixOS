@@ -24,10 +24,10 @@ func (d *daemon) startWM() {
 		if err := json.Unmarshal(raw, &a); err != nil {
 			return nil, err
 		}
-		if err := d.wmc.Act(wm.Action(a.Action), a.Args...); err != nil {
-			return nil, err
-		}
-		return map[string]any{"ok": true}, nil
+		// ActOutput so value-reporting actions (the launcher's
+		// focus-follows-mouse freeze hands back the previous mode) reach the
+		// caller; actions that print nothing answer with an empty result.
+		return d.wmc.ActOutput(wm.Action(a.Action), a.Args...)
 	})
 	go d.watchWindowManager()
 }

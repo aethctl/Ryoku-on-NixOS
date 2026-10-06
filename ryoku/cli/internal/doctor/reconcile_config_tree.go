@@ -59,13 +59,21 @@ func shippedProviders() []string {
 	return out
 }
 
-// missingConfigTrees returns the shipped providers whose entry point is not laid
-// down in ~/.config, the live one separated so the urgent case reads first.
+// missingConfigTrees returns the shipped providers whose tree is not usable in
+// ~/.config -- either not laid down at all, or laid but still missing the
+// generated includes its entry point hard-requires (a fresh install whose
+// materialize ran before any store existed rendered none, and niri treats a
+// missing include as a hard parse error, so the first login dies). The live
+// one is separated so the urgent case reads first.
 func missingConfigTrees() (live, other []string) {
 	active := wm.Detect().Name
 	for _, name := range shippedProviders() {
 		entry := wm.ConfigEntry(name)
-		if entry == "" || sys.Exists(filepath.Join(sys.ConfigHome(), entry)) {
+		if entry == "" {
+			continue
+		}
+		laid := sys.Exists(filepath.Join(sys.ConfigHome(), entry))
+		if laid && !generatedIncludesMissing(name) {
 			continue
 		}
 		if name == active {
@@ -75,6 +83,26 @@ func missingConfigTrees() (live, other []string) {
 		}
 	}
 	return live, other
+}
+
+// generatedIncludesMissing reports whether a laid tree still lacks a file its
+// provider generates. The user_edits mirrors are forks, not generated state:
+// one of those standing is not a gap.
+func generatedIncludesMissing(name string) bool {
+	dir := wm.ConfigDir(name)
+	if dir == "" {
+		return false
+	}
+	for _, rel := range wm.GeneratedConfig(name) {
+		d, _, ok := strings.Cut(rel, "/")
+		if !ok || d != dir {
+			continue
+		}
+		if !sys.Exists(filepath.Join(sys.ConfigHome(), rel)) {
+			return true
+		}
+	}
+	return false
 }
 
 func reconcileConfigTree(checkOnly bool) recResult {
@@ -119,18 +147,19 @@ func reconcileConfigTree(checkOnly bool) recResult {
 }
 
 // configGapDetail names the gap in the terms that matter: the live compositor's
-// tree is why the desktop is bare now, the other one is why switching back would
-// boot a default session.
+// tree is why the desktop is bare (or, with the generated includes missing,
+// why its session cannot start at all) now, and the other one is why
+// switching back would boot a default session.
 func configGapDetail(live, other []string) string {
 	switch {
 	case len(live) > 0 && len(other) > 0:
-		return i18n.Tf("the config for %s (running now) and %s (switch back) is not laid down",
+		return i18n.Tf("the config for %s (running now) and %s (switch back) is not laid down complete",
 			strings.Join(live, ", "), strings.Join(other, ", "))
 	case len(live) > 0:
-		return i18n.Tf("the config for %s (running now) is not laid down, so the session keeps the compositor's own defaults",
+		return i18n.Tf("the config for %s (running now) is not laid down complete, so the session keeps the compositor's own defaults or it cannot start",
 			strings.Join(live, ", "))
 	default:
-		return i18n.Tf("the config for %s is not laid down, so switching back would boot a default session",
+		return i18n.Tf("the config for %s is not laid down complete, so switching back would boot a default session",
 			strings.Join(other, ", "))
 	}
 }

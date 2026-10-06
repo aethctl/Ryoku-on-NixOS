@@ -204,6 +204,7 @@ type engine struct {
 
 func newEngine(f *facts, p *plan, dry bool, ref, payloadOverride string) *engine {
 	e := &engine{f: f, p: p, dry: dry, ref: ref, payloadOverride: payloadOverride}
+	e.resolvePayload()
 	e.openLog()
 	// resuming continues the previous run's backup dir so restore.sh stays
 	// one script; declining starts a fresh state (the file is rewritten at
@@ -538,20 +539,30 @@ func stepTools(e *engine) error {
 	return e.sudo(d.installArgs([]string{"git", d.local("base-devel")})...)
 }
 
-func stepPayload(e *engine) error {
+// resolvePayload anchors the payload checkout path. It runs when the engine is
+// built, not only when the fetch step runs: a resume skips the completed
+// payload step, and every later step joins e.payload to find scripts. Left
+// unset, those joins produce relative paths that fail outside the checkout.
+func (e *engine) resolvePayload() {
 	if e.payloadOverride != "" {
 		e.payload = e.payloadOverride
-		if _, err := os.Stat(filepath.Join(e.payload, "ryoku/lockscreen/install-qylock")); err != nil && !e.dry {
-			return errors.New(i18n.Tf("payload override %s does not look like a ryoku-arch checkout", e.payload))
-		}
-		e.say(i18n.Tf("using payload checkout %s", e.payload))
-		return nil
+		return
 	}
 	cache := os.Getenv("XDG_CACHE_HOME")
 	if cache == "" {
 		cache = filepath.Join(e.f.homeDir, ".cache")
 	}
 	e.payload = filepath.Join(cache, "ryoku-shell-install/repo")
+}
+
+func stepPayload(e *engine) error {
+	if e.payloadOverride != "" {
+		if _, err := os.Stat(filepath.Join(e.payload, "ryoku/lockscreen/install-qylock")); err != nil && !e.dry {
+			return errors.New(i18n.Tf("payload override %s does not look like a ryoku-arch checkout", e.payload))
+		}
+		e.say(i18n.Tf("using payload checkout %s", e.payload))
+		return nil
+	}
 
 	if _, err := os.Stat(filepath.Join(e.payload, ".git")); err == nil {
 		if err := e.cmd(e.payload, nil, "git", "fetch", "--depth=1", "origin", e.ref); err != nil {

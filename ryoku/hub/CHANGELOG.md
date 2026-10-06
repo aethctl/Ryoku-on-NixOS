@@ -1,10 +1,60 @@
 # Changelog: ryoku/hub/
 
+### Fixed
+- **Vesktop colours follow the Ryoku theme, not Midnight.** The palette
+  bridge's Vesktop integration wrote a competing Midnight theme file and could
+  clobber the user's QuickCSS; it now ships a managed palette template beside
+  the user's other matugen templates, toggles the bridge through Vesktop's own
+  QuickCSS marker, preserves any existing QuickCSS on setup and removal, and
+  the Settings integration card reports the template it actually manages
+  (`../palette-bridge/`, `backend/palettebridge.go`).
+
+- **The Stage scene page reports a blocked cut.** When the daemon cannot cut
+  (the quality tier's model is not installed, or a cut failed), the page now
+  says why and offers Retry instead of showing a wallpaper that never gains
+  layers (`quickshell/pages/DesktopScenePage.qml`).
+
+- **The Profile dossier keeps its composure on short windows.** The live
+  telemetry column sat on hard-coded pixels while the dossier foot climbed from
+  the bottom, so under ~880px the callouts ran through the small print and the
+  sub-lines touched the label below. The pins now distribute over the real
+  space between the head and the foot, dropping sub-lines and shrinking the
+  figures as the page tightens, and the compositor row no longer prints two v's
+  before a version that already carries one. (`quickshell/pages/ProfilePage.qml`)
+- **The Updates page can always get out of a stuck run.** It believed any
+  "running" run-state, so one left with no live update behind it pinned the
+  page on "Applying updates" for good. The page now checks the pid the run
+  names: a document with no owner is cleared on sight, a run whose process is
+  gone is recorded as stopped, a live run that stops reporting or makes no
+  progress for three minutes gets a notice naming what it waits on with Keep
+  waiting and Stop update, and STOP is always in the action bar
+  (`quickshell/pages/UpdatesPage.qml`).
+- **App title bars can be turned off on niri from the Look tab.** The niri
+  switch that asks apps to drop their own title bars sat under Layout as
+  "Server-side window frames", where nobody looked for it. It is now "Hide app
+  title bars" on Window Manager > Look, says which apps may keep theirs, and a
+  Hub search for "titlebar" lands on it. (`../wm/niri/schema.json`,
+  `quickshell/Hub.qml`)
+- **General and Desktop settings no longer open blank.** The app picker now
+  resolves to Hub's own component and imports its scrolling controls.
+  (`quickshell/SchemaPage.qml`, `quickshell/AppPicker.qml`)
+
+### Removed
+- **Sidebar styles and layout customization.** Controls and Today now have one
+  compact layout shared by every bar style. The Sidebars page, Classic/Modern
+  selector, geometry, pinning, and content-order controls are gone. Sidebar
+  plugins remain available through Add-ons; old sidebar links open Desktop.
+  (`quickshell/Hub.qml`)
+
 ### Added
-- **Sidebars has its own page.** Contents, ordering, Summary/Full controls,
-  placement, size, and opening behavior are edited in Hub rather than inside
-  sidebar tabs. Saves wait for the daemon's reply and settings-frame confirmation
-  (`quickshell/pages/SidebarsPage.qml`, `quickshell/pages/SidebarWriter.qml`).
+- **UPDATE NOW runs the update right in Ryoku Settings.** No terminal window:
+  the page asks for your password itself, answers the run's questions, and
+  draws the run as a timeline of its steps with how long each took, the line
+  the running step last printed, and the run's own read of whether it is
+  progressing. DETAILS opens the full raw log beneath it, and the settled run
+  stays up until you dismiss it (`quickshell/pages/UpdatesPage.qml`,
+  `quickshell/pages/UpdateRun.qml`, `quickshell/pages/UpdateAuth.qml`,
+  `quickshell/pages/UpdateLog.qml`).
 - **Desktop Scene brings the editors together.** Scene, Visualizer, and Widgets
   have dedicated views. The scene view includes layers, cut quality, shadow
   direction, motion presets, idle speed, music intensity, and pointer tuning.
@@ -108,6 +158,15 @@
   `schema/WidgetsPage.test.mjs` and the widget preview cards).
 
 ### Fixed
+- **A band-picked Wi-Fi join roams again.** Picking 5 GHz on a dual-band
+  network joined through `nmcli dev wifi connect <BSSID>`, which pins the
+  saved profile to that one access point; on a multi-AP network the access
+  points steer the client and the pin forces it back, so the connection
+  visibly reconnects in a loop (nmtui, which joins by SSID, worked). The join
+  now locks the profile to the band (`802-11-wireless.band`) after connecting,
+  keeping the 5 GHz choice without freezing the AP; profiles the old picker
+  pinned are healed by `ryoku doctor`
+  (`quickshell/pages/ConnectionsPage.qml`).
 - **The update and rollback log opens where you can see it.** Both launch a
   terminal from inside Ryoku Settings, and a tiled window always sits under a
   float, so the run's output hid behind the settings page until it finished

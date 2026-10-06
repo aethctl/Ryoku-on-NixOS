@@ -112,15 +112,55 @@ Singleton {
         hasAudioMetadata = false
     }
 
-    function loadAudioMetadata(): void {
-        if (!metadataProcess.running)
-            metadataProcess.running = true
+    // The backend's status file exists exactly while a capture runs and carries
+    // its launch time: reading it on change shows a start at once, from any entry
+    // point, with the clock counting from the real launch rather than first sight.
+    function applyStatusFile(): void {
+        let payload
+        try {
+            payload = JSON.parse(statusFile.text() || "{}")
+        } catch (error) {
+            payload = {}
+        }
+        const payloadPid = Number(payload.recorderPid ?? 0)
+        if (payloadPid <= 0) {
+            root.resetAudioMetadata()
+            return
+        }
+        const launched = Number(payload.startedAt ?? 0) * 1000
+        if (launched > 0)
+            root.recordingStartTime = launched
+        if (!root.isRecording)
+            root.isRecording = true
+        if (root.recordingStartTime > 0)
+            root.elapsedSeconds = Math.floor((Date.now() - root.recordingStartTime) / 1000)
+        root.recorderPid = payloadPid
+        root.requestedAudioMode = root.normalizeAudioMode(String(payload.requestedAudioMode ?? "system"))
+        root.activeAudioMode = root.normalizeAudioMode(String(payload.activeAudioMode ?? "none"))
+        root.audioFallback = payload.audioFallback === true
+        root.hasAudioMetadata = true
+    }
+
+    FileView {
+        id: statusFile
+        path: root.recorderStatusPath
+        blockLoading: true
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.applyStatusFile()
+        onLoadFailed: {
+            if (root.isRecording)
+                root.isRecording = false
+            root.refreshStatus()
+        }
     }
 
     onIsRecordingChanged: {
         if (isRecording) {
-            recordingStartTime = Date.now()
-            elapsedSeconds = 0
+            if (recordingStartTime <= 0)
+                recordingStartTime = Date.now()
+            elapsedSeconds = Math.floor((Date.now() - recordingStartTime) / 1000)
         } else {
             recordingStartTime = 0
             elapsedSeconds = 0
@@ -134,7 +174,7 @@ Singleton {
             checkProcess.running = true
     }
 
-    // Idle poll: infrequent check for externally-started recordings
+    // Idle poll: a backstop for a stale status file; the file watch notices a start.
     Timer {
         id: idlePollTimer
         interval: 5000
@@ -202,46 +242,19 @@ Singleton {
         }
     }
 
-    Process {
-        id: metadataProcess
-        command: ["/usr/bin/cat", root.recorderStatusPath]
-        stdout: StdioCollector {
-            id: metadataCollector
-        }
-        stderr: StdioCollector {}
-        onExited: (exitCode, exitStatus) => {
-            if (exitCode !== 0) {
-                root.resetAudioMetadata()
-                return
-            }
-            try {
-                const payload = JSON.parse(metadataCollector.text)
-                const payloadPid = Number(payload.recorderPid ?? 0)
-                if (!root.isRecording || payloadPid <= 0) {
-                    root.resetAudioMetadata()
-                    return
-                }
-                root.recorderPid = payloadPid
-                root.requestedAudioMode = root.normalizeAudioMode(String(payload.requestedAudioMode ?? "system"))
-                root.activeAudioMode = root.normalizeAudioMode(String(payload.activeAudioMode ?? "none"))
-                root.audioFallback = payload.audioFallback === true
-                root.hasAudioMetadata = true
-            } catch (error) {
-                root.resetAudioMetadata()
-            }
-        }
-    }
-
-    // Detection rides GSR's IPC socket, the Ryoku-scoped liveness check (a foreign
-    // gpu-screen-recorder is invisible to it). The recorder pid comes from the
-    // status file the backend writes, adopted when the metadata loads.
+    // GSR's IPC socket backs the status file up (a backend killed outright leaves
+    // a stale file). The socket comes up a moment after launch, so a negative
+    // answer inside the first seconds of a capture is the socket warming up.
+    readonly property int socketWarmupMs: 5000
     Process {
         id: checkProcess
         command: ["/usr/bin/gsr-cli", "-ipc", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-gsr.sock", "status"]
         onExited: (exitCode, exitStatus) => {
-            root.isRecording = exitCode === 0
+            const warming = root.isRecording && root.recordingStartTime > 0
+                && Date.now() - root.recordingStartTime < root.socketWarmupMs
+            root.isRecording = exitCode === 0 || warming
             if (root.isRecording && !root.hasAudioMetadata)
-                root.loadAudioMetadata()
+                statusFile.reload()
         }
     }
 }

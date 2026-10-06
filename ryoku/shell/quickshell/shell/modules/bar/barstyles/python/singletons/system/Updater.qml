@@ -35,8 +35,4 @@ Item {
             root.remoteVersion = Updates.latest || "";
         }
     }
-
-    function applyUpdate() {
-        Quickshell.execDetached(["ryoku", "update"]);
-    }
 }

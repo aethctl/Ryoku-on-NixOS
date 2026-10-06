@@ -5,6 +5,7 @@
       "loading": "Loading...",
       "unknown": "Unknown",
       "version_by": "v{version} • by {author}",
+      "based_on": "Based on Serpantinum by ilyamiro",
       "hardware": {
         "device_name": "Device name",
         "processor": "Processor",
@@ -21,7 +22,8 @@
         "uptime": "Uptime",
         "default_os": "Linux"
       },
-      "github_repo": "ilyamiro/serpantinum"
+      "github_repo": "ilyamiro/serpantinum",
+      "update_available": "Ryoku update available v"
     },
     "tabs": {
       "welcome": "Welcome",

@@ -221,7 +221,7 @@ Rectangle {
                                 SequentialAnimation on x {
                                     id: titleAnim
                                     loops: Animation.Infinite
-                                    running: titleTextMain.implicitWidth > titleClipRect.width
+                                    running: isMediaActive && titleTextMain.implicitWidth > titleClipRect.width
 
                                     onRunningChanged: {
                                         if (!running) marqueeContainer.x = 0;

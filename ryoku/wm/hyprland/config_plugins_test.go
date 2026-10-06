@@ -225,3 +225,32 @@ func TestRepoSlug(t *testing.T) {
 		}
 	}
 }
+
+// The NVIDIA caveats ride on the plugin cards: the cursor plugin and the
+// glass plugin each carry a known cost on NVIDIA, and both must be surfaced
+// whether or not the plugin is currently loaded. Any other plugin, and any
+// non-NVIDIA machine, carries no note.
+func TestPluginNvidiaNote(t *testing.T) {
+	if got := pluginNvidiaNote("hyprbars", true, false); got != "" {
+		t.Fatalf("note on non-NVIDIA: %q", got)
+	}
+	if got := pluginNvidiaNote("hyprbars", true, true); got != "" {
+		t.Fatalf("note on an unremarkable plugin: %q", got)
+	}
+	for _, c := range []struct {
+		id   string
+		want string
+	}{
+		{"dynamic-cursors", "software"},
+		{"hyprglass", "blur"},
+	} {
+		loaded := pluginNvidiaNote(c.id, true, true)
+		unloaded := pluginNvidiaNote(c.id, false, true)
+		if !strings.Contains(loaded, c.want) {
+			t.Errorf("%s loaded note = %q, want it to mention %q", c.id, loaded, c.want)
+		}
+		if unloaded == "" || unloaded == loaded {
+			t.Errorf("%s unloaded note = %q, want a distinct warning", c.id, unloaded)
+		}
+	}
+}

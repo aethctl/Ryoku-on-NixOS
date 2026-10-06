@@ -1,30 +1,32 @@
 ---
 name: ryoku
 description: >
-  Customize a Ryoku desktop: an Arch Linux system with a Hyprland compositor and
-  a Quickshell shell (the QS Bar, the dock, widgets, the launcher, and the Hub).
-  Use for end-user requests that touch the desktop or its config. Triggers:
-  Hyprland, window rules, keybinds, monitors, gaps, borders, the bar, the dock,
-  bar widgets, plugins, themes, wallpaper, colours, night light, idle, lock
-  screen, and user-facing ryoku commands (ryoku, ryoku-shell, ryoku-hub,
-  ryogami, ryoku-rashin). Read the vault first; act through commands, not by
-  editing shipped files.
+  Customize a Ryoku desktop: an Arch Linux system with a Hyprland or niri
+  compositor and a Quickshell shell (the QS Bar, the dock, widgets, the
+  launcher, and the Hub). Use for end-user requests that touch the desktop or
+  its config. Triggers: window-manager behavior, window rules, keybinds,
+  monitors, gaps, borders, the bar, the dock, bar widgets, plugins, themes,
+  wallpaper, colours, night light, idle, lock screen, and user-facing ryoku
+  commands (ryoku, ryoku-shell, ryoku-hub, ryogami, ryoku-rashin). Read the
+  vault first; act through commands, not by editing shipped files.
 ---
 
 # Ryoku
 
-Ryoku is an Arch Linux desktop: a Hyprland compositor, a single Quickshell shell
-that draws the bar, the dock, the launcher, the popouts and the widgets, and a
-set of Go command-line tools that own the config. This skill is for changing a
-running Ryoku system on behalf of its user. It is not for developing Ryoku
-itself (editing the source checkout, writing migrations, cutting a release).
+Ryoku is an Arch Linux desktop: a Hyprland or niri compositor (`ryoku wm
+status` says which), a single Quickshell shell that draws the bar, the dock, the
+launcher, the popouts and the widgets, and a set of Go command-line tools that
+own the config. This skill is for changing a running Ryoku system on behalf of
+its user. It is not for developing Ryoku itself (editing the source checkout,
+writing migrations, cutting a release).
 
 ## When to use this skill
 
 Use it whenever a request would change the desktop or read its state: the bar
-layout and widgets, the dock, Hyprland behaviour, themes and wallpaper, keybinds,
-idle and lock, plugins, or any `~/.config` file Ryoku owns. If you are about to
-guess a path or edit a config file under `~/.config`, stop and use this skill.
+layout and widgets, the dock, window-manager behaviour, themes and wallpaper,
+keybinds, idle and lock, plugins, or any `~/.config` file Ryoku owns. If you are
+about to guess a path or edit a config file under `~/.config`, stop and use this
+skill.
 
 Do not use it to modify the Ryoku source tree, and never treat a shipped file as
 a place to store a user's choice.
@@ -51,6 +53,11 @@ yours: write durable notes and dated notes (`journal/YYYY-MM-DD.md`) there and
 they survive. `user.md` lists the user's own choices; never revert one to a
 shipped default without being asked.
 
+When a user is new to Ryoku, cite the long-form wiki at
+`~/.local/share/ryoku/rashin/wiki/`. It is shipped read-only; start at
+`README.md`, then link the page that matches the question instead of assuming
+Linux, QML, Go, or compositor knowledge.
+
 Topic guides sit beside this file. Read the matching one first:
 
 - [`gui.md`](gui.md): the GUI map. Every intent to its Ryoku Hub page, shell
@@ -65,6 +72,10 @@ Topic guides sit beside this file. Read the matching one first:
 - [`troubleshoot.md`](troubleshoot.md): the break/fix playbook. Gather the logs
   first (`ryoku-rashin logs <app>`), diagnose, fix through the owning command,
   verify, and know the rollback paths.
+- [`wm.md`](wm.md): the window-manager seam, provider capabilities and actions,
+  safe Hyprland Lua and niri KDL overrides, reload, and verification.
+- [`build.md`](build.md): the feature ladder, shell plugin workflow, QML design
+  rules, the neutral `Wm` singleton, and Go development in a checkout.
 
 ## Answer policy: GUI first
 
@@ -97,11 +108,11 @@ refresh the base freely while your changes stand. Respect the split:
   edit there is lost on the next update. Reading them is safe and useful.
 - **A user override goes to the overlay:** `~/.config/ryoku/user_edits/`, which
   mirrors `~/.config`. A file there wins at its mirrored path and survives every
-  update. To change a shipped Hyprland or app config, drop your version at the
-  mirrored path under `user_edits` (a fork), or, better, use the dedicated
-  override file the tool already reads (`hypr/user.lua`, `hypr/settings.lua`,
-  `kitty/user.conf`, `fish/user.fish`), which the package never ships and never
-  touches. `ryoku reset <path>` drops an overlay file back to the base.
+  update. To change compositor config, use the dedicated last-loaded override
+  (`hypr/user.lua` or `niri/user.kdl`) that `ryoku owner` names. A whole-file
+  fork belongs at the mirrored path under `user_edits`; you own that file and
+  stop receiving upstream changes to it. `ryoku reset <path>` drops an overlay
+  file back to the base.
 - **Prefer a command over a file edit.** The tool that owns a setting is its one
   writer; hand-editing its store drifts. Ryoku Settings' own state (bar, colours,
   launcher, device lighting) lives under `~/.config/ryoku/*.json`, written by
@@ -116,9 +127,9 @@ Prefer a command to a file edit; read a command's `--help` before running it.
 
 | Tool | Owns |
 |---|---|
-| `ryoku` | Updates, rollback, status, reload, materialize, reset, doctor. See `docs/cli.md`. |
+| `ryoku` | Updates, rollback, status, ownership, and the `wm` provider seam. See `docs/cli.md`. |
 | `ryoku-shell` | The live shell: the bar, the dock, menus, popouts, and the `shell.json` settings store (the sole writer of `shell.json`). |
-| `ryoku-hub` | Ryoku Settings and the Hyprland config it generates (`hypr get`, `hypr matugen set`, ...). |
+| `ryoku-hub` | Ryoku Settings and the window-manager settings applied through the active provider. |
 | `ryogami` | Wallpapers and the colour palette (`ryogami wallpaper set|next|random`). |
 | `ryoku-rashin` | The optional agent OS: the vault, wiring, the dashboard, `index`, `wire`. |
 
@@ -153,10 +164,9 @@ When a request would change the system, in order:
 2. **Is there a command for it?** Use it. The bar and dock have a full CLI
    (`ryoku-shell bar ...`, `ryoku-shell dock ...`, see `bar.md`); wallpaper has
    `ryogami wallpaper set`; updates have `ryoku update`.
-3. **Is it a config edit with no command?** Edit the override, never the shipped
-   file: the tool's own `user.*` file, or a fork at the mirrored path under
-   `~/.config/ryoku/user_edits/`. Then reload (`ryoku reload`, or `hyprctl
-   reload` for Hyprland).
+3. **Is it a config edit with no command?** Ask `ryoku owner <path>`, then edit
+   the override it names, never the shipped file. Use `wm.md` for the
+   compositor-specific file, validation, reload, and proof.
 4. **Is it a feature the desktop does not have?** Climb `feature.md`:
    `ryostore catalog` (does the store ship it?), `ryoku-shell bar catalog` and
    `ryoku plugin list` (is it installed but hidden?), then build it as a

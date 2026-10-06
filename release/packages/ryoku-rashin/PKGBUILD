@@ -47,12 +47,19 @@ package() {
   # name (busybox pattern); argv0 routes a bare argument to the terminal ask.
   ln -s ryoku-rashin "$pkgdir/usr/bin/rashin"
   install -Dm644 "$srcdir/ryoku-repo.md" "$pkgdir/usr/share/ryoku/rashin/ryoku-repo.md"
-  # The `ryoku` agent skill: the source map, safety rules, the GUI map, and the
-  # bar and plugin guides. `ryoku-rashin wire` symlinks this dir into every
-  # agent's skills directory; the doctor's rashin reconciler re-wires it on update.
-  for f in SKILL.md gui.md bar.md plugins.md; do
-    install -Dm644 "$_repo/ryoku/rashin/skills/ryoku/$f" \
-      "$pkgdir/usr/share/ryoku/skills/ryoku/$f"
+  # The `ryoku` agent skill: the source map, safety rules, the GUI map, the
+  # bar, plugin, window-manager, build and troubleshoot guides. Every page in
+  # the dir ships (a hand-kept list once left troubleshoot.md behind).
+  # `ryoku-rashin wire` symlinks this dir into every agent's skills directory;
+  # the doctor's rashin reconciler re-wires it on update.
+  for f in "$_repo"/ryoku/rashin/skills/ryoku/*.md; do
+    install -Dm644 "$f" "$pkgdir/usr/share/ryoku/skills/ryoku/$(basename "$f")"
+  done
+  # The wiki: the plain-language guides for someone new. The daemon mirrors
+  # this dir into the vault as wiki/ on every start, so the Needle cites it,
+  # prowl indexes it and the console renders it.
+  for f in "$_repo"/ryoku/rashin/wiki/*.md; do
+    install -Dm644 "$f" "$pkgdir/usr/share/ryoku/rashin/wiki/$(basename "$f")"
   done
   # Systemd user unit: `ryoku-rashin enable` runs `systemctl --user enable
   # --now` on it; the daemon then starts at every login (or at boot with

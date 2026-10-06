@@ -39,23 +39,42 @@ bool TransitionPass::ensureTargets(QRhi *rhi, QSize pixelSize)
     if (m_texA && m_size == px)
         return false;
 
+    releaseTargets();
     m_size = px;
     m_texA.reset(rhi->newTexture(QRhiTexture::RGBA8, px, 1, QRhiTexture::RenderTarget));
-    m_texA->create();
+    const bool texAOk = m_texA->create();
     m_texB.reset(rhi->newTexture(QRhiTexture::RGBA8, px, 1, QRhiTexture::RenderTarget));
-    m_texB->create();
+    const bool texBOk = m_texB->create();
 
-    m_rtA.reset(rhi->newTextureRenderTarget(QRhiTextureRenderTargetDescription(QRhiColorAttachment(m_texA.get()))));
-    m_rpd.reset(m_rtA->newCompatibleRenderPassDescriptor());
-    m_rtA->setRenderPassDescriptor(m_rpd.get());
-    m_rtA->create();
+    bool ok = texAOk && texBOk;
+    if (ok) {
+        m_rtA.reset(
+            rhi->newTextureRenderTarget(QRhiTextureRenderTargetDescription(QRhiColorAttachment(m_texA.get()))));
+        m_rpd.reset(m_rtA->newCompatibleRenderPassDescriptor());
+        m_rtA->setRenderPassDescriptor(m_rpd.get());
+        ok = m_rtA->create() && m_rpd != nullptr;
+    }
+    if (ok) {
+        m_rtB.reset(
+            rhi->newTextureRenderTarget(QRhiTextureRenderTargetDescription(QRhiColorAttachment(m_texB.get()))));
+        m_rtB->setRenderPassDescriptor(m_rpd.get());
+        ok = m_rtB->create();
+    }
+    if (!ok) {
+        // Full-size render targets can fail on memory pressure or an
+        // unsupported format. Begin/draw through the failed objects is
+        // undefined per backend and flashes garbage across the window, so
+        // drop them and let the caller draw the cards directly; the next
+        // frame retries.
+        releaseTargets();
+        m_size = QSize();
+    }
 
-    m_rtB.reset(rhi->newTextureRenderTarget(QRhiTextureRenderTargetDescription(QRhiColorAttachment(m_texB.get()))));
-    m_rtB->setRenderPassDescriptor(m_rpd.get());
-    m_rtB->create();
-
-    // The composite bindings reference the reallocated textures.
+    // The composite bindings reference the (re)allocated textures.
     m_srb.reset();
+    m_pipeline.reset();
+    m_pipelinePass.reset();
+    m_pipelineSamples = -1;
     return true;
 }
 
@@ -63,20 +82,27 @@ void TransitionPass::buildPipeline(QRhi *rhi, QRhiRenderTarget *mainTarget)
 {
     if (!m_uniform) {
         m_uniform.reset(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(TransUniform)));
-        m_uniform->create();
+        if (!m_uniform->create())
+            m_uniform.reset();
     }
     if (!m_sampler) {
         m_sampler.reset(rhi->newSampler(QRhiSampler::Linear, QRhiSampler::Linear, QRhiSampler::None,
                                         QRhiSampler::ClampToEdge, QRhiSampler::ClampToEdge));
-        m_sampler->create();
+        if (!m_sampler->create())
+            m_sampler.reset();
     }
+    if (!m_uniform || !m_sampler || !m_texA || !m_texB)
+        return;
     m_srb.reset(rhi->newShaderResourceBindings());
     m_srb->setBindings({
         QRhiShaderResourceBinding::uniformBuffer(0, QRhiShaderResourceBinding::FragmentStage, m_uniform.get()),
         QRhiShaderResourceBinding::sampledTexture(1, QRhiShaderResourceBinding::FragmentStage, m_texA.get(), m_sampler.get()),
         QRhiShaderResourceBinding::sampledTexture(2, QRhiShaderResourceBinding::FragmentStage, m_texB.get(), m_sampler.get()),
     });
-    m_srb->create();
+    if (!m_srb->create()) {
+        m_srb.reset();
+        return;
+    }
 
     m_pipeline.reset(rhi->newGraphicsPipeline());
     QRhiGraphicsPipeline::TargetBlend blend;
@@ -97,7 +123,11 @@ void TransitionPass::buildPipeline(QRhi *rhi, QRhiRenderTarget *mainTarget)
     m_pipeline->setRenderPassDescriptor(m_pipelinePass.get());
     m_pipeline->setSampleCount(mainTarget->sampleCount());
     m_pipelineSamples = mainTarget->sampleCount();
-    m_pipeline->create();
+    if (!m_pipeline->create()) {
+        m_pipeline.reset();
+        m_pipelinePass.reset();
+        m_pipelineSamples = -1;
+    }
 }
 
 void TransitionPass::prepare(QRhi *rhi, QRhiResourceUpdateBatch *batch, QRhiRenderTarget *mainTarget,
@@ -108,6 +138,8 @@ void TransitionPass::prepare(QRhi *rhi, QRhiResourceUpdateBatch *batch, QRhiRend
         || !m_pipelinePass->isCompatible(mainTarget->renderPassDescriptor())
         || m_pipelineSamples != mainTarget->sampleCount())
         buildPipeline(rhi, mainTarget);
+    if (!m_uniform)
+        return;
 
     TransUniform u{};
     u.resolution[0] = float(m_size.width());
@@ -134,6 +166,16 @@ void TransitionPass::render(QRhiCommandBuffer *cb, QSize pixelSize)
     cb->draw(3);
 }
 
+void TransitionPass::releaseTargets()
+{
+    // Destroy the render targets before the textures they attach.
+    m_rtA.reset();
+    m_rtB.reset();
+    m_rpd.reset();
+    m_texA.reset();
+    m_texB.reset();
+}
+
 void TransitionPass::releaseResources()
 {
     m_pipeline.reset();
@@ -141,10 +183,7 @@ void TransitionPass::releaseResources()
     m_srb.reset();
     m_sampler.reset();
     m_uniform.reset();
-    m_rtA.reset();
-    m_rtB.reset();
-    m_rpd.reset();
-    m_texA.reset();
-    m_texB.reset();
+    m_pipelineSamples = -1;
+    releaseTargets();
     m_size = QSize();
 }

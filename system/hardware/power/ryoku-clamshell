@@ -39,8 +39,10 @@ PANEL_STATE="${RYOKU_CLAMSHELL_PANEL_STATE:-$RUNTIME_DIR/ryoku-clamshell-${UID:-
 PANEL_LOCK="${RYOKU_CLAMSHELL_PANEL_LOCK:-$RUNTIME_DIR/ryoku-clamshell-${UID:-$(id -u)}.panel.lock}"
 SUSPEND_STATE="${RYOKU_CLAMSHELL_SUSPEND_STATE:-$RUNTIME_DIR/ryoku-clamshell-${UID:-$(id -u)}.suspend}"
 SUSPEND_LOCK="${RYOKU_CLAMSHELL_SUSPEND_LOCK:-$RUNTIME_DIR/ryoku-clamshell-${UID:-$(id -u)}.suspend.lock}"
+SUSPEND_REASON="${RYOKU_CLAMSHELL_SUSPEND_REASON:-$RUNTIME_DIR/ryoku-clamshell-${UID:-$(id -u)}.suspend.reason}"
 PGREP_BIN="${RYOKU_PGREP_BIN:-$(command -v pgrep || true)}"
 BUSCTL_BIN="${RYOKU_BUSCTL_BIN:-$(command -v busctl || true)}"
+LOGGER_BIN="${RYOKU_CLAMSHELL_LOGGER_BIN:-$(command -v logger || true)}"
 # Internal panels + non-display connectors. Everything else that reports
 # "connected" is an external display (HDMI-A-*, DP-*, ...).
 INTERNAL_RE='^(eDP|LVDS|DSI|Virtual|Writeback)'
@@ -50,6 +52,21 @@ INTERNAL_RE='^(eDP|LVDS|DSI|Virtual|Writeback)'
 PANEL_RE='^(eDP|LVDS|DSI)'
 
 log() { printf 'ryoku-clamshell: %s\n' "$*"; }
+
+# journal_note writes one line straight to the journal. The compositor spawns
+# the close path detached, so stderr from `ryoku-shell suspend` dies with the
+# process; a rejection reason that never reaches journalctl is undebuggable
+# for support and for the user alike. Identical consecutive reasons are
+# logged once so a retry loop cannot flood the journal.
+JOURNAL_LAST_NOTE=""
+journal_note() {
+  local note=$1
+  [[ $note != "$JOURNAL_LAST_NOTE" ]] || return 0
+  JOURNAL_LAST_NOTE=$note
+  if [[ -n $LOGGER_BIN && -x $LOGGER_BIN ]]; then
+    "$LOGGER_BIN" -t ryoku-clamshell -- "$note" || true
+  fi
+}
 send_event() {
   local event=$1
   [[ -p $EVENT_FIFO ]] || return 1
@@ -458,13 +475,16 @@ cancel_current_suspend() {
 }
 
 request_suspend() {
-  local token=$1
+  local token=$1 reason
+  rm -f "$SUSPEND_REASON"
   if ! command -v ryoku-shell >/dev/null 2>&1; then
     log "ryoku-shell not found; refusing to suspend without a confirmed lock" >&2
+    printf '%s\n' "ryoku-shell not found" >"$SUSPEND_REASON"
     return 1
   fi
-  if ! ryoku-shell suspend transaction "$token"; then
-    log "secure suspend transaction was rejected" >&2
+  if ! reason="$(ryoku-shell suspend transaction "$token" 2>&1)"; then
+    log "secure suspend transaction was rejected: ${reason:-no reason given}" >&2
+    printf '%s\n' "${reason:-no reason given}" >"$SUSPEND_REASON"
     return 1
   fi
 }
@@ -544,6 +564,7 @@ suspend_while_closed_locked() {
       return 0
     fi
     clear_suspend_token "$request_token"
+    journal_note "lid suspend rejected while the lid is closed: $(cat "$SUSPEND_REASON" 2>/dev/null || echo 'no reason recorded')"
     if ! suspend_retry_session_owned; then
       return 0
     fi

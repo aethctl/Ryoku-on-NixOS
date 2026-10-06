@@ -2,28 +2,85 @@
 
 ## Unreleased
 
-### New
-- **Per-source audio and microphone controls.** The **Audio mixer** button below
-  System's volume and microphone controls opens output devices, microphones,
-  playing apps, and recording apps. Each has independent mute and level, an
-  editable percentage, and 1% steps; devices can be chosen as the default.
-  Level changes preserve mute. Subtle hover, press, and page-entry animations
-  respect reduced motion.
-  (`quickshell/shell/modules/sidebar/cards/SystemAudioPage.qml`,
-  `quickshell/shell/modules/sidebar/cards/SystemAudioRow.qml`)
-- **Larger, clearer global sidebars.** `Super+Escape` opens the Control center
-  on the left and `Super+S` opens Companion on the right. Both use matching
-  screen-edge chrome, readable type, a section rail, and labelled controls.
-  System has an informative dashboard with Wi-Fi discovery and connection,
-  Bluetooth discovery and pairing, and audio, brightness, and session controls.
-  Weather includes hourly forecasts, daily ranges, and air conditions; Capture
-  shows screenshot and recording targets and options instead of an empty page.
-  Stage is a wallpaper and widget overview; scene, motion, visualizer, and widget
-  editing now live in Hub. Sidebar contents, placement, size, and behavior also
-  live in Hub, with confirmed saves, card ordering, and movement between sides.
-  Retired native-window geometry is removed by the doctor.
-  (`quickshell/shell/modules/sidebar/`, `../hub/quickshell/pages/SidebarsPage.qml`,
-  `../hub/quickshell/pages/DesktopScenePage.qml`)
+### Added
+- **Clipboard history supports keyboard selection.** The up and down arrows
+  move through the entries and Enter copies the selected one and closes the
+  panel, so the history is usable without reaching for the mouse
+  (`quickshell/shell/modules/clipboard/`).
+
+- **The Ask bar names its agent mode.** The mode strip reads Ask / Agent /
+  Tools / Web and the answer chip says Continue with the agent: the bar is
+  Rashin's Ryoku lane, and Chat is now the companion window's plain
+  conversation with the harness (`quickshell/shell/modules/ask/`).
+- **The Ask bar is sealed.** Its header carries the Rashin mark from the icon
+  theme (`rashin-app`), so the bar, the window and the console share one
+  identity (`quickshell/shell/modules/ask/AskSurface.qml`). `deploy.sh` now
+  also takes an app's `logo.svg` beside its `.desktop`, as the package does.
+- **Login plays the cover animation into the desktop.** The reload cover now
+  also runs at boot: each compositor's autostart raises it the moment the
+  greeter hands over, and the freshly loaded shell releases it once wallpaper
+  and desktop report ready on every screen, so the desktop never appears grey
+  or flickers while the shell's surfaces cold-load. In boot mode the cover
+  reads LOADING DESKTOP and holds up to 45 s before giving up
+  (`scripts/ryoku-reload-cover`, `quickshell/reload-cover/`).
+- **The wordmark sweeps while the cover waits.** The bundled brand mark
+  regained its loading light sweep, so a held cover reads as working rather
+  than frozen (`quickshell/reload-cover/ReloadMedia.qml`).
+- **The Ask bar wears its history and model pickers on the header.** Two icon
+  buttons sit beside the RASHIN // ASK mark: one opens the history drawer
+  (recent chats from the shared session and recent asks from the fast lane,
+  keyboard-navigable, picking a chat switches to it and picking an ask recalls
+  its answer without a model call), and one opens the model drawer (the
+  fast-lane provider the quick asks answer from, and the agent's chat models;
+  a switch lands on the daemon and every chat surface follows). The bar grows
+  around an open drawer instead of clipping it, Ctrl+Shift+H and Ctrl+Shift+M
+  toggle the two drawers without the mouse, and Escape closes the drawer
+  before the bar (`quickshell/shell/modules/ask/AskSurface.qml`,
+  `AskDrawer.qml`, `AskField.qml`, `quickshell/shell/services/Needle.qml`).
+- **OPEN RASHIN joins CONTINUE IN CHAT.** The quick answer's chips now carry a
+  button that leaves the bar and opens the full companion window
+  (`rashin-app`), raising it when it is already open. Continue in chat stays
+  exactly as it was for anyone who wants the thread inside the bar
+  (`quickshell/shell/modules/ask/AskAnswer.qml`, `AskSurface.qml`).
+- **Controls sets the power profile.** The Super+Escape panel gains a Power
+  Saver / Balanced / Performance switch for the system power profile. It
+  offers only what power-profiles-daemon reports, follows a change made
+  anywhere else, and says so when the daemon is missing. The panel's
+  Quick / Standard / Calm choice, which never visibly did anything, now sets
+  the panel's open, close and reveal speed and is labelled Motion.
+  (`quickshell/shell/modules/sidebar/PowerProfileControl.qml`,
+  `quickshell/shell/services/SidebarState.qml`)
+- **Controls is a live system and session panel.** Super+Escape opens the
+  top-left panel with a native mini system monitor, richer connections, fine
+  volume and brightness controls, inline per-application audio and per-display
+  brightness drawers, hold-to-activate session actions, quick toggles, and a
+  small settings popup. Heavy work runs only while the panel is active and
+  motion respects the reduced-motion settings.
+  (`quickshell/shell/modules/sidebar/`, `plugin/systemmonitor.cpp`,
+  `plugin/systemgraph.cpp`)
+- **The system monitor reads continuously.** Vitals sample four times a second
+  with loads and transfer rates measured over a sliding one-second window, the
+  graph keeps a minute and a second at that density and eases every new point,
+  rate axis change, and meter over one sample period, so readings glide instead
+  of stepping once a second. The oldest sample always lies beyond the graph's
+  left edge and the crossing step is clipped there, so a full minute runs off
+  the edge instead of ending on a point that snaps each sample. Expensive
+  sensors (temperatures, battery, disk usage) still refresh once a second.
+  (`plugin/systemmonitor.cpp`, `plugin/systemgraph.cpp`,
+  `quickshell/shell/modules/sidebar/ControlsHero.qml`)
+- **ryoshot is the one capture UI.** Super+Shift+S opens its floating Shot,
+  Edit, OCR, Search, and Record bar. The bar gains a delay timer that captures
+  the live region after the wait, the screenshots folder, and, with Record
+  selected, microphone, key-press overlay, and webcam overlay toggles beside
+  the desktop-audio one; the settings popover links to Hub > Recording
+  (`quickshell/ryoshot/`).
+- **Ask brings Rashin into a compact global bar.** Alt+Space opens streaming
+  quick answers, full chat, tools, and web search with keyboard mode prefixes
+  and Tab cycling. A monochrome dotted orb narrates what the agent is doing and
+  a light beam rides the field while a request runs. Answers can be pinned to a
+  draggable, edge-snapped desktop bubble whose position persists.
+  (`quickshell/shell/modules/ask/`, `quickshell/shell/services/AskSession.qml`,
+  `plugin/thinkingorb.cpp`, `plugin/borderbeam.cpp`)
 - **A fifth bar style: Python.** The serpantinum shell (by ilyamiro, AGPL-3.0)
   is ported into the style folder as `python`: a top or edge bar of pill
   widgets that open into one morphing stage, with the ported network, sound,
@@ -179,10 +236,9 @@
   to Beautify; OCR and Search reuse
   the shell's tools; the colour pick samples the frozen capture so it works on
   Hyprland and niri alike; Record hands the region to the shell recorder.
-  Super+Shift+S and Print open it on every bar style, and the iRiS region IPC
-  and the Control Center Capture tile launch it too. The duplicate iRiS region
-  selector was removed (`ryoku/shell/quickshell/ryoshot/`,
-  `inir/modules/regionSelector/`).
+  Super+Shift+S, Print, `ryoku-shell screenshot`, and the iRiS region IPC open
+  it on every bar style. The duplicate iRiS region selector was removed
+  (`ryoku/shell/quickshell/ryoshot/`, `inir/modules/regionSelector/`).
 - **The desktop widget editor is the iRiS one, in Ryoku's look.** Edit widgets
   opens a floating bar -- grid snap, grid step, Reset/Done, and a Widgets button
   that grows an attached panel: the whole roster as toggle rows (glyph, name,
@@ -352,8 +408,8 @@
   (`modules/desktop/DesktopContextMenu.qml`, `MenuQuick.qml`, `MenuRow.qml`,
   `modules/dock/DockMenu.qml`, `modules/bar/TrayMenu.qml`).
 
-- **The Super+S chat is the desktop's one live window on the shared agent
-  session.** It renders the daemon's stream as it arrives: thinking streams open
+- **Ask Chat is the desktop's one live window on the shared agent session.** It
+  renders the daemon's stream as it arrives: thinking streams open
   then folds to a one-line Thought when the answer starts, the reply reads in the
   order the agent worked with its segments falling in around the tool calls, and
   each tool row shows its kind, input, status and auto-approval with an
@@ -379,6 +435,131 @@
   `../../hyprland/modules/binds.lua`).
 
 ### Fixed
+- **The lid can no longer deny its own suspend.** The sleep transaction
+  closed its hard block and asked login1 to suspend on the same connection
+  immediately; login1 watches the block fd on its own schedule, so a Suspend
+  that overtook the close was denied by the daemon's own inhibitor and the lid
+  retried every two seconds, sometimes for minutes. The transaction now waits
+  until login1's inhibitor list stops naming this process before it calls
+  Suspend, and restores the guard if that confirmation never lands
+  (`ipc/sleepwake.go`).
+
+- **Stage Depth says why it cannot cut.** Turning Depth on with the tier's
+  model missing (or any other blocked pipeline) recorded the effect, ran
+  nothing, and went silent: the tile read On forever with no subject. The
+  engine's availability probe now asks about the model the configured quality
+  tier actually uses (a fine-tier box no longer reads as missing because the
+  draft weights are absent), a blocked or failed cut publishes the engine's
+  one-line reason on the `stage` frame, and the Hub Scene page and the
+  desktop menu's Depth row show it instead of a dead toggle. A wall left on
+  whose cut-outs vanished is re-cut by the next wake, and Clear now takes the
+  wall back to Plain so it stops asking for a cut it deleted
+  (`ipc/stage.go`, `scripts/ryostage`,
+  `quickshell/shell/modules/stage/Singletons/StageBackend.qml`,
+  `quickshell/shell/modules/desktop/DesktopContextMenu.qml`,
+  `../../hub/quickshell/pages/DesktopScenePage.qml`).
+
+- **A reload always plays its cover.** Several teardowns restarted the shell
+  without ever raising the cover, and some raised one the new shell could not
+  release: the daemon's three-second deadline killed a cover one poll from
+  ready; a still-running old shell re-read the freshly written token and
+  finished the cover before the teardown, so the animation opened over the
+  live desktop instead of the grey gap; and `finish` raced the cover's own
+  IPC load and stranded it on the watchdog. The deadline now outlasts the
+  launcher's map poll, the shell reads the reload token exactly once at load,
+  and `finish` retries briefly. The packaged `ryoku update`, the daemon
+  reload, the deploy, and a doctor repair all raise the cover before they
+  stop the shell now (`ipc/daemon.go`, `scripts/ryoku-reload-cover`,
+  `quickshell/shell/shell.qml`, `quickshell/reload-cover/`).
+- **Shima loads on every box, not only on ones with KDE apps.** Its app icons
+  were drawn with KDE's Kirigami, which no Ryoku package depends on, so a box
+  without some unrelated KDE app installed could not load the style at all:
+  picking Shima left no island, dock or frame. The icons now use Quickshell's
+  own icon provider, and the delivery gate fails any shipped QML import that
+  no Ryoku package provides.
+  (`quickshell/inir/modules/common/widgets/SmartAppIcon.qml`,
+  `../../bin/ryoku-dev-verify-delivery`)
+- **The bar's update button no longer opens a terminal.** Clicking it starts
+  the update in the background and opens Ryoku Settings on its Updates page,
+  where the run shows, asks for the password, and can be stopped
+  (`quickshell/shell/modules/bar/barstyles/qsbar/modules/UpdateWidget.qml`).
+- **A recovery on niri lands on a working Ryoku desktop.** `ryoku recovery`
+  clears the generated `settings.kdl` and `rebinds.kdl` with the Hub store,
+  and the deploy only regenerated them for the compositor that was not
+  running, so the next niri login hit a missing include and fell back to
+  niri's own default config. The deploy now writes the running compositor's
+  generated config from the store too. It also rebuilds `Ryoku.Blobs` on
+  every deploy instead of only on a Qt update, so a module built from an older
+  checkout can no longer sit under newer QML that names its types and take
+  the whole shell down. (`deploy.sh`)
+- **A dev deploy no longer edits the shipped user units.** It points the
+  shell, idle, clamshell, AI-usage and ryogami units at `~/.local/bin` with a
+  `ryoku-dev-bin.conf` drop-in. An edited copy read as a hand edit to
+  `ryoku materialize`, which forked it into `user_edits`, and that fork kept
+  the shell running from a home build that was gone once the box was back on
+  packages. (`deploy.sh`, `systemd/user/`)
+- **Hold to Lock and Hold to Sleep in Controls do what they say.** The two
+  holds were sent to the daemon as session calls it never registered, so
+  completing either did nothing. Lock now runs `ryoku-shell lock`, the very
+  command Super+L runs on every compositor, and Sleep runs `ryoku-shell
+  suspend`, the fail-closed lock-then-suspend the lid uses.
+  (`quickshell/shell/services/SessionActions.qml`)
+- **Closing the lid sleeps the laptop even while Keep awake is on.** Keep
+  awake held a logind `sleep` block as well as its idle block, and because
+  the request persists across logins a laptop that had it switched on once
+  answered every lid close and Sleep with "Operation denied due to active
+  block inhibitor", retrying every two seconds with the lid shut. Keep awake
+  now inhibits idle only, logind's own lid rule: the machine never sleeps on
+  its own while it is on, and a deliberate sleep still goes through. A box
+  carrying the old block swaps it on the next shell start.
+  (`scripts/ryoku-cmd-caffeine`)
+- **The record island shows up the moment a capture starts, with the right
+  clock.** A capture started from ryoshot (or the CLI) reached the island only
+  through a five-second idle poll, and the clock then counted from when the
+  shell noticed. The backend's status file now carries the launch time, and
+  the shell and Shima watch that file instead of waiting on the poll: the
+  island appears within a frame of the launch, counts from the real start, and
+  leaves the moment the backend removes the file. GSR's IPC stays as the
+  backstop for a stale file. (`scripts/ryoku-cmd-record`,
+  `quickshell/shell/services/Recorder.qml`,
+  `quickshell/inir/services/RecorderStatus.qml`)
+- **Shima's Music on the edges moves the frame as soon as it is switched on.**
+  The switch used to default to driving the Organic Edge wave, a desktop widget
+  Ryoku never hosts, so flipping it did nothing until a second choice buried
+  under it picked the frame. The port can only move the frame, so that is what
+  the switch does: the dead choice is gone, the response and finish rows follow
+  the switch, the preview shows the swell, and the palette's Frame Music action
+  turns the frame on with it. `ryoku doctor` strips the retired stored choice.
+  (`quickshell/inir/modules/iris/frame/IrisFrame.qml`,
+  `quickshell/inir/modules/iris/settings/IrisOptions.qml`,
+  `quickshell/inir/services/GlobalActions.qml`)
+- **The shell reloads again after the Bluetooth pairing agent shipped.** The
+  agent's command lives in a QML template string, and a shell comment inside it
+  wrapped the command name in backticks: the first one closed the template, so
+  BtLink.qml stopped parsing and every `ryoku reload` died with
+  "shell did not stay up: Expected token `;'". The comment no longer carries
+  backticks, and a file that cannot parse now fails CI: the QML lint job runs
+  on unstable-dev pushes and treats qmllint syntax findings as fatal (import
+  warnings stay advisory), and the local ryoku-dev-lint-qml gate learned the
+  same rule.
+
+- **No more color flicker while browsing live wallpapers and Workshop.** The
+  picker's card atlas uploaded only the image's own pixels and left the rest of
+  each tile slot to whatever the driver had there; machines that read that
+  memory back as garbage flashed arbitrary colors through the field while
+  scrolling. Tiles now fill their whole slot, a texture, render target, or
+  pipeline that fails to allocate is dropped and retried instead of drawn
+  through, and a card still animating out of a filter change re-resolves its
+  atlas slot instead of sampling a layer another wallpaper has taken. On the
+  daemon side, two wallpaper switches racing each other could stack two live
+  players on one screen, a transcode that finished after the user moved past
+  its clip could paint that clip's surface over the new wallpaper, and a
+  Workshop scene could start while a live clip still owned the desktop; the
+  switch generation is now serialized under one lock, a moved-past switch is
+  abandoned before it lands, and applying a scene or any still wallpaper stops
+  the players first. The desktop also no longer yields to a video surface
+  before that surface has committed a frame.
+  (`ryogami/picker/src/`, `ryogami/daemon/`).
 - **Ryogami's picker stops losing cards and stuttering.** A picker opened while
   the daemon was still scanning kept only the wallpapers it had seen so far until
   a relaunch; it now takes the full list when the scan ends. A texture array
@@ -559,10 +740,9 @@
   the click moved (issue #276).
 
 ### Removed
-- **The old quick-settings menu and stash card.** The former
-  `Super+Escape` frame menu and `Super+S` floating stash surface are retired.
-  Their rebuilt controls, chat, usage, and tools now live in the global
-  push-aside sidebars.
+- **The old split panel routes are gone.** Controls, Capture, and Ask replace
+  the separate frame menu and utility surfaces, with one shortcut and one clear
+  home for each task.
 - **The old wall-ui picker.** Replaced by the new picker; its day/night
   rotation lives on as two schedule rules, migrated automatically
   (`ryogami/wall-ui/`).
@@ -744,12 +924,12 @@
   (it drops a pointer, the ryoku skill, and prowl-agent's code-intelligence
   skill into that agent), show every path Rashin exposes -- the skill, each
   vault map, prowl-agent -- and offer a Copy snippet to point an agent Rashin
-  doesn't wire directly. The Super+S chat can run a coding agent other than
+  doesn't wire directly. Ask Chat can run a coding agent other than
   Hermes when its ACP adapter is installed; Hermes stays the recommended
   default. `ryoku-rashin paths` and `ryoku-rashin agent` do the same in a
   terminal.
 
-- **The Super+S chat header picks the agent and its model in one place.** The
+- **The Ask Chat header picks the agent and its model in one place.** The
   chip shows what is answering -- the agent, plus its model when it has one
   ("Hermes · gpt-5.6-luna", or just "Oh My Pi" for an agent that carries its own
   model). Tapping it opens a two-level picker: choose the agent (Hermes, Oh My
@@ -758,12 +938,12 @@
   effect on your next message, and the chip no longer shows a stale model after
   a switch.
 
-- **The Super+S needle opens with a clearer start.** Instead of a wall of text,
+- **Ask Chat opens with a clearer start.** Instead of a wall of text,
   the empty chat now leads with a heading, a one-line explainer, and three
   tap-to-fill example prompts, so it is obvious what to do first.
 
 - **The needle guides first-time setup instead of failing.** On a box with no
-  AI configured yet, the Super+S chat now shows a "Connect an AI" prompt with an
+  AI configured yet, Ask Chat now shows a "Connect an AI" prompt with an
   Open setup button (straight to Ryoku Settings' Rashin page) rather than the
   example prompts, so a first ask never dead-ends on an error.
 
@@ -981,8 +1161,8 @@
   leading `~` to `$HOME` before building the URL, the way the shell already
   resolves the brand mark, for both the image and the video path
   (`quickshell/reload-cover/ReloadMedia.qml`).
-- **The Super+S chat can approve a tool.** When hermes paused on an edit or a
-  command, the sidebar only showed "waiting for approval" with no way to
+- **Ask Chat can approve a tool.** When hermes paused on an edit or a command,
+  the panel only showed "waiting for approval" with no way to
   answer, so the turn dead-ended unless the dashboard was open. The permission
   frame now carries hermes's options through `ryoku-rashin chat`, the bubble
   shows them as buttons, and a pick answers over the new `--perm <id>
@@ -1736,8 +1916,8 @@
   (`controlcenter/PageMotionStage.qml`).
 - **The control center wears a frame.** The studio plate gains HUD corner ticks,
   the same L-bracket vocabulary the poster art and reference sheet use, so it
-  reads as a registered instrument surface like the Super+S sidebar rather than a
-  bare card. The ticks are anchored to the plate, so the frame reframes as the
+  reads as a registered instrument surface rather than a bare card. The ticks
+  are anchored to the plate, so the frame reframes as the
   plate resizes on a route change, on the same spatial curve as the page slide
   (`controlcenter/ControlCenter.qml`).
 - **Notification popups are flicked away, not faded out.** Dismissing a toast
@@ -2025,10 +2205,10 @@
   a Retry that re-runs the flow; every step converges, so a retry over finished
   work is a no-op. The modal cannot be dismissed while a privileged step is in
   flight, which would otherwise leave a half-provisioned host with nothing
-  watching it. All the state lives in `Stash`, so the flow is testable without a
-  window: `tests/ui/cobalt-wizard-probe.sh` drives it through idle, in-flight,
-  failure, reset and done and asserts what the view actually renders
-  (`modules/bar/panel/CobaltSetupWizard.qml`, `services/Stash.qml`).
+  watching it. The Tools service owns the state, so the flow is testable
+  without a window: `tests/ui/cobalt-wizard-probe.sh` drives it through idle,
+  in-flight, failure, reset and done and asserts what the view actually renders
+  (`modules/bar/panel/CobaltSetupWizard.qml`).
 - **The daemon re-applies your CPU profile definition after ppd switches.** The
   goroutine already listening to power-profiles-daemon's `PropertiesChanged` now
   schedules a debounced `ryoku-power apply-profile` for whatever profile is active
@@ -2452,20 +2632,17 @@
   `Theme` and persisted to `shell.json`; the IPC `variant` (activate) and
   `lifecycle.version` targets are gone (`lifecycle.ready()` stays)
   (`modules/bar/barstyles/qsbar/`).
-- **The stash download section gets a cobalt engine switch.** The Super+S Tools
-  "Download" section silently probed a non-existent cobalt at `localhost:9000`
-  and fell back to yt-dlp, whose TikTok extractor is broken upstream, so TikTok
-  links failed. A new "Cobalt engine (Docker)" switch runs a local cobalt
-  container (`ghcr.io/imputnet/cobalt:11`, loopback-only) on demand: off = yt-dlp
-  only, on = downloads route through cobalt with yt-dlp still catching whatever
-  it declines. Docker is detected (not force-installed), so the switch is disabled
-  with an install hint when it is missing, and shows a starting/resource loader
-  on first launch (image pull). State persists in `~/.config/ryoku/stash.json`
-  and reconciles to the real container state on shell start; the "works with"
-  bubble now reflects the active engine. New `stash-cobalt-server.sh` manages the
-  container; `stash-cobalt.sh` skips the cobalt probe when the engine is off
-  (`services/Stash.qml`, `modules/bar/panel/PanelTools.qml`,
-  `hyprland/scripts/stash-cobalt{,-server}.sh`).
+- **The Tools download section gets a cobalt engine switch.** Download silently
+  probed a non-existent cobalt at `localhost:9000` and fell back to yt-dlp,
+  whose TikTok extractor is broken upstream, so TikTok links failed. A new
+  "Cobalt engine (Docker)" switch runs a local cobalt container
+  (`ghcr.io/imputnet/cobalt:11`, loopback-only) on demand: off = yt-dlp only,
+  on = downloads route through cobalt with yt-dlp still catching whatever it
+  declines. Docker is detected rather than force-installed, so the switch is
+  disabled with an install hint when it is missing and shows a
+  starting/resource loader on first launch. State reconciles to the real
+  container state on shell start, and the supported-services bubble reflects
+  the active engine.
 - **The bar clock stops waking the CPU every second.** `ClockWidget` (both bar
   variants) shows only `HH:mm` but drove a 1s `Timer`, waking the CPU 60x a minute
   on an always-visible surface and blocking deep CPU sleep states. It now reads
@@ -2582,25 +2759,22 @@
   `modules/bar/barstyles/qsbar/**/{BarSlot,modules/ClockWidget}.qml`,
   `modules/bar/framebars/menus/MenuClockCard.qml`; Hub `Hub.qml` +
   `schema/DesktopPage.js`).
-- **A chat with the Rashin agent lives in the Super+S sidebar.** A new Chat tab
-  (the default) in the feature sidebar holds a multi-turn conversation with the
-  `ryoku-rashin` agent: the answer streams in as it is written and renders as
-  Markdown, selectable and copyable, with fenced code in a wrapped,
-  syntax-highlighted box that has a one-click copy. Attach images with the paperclip, by pasting
-  (Ctrl+V), or by dropping them; attached and produced images preview inline.
-  The input grows with the text and sends on Enter, Shift+Enter for a newline. A new
-  `ryoku-rashin chat` command bridges the daemon's shared hermes session over a
-  line protocol, so follow-ups keep context and New Chat (`chat --new`) forgets
-  it. The conversation and any in-flight answer live in a `Needle` singleton, so
-  closing and reopening the sidebar keeps the thread; a fresh chat starts only
-  after the sidebar has been away ten minutes (`modules/bar/panel/PanelChat.qml`,
-  `services/Needle.qml`, `rashin/backend/chatcli.go`).
-- **The chat survives a shell reload.** On load the sidebar restores the
+- **Ask Chat holds a multi-turn Rashin conversation.** The answer streams in as
+  it is written and renders as selectable, copyable Markdown, with fenced code
+  in a wrapped, syntax-highlighted box that has a one-click copy. Attach images
+  with the paperclip, by pasting, or by dropping them; attached and produced
+  images preview inline. The input grows with the text and sends on Enter, with
+  Shift+Enter for a newline. `ryoku-rashin chat` bridges the daemon's shared
+  session over a line protocol, so follow-ups keep context and New Chat
+  (`chat --new`) forgets it. The conversation and any in-flight answer live in
+  the shared chat singleton, so closing and reopening Ask keeps the thread
+  (`services/Needle.qml`, `rashin/backend/chatcli.go`).
+- **The chat survives a shell reload.** On load Ask restores the
   conversation the persistent daemon session still holds (text), so a
   `ryoku reload` or relogin lands back on the thread instead of an empty chat.
   A new `ryoku-rashin chat --history` replays the session transcript
   (`rashin/backend/chatcli.go`, `services/Needle.qml`).
-- **Browse and resume past conversations from the sidebar.** The chat header
+- **Browse and resume past conversations from Ask.** The chat header
   gained a history button: it opens a drawer listing every stored session
   (newest first, by title) plus New Chat. Picking one loads it into the
   thread, matching the dashboard's session drawer. New
@@ -2709,24 +2883,20 @@
   fenced code are untouched, and vault docs stay soft-wrapped
   (`modules/bar/panel/PanelChat.qml`, `rashin/backend/web/js/markdown.js`,
   `rashin/backend/web/js/chat.js`).
-- **Sidebar downloads that share a title no longer vanish after "done".** With
-  no cobalt instance reachable, the yt-dlp fallback downloaded straight into the
-  stash under `%(title)s.%(ext)s`; distinct videos that generate the same title
-  (for example several captionless posts by one author, all named
-  `Video by <author>`) collided, so yt-dlp skipped every one after the first as
-  "already downloaded" and exited 0. The queue showed "done" while nothing new
-  landed. The fallback now downloads into a private temp dir and moves each
-  result into the stash through the same `dest_for` disambiguator the cobalt path
-  uses, so a collision lands as "name (1)" instead of being dropped; its stdin is
-  tied to `/dev/null` so an ffmpeg merge can never stall on the inherited pipe
-  (`hyprland/scripts/stash-cobalt.sh`).
+- **Tools downloads that share a title no longer vanish after "done".** With no
+  cobalt instance reachable, the yt-dlp fallback wrote directly under the title;
+  distinct videos with the same generated title collided, so yt-dlp skipped
+  every one after the first as "already downloaded" and exited successfully.
+  The fallback now downloads into a private temporary directory and moves each
+  result through the same destination disambiguator as cobalt, so a collision
+  lands as "name (1)" instead of being dropped. Its stdin is tied to `/dev/null`
+  so an ffmpeg merge cannot stall on an inherited pipe.
 - **The Tools download queue detects a no-op and offers a retry.** A row only
   reads "done" when the worker actually emits a saved file; a run that exits
   cleanly without saving anything (a skipped duplicate, a picker that fetched
   nothing) now shows a red failure with the reason instead of a false success.
   Finished rows carry a dismiss (x); failed rows also carry a retry that re-runs
-  the same link in place, and the progress bar hides once a row settles
-  (`services/Stash.qml`, `modules/bar/panel/PanelTools.qml`).
+  the same link in place, and the progress bar hides once a row settles.
 - **The dashboard chat recovers from a dead session instead of locking up.**
   If the hermes session dies, the composer stays usable and the banner reads
   "offline, send to reconnect"; the next message respawns the session. The
@@ -2882,29 +3052,13 @@
   (`modules/bar/barstyles/qsbar/controlcenter/`,
   `.../qsbar/variants/V2/modules/ReactorLayer.qml`,
   `hub/quickshell/pages/BarStudioPage.qml`).
-- **Super+S opens a feature sidebar: screen time and downloads.** The old file
-  stash (the board, LocalSend send and receive, the drag-to-edge stash) is
-  retired, and the sidebar moved off Super+T (now free) onto Super+S. Usage is a
-  local screen-time overview built from a tracker that samples the focused app
-  every few seconds and keeps the day history under ~/.local/state/ryoku
-  (nothing leaves the box): today's active total, a seven-day trend, and the
-  apps used most. Tools is a downloader: paste a link and cobalt fetches it (now
-  handling cobalt's client-side local-processing and showing the instance's live
-  list of supported sites), recent downloads sit below newest-first, and
-  Convert/Install compress media or install a package
-  (`quickshell/shell/modules/bar/panel/`, `services/ScreenTime.qml`,
-  `services/Stash.qml`, `hyprland/scripts/stash-cobalt.sh`).
 - **Compress video and Install app open an in-shell file picker.** Picking files
-  for the Tools tab's Compress and Install (and their searchable launcher
-  entries) no longer spawns an external zenity dialog that closed the sidebar.
-  A paper-and-ink file browser opens inside the sidebar itself: navigate folders,
-  multi-select, and run, with the sidebar never closing. The launcher entries
-  deep-link straight to it (`stash#compress`, `stash#install`), the picker hands
-  the chosen paths to the ffmpeg compressor and the package installer, and the
-  zenity dependency plus the scripts' `--pick` mode are retired
-  (`quickshell/shell/modules/bar/panel/PanelPicker.qml`, `panel/Panel.qml`,
-  `panel/PanelTools.qml`, `services/Stash.qml`,
-  `apps/tools/compress-video.desktop`, `apps/tools/install-app.desktop`).
+  for Ask > Tools no longer spawns an external dialog that closes the shell
+  surface. A paper-and-ink file browser opens inside Ask: navigate folders,
+  select one or more files, and run. `ryoku-shell compress` and
+  `ryoku-shell install` deep-link straight to the matching picker, which hands
+  the chosen paths to the ffmpeg compressor or package installer. The external
+  picker dependency and scripts' old pick mode are retired.
 - **The desktop shell now runs as a single Quickshell instance.** The frame bar
   and its menus, the launcher, overview, board, wallpaper, visualiser, on-screen
   displays, notifications, capture, and the desktop widgets were seven separate
@@ -2925,17 +3079,6 @@
   and brand types, MusicBars, TrayMenu, NotificationCard, the Popout bases, and
   the audio and notification menus), both resolved through the Quickshell import
   path. See `docs/barstyles.md`; the ryoku-extras catalogue is migrated to it.
-- **Super+S opens capture as a quick-settings tab.** The screenshot and screen
-  record card that Super+S raised as a floating popup now lives as a Capture tab
-  in the Super+Esc quick settings rail, right after Weather, so it reads as part
-  of the same instrument rather than a separate surface. Super+S deep-links to
-  that tab (`quick-settings#capture`) and the card content is reused in place. The
-  tab carries a Recent section: the latest screenshots and recordings in two
-  labelled groups (recordings as poster frames with a play badge and duration),
-  each opening its folder in the file manager on click; the section fills in just
-  after the open so the sidebar never hitches. `ryoku doctor` adds the tab to a
-  rail still carrying the pre-capture default
-  (`quickshell/shell/modules/bar/framebars/menus/quicksettings/QuickSettingsCapture.qml`).
 
 ### Fixed
 - **The bar no longer resets to the sumi rail after an update.** `Frame` loads
@@ -3210,15 +3353,6 @@
   spacing, gap, frame size and roundness, edge melt, island/OSD scale, workspace
   filter and the unified desktop frame live. Nacre owns the popup contents; Obi
   reuses them.
-- **Stash is the floating "Features" sidebar: right edge, tall card, Super+T.**
-  The Stash board moved off the full-span left sidebar into a floating card that
-  slides open from the right edge (the music/Bluetooth popout envelope), centred
-  and tall, with room for more feature panes. Super+T toggles it; dragging a file
-  onto the right edge opens it too, and a drop there stashes straight into
-  ~/Downloads/Stash. The `stash` surface is non-full-span, default anchor `right`;
-  the system sidebar stays full-span (`quickshell/pill/FrameSurface.qml`,
-  `quickshell/pill/FrameMenuManager.qml`, `quickshell/pill/popouts/SidebarFeatures.qml`,
-  `quickshell/pill/shell.qml`, `framebars/FrameBars.js`).
 - **The bar is a pluggable style you pick, and a first alternate ships: Obi.**
   The four-rail frame bar is now one of several drop-in bar styles. A `barStyle`
   key in shell.json selects the active one; each style is a self-contained folder
@@ -3234,11 +3368,11 @@
   hover popout. Bar Studio becomes a style picker; for Sumi it edits the left
   rail, and for Obi it shows a per-widget show/hide panel, stored per style in an
   `obi` map in shell.json so a folder style owns its own settings. The shell's
-  global menus (wallpaper on Super+W, quick settings on Super+Esc, the capture
-  card on Super+S) adapt to a top-bar style: they drop from the top edge with
-  their own card, and the capture card lands top-left. `ryoku doctor` retires
-  top/bottom/right on existing installs. A guide to building your own style (with
-  the shell's IPC, cava, MPRIS and service singletons) is `docs/barstyles.md`
+  global surfaces continue to work under every style: Wallpaper, Controls, and
+  Capture keep their own placement and routing rather than being implemented by
+  the active bar. `ryoku doctor` retires top/bottom/right on existing installs.
+  A guide to building a style around the shell IPC, cava, MPRIS, and shared
+  services is `docs/barstyles.md`
   (`quickshell/pill/barstyles/`, `quickshell/pill/shell.qml`, `FrameMenuManager.qml`,
   `FrameMenu.qml`, `FrameSurface.qml`, `Singletons/Config.qml`,
   `hub/quickshell/pages/BarStudioPage.qml`, `hub/quickshell/Hub.qml`,
@@ -3278,15 +3412,14 @@
   non-sumi style active (e.g. Obi) the frame overlay's input region collapsed to
   click-through whenever no menu was open, so the floating island rendered but ate
   no clicks mid-capture: pause, stop, the mutes and dragging all fell through, and
-  only opening a menu (Super+S) revived it. The overlay now exposes the island's
-  own rect while a capture runs or its chooser is open, whatever the bar style
+  opening Capture revived it. The overlay now exposes the island's own rect
+  while a capture runs or its chooser is open, whatever the bar style
   (`quickshell/pill/shell.qml`).
-- **The Super+S capture card can arm the webcam mirror before recording.** The
-  mirror (webcam self-view) toggled only from the record island's pre-record
-  chooser, which is gone once a capture runs, so there was no way to set it up
-  from the Super+S menu. The card's Record row now carries a webcam toggle beside
-  the audio ones, so you activate and place the bubble before you start
-  (`quickshell/pill/popouts/CapturePopout.qml`).
+- **Capture can arm the webcam mirror before recording.** The mirror
+  (webcam self-view) toggled only from the record island's pre-record chooser,
+  which is gone once a capture runs. Capture's Record row now carries a webcam
+  toggle beside the audio options, so the bubble can be activated and placed
+  before recording starts.
 - **The overview's workspace and desktop switches no longer bounce you straight
   back.** Clicking a workspace cell, the "+", or a window dispatched the Hyprland
   focus and then closed the expo in the same breath; releasing the overlay's
@@ -3302,18 +3435,6 @@
   `quickshell/overview/DesktopStrip.qml`).
 
 ### Changed
-- **Super+Escape is now Ryoku's only full-height control sidebar.** Its existing
-  home controls, notification history, and weather view are independent,
-  catalogued modules selected from the fixed icon rail; media is registered as
-  an optional module for future configuration. The retired system sidebar,
-  illustrated power card, and recording deck are removed, while logout, lock,
-  restart, shutdown, and the performance profiles remain in Super+Escape.
-  Discord compaction now lives beside the Quick recording controls in the
-  Super+S capture card. Doctor removes the retired system surface without
-  touching sibling frame settings and preserves configured module ids across
-  schema normalization (`framebars/MenuCatalog.js`,
-  `quickshell/pill/framebars/menus/MenuQuickSettings.qml`,
-  `quickshell/pill/popouts/CapturePopout.qml`, `cli/internal/doctor`).
 - **The notification toasts slide in from their edge.** A toast used to open by
   the surface growing from nothing underneath it, which wiped the card into view
   top-down instead of animating it, and the compositor animated the layer on top
@@ -3426,25 +3547,6 @@
   `quickshell/pill/framebars/widgets/RailAction.qml`).
 
 ### Added
-- **Super+S opens a capture card, not a full-width menu.** The screenshot keybind
-  now grows a compact frame-edge card (the shared `PopoutCard` skin, like the
-  music and bluetooth cards) instead of the old in-band menu with its oversized
-  buttons. Screenshot is the quick path: a delay chip (0/1/3/5/10s), a save-target
-  chip (Screenshots folder, clipboard, or both), and four one-tap modes (All,
-  Screen, Window, Region). A "Beautify after" switch hands the saved shot to
-  Ryoshot; Record carries desktop/mic toggles and Screen/Region starts (the
-  floating island takes over the live controls) plus an "Edit in Ryomotion when
-  done" switch; a footer notes that Super+Shift+S opens Ryoshot. The delay, save,
-  beautify, audio and edit choices persist (`capture.json`, `record.json`) and the
-  terse chips carry hover bubbles. New `quickshell/pill/popouts/CapturePopout.qml`,
-  registered as a left surface (`quickshell/pill/FrameMenuManager.qml`,
-  `quickshell/pill/FrameSurface.qml`); `Singletons/Capture.qml` and
-  `Singletons/Recorder.qml` gain the persisted options and hand-offs.
-- **Beautify a shot and edit a recording straight from the card.** With "Beautify
-  after" on, a finished screenshot opens in Ryoshot's beautify editor
-  (`RYOSHOT_OPEN` loads the file into the compose phase). With "Edit in Ryomotion
-  when done" on, a finished Quick recording opens in Ryoku Motion once the clip
-  finalises (`hyprland/scripts/ryoku-cmd-edit-recording`).
 - **The dock previews an app's windows on hover.** Hovering a dock icon that has
   open windows grows a strip off the rail, welded to the icon, with a live
   thumbnail of each window (a `ScreencopyView` of the toplevel), its title, and a
@@ -3714,7 +3816,7 @@
   familiar quick settings, workspace, dock, tray, network, and clock flow on
   the left; the other rails are ready to enable in Bar Studio, a section of
   Ryoku Hub (Super+comma), where bounded widgets, menus, and the
-  preserved Stash and System surfaces can be arranged and saved through the
+  preserved custom surfaces can be arranged and saved through the
   normal configuration pipeline. `ok-frame` and `ryoku-frame` share this
   topology while changing only chrome and metrics. All frame menus, power,
   voice, keyring, and plugin surfaces use one monitor-local manager, which
@@ -3739,7 +3841,7 @@
 - **Sidebar cards carry a sumi edge.** A single 1 px light line along the top of
   the tiles, the media and calendar cards, and the docked footer band, like the
   lit edge of layered paper (`quickshell/pill/SumiEdge.qml`).
-- **Today's calendar cell wears the 力 seal.** The brand mark sits faint behind
+- **The current calendar cell wears the 力 seal.** The brand mark sits faint behind
   the day number, inside the primary-tinted ring
   (`quickshell/pill/Calendar.qml`).
 
@@ -4001,8 +4103,8 @@
   (`atollVariant`) now persists: it was in the Settings schema but missing from
   the Hub's store, so the choice was dropped on save.
 
-- **Sidebar hover-corners are reachable on a multi-monitor shared edge.** A
-  left/right sidebar arms only when the pointer reaches the corner where it
+- **Edge-panel hover corners are reachable on a multi-monitor shared edge.** A
+  panel arms only when the pointer reaches the corner where it
   clamps, but on a shared edge between two screens the pointer crosses to the
   neighbour before it can clamp, so that corner never armed. Each overlay now
   detects a flush-adjacent screen and, on that shared axis only, opens the arming
@@ -4480,12 +4582,10 @@
   returns a real error naming the fix (`install awww`, or `ryoku doctor` heals
   it), which the shell surfaces like any other wallpaper failure
   (`ipc/wallpaper.go`).
-- **The sidebars now close as fast as they open.** A keybind or click dismiss
-  sat through the 300ms hover-intent grace before it began melting, so `Super+D`
-  (and the right sidebar) snapped open but felt laggy to shut. The grace now
-  applies only to a hover-leave -- its real job, debouncing a graze across the
-  blob rim -- while a deliberate unpin melts at once, even under the pointer
-  (`quickshell/pill/popouts/Popout.qml`).
+- **The old edge panels close as fast as they open.** A keybind or click dismiss
+  no longer waits through the hover-intent grace before melting. The grace now
+  applies only to hover-leave, where it debounces a graze across the blob rim;
+  deliberate close is immediate (`quickshell/pill/popouts/Popout.qml`).
 - **Live (video) wallpapers stop freezing and play smooth and native.** Three
   bugs made a live wallpaper set, then freeze on the first frame, then stutter
   when it did move. (1) The daemon paused mpvpaper whenever the active workspace
@@ -4512,14 +4612,6 @@
   pinned at 60fps while the render capped near 30, sampling twice for every frame
   shown; it now follows the configured frame rate (default 30), roughly halving
   its steady-state cost (`Singletons/Spectrum.qml`).
-- **The left screen edge is clickable again (no dead strip while browsing).** The
-  left sidebar's drag-to-stash trigger masked a band the full hover-corner width
-  (`sidebarCornerSize`, ~54px scaled) down the entire left edge, but windows only
-  inset `gaps_out` (18px), so roughly 36px of every window's left edge silently
-  swallowed clicks for its whole height (a browser's back button, scrollbar, and
-  first tab sit under it). The band is now a thin sliver kept inside the frame gap:
-  it still opens the stash when a file is flung at the left edge, but never covers
-  window content (`pill/shell.qml`).
 - **`ryoku deploy` preserves every user file now, matching a packaged update.**
   The dev deploy rebuilt `~/.config/hypr` from the repo and carried across only
   seven named files, so any other user-owned file (an extra `.lua`, a custom
@@ -4590,24 +4682,6 @@
   keeps the IP auto-locate) and a `weatherUnit` ("auto" follows the locale, else
   celsius / fahrenheit), both set from Ryoku Settings' Global tab. A unit change
   re-fetches, so the reading, not just the degree symbol, is right.
-- **Two corner-hover sidebars, replacing the control deck.** Full-height panels
-  that melt out of the left and right frame edges and fuse into the top and bottom
-  frame, so a whole side swells open with no gap. Push the cursor into a top corner to open (a
-  short intent, a grace on leave), or toggle via IPC. **Left is Features** (the
-  Stash file board, room for more); **right is System**, the control centre folded
-  in from the old deck: 力 clock and weather, the session and quick toggles, the
-  screen-capture tools and a clipboard button, a volume fader, and a tab rail over
-  the notification digest, the month calendar, now-playing, the weather forecast,
-  and screen recording. Ryoku Settings' Shell section gains a **Sidebar** tab
-  (enable each side, pick and order each side's panes, open-on-hover vs click,
-  width, corner-hotspot size). Built on a new `Popout` `fullSpan` mode; the old
-  `DeckSurface` / `DeckPopout` control deck is gone.
-- **Drag a file to the left edge to stash it.** The left (Features) sidebar now
-  springs open when a file is dragged onto the left frame edge or corner -- a
-  masked `DropArea` band `sidebarCornerSize` deep, since a HoverHandler can't
-  fire while a drag holds the pointer -- so its Stash board is right there to
-  drop onto (the board copies the file in and the sidebar tucks away when the
-  drag ends; a drop on the edge itself stashes too).
 - **A global `roundness` knob and a Global settings tab.** One shell-wide inner
   corner radius (Ryoku Settings' new **Global** tab, alongside the frame melt,
   surface, shadow, and typography controls moved there) rounds every tile, card,
@@ -5026,14 +5100,6 @@
   disconnect, battery updates in place. Nothing connected renders nothing at
   all. The launcher socket's `state` dump gains `btConnected`
   (`BtConnections.qml`, instantiated in `shell.qml` under the Launcher card).
-- `ipc`: a new `ryoku-shell stash-send <file>` command opens the control deck's
-  LocalSend picker on that file (a new pill `stashSend` IpcHandler that shows the
-  stash and calls `openSendPicker`), so the Nautilus stash menu can hand a file to
-  the deck's send flow instead of reinventing device discovery. The path is the
-  raw remainder of the command line and goes through the qs client, so a path with
-  spaces survives intact; `stashSendPath` is unit-tested. `deploy.sh` also drops
-  the `ryoku-stash-menu.py` Nautilus extension into the user extensions dir for the
-  dev loop.
 - `quickshell/launcher` RyoTunes gains **shuffle** and **gapless prefetch**. A
   shuffle toggle in the now-playing transport (lit when on) reorders the queue via
   mpv's own `playlist-shuffle`/`playlist-unshuffle` (history and prev/next stay
@@ -5132,7 +5198,7 @@
   survive; `settings <json>` merges an edit; `forget` drops the entry. Enabling a
   plugin now also seeds, so its settings exist in the right place the moment it
   goes live.
-- `quickshell/pill` stash install: drop a file, get a launcher entry. Beyond
+- **Tools can install a dropped file and create its launcher entry.** Beyond
   AppImages and self-contained tarballs, the installer now handles native and
   portable package formats so they open afterwards:
   - Arch packages (`.pkg.tar.zst`, or any tar carrying a `.PKGINFO`) install with
@@ -5146,14 +5212,10 @@
   - `.deb` and `.rpm` payloads are extracted with bsdtar and run through the same
     app-discovery as tarballs (best-effort; an app that hardcodes system paths is
     better served by its native package or flatpak).
-  `Stash.qml` `hasInstallable` offers exactly these; self-extracting `.bin`/`.run`
-  stay out (running an arbitrary installer blind is unsafe). Covered by
-  `tests/stash-install.sh`.
-- `quickshell/pill` stash install now clears the source from the stash after a
-  successful install, so an installed app is not left duplicated as a leftover
-  drop (it already lives in the app store, or a system/flatpak install). It only
-  removes on success, never on failure, and `RYOKU_STASH_KEEP=1` opts out.
-  Covered by `tests/stash-install.sh`.
+  The installer offers exactly these formats; self-extracting `.bin` and `.run`
+  files stay out because running an arbitrary installer blind is unsafe.
+- **Tools removes the source after a successful install.** An installed app is
+  not left duplicated as a download; failure always preserves the source.
 - `quickshell/widgets`: desktop widgets on the wallpaper. A new `WlrLayer.Bottom`
   host (per monitor, below windows, namespace
   `ryoku-widgets`), supervised like the pill/visualiser via a `{"widgets", true}`
@@ -5185,23 +5247,14 @@
   and parsing live in `weather/lib/weather.js`, unit-tested by
   `weather/lib/weather.test.mjs`. A `Wallust` singleton watches
   `~/.cache/wallust/colors.json` so tinted widgets retune to the wallpaper.
-- `quickshell/pill` stash: a cobalt download window. The Download action now opens
-  a paste-the-link panel modelled on cobalt (https://github.com/imputnet/cobalt):
-  auto/audio/mute modes, a Paste button, and a processing queue that runs links in
-  order with per-item progress. A Remux tab rebuilds a media file's container
-  losslessly (no re-encode), and a drop zone takes files straight in. The engine is
-  cobalt: `stash-cobalt.sh` POSTs to a cobalt API instance (set `COBALT_API_URL`,
-  default `http://localhost:9000`; run one per cobalt's docs) and falls back to
-  yt-dlp when none is reachable, so a fresh install still downloads. Remux is a
-  local ffmpeg stream copy, the same on-device operation cobalt's own remux does.
-  The cobalt credit stays visible in the window since the engine is theirs.
-- `quickshell/pill` stash: LocalSend receive and send-a-note. The header's Receive
-  switch runs a LocalSend v2 server (`localsend.sh receive`, a self-signed HTTPS
-  endpoint that announces the machine on the LAN over multicast) which drops any
-  pushed file straight into the stash and shows a live tally; the Text action
-  sends a typed or pasted note (written to a temp file) to a picked device. The
-  `Stash` singleton drives both: the receiver streams `READY`/`INCOMING`/`SAVED`
-  lines parsed by a `SplitParser`, the rest reuses the existing send helpers.
+- **Tools gains a cobalt download view.** Paste a link, choose auto, audio, or
+  mute, and watch a sequential queue with per-item progress. Remux rebuilds a
+  media file's container losslessly, and a drop zone accepts local files. The
+  cobalt API defaults to loopback and falls back to yt-dlp when unavailable, so
+  downloads still work on a fresh install.
+- **Tools can receive through LocalSend and send a note.** Receive runs a local
+  LocalSend v2 server and shows a live tally as files arrive. Text writes a
+  typed or pasted note to a temporary file and sends it to the selected device.
 - `quickshell/pill`: weather now comes from Open-Meteo (no API key) instead of the
   rate-limited wttr.in scrape, with the resolved location cached at
   `~/.local/state/ryoku/weather-loc.json` so a restart skips the lookup. The
@@ -5333,8 +5386,8 @@
   in under one eyebrow with the count. Section eyebrows drop from eight to four,
   the interior hairline rules give way to spacing, the decorative Tools WaveMeter
   is gone, the masthead is slimmer, and the surface narrows from 660 to 590
-  scale-units. This also removes the void where Stash stretched to match the
-  taller right column. No functionality is dropped.
+  scale-units. This also removes the void left by the old file column. No
+  functionality is dropped.
 - `quickshell/pill`: the mixer popout is reworked from a row of vertical faders
   into an audio control center, while keeping the frame-edge melt and the
   `ryoku-shell mixer` pin. OUTPUT and INPUT each show the active device with an
@@ -5355,19 +5408,6 @@
   default card style (`defaults.desktopWidget.bg`) when the placement pins none,
   so a plugin like photo-frame can opt out of the host card (`bg: "none"`) and
   draw its own frame.
-- `quickshell/pill`: Stash, Tools, and Utilities are unified into one wide
-  `力 CONTROL DECK` surface instead of three separate pill popouts, opened by
-  `Super+D` (the old `Super+Z` and `Super+U` binds are removed). Single view, no
-  sub-tabs: a 力 masthead over two hairline-split columns (Stash left; Tools,
-  Controls and Record right), corner registration ticks, mono micro-labels and tabular
-  figures in the hub Profile dossier idiom. Stash drops onto a filling tray with
-  the Profile's square spec grid; its action bar is evenly spaced; the Send,
-  Receive, Download and Task sub-screens are dismissed by a single Back control
-  in the stash header beside the file count. New `DeckSurface`, `DeckStash`,
-  `DeckTools`, `DeckControls`, `DeckRecord`, `DeckSegmented`, `MicroLabel`, `SpecRow`,
-  `CornerTicks`; the standalone `StashSurface`, `ToolkitSurface`, and
-  `UtilitiesSurface` are retired, and the old Caffeine tile drops out (Keep-Awake
-  covers it).
 - `quickshell/pill`: the battery surface shows real Health now, read from the
   physical battery device (the synthetic UPower display device reports no
   capacity), and Rate/Time read `0 W`/`Full` on AC instead of bare dashes. The
@@ -5390,22 +5430,6 @@
   idiom. A 力 MEDIA eyebrow leads the title and artist, the source/time line is
   mono uppercase, the play seal is flat vermilion (no gloss), and corner
   registration ticks frame it. The album art and the Ryoku wave seek line stay.
-- `quickshell/pill` stash: the action bar lights only what applies. It reads the
-  live file types (`Stash.hasMedia` / `hasInstallable`), so Compress dims unless
-  there is a video/image/audio file and Install dims unless there is an AppImage or
-  tarball; a lone note no longer offers to compress or install it. The LocalSend
-  send sheet gained a Scan again button (and a header rescan icon) so an empty
-  device list can be refreshed without reopening it.
-- `quickshell/pill` stash: the surface is rebuilt around a full-width file grid
-  with a toolkit-style action bar (Send all, Text, Download, Compress, Install) in
-  place of the cramped left rail, plus a header file count and Receive switch.
-  Sends raise a focused sheet (LAN scan, pick a device, then a confirmation naming
-  exactly what goes where), and every rail job now opens on a confirm step
-  (download shows the clipboard link it found) before it runs; removing a file
-  confirms inline on its tile rather than vanishing on a stray click. The look
-  follows the Hub's flat tiles, hairline rules, and type tags in the pill palette,
-  with a brand drop ring while a drag is over the surface. `StashRail.qml` is
-  retired; `StashActions`, `StashSendSheet`, and `StashReceive` are new.
 - `quickshell/pill` update island: surfaces the git update channel it was built
   for. Its count and target version read the commits the checkout is behind
   `origin/main` (from `ryoku status --json`) rather than pacman package counts.
@@ -5549,13 +5573,11 @@
   temp and an atomic rename, and both `ryoku-plugins-place` and `discover.sh`
   treat a missing, empty, or corrupt file as `{}` and self-heal it - so one bad
   write no longer blanks the installed list and breaks the plugin store.
-- `hyprland/scripts/stash-install.sh`: a `.deb`/`.rpm` whose desktop `Exec` is an
-  absolute path (every native package ships one, e.g. `/opt/Termius/termius-app`)
-  now resolves onto the extracted tree at that exact path. It used to rewrite the
-  `Exec` by searching the whole payload for the basename and taking the first hit,
-  which matched an unrelated same-named file when one sorted first: Termius ships
-  an `etc/cron.daily/termius-app` cron script, so the launcher ran the cron job and
-  the app never opened. Covered by `tests/stash-install.sh`.
+- **The package-file installer resolves absolute desktop commands correctly.**
+  A `.deb` or `.rpm` desktop entry whose `Exec` uses an absolute path now maps
+  onto that exact path in the extracted tree. Searching the payload by basename
+  could choose an unrelated script first, so an installed app appeared in the
+  launcher but opened the wrong executable.
 - `shell/deploy.sh`: the Hyprland config swap is now near-atomic, so a reload can
   never catch `hyprland.lua` missing. It built `~/.config/hypr` with `rm -rf` then
   `cp -a`, leaving a long window with no `hyprland.lua`; a manual reload or a fresh
@@ -5574,20 +5596,17 @@
   keyboard interactivity.
 - `quickshell/pill` LocalSend receive: incoming transfers now require consent.
   The receiver auto-accepted any device's `prepare-upload` and dropped the bytes
-  straight into the stash. It now holds each offer at `prepare-upload`, shows
+  straight into the download folder. It now holds each offer at `prepare-upload`, shows
   "‹device› wants to send ‹N› file(s)" with Accept/Decline in the receive sheet,
   and issues an upload token only once you Accept (Decline or 60s of silence
   returns 403, so declined bytes never cross the wire). The shell answers over
   the receiver's stdin; the Python program now loads from fd 3 to leave stdin
   free for that channel. Covered by `tests/localsend-receive.sh`.
-- `quickshell/pill` stash install: the control deck now steps aside for the sudo
-  prompt. Installing a pacman package shells out to `pkexec`, whose polkit window
-  (`hyprpolkitagent`) landed behind the deck's overlay layer and could not take
-  the password (the deck holds an exclusive keyboard grab), forcing a close-deck,
-  type-password, reopen dance. `stash-install.sh` emits an `@AUTH` marker before
-  the privileged step, the stash reads it live and the pill dismisses the deck so
-  the prompt takes focus, and a window rule floats and centres the
-  `hyprpolkitagent` prompt. Covered by `tests/stash-install.sh`.
+- **Tools steps aside for the sudo prompt during package installation.**
+  The polkit window used to land behind the overlay and could not take the
+  password while the shell held an exclusive keyboard grab. The installer now
+  marks the privileged step, dismisses the shell surface, and a window rule
+  floats and centres the prompt.
 - `quickshell/visualizer` no longer pins a CPU core and overheats the machine on a
   high-refresh panel. It ran a `FrameAnimation` once per vsync (re-rendering 96
   bands plus the bloom at 165Hz though cava only feeds 60fps), and the `wave` style
@@ -5618,8 +5637,8 @@
 - `quickshell/pill`: hover works again across the whole island. The neck/reveal
   hover zone sitting in front of the pill (added so crossing the tray icons would
   not collapse the island) was a covering sibling holding a `HoverHandler`, which
-  swallowed hover from every surface beneath it, so stash tiles, action buttons,
-  device rows and the like never lit or revealed their hover actions. Island hover
+  swallowed hover from every surface beneath it, so file tiles, action buttons,
+  device rows and other controls never lit or revealed their hover actions. Island hover
   is now read by a `HoverHandler` on the pill itself (an ancestor of the surfaces,
   so it never blocks their own hover) OR'd with a neck-only zone that no longer
   overlaps the body.
@@ -5751,21 +5770,6 @@
 - `quickshell/pill`: the REC activity chip stops the recording on click. Its dot
   squares into a stop icon on hover, so the chip reads as a control rather than a
   readout, and the recording can be ended without opening the Utilities surface.
-- `quickshell/pill`: three more native surfaces grown from the pill. A SYSTEM
-  card (`SysInfoSurface` + `Singletons/SysInfo`) reads user@host, distro, kernel,
-  CPU/GPU, memory and disk meters, uptime and packages; a file STASH
-  (`StashSurface` + `Singletons/Stash` + `hyprland/scripts/localsend.sh`) is a
-  drop-target grid over `~/Downloads/Stash` that sends any file to a LAN peer over
-  LocalSend; and current weather (`Singletons/Weather`, from wttr.in) shows in the
-  calendar surface and the hover clock. The card and stash open from new hover-row
-  glyphs, and the stash also rides the activity strip as a live chip.
-- `quickshell/pill`: the STASH gains an action rail down its left edge: send the
-  whole stash over LocalSend, install dropped AppImages and tarballs into the app
-  launcher (Super+Space), compress videos and images through ffmpeg, and pull
-  media in from the clipboard with yt-dlp. Adds `StashRail`, `StashTaskOverlay`,
-  the `send`/`install`/`compress`/`download` `GlyphIcon` glyphs, `Singletons/Stash`
-  actions, and the `hyprland/scripts/stash-install.sh`, `stash-compress.sh`,
-  `stash-download.sh` helpers (plus a `send-all` mode on `localsend.sh`) behind them.
 - `quickshell/pill`: a TOOLKIT centre island (Super+D) of screen tools that grow
   from the pill and run self-contained `hypr/scripts` helpers: Google Lens (upload
   a region and open the search), a color picker (hyprpicker to the clipboard), OCR
@@ -5789,9 +5793,9 @@
 - `ryoku-cmd-screenrecord`: starting a recording no longer raises a "recording
   started" toast. The REC chip on the pill's activity strip is the live indicator,
   so the toast was redundant noise; the stop and failure notifications stay.
-- `quickshell/pill`: the Stash tiles show a file-type glyph (archive, image, film,
-  music, code, document) instead of a large extension label, and the empty state
-  is a faint 力 watermark over a minimal prompt, for a less templated look.
+- `quickshell/pill`: the old file tiles show a file-type glyph (archive, image,
+  film, music, code, document) instead of a large extension label, and the empty
+  state is a faint 力 watermark over a minimal prompt.
 - Relocated from the top-level `shell/` to `ryoku/shell/` as part of folding the
   whole desktop into one `ryoku/` tree. The Hyprland config moved to
   `ryoku/hyprland` (the single Hyprland config); the duplicate `fish` was dropped
@@ -5823,7 +5827,6 @@
   takes a ryoshot screenshot; dropped the SUPER-tap launcher and `SUPER+T` float.
   `SUPER+[1..0]` focus workspaces, `SUPER+SHIFT+[1..0]` move the window there.
   `SUPER+N` opens Neovim, `SUPER+ALT+E` opens yazi; `EDITOR`/`VISUAL` are nvim.
-- `binds.lua`: Super+Z opens the file stash.
 - `input.lua`: matched the upstream Ryoku input, `sensitivity` 0, no explicit
   `accel_profile` (libinput's adaptive default), `touchpad.natural_scroll` false,
   and hardware cursors. The shell's reversed scroll and a positive sensitivity
@@ -5879,8 +5882,8 @@
   instead of a synthetic wave, so the bars read as real playback levels or rest
   flat, the way VoiceBars already treats the mic.
 - `quickshell/pill`: the media player surface is reachable from the UI. Tapping
-  the now-playing music island opens it; the tap was wired to the file stash, so
-  the media surface had no entry point other than the IPC command.
+  the now-playing music island opens it; the tap was wired to the old file board,
+  so the media surface had no entry point other than the IPC command.
 - `quickshell/pill`: Keep-Awake now holds across a shell reload. The in-process
   Wayland `IdleInhibitor` dies with the pill on every respawn, so a durable
   `ryoku-cmd-caffeine` systemd-inhibit (launched outside the shell) bridges the
@@ -5895,8 +5898,8 @@
   close spring was underdamped enough to spring the body back open past flush,
   re-triggering the hover and sticking the popout (power especially) open; the
   close now eases out with no overshoot.
-- `quickshell/pill`: the activity-strip chips (REC stop, stash) now receive hover
-  and clicks. The strip rides left of the pill, outside the pill's input mask, so
+- `quickshell/pill`: the activity-strip chips now receive hover and clicks. The
+  strip rides left of the pill, outside the pill's input mask, so
   its region was never grabbed and clicks fell through to the window behind; the
   mask now covers the strip's bounds, like the music island and edge popouts.
 - `ipc/wallpaper.go`: resolve a symlinked wallpaper directory (`EvalSymlinks`)

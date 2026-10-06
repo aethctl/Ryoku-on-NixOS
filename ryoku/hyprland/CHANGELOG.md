@@ -2,7 +2,18 @@
 
 ## Unreleased
 
+### Added
+- **Super+Alt+Space opens the Rashin app.** The companion window summons the
+  single-instance way: a second press focuses the open window instead of
+  spawning a twin, and a window rule floats and centres it like the other
+  app windows (`modules/binds.lua`, `modules/window_rules.lua`).
+
 ### Changed
+- **Login raises the reload cover.** The session autostart chain calls
+  `ryoku-reload-cover begin boot` after the environment push and before
+  `session-start` restarts the shell services, so the desktop is covered from
+  the greeter handoff until the loaded shell releases it
+  (`modules/autostart.lua`).
 - **Super+Q asks first when iRiS is set to.** The close bind reads
   `shell.json` in place and only goes through the shell when the iRiS bar
   style is active with its close confirmation on; every other close stays a
@@ -14,6 +25,12 @@
   (`modules/binds.lua`, `modules/ryoshot.lua`).
 
 ### Fixed
+- **Arrow keys still move focus when a window is maximized.** Super+D
+  maximizes, and with the compositor's default the direction focus binds then
+  refuse to leave a maximized or fullscreen window: on the scrolling layout
+  the maximized window covers the tape, so the neighbour beside it becomes
+  unreachable until the state clears. Direction focus now moves to the
+  neighbour and leaves the maximized window maximized (`modules/binds.lua`).
 - **Ryoku Settings opens inside the work area.** Its full-page float was sized
   from the whole monitor, so it slid under whatever the shell reserves (the
   iRiS frame's edges, a bar). It now fits the work area with the same gaps and

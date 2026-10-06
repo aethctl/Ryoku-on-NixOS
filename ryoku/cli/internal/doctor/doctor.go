@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"ryoku-cli/internal/sys"
+	"ryoku-cli/internal/updater"
 	"strconv"
 	"strings"
 	"syscall"
@@ -165,11 +166,12 @@ func reconcilers() []reconciler {
 		{i18n.T("quick-settings stage tab"), reconcileStageModule},
 		{i18n.T("ryostage cache"), reconcileRyostageCache},
 		{i18n.T("stage migration leftovers"), reconcileStageLeftovers},
-		{i18n.T("retired system sidebar"), reconcileLegacySystemSidebar},
-		{i18n.T("stash features sidebar anchor"), reconcileStashSidebar},
-		{i18n.T("sidebar settings rework"), reconcileSidebarRework},
+		{i18n.T("retired sidebar settings"), reconcileSidebarRework},
+		{i18n.T("retired panel keybind"), reconcileAskKeybind},
+		{i18n.T("retired Shima frame music key"), reconcileShimaFrameMusic},
 		{i18n.T("shipped app packages"), reconcileShippedApps},
 		{i18n.T("retired app packages"), reconcileRetiredApps},
+		{i18n.T("retired compositor"), reconcileRetiredCompositor},
 		{i18n.T("release control manifest"), reconcileManifest},
 		{i18n.T("ghostty theme include"), reconcileGhostty},
 		{i18n.T("obsidian palette snippet"), reconcileObsidianSnippet},
@@ -192,7 +194,6 @@ func reconcilers() []reconciler {
 		{i18n.T("decor art"), reconcileRyodecors},
 		{i18n.T("Hyprland config integrity"), reconcileHyprlandConfig},
 		{i18n.T("niri config integrity"), reconcileNiriConfig},
-		{i18n.T("mango config integrity"), reconcileMangoConfig},
 		{i18n.T("window manager plugin builds"), reconcileWmPlugins},
 		{i18n.T("stale window-border pin"), reconcileBorderPin},
 		{i18n.T("orphaned theme.lua"), reconcileThemeLua},
@@ -210,6 +211,7 @@ func reconcilers() []reconciler {
 		{i18n.T("failed services"), reconcileFailedUnits},
 		{i18n.T("btrfs device health"), reconcileBtrfsHealth},
 		{i18n.T("wireless regulatory domain"), reconcileWifiRegdom},
+		{i18n.T("Wi-Fi access-point pins"), reconcileWifiBssidPin},
 		{i18n.T("ASUS Aura lighting provider"), reconcileAsusAura},
 		{i18n.T("QMK/VIA keyboard lighting provider"), reconcileQMK},
 		{i18n.T("display backlight"), reconcileBacklight},
@@ -877,16 +879,15 @@ func reconcilePacmanLock(checkOnly bool) recResult {
 // ---- reconciler: stale update run-state --------------------------------------
 
 // reconcileStaleUpdateRun clears the run-state file a crashed `ryoku update`
-// left in "running" (or an unanswered "prompt"): the shell's update island and
-// the Hub keep rendering that phantom run for the rest of the session. A live
-// `ryoku update` (stage 1 or --stage2) owns the file and is left alone; so is
-// the update this doctor may itself be running inside (the process match).
-// updateProcessLive: is a `ryoku update` (stage 1 or --stage2) running right
-// now? A package var so tests can stub it: a real pgrep scan is neither
-// hermetic (a dev's live update flips the result) nor guaranteed cheap.
-var updateProcessLive = func() bool {
-	return exec.Command("pgrep", "-f", "ryoku update").Run() == nil
-}
+// left in "running" (or an unanswered "prompt" or password request): the Hub
+// keeps rendering that phantom run for the rest of the session. The file names
+// the pid that owns it; a live `ryoku update` under that pid (stage 1 or
+// --stage2, or the update this doctor may itself be running inside) is left
+// alone. A document with no pid has no owner at all.
+//
+// runOwnerLive is a package var so tests can stub it: a real process check is
+// not hermetic (a dev's live update flips the result).
+var runOwnerLive = updater.RunOwnerLive
 
 func reconcileStaleUpdateRun(checkOnly bool) recResult {
 	dir := os.Getenv("XDG_RUNTIME_DIR")
@@ -900,11 +901,12 @@ func reconcileStaleUpdateRun(checkOnly bool) recResult {
 	}
 	var st struct {
 		Phase string `json:"phase"`
+		PID   int    `json:"pid"`
 	}
-	if json.Unmarshal(b, &st) != nil || (st.Phase != "running" && st.Phase != "prompt") {
+	if json.Unmarshal(b, &st) != nil || (st.Phase != "running" && st.Phase != "prompt" && st.Phase != "auth") {
 		return okRes(i18n.T("update run-state is settled"))
 	}
-	if updateProcessLive() {
+	if runOwnerLive(st.PID) {
 		return okRes(i18n.T("an update is running; run-state is live"))
 	}
 	if checkOnly {
@@ -1166,72 +1168,6 @@ func reconcileIconFont(checkOnly bool) recResult {
 			withFix("sudo pacman -S ttf-material-symbols-variable")
 	}
 	return fixedRes(i18n.T("installed the Material Symbols icon font; `ryoku reload` picks it up"))
-}
-
-// ---- reconciler: stale dev/recovery residue ------------------------------------
-
-// reconcileDevResidue clears home-installed Ryoku artifacts off a packaged box.
-// deploy.sh (the dev loop, and `ryoku recovery`) installs binaries into
-// ~/.local/bin and QML modules into ~/.local/lib/qt6/qml; both outrank the
-// packaged copies on PATH and the QML import path, so once the box is back on
-// the pacman channel the leftovers pin it to whatever vintage last deployed
-// them and every later package update is silently shadowed. a checkout box
-// (git channel) IS the dev loop: left alone.
-func reconcileDevResidue(checkOnly bool) recResult {
-	if sys.ResolveRepo() != "" {
-		return okRes(i18n.T("checkout box; home-deployed artifacts are the live desktop"))
-	}
-	if !sys.PkgInstalled("ryoku-desktop") {
-		return okRes(i18n.T("not a packaged install"))
-	}
-	var residue []string
-	if qml := filepath.Join(sys.Home(), ".local", "lib", "qt6", "qml", "Ryoku"); sys.Exists(qml) {
-		residue = append(residue, qml)
-	}
-	// every ~/.local/bin entry that shadows a Ryoku-packaged /usr/bin binary.
-	// deploy.sh installs a wide, release-dependent set (shell, livewall, CLI,
-	// hub, rashin, hardware helpers, app bins), so pacman is the manifest: a
-	// home copy of anything a ryoku package ships is residue. A fixed name
-	// list here once missed ryoku-livewall and the helpers, leaving a stale
-	// player and tools shadowing every later update. Anything the packages
-	// never shipped (a user's own script) has no ryoku-owned /usr/bin twin
-	// and is left alone; a wrapper deliberately named after a packaged ryoku
-	// tool is treated as residue too -- doctor owns converging the packaged
-	// toolchain, and an intercepted tool is exactly the drift it heals.
-	localBin := filepath.Join(sys.Home(), ".local", "bin")
-	entries, _ := os.ReadDir(localBin)
-	for _, e := range entries {
-		usr := "/usr/bin/" + e.Name()
-		if !sys.Exists(usr) {
-			continue
-		}
-		owner, err := sys.RunOut("pacman", "-Qoq", usr)
-		if err != nil || !strings.HasPrefix(strings.TrimSpace(owner), "ryoku") {
-			continue
-		}
-		residue = append(residue, filepath.Join(localBin, e.Name()))
-	}
-	if len(residue) == 0 {
-		return okRes(i18n.T("no home-deployed artifacts shadowing the packages"))
-	}
-	if checkOnly {
-		return wouldRes(i18n.T("stale home-deployed artifacts shadow the packaged install: %s"), strings.Join(residue, ", ")).
-			withFix(i18n.T("ryoku doctor removes them; the packaged copies take over on the next reload"))
-	}
-	// report what could not be removed: a survivor keeps shadowing the packaged
-	// install (Hyprland's autostart relaunches it by PATH at next login), so
-	// claiming "removed" while it lives would hide the very drift this heals.
-	var kept []string
-	for _, p := range residue {
-		if err := os.RemoveAll(p); err != nil {
-			kept = append(kept, p)
-		}
-	}
-	if len(kept) > 0 {
-		return failRes(i18n.T("could not remove home-deployed artifact(s) still shadowing the packaged install: %s"), strings.Join(kept, ", ")).
-			withFix(i18n.T("remove them by hand (check ownership/permissions), then `ryoku reload`"))
-	}
-	return fixedRes(i18n.T("removed %d home-deployed artifact(s) shadowing the packaged install; `ryoku reload` switches to the packaged shell"), len(residue))
 }
 
 // ---- reconciler: ryostore cache directory ------------------------------------
@@ -1857,8 +1793,8 @@ func normalizeFrameBars(v any) (map[string]any, []string) {
 
 // retiredShellKeys are shell.json keys no shipped surface reads any more: the
 // Atoll bar geometry and skins, its module/toggle lists, the island knobs, and
-// the retired sidebar controls. Current frame bars and sidebars replace that
-// state, so an upgrade sheds it rather than keeping dead settings forever.
+// the retired sidebar controls. Current frame bars and fixed corner panels
+// replace that state, so an upgrade sheds it rather than keeping dead settings.
 var retiredShellKeys = []string{
 	"atollVariant", "barEnabled", "barHeight", "barLayoutCentre", "barLayoutLeft",
 	"barLayoutRight", "barOccupiedWorkspaces", "barPosition", "barShowMedia",
@@ -1878,10 +1814,6 @@ func migrateShellConfig(raw []byte) ([]byte, []string, error) {
 	if _, present := cfg["frameBars"]; !present {
 		cfg["frameBars"] = defaultFrameBarsFromLegacy(cfg)
 		changes = append(changes, i18n.T("migrated Atoll settings to frame bars"))
-	}
-	if _, present := cfg["sidebars"]; !present {
-		cfg["sidebars"] = defaultSidebars()
-		changes = append(changes, i18n.T("seeded sidebar settings"))
 	}
 	retiredSidebarSettings := false
 	for _, key := range []string{"sidebarLeftPanes", "sidebarRightPanes", "sidebarWidth"} {
@@ -3174,6 +3106,11 @@ func shellDaemonReachable() bool {
 // would resurrect a stale daemon; a checkout box's home deploy IS the
 // desktop, so PATH is right there.
 func startShellDaemon() error {
+	// A dead daemon means a bare desktop already; raise the cover before the
+	// fresh shell cold-loads so recovery ends on an animation, not a flicker.
+	// When reached via restartShellDaemon the first cover is still up and the
+	// launcher's single-instance claim makes this a no-op.
+	updater.BeginReloadCover()
 	// Prefer the unit so a recovered daemon stays supervised; the reload lets a
 	// freshly delivered unit be found. Falls through to a bare start where the
 	// unit does not exist, so recovery never depends on it. The env push first:
@@ -3305,6 +3242,10 @@ func daemonBinaryReplaced(cmdline, exeLink string) bool {
 // socket), then start a fresh daemon, which inherits doctor's live session
 // environment and passes it to every component it supervises.
 func restartShellDaemon() error {
+	// The quit below drops the shell to a bare desktop until the fresh
+	// daemon's shell comes back; the cover rides the gap and the new shell
+	// finishes it on readiness, same contract as an update reload.
+	updater.BeginReloadCover()
 	quitShellDaemon()
 	return startShellDaemon()
 }
@@ -3616,7 +3557,8 @@ func balancedRunes(s string, open, shut rune) bool {
 // ---- reconciler: failed systemd units ----------------------------------------
 
 func reconcileFailedUnits(checkOnly bool) recResult {
-	// Clear the lingering transient app scopes (safe: the app is already gone),
+	// Clear the lingering transient app scopes (safe: the app is already gone)
+	// and the TPM units that failed only for want of NvPCRs (reconcile_tpm_nvpcr.go),
 	// then report whatever real failures remain.
 	var reset int
 	if !checkOnly {
@@ -3625,6 +3567,7 @@ func reconcileFailedUnits(checkOnly bool) recResult {
 				reset++
 			}
 		}
+		reset += len(clearNvpcrFailures(failedUnits()))
 	}
 	var failed []string
 	failed = append(failed, failedUnits()...)
@@ -3637,7 +3580,7 @@ func reconcileFailedUnits(checkOnly bool) recResult {
 	}
 	if len(failed) == 0 {
 		if reset > 0 {
-			return fixedRes(i18n.T("reset %d stale app scope(s)"), reset)
+			return fixedRes(i18n.T("cleared %d failed unit(s) with nothing left wrong (stale app scopes, TPM NvPCR setup)"), reset)
 		}
 		return okRes(i18n.T("no failed services"))
 	}
@@ -3763,13 +3706,47 @@ func stripRyokuRepoStanza(conf []byte) []byte {
 // difference never reads as a conflict.
 func trimTrailing(b []byte) []byte { return bytes.TrimRight(b, " \t\r\n") }
 
+// untouchedSinceInstall reports whether a live config predates the box itself.
+// pacman lays a file with the timestamp it carries in the package, and any
+// write on the box (an editor, sed, the installer) stamps it with the time of
+// that write; a file older than the box's first pacman transaction is exactly
+// what an older package shipped. Taking the .pacnew then loses nothing: it is
+// the update pacman would have applied itself, had its record of the old file
+// matched. An unknown install time never qualifies. pure.
+func untouchedSinceInstall(liveMTime, installedAt time.Time) bool {
+	return !installedAt.IsZero() && liveMTime.Before(installedAt)
+}
+
+// boxInstalledAt is the time of the box's first pacman transaction, the first
+// line of pacman.log ("[2026-06-17T16:10:08+0000] ..."); zero when unreadable.
+// A var so tests pin it.
+var boxInstalledAt = func() time.Time {
+	f, err := os.Open("/var/log/pacman.log")
+	if err != nil {
+		return time.Time{}
+	}
+	defer f.Close()
+	line, _ := bufio.NewReader(f).ReadString('\n')
+	stamp, _, ok := strings.Cut(strings.TrimPrefix(line, "["), "]")
+	if !ok {
+		return time.Time{}
+	}
+	t, err := time.Parse("2006-01-02T15:04:05-0700", stamp)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
 // reconcilePacnew resolves the .pacnew files pacman drops when it upgrades a
 // package whose tracked /etc file the install (or a later edit) changed. it
-// auto-clears only the provably safe ones -- a .pacnew identical to the live
-// file, or a pacman.conf whose sole diff is the [ryoku] repo stanza the
-// installer appends -- and never overwrites a user-modified base config with the
-// packaged default. genuine merges are reported for `sudo pacdiff`. idempotent:
-// once the safe ones are gone a re-run only sees (and reports) the conflicts.
+// auto-resolves only the provably safe ones: a .pacnew identical to the live
+// file, a pacman.conf whose sole diff is the [ryoku] repo stanza the installer
+// appends, or a re-commented locale.gen are dropped; a live file nobody has
+// written since before the box was installed is replaced by the packaged
+// update. it never overwrites a config written on this box. genuine merges are
+// reported for `sudo pacdiff`. idempotent: once the safe ones are gone a
+// re-run only sees (and reports) the conflicts.
 func reconcilePacnew(checkOnly bool) recResult {
 	if sys.NixBackend() {
 		return okRes("pacman configuration repair is not applicable on NixOS")
@@ -3780,20 +3757,30 @@ func reconcilePacnew(checkOnly bool) recResult {
 	if len(files) == 0 {
 		return okRes(i18n.T("no pending config updates"))
 	}
+	installedAt := boxInstalledAt()
 	resolved, conflicts := 0, 0
 	for _, pacnew := range files {
 		live := strings.TrimSuffix(pacnew, ".pacnew")
 		lb, lerr := os.ReadFile(live)
 		pb, perr := os.ReadFile(pacnew)
-		if lerr != nil || perr != nil || classifyPacnew(live, lb, pb) == pacnewConflict {
+		if lerr != nil || perr != nil {
 			conflicts++
 			continue
+		}
+		apply := []string{"rm", "-f", pacnew}
+		if classifyPacnew(live, lb, pb) == pacnewConflict {
+			st, err := os.Stat(live)
+			if err != nil || !untouchedSinceInstall(st.ModTime(), installedAt) {
+				conflicts++
+				continue
+			}
+			apply = []string{"mv", "-f", pacnew, live}
 		}
 		if checkOnly {
 			resolved++
 			continue
 		}
-		if err := sys.Sudo("rm", "-f", pacnew); err != nil {
+		if err := sys.Sudo(apply...); err != nil {
 			conflicts++
 			continue
 		}
@@ -3801,15 +3788,15 @@ func reconcilePacnew(checkOnly bool) recResult {
 	}
 	if conflicts == 0 {
 		if checkOnly {
-			return wouldRes(i18n.T("%d pending .pacnew are safe to drop (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)"), resolved)
+			return wouldRes(i18n.T("%d pending .pacnew are safe to resolve (identical to the live config, only the [ryoku] repo addition, a re-commented locale.gen, or a config never edited on this box)"), resolved)
 		}
-		return fixedRes(i18n.T("cleared %d safe .pacnew (identical to the live config, only the [ryoku] repo addition, or a re-commented locale.gen)"), resolved)
+		return fixedRes(i18n.T("resolved %d safe .pacnew (identical to the live config, only the [ryoku] repo addition, a re-commented locale.gen, or a config never edited on this box)"), resolved)
 	}
 	msg := warnRes(i18n.T("%d pending config update(s) (.pacnew) need review"), conflicts)
 	if resolved > 0 {
-		verb := i18n.T("cleared")
+		verb := i18n.T("resolved")
 		if checkOnly {
-			verb = i18n.T("safe to drop")
+			verb = i18n.T("safe to resolve")
 		}
 		msg = warnRes(i18n.T("%d pending config update(s) (.pacnew) need review (%d %s)"), conflicts, resolved, verb)
 	}
@@ -3967,7 +3954,7 @@ func tailLines(s string, n int) string {
 // older ISO, or `ryoku recovery` collides with the package on `pacman -Syu`
 // ("exists in filesystem") and aborts the whole atomic transaction, so no update
 // lands. `ryoku update` now passes --overwrite for these
-// (updater.ryokuOverwriteGlob), but a box already wedged cannot reach that fixed
+// (updater.RyokuOverwriteGlob), but a box already wedged cannot reach that fixed
 // binary; clearing the copies here lets the next update adopt them.
 var ryokuSystemGlobs = []string{
 	"/usr/bin/ryoku-*",
@@ -3978,10 +3965,12 @@ var ryokuSystemGlobs = []string{
 	"/etc/systemd/logind.conf.d/10-ryoku-lid.conf",
 }
 
-// pkgOwnsFile reports whether an installed package owns path. A var so tests stub
-// the probe without a real pacman database.
+// pkgOwnsFile reports whether an installed package owns path. Only the exit
+// status is the answer: wired to stdio, pacman printed "<path> is owned by
+// <pkg>" for every one of the hundred-odd shipped paths on each doctor run. A
+// var so tests stub the probe without a real pacman database.
 var pkgOwnsFile = func(path string) bool {
-	return sys.Run("pacman", "-Qo", path) == nil
+	return exec.Command("pacman", "-Qo", path).Run() == nil
 }
 
 // strayRyokuFiles returns the files matching globs that pacman does not own: the

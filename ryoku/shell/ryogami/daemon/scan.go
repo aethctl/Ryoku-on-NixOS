@@ -243,11 +243,14 @@ func fileMtime(path string) int64 {
 	return fi.ModTime().Unix()
 }
 
-// tmpPath is the same "<stem>.tmp.<ext>" sibling the Rust tmp_path builds, so a
-// failed conversion never leaves a half-written thumbnail at the real path.
+// tmpPath is a unique ".tmp" sibling of the destination: a failed conversion
+// must never leave a half-written file at the real path, and two overlapping
+// generators of the same output (a forced rescan while another still runs)
+// must never interleave into each other's writer and publish a corrupt file.
 func tmpPath(dest string) string {
 	ext := filepath.Ext(dest)
-	return strings.TrimSuffix(dest, ext) + ".tmp" + ext
+	return fmt.Sprintf("%s.tmp.%d-%d%s", strings.TrimSuffix(dest, ext),
+		os.Getpid(), time.Now().UnixNano(), ext)
 }
 
 func genFullThumb(it scanned) error {

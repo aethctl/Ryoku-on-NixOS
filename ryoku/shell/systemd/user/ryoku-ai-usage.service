@@ -5,7 +5,7 @@ Description=Ryoku AI usage collectors
 
 [Service]
 Type=oneshot
-# the dev deploy rewrites these to ~/.local/bin; the package ships /usr/bin.
+# the dev deploy repoints these at ~/.local/bin with a drop-in; the package ships /usr/bin.
 # every line is '-' prefixed: a missing tool (no codex, no opencode db, no
 # claude creds) is the normal case and must never fail the unit or the timer.
 ExecStart=-/usr/bin/claude-usage

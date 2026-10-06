@@ -132,6 +132,10 @@ func validateReceipt(category, id string, receipt Receipt) error {
 			return fmt.Errorf("receipt %s file %d is invalid", label, index)
 		}
 	}
+	if category == vesktopThemesCategory {
+		_, err := vesktopThemeReceiptFile(receipt.Files)
+		return err
+	}
 	return nil
 }
 

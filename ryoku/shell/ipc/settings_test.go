@@ -43,10 +43,9 @@ func frameNum(t *testing.T, frame []byte, path string) float64 {
 
 func rm(s string) json.RawMessage { return json.RawMessage(s) }
 
-// TestPatchRejectsInvalidSchemaValues checks a strict patch of a bad enum, an
-// out-of-range integer, an empty required string, or an unknown enum member is
-// rejected and never touches the file (the daemon commits only after a clean
-// validate + persist).
+// TestPatchRejectsInvalidSchemaValues checks bad schema values and retired
+// namespaces are rejected without touching the file. The daemon commits only
+// after a clean validation and persist.
 func TestPatchRejectsInvalidSchemaValues(t *testing.T) {
 	cases := []struct {
 		name, path, val, want string
@@ -59,7 +58,13 @@ func TestPatchRejectsInvalidSchemaValues(t *testing.T) {
 		{"border too high", "theme.attributes.sizing.border_width", `999`, "out of range"},
 		{"margin negative", "notifications.popup_window_margins", `-5`, "out of range"},
 		{"min height too high", "bars.top_bar.minimum_height", `9000`, "out of range"},
+		{"bad ask enabled type", "ask.bubble.enabled", `1`, "cannot unmarshal"},
+		{"bad ask screen type", "ask.bubble.screen", `42`, "cannot unmarshal"},
+		{"unknown ask key", "ask.bubble.nope", `true`, "unknown setting"},
 		{"empty theme", "theme.theme", `""`, "must not be empty"},
+		{"retired sidebar layout", "sidebars.layout", `"classic"`, "sidebars settings are retired"},
+		{"retired sidebar subtree", "sidebars.left.width", `930`, "sidebars settings are retired"},
+		{"retired sidebar root", "sidebars", `{"layout":"modern"}`, "sidebars settings are retired"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -92,6 +97,10 @@ func TestPatchClampsFloatStrengths(t *testing.T) {
 		{"theme.attributes.window_opacity", "-1", 0},
 		{"theme.motion.scale", "9", 3},
 		{"theme.motion.scale", "0.1", 0.25},
+		{"ask.bubble.x", "4", 1},
+		{"ask.bubble.x", "-2", 0},
+		{"ask.bubble.y", "3", 1},
+		{"ask.bubble.y", "-1", 0},
 	}
 	for _, c := range cases {
 		t.Run(c.path+"="+c.val, func(t *testing.T) {
@@ -117,6 +126,8 @@ func TestPatchAcceptsValidSchemaValues(t *testing.T) {
 		{"theme.attributes.sizing.border_width", `15`},
 		{"menus.clock_menu.position", `"Right"`},
 		{"bars.top_bar.left_widgets", `["Clock","Battery"]`},
+		{"ask.bubble.enabled", `true`},
+		{"ask.bubble.screen", `"DP-2"`},
 	}
 	for _, st := range steps {
 		if err := s.patch(st.path, rm(st.val)); err != nil {
@@ -136,6 +147,12 @@ func TestPatchAcceptsValidSchemaValues(t *testing.T) {
 	ws, ok := frameGet(t, frame, "bars.top_bar.left_widgets").([]any)
 	if !ok || len(ws) != 2 || ws[0] != "Clock" || ws[1] != "Battery" {
 		t.Fatalf("left_widgets = %v, want [Clock Battery]", ws)
+	}
+	if got := frameGet(t, frame, "ask.bubble.enabled"); got != true {
+		t.Fatalf("ask.bubble.enabled = %v, want true", got)
+	}
+	if got := frameGet(t, frame, "ask.bubble.screen"); got != "DP-2" {
+		t.Fatalf("ask.bubble.screen = %v, want DP-2", got)
 	}
 }
 
@@ -355,11 +372,11 @@ func TestMalformedFileFirstLoad(t *testing.T) {
 		if !reflect.DeepEqual(s.cur, defaultSettings()) {
 			t.Fatalf("unparseable file did not fall back to defaults")
 		}
-		// Defaults only: exactly the six schema namespaces, no passthrough.
-		if len(s.raw) != 6 {
-			t.Fatalf("first-load fallback carried %d top-level keys, want 6 (schema only)", len(s.raw))
+		// Defaults only: exactly the seven schema namespaces, no passthrough.
+		if len(s.raw) != 7 {
+			t.Fatalf("first-load fallback carried %d top-level keys, want 7 (schema only)", len(s.raw))
 		}
-		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper"} {
+		for _, k := range []string{"general", "theme", "bars", "menus", "notifications", "wallpaper", "ask"} {
 			if _, ok := s.raw[k]; !ok {
 				t.Fatalf("first-load fallback missing schema namespace %q", k)
 			}

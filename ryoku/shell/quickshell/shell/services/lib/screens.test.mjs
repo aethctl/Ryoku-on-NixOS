@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
-const { uniqueByName, sliceForName, sliceForScreen, monitorScale } = require("./screens.js");
+const { uniqueByName, sameOutputs, sliceForName, sliceForScreen, monitorScale } = require("./screens.js");
 
 let failed = 0;
 function eq(actual, expected, message) {
@@ -29,6 +29,21 @@ const first = scr("eDP-1");
 const second = scr("eDP-1");
 const deduped = uniqueByName([first, second]);
 ok(deduped.length === 1 && deduped[0] === first, "keeps the first ShellScreen object, so a duplicate the compositor is about to drop rebuilds nothing");
+
+// --- churn filter for the per-monitor surface fan --------------------------
+
+// The #312 crash: an unplug/replug makes QtWayland signal the screen list
+// several times while the real outputs have not changed (a nameless 0x0
+// placeholder is added, then removed). Each signal re-evaluated the deduped
+// list, and every per-screen Variants rebuilt on the new array.
+const a1 = scr("eDP-1"), a2 = scr("HDMI-A-1");
+ok(sameOutputs([a1, a2], [a1, a2]), "the same live objects are the same outputs");
+ok(sameOutputs([a1, a2], uniqueByName([a1, { name: "", width: 0, height: 0 }, a2])),
+    "a placeholder signal leaves the sanitized list identical");
+ok(!sameOutputs([a1, a2], [a1]), "losing an output is a change");
+ok(!sameOutputs([a1], [a1, a2]), "gaining an output is a change");
+ok(!sameOutputs([a1], [scr("eDP-1")]), "a recreated output object is a change, same name or not");
+ok(!sameOutputs(undefined, [a1]), "a missing list is never same");
 
 // --- per-monitor slice lookup ---------------------------------------------
 

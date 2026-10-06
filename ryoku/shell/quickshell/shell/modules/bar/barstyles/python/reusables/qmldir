@@ -1,5 +1,6 @@
 singleton WaveTick 1.0 behavior/WaveTick.qml
 WaveClock 1.0 behavior/WaveClock.qml
+WaveSurface 1.0 behavior/WaveSurface.qml
 SettingsRow 1.0 guide/SettingsRow.qml
 LyricsPicker 1.0 inputs/LyricsPicker.qml
 SystemUsageCard 1.0 display/SystemUsageCard.qml

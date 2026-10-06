@@ -132,69 +132,22 @@ Item {
                             NumberAnimation { duration: 400; easing.type: Easing.OutQuart }
                         }
 
-                        Canvas {
-                            id: actionWaveCanvas
+                        WaveSurface {
                             anchors.fill: parent
                             visible: actionCapsule.fillLevel > 0.001
-                            renderTarget: Canvas.Image
-                            renderStrategy: Canvas.Immediate
+                            fill: actionCapsule.fillLevel
+                            amp: actionCapsule.fillLevel < 0.99
+                                ? Scaler.s(8) * Math.sin(actionCapsule.fillLevel * Math.PI) : 0
+                            phase: waveClock.phase
+                            radius: actionCapsule.radius
+                            alpha: 1
+                            colorTop: actionCapsule.fillColor
+                            colorBottom: actionCapsule.fillColor
 
-                            property real wavePhase: waveClock.phase
                             WaveClock {
                                 id: waveClock
                                 duration: 800
                                 running: actionCapsule.fillLevel > 0.0 && actionCapsule.fillLevel < 1.0
-                            }
-
-                            onWavePhaseChanged: requestPaint()
-
-                            Connections {
-                                target: actionCapsule
-                                function onFillLevelChanged() { actionWaveCanvas.requestPaint() }
-                                function onRadiusChanged() { actionWaveCanvas.requestPaint() }
-                            }
-
-                            onPaint: {
-                                var ctx = getContext("2d");
-                                ctx.clearRect(0, 0, width, height);
-                                if (actionCapsule.fillLevel <= 0.001) return;
-
-                                var r = Math.min(actionCapsule.radius, Math.min(width, height) / 2);
-                                var fillY = height * (1.0 - actionCapsule.fillLevel);
-
-                                ctx.save();
-                                ctx.beginPath();
-                                ctx.moveTo(r, 0);
-                                ctx.lineTo(width - r, 0);
-                                ctx.arcTo(width, 0, width, r, r);
-                                ctx.lineTo(width, height - r);
-                                ctx.arcTo(width, height, width - r, height, r);
-                                ctx.lineTo(r, height);
-                                ctx.arcTo(0, height, 0, height - r, r);
-                                ctx.lineTo(0, r);
-                                ctx.arcTo(0, 0, r, 0, r);
-                                ctx.closePath();
-                                ctx.clip();
-
-                                ctx.beginPath();
-                                ctx.moveTo(0, fillY);
-                                if (actionCapsule.fillLevel < 0.99) {
-                                    var waveAmp = Scaler.s(8) * Math.sin(actionCapsule.fillLevel * Math.PI);
-                                    var cp1y = fillY + Math.sin(wavePhase) * waveAmp;
-                                    var cp2y = fillY + Math.cos(wavePhase + Math.PI) * waveAmp;
-                                    ctx.bezierCurveTo(width * 0.33, cp2y, width * 0.66, cp1y, width, fillY);
-                                    ctx.lineTo(width, height);
-                                    ctx.lineTo(0, height);
-                                } else {
-                                    ctx.lineTo(width, 0);
-                                    ctx.lineTo(width, height);
-                                    ctx.lineTo(0, height);
-                                }
-                                ctx.closePath();
-
-                                ctx.fillStyle = actionCapsule.fillColor.toString();
-                                ctx.fill();
-                                ctx.restore();
                             }
                         }
 

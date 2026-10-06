@@ -35,7 +35,11 @@ Item {
     readonly property real innerRadius: Math.max(root.dp(6), root.radius - root.padding)
     readonly property real gap: root.dp(10)
     readonly property real contentWidth: root.width - root.padding * 2
-    readonly property bool live: root.widget.powerActive && root.widget.visible
+    // Under Ryoku hosting the widget instance is a deliberately invisible data
+    // source and the slot renders the face, so the host itself is the
+    // visibility: without this the face reads live=false forever, the clock
+    // drops to minute precision and the second hand freezes.
+    readonly property bool live: root.widget.powerActive && (root.widget.visible || root.widget.ryokuHosted)
 
     readonly property string material: root.widget.irisMaterial
     readonly property bool glass: root.material === "glass"

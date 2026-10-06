@@ -61,15 +61,18 @@ them (see below), never as dead settings.
 
 ## Surfaces outside the Hub
 
-Wallpaper, theme, the bar, the launcher, and the Stash are not Hub pages. Reach
-them here:
+Wallpaper, theme, the bar, the launcher, Controls, ryoshot, and Ask are outside
+the Hub. Reach them here:
 
 | Intent | GUI surface | How to open | The command behind it |
 |---|---|---|---|
 | Change wallpaper or theme | Wallpaper picker | Super+W | `ryogami wallpaper ui` (picker), `ryogami wallpaper set\|next\|random` |
 | Bar layout, widgets, dock | QS Bar Settings | `ryoku-shell bar settings [route]` | `ryoku-shell bar ...`, `ryoku-shell dock ...` (see bar.md) |
 | Launch an app | App launcher | Super+Space | the shell launcher (the App Launcher page tunes it) |
-| Screen time and downloads | Stash | Super+S | a shell surface; no config command |
+| System activity, connections, levels, and session actions | Controls | Super+Escape | `ryoku-shell quicksettings` |
+| Screenshots and recordings | ryoshot capture bar | Super+Shift+S | `ryoku-shell screenshot` |
+| Quick AI answers, chat, tools, and web search | Ask | Alt+Space | `ryoku-shell ask`, `ryoku-shell ask chat`, `ryoku-shell ask tools`, `ryoku-shell compress`, `ryoku-shell install` |
+| The full AI companion window (chat, ask, vault, agents, models, system) | Rashin app | Super+Alt+Space | `rashin-app` (single-instance: a second press focuses it) |
 
 QS Bar Settings routes are `bars`, `layout`, `widgets`, `dock`, and `community`,
 so `ryoku-shell bar settings layout` opens straight to the layout lanes. The bar

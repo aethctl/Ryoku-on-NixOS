@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 
-source "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/caching.sh" 2>/dev/null || true
-
 ACTION="${1:-get}"
 
 get_locks() {
     local caps=0
     local num=0
-    local data=""
 
     # LED state lives in sysfs, so the read is compositor-neutral.
 

@@ -5,6 +5,7 @@ import Quickshell
 import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
+import "." as HubComponents
 import "Singletons"
 import "ReloadCoverModel.js" as ReloadCoverModel
 
@@ -175,6 +176,30 @@ Item {
         }
         onImagePickRequested: (r) => { page.pendingImageRow = r; imgPick.open(); }
         onTimezonePickRequested: (r) => page.timezonePickRequested(r)
+        onAppPickRequested: (r) => { page.pendingAppRow = r; appPick.visible = true; }
+    }
+
+    // The app control: SettingsSheet emits appPickRequested; the hub's
+    // AppPicker overlay lists the installed apps and the chosen command lands
+    // on the row's key like any edit.
+    property var pendingAppRow: null
+
+    HubComponents.AppPicker {
+        id: appPick
+        anchors.fill: parent
+        visible: false
+        z: 20
+        title: page.pendingAppRow ? I18n.tr(String(page.pendingAppRow.label || "")) : ""
+        onChosen: (cmd) => {
+            if (page.pendingAppRow)
+                page.edited(page.pendingAppRow.key, cmd);
+            page.pendingAppRow = null;
+            appPick.visible = false;
+        }
+        onDismissed: {
+            page.pendingAppRow = null;
+            appPick.visible = false;
+        }
     }
 
     // the image-mark picker: an `image` control asks for it (SettingsSheet emits

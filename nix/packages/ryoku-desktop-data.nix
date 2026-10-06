@@ -1,11 +1,23 @@
 { pkgs, src }:
 
-pkgs.stdenvNoCC.mkDerivation {
+pkgs.stdenv.mkDerivation {
   pname = "ryoku-desktop-data";
   version = "unstable";
 
   inherit src;
 
+  nativeBuildInputs = [
+    pkgs.cmake
+    pkgs.ninja
+    pkgs.pkg-config
+  ];
+
+  buildInputs = [
+    pkgs.gtk3
+    pkgs.webkitgtk_4_1
+  ];
+
+  dontConfigure = true;
   dontBuild = true;
 
   installPhase = ''
@@ -96,28 +108,34 @@ pkgs.stdenvNoCC.mkDerivation {
       exit 1
     fi
 
-    # ── First-party Ryoku Quickshell apps ──────────────────────
+    # ── First-party Ryoku apps ─────────────────────────────────
+    #
+    # Keep the same app contract as upstream: Quickshell apps ship their
+    # config tree, while native apps with a CMakeLists.txt build into $out/bin.
+    # Desktop entries, icons and helper scripts are shared by both shapes.
 
     for appdir in ryoku/apps/*/; do
-      if [ -d "$appdir/quickshell" ]; then
-        appname="$(basename "$appdir")"
+      appname="$(basename "$appdir")"
+      has_ui=0
 
+      if [ -d "$appdir/quickshell" ]; then
+        has_ui=1
         mkdir -p "$cfg/quickshell/$appname"
         cp -a "$appdir/quickshell/." "$cfg/quickshell/$appname/"
+      fi
 
-        icon="$appdir/quickshell/logo.svg"
-
-        if [ ! -f "$icon" ]; then
-          icon="$appdir/logo.svg"
-        fi
-
-        if [ ! -f "$icon" ]; then
-          icon="ryoku/assets/brand/logo-mark.svg"
-        fi
-
-        install -Dm644 \
-          "$icon" \
-          "$out/share/icons/hicolor/scalable/apps/$appname.svg"
+      if [ -f "$appdir/CMakeLists.txt" ]; then
+        has_ui=1
+        appbuild="$TMPDIR/ryoku-app-$appname"
+        cmake \
+          -S "$appdir" \
+          -B "$appbuild" \
+          -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release
+        cmake --build "$appbuild"
+        install -Dm755 \
+          "$appbuild/$appname" \
+          "$out/bin/$appname"
       fi
 
       if [ -d "$appdir/bin" ]; then
@@ -137,6 +155,16 @@ pkgs.stdenvNoCC.mkDerivation {
           "$desktop" \
           "$out/share/applications/$(basename "$desktop")"
       done
+
+      if [ "$has_ui" -eq 1 ]; then
+        icon="$appdir/quickshell/logo.svg"
+        [ -f "$icon" ] || icon="$appdir/logo.svg"
+        [ -f "$icon" ] || icon="ryoku/assets/brand/logo-mark.svg"
+
+        install -Dm644 \
+          "$icon" \
+          "$out/share/icons/hicolor/scalable/apps/$appname.svg"
+      fi
     done
 
     # ── Matugen / palette pipeline ─────────────────────────────

@@ -27,6 +27,22 @@ function uniqueByName(screens) {
     return out;
 }
 
+// Whether two sanitized screen lists hold exactly the same live objects. A
+// monitor power-off/on makes QtWayland signal the screen list several times
+// while the real outputs have not changed (a nameless placeholder is added,
+// then removed); rebuilding every per-monitor surface for that churn is what
+// crashed the shell (#312). A recreated output comes back as a NEW object with
+// the same name, so identity, not just the name, must be compared: the same
+// name with a different object is a genuine change and must flow through.
+function sameOutputs(a, b) {
+    if (!a || !b || a.length !== b.length)
+        return false;
+    for (var i = 0; i < a.length; i++)
+        if (a[i] !== b[i])
+            return false;
+    return true;
+}
+
 // An output's stable identity is its NAME, never its ShellScreen object. A
 // disabled and re-enabled output -- a laptop lid, a modeset -- comes back as a
 // new object with the same name, so a per-monitor slice found by object identity
@@ -65,4 +81,4 @@ function monitorScale(screen, scale, cap) {
 }
 
 if (typeof module !== "undefined" && module.exports)
-    module.exports = { uniqueByName, sliceForName, sliceForScreen, monitorScale };
+    module.exports = { uniqueByName, sameOutputs, sliceForName, sliceForScreen, monitorScale };

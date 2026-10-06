@@ -35,7 +35,7 @@ func upgradeRyotunes() {
 	case st.Updated:
 		progress.logf(i18n.T("Ryotunes updated to %s"), st.Latest)
 	default:
-		progress.logf(i18n.T("Ryotunes is current (%s)"), st.Installed)
+		progress.detailf(i18n.T("Ryotunes is current (%s)"), st.Installed)
 	}
 }
 

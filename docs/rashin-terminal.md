@@ -4,7 +4,7 @@ The terminal lane wires the Rashin brain into the place Ryoku users actually
 live: kitty running fish. One command, `rashin`, turns natural language into
 answers and ready-to-run commands that know *this* machine, because they are
 answered by the same daemon, the same vault, and the same Hermes connection as
-the launcher's `\` ask and the dashboard chat. One brain, three surfaces.
+the launcher's `\` ask and the Alt+Space Ask chat. One brain, three surfaces.
 
 ```
 $ rashin take me to the fastfetch config
@@ -104,7 +104,7 @@ sequenceDiagram
    propose the command in a fenced block and never run it.** The daemon lifts
    those commands into a plan (`planFromText`) and validates them the same way.
    The turn keeps running in the daemon even if the CLI detaches; `rashin
-   --last`, `\resume`, and the dashboard all pick it up.
+   --last`, `\resume`, and the Alt+Space Ask chat all pick it up.
 
 On an OAuth-only backend (openai-codex, native anthropic) the fast lane cannot
 be called, so **every** terminal ask takes the session lane: correct output,
@@ -114,7 +114,7 @@ not the lane's.
 
 Both lanes record into the shared transcript and the ask history
 (`$XDG_STATE_HOME/ryoku/rashin-asks.jsonl`), so the launcher's `\resume`, the
-terminal's `--resume`, and the dashboard's "continue in chat" all see the same
+terminal's `--resume`, and the launcher's "continue in chat" all see the same
 conversation. That is the synchronization contract: **every surface reads and
 writes the same three stores** (transcript, ask history, vault).
 
@@ -163,10 +163,11 @@ The classifier is deny-first and pessimistic: an unknown binary classifies as
 badge); the user is the executor and the buffer is the confirmation step. The
 tier gates only `--run`.
 
-Permissions stop dead-ending outside the dashboard: when an escalated turn
+Permissions stop dead-ending outside the Ask chat: when an escalated turn
 hits a Hermes `session/request_permission`, the terminal renders the options
-and answers over `POST /api/perm` on the same request. The dashboard sees the
-same request live; whoever answers first wins, the reply is sent exactly once.
+and answers over `POST /api/perm` on the same request. The Ask chat sees
+the same request live; whoever answers first wins, the reply is sent exactly
+once.
 
 ## The learning loop
 

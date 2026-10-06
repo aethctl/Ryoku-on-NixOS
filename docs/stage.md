@@ -12,7 +12,7 @@ Names, so the parts are findable:
 
 | Part | Name | Where |
 |---|---|---|
-| The feature, overview, and settings page | **Stage** (`stage` sidebar card; Desktop Scene in Hub) | `quickshell/shell/modules/stage/`, `sidebar/cards/StageCard.qml`, `ryoku/hub/quickshell/pages/DesktopScenePage.qml` |
+| The feature and settings page | **Stage** (Desktop Scene in Hub) | `quickshell/shell/modules/stage/`, `ryoku/hub/quickshell/pages/DesktopScenePage.qml` |
 | The cut-out engine helper | **`ryostage`** | `ryoku/shell/scripts/ryostage`, shipped to `/usr/bin` |
 | The daemon module | `stage` topic and verbs | `ryoku/shell/ipc/stage.go` |
 | The settings | `~/.config/ryoku/stage.json` | user-owned, GUI-managed, never materialized |
@@ -63,12 +63,9 @@ Plain, Depth, and Parallax are chosen in Hub's Scene view:
 Depth and Parallax use the same cut-outs. The first enable cuts the current
 wallpaper if necessary; progress and Stop stay visible in Hub while the engine runs.
 
-## Stage overview and Hub settings
+## Hub settings
 
-`modules/sidebar/cards/StageCard.qml` is an overview. Its wallpaper preview,
-scene mode, widget count, enabled-widget list, and visualizer status describe
-what is on the desktop. Edit scene, Visualizer, and Widgets open the matching
-Desktop Scene view in Hub.
+Open **Ryoku Hub > Desktop Scene** for the Scene, Visualizer, and Widgets views.
 
 `ryoku/hub/quickshell/pages/DesktopScenePage.qml` contains the editors. It uses
 two columns when there is room and one on smaller windows, with a scrolling
@@ -106,44 +103,36 @@ Hub reads the stores but is not their writer. Typed shell IPC updates the
 canonical stage and visualizer settings; wallpaper effects and layers use the
 daemon's stage commands.
 
-## Edit widgets
+## The Stage Editor
 
-The desktop lifts above open windows, the dock steps back, and every enabled
-widget wears a frame:
+Editing the desktop opens the Stage Editor: the shrinking chrome ported from the
+reference shell's Edit Mode (`ryoku/shell/quickshell/stage/`), mounted over the
+live desktop by `shell/modules/stage/StageEditorHost.qml`. It frames one screen
+at a time: the desktop under edit shrinks into a card with the toolbar on its
+edge, the other screens dim, and every enabled widget wears a frame (a 1 px
+outline with its name, a Settings button that opens that widget's own menu, and
+a Remove button). Drag anywhere to move (grid-snapped, live), the bottom-right
+bracket to resize, Ctrl+wheel to scale. Built-ins, the Shima and Python faces,
+and the plugin tiles alike.
 
-- a 1 px outline with the widget's name at its top-left;
-- drag anywhere on it to move (grid-snapped, live), the bottom-right bracket to
-  resize;
-- two small buttons on its top-right: **Settings** (opens that widget's own
-  menu: design, lock, size, opacity, colour, snap) and **Remove** (hides it).
+The toolbar row is Desktop (one tab per monitor) | Widgets | Wallpaper | Style,
+then undo, redo, and Done. There is no lock-screen, bar, or dock editing: those
+tabs of the reference are cut. The drawer's Widgets page is Ryoku's own roster
+(built-ins, hosted faces, installed plugin sets, the visualizer) read and
+written through `StageWidgetProvider`, the bridge onto widgets.json,
+plugins.json and the visualizer store; the Wallpaper page frames the current
+wallpaper; the Style page holds the presets.
 
-Every framed widget gets one: the built-ins, the Shima and Python faces, and
-the plugin tiles alike.
+There is no Save and no Reset: the desktop is the document, and the chrome's
+undo stack is the walk-back. Every edit the mode makes is recorded - catalogue
+adds, removes and moves, wallpaper framing, style presets - and so is each of
+Ryoku's own gestures: a slot drag, corner resize or wheel scale commits through
+`Desktop.stageRecordGesture`, a plugin tile's commit through
+`stageRecordPluginGesture`, so Ctrl+Z steps any of them back exactly like the
+reference's canvas steps its own.
 
-One toolbar rests bottom-centre, one row:
-
-```
-部品 EDIT WIDGETS  [grid] [16]  [Widgets]  [Reset]  [Done]
-```
-
-- **Widgets** grows a panel out of the bar's top edge. The roster is too long
-  for one honest list, so the panel is a settings page: a category rail on the
-  left (Ryoku widgets, Shima widgets, Python widgets, each installed plugin
-  set, with a live count) and a two-column grid of widget cards for the chosen
-  category. A card carries the glyph, name, hint, an on/off dot, and (once on)
-  a tune affordance that opens that widget's editor -- the inspector for a
-  slot-hosted face, the Placer for the visualizer, the tile's own menu for a
-  plugin. The whole card toggles. Search drops into a flat result grid across
-  every category, each card wearing its category as an eyebrow. Keyboard:
-  Down from the search enters the grid, arrows move, Space toggles, Esc
-  unwinds. Plugin rows read the installed set (enabled or not), so a hidden
-  tile keeps its card and the switch brings it back.
-- **Reset** restores widgets.json as it was when the session opened (every
-  widget's enabled set, placement, size, style, colour and face options, plus
-  the visualizer's flag and the placed plugin set); its slot is kept while
-  clean so Done never moves.
-- **Done** (or Escape, or a click on bare wallpaper when nothing is selected)
-  leaves. There is no Save; the desktop is the document.
+Done, Escape (one level per press: the drawer, the selection, the mode), or a
+click on bare wallpaper when nothing is selected leaves the mode.
 
 ## Customize visualizer
 
@@ -154,11 +143,12 @@ visualizer on if it is off and opens it. Its Done closes it.
 
 ## Session model
 
-`modules/stage/Singletons/StageSession.qml` is the Edit widgets session only:
-`mode` is `""` or `"widgets"`; `monitor` names the screen that opened it;
-`selected` is a widget id; `panel` is the drop-down that is open (`"add"`);
-`dirty` shows Reset. `escapeStep()` unwinds one level per press: the
-drop-down, then the selection, then the session. Hub keeps pending scene
+`modules/stage/Singletons/StageSession.qml` is Ryoku's half of the edit
+session: `mode` is `""` or `"widgets"`; `monitor` names the screen that opened
+it; `selected` is a widget id; `panel` is the drop-down that is open (`"add"`).
+Entering it opens the chrome on that monitor, leaving the chrome leaves it
+(StageEditorHost wires the two). `escapeStep()` unwinds one level per press:
+the drop-down, then the selection, then the session. Hub keeps pending scene
 confirmations locally; the settings page is not an edit session.
 
 ## Models: one catalogue, visible provenance
@@ -192,7 +182,7 @@ rembg's range, `uv` provisioning a managed 3.13 otherwise).
 
 | Subcommand | Contract |
 |---|---|
-| `check` | exit 0 and print `available` when the runtime and at least one model are present, else `missing` and non-zero |
+| `check [model]` | exit 0 and print `available` when the runtime and (with a model named) that model, else (without) at least one curated model, are present; otherwise a one-line reason (`runtime missing`, `model <id> missing`, `missing`) and non-zero |
 | `models [--json]` | the curated catalogue: ids one per line, or the JSON above |
 | `install [model...]` | provision the runtime and fetch the named models (default `u2netp`); opt-in, streams progress |
 | `remove <model>` | drop a cached model |
@@ -222,23 +212,29 @@ One worker, one registry (below), one topic.
   Parallax is chosen for that wallpaper), `layer-NN.png` (added layers),
   `.index.json` (mtime + quality reuse).
 - **Topic** `stage`: `{ current, busy, stage: "cut"|"inpaint"|"", percent,
-  walls: { <path>: { effect, subject, background, rev, layers: [...] } } }`,
+  notice, walls: { <path>: { effect, subject, background, rev, layers: [...] } } }`,
   published on every change and on each generation phase. QML renders from it
   and nothing else. `subject`/`background` are absolute paths ("" until fresh);
   `rev` is the max mtime across the wall's `subject.png`/`background.png`/
   `layer-NN.png`, so the shell busts every url with the one revision. The frame
   layers carry `{out, label, enabled, front, depth}` and no per-layer rev, and
-  `layers[0]` is always the subject slot.
+  `layers[0]` is always the subject slot. `notice` names why the last reconcile
+  could not produce a cut (the engine's reason, e.g. `model u2netp missing`);
+  it is "" whenever the pipeline is fine, and the UI shows it instead of a
+  silently dead toggle.
 - **Verbs** (`ryoku-shell stage ...`): `set-effect <off|depth|parallax>`,
   `set-layer <index> <json>` (enabled/front/depth), `add-layer <png>`,
   `cut-layer <picture>` (runs the engine on another picture and adds the
-  result), `remove-layer <index>`, `refresh` (re-cut), `cancel`, `clear`,
+  result), `remove-layer <index>`, `refresh` (re-cut), `cancel`, `clear`
+  (delete the current wall's cut-outs and take the wall back to Plain),
   `status`, `models`.
 - **Rules**: a wallpaper switch reconciles and never generates; a stage is
   per wallpaper; videos are skipped; an effect switch never re-cuts (only
-  Parallax's first use on a wallpaper adds the inpaint); a failure leaves the
-  effect off with a logged reason. The subject is still handed to ryogami as
-  `depth` for the Depth effect only, unchanged on the wire.
+  Parallax's first use on a wallpaper adds the inpaint); a wall left on whose
+  artifacts vanished is re-cut by the next wake (the registry is the intent);
+  a blocked or failed cut keeps the effect recorded, logs the reason, and
+  publishes it as the frame's `notice`. The subject is still handed to ryogami
+  as `depth` for the Depth effect only, unchanged on the wire.
 
 ## Settings: `~/.config/ryoku/stage.json`
 
@@ -324,10 +320,12 @@ Hub's Desktop Scene page sits beside the stack, not in it. It reads stage.json
 and sends typed `stage-settings` IPC requests to the shell's canonical
 `modules/stage/Singletons/Config.qml`; per-wallpaper changes go through the
 daemon's `StageBackend` contract. Drag updates coalesce before being sent.
-The desktop mounts `modules/desktop/WidgetEditBar.qml`, the widget outlines,
-and the picker, and lifts to the Top layer for the edit session. Reset writes
-each store as one update: bursts of single-key writes can interleave with a
-watcher's reload of an older version and put an old value back.
+The desktop mounts the widget outlines and lifts to the Top layer for the edit
+session; the chrome itself lives on its own surfaces under
+`shell/modules/stage/`. Each undo step writes a store as one update
+(`setMany`, or one place-tool command): bursts of single-key writes can
+interleave with a watcher's reload of an older version and put an old value
+back.
 
 ## Delivery
 

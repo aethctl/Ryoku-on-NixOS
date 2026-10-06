@@ -437,7 +437,6 @@ function config() {
   },
   "surround": {
    "enable": true,
-   "music": "widget",
    "thickness": 10,
    "radius": 22
   },

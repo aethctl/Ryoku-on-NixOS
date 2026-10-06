@@ -23,6 +23,7 @@ Item {
     property string busyAddress: ""
     property string errorText: ""
     readonly property bool busy: linkProcess.running
+    readonly property bool motionAllowed: root.active && !Tokens.reduceMotion && !Motion.reduce
 
     readonly property var devices: !root.adapterEnabled || !Bluetooth.devices
         ? [] : (Bluetooth.devices.values || []).filter(device => !!device)
@@ -140,7 +141,7 @@ Item {
             anchors.right: parent.right
             anchors.verticalCenter: titleText.verticalCenter
             text: sectionTitle.status
-            color: Tokens.sun
+            color: Tokens.inkMuted
             font.family: Tokens.ui
             font.pixelSize: Tokens.fSmall * root.s
             font.weight: Font.Medium
@@ -165,9 +166,18 @@ Item {
         implicitHeight: Math.max(72 * root.s, deviceCopy.implicitHeight + Tokens.s3 * root.s * 2)
         height: implicitHeight
         radius: Tokens.radius * root.s * 1.5
-        color: deviceRow.device && deviceRow.device.connected ? Tokens.tint10 : Tokens.tint5
+        color: deviceHover.hovered ? Tokens.tint10
+            : deviceRow.device && deviceRow.device.connected ? Tokens.tint10 : Tokens.tint5
         border.width: Tokens.border
-        border.color: deviceRow.connecting ? Tokens.bone : Tokens.lineSoft
+        border.color: deviceRow.connecting ? Tokens.bone : deviceHover.hovered ? Tokens.lineStrong : Tokens.lineSoft
+        Behavior on color {
+            enabled: root.motionAllowed
+            ColorAnimation { duration: Tokens.snap }
+        }
+        Behavior on border.color {
+            enabled: root.motionAllowed
+            ColorAnimation { duration: Tokens.snap }
+        }
         readonly property bool connecting: root.busy
             && root.busyAddress === String(deviceRow.device ? deviceRow.device.address : "")
 
@@ -255,6 +265,8 @@ Item {
                 onAct: root.primaryAction(deviceRow.device)
             }
         }
+
+        HoverHandler { id: deviceHover }
     }
 
     Column {
@@ -302,6 +314,22 @@ Item {
                 enabled: root.adapterAvailable
                 Accessible.name: I18n.tr("Bluetooth radio")
                 onToggleRequested: if (root.adapter) root.adapter.enabled = !root.adapter.enabled
+            }
+        }
+
+        Rectangle {
+            visible: root.scanning
+            width: parent.width
+            height: Tokens.s1 * root.s
+            radius: height / 2
+            color: Tokens.bone
+            opacity: root.motionAllowed ? 0.24 : 1
+
+            SequentialAnimation on opacity {
+                running: root.active && root.scanning && root.motionAllowed
+                loops: Animation.Infinite
+                NumberAnimation { from: 0.24; to: 0.86; duration: Tokens.move; easing.type: Tokens.ease }
+                NumberAnimation { from: 0.86; to: 0.24; duration: Tokens.move; easing.type: Tokens.ease }
             }
         }
 

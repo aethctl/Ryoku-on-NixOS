@@ -341,6 +341,71 @@ func TestActTouchpadFlipsPadsAndTracksState(t *testing.T) {
 	}
 }
 
+// The freeze hands back the mode the user configured, read from the settings
+// store rather than the live option: a previous freeze whose restore was lost
+// leaves follow_mouse at 0 live, and reporting that back would "restore" the
+// stuck value. The store is the durable truth, and its default matches the
+// shipped input.lua.
+func TestActFocusFollowsMouseReportsConfiguredMode(t *testing.T) {
+	cfg := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", cfg)
+	ryoku := filepath.Join(cfg, "ryoku")
+	if err := os.MkdirAll(ryoku, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	store := `{"desktop":{"input":{"followMouse":2}}}`
+	if err := os.WriteFile(filepath.Join(ryoku, "desktop.json"), []byte(store), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var evals []string
+	restore := stubCtl(t, func(args ...string) ([]byte, error) {
+		if len(args) == 2 && args[0] == "eval" {
+			evals = append(evals, args[1])
+		}
+		// A live getoption answering 0 (a lost restore) must not win: the
+		// store's 2 is what the caller gets back.
+		if len(args) == 3 && args[0] == "getoption" {
+			return []byte(`{"int":0}`), nil
+		}
+		return nil, nil
+	})
+	defer restore()
+
+	var buf bytes.Buffer
+	prevOut := stdout
+	stdout = bufio.NewWriter(&buf)
+	err := runAct([]string{"input.focusFollowsMouse", "0"})
+	stdout.Flush()
+	stdout = prevOut
+	if err != nil {
+		t.Fatalf("freeze: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "2" {
+		t.Errorf("reported previous mode = %q, want the configured 2", got)
+	}
+	if len(evals) != 1 || !strings.Contains(evals[0], "follow_mouse = 0") {
+		t.Errorf("freeze evals = %q, want one follow_mouse = 0 eval", evals)
+	}
+
+	// No store at all: the shipped default (1) is reported, never empty, so
+	// the caller always has a mode to put back.
+	if err := os.Remove(filepath.Join(ryoku, "desktop.json")); err != nil {
+		t.Fatal(err)
+	}
+	buf.Reset()
+	stdout = bufio.NewWriter(&buf)
+	err = runAct([]string{"input.focusFollowsMouse", "0"})
+	stdout.Flush()
+	stdout = prevOut
+	if err != nil {
+		t.Fatalf("freeze without store: %v", err)
+	}
+	if got := strings.TrimSpace(buf.String()); got != "1" {
+		t.Errorf("default reported mode = %q, want 1", got)
+	}
+}
+
 // output.cycle steps the arrangement through ryoku-monitor, so the pin is that
 // it execs `ryoku-monitor toggle`.
 func TestActOutputCycleRunsMonitorToggle(t *testing.T) {

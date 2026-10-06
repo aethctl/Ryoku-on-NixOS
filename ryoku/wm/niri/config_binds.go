@@ -164,6 +164,8 @@ func defaultBinds() map[string]niriBind {
 
 		// Shell
 		"shell.launcher":          {action: spawnArgs("ryoku-shell", "launcher")},
+		"shell.ask":               {action: spawnArgs("ryoku-shell", "ask")},
+		"shell.rashin":            {action: spawnSh("ryoku-summon Rashin flock -n -o /tmp/rashin-app.lock rashin-app")},
 		"shell.cheatsheet":        {action: spawnSh("pkill -x -f 'qs -c keys' 2>/dev/null || " + qmlEnv + " flock -n -o /tmp/ryoku-keys.lock qs -c keys")},
 		"shell.lock":              {action: spawnArgs("ryoku-shell", "lock")},
 		"shell.quicksettings":     {action: spawnArgs("ryoku-shell", "quicksettings")},
@@ -176,7 +178,6 @@ func defaultBinds() map[string]niriBind {
 		"shell.visualizerPlace":   {action: spawnArgs("ryoku-shell", "visualizer-place")},
 		"shell.voice":             {action: spawnArgs("ryoku-shell", "voice")},
 		"shell.settings":          {action: spawnArgs("ryoku-shell", "hub", "open")},
-		"shell.stash":             {action: spawnArgs("ryoku-shell", "stash")},
 		"shell.screenshot":        {action: spawnSh(screenshotLaunchCommand(""))},
 		// Hyprland gives ryoshot three entry points, so niri gets the same three:
 		// without Print the key a user reaches for does nothing, and monitor mode

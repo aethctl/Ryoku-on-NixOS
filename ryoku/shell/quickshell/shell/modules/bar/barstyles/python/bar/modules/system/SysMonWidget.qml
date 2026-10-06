@@ -80,7 +80,11 @@ Rectangle {
         property color accentColor: ThemeBackend.mauve
         property bool initAnimTrigger: false
 
-        property real animValue: value
+        // The slide exists to make a visible change readable; a 1% sensor
+        // flicker moves the crest a third of a pixel, so the animated value
+        // carries a five-percent deadband. An unquantized slide restarts on
+        // every fetch and keeps the whole bar window animating at vsync.
+        property real animValue: Math.round(value * 20) / 20
         Behavior on animValue { NumberAnimation { duration: 600; easing.type: Easing.OutQuint } }
 
         property real fillRatio: Math.max(0.0, Math.min(1.0, isNaN(animValue) ? 0.0 : animValue))
@@ -109,68 +113,16 @@ Rectangle {
         }
         Behavior on opacity { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
 
-        Canvas {
-            id: pillCanvas
+        WaveSurface {
             anchors.fill: parent
-            renderTarget: Canvas.FramebufferObject
-            renderStrategy: Canvas.Cooperative
-
-            onPaint: {
-                var ctx = getContext("2d");
-                ctx.clearRect(0, 0, width, height);
-                if (pillRoot.fillRatio <= 0) return;
-
-                ctx.save();
-                var r = pillRoot.radius;
-                ctx.beginPath();
-                ctx.moveTo(r, 0);
-                ctx.lineTo(width - r, 0);
-                ctx.quadraticCurveTo(width, 0, width, r);
-                ctx.lineTo(width, height - r);
-                ctx.quadraticCurveTo(width, height, width - r, height);
-                ctx.lineTo(r, height);
-                ctx.quadraticCurveTo(0, height, 0, height - r);
-                ctx.lineTo(0, r);
-                ctx.quadraticCurveTo(0, 0, r, 0);
-                ctx.closePath();
-                ctx.clip();
-
-                ctx.beginPath();
-                ctx.moveTo(0, pillRoot.fillY);
-                if (pillRoot.waveAmp > 0) {
-                    var cp1y = pillRoot.fillY + Math.sin(sysMonWidgetRoot.globalWavePhase) * pillRoot.waveAmp;
-                    var cp2y = pillRoot.fillY + Math.cos(sysMonWidgetRoot.globalWavePhase + Math.PI) * pillRoot.waveAmp;
-                    ctx.bezierCurveTo(width * 0.33, cp2y, width * 0.66, cp1y, width, pillRoot.fillY);
-                    ctx.lineTo(width, height);
-                    ctx.lineTo(0, height);
-                } else {
-                    ctx.lineTo(width, pillRoot.fillY);
-                    ctx.lineTo(width, height);
-                    ctx.lineTo(0, height);
-                }
-                ctx.closePath();
-
-                var grad = ctx.createLinearGradient(0, 0, 0, height);
-                grad.addColorStop(0, Qt.lighter(pillRoot.accentColor, 1.25).toString());
-                grad.addColorStop(1, pillRoot.accentColor.toString());
-                ctx.fillStyle = grad;
-                ctx.globalAlpha = 0.95;
-                ctx.fill();
-                ctx.restore();
-            }
-
-            Connections {
-                target: sysMonWidgetRoot
-                enabled: sysMonWidgetRoot.isSysVisible && pillRoot.waveAmp > 0
-                function onGlobalWavePhaseChanged() { pillCanvas.requestPaint(); }
-            }
-
-            Connections {
-                target: pillRoot
-                enabled: sysMonWidgetRoot.isSysVisible
-                function onFillRatioChanged() { pillCanvas.requestPaint(); }
-                function onAccentColorChanged() { pillCanvas.requestPaint(); }
-            }
+            visible: pillRoot.fillRatio > 0
+            fill: pillRoot.fillRatio
+            amp: pillRoot.waveAmp
+            phase: sysMonWidgetRoot.globalWavePhase
+            radius: pillRoot.radius
+            alpha: 0.95
+            colorTop: Qt.lighter(pillRoot.accentColor, 1.25)
+            colorBottom: pillRoot.accentColor
         }
 
         Row {
@@ -244,21 +196,21 @@ Rectangle {
         property int pillWidth: barWindow ? barWindow.s(sysMonWidgetRoot.isCompact ? 48 : 52) : (sysMonWidgetRoot.isCompact ? 48 : 52)
 
         SysMonPill {
-            value: isNaN(SysData.cpu) ? 0 : SysData.cpu / 100.0
+            value: isNaN(SysData.cpu) ? 0 : Math.round(SysData.cpu) / 100.0
             textVal: (isNaN(SysData.cpu) ? 0 : Math.round(SysData.cpu)) + "%"
             icon: "\uF2DB"
             accentColor: ThemeBackend.mauve
         }
 
         SysMonPill {
-            value: isNaN(SysData.ramPercent) ? 0 : SysData.ramPercent / 100.0
+            value: isNaN(SysData.ramPercent) ? 0 : Math.round(SysData.ramPercent) / 100.0
             textVal: (isNaN(SysData.ramPercent) ? 0 : Math.round(SysData.ramPercent)) + "%"
             icon: "󰍛"
             accentColor: ThemeBackend.sapphire
         }
 
         SysMonPill {
-            value: isNaN(SysData.temp) ? 0 : Math.max(0, Math.min(1, SysData.temp / 100.0))
+            value: isNaN(SysData.temp) ? 0 : Math.round(Math.max(0, Math.min(100, SysData.temp))) / 100.0
             textVal: (isNaN(SysData.temp) ? 0 : Math.round(SysData.temp)) + "°"
             icon: "\uF2C9"
             accentColor: ThemeBackend.red

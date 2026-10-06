@@ -62,26 +62,6 @@ Item {
     readonly property real waveAmp: (root.fillRatio < 0.99 && root.fillRatio > 0.01) ? root.waveAmpMax * Math.sin(root.fillRatio * Math.PI) : 0
     readonly property real waveCenterOffset: root.waveAmp > 0 ? 0.375 * root.waveAmp * (Math.sin(root.wavePhase) - Math.cos(root.wavePhase)) : 0
 
-    onWavePhaseChanged: {
-        if (root.isLive && root.waveAmp > 0) {
-            fluidCanvas.requestPaint();
-        }
-    }
-
-    onValueChanged: {
-        if (root.isLive) {
-            fluidCanvas.requestPaint();
-        }
-    }
-
-    onColorFillChanged: {
-        if (root.isLive) {
-            fluidCanvas.requestPaint();
-        }
-    }
-
-    onWidthChanged: fluidCanvas.requestPaint()
-    onHeightChanged: fluidCanvas.requestPaint()
 
     Rectangle {
         anchors.fill: parent
@@ -100,57 +80,16 @@ Item {
         border.color: root.borderColor
     }
 
-    Canvas {
-        id: fluidCanvas
+    WaveSurface {
         anchors.fill: parent
-        renderTarget: Canvas.FramebufferObject
-        renderStrategy: Canvas.Immediate
-
-        onPaint: {
-            var ctx = getContext("2d");
-            ctx.clearRect(0, 0, width, height);
-            if (root.value <= 0) return;
-
-            ctx.save();
-            var r = root.cardRadius;
-            ctx.beginPath();
-            ctx.moveTo(r, 0);
-            ctx.lineTo(width - r, 0);
-            ctx.quadraticCurveTo(width, 0, width, r);
-            ctx.lineTo(width, height - r);
-            ctx.quadraticCurveTo(width, height, width - r, height);
-            ctx.lineTo(r, height);
-            ctx.quadraticCurveTo(0, height, 0, height - r);
-            ctx.lineTo(0, r);
-            ctx.quadraticCurveTo(0, 0, r, 0);
-            ctx.closePath();
-            ctx.clip();
-
-            ctx.beginPath();
-            ctx.moveTo(0, root.fillY);
-            if (root.waveAmp > 0) {
-                var sinPhase = Math.sin(root.wavePhase);
-                var cosPhase = Math.cos(root.wavePhase + Math.PI);
-                var cp1y = root.fillY + sinPhase * root.waveAmp;
-                var cp2y = root.fillY + cosPhase * root.waveAmp;
-                ctx.bezierCurveTo(width * 0.33, cp2y, width * 0.66, cp1y, width, root.fillY);
-                ctx.lineTo(width, height);
-                ctx.lineTo(0, height);
-            } else {
-                ctx.lineTo(width, root.fillY);
-                ctx.lineTo(width, height);
-                ctx.lineTo(0, height);
-            }
-            ctx.closePath();
-
-            var grad = ctx.createLinearGradient(0, 0, 0, height);
-            grad.addColorStop(0, Qt.lighter(root.colorFill, 1.18).toString());
-            grad.addColorStop(1, root.colorFill.toString());
-            ctx.fillStyle = grad;
-            ctx.globalAlpha = 0.94;
-            ctx.fill();
-            ctx.restore();
-        }
+        visible: root.isLive && root.value > 0
+        fill: root.fillRatio
+        amp: root.waveAmp
+        phase: root.wavePhase
+        radius: root.cardRadius
+        alpha: 0.94
+        colorTop: Qt.lighter(root.colorFill, 1.18)
+        colorBottom: root.colorFill
     }
 
     Item {

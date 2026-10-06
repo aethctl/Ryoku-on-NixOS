@@ -1,0 +1,2 @@
+module stage.modules.ii.background.shortcuts
+singleton DesktopShortcuts 1.0 DesktopShortcuts.qml

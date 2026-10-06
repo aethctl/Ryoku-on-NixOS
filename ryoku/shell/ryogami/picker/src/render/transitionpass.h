@@ -30,7 +30,7 @@ public:
     QRhiTextureRenderTarget *targetB() const { return m_rtB.get(); }
     QRhiRenderPassDescriptor *renderPassDescriptor() const { return m_rpd.get(); }
     QSize size() const { return m_size; }
-    bool ready() const { return m_pipeline && m_texA && m_texB; }
+    bool ready() const { return m_pipeline && m_rtA && m_rtB && m_texA && m_texB; }
 
     // Call in prepare(), before the main render pass begins.
     void prepare(QRhi *rhi, QRhiResourceUpdateBatch *batch, QRhiRenderTarget *mainTarget,
@@ -43,6 +43,7 @@ public:
 
 private:
     void buildPipeline(QRhi *rhi, QRhiRenderTarget *mainTarget);
+    void releaseTargets();
 
     QSize m_size;
     std::unique_ptr<QRhiTexture> m_texA;

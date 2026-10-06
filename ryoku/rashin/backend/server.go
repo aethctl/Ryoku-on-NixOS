@@ -23,7 +23,11 @@ import (
 	"github.com/coder/websocket"
 )
 
-//go:embed web
+// The console is a Svelte app built from ryoku/rashin/web into web/dist; the
+// build output is committed so go build alone ships it (no node at build
+// time). `all:` keeps Vite's dot-prefixed files.
+//
+//go:embed all:web/dist
 var webFS embed.FS
 
 // Serve runs the dashboard and the agent bridge on 127.0.0.1.
@@ -81,17 +85,23 @@ func Serve(cfg Config) error {
 		}
 	}()
 
-	hub := newChatHub()
-	// Pre-warm the shared session: hermes pays its Python cold start at boot,
+	// Two lanes, two hubs, two agent processes. The Ryoku lane is the
+	// machine agent (the launcher bar, the terminal, the console's first
+	// sheet) and the only lane with a quick path; the chat lane is a plain
+	// conversation with the harness, spawned only when a surface joins it.
+	hub := newChatHub(ryokuLane())
+	chatHubPlain := newChatHub(chatLane())
+	laneHubs := map[string]*chatHub{laneRyoku: hub, laneChat: chatHubPlain}
+	// Pre-warm the Ryoku session: hermes pays its Python cold start at boot,
 	// not on the user's first question.
 	go hub.warm()
 	mux := http.NewServeMux()
 
-	sub, err := fs.Sub(webFS, "web")
+	sub, err := fs.Sub(webFS, "web/dist")
 	if err != nil {
 		return err
 	}
-	mux.Handle("/", http.FileServerFS(sub))
+	mux.Handle("/", webHandler(sub))
 
 	mux.HandleFunc("GET /api/ping", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, "ok")
@@ -196,7 +206,9 @@ func Serve(cfg Config) error {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		hub.resetConn() // switch takes effect on the next turn
+		for _, h := range laneHubs { // switch takes effect on the next turn, on every lane
+			h.resetConn()
+		}
 		writeJSON(w, chatBackendInfos(LoadConfig()))
 	})
 
@@ -261,12 +273,23 @@ func Serve(cfg Config) error {
 		serveVitalsWS(r.Context(), ws)
 	})
 	mux.HandleFunc("GET /ws/chat", func(w http.ResponseWriter, r *http.Request) {
+		// ?lane= picks the conversation; an absent lane is the Ryoku lane,
+		// so every surface built before lanes existed keeps its meaning.
+		name := r.URL.Query().Get("lane")
+		if name == "" {
+			name = laneRyoku
+		}
+		h, ok := laneHubs[name]
+		if !ok {
+			http.Error(w, "unknown lane", http.StatusBadRequest)
+			return
+		}
 		ws, err := acceptWS(w, r)
 		if err != nil {
 			return
 		}
 		defer ws.CloseNow()
-		hub.handle(r.Context(), ws)
+		h.handle(r.Context(), ws)
 	})
 
 	srv := &http.Server{

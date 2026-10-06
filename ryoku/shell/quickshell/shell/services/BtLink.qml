@@ -171,7 +171,11 @@ reason() {
 
 # every call carries an agent: without one BlueZ auto-rejects its own
 # authorisation request and the step fails for no reason the user can see.
-btc() { local t=$1; shift; bluetoothctl --agent NoInputNoOutput --timeout "$t" "$@" 2>&1; }
+# KeyboardDisplay, not NoInputNoOutput: BLE HID devices (gamepads, keyboards)
+# pair by numeric comparison, which asks the agent to confirm a passkey --
+# a NoInputNoOutput agent cannot answer it and bluetoothd denies the bond
+# (#308). Piping yes answers the confirmation prompt bluetoothctl reads on stdin.
+btc() { local t=$1; shift; yes | bluetoothctl --agent KeyboardDisplay --timeout "$t" "$@" 2>&1; }
 
 sout=$(bluetoothctl show 2>&1)
 if grep -qiE 'No default controller available' <<<"$sout"; then

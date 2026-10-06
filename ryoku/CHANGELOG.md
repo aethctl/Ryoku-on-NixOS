@@ -3,6 +3,59 @@
 ## Unreleased
 
 ### Added
+- **The Stage Editor is the desktop's edit mode.** Editing widgets opens the
+  shrinking chrome ported from ii-p3drovfx's Edit Mode: the toolbar frames one
+  monitor at a time (Desktop | Widgets | Wallpaper | Style, undo, redo, Done),
+  the drawer lists Ryoku's real catalogue (built-ins, Shima and Python faces,
+  installed plugin sets), and every edit - a catalogue add, a wallpaper frame,
+  a style preset, a widget drag, resize or scale - lands in one undo stack.
+  The old Edit widgets bar, its picker and its Reset button are gone: the
+  desktop is the document and undo is the walk-back. Bar, dock and lock
+  editing stay in the Hub (`ryoku/shell/quickshell/stage/`,
+  `shell/modules/stage/`, docs/stage.md).
+- **Rashin splits into a Ryoku lane and a Chat lane.** The Ryoku lane is the
+  machine agent: the Needle with the vault, the `ryoku` skill, the wiki, prowl
+  over the Ryoku source and the approval modes, on the Alt+Space bar, in the
+  terminal and on the companion window's first sheet; its quick path answers
+  fast and hands tool jobs to the same lane's agent. The Chat lane is a plain
+  conversation with the harness, nothing about the machine in front of it. Each
+  lane is its own agent process in its own cwd, and the Ryoku lane's system
+  prompt is the vault's `AGENTS.md` the daemon writes (`rashin/backend/`,
+  `rashin/web/`).
+- **A wiki for people new to Ryoku.** Plain-language guides (Linux basics, the
+  desktop, Hyprland in Lua, niri in KDL, Quickshell QML, the Go tools, Rashin)
+  ship with Rashin, are mirrored into the vault so the Needle cites them, and
+  render on the console's Wiki sheet (`rashin/wiki/`).
+- **The `ryoku` skill learns the window-manager seam and how to build.** `wm.md`
+  (`ryoku wm`, where each compositor's config is authored, where a user's
+  change goes) and `build.md` (a Quickshell plugin end to end, QML and Go the
+  Ryoku way) join the skill; its intro no longer assumes Hyprland, and the
+  package now ships every guide (`troubleshoot.md` had been left out).
+- **Rashin has its own seal.** A sibling of the 力 tile: the cross 十 that
+  ends 針 (needle), drawn as a compass needle with a vermillion north and the
+  pivot left as tile (`assets/brand/rashin-mark.svg`, with one-colour and
+  small cuts and a `Rashin 羅針` lockup). It is the app icon, the console's
+  favicon and brand seal, and the Ask bar's header mark, replacing the
+  borrowed Ryoku logo.
+- **niri raises the reload cover at login.** The session autostart chain
+  calls `ryoku-reload-cover begin boot` after the environment push and before
+  `session-start` restarts the shell services, so a fresh niri desktop is
+  covered from the greeter handoff until the loaded shell releases it,
+  matching Hyprland (`niri/autostart.kdl`).
+- **Rashin, the AI companion app, joins the desktop.** A window
+  (`ryoku/apps/rashin-app/`, GTK3 + WebKitGTK) that hosts the Rashin console
+  the daemon serves, one Svelte app (`ryoku/rashin/web/`) that is also the
+  dashboard: the shared agent chat as a three-pane workspace (sessions, the
+  transcript with thinking folds, tool rows, diffs and inline approvals, the
+  composer with slash commands and images, the inspector), the fast-lane
+  Ask, and every dashboard sheet (overview, system, vault, memory, skills,
+  agents, models, about) rebuilt on bits-ui with the Libraries.dev effects
+  (the Needle's face, thinking orbs, a beam on the composer while it works).
+  Super+Alt+Space summons it on both compositors, the Ask bar's new OPEN
+  RASHIN chip raises it from a quick answer, and the Ask bar's header grew
+  its history and model drawers (`apps/rashin-app/`, `rashin/web/`,
+  `wm/binds.go`, `wm/niri/config_binds.go`,
+  `shell/quickshell/shell/modules/ask/`).
 - **The night light can run on the clock.** Hub > Displays > Night light
   gained an AT THE CLOCK switch with START AT and OFF AT rows: a 12-hour
   time you step by the hour, flip AM/PM, or type, wrapping midnight, so a
@@ -69,6 +122,19 @@
   (`ui/Singletons/Wm.qml`).
 
 ### Fixed
+- **The keypad choice reaches the login greeter.** Both compositor providers
+  now publish the session's effective numlock state to
+  `/var/lib/ryoku/greeter-numlock` on every apply (the same hand-off shape as
+  greeter-primary), so the login screen and the lock screen agree with the
+  session instead of forcing the keypad on for everyone
+  (`wm/greeter.go`, `wm/hyprland/apply.go`, `wm/niri/apply.go`).
+
+- **The Glass plugin says what it costs on NVIDIA.** Liquid-glass blur and
+  refraction re-render per window on every monitor, and reports say it turns
+  visibly laggy on NVIDIA multi-monitor setups; the plugin's own card now
+  carries that caveat whenever an NVIDIA driver is active, joining the
+  Cursor motion plugin's note (`wm/hyprland/config_plugins_tier.go`).
+
 - **The night light warms the screen on niri.** Users reported it doing
   nothing there. The niri backend is now wlsunset, the small day/night gamma
   daemon in extra, which speaks the gamma protocol niri serves and holds the

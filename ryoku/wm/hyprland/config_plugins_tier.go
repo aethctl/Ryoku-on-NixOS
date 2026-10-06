@@ -874,26 +874,35 @@ func describePlugin(d pluginDef, o Overrides, target hyprABI, loaded map[string]
 			info.Detail = "Installed. Turn it on and Save to load it."
 		}
 	}
-	if d.ID == "dynamic-cursors" {
-		if note := dynamicCursorsNote(info.Loaded, nvidiaGPU()); note != "" {
-			info.Detail += " " + note
-		}
+	if note := pluginNvidiaNote(d.ID, info.Loaded, nvidiaGPU()); note != "" {
+		info.Detail += " " + note
 	}
 	return info
 }
 
-// dynamicCursorsNote is the honest caveat for the one plugin with a known
-// cost on NVIDIA: it forces software cursor rendering, which reports say
-// stutters when the pointer crosses monitors (#257, #259). Surfacing it on
-// the plugin's own card beats shipping the surprise silently.
-func dynamicCursorsNote(loaded, nvidia bool) string {
+// pluginNvidiaNote is the honest caveat for the plugins with a known cost on
+// NVIDIA: dynamic-cursors forces software cursor rendering, which reports say
+// stutters when the pointer crosses monitors (#257, #259), and hyprglass
+// re-renders its blur and refraction pass per window on every monitor, which
+// reports say turns visibly laggy on NVIDIA multi-monitor setups. Surfacing
+// them on the plugin's own card beats shipping the surprise silently.
+func pluginNvidiaNote(id string, loaded, nvidia bool) string {
 	if !nvidia {
 		return ""
 	}
-	if loaded {
-		return "On NVIDIA this plugin renders the cursor in software, which can stutter when the pointer crosses monitors: turn it off if the desktop feels laggy."
+	switch id {
+	case "dynamic-cursors":
+		if loaded {
+			return "On NVIDIA this plugin renders the cursor in software, which can stutter when the pointer crosses monitors: turn it off if the desktop feels laggy."
+		}
+		return "On NVIDIA this plugin forces software cursor rendering and can stutter across monitors."
+	case "hyprglass":
+		if loaded {
+			return "On NVIDIA, especially with several monitors, the glass pass can lag: lower the blur strength or turn it off if windows feel heavy to move."
+		}
+		return "On NVIDIA, especially with several monitors, this plugin's blur and refraction can lag."
 	}
-	return "On NVIDIA this plugin forces software cursor rendering and can stutter across monitors."
+	return ""
 }
 
 // nvidiaGPU reports an active NVIDIA driver by its device nodes, the same

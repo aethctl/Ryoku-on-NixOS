@@ -21,6 +21,11 @@ import (
 
 const minTermW, minTermH = 80, 24
 
+// maxStepRetries bounds how many times the failed screen re-runs the same
+// step: a deterministic failure (a broken script, a missing file) cannot be
+// retried into success, and an unbounded retry loop hides that from the user.
+const maxStepRetries = 3
+
 type frameMsg time.Time
 type scanMsg struct{ f *facts }
 
@@ -51,6 +56,7 @@ type model struct {
 	tailTransient bool
 	failIdx       int
 	failMsg       string
+	failCount     int  // consecutive failures at failIdx; retry stays offered below the cap
 	intAsk        bool // one ctrl+c pressed during install, awaiting the second
 
 	dry        bool
@@ -250,7 +256,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.waitEv()
 	case evDone:
 		if msg.err != nil {
-			m.failIdx, m.failMsg = msg.idx, msg.err.Error()
+			if msg.idx == m.failIdx {
+				m.failCount++
+			} else {
+				m.failIdx, m.failCount = msg.idx, 1
+			}
+			m.failMsg = msg.err.Error()
 			m.state = "failed"
 		} else {
 			m.state = "done"
@@ -341,6 +352,9 @@ func (m model) onKey(k string) (tea.Model, tea.Cmd) {
 	case "failed":
 		switch k {
 		case "r":
+			if m.failCount >= maxStepRetries {
+				return m, nil
+			}
 			m.events = m.eng.runFrom(m.failIdx)
 			m.state = "install"
 			return m, tea.Batch(m.tickCmd(), m.waitEv())
@@ -416,6 +430,9 @@ func (m model) footer() string {
 	case "done":
 		return keyHint("r", i18n.T("reboot now")) + hintSep() + keyHint("q", i18n.T("quit"))
 	case "failed":
+		if m.failCount >= maxStepRetries {
+			return fg(cDim, i18n.Tf("this step failed %d times; fix the cause (see the log) or quit and roll back", m.failCount)) + hintSep() + keyHint("q", i18n.T("quit"))
+		}
 		return keyHint("r", i18n.T("retry failed step")) + hintSep() + keyHint("q", i18n.T("quit"))
 	}
 	return ""
@@ -774,7 +791,7 @@ func main() {
 	uninstall := flag.Bool("uninstall", false, i18n.T("remove the ryoku packages and restore the backup chain"))
 	ref := flag.String("ref", envOr("RYOKU_SHELL_REF", "main"), i18n.T("ryoku-arch git ref for the payload"))
 	payload := flag.String("payload", os.Getenv("RYOKU_SHELL_PAYLOAD"), i18n.T("use a local ryoku-arch checkout as the payload"))
-	compositor := flag.String("compositor", "", i18n.T("window manager to install: hyprland or niri (default hyprland)"))
+	compositor := flag.String("compositor", "", i18n.Tf("window manager to install: %s (default %s)", strings.Join(compositors(), ", "), compositors()[0]))
 	flag.Parse()
 
 	initGlyphs()

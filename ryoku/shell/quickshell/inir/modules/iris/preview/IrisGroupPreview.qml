@@ -3,7 +3,6 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Services.SystemTray
 import Quickshell.Widgets
@@ -2997,10 +2996,7 @@ ClippingRectangle {
             id: framePreview
             readonly property real naturalWidth: Math.round(540 * root.d)
             readonly property real naturalHeight: Math.round(280 * root.d)
-            readonly property bool wave: root.section === "frameMusic" && root.opt("background.edgeWidgets.organic.enable", false) && String(root.opt("iris.surround.music", "widget")) === "widget"
-            readonly property bool music: root.section === "frameMusic"
-                && root.opt("background.edgeWidgets.organic.enable", false)
-                && String(root.opt("iris.surround.music", "widget")) === "frame"
+            readonly property bool music: root.section === "frameMusic" && root.opt("background.edgeWidgets.organic.enable", false)
             property real phase: 0
             readonly property real strength: Number(root.opt("iris.surround.musicStrength", 160)) / 100
             readonly property real sensitivity: Number(root.opt("iris.surround.musicSensitivity", 140)) / 100
@@ -3008,7 +3004,7 @@ ClippingRectangle {
             Timer {
                 interval: 50
                 repeat: true
-                running: root.playing && root.visible && (framePreview.wave || (framePreview.music && IrisFrame.framed)) && IrisStyle.motionEnabled
+                running: root.playing && root.visible && framePreview.music && IrisFrame.framed && IrisStyle.motionEnabled
                 onTriggered: framePreview.phase += 0.05 * Number(root.opt("iris.surround.musicSpeed", 100)) / 100
             }
             Field.IrisField {
@@ -3030,23 +3026,8 @@ ClippingRectangle {
                     radius: IrisStyle.radiusTile, id: "island", joins: "frame", fuse: IrisStyle.fuse }]
             }
             IrisClock { anchors.centerIn: parent; pixelSize: 48 * IrisStyle.typeScale; separatorColor: IrisStyle.secondaryAccent }
-            Shape {
-                anchors.fill: parent
-                visible: framePreview.wave
-                preferredRendererType: Shape.CurveRenderer
-                ShapePath {
-                    strokeColor: IrisStyle.accent
-                    strokeWidth: Math.round(3 * root.d)
-                    fillColor: "transparent"
-                    capStyle: ShapePath.RoundCap
-                    PathMultiline {
-                        paths: [Array.from({length: 49}, (_, i) => Qt.point(i / 48 * framePreview.width,
-                            framePreview.height - 24 * root.d - (10 + 7 * Math.sin(i * 0.2 + framePreview.phase * 3)) * root.d))]
-                    }
-                }
-            }
-            OffState { visible: !IrisFrame.framed && !framePreview.wave; text: Translation.tr("Frame off") }
-            Caption { glyph: "crop_free"; text: framePreview.wave ? Translation.tr("Music follows the screen edges") : framePreview.music ? Translation.tr("A sample of your frame's music response") : Translation.tr("The frame's width, corners and material") }
+            OffState { visible: !IrisFrame.framed; text: Translation.tr("Frame off") }
+            Caption { glyph: "crop_free"; text: framePreview.music ? Translation.tr("A sample of your frame's music response") : Translation.tr("The frame's width, corners and material") }
         }
     }
 

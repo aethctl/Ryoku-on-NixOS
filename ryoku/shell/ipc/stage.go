@@ -106,6 +106,7 @@ type stageFrame struct {
 	Busy    bool                      `json:"busy"`
 	Stage   string                    `json:"stage"`
 	Percent int                       `json:"percent"`
+	Notice  string                    `json:"notice,omitempty"`
 	Walls   map[string]stageWallFrame `json:"walls"`
 }
 
@@ -299,12 +300,22 @@ func stageEngineBin() string {
 	return "ryostage"
 }
 
-// stageEngineAvailable probes the runtime on a deadline: a hung helper must
-// never wedge the worker.
-func stageEngineAvailable() bool {
+// stageEngineProbe asks the helper whether it can cut with `model` right now,
+// on a deadline so a hung helper never wedges the worker. It returns the
+// helper's one-line reason ("runtime missing", "model u2netp missing") so a
+// blocked pipeline can name itself instead of dying mute.
+func stageEngineProbe(model string) (bool, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	return exec.CommandContext(ctx, stageEngineBin(), "check").Run() == nil
+	cmd := exec.CommandContext(ctx, stageEngineBin(), "check", model)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return true, ""
+	}
+	if reason := strings.TrimSpace(string(out)); reason != "" {
+		return false, reason
+	}
+	return false, "engine unavailable"
 }
 
 // stageModelsJSON passes the curated catalogue through to the shell.
@@ -404,6 +415,33 @@ func readLastStagePhase() string {
 		}
 	}
 	return phase
+}
+
+// readLastStageError returns the error the last failed engine phase recorded
+// ("" when the last phase was not an error), so a blocked cut can name the
+// real failure instead of pointing at the log.
+func readLastStageError() string {
+	b, err := os.ReadFile(stageProgressPath())
+	if err != nil {
+		return ""
+	}
+	phase, msg := "", ""
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var rec map[string]any
+		if json.Unmarshal([]byte(line), &rec) != nil {
+			continue
+		}
+		phase, _ = rec["phase"].(string)
+		msg, _ = rec["error"].(string)
+	}
+	if phase == "error" {
+		return msg
+	}
+	return ""
 }
 
 // --- reuse rules -----------------------------------------------------------
@@ -562,13 +600,21 @@ func (d *daemon) reconcileStage(force, gen bool) {
 			logStage("save current", err)
 		}
 	}
-	// Only probe the engine when generation is actually possible, so a plain
-	// switch makes zero engine calls.
-	available := false
-	if force || gen {
-		available = stageEngineAvailable()
-	}
 	q := stageConfig()
+	// Probe the engine only when some wall can actually need a cut, and ask
+	// about the model the configured tier uses: a box that installed the fine
+	// tier must not read as "engine missing" just because the draft model is
+	// absent, and a box that cannot cut must say why.
+	probed, available := false, false
+	reason := ""
+	probe := func() bool {
+		if !probed {
+			available, reason = stageEngineProbe(q.model)
+			probed = true
+		}
+		return available
+	}
+	notice := ""
 	dirty := false
 	subjectPublished := false
 	for _, t := range d.stageTargets() {
@@ -577,8 +623,32 @@ func (d *daemon) reconcileStage(force, gen bool) {
 		if effect == "" || effect == stageEffectOff {
 			continue
 		}
+		// A wall switched on whose artifacts vanished (a hand-purged cache, a
+		// cut that died mid-flight) is retried on any wake: the registry says
+		// the user wants the scene, so the missing file is the work.
+		missing := !subjectFresh(t.source, stageSubjectOut(t.source))
+		if !missing && effect == stageEffectParallax {
+			missing = !backgroundFresh(t.source, stageBackgroundOut(t.source))
+		}
+		genHere := gen || force || missing
+		avail := false
+		if genHere {
+			avail = probe()
+		}
 		prevBytes, _ := json.Marshal(e)
-		subjectExists := d.ensureArtifacts(t.source, effect, q, force, gen, available)
+		subjectExists := d.ensureArtifacts(t.source, effect, q, force, genHere, avail)
+		if !subjectExists && notice == "" {
+			switch {
+			case genHere && !avail:
+				notice = reason
+			case genHere && avail:
+				if cutErr := readLastStageError(); cutErr != "" {
+					notice = cutErr
+				} else {
+					notice = "the last cut failed"
+				}
+			}
+		}
 		e.Layers = d.deriveLayers(t.source, e.Layers)
 		reg.Walls[t.source] = e
 		if newBytes, _ := json.Marshal(e); !bytes.Equal(prevBytes, newBytes) {
@@ -599,6 +669,7 @@ func (d *daemon) reconcileStage(force, gen bool) {
 			logStage("save walls", err)
 		}
 	}
+	d.stageNotice.Store(notice)
 	d.stageBusy.Store(false)
 	d.publishStage()
 }
@@ -757,7 +828,16 @@ func (d *daemon) buildStageFrame() stageFrame {
 		}
 		walls[p] = wf
 	}
-	return stageFrame{Current: cur, Busy: busy, Stage: stageStr, Percent: percent, Walls: walls}
+	return stageFrame{Current: cur, Busy: busy, Stage: stageStr, Percent: percent, Notice: d.stageNoticeText(), Walls: walls}
+}
+
+// stageNoticeText reads the last blocked-cut reason; a daemon that never
+// reconciled (or a bare test struct) reads as fine.
+func (d *daemon) stageNoticeText() string {
+	if v, ok := d.stageNotice.Load().(string); ok {
+		return v
+	}
+	return ""
 }
 
 func (d *daemon) publishStage() {
@@ -959,15 +1039,27 @@ func (d *daemon) stageRemoveLayer(indexArg string) error {
 }
 
 // stageClear removes the current wall's generated artifacts (subject, backdrop,
-// index), keeping manual layers and the effect setting, then reconciles so the
-// overlay clears and layers re-derive without regenerating.
+// index), keeps manual layers, and records the wall as off: the registry is the
+// user's intent, and a cleared cut-out is an intent to stop showing the scene
+// (an on-wall with purged files is the ghost state the self-heal would
+// immediately re-cut). The reconcile then clears the overlay and re-derives.
 func (d *daemon) stageClear() {
-	if wall := d.currentWall(); wall != "" {
-		dir := stageWallDir(wall)
-		for _, n := range []string{"subject.png", "background.png", ".index.json"} {
-			_ = os.Remove(filepath.Join(dir, n))
-		}
+	wall := d.currentWall()
+	if wall == "" {
+		return
 	}
+	dir := stageWallDir(wall)
+	for _, n := range []string{"subject.png", "background.png", ".index.json"} {
+		_ = os.Remove(filepath.Join(dir, n))
+	}
+	reg := loadStageWalls()
+	e := reg.Walls[wall]
+	e.Effect = stageEffectOff
+	reg.Walls[wall] = e
+	if err := saveStageWalls(reg); err != nil {
+		logStage("clear save", err)
+	}
+	d.publishStage()
 	d.scheduleStage()
 }
 

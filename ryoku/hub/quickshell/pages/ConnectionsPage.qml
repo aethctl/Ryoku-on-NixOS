@@ -483,6 +483,7 @@ Item {
         property string pwDraft: ""
         property string pendingPw: ""
         property string attemptSsid: ""
+        property string attemptBand: ""
         property bool attemptWasKnown: false
 
         readonly property real colMax: 720
@@ -561,18 +562,20 @@ Item {
             return I18n.tr("2.4 GHz");
         }
 
-        // the BSSID of the band the user picked for this SSID, or "" when none
-        // is picked (keep NM's own strongest-BSS choice).
-        function pickedBssid(ssid) {
+        // NetworkManager's band value for the band the user picked for this
+        // SSID: "a" (5 GHz), "bg" (2.4 GHz), or "" (none picked, or 6 GHz,
+        // which NM's band property cannot express). The join pins the profile
+        // to the band, never to one AP's BSSID: a BSSID pin stops the client
+        // roaming between the access points of the same network, which on a
+        // multi-AP 5 GHz network reads as a connect/disconnect loop.
+        function pickedBand(ssid) {
             var band = wifi.selectedBands[ssid];
             if (!band)
                 return "";
-            var entries = wifi.bandMap[ssid];
-            if (!entries)
-                return "";
-            for (var i = 0; i < entries.length; i++)
-                if (entries[i].band === band)
-                    return entries[i].bssid;
+            if (band === "5")
+                return "a";
+            if (band === "2.4")
+                return "bg";
             return "";
         }
 
@@ -603,9 +606,8 @@ Item {
             var secKnown = wifi.securityMap[ssid] !== undefined;
             if (wifi.knownProfiles[ssid] === true || (secKnown && !wifi.isSecured(ssid))) {
                 wifi.expandedSsid = "";
-                var bssid = wifi.pickedBssid(ssid);
-                if (bssid.length) {
-                    wifi.connectBand(ssid, bssid);
+                if (wifi.pickedBand(ssid).length) {
+                    wifi.connectBand(ssid);
                     return;
                 }
                 if (typeof net.connect === "function")
@@ -626,28 +628,26 @@ Item {
             wifi.connecting = true;
             wifi.connectFailed = false;
             wifi.attemptSsid = ssid;
+            wifi.attemptBand = wifi.pickedBand(ssid);
             wifi.attemptWasKnown = wifi.knownProfiles[ssid] === true;
             wifi.pendingPw = pw;
-            // a picked band joins its exact BSSID; an empty pick keeps the SSID
-            // so NM chooses the strongest AP (today's behaviour).
-            var bssid = wifi.pickedBssid(ssid);
-            connProc.command = ["nmcli", "--ask", "dev", "wifi", "connect", bssid.length ? bssid : ssid];
+            connProc.command = ["nmcli", "--ask", "dev", "wifi", "connect", ssid];
             connProc.running = true;
         }
 
-        // known/open join pinned to a band's BSSID. nmcli's connect target
-        // accepts a BSSID, so this reaches the exact AP instead of NM's
-        // strongest pick; it shares connProc's success and cleanup wiring and
-        // needs no password.
-        function connectBand(ssid, bssid) {
+        // known/open join pinned to a band. The profile is locked to the band
+        // after the join (nmcli's connect target takes no settings), never to
+        // one AP's BSSID, so the client still roams across the band.
+        function connectBand(ssid) {
             if (connProc.running)
                 return;
             wifi.connecting = true;
             wifi.connectFailed = false;
             wifi.attemptSsid = ssid;
+            wifi.attemptBand = wifi.pickedBand(ssid);
             wifi.attemptWasKnown = wifi.knownProfiles[ssid] === true;
             wifi.pendingPw = "";
-            connProc.command = ["nmcli", "dev", "wifi", "connect", bssid];
+            connProc.command = ["nmcli", "dev", "wifi", "connect", ssid];
             connProc.running = true;
         }
 
@@ -689,7 +689,7 @@ Item {
 
         Process {
             id: secProc
-            command: ["nmcli", "-t", "-f", "SSID,SECURITY,FREQ,BSSID", "dev", "wifi", "list"]
+            command: ["nmcli", "-t", "-f", "SSID,SECURITY,FREQ", "dev", "wifi", "list"]
             stdout: StdioCollector {
                 onStreamFinished: {
                     var secs = {};
@@ -699,7 +699,7 @@ Item {
                         if (!lines[i].length)
                             continue;
                         var f = wifi.terseFields(lines[i]);
-                        if (f.length < 4 || !f[0].length)
+                        if (f.length < 3 || !f[0].length)
                             continue;
                         secs[f[0]] = f[1];
                         var mhz = parseInt(f[2], 10);
@@ -713,10 +713,8 @@ Item {
                                 seen = true;
                                 break;
                             }
-                        // nmcli lists strongest first, so the first BSSID kept
-                        // for a band is that band's strongest AP.
                         if (!seen)
-                            entries.push({ band: band, bssid: f[3], freq: mhz });
+                            entries.push({ band: band, freq: mhz });
                         bands[f[0]] = entries;
                     }
                     for (var s in bands)
@@ -763,6 +761,12 @@ Item {
                     wifi.expandedSsid = "";
                     wifi.pwDraft = "";
                     wifi.connectFailed = false;
+                    if (wifi.attemptBand.length && wifi.attemptSsid.length) {
+                        bandProc.command = ["nmcli", "connection", "modify", wifi.attemptSsid,
+                            "802-11-wireless.band", wifi.attemptBand];
+                        bandProc.running = true;
+                        return;
+                    }
                     wifi.refresh();
                 } else {
                     wifi.connectFailed = true;
@@ -775,11 +779,22 @@ Item {
         }
 
         // a failed `nmcli dev wifi connect` leaves a profile named after the
-        // SSID (nmcli names it after the SSID even when the join used a BSSID),
-        // so the cleanup keys on attemptSsid, not the BSSID. without deleting it
-        // the next click reads the network as known and silently fails forever.
+        // SSID (nmcli names it after the SSID), so the cleanup keys on
+        // attemptSsid. without deleting it the next click reads the network as
+        // known and silently fails forever.
         Process {
             id: cleanupProc
+            onExited: wifi.refresh()
+        }
+
+        // lock the just-joined profile to the picked band. nmcli's `dev wifi
+        // connect` takes no settings, so the band rides on the profile after
+        // the join; the profile name equals the SSID (nmcli names it after the
+        // SSID), the same keying the autoconnect toggle uses.
+        Process {
+            id: bandProc
+            stdout: StdioCollector {}
+            stderr: StdioCollector {}
             onExited: wifi.refresh()
         }
 
@@ -1090,8 +1105,8 @@ Item {
                             // band selector. a dual or tri-band SSID resolves to
                             // one BSSID per band, and NM's SSID join takes the
                             // strongest, which is the 2.4 GHz AP at any range.
-                            // picking a band pins the join to that band's BSSID;
-                            // single-band rows collapse this to nothing.
+                            // picking a band locks the saved profile to that
+                            // band, never to one AP, so the client still roams.
                             Item {
                                 id: bandRow
                                 readonly property var entries: wifi.bandMap[netItem.ssid] || []
@@ -1427,8 +1442,13 @@ Item {
                 return;
             bt.pairingAddress = d.address;
             bt.failedAddress = "";
+            // The agent is what lets BLE HID devices (gamepads, keyboards)
+            // pair at all: they confirm a passkey, and bluetoothd denies the
+            // bond when no agent can answer (#308). `yes` answers the
+            // confirmation prompt; KeyboardDisplay is the capability that
+            // carries a passkey.
             pairProc.command = ["sh", "-c",
-                'timeout 30 bluetoothctl pair "$1" && bluetoothctl trust "$1" && timeout 30 bluetoothctl connect "$1"',
+                'yes | timeout 30 bluetoothctl --agent KeyboardDisplay pair "$1" && timeout 30 bluetoothctl --agent KeyboardDisplay trust "$1" && timeout 30 bluetoothctl --agent KeyboardDisplay connect "$1"',
                 "sh", d.address];
             pairProc.running = true;
         }

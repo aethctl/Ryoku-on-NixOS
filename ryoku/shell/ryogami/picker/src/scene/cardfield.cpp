@@ -817,18 +817,37 @@ void CardField::filterStorm()
     m_filterElapsed = 0.0;
 }
 
-void CardField::pushFilterOld(std::vector<CardInstance> &instances)
+void CardField::pushFilterOld(std::vector<CardInstance> &instances, CardRenderNode *node)
 {
-    for (const FilterOld &fo : m_filterOld) {
+    for (FilterOld &fo : m_filterOld) {
         const float roll = geom::smoothstep(fo.t);
         if (roll >= 1.0f)
             continue;
-        CardInstance body = fo.inst;
-        geom::rollOutCut(body, roll);
-        if (body.rect[2] < 0.5f)
+        // The cached instance holds an atlas slot from the frame the filter
+        // swapped. find() is the only thing that refreshes a tile's age and
+        // notices eviction; without it a still-drawing old card can sample a
+        // layer another wallpaper has since taken, flashing the wrong image
+        // for as long as the old card animates out.
+        CardInstance &body = fo.inst;
+        const TextureTier::Slot *slot =
+            body.misc[0] == CardTex::Near ? node->nearTier().find(fo.key) : nullptr;
+        const bool near = slot != nullptr;
+        if (!slot)
+            slot = node->farTier().find(fo.key);
+        if (slot) {
+            body.misc[0] = near ? CardTex::Near : CardTex::Far;
+            body.misc[1] = uint32_t(slot->layer);
+            setVec4(body.uv, float(slot->uv.x()), float(slot->uv.y()),
+                    float(slot->uv.width()), float(slot->uv.height()));
+        } else if (body.misc[0] == CardTex::Near || body.misc[0] == CardTex::Far) {
+            body.misc[0] = CardTex::None;
+        }
+        CardInstance cut = body;
+        geom::rollOutCut(cut, roll);
+        if (cut.rect[2] < 0.5f)
             continue;
         m_wanted.insert(fo.key);
-        instances.push_back(body);
+        instances.push_back(cut);
     }
 }
 
@@ -1003,7 +1022,7 @@ void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
         applyMicroAnim(inst, row, projected, ctx);
         instances.push_back(inst);
     }
-    pushFilterOld(instances);
+    pushFilterOld(instances, node);
 }
 
 void CardField::resolveTransition(CardRenderNode *node, const LayoutContext &ctx)

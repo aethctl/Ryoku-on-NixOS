@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
 # The session intro: the welcome tour and the first-boot keyboard hint. Every
-# compositor's autostart calls this instead of carrying the logic inline,
-# because the copy lives in three config dialects and only one of them can
-# script; mango in particular truncates a config value at 255 characters, so
-# an inline chain silently loses its tail there. The behaviour is unchanged
-# from when each line lived in the configs:
+# compositor's autostart calls this instead of carrying the logic inline, so
+# the behaviour stays identical across providers:
 #
 #   welcome   once per tour version: a fresh or older-version box sees it, a
 #             box already on this version is left alone. The version is written

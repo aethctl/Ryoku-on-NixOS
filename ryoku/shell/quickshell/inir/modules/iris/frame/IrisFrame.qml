@@ -31,10 +31,11 @@ QtObject {
         }
         return out
     }
+    // Ryoku hosts no Organic Edge widget, so Music on the edges has one thing it
+    // can move: the frame itself.
     readonly property bool musicActive: {
         Config.revision
         return root.framed && Boolean(Config.options?.background?.edgeWidgets?.organic?.enable ?? false)
-            && String(root.surround?.music ?? "widget") === "frame"
     }
     function musicReach(edge: string): real {
         Config.revision

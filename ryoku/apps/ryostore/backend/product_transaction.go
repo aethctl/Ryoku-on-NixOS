@@ -35,6 +35,7 @@ type productTransactionJournal struct {
 	Adopted                 bool            `json:"adopted,omitempty"`
 	BaseRevision            uint64          `json:"baseRevision"`
 	PriorReceipt            *Receipt        `json:"priorReceipt,omitempty"`
+	VesktopThemeFile        string          `json:"vesktopThemeFile,omitempty"`
 	SelectionToken          string          `json:"selectionToken,omitempty"`
 	PluginPlacement         json.RawMessage `json:"pluginPlacement,omitempty"`
 	PluginPlacementPresent  bool            `json:"pluginPlacementPresent,omitempty"`
@@ -95,6 +96,13 @@ func installProductFrom(ctx context.Context, cache *Cache, category string, entr
 	}
 	if manifest.Destination != expectedDestination {
 		return fmt.Errorf("%s/%s: destination %q is outside the category allowlist", category, entry.ID, manifest.Destination)
+	}
+	vesktopThemeFile := ""
+	if category == vesktopThemesCategory {
+		vesktopThemeFile, err = vesktopThemeManifestFile(manifest.Files)
+		if err != nil {
+			return err
+		}
 	}
 
 	globalUnlock, err := lockTree(storeTransactionLockPath())
@@ -223,15 +231,16 @@ func installProductFrom(ctx context.Context, cache *Cache, category string, entr
 		return err
 	}
 	journal := productTransactionJournal{
-		Schema:         1,
-		Category:       category,
-		ID:             entry.ID,
-		Version:        entry.Version,
-		Operation:      operation,
-		Phase:          "install-prepared",
-		BaseRevision:   baseRevision,
-		HadDestination: hadDestination,
-		Adopted:        adopting,
+		Schema:           1,
+		Category:         category,
+		ID:               entry.ID,
+		Version:          entry.Version,
+		Operation:        operation,
+		Phase:            "install-prepared",
+		BaseRevision:     baseRevision,
+		HadDestination:   hadDestination,
+		Adopted:          adopting,
+		VesktopThemeFile: vesktopThemeFile,
 	}
 	if hadReceipt {
 		priorCopy := prior
@@ -470,7 +479,7 @@ func removeProduct(_ context.Context, category, id string) error {
 
 func recoverStoreTransactions() error {
 	root := storeTransactionsDir()
-	for _, category := range []string{"rices", "lockscreens", "barstyles", "fastfetch", "plugins", "bundles"} {
+	for _, category := range []string{"rices", "lockscreens", "barstyles", "fastfetch", "plugins", "bundles", vesktopThemesCategory} {
 		directory := filepath.Join(root, category)
 		entries, err := os.ReadDir(directory)
 		if os.IsNotExist(err) {
@@ -734,6 +743,16 @@ func validateProductJournal(journal productTransactionJournal) error {
 			return fmt.Errorf("invalid prior receipt: %w", err)
 		}
 	}
+	if journal.Category == vesktopThemesCategory {
+		if journal.Operation != "remove" && !validVesktopThemeName(journal.VesktopThemeFile) {
+			return fmt.Errorf("invalid Vesktop theme transaction filename")
+		}
+		if journal.Operation == "remove" && journal.VesktopThemeFile != "" {
+			return fmt.Errorf("Vesktop theme removal has a new filename")
+		}
+	} else if journal.VesktopThemeFile != "" {
+		return fmt.Errorf("non-Vesktop transaction has a theme filename")
+	}
 	if journal.SelectionToken != "" && (journal.Category != "barstyles" || journal.Operation != "remove") {
 		return fmt.Errorf("invalid product selection transaction")
 	}
@@ -776,6 +795,9 @@ func validateProductJournal(journal productTransactionJournal) error {
 }
 
 func syncProductDerivedState(journal productTransactionJournal, committed bool) error {
+	if journal.Category == vesktopThemesCategory {
+		return syncVesktopTheme(journal, committed)
+	}
 	if journal.Category == "plugins" {
 		return writePluginIndexLocked()
 	}

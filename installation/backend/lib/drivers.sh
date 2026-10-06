@@ -50,11 +50,12 @@ ryoku_drivers() {
 #   offload -> hybrid       (no pin; Hyprland's iGPU-first default, for battery)
 #   sync    -> performance  (pin the dGPU as the primary renderer)
 #   vfio    -> passthrough  (pin the iGPU alone, freeing the dGPU for a VM)
-# run `ryoku-gpu mode <mapped>` as the user against the provider's gpu.lua render
-# pin, via runuser like deploy.sh's materialize. only a compositor whose config
-# ships that Lua pin has a writer here: niri picks its own render device and ships
-# gpu.kdl, so the render pin is skipped for it (niri's gpu.kdl still gets the
-# cursor half of the policy from `ryoku-gpu persist`, which lands at login).
+# run `ryoku-gpu mode <mapped>` as the user against the provider's render pin,
+# via runuser like deploy.sh's materialize. the pin file is the seam's answer
+# (wm.GpuPinFile, exported as RYOKU_COMPOSITOR_GPU_PIN): Hyprland writes
+# gpu.lua, while niri names no file because it picks its own render device.
+# niri's gpu.kdl still gets the cursor half of the policy from `ryoku-gpu
+# persist`, which lands at login.
 # ryoku-gpu's analyze reads /sys/class/drm,
 # which arch-chroot bind-mounts, so detection sees the real target GPUs; the tool
 # self-gates (a single GPU no-ops, a missing iGPU refuses passthrough), so a
@@ -79,14 +80,21 @@ ryoku_gpu_mode() {
 		vfio)    mapped=passthrough ;;
 		*) log 'GPU mode: ignoring unknown RYOKU_GPU_MODE='\''%s'\'' (want offload|sync|vfio)' "$RYOKU_GPU_MODE"; return 0 ;;
 	esac
-	local u=$RYOKU_USERNAME dest="/home/$RYOKU_USERNAME/.config/$RYOKU_COMPOSITOR_CONFIG_DIR/gpu.lua"
-	if [[ -n ${RYOKU_DRYRUN:-} ]]; then
-		log "DRYRUN: arch-chroot /mnt runuser -u $u -- env HOME=/home/$u ryoku-gpu mode $mapped $dest"
+	local u=$RYOKU_USERNAME
+	# The TUI derives the pin file from wm.GpuPinFile: an empty value means
+	# the compositor picks its own render device (niri), so the step skips.
+	# The write itself goes to ryoku-gpu's default store (the Hyprland pin
+	# file, which materialize lays on every box); the tool mirrors the
+	# decision into the active compositor's own dialect on every path.
+	if [[ -z ${RYOKU_COMPOSITOR_GPU_PIN:-} ]]; then
+		log 'GPU mode: skipped (the %s compositor picks its own render device)' "$RYOKU_COMPOSITOR"
 		return 0
 	fi
-	# only a compositor whose config ships a gpu.lua pin has a ryoku-gpu writer;
-	# niri ships gpu.kdl (comment-only, it picks its own render device), so skip.
-	if [[ ! -f /mnt/usr/share/ryoku/config/$RYOKU_COMPOSITOR_CONFIG_DIR/gpu.lua ]]; then
+	if [[ -n ${RYOKU_DRYRUN:-} ]]; then
+		log "DRYRUN: arch-chroot /mnt runuser -u $u -- env HOME=/home/$u ryoku-gpu mode $mapped (writes /home/$u/.config/$RYOKU_COMPOSITOR_CONFIG_DIR/$RYOKU_COMPOSITOR_GPU_PIN)"
+		return 0
+	fi
+	if [[ ! -f /mnt/usr/share/ryoku/config/$RYOKU_COMPOSITOR_CONFIG_DIR/$RYOKU_COMPOSITOR_GPU_PIN ]]; then
 		log 'GPU mode: skipped (the %s compositor has no ryoku-gpu render pin)' "$RYOKU_COMPOSITOR"
 		return 0
 	fi
@@ -96,6 +104,6 @@ ryoku_gpu_mode() {
 	fi
 	log 'GPU mode: applying '\''%s'\'' -> ryoku-gpu mode %s for %s' "$RYOKU_GPU_MODE" "$mapped" "$u"
 	arch-chroot /mnt runuser -u "$u" -- env "HOME=/home/$u" "USER=$u" "LOGNAME=$u" \
-		ryoku-gpu mode "$mapped" "$dest" \
+		ryoku-gpu mode "$mapped" \
 		|| log 'GPU mode: warning, '\''ryoku-gpu mode %s'\'' failed (continuing; set it later from Ryoku Settings > GPU)' "$mapped"
 }

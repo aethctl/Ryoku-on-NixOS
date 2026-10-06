@@ -4,13 +4,16 @@ import Quickshell
 import Quickshell.Io
 import "lib/screens.js" as Screens
 
-// Screen recording state + control for GPU Screen Recorder. The live process is
-// the truth: it polls the GSR IPC socket (the backend ryoku-cmd-record drives) so
-// a failed launch or an external stop can never strand the island, and reads the
-// recorder-status.json the backend writes for the live audio mode. Control goes
-// through the one command API -- `ryoku-shell record start|stop|pause|resume` and
-// `record settings` -- so nothing here builds a recorder invocation of its own.
-// The capture card and the floating record island share this single source of truth.
+// Screen recording state + control for GPU Screen Recorder. The backend
+// (ryoku-cmd-record) writes recorder-status.json the moment it launches the
+// recorder and removes it on every exit, so that file is the capture's lifetime:
+// watching it shows the island at once for a capture started anywhere (the
+// capture card, ryoshot, the CLI) and carries the launch time, so the clock is
+// right from its first frame and survives a shell reload. GSR's IPC socket is
+// polled as the backstop for a stale file. Control goes through the one command
+// API -- `ryoku-shell record start|stop|pause|resume` and `record settings` --
+// so nothing here builds a recorder invocation of its own.
+// The capture popout and the floating record island share this single source of truth.
 Singleton {
     id: root
 
@@ -20,7 +23,7 @@ Singleton {
     property int elapsedSec: 0
     readonly property string elapsedText: fmt(elapsedSec)
 
-    // The record island and capture card watch anyActive and its changed signal;
+    // The record island and capture popout watch anyActive and its changed signal;
     // with the standalone editor gone it tracks the one live capture directly.
     readonly property bool anyActive: root.active
 
@@ -91,7 +94,7 @@ Singleton {
     }
 
     // Read-only mirror of the daemon-owned recording settings. The daemon is the
-    // sole writer (ryoku-shell record settings); the capture card shows these and
+    // sole writer (ryoku-shell record settings); the capture popout shows these and
     // edits them through setSetting(), never by writing the file here. watchChanges
     // picks up the daemon's writes so the chips stay in sync. Defaults match the
     // daemon's so a missing file still reads sensibly.
@@ -136,30 +139,64 @@ Singleton {
         return a;
     }
 
-    // Persist the capture's start time so a shell reload mid-recording keeps
-    // counting from the real start instead of resetting the clock. Written when a
-    // capture begins, cleared when it ends; the poll reads it back on reload. A
-    // capture started outside the shell has no stamp and counts from when the shell
-    // first saw it.
-    readonly property string sessionFile: (Quickshell.env("RYOKU_STATE_PATH") || (Quickshell.env("HOME") + "/.local/state/ryoku")) + "/record-session"
-    function writeSession(v) {
-        Quickshell.execDetached(["sh", "-c",
-            "mkdir -p \"${1%/*}\"; printf '%s' \"$2\" > \"$1\"", "sh", root.sessionFile, v]);
+    // The backend's status file: present exactly while a capture runs. A capture
+    // seen here that the shell did not start adopts its launch time, so the clock
+    // never counts from when the shell first noticed.
+    property bool statusPresent: false
+    function applyStatus() {
+        var p;
+        try {
+            p = JSON.parse(statusView.text() || "{}");
+        } catch (e) {
+            p = {};
+        }
+        root.statusPresent = true;
+        root.recorderPid = Number(p.recorderPid ?? 0);
+        root.activeAudioMode = String(p.activeAudioMode ?? "none");
+        root.audioFallback = p.audioFallback === true;
+        const launched = Number(p.startedAt ?? 0);
+        if (launched > 0)
+            root.startedAt = launched;
+        else if (root.startedAt <= 0)
+            root.startedAt = Math.floor(Date.now() / 1000);
+        root.elapsedSec = Math.max(0, Math.floor(Date.now() / 1000) - root.startedAt);
+        if (!root.active) {
+            root.active = true;
+            root.paused = false;
+        }
+        // The launch stamp just arrived: tick from it, so each second rolls on
+        // the capture's own boundary instead of up to a second late.
+        tick.restart();
     }
-    function readSessionStart() {
-        const n = parseInt((sessionView.text() || "").trim(), 10);
-        return (isFinite(n) && n > 0) ? n : 0;
+    function clearStatus() {
+        root.active = false;
+        root.startedAt = 0;
+        root.elapsedSec = 0;
+        root.regionGeom = "";
+        root.activeAudioMode = "none";
+        root.audioFallback = false;
+        root.paused = false;
+        root.recorderPid = 0;
     }
     FileView {
-        id: sessionView
-        path: root.sessionFile
+        id: statusView
+        path: (Quickshell.env("RYOKU_STATE_PATH") || (Quickshell.env("HOME") + "/.local/state/ryoku")) + "/recorder-status.json"
         blockLoading: true
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
+        onLoaded: root.applyStatus()
+        onLoadFailed: {
+            // The backend removed its file: the capture is over, whatever the
+            // optimistic state says; the poll confirms.
+            root.statusPresent = false;
+            if (root.active)
+                root.clearStatus();
+            root.refreshStatus();
+        }
     }
 
-    // pre-record countdown: the capture card can arm a delay (Capture.delay,
+    // pre-record countdown: the capture popout can arm a delay (Capture.delay,
     // 0/1/3/5/10s) so the desktop is framed before capture begins. startAfter ticks
     // that delay down -- the island renders it -- then calls start(), so the count
     // is honest. args are latched so a mid-count option change can't retarget it.
@@ -220,12 +257,12 @@ Singleton {
             root.regionGeom = "";
         }
         Quickshell.execDetached(["ryoku-shell", "record", "start"].concat(a));
+        // Optimistic, so the island shows at once; the backend's status file then
+        // supplies the launch time and the poll confirms the recorder came up.
         root.active = true;
         root.paused = false;
         root.startedAt = Math.floor(Date.now() / 1000);
         root.elapsedSec = 0;
-        root.writeSession(String(root.startedAt));
-        confirm.restart();
     }
 
     // Pause/resume the live capture through the daemon (which relays to GSR's IPC
@@ -246,13 +283,15 @@ Singleton {
         root.active = false;
         root.paused = false;
         root.regionGeom = "";
-        root.writeSession("");
     }
 
-    // ── reconcile against the live process. Detection is GSR's IPC status; the
-    // status file adds the live audio mode and pid. A poll that finds a capture the
-    // shell didn't start (reload, or an external launch) restores the clock from the
-    // session stamp so it keeps counting rather than resetting.
+    // ── reconcile against the live process. The status file says a capture runs;
+    // GSR's IPC status backs it up so a stale file (the backend killed outright)
+    // can never strand the island. GSR brings its socket up a moment after launch,
+    // so a negative answer inside the first seconds of a capture is the socket
+    // warming up, not a stop; a launch that never produced a file clears once that
+    // window passes.
+    readonly property int socketWarmupSec: 5
     function refreshStatus() {
         if (!poll.running)
             poll.running = true;
@@ -262,64 +301,30 @@ Singleton {
         id: poll
         command: ["gsr-cli", "-ipc", (Quickshell.env("XDG_RUNTIME_DIR") || "/tmp") + "/ryoku-gsr.sock", "status"]
         onExited: (exitCode) => {
-            var nowActive = exitCode === 0;
-            if (nowActive && !root.active) {
-                const persisted = root.readSessionStart();
-                if (persisted > 0) {
-                    root.startedAt = persisted;
-                    root.elapsedSec = Math.max(0, Math.floor(Date.now() / 1000) - persisted);
-                } else {
-                    root.startedAt = Math.floor(Date.now() / 1000);
-                    root.elapsedSec = 0;
-                    root.writeSession(String(root.startedAt));
-                }
+            const answering = exitCode === 0;
+            const warming = root.active && root.startedAt > 0
+                && Math.floor(Date.now() / 1000) - root.startedAt < root.socketWarmupSec;
+            if (!answering && !warming) {
+                if (root.active)
+                    root.clearStatus();
+                return;
             }
-            if (!nowActive) {
-                root.startedAt = 0;
-                root.elapsedSec = 0;
-                root.regionGeom = "";
-                root.activeAudioMode = "none";
-                root.audioFallback = false;
+            if (!root.active) {
+                root.active = true;
                 root.paused = false;
-                root.recorderPid = 0;
-                root.writeSession("");
             }
-            root.active = nowActive;
-            if (nowActive)
+            // A capture the shell has not read the file for yet (a reload mid-capture
+            // before the watch delivered): adopt its launch time now.
+            if (!root.statusPresent)
                 statusView.reload();
         }
     }
 
-    // audio metadata + recorder pid the backend writes alongside the capture.
-    FileView {
-        id: statusView
-        path: (Quickshell.env("RYOKU_STATE_PATH") || (Quickshell.env("HOME") + "/.local/state/ryoku")) + "/recorder-status.json"
-        blockLoading: true
-        printErrors: false
-        onLoaded: {
-            if (!root.active) {
-                root.recorderPid = 0;
-                root.activeAudioMode = "none";
-                root.audioFallback = false;
-                return;
-            }
-            try {
-                const p = JSON.parse(statusView.text() || "{}");
-                root.recorderPid = Number(p.recorderPid ?? 0);
-                root.activeAudioMode = String(p.activeAudioMode ?? "none");
-                root.audioFallback = p.audioFallback === true;
-            } catch (e) {
-                root.recorderPid = 0;
-                root.activeAudioMode = "none";
-                root.audioFallback = false;
-            }
-        }
-    }
-
-    // poll hard (1s) while a capture is live -- elapsed tick + external-stop
-    // detection -- and slowly (5s) idle, enough to catch a capture started outside
-    // the shell without a status probe every second around the clock.
+    // Tick the clock and back the status file up with GSR's IPC: every second
+    // while a capture is live, every five idle, in case a backend died without
+    // removing its file. The file watch, not this poll, is what notices a start.
     Timer {
+        id: tick
         interval: root.anyActive ? 1000 : 5000
         running: true
         repeat: true
@@ -329,14 +334,6 @@ Singleton {
                 root.elapsedSec = Math.max(0, Math.floor(Date.now() / 1000) - root.startedAt);
             root.refreshStatus();
         }
-    }
-
-    // confirm the recorder actually came up after a start; a failed launch would
-    // otherwise leave the optimistic running state counting up forever.
-    Timer {
-        id: confirm
-        interval: 2500
-        onTriggered: root.refreshStatus()
     }
 
     function fmt(sec) {

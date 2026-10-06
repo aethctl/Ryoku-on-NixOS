@@ -83,12 +83,13 @@ bool TextureTier::admit(TierImage &&image)
         return false;
 
     const QRect r = tileRect(tile);
-    const QSize content = image.levels.front().size().boundedTo(r.size());
+    const QSize content = image.content.boundedTo(r.size());
     Tile &t = m_tiles[size_t(tile)];
     t.key = image.key;
     t.lastUsed = m_frame;
     t.slot.layer = tile / tilesPerLayer();
-    // Half a texel inset keeps linear filtering inside the tile.
+    // The slot covers the content inside the tile; the padding beyond it is
+    // edge smear, defined for the sampler but never meant to be seen.
     t.slot.uv = QRectF((r.x() + 0.5) / m_layerSize.width(), (r.y() + 0.5) / m_layerSize.height(),
                        (content.width() - 1.0) / m_layerSize.width(),
                        (content.height() - 1.0) / m_layerSize.height());

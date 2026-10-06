@@ -13,9 +13,11 @@ class QRhi;
 class QRhiResourceUpdateBatch;
 class QRhiTexture;
 
-// Level 0 fits the tile with its aspect kept; further entries are the mip chain.
+// Level 0 and its mip chain, each padded to the full tile box; content is the
+// aspect-fitted image inside that box.
 struct TierImage {
     QString key;
+    QSize content;
     std::vector<QImage> levels;
 };
 
@@ -44,6 +46,9 @@ public:
     bool commit(QRhi *rhi, QRhiResourceUpdateBatch *batch);
 
     QRhiTexture *texture() const { return m_texture.get(); }
+    // Layers the live texture actually has; may be below the logical count
+    // when a grown array failed to allocate until the next successful commit.
+    int liveLayers() const { return m_texture ? m_textureLayers : 0; }
     int mipLevels() const { return m_mipLevels; }
     QSize tileSize() const { return m_tile; }
     int capacity() const { return m_maxLayers * tilesPerLayer(); }

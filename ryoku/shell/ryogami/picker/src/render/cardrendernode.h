@@ -42,7 +42,16 @@ public:
     void setTransition(std::vector<CardInstance> &&from, float progress, int kind);
     // Epicenter (kind 1) and glow accent (kinds 1-2); kind 0 needs neither.
     void setTransitionParams(QPointF origin, const QColor &accent);
-    void setSandyPass(const SandyPass *pass) { m_sandyPass = pass; }
+    // The pass is copied, not referenced: the layout that produced it can be
+    // destroyed on the GUI thread while this node still renders the frame.
+    void setSandyPass(const SandyPass *pass) {
+        if (pass) {
+            m_sandyPassData = *pass;
+            m_sandyPassActive = true;
+        } else {
+            m_sandyPassActive = false;
+        }
+    }
     void setScene(const QRectF &bounds, const QRectF &clip, float time, float vis);
     void setPreviewImage(const QImage &image);
     bool hasPreview() const { return !m_previewImage.isNull() || m_previewUploaded; }
@@ -55,6 +64,8 @@ public:
 
 private:
     bool ensurePreview(QRhi *rhi, QRhiResourceUpdateBatch *batch);
+    bool ensureBindings(QRhi *rhi, bool texturesChanged);
+    void sanitize(std::vector<CardInstance> &instances, int nearLayers, int farLayers);
     void configureCardPipeline(QRhiGraphicsPipeline *pipeline);
     void buildPipeline(QRhi *rhi);
     void buildScenePipeline(QRhi *rhi);
@@ -92,8 +103,8 @@ private:
     std::unique_ptr<QRhiGraphicsPipeline> m_scenePipeline;
     std::unique_ptr<QRhiRenderPassDescriptor> m_pipelinePass;
     int m_pipelineSamples = 0;
-
     TransitionPass m_transition;
     SandyRenderer m_sandy;
-    const SandyPass *m_sandyPass = nullptr;
+    SandyPass m_sandyPassData;
+    bool m_sandyPassActive = false;
 };

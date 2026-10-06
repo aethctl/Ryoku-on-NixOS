@@ -37,6 +37,7 @@ Item {
     readonly property string effect: wall && wall.effect ? wall.effect : "off"
     readonly property var layers: wall && Array.isArray(wall.layers) ? wall.layers : []
     readonly property bool stageBusy: stageFrame.busy === true
+    readonly property string stageNotice: stageFrame.notice || ""
     readonly property bool commandBusy: commandProc.running || commandQueue.length > 0
     readonly property string stateDir: Quickshell.env("XDG_STATE_HOME") || (Quickshell.env("HOME") + "/.local/state")
     readonly property string previewPath: pg.isVideo(pg.currentWall) ? pg.stateDir + "/ryoku-live-frame.png" : pg.currentWall
@@ -382,10 +383,17 @@ Item {
                         Text { visible: wallpaperPreview.status !== Image.Ready; anchors.centerIn: parent; text: "layers"; color: Tokens.inkFaint; font.family: "Material Symbols Rounded"; font.pixelSize: 72 }
                         Column { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Tokens.s4; spacing: Tokens.s1
                             Text { width: parent.width; text: pg.effectLabel(); color: Tokens.ink; font.family: Tokens.display; font.pixelSize: Tokens.fHero; elide: Text.ElideRight }
-                            Text { width: parent.width; text: pg.stageBusy ? I18n.tr("Building layers · %1%").arg(stageFrame.percent || 0) : pg.layers.length ? I18n.tr("%1 layers ready").arg(pg.layers.length) : I18n.tr("Choose Depth or Parallax to cut this wallpaper into layers."); color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap }
+                            Text { width: parent.width; text: pg.stageBusy ? I18n.tr("Building layers · %1%").arg(stageFrame.percent || 0) : (pg.stageNotice !== "" && pg.effect !== "off") ? I18n.tr("Cut blocked") : pg.layers.length ? I18n.tr("%1 layers ready").arg(pg.layers.length) : I18n.tr("Choose Depth or Parallax to cut this wallpaper into layers."); color: (!pg.stageBusy && pg.stageNotice !== "" && pg.effect !== "off") ? Tokens.alert : Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap }
                         }
                     }
                     Seg { width: parent.width; options: ["off", "depth", "parallax"]; labels: ({ off: I18n.tr("Plain"), depth: I18n.tr("Depth"), parallax: I18n.tr("Parallax") }); current: pg.effect; onChose: value => pg.stageCall("set-effect", value) }
+                    Rectangle { visible: !pg.stageBusy && pg.stageNotice !== "" && pg.effect !== "off"; width: parent.width; implicitHeight: noticeRow.implicitHeight + Tokens.s3 * 2; radius: Tokens.radius; color: Qt.rgba(Tokens.alert.r, Tokens.alert.g, Tokens.alert.b, 0.08); border.width: Tokens.border; border.color: Tokens.alert
+                        Row { id: noticeRow; anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; anchors.margins: Tokens.s3; spacing: Tokens.s3
+                            Text { text: "block"; color: Tokens.alert; font.family: "Material Symbols Rounded"; font.pixelSize: 22; anchors.verticalCenter: parent.verticalCenter }
+                            Text { width: parent.width - retryCut.width - 42; text: I18n.tr("The scene could not be cut: %1").arg(pg.stageNotice); color: Tokens.ink; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall; wrapMode: Text.WordWrap; anchors.verticalCenter: parent.verticalCenter }
+                            Btn { id: retryCut; text: I18n.tr("Retry"); compact: true; onAct: pg.stageCall("refresh") }
+                        }
+                    }
                     Rectangle { visible: pg.stageBusy; width: parent.width; implicitHeight: busyRow.implicitHeight + Tokens.s3 * 2; radius: Tokens.radius; color: Tokens.tint5; border.width: Tokens.border; border.color: Tokens.line
                         Row { id: busyRow; anchors.left: parent.left; anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; anchors.margins: Tokens.s3; spacing: Tokens.s3
                             Text { text: "progress_activity"; color: Tokens.bone; font.family: "Material Symbols Rounded"; font.pixelSize: 22; anchors.verticalCenter: parent.verticalCenter }

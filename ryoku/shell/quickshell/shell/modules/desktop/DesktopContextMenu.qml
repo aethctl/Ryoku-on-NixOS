@@ -102,7 +102,9 @@ Item {
     readonly property string stageEffect: StageCfg.StageBackend.effect
     readonly property bool stageBusy: StageCfg.StageBackend.busy
     readonly property int stagePct: StageCfg.StageBackend.percent
+    readonly property string stageNotice: StageCfg.StageBackend.notice
     readonly property string depthLabel: menu.stageBusy ? (menu.stagePct + "%")
+        : menu.stageNotice !== "" && menu.stageEffect !== "off" ? I18n.tr("Blocked")
         : menu.stageEffect === "parallax" ? I18n.tr("Parallax")
         : menu.stageEffect === "off" ? I18n.tr("Off") : I18n.tr("On")
 

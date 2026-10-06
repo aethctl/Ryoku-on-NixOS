@@ -24,10 +24,14 @@ spawn-sh-at-startup "command -v ryoku-cmd-folders >/dev/null 2>&1 && ryoku-cmd-f
 // The session, in one chained command. Push the compositor env into the user
 // manager first: a lost race skips ConditionEnvironment=WAYLAND_DISPLAY units
 // and lands a black desktop. daemon-reload picks up freshly laid units, then
-// session-start owns the guarded restarts and does not return until the shell
-// and lid owners prove readiness. Portals restart last so a stale frontend
-// cannot proxy ScreenCast requests to the dead backend.
-spawn-sh-at-startup "dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; ryoku-power-cutover session-start-logged && systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"
+// the cover goes up over the bare compositor before session-start restarts
+// anything, so the desktop never loads grey or flickers while the shell's
+// QML surfaces cold-load; session-start owns the guarded restarts and does
+// not return until the shell and lid owners prove readiness, and the fresh
+// shell finishes the cover once wallpaper and desktop report ready. Portals
+// restart last so a stale frontend cannot proxy ScreenCast requests to the
+// dead backend.
+spawn-sh-at-startup "dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; ryoku-reload-cover begin boot || true; ryoku-power-cutover session-start-logged && systemctl --user try-restart xdg-desktop-portal.service xdg-desktop-portal-gnome.service xdg-desktop-portal-gtk.service"
 
 // No autoscale line: niri picks each output's scale itself, and ryoku-monitor is the Hyprland provider's display tool.
 
@@ -74,8 +78,7 @@ spawn-sh-at-startup "command -v ryoku-i18n >/dev/null 2>&1 && ryoku-i18n ensure 
 
 // Welcome tour (once per tour version) and the first-boot keyboard hint
 // (exactly once ever). The behaviour lives in ryoku-session-intro so every
-// compositor's autostart calls the same script; mango's config grammar
-// truncates a value at 255 characters, so an inline chain there silently
-// loses its tail. Bump the tour version in the helper when the tour changes.
+// compositor's autostart calls the same script. Bump the tour version in the
+// helper when the tour changes.
 spawn-sh-at-startup "command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro welcome"
 spawn-sh-at-startup "command -v ryoku-session-intro >/dev/null 2>&1 && ryoku-session-intro keys-hint"

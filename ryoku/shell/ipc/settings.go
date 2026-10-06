@@ -25,9 +25,9 @@ import (
 // bars, menus, notifications, wallpaper). Those are validated: enum membership
 // and integer ranges are rejected, the float strength/contrast/opacity values
 // clamp into range. Every other top-level key in the file (the Ryoku-native look
-// knobs frameRadius, frameBars, weatherLocation, sidebar panes, language, and the
-// rest) is carried through verbatim as passthrough: echoed in the frame and
-// merged on patch, but not validated, because the daemon has no schema for them.
+// knobs frameRadius, frameBars, weatherLocation, language, and the rest) is
+// carried through verbatim as passthrough: echoed in the frame and merged on
+// patch, but not validated, because the daemon has no schema for them.
 // Passthrough keeps the daemon the sole writer without having to model keys other
 // surfaces own.
 //
@@ -50,6 +50,7 @@ var contractKeys = map[string]bool{
 	"menus":         true,
 	"notifications": true,
 	"wallpaper":     true,
+	"ask":           true,
 }
 
 // Value domains, in the display order of contract 14 section 8. Stored as stable
@@ -99,8 +100,8 @@ var (
 )
 
 // settings mirrors the reference configuration schema (contract 14), minus the
-// keys Ryoku has no consumer for (see the slice report): the icon-theme group,
-// the custom-CSS file, and the app-launcher menu.
+// icon-theme group, custom-CSS file, and app-launcher menu that Ryoku does not
+// consume. Ask holds the shell's persistent chat-bubble placement.
 type settings struct {
 	General       generalSettings       `json:"general"`
 	Theme         themeSettings         `json:"theme"`
@@ -108,6 +109,7 @@ type settings struct {
 	Menus         menusSettings         `json:"menus"`
 	Notifications notificationsSettings `json:"notifications"`
 	Wallpaper     wallpaperSettings     `json:"wallpaper"`
+	Ask           askSettings           `json:"ask"`
 }
 
 type generalSettings struct {
@@ -253,6 +255,17 @@ type wallpaperSettings struct {
 	VideoTranscodeWidth int    `json:"video_transcode_width"`
 }
 
+type askSettings struct {
+	Bubble askBubbleSettings `json:"bubble"`
+}
+
+type askBubbleSettings struct {
+	Enabled bool    `json:"enabled"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	Screen  string  `json:"screen"`
+}
+
 func ip(n int) *int { return &n }
 
 // mw builds a unit menu-widget; spc a spacer; qa a quick-actions group. Used only
@@ -318,6 +331,7 @@ func defaultSettings() *settings {
 		},
 		Notifications: notificationsSettings{NotificationPosition: "Right", PopupWindowMargins: 0},
 		Wallpaper:     wallpaperSettings{ContentFit: "Cover", TransitionPreset: "random", VideoEngine: "ryogami", VideoEnabled: true, VideoTranscodeFps: 24, VideoTranscodeWidth: 1920},
+		Ask:           askSettings{Bubble: askBubbleSettings{Enabled: false, X: 0.94, Y: 0.68, Screen: ""}},
 	}
 }
 
@@ -399,6 +413,7 @@ func (s *settings) normalize(strict bool) error {
 	s.Menus.normalize(v)
 	s.Notifications.normalize(v)
 	s.Wallpaper.normalize(v)
+	s.Ask.normalize(v)
 	return v.err
 }
 
@@ -543,6 +558,11 @@ func (w *wallpaperSettings) normalize(v *validator) {
 	// ryoku-shell keeps the key but no longer duplicates the preset name list.
 }
 
+func (a *askSettings) normalize(v *validator) {
+	v.clampF(&a.Bubble.X, 0, 1)
+	v.clampF(&a.Bubble.Y, 0, 1)
+}
+
 // splitPath breaks a dotted patch path into segments, rejecting an empty path or
 // any empty segment (a malformed path such as "a." or "a..b").
 func splitPath(path string) ([]string, error) {
@@ -669,7 +689,7 @@ func settingsToMap(s *settings) map[string]any {
 	return m
 }
 
-// writeContract overlays the six schema namespaces of ns onto full, so a clamped
+// writeContract overlays the seven schema namespaces of ns onto full, so a clamped
 // value from normalize is what gets persisted.
 func writeContract(full map[string]any, ns *settings) {
 	for k, v := range settingsToMap(ns) {
@@ -699,7 +719,7 @@ func resolveThemePalette(full map[string]any, themeName string) {
 	full["themePalette"] = m
 }
 
-// buildSettings reads the six schema namespaces out of a decoded file, defaulting
+// buildSettings reads the seven schema namespaces out of a decoded file, defaulting
 // any that are absent, then normalises. A namespace whose shape does not fit the
 // schema, or a value that fails normalisation, is an error the caller treats as a
 // malformed file (lenient) or a rejected patch (strict).
@@ -712,6 +732,7 @@ func buildSettings(raw map[string]any, strict bool) (*settings, error) {
 		"menus":         &s.Menus,
 		"notifications": &s.Notifications,
 		"wallpaper":     &s.Wallpaper,
+		"ask":           &s.Ask,
 	}
 	for k, ptr := range dst {
 		raw, ok := raw[k]
@@ -904,14 +925,18 @@ func lockSettingsFile(path string) (func(), error) {
 
 const barStyleTransactionKey = "ryoStoreBarStyleTransaction"
 
-// patch sets one leaf. A schema path is validated and clamped; any other path is
-// passthrough (merged, not validated). The change is persisted before it is
-// committed in memory, so a write failure drops the change rather than leaving
-// memory and disk disagreeing.
+// patch sets one leaf. A schema path is validated and clamped; native
+// passthrough paths are merged without validation. Retired settings namespaces
+// are rejected rather than silently resurrected. The change is persisted before
+// it is committed in memory, so a write failure cannot leave memory and disk
+// disagreeing.
 func (s *settingsStore) patch(path string, value json.RawMessage) error {
 	segs, err := splitPath(path)
 	if err != nil {
 		return err
+	}
+	if segs[0] == "sidebars" {
+		return fmt.Errorf("sidebars settings are retired")
 	}
 	if len(value) == 0 {
 		return fmt.Errorf("missing value")

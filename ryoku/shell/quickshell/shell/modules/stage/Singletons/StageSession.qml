@@ -4,10 +4,11 @@ import QtQuick
 import Quickshell
 
 // The Edit widgets session (docs/stage.md, "Session model"): one desktop, one
-// monitor, never two. It carries the one selected widget, the drop-down that is
-// open, and whether anything changed (so Reset can appear). The desktop keeps
-// its own snapshot and restores it on resetRequested; nothing here is
-// persisted, and there is no Save: the desktop is the document.
+// monitor, never two. It carries the one selected widget and the drop-down that
+// is open, and mirrors the Stage Editor's chrome: the chrome owns the walk-back
+// (its undo stack covers every edit, including a slot drag or resize), so
+// nothing here is persisted and there is no Save and no Reset: the desktop is
+// the document.
 Singleton {
     id: root
 
@@ -23,10 +24,6 @@ Singleton {
     readonly property bool active: root.mode !== ""
     readonly property bool widgets: root.mode === "widgets"
 
-    property bool dirty: false
-
-    // The desktop restores its snapshot on this.
-    signal resetRequested()
     signal left()
 
     function onMonitor(name) { return root.active && ("" + name) === root.monitor; }
@@ -34,7 +31,6 @@ Singleton {
     function enterWidgets(monitor) {
         root.selected = "";
         root.panel = "";
-        root.dirty = false;
         root.monitor = "" + (monitor || "");
         root.mode = "widgets";
     }
@@ -44,7 +40,6 @@ Singleton {
         root.mode = "";
         root.selected = "";
         root.panel = "";
-        root.dirty = false;
         root.left();
     }
 
@@ -60,12 +55,6 @@ Singleton {
     function openPanel(kind) { root.panel = "" + kind; }
     function closePanel() { root.panel = ""; }
     function togglePanel(kind) { root.panel = root.panel === ("" + kind) ? "" : ("" + kind); }
-
-    function markDirty() { root.dirty = true; }
-    function reset() {
-        root.resetRequested();
-        root.dirty = false;
-    }
 
     // Escape unwinds one level per press: an open drop-down, then the
     // selection, then the session. Returns what it did.

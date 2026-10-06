@@ -6,9 +6,16 @@ import Quickshell.Bluetooth
 import Quickshell.Networking
 import Quickshell.Services.Pipewire
 import "../../"
+import shell.services as Ryoku
 
 Item {
     id: controller
+
+    // The style's singletons outlive a hot style switch: the scene Loader
+    // unloads, the singleton does not. Every long-lived helper this file
+    // spawns follows the active style, so a box that left python behind
+    // stops watching LEDs and brightness for a bar that is gone.
+    readonly property bool styleActive: Ryoku.Config.barStyle === "python"
 
     property bool isVisible: false
     property string kind: "volume"
@@ -126,7 +133,7 @@ Item {
 
     Process {
         id: kbWatcher
-        running: true
+        running: controller.styleActive
         command: ["bash", Caching.watchersPath + "/kb_locks.sh", "watch"]
         stdout: SplitParser {
             onRead: data => {
@@ -152,7 +159,7 @@ Item {
 
     Process {
         id: kbFetcher
-        running: true
+        running: controller.styleActive
         command: ["bash", Caching.scriptsPath + "/kb_locks.sh", "get"]
         stdout: StdioCollector {
             onStreamFinished: {
@@ -170,7 +177,7 @@ Item {
 
     Process {
         id: briWatcher
-        running: true
+        running: controller.styleActive
         command: ["bash", Caching.scriptsPath + "/brightness.sh", "watch"]
         stdout: SplitParser {
             onRead: data => {
@@ -191,7 +198,7 @@ Item {
 
     Process {
         id: briFetcher
-        running: true
+        running: controller.styleActive
         command: ["bash", Caching.scriptsPath + "/brightness.sh", "get"]
         stdout: StdioCollector {
             onStreamFinished: {

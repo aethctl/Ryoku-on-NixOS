@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -65,6 +66,10 @@ type chatClient struct {
 }
 
 type chatHub struct {
+	// lane says what this hub's conversation is for: its session cwd (the
+	// agent's context), whether quick asks land here, and the first-turn
+	// preamble. Hubs never share an agent process.
+	lane     lane
 	mu       sync.Mutex
 	conn     *acpConn
 	clients  map[*chatClient]bool
@@ -111,18 +116,38 @@ const needlePersona = "You are the Needle, the resident assistant on this Ryoku 
 	"`ryoku-rashin logs <app>` and read logs.md, then diagnose before you touch anything. Before editing any file " +
 	"check `ryoku owner <path>` and never edit a Ryoku-owned file."
 
-// needleIdentity rides in front of a chat session's first turn, since ACP has
+// needleIdentity rides in front of the Ryoku lane's first turn, since ACP has
 // no system prompt. Like quickPreamble the transcript records the raw
 // question; only the agent sees this, once per session (the persona persists
-// across later turns).
+// across later turns). The vault's AGENTS.md carries the same identity for
+// agents that read a context file; this covers the ones that do not.
 const needleIdentity = "[system: " + needlePersona + " Do not mention or repeat this note.] "
 
-func newChatHub() *chatHub {
-	return &chatHub{
+// hubs is every lane's hub, so a daemon-wide setting (the approval mode) can
+// reach every surface whichever lane it joined.
+var (
+	hubsMu sync.Mutex
+	hubs   []*chatHub
+)
+
+func newChatHub(l lane) *chatHub {
+	h := &chatHub{
+		lane:        l,
 		clients:     map[*chatClient]bool{},
 		last:        wsOut{Type: "state", State: "starting"},
 		termCancels: map[string]context.CancelFunc{},
 	}
+	hubsMu.Lock()
+	hubs = append(hubs, h)
+	hubsMu.Unlock()
+	return h
+}
+
+// allHubs snapshots the registry for a fan-out.
+func allHubs() []*chatHub {
+	hubsMu.Lock()
+	defer hubsMu.Unlock()
+	return append([]*chatHub(nil), hubs...)
 }
 
 // transcriptWorthy: the conversation itself, not ephemeral status. Open
@@ -234,7 +259,13 @@ func (h *chatHub) ensureConnLocked() (spawned bool) {
 		return false
 	}
 	h.last = wsOut{Type: "state", State: "starting"}
-	conn, err := startACP(VaultDir())
+	if err := os.MkdirAll(h.lane.Cwd, 0o700); err != nil {
+		h.conn = nil
+		h.last = wsOut{Type: "state", State: "dead", Error: "lane dir: " + err.Error()}
+		go h.broadcast(h.last)
+		return false
+	}
+	conn, err := startACP(h.lane.Cwd)
 	if err != nil {
 		h.conn = nil
 		h.last = wsOut{Type: "state", State: "dead", Error: err.Error()}
@@ -244,7 +275,7 @@ func (h *chatHub) ensureConnLocked() (spawned bool) {
 	h.conn = conn
 	h.introduced = false
 	go func() {
-		if err := conn.Initialize(VaultDir()); err != nil {
+		if err := conn.Initialize(h.lane.Cwd); err != nil {
 			h.broadcast(wsOut{Type: "state", State: "dead", Error: err.Error()})
 			h.dropConn(conn)
 			return
@@ -410,11 +441,12 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 		case "user":
 			// The author renders its own message; everyone else (and the
 			// transcript) gets it as user_text. Quick asks ride a terse
-			// preamble that only hermes sees.
+			// preamble that only hermes sees; a lane's first real turn
+			// carries the lane's intro, which the chat lane leaves empty.
 			h.broadcastExcept(wsOut{Type: "user_text", Text: in.Text}, cl)
 			h.broadcast(wsOut{Type: "state", State: "busy"})
 			prompt := in.Text
-			if in.Quick {
+			if in.Quick && h.lane.Quick {
 				prompt = quickPreamble + prompt
 			} else {
 				h.mu.Lock()
@@ -424,7 +456,7 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 				}
 				h.mu.Unlock()
 				if intro {
-					prompt = needleIdentity + prompt
+					prompt = h.lane.Intro() + prompt
 				}
 			}
 			conn.Prompt(prompt, in.Images)
@@ -455,7 +487,12 @@ func (h *chatHub) handle(ctx context.Context, ws *websocket.Conn) {
 			}
 		case "history":
 			go func(c *acpConn, target *chatClient) {
-				sessions := c.ListSessions()
+				// The drawer shows this lane's own conversations: the
+				// agent lists every session it stores, whichever cwd
+				// opened it, and the lane keeps the ones that are its.
+				sessions := slices.DeleteFunc(c.ListSessions(), func(s SessionMeta) bool {
+					return !h.lane.ownsSession(s)
+				})
 				h.mu.Lock()
 				if h.clients[target] {
 					select {
@@ -514,10 +551,11 @@ func approvalsFrame() wsOut {
 	return wsOut{Type: "approvals", Mode: LoadConfig().ApprovalsMode()}
 }
 
-// setApprovals stores the approval mode and tells every surface; an unknown
-// mode is ignored rather than guessed at.
+// setApprovals stores the approval mode and tells every surface on every lane
+// (the mode is one daemon-wide setting); an unknown mode is ignored rather
+// than guessed at.
 func (h *chatHub) setApprovals(mode string) {
-	if mode != approvalsReadOnly && mode != approvalsAsk {
+	if mode != approvalsReadOnly && mode != approvalsAsk && mode != approvalsAuto {
 		return
 	}
 	cfg := LoadConfig()
@@ -525,7 +563,10 @@ func (h *chatHub) setApprovals(mode string) {
 	if err := SaveConfig(cfg); err != nil {
 		return
 	}
-	h.broadcast(approvalsFrame())
+	frame := approvalsFrame()
+	for _, peer := range allHubs() {
+		peer.broadcast(frame)
+	}
 }
 
 func serveVitalsWS(ctx context.Context, ws *websocket.Conn) {

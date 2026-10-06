@@ -59,6 +59,7 @@ func runApply(args []string) error {
 	if err := writeOverlayLua("rebinds.lua", renderRebinds(o)); err != nil {
 		return err
 	}
+	wm.PublishGreeterNumlock(o.Input.NumlockByDefault)
 	rep := wm.ApplyReport{
 		Provider: wm.ProviderHyprland,
 		Written: []string{

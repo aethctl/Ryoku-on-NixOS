@@ -1,0 +1,197 @@
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Widgets
+import stage
+import stage.services
+import stage.modules.common
+import stage.modules.common.widgets
+import stage.modules.common.functions
+
+/**
+ * The wallpaper folder, as a grid of thumbnails on Edit Mode's panel.
+ *
+ * A compact cut of the full selector: the folder the shell already watches,
+ * in the order it is already sorted, three to a row. A click applies and the
+ * card follows; the applied one carries a mark. Sorting, search, sub-folders
+ * and the online browser stay with the selector, which the Style page hands
+ * off to.
+ *
+ * Which wallpaper a pick sets is the page's `target`, decided by the
+ * Wallpaper catalogue from the tab, the screen and the variants: the lock's
+ * own, the light mode's, this screen's own (services/WallpaperLayout.qml), or
+ * the desktop's shared one.
+ */
+Item {
+    id: root
+
+    // "desktop", "lockscreen", "lightmode" or "screen".
+    property string target: "desktop"
+    // The screen a "screen" pick is for.
+    property string screenName: ""
+    readonly property bool screenTarget: root.target === "screen"
+    readonly property string appliedPath: {
+        if (root.screenTarget)
+            return WallpaperLayout.ownPathFor(root.screenName);
+        const background = Config.options.background;
+        const raw = root.target === "lockscreen" ? background.lockscreenWallpaperPath
+            : root.target === "lightmode" ? background.lightModeWallpaperPath
+            : background.wallpaperPath;
+        return FileUtils.trimFileProtocol(String(raw ?? ""));
+    }
+
+    readonly property int columns: 3
+    readonly property real cellGap: 6
+    // The view's cell carries the gap, so the cell is the width divided by
+    // the columns and the tile is what is left of it: a tile sized first and
+    // a gap added after came to a hair more than the width, and the view
+    // fitted two.
+    readonly property real cellStride: Math.floor(root.width / root.columns)
+    readonly property real cellWidth: root.cellStride - root.cellGap
+    readonly property real cellHeight: Math.round(root.cellWidth * 10 / 16)
+
+    // The folder's files, in the service's sorted order. Directories are the
+    // selector's navigation, not a wallpaper, so they are left out here.
+    readonly property var files: {
+        const model = Wallpapers.sortedFolderModel;
+        const out = [];
+        // Read so the binding follows the model's refills.
+        const count = model.count;
+        for (let i = 0; i < count; i++) {
+            const entry = model.get(i);
+            if (!entry || entry.fileIsDir)
+                continue;
+            const name = String(entry.fileName ?? "");
+            if (!Images.isValidImageByName(name) && !Wallpapers.isVideoFile(name))
+                continue;
+            // A screen of its own shows a picture: videos are played or
+            // painted for the whole desktop.
+            if (root.screenTarget && Wallpapers.isVideoFile(name))
+                continue;
+            out.push({
+                "filePath": FileUtils.trimFileProtocol(String(entry.filePath ?? "")),
+                "fileName": name
+            });
+        }
+        return out;
+    }
+
+    function apply(path) {
+        if (root.screenTarget) {
+            WallpaperLayout.setOwnWallpaper(root.screenName, path);
+            return;
+        }
+        if (root.target === "lockscreen") {
+            Wallpapers.selectLockscreen(path);
+            return;
+        }
+        if (root.target === "lightmode") {
+            Wallpapers.selectLightmode(path);
+            return;
+        }
+        Wallpapers.select(path);
+    }
+
+    // The thumbnails are made once for the size the cells draw at, the same
+    // way the selector asks for its own.
+    Component.onCompleted: {
+        Wallpapers.load();
+        const dpr = (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1;
+        Wallpapers.generateThumbnail(Images.thumbnailSizeNameForDimensions(
+            Math.ceil(root.cellWidth * dpr), Math.ceil(root.cellHeight * dpr)));
+    }
+
+    GridView {
+        id: grid
+        anchors.fill: parent
+        clip: true
+        cellWidth: root.cellStride
+        cellHeight: root.cellHeight + root.cellGap
+        model: root.files
+        boundsBehavior: Flickable.StopAtBounds
+        maximumFlickVelocity: 3500
+
+        TouchpadScrollHandler {
+            flickable: grid
+        }
+
+        delegate: Item {
+            id: cell
+            required property var modelData
+            required property int index
+            readonly property bool applied: cell.modelData.filePath === root.appliedPath
+            width: grid.cellWidth
+            height: grid.cellHeight
+
+            Rectangle {
+                id: tile
+                width: root.cellWidth
+                height: root.cellHeight
+                radius: Appearance.rounding.small
+                color: Appearance.colors.colLayer1
+                border.width: cell.applied ? 2 : 0
+                border.color: cell.applied ? Appearance.colors.colPrimary : Appearance.colors.colLayer0Border
+                scale: tileMouse.containsPress ? 0.96 : 1
+                Behavior on scale {
+                    enabled: !Appearance.reducedMotion
+                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(tile)
+                }
+
+                ClippingRectangle {
+                    anchors.fill: parent
+                    anchors.margins: tile.border.width
+                    radius: tile.radius - tile.border.width
+                    color: "transparent"
+
+                    ThumbnailImage {
+                        anchors.fill: parent
+                        sourcePath: cell.modelData.filePath
+                        thumbnailService: Wallpapers
+                        generateThumbnail: false
+                        fillMode: Image.PreserveAspectCrop
+                        cache: false
+                    }
+                }
+
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.right: parent.right
+                    anchors.margins: 6
+                    visible: cell.applied
+                    width: 22
+                    height: 22
+                    radius: width / 2
+                    color: Appearance.colors.colPrimary
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: "check"
+                        iconSize: 16
+                        color: Appearance.colors.colOnPrimary
+                    }
+                }
+
+                // No tooltip with the file's name: a StyledToolTip inside a
+                // view's delegate draws itself without a hover.
+                MouseArea {
+                    id: tileMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (!cell.applied)
+                            root.apply(cell.modelData.filePath);
+                    }
+                }
+            }
+        }
+    }
+
+    StyledText {
+        anchors.centerIn: parent
+        visible: grid.count === 0
+        text: Wallpapers.directoryLoading ? Translation.tr("Loading…") : Translation.tr("No wallpapers in this folder")
+        font.pixelSize: Appearance.font.pixelSize.small
+        color: Appearance.colors.colOnSurfaceVariant
+    }
+}

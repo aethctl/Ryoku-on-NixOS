@@ -109,6 +109,10 @@ test("approvals frame carries the mode into state", () => {
     assert.equal(s.approvals, "read-only");
     s = applyEvent(s, { type: "approvals", mode: "ask" });
     assert.equal(s.approvals, "ask");
+    s = applyEvent(s, { type: "approvals", mode: "auto" });
+    assert.equal(s.approvals, "auto");
+    s = applyEvent(s, { type: "approvals", mode: "yolo" });
+    assert.equal(s.approvals, "read-only", "an unknown mode is the default");
 });
 
 test("replay_start clears the stream and stale approvals, replay_end resumes live", () => {

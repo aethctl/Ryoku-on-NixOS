@@ -31,8 +31,8 @@ Singleton {
                 min = c.duration;
         }
         if (min === 0)
-            return 100;
-        return Math.max(33, Math.min(100, Math.round(min / 32)));
+            return 200;
+        return Math.max(100, Math.min(200, Math.round(min / 16)));
     }
 
     Timer {

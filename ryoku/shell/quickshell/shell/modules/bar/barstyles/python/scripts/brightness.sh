@@ -29,9 +29,9 @@ detect_ddc_bus() {
 }
 
 ddc_get_locked() {
-    local attempt bus output current maximum
+    local bus output current maximum
 
-    for attempt in 1 2; do
+    for _ in 1 2; do
         bus=$(detect_ddc_bus) || return 1
         output=$(timeout 5s ddcutil --bus "$bus" --brief getvcp 10 2>/dev/null) || {
             rm -f "$DDC_CACHE"
@@ -55,9 +55,9 @@ ddc_get() {
 
 ddc_set_locked() {
     local percent=$1
-    local attempt bus output current maximum raw
+    local bus output current maximum raw
 
-    for attempt in 1 2; do
+    for _ in 1 2; do
         bus=
         maximum=
         if [[ -f "$DDC_CACHE" ]]; then

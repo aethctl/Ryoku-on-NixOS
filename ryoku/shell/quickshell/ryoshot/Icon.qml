@@ -42,7 +42,12 @@ Item {
         "video":     "M3.5 7.5a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v9a1 1 0 0 1 -1 1h-9a1 1 0 0 1 -1 -1z M14.5 10.5l6 -3.5v10l-6 -3.5z",
         "eyedropper":"M20.4 3.6a2 2 0 0 0 -2.8 0l-2.3 2.3 2.8 2.8 2.3 -2.3a2 2 0 0 0 0 -2.8z M14.3 7.2L5 16.5 4 20l3.5 -1 9.3 -9.3z",
         "fullscreen":"M4 9V4h5 M15 4h5v5 M20 15v5h-5 M9 20H4v-5",
-        "sound":     "M4 9.5h3l4 -3.5v12l-4 -3.5H4z M15 9a3.5 3.5 0 0 1 0 6 M17.5 6.5a7 7 0 0 1 0 11"
+        "sound":     "M4 9.5h3l4 -3.5v12l-4 -3.5H4z M15 9a3.5 3.5 0 0 1 0 6 M17.5 6.5a7 7 0 0 1 0 11",
+        "timer":     "M9 3h6 M12 3v3 M17.5 6.5l1.5 -1.5 M12 7a7 7 0 1 1 -0.01 0z M12 10v3l2 2",
+        "mic":       "M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1 -6 0z M6 12a6 6 0 0 0 12 0 M12 18v3 M9 21h6",
+        "keyboard":  "M3 6h18v12H3z M6 9h1 M10 9h1 M14 9h1 M18 9h1 M6 12h1 M10 12h1 M14 12h1 M18 12h1 M7 15h10",
+        "webcam":    "M5 7h14v10H5z M15 12a3 3 0 1 1 -6 0a3 3 0 0 1 6 0z M12 17v3 M9 20h6",
+        "folder":    "M3 6h7l2 2h9v11H3z"
     })
 
     readonly property string d: defs[name] !== undefined ? defs[name] : ""

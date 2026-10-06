@@ -54,23 +54,19 @@ Singleton {
         execute: a.execute
     }))
 
-    function irisMusicOn(mode: string): bool {
-        const edge = Config.options?.background?.edgeWidgets?.organic ?? ({})
-        const surround = Config.options?.iris?.surround ?? ({})
-        return Boolean(edge.enable) && String(surround.music ?? "widget") === mode
-    }
+    readonly property bool irisMusicOn: Boolean(Config.options?.background?.edgeWidgets?.organic?.enable ?? false)
 
-    function toggleIrisMusic(mode: string): void {
-        if (root.irisMusicOn(mode)) {
+    // Ryoku hosts no Organic Edge widget, so music on the edges moves the frame
+    // itself; switching it on makes sure there is a frame to move.
+    function toggleIrisMusic(): void {
+        if (root.irisMusicOn) {
             Config.setNestedValue("background.edgeWidgets.organic.enable", false)
             return
         }
-        const updates = {
-            "iris.surround.music": mode,
-            "background.edgeWidgets.organic.enable": true
-        }
-        if (mode === "frame") updates["iris.surround.enable"] = true
-        Config.setNestedValues(updates)
+        Config.setNestedValues({
+            "background.edgeWidgets.organic.enable": true,
+            "iris.surround.enable": true
+        })
     }
 
     function fuzzyQuery(query: string): list<var> {
@@ -387,19 +383,9 @@ Singleton {
             description: Translation.tr("Toggle music on the Shima frame"),
             icon: "graphic_eq",
             category: "appearance",
-            keywords: ["iris", "frame", "chassis", "music", "visualizer"],
-            isOn: () => root.irisMusicOn("frame"),
-            execute: () => root.toggleIrisMusic("frame")
-        },
-        {
-            id: "edge-music",
-            name: Translation.tr("Edge Music"),
-            description: Translation.tr("Toggle the Organic Edge music wave"),
-            icon: "waves",
-            category: "appearance",
-            keywords: ["iris", "edge", "music", "wave", "visualizer"],
-            isOn: () => root.irisMusicOn("widget"),
-            execute: () => root.toggleIrisMusic("widget")
+            keywords: ["iris", "frame", "chassis", "edge", "music", "wave", "visualizer"],
+            isOn: () => root.irisMusicOn,
+            execute: () => root.toggleIrisMusic()
         }
     ]
 
@@ -599,13 +585,13 @@ Singleton {
             execute: () => { GlobalStates.openSidebarLeft("") }
         },
         {
-            id: "open-sidebar-right",
-            name: Translation.tr("Open Today Panel"),
-            description: Translation.tr("The right side panel"),
-            icon: "right_panel_open",
+            id: "open-ask",
+            name: Translation.tr("Ask Rashin"),
+            description: Translation.tr("Quick ask and chat"),
+            icon: "auto_awesome",
             category: "settings",
-            keywords: ["sidebar", "today", "right", "panel"],
-            execute: () => { GlobalStates.openSidebarRight("") }
+            keywords: ["ask", "chat", "Rashin", "web", "tools"],
+            execute: () => { Quickshell.execDetached(["ryoku-shell", "ask"]) }
         },
         {
             id: "zoom-in",

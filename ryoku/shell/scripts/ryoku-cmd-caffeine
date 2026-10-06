@@ -5,6 +5,12 @@
 # (systemd-run --user, setsid fallback) so it survives a shell reload/restart.
 # do it in-shell and the Wayland inhibitor dies on the swap, screen idles. the
 # request is persisted so a fresh login can pick it back up.
+#
+# It inhibits idle only: the machine never dims, locks or sleeps on its own
+# while it is on. A deliberate sleep (the lid, the power key, Sleep in Controls)
+# is not idle and still goes through, which is logind's own lid rule
+# (LidSwitchIgnoreInhibited=yes). A sleep block here left laptops awake with the
+# lid shut for as long as the request was persisted.
 
 set -euo pipefail
 
@@ -14,7 +20,7 @@ lock_file="${RYOKU_CAFFEINE_LOCK_FILE:-${XDG_RUNTIME_DIR:-/tmp}/ryoku-caffeine.l
 unit_name="${RYOKU_CAFFEINE_UNIT_NAME:-ryoku-caffeine-inhibit}"
 
 inhibit_pattern="[r]yoku-caffeine-inhibit"
-desired_inhibit_pattern="(^|/)systemd-inhibit --what=idle:sleep --who=Ryoku .*Ryoku caffeine mode"
+desired_inhibit_pattern="(^|/)systemd-inhibit --what=idle --who=Ryoku .*Ryoku caffeine mode"
 
 usage() {
   cat <<'EOF'
@@ -68,7 +74,7 @@ start_inhibitor_with_systemd() {
     --unit="$unit_name" \
     --description="Ryoku caffeine idle inhibitor" \
     systemd-inhibit \
-    --what=idle:sleep \
+    --what=idle \
     --who=Ryoku \
     --why="Ryoku caffeine mode" \
     bash -c 'exec -a ryoku-caffeine-inhibit sleep infinity' 9>&- >/dev/null 2>&1
@@ -76,7 +82,7 @@ start_inhibitor_with_systemd() {
 
 start_inhibitor_with_setsid() {
   setsid systemd-inhibit \
-    --what=idle:sleep \
+    --what=idle \
     --who=Ryoku \
     --why="Ryoku caffeine mode" \
     bash -c 'exec -a ryoku-caffeine-inhibit sleep infinity' 9>&- >/dev/null 2>&1 &
@@ -88,7 +94,10 @@ start_inhibitor() {
       return 0
     fi
   fi
-  pkill -f "$inhibit_pattern" >/dev/null 2>&1 || true
+  # An inhibitor of another shape (an older build's idle:sleep block) is
+  # replaced; stopping its unit first is synchronous, so the new unit of the
+  # same name cannot collide with one still deactivating.
+  stop_inhibitor
   start_inhibitor_with_systemd || start_inhibitor_with_setsid
 }
 
