@@ -7,6 +7,7 @@ import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "../Singletons"
+import "." as UpdateParts
 
 // System > Updates (DESIGN.md section 8, SYSTEM). The Ryoku update channel as a
 // paper-and-ink instrument: how far the install sits behind origin, the commits
@@ -28,6 +29,7 @@ Item {
     property var hub
     // A full-bleed page owns the whole content region itself.
     readonly property bool fullBleed: true
+    readonly property bool nixBackend: Updates.backend === "nix"
 
     // ── automatic-check schedule (persisted in the hub's TOML) ──────────────
     property string interval: "daily"
@@ -388,6 +390,8 @@ Item {
     // in the background and returns, and the run reports through the
     // run-state, asking this page for its password and its questions.
     function startUpdate() {
+        if (pg.nixBackend && !Updates.canUpdate)
+            return;
         pg.starting = true;
         pg.actionError = "";
         pg.keepWaiting = false;
@@ -965,7 +969,7 @@ Item {
             topPadding: Tokens.s4
             spacing: Tokens.s5
 
-            UpdateRun {
+            UpdateParts.UpdateRun {
                 width: runCol.width
                 run: pg
             }
@@ -987,7 +991,7 @@ Item {
                 visible: pg.showFixWithAI
             }
 
-            UpdateLog {
+            UpdateParts.UpdateLog {
                 width: runCol.width
                 height: Math.max(220, runView.height * 0.45)
                 visible: pg.showLog
@@ -1068,7 +1072,7 @@ Item {
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
         }
 
-        UpdateAuth {
+        UpdateParts.UpdateAuth {
             anchors.centerIn: parent
             width: Math.min(parent.width, 560)
             run: pg

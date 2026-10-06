@@ -143,6 +143,9 @@ func authorizeGUI() error {
 	}
 	title := i18n.T("Authorize the update")
 	detail := i18n.T("Ryoku needs your password to take a snapshot and install packages.")
+	if nixBackend() {
+		detail = i18n.T("Ryoku needs your password to update the flake and switch the new NixOS generation.")
+	}
 	refused := ""
 	for try := range 3 {
 		// a fresh id per attempt, so the Hub can tell a second refusal from the first

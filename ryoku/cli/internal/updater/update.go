@@ -108,6 +108,17 @@ func Update(args []string) (err error) {
 		if stage2 {
 			return fmt.Errorf("the Arch update handoff is unavailable on NixOS")
 		}
+
+		// Nix updates mutate the flake lock and switch the active generation, so
+		// they need the same single-writer protection as package updates.
+		lock, busy := acquireUpdateLock()
+		if busy != nil {
+			return busy
+		}
+		if lock != nil {
+			defer lock.Close()
+		}
+
 		return nixUpdate()
 	}
 
