@@ -30,6 +30,15 @@
     "flakes"
   ];
 
+  # Give the installer compressed emergency headroom. The full Ryoku closure
+  # includes a few memory-hungry builds, and the live environment should not
+  # OOM-kill nixos-install on otherwise-supported 8 GiB machines.
+  zramSwap = {
+    enable = true;
+    memoryPercent = 50;
+    algorithm = "zstd";
+  };
+
   # The source tree embedded in the image is the exact revision used to build
   # it. Installer/profile code can therefore install that revision rather than
   # silently chasing a moving Git branch.

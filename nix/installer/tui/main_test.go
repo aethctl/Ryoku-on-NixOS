@@ -123,3 +123,16 @@ func TestISODiskAutomationSelectsDirectBackend(t *testing.T) {
 		t.Fatalf("backend args = %v", args)
 	}
 }
+
+func TestMangoChoiceIsAvailable(t *testing.T) {
+	found := false
+	for _, c := range flow[0].choices {
+		if c.key == "mango" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("MangoWM must remain available in the Ryoku Nix installer")
+	}
+}

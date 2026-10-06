@@ -12,6 +12,7 @@ let
     nix
     nixos-install-tools
     parted
+    pciutils
     util-linux
     dosfstools
     e2fsprogs
@@ -25,11 +26,13 @@ let
       "@TRUSTED_ROOT_PATH@"
       "@COREUTILS_ENV@"
       "@INSTALL_EDIT@"
+      "@ISO_CONFIGS@"
     ]
     [
       trustedRootPath
       "${pkgs.coreutils}/bin/env"
       "${./ryoku-install-edit.py}"
+      "${../iso-configs}"
     ]
     (builtins.readFile ./ryoku-install-backend.sh);
 in
@@ -47,6 +50,7 @@ pkgs.writeShellApplication {
     nix
     nixos-install-tools
     parted
+    pciutils
     util-linux
     dosfstools
     e2fsprogs

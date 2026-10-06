@@ -1,34 +1,29 @@
 {
-  inputs = {
-    # Use the unstable channel of nixpkgs as the main package source.
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  description = "Ryoku on NixOS";
 
-    # Import the Ryoku-on-NixOS flake.
+  inputs = {
+    # Keep normal moving branch URLs here. The installer writes a lock file
+    # pinned to the exact revisions tested by the ISO, so future `nix flake
+    # update` calls can advance normally instead of pinning users forever.
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     ryoku.url = "github:aethctl/Ryoku-on-NixOS/main";
   };
 
-  # Define the NixOS system configuration and expose all flake inputs.
-  outputs = { nixpkgs, ryoku, ... }@inputs: {
-    nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
-      # Target system architecture.
-      system = "x86_64-linux";
-
-      # Pass the flake inputs to the NixOS modules.
-      specialArgs = {
-        inherit inputs;
+  outputs = { nixpkgs, ryoku, ... }@inputs:
+    let
+      install = import ./install-values.nix;
+    in
+    {
+      nixosConfigurations.ryoku = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        specialArgs = {
+          inherit inputs install;
+        };
+        modules = [
+          ryoku.nixosModules.default
+          ./ryoku.nix
+          ./configuration.nix
+        ];
       };
-
-      # NixOS modules loaded by this configuration.
-      modules = [
-        # Enable the Ryoku-on-NixOS module.
-        ryoku.nixosModules.default
-
-        # Ryoku-specific system configuration.
-        ./ryoku.nix
-
-        # Main NixOS system configuration.
-        ./configuration.nix
-      ];
     };
-  };
 }

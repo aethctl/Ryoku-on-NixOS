@@ -102,15 +102,47 @@
         inherit pkgs;
         backend = ryokuInstallBackend;
       };
-    in
-    {
-      lib.version = version;
 
-      nixosModules.default =
+      ryokuNixosModule =
         import ./nix/modules/ryoku.nix {
           inherit self hermesAgent;
           ryokuNixpkgs = pkgs;
         };
+
+      mkIsoConfigSystem = gpuVendors:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+          specialArgs = {
+            inputs = { };
+            install = {
+              hostname = "ryoku-ci";
+              username = "ryoku";
+              passwordHash = "*";
+              firmware = "uefi";
+              installDisk = "/dev/vda";
+              inherit gpuVendors;
+              timeZone = "UTC";
+              locale = "en_US.UTF-8";
+              keyboardLayout = "us";
+              compositor = "hyprland";
+              browser = "chromium";
+              shell = "fish";
+              optionalApps = [ "prompt" ];
+              ryokuSource = "github:aethctl/Ryoku-on-NixOS/main";
+              nixpkgsSource = "github:NixOS/nixpkgs/nixos-unstable";
+            };
+          };
+          modules = [
+            ryokuNixosModule
+            ./nix/iso-configs/ryoku.nix
+            ./nix/iso-configs/configuration.nix
+          ];
+        };
+    in
+    {
+      lib.version = version;
+
+      nixosModules.default = ryokuNixosModule;
 
       # Bootable Ryoku-on-NixOS live/install image. The live environment tracks
       # the flake's nixos-unstable input; Ryoku-owned packages remain pinned to
@@ -235,6 +267,42 @@
             grep -Fq 'nixos-install' "$backend"
             grep -Fq 'Type the exact disk path' "$backend"
             grep -Fq 'refusing to erase the disk backing the live installer' "$backend"
+            grep -Fq 'target_root/etc/nixos/ryoku-source' "$backend"
+            grep -Fq 'path:./ryoku-source' "$backend"
+            grep -Fq 'detect_gpu_vendors' "$backend"
+            grep -Fq 'nixos-generate-config --root "$target_root" --show-hardware-config' "$backend"
+            grep -Fq 'cp -a "$iso_config_templates/."' "$backend"
+            grep -Fq 'user-password.hash' "$backend"
+            grep -Fq 'install -m 0600 -o root -g root' "$backend"
+            grep -Fq 'path:$target_root/etc/nixos#ryoku' "$backend"
+            grep -Fq -- '--override-input nixpkgs "$target_nixpkgs_ref"' "$backend"
+            grep -Fq -- '--override-input ryoku "$target_source_ref"' "$backend"
+            grep -Fq 'choose_install_parallelism' "$backend"
+            grep -Fq -- '--max-jobs "$install_jobs"' "$backend"
+            grep -Fq -- '--cores "$install_cores"' "$backend"
+            touch "$out"
+          '';
+
+        ryoku-iso-configs =
+          let
+            generic = mkIsoConfigSystem [ ];
+            nvidia = mkIsoConfigSystem [ "nvidia" ];
+            amd = mkIsoConfigSystem [ "amd" ];
+            intel = mkIsoConfigSystem [ "intel" ];
+            hybrid = mkIsoConfigSystem [ "nvidia" "intel" ];
+          in
+          assert generic.config.networking.hostName == "ryoku-ci";
+          assert generic.config.programs.ryoku.enable;
+          assert generic.config.nix.package == nixpkgs.legacyPackages.${system}.nixVersions.latest;
+          assert nvidia.config.services.xserver.videoDrivers == [ "nvidia" ];
+          assert nvidia.config.hardware.nvidia.modesetting.enable;
+          assert !nvidia.config.hardware.nvidia.open;
+          assert builtins.elem "amdgpu" amd.config.boot.initrd.kernelModules;
+          assert builtins.elem "i915" intel.config.boot.initrd.kernelModules;
+          assert builtins.length intel.config.hardware.graphics.extraPackages >= 2;
+          assert hybrid.config.services.xserver.videoDrivers == [ "nvidia" ];
+          assert builtins.elem "i915" hybrid.config.boot.initrd.kernelModules;
+          pkgs.runCommand "ryoku-iso-configs-check" { } ''
             touch "$out"
           '';
 

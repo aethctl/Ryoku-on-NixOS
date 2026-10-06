@@ -18,8 +18,14 @@ target_hostname=""
 target_username=""
 confirm_disk=""
 firmware_choice="auto"
+target_timezone=""
+target_locale=""
+target_keyboard=""
+gpu_spec="auto"
+gpu_vendors=()
 target_root="${RYOKU_INSTALL_TARGET_ROOT:-/mnt}"
 iso_work=""
+iso_config_templates="@ISO_CONFIGS@"
 
 # Bootstrap the public cache before the new NixOS generation
 # activates its declarative substituter configuration.
@@ -55,6 +61,32 @@ die() {
   exit 1
 }
 
+choose_install_parallelism() {
+  local mem_kib jobs cores
+
+  mem_kib="$(awk '/^MemTotal:/ { print $2; exit }' /proc/meminfo 2>/dev/null || true)"
+  case "$mem_kib" in
+    ''|*[!0-9]*) mem_kib=0 ;;
+  esac
+
+  # Building the full Ryoku closure can include memory-heavy Rust, Elixir and
+  # C++ derivations. Keep low-memory installs deliberately conservative so the
+  # kernel does not OOM-kill nixos-install halfway through an otherwise valid
+  # installation. More capable machines still get modest parallelism.
+  if [ "$mem_kib" -gt 0 ] && [ "$mem_kib" -lt 12582912 ]; then
+    jobs=1
+    cores=2
+  elif [ "$mem_kib" -gt 0 ] && [ "$mem_kib" -lt 25165824 ]; then
+    jobs=2
+    cores=2
+  else
+    jobs=4
+    cores=0
+  fi
+
+  printf '%s %s\n' "$jobs" "$cores"
+}
+
 nix_quote() {
   python3 - "$1" <<'PY_QUOTE'
 import json
@@ -67,12 +99,86 @@ print(json.dumps(value).replace("${", "\\${"))
 PY_QUOTE
 }
 
+# The live ISO exposes its embedded Ryoku tree through /etc/ryoku/source, which
+# resolves through /etc/static and is not a valid target-flake input during
+# pure evaluation. Persist that source beside the installed flake and use a
+# relative path instead. Clean release ISOs still keep their exact Git revision.
+target_source_ref_for_install() {
+  local ref="${RYOKU_INSTALL_TARGET_SOURCE:-$source_ref}"
+  case "$ref" in
+    path:/etc/ryoku/source|path:/etc/static/ryoku/source)
+      printf '%s\n' 'path:./ryoku-source'
+      ;;
+    *)
+      printf '%s\n' "$ref"
+      ;;
+  esac
+}
+
 valid_hostname() {
   [[ "$1" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]]
 }
 
 valid_username() {
   [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+}
+
+valid_timezone() {
+  [[ "$1" =~ ^[A-Za-z0-9_+.-]+(/[A-Za-z0-9_+.-]+)*$ ]] && [[ "$1" != *".."* ]]
+}
+
+valid_locale() {
+  [[ "$1" =~ ^[A-Za-z0-9_.@-]+$ ]]
+}
+
+valid_keyboard() {
+  [[ "$1" =~ ^[A-Za-z0-9_,+-]+$ ]]
+}
+
+detect_gpu_vendors() {
+  command -v lspci >/dev/null 2>&1 || return 0
+
+  lspci -Dn 2>/dev/null | awk '
+    $2 ~ /^(0300|0302|0380):$/ {
+      split($3, id, ":")
+      vendor = tolower(id[1])
+      if (vendor == "10de") print "nvidia"
+      else if (vendor == "1002") print "amd"
+      else if (vendor == "8086") print "intel"
+    }
+  ' | awk '!seen[$0]++'
+}
+
+resolve_gpu_vendors() {
+  local item
+  local -A seen=()
+  gpu_vendors=()
+
+  if [ "$gpu_spec" = "auto" ]; then
+    while IFS= read -r item; do
+      [ -n "$item" ] || continue
+      if [ -z "${seen[$item]+x}" ]; then
+        gpu_vendors+=("$item")
+        seen[$item]=1
+      fi
+    done < <(detect_gpu_vendors)
+    return
+  fi
+
+  [ "$gpu_spec" = "none" ] && return
+
+  IFS=',' read -r -a requested_gpus <<< "$gpu_spec"
+  for item in "${requested_gpus[@]}"; do
+    item="${item//[[:space:]]/}"
+    case "$item" in
+      nvidia|amd|intel) ;;
+      *) die "invalid GPU vendor: $item (expected auto, none, nvidia, amd, intel, or a comma-separated hybrid set)" ;;
+    esac
+    if [ -z "${seen[$item]+x}" ]; then
+      gpu_vendors+=("$item")
+      seen[$item]=1
+    fi
+  done
 }
 
 canonical_whole_disk() {
@@ -202,89 +308,82 @@ partition_by_number() {
 
 render_iso_target() {
   local outdir="$1" firmware="$2" password_hash="$3"
-  local apps_block="" boot_block
-  local nix_host nix_user nix_hash nix_ryoku nix_nixpkgs nix_disk
+  local apps_block="" gpu_block=""
+  local nix_host nix_user nix_ryoku nix_nixpkgs nix_disk
+  local nix_timezone nix_locale nix_keyboard nix_firmware
   local target_source_ref target_nixpkgs_ref
 
-  target_source_ref="${RYOKU_INSTALL_TARGET_SOURCE:-$source_ref}"
+  target_source_ref="$(target_source_ref_for_install)"
   target_nixpkgs_ref="${RYOKU_INSTALL_NIXPKGS_SOURCE:-github:NixOS/nixpkgs/nixos-unstable}"
 
   nix_host="$(nix_quote "$target_hostname")"
   nix_user="$(nix_quote "$target_username")"
-  nix_hash="$(nix_quote "$password_hash")"
   nix_ryoku="$(nix_quote "$target_source_ref")"
   nix_nixpkgs="$(nix_quote "$target_nixpkgs_ref")"
   nix_disk="$(nix_quote "$install_disk")"
+  nix_timezone="$(nix_quote "$target_timezone")"
+  nix_locale="$(nix_quote "$target_locale")"
+  nix_keyboard="$(nix_quote "$target_keyboard")"
+  nix_firmware="$(nix_quote "$firmware")"
 
   if [ "${#selected_apps[@]}" -gt 0 ]; then
-    apps_block="$(printf '      "%s"\n' "${selected_apps[@]}")"
+    apps_block="$(printf '    "%s"
+' "${selected_apps[@]}")"
   fi
-
-  if [ "$firmware" = "uefi" ]; then
-    boot_block='  boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;'
-  else
-    boot_block="  boot.loader.grub.enable = true;
-  boot.loader.grub.devices = [ $nix_disk ];"
+  if [ "${#gpu_vendors[@]}" -gt 0 ]; then
+    gpu_block="$(printf '    "%s"
+' "${gpu_vendors[@]}")"
   fi
 
   mkdir -p "$outdir"
+  cp -a "$iso_config_templates/." "$outdir/"
+  chmod -R u+w "$outdir"
 
-  cat > "$outdir/flake.nix" <<EOF_FLAKE
+  # Keep normal branch URLs in installed release flakes so `nix flake update`
+  # can advance them later. Dirty development ISOs are the one exception: their
+  # uncommitted Ryoku tree has no Git revision, so the target must reference the
+  # persisted local copy beside flake.nix.
+  if [ "$target_source_ref" = "path:./ryoku-source" ]; then
+    python3 - "$outdir/flake.nix" <<'PY_FLAKE'
+from pathlib import Path
+
+path = Path(__import__("sys").argv[1])
+text = path.read_text()
+text = text.replace(
+    'ryoku.url = "github:aethctl/Ryoku-on-NixOS/main";',
+    'ryoku.url = "path:./ryoku-source";',
+    1,
+)
+path.write_text(text)
+PY_FLAKE
+  fi
+
+  cat > "$outdir/install-values.nix" <<EOF_VALUES
+# Generated by ryoku-install. Edit this file to change machine-specific choices.
 {
-  description = "Ryoku on NixOS";
+  hostname = $nix_host;
+  username = $nix_user;
+  firmware = $nix_firmware;
+  installDisk = $nix_disk;
+  gpuVendors = [
+$gpu_block
+  ];
 
-  inputs = {
-    nixpkgs.url = $nix_nixpkgs;
-    ryoku.url = $nix_ryoku;
-  };
+  timeZone = $nix_timezone;
+  locale = $nix_locale;
+  keyboardLayout = $nix_keyboard;
 
-  outputs = { nixpkgs, ryoku, ... }: {
-    nixosConfigurations.$nix_host = nixpkgs.lib.nixosSystem {
-      system = "x86_64-linux";
-      modules = [
-        ryoku.nixosModules.default
-        ./configuration.nix
-      ];
-    };
-  };
-}
-EOF_FLAKE
-
-  cat > "$outdir/configuration.nix" <<EOF_CONFIG
-{ pkgs, ... }:
-
-{
-  imports = [ ./hardware-configuration.nix ];
-
-$boot_block
-
-  networking.hostName = $nix_host;
-  networking.networkmanager.enable = true;
-
-  nix.package = pkgs.nixVersions.latest;
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
-  zramSwap.enable = true;
-
-  users.users.$nix_user = {
-    isNormalUser = true;
-    extraGroups = [ "wheel" "networkmanager" "video" "audio" "input" ];
-    hashedPassword = $nix_hash;
-  };
-
-  programs.ryoku = {
-    enable = true;
-    defaultCompositor = "$compositor";
-    browser = "$browser";
-    shell = "$shell_choice";
-    optionalApps = [
+  compositor = "${compositor}";
+  browser = "${browser}";
+  shell = "${shell_choice}";
+  optionalApps = [
 $apps_block
-    ];
-  };
+  ];
 
-  system.stateVersion = "26.11";
+  ryokuSource = $nix_ryoku;
+  nixpkgsSource = $nix_nixpkgs;
 }
-EOF_CONFIG
+EOF_VALUES
 }
 
 install_iso() {
@@ -340,6 +439,41 @@ install_iso() {
   fi
   valid_username "$target_username" || die "invalid username: $target_username"
 
+  if [ -z "$target_timezone" ]; then
+    if [ "$assume_yes" -eq 1 ]; then
+      target_timezone="UTC"
+    else
+      printf 'Timezone [UTC]: '
+      read -r target_timezone
+      target_timezone="${target_timezone:-UTC}"
+    fi
+  fi
+  valid_timezone "$target_timezone" || die "invalid timezone: $target_timezone"
+
+  if [ -z "$target_locale" ]; then
+    if [ "$assume_yes" -eq 1 ]; then
+      target_locale="en_US.UTF-8"
+    else
+      printf 'Locale [en_US.UTF-8]: '
+      read -r target_locale
+      target_locale="${target_locale:-en_US.UTF-8}"
+    fi
+  fi
+  valid_locale "$target_locale" || die "invalid locale: $target_locale"
+
+  if [ -z "$target_keyboard" ]; then
+    if [ "$assume_yes" -eq 1 ]; then
+      target_keyboard="us"
+    else
+      printf 'Keyboard layout [us]: '
+      read -r target_keyboard
+      target_keyboard="${target_keyboard:-us}"
+    fi
+  fi
+  valid_keyboard "$target_keyboard" || die "invalid keyboard layout: $target_keyboard"
+
+  resolve_gpu_vendors
+
   case "$firmware_choice" in
     auto)
       if [ -d /sys/firmware/efi ]; then firmware="uefi"; else firmware="bios"; fi
@@ -370,7 +504,7 @@ install_iso() {
     done
   fi
 
-  target_source_ref="${RYOKU_INSTALL_TARGET_SOURCE:-$source_ref}"
+  target_source_ref="$(target_source_ref_for_install)"
   target_nixpkgs_ref="${RYOKU_INSTALL_NIXPKGS_SOURCE:-github:NixOS/nixpkgs/nixos-unstable}"
 
   iso_work="$(mktemp -d)"
@@ -383,6 +517,10 @@ install_iso() {
   printf 'Firmware   %s\n' "$firmware"
   printf 'Hostname   %s\n' "$target_hostname"
   printf 'User       %s\n' "$target_username"
+  printf 'Timezone   %s\n' "$target_timezone"
+  printf 'Locale     %s\n' "$target_locale"
+  printf 'Keyboard   %s\n' "$target_keyboard"
+  printf 'GPU        %s\n' "$(IFS=,; echo "${gpu_vendors[*]:-auto/none}")"
   printf 'WM         %s\n' "$compositor"
   printf 'Browser    %s\n' "$browser"
   printf 'Shell      %s\n' "$shell_choice"
@@ -394,6 +532,8 @@ install_iso() {
     cat "$iso_work/flake.nix"
     printf '\nGenerated configuration.nix:\n'
     cat "$iso_work/configuration.nix"
+    printf '\nGenerated install-values.nix:\n'
+    cat "$iso_work/install-values.nix"
     rm -rf "$iso_work"
     printf '\nDry run complete. No disks or files were changed.\n'
     return 0
@@ -479,24 +619,50 @@ install_iso() {
   fi
 
   echo "@@RYOKU_STEP configuration"
-  run_root nixos-generate-config --root "$target_root"
-  run_root install -m 0644 "$iso_work/flake.nix" "$target_root/etc/nixos/flake.nix"
-  run_root install -m 0644 "$iso_work/configuration.nix" "$target_root/etc/nixos/configuration.nix"
+  run_root mkdir -p "$target_root/etc/nixos"
+  run_root nixos-generate-config --root "$target_root" --show-hardware-config > "$iso_work/hardware-configuration.nix"
+  run_root cp -a "$iso_work/." "$target_root/etc/nixos/"
 
-  if [ -e /etc/ryoku/source ]; then
-    run_root mkdir -p "$target_root/etc/ryoku/source"
+  # Password hashes are credentials too. Keep them out of flake source and the
+  # world-readable Nix store; NixOS reads this root-only file on activation.
+  local password_file="$iso_work/user-password.hash"
+  (umask 077; printf '%s\n' "$password_hash" > "$password_file")
+  run_root mkdir -p "$target_root/etc/ryoku"
+  run_root install -m 0600 -o root -g root "$password_file" \
+    "$target_root/etc/ryoku/user-password.hash"
+
+  if [ "$target_source_ref" = "path:./ryoku-source" ]; then
+    [ -e /etc/ryoku/source ] || die "embedded Ryoku source is missing from the live ISO"
+    run_root mkdir -p "$target_root/etc/nixos/ryoku-source"
     # Preserve source-tree symlinks exactly. Dereferencing them breaks on
     # intentionally relative compatibility links in the repository.
-    run_root cp -a /etc/ryoku/source/. "$target_root/etc/ryoku/source/"
+    run_root cp -a /etc/ryoku/source/. "$target_root/etc/nixos/ryoku-source/"
   fi
 
   echo "@@RYOKU_STEP lock"
-  run_root nix flake lock "path:$target_root/etc/nixos"
+  local -a lock_args=(nix flake lock "path:$target_root/etc/nixos")
+  # Preserve the branch URL as the lock node's `original` reference while
+  # pinning the exact revisions carried by this ISO as `locked`. Future
+  # `nix flake update` can then advance normally instead of fossilising users
+  # on the installer release forever.
+  lock_args+=(--override-input nixpkgs "$target_nixpkgs_ref")
+  if [ "$target_source_ref" != "path:./ryoku-source" ]; then
+    lock_args+=(--override-input ryoku "$target_source_ref")
+  fi
+  run_root "${lock_args[@]}"
 
   echo "@@RYOKU_STEP install"
+  local install_jobs install_cores
+  read -r install_jobs install_cores <<EOF
+$(choose_install_parallelism)
+EOF
+  printf 'Ryoku installer: nix build parallelism: %s job(s), %s core(s) per job\n' \
+    "$install_jobs" "$install_cores"
   run_root nixos-install \
+    --max-jobs "$install_jobs" \
+    --cores "$install_cores" \
     --root "$target_root" \
-    --flake "path:$target_root/etc/nixos#$target_hostname" \
+    --flake "path:$target_root/etc/nixos#ryoku" \
     --no-root-passwd \
     "${bootstrap_cache[@]}"
 
@@ -521,7 +687,7 @@ Usage:
 Options:
   --flake PATH[#HOST]   NixOS flake to configure (default: /etc/nixos)
   --source REF          Ryoku flake reference
-  --compositor NAME     Initial compositor: hyprland or niri
+  --compositor NAME     Initial compositor: hyprland, niri, or mango
   --browser NAME        Browser: chromium or firefox
   --shell NAME          Interactive shell: fish or zsh
   --apps CSV            Optional app IDs, comma-separated; use none for empty
@@ -530,6 +696,10 @@ Options:
   --filesystem TYPE     ext4 or btrfs (default: ext4)
   --hostname NAME       Target hostname for --iso (default: ryoku)
   --username NAME       Target user for --iso (default: ryoku)
+  --timezone ZONE       Target timezone (default: UTC)
+  --locale LOCALE       Target locale (default: en_US.UTF-8)
+  --keyboard LAYOUT     XKB keyboard layout (default: us)
+  --gpu VENDORS         auto, none, or comma-separated nvidia,amd,intel
   --firmware MODE       auto, uefi, or bios (default: auto)
   --confirm-disk DEVICE Required with --iso --yes; must exactly match --disk
   --dry-run             Show proposed changes without writing them
@@ -613,6 +783,26 @@ while [ "$#" -gt 0 ]; do
       target_username="$2"
       shift 2
       ;;
+    --timezone)
+      [ "$#" -ge 2 ] || die "--timezone requires a value"
+      target_timezone="$2"
+      shift 2
+      ;;
+    --locale)
+      [ "$#" -ge 2 ] || die "--locale requires a value"
+      target_locale="$2"
+      shift 2
+      ;;
+    --keyboard)
+      [ "$#" -ge 2 ] || die "--keyboard requires a value"
+      target_keyboard="$2"
+      shift 2
+      ;;
+    --gpu)
+      [ "$#" -ge 2 ] || die "--gpu requires a value"
+      gpu_spec="$2"
+      shift 2
+      ;;
     --firmware)
       [ "$#" -ge 2 ] || die "--firmware requires a value"
       firmware_choice="$2"
@@ -644,7 +834,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$compositor" in
-  ""|hyprland|niri) ;;
+  ""|hyprland|niri|mango) ;;
   *)
     echo "ryoku-install: invalid compositor: $compositor" >&2
     exit 2
@@ -664,10 +854,12 @@ if [ -z "$compositor" ]; then
     printf '\nInitial compositor\n'
     printf '  1) Hyprland  (Ryoku default)\n'
     printf '  2) niri      (scrollable tiling)\n'
+    printf '  3) MangoWM   (dynamic tiling, Ryoku Nix supported)\n'
     printf 'Choose [1]: '
     read -r answer
     case "$answer" in
       2) compositor="niri" ;;
+      3) compositor="mango" ;;
       ""|1) compositor="hyprland" ;;
       *)
         echo "ryoku-install: invalid compositor selection" >&2

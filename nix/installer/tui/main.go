@@ -86,9 +86,10 @@ type step struct {
 }
 
 var flow = []step{
-	{key: "compositor", title: "Window manager", desc: "Choose the session Ryoku preselects. Both providers stay installed.", choices: []choice{
+	{key: "compositor", title: "Window manager", desc: "Choose the session Ryoku preselects. All Ryoku providers stay installed.", choices: []choice{
 		{"hyprland", "Hyprland", "dynamic tiling · effects · broad plugin ecosystem"},
 		{"niri", "niri", "scrollable tiling · clean columns · Ryoku-supported"},
+		{"mango", "MangoWM", "dynamic tiling · lightweight · Ryoku Nix supported"},
 	}},
 	{key: "browser", title: "Web browser", desc: "Installed declaratively and used by Ryoku's browser role.", choices: []choice{
 		{"chromium", "Chromium", "Chromium engine · current NixOS default"},
@@ -596,7 +597,7 @@ Interactive options:
 Automation / compatibility:
   --cli ...             Run ryoku-install-backend directly
   -y, --yes             Also selects the direct backend path
-  --disk/--filesystem/--hostname/--username/--firmware/--confirm-disk
+  --disk/--filesystem/--hostname/--username/--timezone/--locale/--keyboard/--gpu/--firmware/--confirm-disk
                         are accepted by the direct ISO backend
   --compositor/--browser/--shell/--apps are accepted by the direct backend`)
 }
@@ -631,7 +632,7 @@ func parseOptions(args []string) (options, bool, []string, error) {
 		case "--dry-run":
 			o.dryRun = true
 			backendArgs = append(backendArgs, a)
-		case "--compositor", "--browser", "--shell", "--apps", "--disk", "--filesystem", "--hostname", "--username", "--firmware", "--confirm-disk":
+		case "--compositor", "--browser", "--shell", "--apps", "--disk", "--filesystem", "--hostname", "--username", "--timezone", "--locale", "--keyboard", "--gpu", "--firmware", "--confirm-disk":
 			if i+1 >= len(args) {
 				return o, false, nil, fmt.Errorf("%s requires a value", a)
 			}
