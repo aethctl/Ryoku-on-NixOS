@@ -20,6 +20,7 @@ import (
 )
 
 const minISODiskBytes = int64(16 * 1024 * 1024 * 1024)
+const dryRunDiskPath = "/dev/vda"
 
 type isoStep struct {
 	key   string
@@ -67,13 +68,14 @@ type isoModel struct {
 	picks map[string]string
 	keep  map[string]bool
 
-	disks       []isoDisk
-	diskLoading bool
-	netChecked  bool
-	netOnline   bool
-	busy        bool
-	status      string
-	err         error
+	disks         []isoDisk
+	diskLoading   bool
+	syntheticDisk bool
+	netChecked    bool
+	netOnline     bool
+	busy          bool
+	status        string
+	err           error
 
 	text          map[string]string
 	passwordField int
@@ -313,6 +315,10 @@ func (m *isoModel) gotoKey(key string) {
 
 func (m *isoModel) next() {
 	key := m.current().key
+	if key == "network" && m.opts.dryRun && m.syntheticDisk {
+		m.gotoKey("filesystem")
+		return
+	}
 	if key == "configuration" && m.picks["configuration"] == "ryoku" {
 		m.gotoKey("review")
 		return
@@ -333,6 +339,10 @@ func (m *isoModel) next() {
 
 func (m *isoModel) back() {
 	key := m.current().key
+	if key == "filesystem" && m.opts.dryRun && m.syntheticDisk {
+		m.gotoKey("network")
+		return
+	}
 	if key == "review" && m.picks["configuration"] == "ryoku" {
 		m.gotoKey("configuration")
 		return
@@ -632,9 +642,20 @@ func (m isoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, isoCheckNetworkCmd()
 	case isoDisksMsg:
 		m.diskLoading = false
-		if msg.err != nil {
+		if m.opts.dryRun && (msg.err != nil || len(msg.disks) == 0) {
+			m.syntheticDisk = true
+			m.disks = nil
+			m.picks["disk"] = dryRunDiskPath
+			m.err = nil
+			m.status = "No eligible disks found; using /dev/vda as a synthetic dry-run target"
+			if m.current().key == "disk" {
+				m.next()
+				m.setChoiceCursor(m.current().key)
+			}
+		} else if msg.err != nil {
 			m.err = msg.err
 		} else {
+			m.syntheticDisk = false
 			m.disks = msg.disks
 		}
 		return m, nil

@@ -208,3 +208,36 @@ func TestISOExactDiskConfirmation(t *testing.T) {
 		t.Fatalf("wrong confirmation unexpectedly started install: installing=%v err=%v", got.installing, got.err)
 	}
 }
+func TestISODryRunUsesSyntheticDiskWhenNoneFound(t *testing.T) {
+	o := defaultOptions()
+	o.iso = true
+	o.dryRun = true
+	m := newISOModel(o)
+	m.gotoKey("network")
+
+	model, _ := m.Update(isoDisksMsg{disks: nil})
+	got := model.(isoModel)
+	if !got.syntheticDisk {
+		t.Fatal("dry run with no disks must enable the synthetic target")
+	}
+	if got.picks["disk"] != dryRunDiskPath {
+		t.Fatalf("synthetic disk = %q, want %q", got.picks["disk"], dryRunDiskPath)
+	}
+
+	got.next()
+	if got.current().key != "filesystem" {
+		t.Fatalf("dry run should skip disk picker, landed on %q", got.current().key)
+	}
+}
+
+func TestISORealInstallDoesNotInventDisk(t *testing.T) {
+	o := defaultOptions()
+	o.iso = true
+	m := newISOModel(o)
+
+	model, _ := m.Update(isoDisksMsg{disks: nil})
+	got := model.(isoModel)
+	if got.syntheticDisk || got.picks["disk"] != "" {
+		t.Fatalf("real install invented a disk: synthetic=%v disk=%q", got.syntheticDisk, got.picks["disk"])
+	}
+}
