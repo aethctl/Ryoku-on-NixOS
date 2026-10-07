@@ -131,6 +131,7 @@
               timeZone = "UTC";
               locale = "en_US.UTF-8";
               keyboardLayout = "us";
+              kernel = "default";
               compositor = "hyprland";
               browser = "chromium";
               shell = "fish";
@@ -282,7 +283,8 @@
             grep -Fq 'cp -a "$iso_config_templates/."' "$backend"
             grep -Fq 'user-password.hash' "$backend"
             grep -Fq 'install -m 0600 -o root -g root' "$backend"
-            grep -Fq 'path:$target_root/etc/nixos#ryoku' "$backend"
+            grep -Fq 'local install_host="ryoku"' "$backend"
+            grep -Fq -- '--flake "path:$target_root/etc/nixos#$install_host"' "$backend"
             grep -Fq -- '--override-input nixpkgs "$target_nixpkgs_ref"' "$backend"
             grep -Fq -- '--override-input ryoku "$target_source_ref"' "$backend"
             grep -Fq 'choose_install_parallelism' "$backend"

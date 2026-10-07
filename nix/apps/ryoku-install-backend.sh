@@ -21,6 +21,10 @@ firmware_choice="auto"
 target_timezone=""
 target_locale=""
 target_keyboard=""
+kernel_choice="default"
+config_mode="ryoku"
+import_flake=""
+import_host=""
 gpu_spec="auto"
 gpu_vendors=()
 target_root="${RYOKU_INSTALL_TARGET_ROOT:-/mnt}"
@@ -133,6 +137,49 @@ valid_locale() {
 
 valid_keyboard() {
   [[ "$1" =~ ^[A-Za-z0-9_,+-]+$ ]]
+}
+
+
+validate_import_flake() {
+  local root="$1" candidate
+  [ -d "$root" ] || die "import flake path is not a directory: $root"
+  [ -f "$root/flake.nix" ] || die "import flake must contain flake.nix at its root"
+  [ -f "$root/hardware-configuration.nix" ] || die "import flake must contain root hardware-configuration.nix so the installer can replace machine-specific hardware safely"
+
+  while IFS= read -r -d '' candidate; do
+    [ "$candidate" = "$root/hardware-configuration.nix" ] && continue
+    if grep -Eq '(^|[^A-Za-z])(fileSystems\.|swapDevices[[:space:]]*=|/dev/disk/by-(uuid|partuuid)|UUID=)' "$candidate"; then
+      die "import flake contains filesystem/disk declarations outside hardware-configuration.nix: ${candidate#"$root"/}"
+    fi
+  done < <(find "$root" -type f -name '*.nix' -print0)
+}
+
+resolve_import_host() {
+  local root="$1" show
+  if [ -n "$import_host" ]; then
+    return 0
+  fi
+  show="$(nix flake show "path:$root" --json --no-write-lock-file 2>/dev/null || true)"
+  mapfile -t import_hosts < <(printf '%s\n' "$show" | jq -r '.nixosConfigurations // {} | keys[]' 2>/dev/null || true)
+  case "${#import_hosts[@]}" in
+    1) import_host="${import_hosts[0]}" ;;
+    0) die "import flake exposes no nixosConfigurations; pass --import-host only after fixing the flake" ;;
+    *) die "import flake exposes multiple NixOS hosts; pass --import-host NAME" ;;
+  esac
+}
+
+render_import_target() {
+  local outdir="$1" root source_for_input
+  root="$(readlink -f "$import_flake")"
+  validate_import_flake "$root"
+  resolve_import_host "$root"
+
+  mkdir -p "$outdir"
+  cp -a "$root/." "$outdir/"
+  chmod -R u+w "$outdir"
+
+  source_for_input="$(target_source_ref_for_install)"
+  python3 @INSTALL_EDIT@ --input-only "$outdir/flake.nix" "$source_for_input"
 }
 
 detect_gpu_vendors() {
@@ -325,6 +372,7 @@ render_iso_target() {
   nix_locale="$(nix_quote "$target_locale")"
   nix_keyboard="$(nix_quote "$target_keyboard")"
   nix_firmware="$(nix_quote "$firmware")"
+  nix_kernel="$(nix_quote "$kernel_choice")"
 
   if [ "${#selected_apps[@]}" -gt 0 ]; then
     apps_block="$(printf '    "%s"
@@ -372,6 +420,7 @@ $gpu_block
   timeZone = $nix_timezone;
   locale = $nix_locale;
   keyboardLayout = $nix_keyboard;
+  kernel = $nix_kernel;
 
   compositor = "${compositor}";
   browser = "${browser}";
@@ -472,6 +521,19 @@ install_iso() {
   fi
   valid_keyboard "$target_keyboard" || die "invalid keyboard layout: $target_keyboard"
 
+  case "$kernel_choice" in
+    default|latest|zen|hardened) ;;
+    *) die "invalid kernel: $kernel_choice (expected default, latest, zen, or hardened)" ;;
+  esac
+
+  case "$config_mode" in
+    ryoku) ;;
+    import)
+      [ -n "$import_flake" ] || die "--config-mode import requires --import-flake PATH"
+      ;;
+    *) die "invalid configuration mode: $config_mode (expected ryoku or import)" ;;
+  esac
+
   resolve_gpu_vendors
 
   case "$firmware_choice" in
@@ -482,7 +544,10 @@ install_iso() {
     *) die "invalid firmware mode: $firmware_choice" ;;
   esac
 
-  if [ "$dry_run" -eq 1 ]; then
+  if [ "$config_mode" = "import" ]; then
+    # Input-only import mode owns its users and authentication policy.
+    password_hash="*"
+  elif [ "$dry_run" -eq 1 ]; then
     password_hash="*"
   elif [ -n "${RYOKU_INSTALL_PASSWORD_HASH:-}" ]; then
     password_hash="$RYOKU_INSTALL_PASSWORD_HASH"
@@ -508,7 +573,11 @@ install_iso() {
   target_nixpkgs_ref="${RYOKU_INSTALL_NIXPKGS_SOURCE:-github:NixOS/nixpkgs/nixos-unstable}"
 
   iso_work="$(mktemp -d)"
-  render_iso_target "$iso_work" "$firmware" "$password_hash"
+  if [ "$config_mode" = "import" ]; then
+    render_import_target "$iso_work"
+  else
+    render_iso_target "$iso_work" "$firmware" "$password_hash"
+  fi
 
   printf '\nRyoku NixOS full installation\n'
   printf '%s\n' '────────────────────────────────────────'
@@ -520,6 +589,11 @@ install_iso() {
   printf 'Timezone   %s\n' "$target_timezone"
   printf 'Locale     %s\n' "$target_locale"
   printf 'Keyboard   %s\n' "$target_keyboard"
+  printf 'Kernel     %s\n' "$kernel_choice"
+  printf 'Config     %s\n' "$config_mode"
+  if [ "$config_mode" = "import" ]; then
+    printf 'Import     %s#%s\n' "$import_flake" "$import_host"
+  fi
   printf 'GPU        %s\n' "$(IFS=,; echo "${gpu_vendors[*]:-auto/none}")"
   printf 'WM         %s\n' "$compositor"
   printf 'Browser    %s\n' "$browser"
@@ -530,10 +604,14 @@ install_iso() {
   if [ "$dry_run" -eq 1 ]; then
     printf '\nGenerated flake.nix:\n'
     cat "$iso_work/flake.nix"
-    printf '\nGenerated configuration.nix:\n'
-    cat "$iso_work/configuration.nix"
-    printf '\nGenerated install-values.nix:\n'
-    cat "$iso_work/install-values.nix"
+    if [ "$config_mode" = "ryoku" ]; then
+      printf '\nGenerated configuration.nix:\n'
+      cat "$iso_work/configuration.nix"
+      printf '\nGenerated install-values.nix:\n'
+      cat "$iso_work/install-values.nix"
+    else
+      printf '\nImported configuration is otherwise unchanged. hardware-configuration.nix is regenerated only during a real install.\n'
+    fi
     rm -rf "$iso_work"
     printf '\nDry run complete. No disks or files were changed.\n'
     return 0
@@ -623,13 +701,15 @@ install_iso() {
   run_root nixos-generate-config --root "$target_root" --show-hardware-config > "$iso_work/hardware-configuration.nix"
   run_root cp -a "$iso_work/." "$target_root/etc/nixos/"
 
-  # Password hashes are credentials too. Keep them out of flake source and the
-  # world-readable Nix store; NixOS reads this root-only file on activation.
-  local password_file="$iso_work/user-password.hash"
-  (umask 077; printf '%s\n' "$password_hash" > "$password_file")
-  run_root mkdir -p "$target_root/etc/ryoku"
-  run_root install -m 0600 -o root -g root "$password_file" \
-    "$target_root/etc/ryoku/user-password.hash"
+  if [ "$config_mode" = "ryoku" ]; then
+    # Password hashes are credentials too. Keep them out of flake source and the
+    # world-readable Nix store; NixOS reads this root-only file on activation.
+    local password_file="$iso_work/user-password.hash"
+    (umask 077; printf '%s\n' "$password_hash" > "$password_file")
+    run_root mkdir -p "$target_root/etc/ryoku"
+    run_root install -m 0600 -o root -g root "$password_file" \
+      "$target_root/etc/ryoku/user-password.hash"
+  fi
 
   if [ "$target_source_ref" = "path:./ryoku-source" ]; then
     [ -e /etc/ryoku/source ] || die "embedded Ryoku source is missing from the live ISO"
@@ -641,13 +721,14 @@ install_iso() {
 
   echo "@@RYOKU_STEP lock"
   local -a lock_args=(nix flake lock "path:$target_root/etc/nixos")
-  # Preserve the branch URL as the lock node's `original` reference while
-  # pinning the exact revisions carried by this ISO as `locked`. Future
-  # `nix flake update` can then advance normally instead of fossilising users
-  # on the installer release forever.
-  lock_args+=(--override-input nixpkgs "$target_nixpkgs_ref")
-  if [ "$target_source_ref" != "path:./ryoku-source" ]; then
-    lock_args+=(--override-input ryoku "$target_source_ref")
+  # A generated Ryoku configuration deliberately pins both installer inputs.
+  # An imported flake keeps the user's nixpkgs and other inputs untouched; the
+  # only dependency this installer adds is Ryoku itself.
+  if [ "$config_mode" = "ryoku" ]; then
+    lock_args+=(--override-input nixpkgs "$target_nixpkgs_ref")
+    if [ "$target_source_ref" != "path:./ryoku-source" ]; then
+      lock_args+=(--override-input ryoku "$target_source_ref")
+    fi
   fi
   run_root "${lock_args[@]}"
 
@@ -658,11 +739,15 @@ $(choose_install_parallelism)
 EOF
   printf 'Ryoku installer: nix build parallelism: %s job(s), %s core(s) per job\n' \
     "$install_jobs" "$install_cores"
+  local install_host="ryoku"
+  if [ "$config_mode" = "import" ]; then
+    install_host="$import_host"
+  fi
   run_root nixos-install \
     --max-jobs "$install_jobs" \
     --cores "$install_cores" \
     --root "$target_root" \
-    --flake "path:$target_root/etc/nixos#ryoku" \
+    --flake "path:$target_root/etc/nixos#$install_host" \
     --no-root-passwd \
     "${bootstrap_cache[@]}"
 
@@ -699,6 +784,10 @@ Options:
   --timezone ZONE       Target timezone (default: UTC)
   --locale LOCALE       Target locale (default: en_US.UTF-8)
   --keyboard LAYOUT     XKB keyboard layout (default: us)
+  --kernel NAME         default, latest, zen, or hardened
+  --config-mode MODE    ryoku or import (default: ryoku)
+  --import-flake PATH   Existing flake directory for advanced import mode
+  --import-host NAME    NixOS host from imported flake; auto when exactly one exists
   --gpu VENDORS         auto, none, or comma-separated nvidia,amd,intel
   --firmware MODE       auto, uefi, or bios (default: auto)
   --confirm-disk DEVICE Required with --iso --yes; must exactly match --disk
@@ -796,6 +885,26 @@ while [ "$#" -gt 0 ]; do
     --keyboard)
       [ "$#" -ge 2 ] || die "--keyboard requires a value"
       target_keyboard="$2"
+      shift 2
+      ;;
+    --kernel)
+      [ "$#" -ge 2 ] || die "--kernel requires a value"
+      kernel_choice="$2"
+      shift 2
+      ;;
+    --config-mode)
+      [ "$#" -ge 2 ] || die "--config-mode requires a value"
+      config_mode="$2"
+      shift 2
+      ;;
+    --import-flake)
+      [ "$#" -ge 2 ] || die "--import-flake requires a value"
+      import_flake="$2"
+      shift 2
+      ;;
+    --import-host)
+      [ "$#" -ge 2 ] || die "--import-host requires a value"
+      import_host="$2"
       shift 2
       ;;
     --gpu)

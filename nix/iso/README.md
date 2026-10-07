@@ -19,25 +19,46 @@ open it again.
 
 ## Guided installation
 
-The installer currently supports a safe whole-disk installation flow. It asks
-for or determines:
+The ISO uses one continuous Bubble Tea wizard for the complete whole-disk flow.
+The backend receives a fully validated non-interactive install plan; it does not
+fall back to shell prompts halfway through the installation. The wizard covers:
 
+- HTTPS connectivity to `cache.nixos.org`, with NetworkManager `nmtui` recovery;
+- target disk and ext4/Btrfs filesystem;
+- hostname, username and a masked/confirmed password;
+- timezone, locale and keyboard layout;
+- kernel policy: NixOS default, latest, Zen, or hardened from the pinned nixpkgs;
 - Ryoku compositor: Hyprland, niri, or MangoWM;
-- browser and shell;
-- optional Ryoku apps/tools;
-- target disk and ext4/btrfs filesystem;
-- hostname, username, password;
-- timezone, locale, and keyboard layout;
-- UEFI/BIOS mode;
-- GPU vendors, detected automatically from PCI devices with NVIDIA/AMD/Intel
-  and hybrid combinations supported.
+- browser, shell and optional Ryoku apps/tools;
+- generated Ryoku configuration, or advanced input-only import of an existing
+  NixOS flake;
+- final review and exact target-disk confirmation.
 
-Before partitioning, the user must type the exact target disk path. Unattended
-installs require both `--disk` and a matching `--confirm-disk`. The installer
-refuses the disk backing the live medium and writable targets smaller than
-16 GiB. The live image also enables compressed zram and automatically limits
-Nix build parallelism on lower-memory machines; 8 GiB RAM is the tested minimum
-for the default full desktop installation.
+GPU vendors and UEFI/BIOS mode are still detected by the backend. Password
+plaintext never enters backend argv, a temporary file, or installer logs: the
+TUI sends only its yescrypt hash through the backend environment.
+
+Before partitioning, the user must type the exact target disk path. The backend
+validates the same path again before `wipefs`. Unattended installs require both
+`--disk` and a matching `--confirm-disk`. The installer refuses the disk backing
+the live medium and writable targets smaller than 16 GiB. The live image also
+enables compressed zram and automatically limits Nix build parallelism on
+lower-memory machines; 8 GiB RAM is the tested minimum for the default full
+desktop installation.
+
+### Import existing NixOS flake
+
+Import mode is deliberately conservative. It copies the selected flake into the
+new system, adds only the `ryoku` flake input, and leaves the imported modules,
+users, packages, desktop policy and nixpkgs input under the user's ownership.
+The source directory is never edited in place.
+
+For disk safety, the imported tree must contain a root
+`hardware-configuration.nix`; the installer replaces that file with hardware
+configuration generated for the new machine. Filesystem/disk declarations
+outside that file are rejected instead of guessing whether old UUIDs are safe.
+If the flake exposes more than one `nixosConfiguration`, the host must be chosen
+explicitly.
 
 **Guided dual boot / preserve-existing-partitions is not implemented yet.** The
 selected installation disk is erased. Advanced users can leave the installer

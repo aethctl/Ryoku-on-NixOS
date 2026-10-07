@@ -239,6 +239,24 @@ class InstallerEditTests(unittest.TestCase):
                 SOURCE,
             )
 
+    def test_input_only_adds_no_modules_or_output_arguments(self):
+        text = """{
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  outputs = { self, nixpkgs }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [ ./configuration.nix ];
+    };
+  };
+}
+"""
+        edited = PARSER.add_input(text, SOURCE)
+        self.assertIn("inputs.ryoku.url", edited)
+        self.assertNotIn("ryoku.nixosModules.default", edited)
+        self.assertNotIn("./ryoku.nix", edited)
+        self.assertIn("outputs = { self, nixpkgs }:", edited)
+        self.assertEqual(PARSER.add_input(edited, SOURCE), edited)
+        self.assert_valid_nix(edited)
+
     def test_imported_host_fails_safely(self):
         text = """{
   inputs = { nixpkgs.url = "github:NixOS/nixpkgs"; };

@@ -2,6 +2,7 @@ package main
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -134,5 +135,76 @@ func TestMangoChoiceIsAvailable(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("MangoWM must remain available in the Ryoku Nix installer")
+	}
+}
+
+func TestISOKernelChoicesMatchBackendContract(t *testing.T) {
+	want := []string{"default", "latest", "zen", "hardened"}
+	choices := isoChoices("kernel")
+	if len(choices) != len(want) {
+		t.Fatalf("kernel choices = %d, want %d", len(choices), len(want))
+	}
+	for i, key := range want {
+		if choices[i].key != key {
+			t.Fatalf("kernel choice %d = %q, want %q", i, choices[i].key, key)
+		}
+	}
+}
+
+func TestISOBackendArgsAreFullyNonInteractive(t *testing.T) {
+	o := defaultOptions()
+	o.iso = true
+	m := newISOModel(o)
+	m.disks = []isoDisk{{Path: "/dev/vda", Size: minISODiskBytes}}
+	m.picks["disk"] = "/dev/vda"
+	m.passwordHash = "$y$test$hash"
+	m.text["password"] = "super secret plaintext"
+	m.text["confirm"] = "super secret plaintext"
+	args := m.backendArgs()
+	joined := strings.Join(args, " ")
+	for _, required := range []string{
+		"--iso", "--yes", "--disk /dev/vda", "--confirm-disk /dev/vda",
+		"--filesystem ext4", "--hostname ryoku", "--username ryoku",
+		"--timezone UTC", "--locale en_US.UTF-8", "--keyboard us",
+		"--kernel default", "--gpu auto", "--firmware auto",
+		"--config-mode ryoku",
+	} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("backend args missing %q: %s", required, joined)
+		}
+	}
+	if strings.Contains(joined, "super secret plaintext") || strings.Contains(joined, m.passwordHash) {
+		t.Fatalf("password material leaked into argv: %s", joined)
+	}
+}
+
+func TestISOImportArgsOnlyDeclareImportContract(t *testing.T) {
+	o := defaultOptions()
+	o.iso = true
+	m := newISOModel(o)
+	m.picks["disk"] = "/dev/vda"
+	m.picks["configuration"] = "import"
+	m.text["import-path"] = "/tmp/existing"
+	m.text["import-host"] = "laptop"
+	joined := strings.Join(m.backendArgs(), " ")
+	for _, required := range []string{"--config-mode import", "--import-flake /tmp/existing", "--import-host laptop"} {
+		if !strings.Contains(joined, required) {
+			t.Fatalf("import args missing %q: %s", required, joined)
+		}
+	}
+}
+
+func TestISOExactDiskConfirmation(t *testing.T) {
+	o := defaultOptions()
+	o.iso = true
+	m := newISOModel(o)
+	m.w, m.h = 112, 40
+	m.picks["disk"] = "/dev/vda"
+	m.gotoKey("confirm")
+	m.text["disk-confirm"] = "/dev/sda"
+	model, cmd := m.onKey("enter")
+	got := model.(isoModel)
+	if cmd != nil || got.installing || got.err == nil {
+		t.Fatalf("wrong confirmation unexpectedly started install: installing=%v err=%v", got.installing, got.err)
 	}
 }

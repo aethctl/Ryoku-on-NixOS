@@ -597,7 +597,7 @@ Interactive options:
 Automation / compatibility:
   --cli ...             Run ryoku-install-backend directly
   -y, --yes             Also selects the direct backend path
-  --disk/--filesystem/--hostname/--username/--timezone/--locale/--keyboard/--gpu/--firmware/--confirm-disk
+  --disk/--filesystem/--hostname/--username/--timezone/--locale/--keyboard/--kernel/--gpu/--firmware/--config-mode/--import-flake/--import-host/--confirm-disk
                         are accepted by the direct ISO backend
   --compositor/--browser/--shell/--apps are accepted by the direct backend`)
 }
@@ -632,7 +632,7 @@ func parseOptions(args []string) (options, bool, []string, error) {
 		case "--dry-run":
 			o.dryRun = true
 			backendArgs = append(backendArgs, a)
-		case "--compositor", "--browser", "--shell", "--apps", "--disk", "--filesystem", "--hostname", "--username", "--timezone", "--locale", "--keyboard", "--gpu", "--firmware", "--confirm-disk":
+		case "--compositor", "--browser", "--shell", "--apps", "--disk", "--filesystem", "--hostname", "--username", "--timezone", "--locale", "--keyboard", "--kernel", "--gpu", "--firmware", "--config-mode", "--import-flake", "--import-host", "--confirm-disk":
 			if i+1 >= len(args) {
 				return o, false, nil, fmt.Errorf("%s requires a value", a)
 			}
@@ -696,12 +696,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, "ryoku-install: TERM=dumb; use --cli for the non-interactive backend")
 		os.Exit(2)
 	}
-	fm, err := tea.NewProgram(newModel(opts)).Run()
+	var fm tea.Model
+	if opts.iso {
+		fm, err = tea.NewProgram(newISOModel(opts)).Run()
+	} else {
+		fm, err = tea.NewProgram(newModel(opts)).Run()
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "ryoku-install:", err)
 		os.Exit(1)
 	}
 	if result, ok := fm.(model); ok && result.err != nil {
+		os.Exit(1)
+	}
+	if result, ok := fm.(isoModel); ok && result.err != nil {
 		os.Exit(1)
 	}
 }

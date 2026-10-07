@@ -25,6 +25,15 @@ in
     install.installDisk
   ];
 
+  # The installer records a stable kernel policy instead of a concrete version.
+  # The selected package set is still pinned by this flake's nixpkgs input.
+  boot.kernelPackages = {
+    default = pkgs.linuxPackages;
+    latest = pkgs.linuxPackages_latest;
+    zen = pkgs.linuxPackages_zen;
+    hardened = pkgs.linuxPackages_hardened;
+  }.${install.kernel};
+
   # ──────────────────────────────────────────────────────────────────────────
   # Machine identity / networking
   # ──────────────────────────────────────────────────────────────────────────

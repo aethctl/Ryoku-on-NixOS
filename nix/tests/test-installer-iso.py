@@ -1,6 +1,8 @@
 import os
 import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 
 class ISOInstallerTests(unittest.TestCase):
@@ -90,6 +92,7 @@ class ISOInstallerTests(unittest.TestCase):
         self.assertIn('timeZone = "Europe/London"', output)
         self.assertIn('locale = "en_GB.UTF-8"', output)
         self.assertIn('keyboardLayout = "gb"', output)
+        self.assertIn('kernel = "default"', output)
         self.assertIn('"nvidia"', output)
         self.assertIn('"intel"', output)
         self.assertIn('compositor = "mango"', output)
@@ -101,6 +104,75 @@ class ISOInstallerTests(unittest.TestCase):
         self.assertIn("Dry run complete. No disks or files were changed.", output)
         self.assertNotIn("@@RYOKU_STEP partition", output)
         self.assertNotIn("@@RYOKU_STEP install", output)
+
+    def test_kernel_choice_is_written_to_install_values(self):
+        result = self.run_backend(
+            "--iso", "--dry-run", "--yes",
+            "--disk", "/dev/vda", "--confirm-disk", "/dev/vda",
+            "--kernel", "zen", "--gpu", "none",
+        )
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("Kernel     zen", output)
+        self.assertIn('kernel = "zen"', output)
+
+    def test_import_mode_adds_only_ryoku_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "flake.nix").write_text(
+                '{\n'
+                '  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";\n'
+                '  outputs = { self, nixpkgs }: {\n'
+                '    nixosConfigurations.laptop = nixpkgs.lib.nixosSystem {\n'
+                '      system = "x86_64-linux";\n'
+                '      modules = [ ./configuration.nix ./hardware-configuration.nix ];\n'
+                '    };\n'
+                '  };\n'
+                '}\n'
+            )
+            (root / "configuration.nix").write_text('{ ... }: { system.stateVersion = "26.11"; }\n')
+            (root / "hardware-configuration.nix").write_text('{ ... }: {}\n')
+            result = self.run_backend(
+                "--iso", "--dry-run", "--yes",
+                "--disk", "/dev/vda", "--confirm-disk", "/dev/vda",
+                "--config-mode", "import", "--import-flake", directory,
+                "--import-host", "laptop", "--gpu", "none",
+            )
+            output = result.stdout + result.stderr
+            self.assertEqual(result.returncode, 0, output)
+            self.assertIn("Config     import", output)
+            self.assertIn("inputs.ryoku.url", output)
+            self.assertNotIn("ryoku.nixosModules.default", output)
+            self.assertNotIn("./ryoku.nix", output)
+            self.assertIn("Imported configuration is otherwise unchanged", output)
+
+    def test_import_mode_rejects_extra_disk_declarations(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "flake.nix").write_text(
+                '{\n'
+                '  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";\n'
+                '  outputs = { self, nixpkgs }: {\n'
+                '    nixosConfigurations.laptop = nixpkgs.lib.nixosSystem {\n'
+                '      system = "x86_64-linux";\n'
+                '      modules = [ ./configuration.nix ./hardware-configuration.nix ];\n'
+                '    };\n'
+                '  };\n'
+                '}\n'
+            )
+            (root / "configuration.nix").write_text(
+                '{ ... }: { fileSystems."/data".device = "/dev/disk/by-uuid/OLD"; }\n'
+            )
+            (root / "hardware-configuration.nix").write_text('{ ... }: {}\n')
+            result = self.run_backend(
+                "--iso", "--dry-run", "--yes",
+                "--disk", "/dev/vda", "--confirm-disk", "/dev/vda",
+                "--config-mode", "import", "--import-flake", directory,
+                "--import-host", "laptop", "--gpu", "none",
+            )
+            output = result.stdout + result.stderr
+            self.assertNotEqual(result.returncode, 0, output)
+            self.assertIn("filesystem/disk declarations outside hardware-configuration.nix", output)
 
     def test_live_iso_source_is_rebased_into_target_flake(self):
         env = dict(

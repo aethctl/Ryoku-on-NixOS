@@ -14,6 +14,7 @@
   timeZone = "UTC";
   locale = "en_US.UTF-8";
   keyboardLayout = "us";
+  kernel = "default";
 
   compositor = "hyprland";
   browser = "chromium";

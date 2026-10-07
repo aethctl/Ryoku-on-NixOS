@@ -76,6 +76,8 @@
     jq
     nixVersions.latest
     nixos-install-tools
+    networkmanager
+    whois
     parted
     rsync
     util-linux
