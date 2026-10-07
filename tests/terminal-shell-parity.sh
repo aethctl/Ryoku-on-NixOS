@@ -14,7 +14,7 @@ fi
 grep -Fq 'apps/kitty/kitty.conf' "$repo/ryoku/shell/deploy.sh" ||
   fail "dev deploy does not refresh Kitty's shell policy"
 bash_cfg=$repo/ryoku/apps/bash/ryoku.bash
-grep -Fq '{ "type": "command", "key": "SHELL"' "$repo/ryoku/apps/fastfetch/config.jsonc" ||
+grep -Fq '"text": "basename \"${SHELL:-unknown}\""' "$repo/ryoku/apps/fastfetch/config.jsonc" ||
   fail "Fastfetch shell readout does not follow the selected session shell"
 grep -Fq 'apps/fastfetch/config.jsonc' "$repo/ryoku/shell/deploy.sh" ||
   fail "dev deploy does not refresh Fastfetch's shell readout"

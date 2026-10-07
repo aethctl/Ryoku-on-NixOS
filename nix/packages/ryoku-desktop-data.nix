@@ -194,8 +194,8 @@ pkgs.stdenv.mkDerivation {
     cp ryoku/apps/fastfetch/config.jsonc \
       "$cfg/fastfetch/config.jsonc"
 
-    cp ryoku/assets/brand/fastfetch-emblem.png \
-      "$cfg/fastfetch/fastfetch-emblem.png"
+    cp ryoku/assets/brand/ryoku-nixos.png \
+      "$cfg/fastfetch/ryoku-nixos.png"
 
     mkdir -p "$cfg/kitty"
     cp -a ryoku/apps/kitty/. "$cfg/kitty/"
