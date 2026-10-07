@@ -4,6 +4,7 @@
   hyprglassSrc,
   bibataMaterialSrc,
   imgbordersSrc,
+  ryomanagerSrc,
   ryotunesSrc,
   version,
 }:
@@ -134,6 +135,10 @@ let
   ryotunes = import ./ryoku-ryotunes.nix {
     inherit pkgs ryotunesUnwrapped;
     ryokuQml = qml;
+  };
+
+  ryomanager = import ./ryomanager.nix {
+    inherit pkgs ryomanagerSrc;
   };
 
   keysounds = import ./ryoku-keysounds.nix {
@@ -304,6 +309,7 @@ let
       livewall
       ryogami
       ryotunes
+      ryomanager
       qmkHid
       waifu2x
       desktopData
@@ -334,6 +340,7 @@ in
     livewall
     ryogami
     ryotunes
+    ryomanager
     ryotunesUnwrapped
     keysounds
     qmkHid

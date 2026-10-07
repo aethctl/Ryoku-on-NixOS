@@ -115,6 +115,14 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    name   = "float-ryomanager",
+    match  = { class = "^ryomanager$" },
+    float  = true,
+    size   = fit(1460, 900),
+    center = true,
+})
+
+hl.window_rule({
     -- The update and rollback logs are started from Ryoku Settings itself
     -- (UpdatesPage, and the bar's update widget), and a tiled window always
     -- sits under a float, so the run's output hid behind the 99% settings

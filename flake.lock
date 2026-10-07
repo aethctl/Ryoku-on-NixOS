@@ -249,6 +249,7 @@
         "imgbordersSrc": "imgbordersSrc",
         "nixpkgs": "nixpkgs_2",
         "ryokuPackagesNixpkgs": "ryokuPackagesNixpkgs",
+        "ryomanagerSrc": "ryomanagerSrc",
         "ryotunesSrc": "ryotunesSrc"
       }
     },
@@ -265,6 +266,23 @@
         "owner": "NixOS",
         "repo": "nixpkgs",
         "rev": "56c02bc00adcf003215cc4bd996d6efaf4cff188",
+        "type": "github"
+      }
+    },
+    "ryomanagerSrc": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791364434,
+        "narHash": "sha256-82p7NQVpPkfb3T+z8aXSk1vB30DbYMnDBk0JzX4CvlU=",
+        "owner": "aethctl",
+        "repo": "ryomanager",
+        "rev": "4bb3d08dd9264ae311d4d12ae5c0a94a2dcf9165",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aethctl",
+        "repo": "ryomanager",
+        "rev": "4bb3d08dd9264ae311d4d12ae5c0a94a2dcf9165",
         "type": "github"
       }
     },

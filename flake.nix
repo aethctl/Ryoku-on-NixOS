@@ -36,6 +36,12 @@
       flake = false;
     };
 
+    # RyoManager task manager, pinned to the approved Ryoku UI build.
+    ryomanagerSrc = {
+      url = "github:aethctl/ryomanager/4bb3d08dd9264ae311d4d12ae5c0a94a2dcf9165";
+      flake = false;
+    };
+
     # Native Ryotunes 1.1.6, pinned to its release commit.
     # Keep this pinned to the exact upstream release commit.
     ryotunesSrc = {
@@ -44,7 +50,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, ryokuPackagesNixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryotunesSrc, ... }:
+  outputs = { self, nixpkgs, ryokuPackagesNixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryomanagerSrc, ryotunesSrc, ... }:
     let
       version =
         builtins.replaceStrings
@@ -78,6 +84,7 @@
           hyprglassSrc
           bibataMaterialSrc
           imgbordersSrc
+          ryomanagerSrc
           ryotunesSrc
           version
           ;
@@ -181,6 +188,7 @@
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
         ryoku-ryotunes = ryoku.ryotunes;
+        ryomanager = ryoku.ryomanager;
         ryotunes-unwrapped = ryoku.ryotunesUnwrapped;
         ryoku-keysounds = ryoku.keysounds;
         ryoku-qmk-hid = ryoku.qmkHid;
@@ -348,6 +356,7 @@
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
         ryoku-ryotunes = ryoku.ryotunes;
+        ryomanager = ryoku.ryomanager;
         ryoku-keysounds = ryoku.keysounds;
         ryoku-qmk-hid = ryoku.qmkHid;
         ryoku-waifu2x = ryoku.waifu2x;
