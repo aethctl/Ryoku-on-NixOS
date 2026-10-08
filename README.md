@@ -85,6 +85,12 @@ Ryoku is designed to be incredibly customizable out of the box with the easy to 
 
 ---
 
+<div align="center">
+
+<img src="docs/readme/assets/art/beauty.png" alt="Power" width="70%" />
+
+</div>
+
 ## What this port owns
 
 Ryoku's base code and configs are the same as upstream, this
