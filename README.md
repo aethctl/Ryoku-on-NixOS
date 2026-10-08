@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/readme/assets/brand/ryoku-logo.png" alt="Ryoku" width="200" />
+<img src="docs/readme/assets/brand/ryoku-logo.png" alt="Ryoku" width="250" />
 
 # Ryoku on NixOS
 
