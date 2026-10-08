@@ -2085,11 +2085,12 @@ const defaultCursorTheme = "Bibata-Modern-Ice"
 // (where ryoku-cursors installs the Bibata family) first, then the two per-user
 // dirs a Hub-installed third-party theme can land in.
 func cursorSearchDirs() []string {
-	return []string{
-		"/usr/share/icons",
-		filepath.Join(sys.Home(), ".local", "share", "icons"),
-		filepath.Join(sys.Home(), ".icons"),
+	var dirs []string
+	for _, data := range sys.DataDirs() {
+		dirs = append(dirs, filepath.Join(data, "icons"))
 	}
+	dirs = append(dirs, filepath.Join(sys.Home(), ".icons"))
+	return dirs
 }
 
 // cursorThemeInstalled: is <theme>/cursors present under any search dir? a bare

@@ -3,6 +3,7 @@ package sys
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -24,6 +25,38 @@ func Xdg(envVar, fallback string) string {
 
 // ConfigHome is $XDG_CONFIG_HOME (default ~/.config).
 func ConfigHome() string { return Xdg("XDG_CONFIG_HOME", ".config") }
+
+// DataDirs returns XDG data roots in lookup order, including active NixOS
+// profiles when the session does not provide XDG_DATA_DIRS.
+func DataDirs() []string {
+	raw := strings.TrimSpace(os.Getenv("XDG_DATA_DIRS"))
+	if raw == "" {
+		if NixBackend() {
+			raw = strings.Join([]string{
+				filepath.Join(Home(), ".local", "share"),
+				filepath.Join(Home(), ".nix-profile", "share"),
+				filepath.Join("/etc/profiles/per-user", os.Getenv("USER"), "share"),
+				"/run/current-system/sw/share",
+				"/usr/local/share",
+				"/usr/share",
+			}, ":")
+		} else {
+			raw = "/usr/local/share:/usr/share"
+		}
+	}
+
+	var out []string
+	seen := map[string]bool{}
+	for _, dir := range strings.Split(raw, ":") {
+		dir = strings.TrimSpace(dir)
+		if dir == "" || seen[dir] {
+			continue
+		}
+		seen[dir] = true
+		out = append(out, dir)
+	}
+	return out
+}
 
 // StateDir is the CLI's state root, $XDG_STATE_HOME/ryoku (default
 // ~/.local/state/ryoku).
