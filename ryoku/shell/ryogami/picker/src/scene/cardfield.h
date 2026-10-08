@@ -141,6 +141,7 @@ private:
     void restoreSelection();
     void connectSource();
     void disconnectSource();
+    void resetGenerationState();
 
     void drainDecoder(CardRenderNode *node);
     void resolve(CardRenderNode *node, const LayoutContext &ctx,
@@ -156,9 +157,7 @@ private:
     bool tickFades(double dt);
 
     float flipPhase(float x, float y) const;
-    float filterRollFor(qint64 cell, const QString &key, float x, float y);
-    void filterStorm();
-    void pushFilterOld(std::vector<CardInstance> &instances, CardRenderNode *node);
+    float filterRollFor(qint64 cell, float x, float y);
     bool advanceFilterSwap(double dt);
 
     void schedulePreview();
@@ -235,21 +234,6 @@ private:
     std::vector<CardInstance> m_transBuf;
     std::unordered_map<QString, Spring> m_fades;
 
-    struct FilterCard {
-        CardInstance inst;
-        qint64 cell;
-        QString key;
-        float roll;
-    };
-    struct FilterOld {
-        CardInstance inst;
-        qint64 cell;
-        QString key;
-        float t;
-    };
-    std::vector<FilterCard> m_filterCache;
-    std::vector<FilterOld> m_filterOld;
-    QHash<qint64, int> m_filterCell;
     QHash<qint64, float> m_filterIn;
     float m_filterWave = 10.0f;
     // Watchdog: a bounded swap must terminate, so a stuck roll can never blank a card.

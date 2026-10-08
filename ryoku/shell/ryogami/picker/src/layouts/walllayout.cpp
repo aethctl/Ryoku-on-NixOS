@@ -116,10 +116,12 @@ WallLayout::Params WallLayout::readParams(const LayoutContext &ctx) const
     const ParamSource *p = ctx.params;
     const bool small = p->smallScreen();
     Params np;
-    np.cols = std::max(1, int(std::lround(p->num(wsKey("gridColumns"), small ? 4 : 6))));
-    np.rows = std::max(1, int(std::lround(p->num(wsKey("gridRows"), 3))));
-    np.thumbW = float(p->num(wsKey("gridThumbWidth"), small ? 220 : 300));
-    np.thumbH = float(p->num(wsKey("gridThumbHeight"), small ? 124 : 169));
+    np.cols = int(std::lround(std::clamp(p->num(wsKey("gridColumns"), small ? 4 : 6), 1.0, 64.0)));
+    np.rows = int(std::lround(std::clamp(p->num(wsKey("gridRows"), 3), 1.0, 64.0)));
+    np.thumbW = std::clamp(float(p->num(wsKey("gridThumbWidth"), small ? 220 : 300)),
+                           24.0f, 4096.0f);
+    np.thumbH = std::clamp(float(p->num(wsKey("gridThumbHeight"), small ? 124 : 169)),
+                           24.0f, 4096.0f);
     np.gapX = std::clamp(float(p->num(wsKey("gridGapX"), 8)), 0.0f, 256.0f);
     np.gapY = std::clamp(float(p->num(wsKey("gridGapY"), 8)), 0.0f, 256.0f);
     const bool round = p->flag(wsKey("gridRoundCorners"), true);

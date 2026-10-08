@@ -4,36 +4,30 @@ import stage.modules.common.functions
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Ryoku.Ui.Singletons
 pragma Singleton
 pragma ComponentBehavior: Bound
 
 /**
- * Per-screen wallpapers and how each screen frames its picture.
+ * Per-screen framing for the wallpaper each mounted desktop is painting.
  *
- * Two things the shell used to have one of per desktop: the wallpaper, and the
- * way it is cropped (the cover fit, centred). Edit Mode's Wallpaper catalogue
- * gives each screen its own of both, and this is where they are stored, read
- * back and changed.
+ * Ryogami owns wallpaper selection and its output and workspace assignments.
+ * This service keeps only framing records keyed by monitor and wallpaper path;
+ * workspaces that use the same picture therefore share one Stage scene and the
+ * mounted Backdrop always supplies the path currently painted on that output.
  *
- * Colours. The palette comes from ONE picture - matugen and the colour scripts
- * read `background.wallpaperPath` (or the light-mode one) and nothing else - so
- * that stays the "shared" wallpaper, and a screen either shows it or has its
- * own. The shared one is by construction the colour source, and the screens
- * still showing it are the ones it colours from: picking another screen's
- * wallpaper as the colour source is a swap (makeColourSource), never a second
- * palette. That keeps every script, preset and settings page that reads
- * `wallpaperPath` exactly as it was.
+ * Colours still come from one picture because matugen reads the shared
+ * `background.wallpaperPath`. Screens painting that path identify the colour
+ * source, while choosing another colour source updates Ryogami without moving
+ * any picture between outputs.
  *
- * Framing. A screen keeps one framing per picture it has shown (a few of them,
- * most recent first), so going back to a wallpaper finds it as it was left and
- * a new one starts square. While Edit Mode's Wallpaper catalogue is open over a
- * screen, that screen's framing is previewed live from the values below
- * instead of the stored ones: the overlay on the desktop drags them, and only
- * the release is written to the config (one history entry per gesture).
+ * A screen keeps one framing per picture it has shown (a few of them, most
+ * recent first), so returning to a wallpaper restores the way it was left.
+ * While the catalogue is open, gestures preview from the live values below;
+ * only release writes one history entry.
  *
- * Off entirely while another process paints the desktop (mpvpaper, Wallpaper
- * Engine): there is no plane in this shell to frame, and a screen's own image
- * would fight that process for the same layer.
+ * Framing is unavailable while another process owns the wallpaper layer
+ * because the shell has no plane to transform.
  */
 Singleton {
     id: root
@@ -41,12 +35,14 @@ Singleton {
     // How many pictures a screen remembers a framing for.
     readonly property int framingMemory: 12
 
-    // Ryoku's wallpaper plane belongs to ryogami (the daemon paints every
-    // screen, still or video), which is this service's own "another process
-    // paints the desktop" case: per-screen copies and framing cannot land
-    // anywhere, so the Wallpaper catalogue hides the section outright.
-    readonly property bool available: Config.ready && !Wallpapers.videoWallpaperActive
-        && !Config.widgetProvider
+    // Mounted painters publish both ownership and provider path. The latter is
+    // authoritative even while outputs.json is between daemon revisions.
+    property var painters: ({})
+    readonly property bool hasMountedPainter: Object.keys(root.painters).length > 0
+    readonly property bool externalPainterActive: Object.keys(root.painters)
+        .some(name => root.painters[name]?.external === true)
+    readonly property bool available: Config.ready && (root.hasMountedPainter
+        ? !root.externalPainterActive : !Wallpapers.videoWallpaperActive)
     readonly property var screenNames: Array.from(Quickshell.screens).map(screen => screen.name)
     readonly property bool multiScreen: root.screenNames.length > 1
 
@@ -79,6 +75,25 @@ Singleton {
         return root.screenKeys[name] ?? "";
     }
 
+    function registerPainter(name, external, path) {
+        if (!name)
+            return;
+        const next = Object.assign({}, root.painters);
+        next[name] = {
+            "external": external === true,
+            "path": root.cleanPath(path)
+        };
+        root.painters = next;
+    }
+
+    function unregisterPainter(name) {
+        if (!name || !(name in root.painters))
+            return;
+        const next = Object.assign({}, root.painters);
+        delete next[name];
+        root.painters = next;
+    }
+
     // The entry a screen reads and writes: its monitor's own first, then one
     // stored under its connector - an entry from before monitors were told
     // apart, or one for a screen that cannot be told apart now - unless that
@@ -107,6 +122,11 @@ Singleton {
     // wallpaper display it: the light-mode one in light mode when there is a
     // separate one, else the desktop's, else the shipped default.
     readonly property string sharedSourcePath: {
+        if (Config.widgetProvider) {
+            const mounted = root.cleanPath(Config.wallpaperPath);
+            if (mounted !== "")
+                return mounted;
+        }
         const background = Config.options?.background;
         if (!background || background.useWallpaperEngine)
             return "";
@@ -122,29 +142,29 @@ Singleton {
         return root.matchEntry(root.entries, name);
     }
 
-    // The screen's own wallpaper, "" while it shows the shared one.
+    // The mounted provider frame is the path actually painted on this output.
+    // outputs.json is the startup fallback before Backdrop registers.
+    function sourcePathFor(name) {
+        const mounted = root.cleanPath(root.painters[name]?.path);
+        return mounted !== "" ? mounted : root.cleanPath(Wallpapers.currentWallpaperPath(name));
+    }
+
+    // "Own" is presentation vocabulary: this output differs from the picture
+    // that feeds the shared palette. Ryogami remains the only owner of paths.
     function ownPathFor(name) {
         if (!root.available || !name)
             return "";
-        const path = root.cleanPath(root.entryFor(name)?.path);
-        return root.isImagePath(path) ? path : "";
+        const path = root.sourcePathFor(name);
+        return path !== root.sharedSourcePath ? path : "";
     }
 
     function hasOwn(name) {
         return root.ownPathFor(name) !== "";
     }
 
-    // The file the screen shows: what its framings are keyed by, and what the
-    // panel names.
-    function sourcePathFor(name) {
-        const own = root.ownPathFor(name);
-        return own !== "" ? own : root.sharedSourcePath;
-    }
-
-    // The screens on this machine that show the shared wallpaper - the ones the
-    // colours visibly come from. Empty when every screen has its own, which a
-    // monitor being unplugged can leave behind.
-    readonly property var colourScreens: root.screenNames.filter(name => root.ownPathFor(name) === "")
+    // Empty when no output currently paints the palette's source picture.
+    readonly property var colourScreens: root.screenNames
+        .filter(name => root.sourcePathFor(name) === root.sharedSourcePath)
     readonly property string colourScreen: root.colourScreens.length > 0 ? root.colourScreens[0] : ""
     // Whether more than one picture is on screen, which is when "which one do
     // the colours come from" is a question at all.
@@ -238,6 +258,15 @@ Singleton {
     // A gesture owns the live values: a config change arriving meanwhile (the
     // release's own write) must not animate them out from under the pointer.
     property bool interacting: false
+    // A local write may pass through an empty adapter snapshot before the
+    // replacement list is readable. Keep painting the live record until the
+    // store publishes the exact record that was committed.
+    property var pendingWrite: null
+    Timer {
+        id: pendingWriteTimer
+        interval: 900
+        onTriggered: root.pendingWrite = null
+    }
 
     readonly property var liveFraming: ({
         "zoom": root.liveZoom,
@@ -255,6 +284,8 @@ Singleton {
         target: GlobalStates
         function onEditHistoryWillReplay() {
             root.flushGesture();
+            pendingWriteTimer.stop();
+            root.pendingWrite = null;
         }
     }
 
@@ -353,9 +384,23 @@ Singleton {
     Connections {
         target: Config.ready ? Config.options.background : null
         function onMonitorWallpapersChanged() {
-            if (root.liveScreen === "" || root.interacting)
-                return;
-            root.animateLiveTo(root.savedFramingFor(root.liveScreen, root.livePath), false);
+            // JsonAdapter can publish an empty intermediate list while replacing
+            // it. A local commit already has the authoritative pixels on screen;
+            // ignore store echoes until that exact record becomes readable.
+            Qt.callLater(() => {
+                if (root.liveScreen === "" || root.interacting)
+                    return;
+                const saved = root.savedFramingFor(root.liveScreen, root.livePath);
+                const pending = root.pendingWrite;
+                if (pending && pending.screen === root.liveScreen && pending.path === root.livePath) {
+                    if (WallpaperFraming.equal(saved, pending.framing)) {
+                        pendingWriteTimer.stop();
+                        root.pendingWrite = null;
+                    }
+                    return;
+                }
+                root.animateLiveTo(saved, false);
+            });
         }
     }
 
@@ -429,16 +474,21 @@ Singleton {
     }
 
     // ── Gestures (the overlay) ───────────────────────────────────────────────
-    // Stops a landing animation where it was heading. The angle goes to the
-    // turn's destination, not the nearest quarter: a turn caught less than
-    // half-way would otherwise snap back, and the gesture's release would
-    // write the old orientation over the one the button just stored.
+    // Finish at the destination, not at the in-between frame where the next
+    // pointer gesture happened to interrupt the landing animation.
     function settleLive() {
         if (!liveAnimation.running)
             return;
-        const angle = angleAnim.to;
+        const target = WallpaperFraming.normalize({
+            "zoom": zoomAnim.to,
+            "x": xAnim.to,
+            "y": yAnim.to,
+            "rotation": angleAnim.to,
+            "flipH": root.liveFlipH,
+            "flipV": root.liveFlipV
+        });
         liveAnimation.stop();
-        root.liveAngle = WallpaperFraming.snapRotation(angle);
+        root.setLive(target, target.rotation);
     }
 
     function beginGesture() {
@@ -505,11 +555,13 @@ Singleton {
         });
     }
 
+    // A single-shot Timer no longer reports `running` inside its own
+    // onTriggered, so the expiry commits directly, not through flushGesture().
     Timer {
         id: commitTimer
         interval: 450
         repeat: false
-        onTriggered: root.flushGesture()
+        onTriggered: root.commitSteps()
     }
 
     // Writes a run of steps now instead of when the timer would have: before
@@ -520,11 +572,14 @@ Singleton {
         if (!commitTimer.running)
             return;
         commitTimer.stop();
+        root.commitSteps();
+    }
+
+    function commitSteps() {
+        root.interacting = false;
         if (root.liveScreen === "")
             return;
-        const target = root.gestureTarget();
-        root.interacting = false;
-        root.commitFraming(root.liveScreen, root.livePath, target);
+        root.commitFraming(root.liveScreen, root.livePath, root.gestureTarget());
     }
 
     // ── Writes ───────────────────────────────────────────────────────────────
@@ -537,11 +592,29 @@ Singleton {
         return root.entries.map(entry => ({
             "monitor": String(entry.monitor),
             "key": String(entry.key ?? ""),
-            "path": root.cleanPath(entry.path),
             "framings": Array.from(entry.framings ?? [])
                 .filter(f => f && root.cleanPath(f.path) !== "")
                 .map(f => Object.assign({ "path": root.cleanPath(f.path) }, WallpaperFraming.normalize(f)))
         }));
+    }
+
+    // Old builds mixed provider state into the framing list. Drop only that
+    // field so upgrades retain every monitor's crop history.
+    function removeLegacyWallpaperPaths() {
+        if (!Config.ready)
+            return;
+        const stored = Array.from(Config.options.background.monitorWallpapers ?? []);
+        if (stored.some(entry => entry && "path" in entry))
+            Config.options.background.monitorWallpapers = root.listCopy()
+                .filter(entry => entry.framings.length > 0);
+    }
+    Component.onCompleted: Qt.callLater(root.removeLegacyWallpaperPaths)
+    Connections {
+        target: Config
+        function onReadyChanged() {
+            if (Config.ready)
+                root.removeLegacyWallpaperPaths();
+        }
     }
 
     // The screen's entry in a copy of the list, created when it has none,
@@ -550,7 +623,7 @@ Singleton {
         const key = root.keyFor(name);
         let entry = root.matchEntry(list, name);
         if (!entry) {
-            entry = { "monitor": name, "key": key, "path": "", "framings": [] };
+            entry = { "monitor": name, "key": key, "framings": [] };
             list.push(entry);
         }
         entry.monitor = name;
@@ -561,8 +634,8 @@ Singleton {
 
     function writeList(next) {
         const before = root.listCopy();
-        // An entry with nothing in it is the default and is not kept.
-        const after = next.filter(entry => entry.path !== "" || entry.framings.length > 0);
+        // Identity-only entries carry no state worth persisting.
+        const after = next.filter(entry => entry.framings.length > 0);
         if (JSON.stringify(before) === JSON.stringify(after))
             return false;
         Config.options.background.monitorWallpapers = after;
@@ -592,9 +665,23 @@ Singleton {
         const clean = root.cleanPath(path);
         if (!root.available || !name || clean === "")
             return;
+        const next = WallpaperFraming.normalize(framing);
+        const live = root.isLive(name, clean);
+        // Button actions update the mounted painter synchronously. Gesture
+        // releases are already at `next`; neither waits for the watched store.
+        if (live && !root.interacting && !WallpaperFraming.equal(root.gestureTarget(), next))
+            root.animateLiveTo(next, false);
+        if (live)
+            root.pendingWrite = { "screen": name, "path": clean, "framing": next };
         const list = root.listCopy();
-        root.setFramingIn(root.entryIn(list, name), clean, framing);
-        root.writeList(list);
+        root.setFramingIn(root.entryIn(list, name), clean, next);
+        const wrote = root.writeList(list);
+        if (live) {
+            if (wrote)
+                pendingWriteTimer.restart();
+            else
+                root.pendingWrite = null;
+        }
     }
 
     // The framing a button starts from: the gesture's destination while one
@@ -643,99 +730,90 @@ Singleton {
         root.commitFraming(name, root.sourcePathFor(name), WallpaperFraming.defaults());
     }
 
-    // A picture picked for one screen. A screen showing the shared wallpaper
-    // changes the shared one - and with it the colours and every other screen
-    // still showing it, which is what "shared" means; a screen with its own
-    // changes only itself. Images only for a screen of its own: a video is
-    // played or painted for the whole desktop.
+    // Picks always enter Ryoku through the per-output seam; the daemon then
+    // publishes the frame that sourcePathFor observes from the mounted painter.
     function setScreenWallpaper(name, path) {
         const clean = root.cleanPath(path);
-        if (clean === "")
+        if (!name || clean === "")
             return false;
-        if (!root.hasOwn(name)) {
-            Wallpapers.select(clean);
-            return true;
+        return Wallpapers.selectForScreen(clean, name);
+    }
+    function activeWorkspaceFor(name) {
+        const workspaces = Wm.workspaces ?? [];
+        for (let i = 0; i < workspaces.length; ++i) {
+            const workspace = workspaces[i];
+            if (workspace.active && workspace.output === name)
+                return workspace;
         }
-        return root.setOwnWallpaper(name, clean);
+        return null;
     }
 
-    // A picture of the screen's own, whether or not it had one: the pick that
-    // gives a screen its own wallpaper when the shared one is a video and
-    // cannot simply be copied over (detach below).
-    function setOwnWallpaper(name, path) {
-        const clean = root.cleanPath(path);
-        if (!root.available || !root.multiScreen || !root.isImagePath(clean))
+    function workspaceLabelFor(name) {
+        const workspace = root.activeWorkspaceFor(name);
+        if (!workspace)
+            return "";
+        return String(workspace.name || workspace.id || "");
+    }
+
+    function assignCurrentToWorkspace(name) {
+        if (!name || !root.activeWorkspaceFor(name))
             return false;
-        if (!root.hasOwn(name) && !root.canDetach(name))
-            return false;
-        const list = root.listCopy();
-        root.entryIn(list, name).path = clean;
-        root.writeList(list);
-        // The selector closes on this, as it does for any other pick.
-        Wallpapers.changed();
+        Spawn.run(["ryogami", "wallpaper", "assign", "--screen", name]);
         return true;
     }
 
-    // Gives a screen a wallpaper of its own, starting from the one it already
-    // shows so nothing on screen changes. A shared video cannot be copied to
-    // one screen; the caller has one picked instead (setOwnWallpaper).
-    function detach(name) {
-        if (!root.canDetach(name) || !root.isImagePath(root.sharedSourcePath))
+    function clearWorkspaceWallpaper(name) {
+        if (!name || !root.activeWorkspaceFor(name))
             return false;
-        const list = root.listCopy();
-        root.entryIn(list, name).path = root.sharedSourcePath;
-        return root.writeList(list);
+        Spawn.run(["ryogami", "wallpaper", "unassign", "--screen", name]);
+        return true;
     }
 
-    // Back to the shared wallpaper.
+
+
+    // Ryogami still owns the write; matching the palette source makes the
+    // screen shared again without restoring an island-side path.
     function attach(name) {
         if (!root.hasOwn(name))
-            return;
-        const list = root.listCopy();
-        root.entryIn(list, name).path = "";
-        root.writeList(list);
+            return false;
+        return Wallpapers.selectForScreen(root.sharedSourcePath, name);
     }
 
-    // The colours from another screen's picture. That picture becomes the
-    // shared one - through Wallpapers, so the colour scripts run as for any
-    // other pick - and every screen that was showing the old shared wallpaper
-    // keeps it as its own, so not one screen changes what it shows. One
-    // history entry for the whole swap.
+    // Changing the palette source must not move wallpapers between outputs.
+    // Snapshot every painted path before the shared source changes, then put
+    // those paths back through Ryogami's per-output seam.
     function canMakeColourSource(name) {
-        return root.hasOwn(name) && root.isImagePath(root.sharedSourcePath);
+        return root.hasOwn(name) && root.isImagePath(root.sourcePathFor(name));
     }
 
     function makeColourSource(name) {
         if (!root.canMakeColourSource(name))
             return false;
-        const picture = root.ownPathFor(name);
-        const previous = root.sharedSourcePath;
-        const list = root.listCopy();
-        for (const other of root.screenNames) {
-            if (other !== name && root.ownPathFor(other) === "")
-                root.entryIn(list, other).path = previous;
-        }
-        root.entryIn(list, name).path = "";
+        const picture = root.sourcePathFor(name);
+        const shown = {};
+        for (const screen of root.screenNames)
+            shown[screen] = root.sourcePathFor(screen);
         GlobalStates.editHistoryBeginBatch();
-        root.writeList(list);
         Wallpapers.select(picture);
+        for (const screen of root.screenNames)
+            Wallpapers.selectForScreen(shown[screen], screen, Appearance.m3colors.darkmode, true);
         GlobalStates.editHistoryEndBatch();
         return true;
     }
 
-    // A random picture from the selector's folder, for one screen.
+    // A random pick is still output-scoped; images and videos are both valid
+    // because the provider frame carries the matching still/live fields.
     function randomForScreen(name) {
         const model = Wallpapers.folderModel;
         const current = root.sourcePathFor(name);
-        const own = root.hasOwn(name);
         const candidates = [];
         for (let i = 0; i < model.count; i++) {
             if (Boolean(model.get(i, "fileIsDir")))
                 continue;
             const path = root.cleanPath(model.get(i, "filePath"));
-            if (path === "" || path === current)
-                continue;
-            if (own ? !root.isImagePath(path) : !Wallpapers.extensions.some(ext => path.toLowerCase().endsWith("." + ext)))
+            const lower = path.toLowerCase();
+            if (path === "" || path === current
+                    || !Wallpapers.extensions.some(ext => lower.endsWith("." + ext)))
                 continue;
             candidates.push(path);
         }
@@ -789,34 +867,30 @@ Singleton {
 
     // ── Two screens at once ──────────────────────────────────────────────────
 
-    // Whether two screens can trade pictures: they must show different ones,
-    // and the shared one stays on a screen either way (it moves to the other).
     function canSwap(a, b) {
         if (!root.available || !a || !b || a === b)
             return false;
-        return root.ownPathFor(a) !== root.ownPathFor(b);
+        return root.sourcePathFor(a) !== root.sourcePathFor(b);
     }
 
-    // The two screens trade pictures, each picture keeping the framing it had
-    // where it came from. One history entry.
+    // The path exchange and both framing moves are one replayable edit.
     function swapWallpapers(a, b) {
         if (!root.canSwap(a, b))
             return false;
         root.flushGesture();
-        const ownA = root.ownPathFor(a);
-        const ownB = root.ownPathFor(b);
         const shownA = root.sourcePathFor(a);
         const shownB = root.sourcePathFor(b);
         const framingA = root.savedFramingFor(a, shownA);
         const framingB = root.savedFramingFor(b, shownB);
         const list = root.listCopy();
-        const entryA = root.entryIn(list, a);
-        const entryB = root.entryIn(list, b);
-        entryA.path = ownB;
-        entryB.path = ownA;
-        root.setFramingIn(entryA, shownB, framingB);
-        root.setFramingIn(entryB, shownA, framingA);
-        return root.writeList(list);
+        root.setFramingIn(root.entryIn(list, a), shownB, framingB);
+        root.setFramingIn(root.entryIn(list, b), shownA, framingA);
+        GlobalStates.editHistoryBeginBatch();
+        root.writeList(list);
+        Wallpapers.selectForScreen(shownB, a);
+        Wallpapers.selectForScreen(shownA, b);
+        GlobalStates.editHistoryEndBatch();
+        return true;
     }
 
     // One screen's framing on another, for whatever picture that one shows:
@@ -879,16 +953,17 @@ Singleton {
             && root.imageSizeFor(name) !== null;
     }
 
-    // Whether the screens show one picture spanned across them.
     readonly property bool spanned: {
-        if (!root.available || !root.multiScreen || root.screenNames.some(name => root.hasOwn(name)))
+        if (!root.available || !root.multiScreen)
             return false;
+        const picture = root.sourcePathFor(root.screenNames[0]);
         const size = root.imageSizeFor(root.screenNames[0]);
-        if (size === null)
+        if (picture === "" || size === null
+                || root.screenNames.some(name => root.sourcePathFor(name) !== picture))
             return false;
         return root.screenNames.every(name => {
             const target = root.spanFramingFor(name, size.width, size.height);
-            return target !== null && WallpaperFraming.equal(root.savedFramingFor(name, root.sharedSourcePath), target);
+            return target !== null && WallpaperFraming.equal(root.savedFramingFor(name, picture), target);
         });
     }
 
@@ -898,19 +973,17 @@ Singleton {
         root.flushGesture();
         const picture = root.sourcePathFor(name);
         const size = root.imageSizeFor(name);
-        const becomesShared = root.hasOwn(name);
         const list = root.listCopy();
         for (const other of root.screenNames) {
-            const entry = root.entryIn(list, other);
-            entry.path = "";
             const framing = root.spanFramingFor(other, size.width, size.height);
             if (framing !== null)
-                root.setFramingIn(entry, picture, framing);
+                root.setFramingIn(root.entryIn(list, other), picture, framing);
         }
         GlobalStates.editHistoryBeginBatch();
         root.writeList(list);
-        if (becomesShared)
-            Wallpapers.select(picture);
+        Wallpapers.select(picture);
+        for (const other of root.screenNames)
+            Wallpapers.selectForScreen(picture, other, Appearance.m3colors.darkmode, true);
         GlobalStates.editHistoryEndBatch();
         return true;
     }

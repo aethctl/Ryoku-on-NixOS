@@ -703,6 +703,13 @@ Singleton {
     // is self-contained (the verbatim reference behaviour).
     property var widgetProvider: null
 
+    // Catalogues the provider adds beside Widgets, Wallpaper and Style: the
+    // editors Ryoku folds into this mode (the visualiser, the depth stage).
+    // Each is {section, label, icon, tooltip, intro, page}, where `page` is
+    // the Component the drawer shows for it. None without a provider.
+    readonly property var extraSections: root.widgetProvider
+        ? (root.widgetProvider.extraSections ?? []) : []
+
     // The placed widgets, in the island's entry shape, from whichever store is
     // live. Readers (the drawer's counts, the clear row, the reset) go through
     // this rather than the raw option.

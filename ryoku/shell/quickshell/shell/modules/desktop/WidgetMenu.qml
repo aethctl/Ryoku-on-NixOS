@@ -6,6 +6,8 @@ import Ryoku.Ui.Singletons
 import "iris/IrisRoster.js" as IrisRoster
 import "python/PythonRoster.js" as PythonRoster
 import "../stage/Singletons" as StageCfg
+import "../visualizer/Singletons" as VizCfg
+import stage.modules.common.functions as StageFunctions
 
 // A desktop widget's right-click menu, built on the shared DesktopMenu chrome in
 // the quick-settings sidebar idiom: a short card that names the widget, offers
@@ -27,12 +29,17 @@ Item {
     signal customizeRequested(string widget)
 
     property string scope: "desktop"   // desktop | clock | ...
+    property string monitor: ""
     // The wallpaper of the monitor whose right-click opened this menu; the
     // Depth row gates on it, so the lift is offered only where the scene has
     // cut-outs. Set by the owning desktop with openFor.
     property string wall: ""
 
     readonly property bool isWidget: menu.scope !== "desktop"
+    // The visualiser is a framed widget like the rest, but its store is its
+    // own: no per-widget lock, no scale (the grip sizes its box), and a look
+    // catalogue walked through the visualiser config rather than a design ladder.
+    readonly property bool isVisualizer: menu.scope === "visualizer"
     readonly property bool isStats: menu.scope === "stats"
     readonly property bool isNotes: menu.scope === "notes"
     readonly property bool isCalendar: menu.scope === "calendar"
@@ -40,7 +47,8 @@ Item {
     readonly property bool isAio: menu.scope === "aio"
     readonly property bool isDayprogress: menu.scope === "dayprogress"
     readonly property bool isShape: menu.scope === "shape"
-    readonly property bool locked: menu.isWidget ? Config[menu.scope + "Locked"] : false
+    readonly property bool locked: menu.isWidget && !menu.isVisualizer
+        ? Config[menu.scope + "Locked"] : false
     // The stage lift (docs/stage.md): Depth offers this widget a place above
     // every in-front cut-out; the row only shows while the wall cuts a subject.
     readonly property bool stageActive: menu.wall !== ""
@@ -106,9 +114,12 @@ Item {
     readonly property bool hasDesign: menu.isWidget && !menu.isIris && !menu.isPython
         && (menu.designLists[menu.scope] !== undefined)
 
-    // Size quick-nudge: a small scale ladder every widget shares. Fine control
-    // (and the iRiS size preset) lives on the inspector's Look tab.
-    readonly property real curScale: menu.isWidget ? (Config[menu.scope + "Scale"] || 1) : 1
+    // The source menu and resize grip share the same named detents.
+    readonly property real curScale: menu.isWidget
+        ? (Config.get(menu.scope + "Scale", menu.monitor) || 1) : 1
+    readonly property real scaleStep: StageFunctions.EditModeLogic.nearestSizeStep(menu.curScale)
+    readonly property bool canGrow: StageFunctions.EditModeLogic.steppedScale(menu.curScale, 1) !== null
+    readonly property bool canShrink: StageFunctions.EditModeLogic.steppedScale(menu.curScale, -1) !== null
 
     function openFor(widget, x, y, wall) { menu.scope = widget; menu.wall = wall; shell.px = x; shell.py = y; shell.open = true; }
     function close() { shell.open = false; }
@@ -127,20 +138,52 @@ Item {
         const current = presets.indexOf(menu.curFacePreset);
         Config.set(menu.facePresetKey, presets[(current + 1) % presets.length]);
     }
-    function cycleScale() {
-        const d = [0.75, 1.0, 1.25, 1.5, 2.0];
-        var n = d.find(v => v > menu.curScale + 0.001);
-        if (n === undefined)
-            n = d[0];
-        Config.set(menu.scope + "Scale", n);
+    function stepScale(direction) {
+        const next = StageFunctions.EditModeLogic.steppedScale(menu.curScale, direction);
+        if (next !== null)
+            Config.setFor(menu.monitor, menu.scope + "Scale", next);
+    }
+    function resetScale() {
+        Config.setFor(menu.monitor, menu.scope + "Scale", 1);
     }
     function openSettings() {
-        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene-widgets"]);
+        Spawn.run(["ryoku-shell", "hub", "open"]);
         menu.close();
     }
     function refreshShell() {
         Quickshell.execDetached(["ryoku-shell", "reload"]);
         menu.close();
+    }
+
+    component ScaleButton: Rectangle {
+        id: scaleButton
+        property string symbol: ""
+        property bool available: true
+        signal activated()
+        width: 26
+        height: 26
+        radius: 6
+        color: scaleMouse.pressed ? Theme.tilePress
+            : scaleMouse.containsMouse ? Theme.tileHover : "transparent"
+        border.width: 1
+        border.color: scaleButton.available ? Theme.lineStrong : Theme.line
+        opacity: scaleButton.available ? 1 : 0.38
+        Text {
+            anchors.centerIn: parent
+            text: scaleButton.symbol
+            color: Theme.ink
+            font.family: Theme.font
+            font.pixelSize: 17
+            font.weight: Font.DemiBold
+        }
+        MouseArea {
+            id: scaleMouse
+            anchors.fill: parent
+            enabled: scaleButton.available
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: scaleButton.activated()
+        }
     }
 
     DesktopMenu {
@@ -176,14 +219,75 @@ Item {
             onTriggered: menu.cycleFacePreset()
         }
         MenuRow {
-            visible: menu.isWidget
-            label: I18n.tr("Size")
-            value: Math.round(menu.curScale * 100) + "%"
+            visible: menu.isVisualizer
+            label: I18n.tr("Style")
+            value: menu.cap(VizCfg.Config.styleId)
             closeOnTrigger: false
-            onTriggered: menu.cycleScale()
+            onTriggered: VizCfg.Config.cycleStyle(1)
+        }
+        Item {
+            visible: menu.isWidget && !menu.isVisualizer
+            width: parent ? parent.width : 0
+            implicitHeight: 34
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 6
+                color: "transparent"
+                border.width: 1
+                border.color: Theme.line
+            }
+            MouseArea {
+                anchors.fill: parent
+            }
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: 9
+                anchors.verticalCenter: parent.verticalCenter
+                text: I18n.tr("Size")
+                color: Theme.inkSoft
+                font.family: Theme.font
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+            }
+            Row {
+                anchors.right: parent.right
+                anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 5
+                ScaleButton {
+                    symbol: "−"
+                    available: menu.canShrink
+                    onActivated: menu.stepScale(-1)
+                }
+                Text {
+                    width: 42
+                    height: 26
+                    verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: Math.round(menu.scaleStep * 100) + "%"
+                    color: Theme.inkDim
+                    font.family: Theme.mono
+                    font.pixelSize: 11
+                    font.weight: Font.Medium
+                }
+                ScaleButton {
+                    symbol: "+"
+                    available: menu.canGrow
+                    onActivated: menu.stepScale(1)
+                }
+            }
         }
         MenuRow {
-            visible: menu.isWidget
+            visible: menu.isWidget && !menu.isVisualizer
+                && Math.abs(menu.curScale - 1) > 0.001
+            label: I18n.tr("Reset size")
+            icon: "fit_screen"
+            closeOnTrigger: false
+            onTriggered: menu.resetScale()
+        }
+        MenuRow {
+            visible: menu.isWidget && !menu.isVisualizer
             label: I18n.tr("Lock")
             value: menu.locked ? "On" : "Off"
             on: menu.locked
@@ -212,7 +316,8 @@ Item {
         MenuRow {
             visible: menu.isWidget
             label: I18n.tr("Hide")
-            onTriggered: Config.set(menu.scope + "Enabled", false)
+            onTriggered: menu.isVisualizer ? VizCfg.Config.setEnabled(false)
+                : Config.set(menu.scope + "Enabled", false)
         }
 
         // ── globals ────────────────────────────────────────────────────

@@ -18,21 +18,36 @@ Item {
     readonly property bool fullBleed: true
 
     // ── installed-management state ──────────────────────────────────────────
-    property var plugins: []        // discover.sh --all: [{ id, dir, manifest, placement }]
-    property var catalog: []         // normalized RyoStore plugin items, for update detection
-    property string selId: ""        // "" = master list; else the open plugin's id
-    property string busyId: ""        // id currently installing/removing
-    property bool confirmRemove: false // the destructive-confirm plate is up
-    property bool loaded: false        // discover.sh has answered at least once
+    property var plugins: []
+    property var catalog: []
+    property var bundleCatalog: []
+    property string selId: ""
+    property string busyId: ""
+    property string bundleBusyId: ""
+    property bool confirmRemove: false
+    property bool loaded: false
     property string tab: "Plugins"
     property var bundles: []
     property bool bundlesLoaded: false
 
-    // hub.query carries the rail search text; empty means no filter.
+    property string errorMessage: ""
+    property string errorRetry: ""
+    property var errorCommand: []
+    property string errorTarget: ""
+    property string errorItem: ""
+
+    property var placeQueue: []
+    property var settingsQueue: []
+    property var activePlaceCommand: []
+    property var activeSettingsCommand: []
+    property string bundleMutationId: ""
+    property string bundleMutationItem: ""
+    property string statusTarget: ""
+    property bool statusQueued: false
+    property string queuedStatusTarget: ""
+
     readonly property string query: (pg.hub && pg.hub.query) ? ("" + pg.hub.query) : ""
 
-    // the selected plugin, re-derived from selId so it stays fresh across a
-    // refresh (the process round-trip swaps the whole plugins array).
     readonly property var sel: {
         for (var i = 0; i < pg.plugins.length; i++)
             if (pg.plugins[i].id === pg.selId)
@@ -40,7 +55,6 @@ Item {
         return null;
     }
 
-    // the master list, filtered by the rail search.
     readonly property var shown: {
         var q = pg.query.trim().toLowerCase();
         if (q === "")
@@ -68,8 +82,10 @@ Item {
     readonly property string script: (pg.shellDir && pg.shellDir.length > 0)
         ? pg.shellDir + "/quickshell/plugins/discover.sh"
         : (Quickshell.env("XDG_CONFIG_HOME") || (Quickshell.env("HOME") + "/.config")) + "/quickshell/plugins/discover.sh"
+    readonly property string placeTool: (pg.shellDir && pg.shellDir.length > 0)
+        ? pg.shellDir + "/quickshell/plugins/ryoku-plugins-place"
+        : "ryoku-plugins-place"
 
-    // Plugin host id -> readable label, and back.
     function hostLabel(key) {
         return key === "framePopout" ? I18n.tr("Frame popout")
             : key === "desktopWidget" ? I18n.tr("Desktop widget")
@@ -83,15 +99,77 @@ Item {
             : label === I18n.tr("Sidebar card") ? "sidebarCard" : label;
     }
 
-    function refresh() { listProc.running = false; listProc.running = true; }
-    function loadCatalog() { catProc.running = false; catProc.running = true; }
-    function loadBundles() { bundleProc.running = false; bundleProc.running = true; }
+    function clearError(kind) {
+        if (pg.errorRetry !== kind)
+            return;
+        pg.errorMessage = "";
+        pg.errorRetry = "";
+        pg.errorCommand = [];
+        pg.errorTarget = "";
+        pg.errorItem = "";
+    }
+    function compactError(stderrText, fallback, code) {
+        const text = String(stderrText || "").trim();
+        if (text.length === 0)
+            return fallback.arg(code);
+        const lines = text.split("\n").filter(line => line.trim().length > 0);
+        return lines.slice(Math.max(0, lines.length - 2)).join(" ");
+    }
+    function showError(kind, message, command, target, item) {
+        pg.errorRetry = kind;
+        pg.errorMessage = message;
+        pg.errorCommand = command ? command.slice() : [];
+        pg.errorTarget = target || "";
+        pg.errorItem = item || "";
+    }
+    function retryFailure() {
+        switch (pg.errorRetry) {
+        case "plugins-read": pg.refresh(); break;
+        case "catalog-read": pg.loadCatalog(); break;
+        case "bundles-read": pg.loadBundles(); break;
+        case "bundle-status": pg.loadBundleStatus(pg.errorTarget); break;
+        case "bundle-remove": pg.removeBundle(pg.errorTarget, pg.errorItem); break;
+        case "plugin-install": pg.install(pg.errorTarget); break;
+        case "plugin-remove":
+            pg.busyId = pg.errorTarget;
+            rmProc.command = pg.errorCommand.slice();
+            rmProc.running = true;
+            break;
+        case "plugin-forget":
+            pg.busyId = pg.errorTarget;
+            forgetProc.command = pg.errorCommand.slice();
+            forgetProc.running = true;
+            break;
+        case "placement": pg.enqueuePlace(pg.errorCommand); break;
+        case "setting": pg.enqueueSetting(pg.errorCommand); break;
+        }
+    }
+
+    function refresh() {
+        if (!listProc.running)
+            listProc.running = true;
+    }
+    function loadCatalog() {
+        if (!catProc.running)
+            catProc.running = true;
+    }
+    function loadBundles() {
+        if (!bundleProc.running)
+            bundleProc.running = true;
+    }
     function browseStore() {
-        Quickshell.execDetached(["ryostore", "open", pg.tab === "Bundles" ? "bundles" : "plugins"]);
+        Spawn.run(["ryostore", "open", pg.tab === "Bundles" ? "bundles" : "plugins"]);
     }
     function removeBundle(id, item) {
+        if (!id || bundleMutProc.running)
+            return;
+        pg.bundleBusyId = id;
+        pg.bundleMutationId = id;
+        pg.bundleMutationItem = item || "";
         const scope = item ? ["item", id, item] : ["bundle", id];
-        Spawn.run(["kitty", "--class", "ryostore", "-e", "ryostore-install", "remove"].concat(scope));
+        bundleMutProc.command = ["kitty", "--class", "ryostore", "-e",
+            "ryostore-install", "remove"].concat(scope);
+        bundleMutProc.running = true;
     }
     function catalogEntry(id) {
         for (var i = 0; i < pg.catalog.length; i++)
@@ -99,7 +177,6 @@ Item {
                 return pg.catalog[i];
         return null;
     }
-    // semver compare: 1 if a>b, 0 equal, -1 if a<b. missing parts = 0.
     function cmpSemver(a, b) {
         var pa = String(a || "0").split(".").map(function (n) { return parseInt(n, 10) || 0; });
         var pb = String(b || "0").split(".").map(function (n) { return parseInt(n, 10) || 0; });
@@ -110,8 +187,6 @@ Item {
         }
         return 0;
     }
-    // an installed plugin -> the newer catalogue version, or "" when up to date
-    // / unknown. Drives the Update marker and the detail's Update button.
     function updateFor(pl) {
         var inst = (pl && pl.manifest && pl.manifest.version) ? pl.manifest.version : "";
         var ce = pg.catalogEntry(pl ? pl.id : "");
@@ -121,40 +196,150 @@ Item {
         return pg.cmpSemver(avail, inst) > 0 ? avail : "";
     }
     function install(id) {
-        if (!id)
+        if (!id || installProc.running || pg.busyId !== "")
             return;
         pg.busyId = id;
         installProc.command = ["ryostore", "internal", "install-guest", "plugins", id];
         installProc.running = true;
     }
+    function enqueuePlace(args) {
+        if (!args || args.length === 0)
+            return;
+        var queue = pg.placeQueue.slice();
+        queue.push(args.slice());
+        pg.placeQueue = queue;
+        pg.startNextPlace();
+    }
+    function startNextPlace() {
+        if (placeProc.running || pg.placeQueue.length === 0)
+            return;
+        var queue = pg.placeQueue.slice();
+        pg.activePlaceCommand = queue.shift();
+        pg.placeQueue = queue;
+        placeProc.command = pg.activePlaceCommand;
+        placeProc.running = true;
+    }
     function place(id, field, a, b, c, d) {
         if (!id)
             return;
-        var args = ["ryoku-plugins-place", id, field];
-        for (var v of [a, b, c, d])
-            if (v !== undefined)
-                args.push("" + v);
-        placeProc.command = args;
-        placeProc.running = true;
+        var args = [pg.placeTool, id, field];
+        for (var value of [a, b, c, d])
+            if (value !== undefined)
+                args.push("" + value);
+        pg.enqueuePlace(args);
+    }
+    function enqueueSetting(args) {
+        if (!args || args.length === 0)
+            return;
+        var queue = pg.settingsQueue.slice();
+        queue.push(args.slice());
+        pg.settingsQueue = queue;
+        pg.startNextSetting();
+    }
+    function startNextSetting() {
+        if (settingsProc.running || pg.settingsQueue.length === 0)
+            return;
+        var queue = pg.settingsQueue.slice();
+        pg.activeSettingsCommand = queue.shift();
+        pg.settingsQueue = queue;
+        settingsProc.command = pg.activeSettingsCommand;
+        settingsProc.running = true;
     }
     function setSetting(id, key, value) {
         if (!id)
             return;
         var obj = {};
         obj[key] = value;
-        settingsProc.command = ["ryoku-plugins-place", id, "settings", JSON.stringify(obj)];
-        settingsProc.running = true;
+        pg.enqueueSetting([pg.placeTool, id, "settings", JSON.stringify(obj)]);
     }
-    // remove drops the whole plugins.json entry (forget) then deletes the
-    // data-dir plugin via the symlink-safe backend (a dev plugin is a symlink
-    // into the checkout; rm -rf would gut the repo).
     function removePlugin(id) {
-        if (!id)
+        if (!id || pg.busyId !== "")
             return;
         pg.busyId = id;
-        pg.place(id, "forget");
+        pg.confirmRemove = false;
         rmProc.command = ["ryostore", "internal", "remove-guest", "plugins", id];
         rmProc.running = true;
+    }
+
+    function bundlePartRemovable(part) {
+        const type = String((part || {}).type || "");
+        return type === "package" || type === "plugin" || type === "nautilus-pack";
+    }
+    function bundleWithStatus(base, status) {
+        var result = JSON.parse(JSON.stringify(base || {}));
+        var metadata = result.metadata || {};
+        var parts = metadata.items || [];
+        var states = {};
+        for (var i = 0; i < status.items.length; ++i)
+            states[String(status.items[i].name)] = status.items[i].status;
+        var count = 0;
+        for (var j = 0; j < parts.length; ++j) {
+            var part = JSON.parse(JSON.stringify(parts[j]));
+            if (states[part.name] !== undefined)
+                part.installed = states[part.name] === "present";
+            if (part.installed === true)
+                count++;
+            parts[j] = part;
+        }
+        metadata.items = parts;
+        result.metadata = metadata;
+        result.installedCount = count;
+        result.totalCount = parts.length;
+        return result;
+    }
+    function applyBundleCatalogue(items) {
+        var current = {};
+        for (var i = 0; i < pg.bundles.length; ++i)
+            current[pg.bundles[i].id] = pg.bundles[i];
+        pg.bundleCatalog = items.filter(item => item.category === "bundles");
+        var next = [];
+        for (var j = 0; j < pg.bundleCatalog.length; ++j) {
+            var base = pg.bundleCatalog[j];
+            if (current[base.id] !== undefined)
+                next.push(current[base.id]);
+            else if (Number(base.installedCount || 0) > 0)
+                next.push(base);
+        }
+        pg.bundles = next;
+    }
+    function applyBundleStatuses(rows) {
+        var byId = {};
+        for (var i = 0; i < rows.length; ++i)
+            byId[rows[i].id] = rows[i];
+        var current = {};
+        for (var j = 0; j < pg.bundles.length; ++j)
+            current[pg.bundles[j].id] = pg.bundles[j];
+        var next = [];
+        for (var k = 0; k < pg.bundleCatalog.length; ++k) {
+            var base = pg.bundleCatalog[k];
+            var item = byId[base.id] !== undefined
+                ? pg.bundleWithStatus(base, byId[base.id])
+                : (current[base.id] || base);
+            if (Number(item.installedCount || 0) > 0)
+                next.push(item);
+        }
+        pg.bundles = next;
+    }
+    function loadBundleStatus(id) {
+        const target = id || "";
+        if (statusProc.running) {
+            pg.statusQueued = true;
+            pg.queuedStatusTarget = target;
+            return;
+        }
+        pg.statusTarget = target;
+        statusProc.command = target.length > 0
+            ? ["ryostore-install", "status", "bundle", target]
+            : ["ryostore-install", "status"];
+        statusProc.running = true;
+    }
+    function runQueuedStatus() {
+        if (!pg.statusQueued)
+            return;
+        const target = pg.queuedStatusTarget;
+        pg.statusQueued = false;
+        pg.queuedStatusTarget = "";
+        Qt.callLater(() => pg.loadBundleStatus(target));
     }
 
     Component.onCompleted: { pg.refresh(); pg.loadCatalog(); pg.loadBundles(); }
@@ -162,45 +347,229 @@ Item {
     Process {
         id: listProc
         command: ["bash", pg.script, "--all"]
-        running: true
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try { pg.plugins = JSON.parse(text || "[]"); } catch (e) { pg.plugins = []; }
+        environment: Spawn.env
+        stdout: StdioCollector { id: listOut }
+        stderr: StdioCollector { id: listErr }
+        onExited: code => {
+            if (code !== 0) {
+                pg.showError("plugins-read",
+                    pg.compactError(listErr.text, I18n.tr("Couldn't read installed add-ons (exit %1)."), code));
+                return;
+            }
+            try {
+                const parsed = JSON.parse(listOut.text || "[]");
+                if (!Array.isArray(parsed))
+                    throw new Error("not an array");
+                pg.plugins = parsed;
+                if (pg.selId !== "") {
+                    var selectedStillExists = false;
+                    for (var i = 0; i < parsed.length; ++i)
+                        if (parsed[i].id === pg.selId)
+                            selectedStillExists = true;
+                    if (!selectedStillExists)
+                        pg.selId = "";
+                }
                 pg.loaded = true;
+                pg.clearError("plugins-read");
+            } catch (error) {
+                pg.showError("plugins-read", I18n.tr("Couldn't read installed add-ons."));
             }
         }
     }
-    Process { id: placeProc; onExited: pg.refresh() }
-    Process { id: settingsProc; onExited: pg.refresh() }
-    Process { id: rmProc; onExited: { pg.busyId = ""; pg.selId = ""; pg.confirmRemove = false; pg.refresh(); } }
+    Process {
+        id: placeProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: placeErr }
+        onExited: code => {
+            if (code !== 0) {
+                pg.placeQueue = [];
+                pg.showError("placement",
+                    pg.compactError(placeErr.text, I18n.tr("Couldn't save placement (exit %1)."), code),
+                    pg.activePlaceCommand);
+                pg.refresh();
+                return;
+            }
+            pg.clearError("placement");
+            if (pg.placeQueue.length > 0)
+                pg.startNextPlace();
+            else
+                pg.refresh();
+        }
+    }
+    Process {
+        id: settingsProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: settingsErr }
+        onExited: code => {
+            if (code !== 0) {
+                pg.settingsQueue = [];
+                pg.showError("setting",
+                    pg.compactError(settingsErr.text, I18n.tr("Couldn't save add-on setting (exit %1)."), code),
+                    pg.activeSettingsCommand);
+                pg.refresh();
+                return;
+            }
+            pg.clearError("setting");
+            if (pg.settingsQueue.length > 0)
+                pg.startNextSetting();
+            else
+                pg.refresh();
+        }
+    }
+    Process {
+        id: rmProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: rmErr }
+        onExited: code => {
+            const id = pg.busyId;
+            if (code !== 0) {
+                pg.busyId = "";
+                pg.showError("plugin-remove",
+                    pg.compactError(rmErr.text, I18n.tr("Couldn't remove add-on (exit %1)."), code),
+                    rmProc.command, id);
+                pg.refresh();
+                return;
+            }
+            pg.clearError("plugin-remove");
+            forgetProc.command = [pg.placeTool, id, "forget"];
+            forgetProc.running = true;
+        }
+    }
+    Process {
+        id: forgetProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: forgetErr }
+        onExited: code => {
+            const id = pg.busyId;
+            if (code !== 0) {
+                pg.busyId = "";
+                pg.showError("plugin-forget",
+                    pg.compactError(forgetErr.text, I18n.tr("Add-on removed, but its settings couldn't be cleared (exit %1)."), code),
+                    forgetProc.command, id);
+                return;
+            }
+            pg.clearError("plugin-forget");
+            pg.busyId = "";
+            pg.selId = "";
+            pg.refresh();
+            pg.loadCatalog();
+        }
+    }
     Process {
         id: catProc
         command: ["ryostore", "catalog", "--category", "plugins"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try { pg.catalog = (JSON.parse(text || "{}").items) || []; }
-                catch (e) { pg.catalog = []; }
+        environment: Spawn.env
+        stdout: StdioCollector { id: catOut }
+        stderr: StdioCollector { id: catErr }
+        onExited: code => {
+            if (code !== 0) {
+                pg.showError("catalog-read",
+                    pg.compactError(catErr.text, I18n.tr("Couldn't read the add-on catalogue (exit %1)."), code));
+                return;
+            }
+            try {
+                const items = (JSON.parse(catOut.text || "{}").items) || [];
+                if (!Array.isArray(items))
+                    throw new Error("items is not an array");
+                pg.catalog = items;
+                pg.clearError("catalog-read");
+            } catch (error) {
+                pg.showError("catalog-read", I18n.tr("Couldn't read the add-on catalogue."));
             }
         }
     }
-    Process { id: installProc; onExited: { pg.busyId = ""; pg.refresh(); pg.loadCatalog(); } }
+    Process {
+        id: installProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: installErr }
+        onExited: code => {
+            const id = pg.busyId;
+            pg.busyId = "";
+            if (code !== 0) {
+                pg.showError("plugin-install",
+                    pg.compactError(installErr.text, I18n.tr("Couldn't update add-on (exit %1)."), code),
+                    installProc.command, id);
+            } else {
+                pg.clearError("plugin-install");
+            }
+            pg.refresh();
+            pg.loadCatalog();
+        }
+    }
     Process {
         id: bundleProc
         command: ["ryostore", "catalog", "--category", "bundles"]
-        stdout: StdioCollector {
-            onStreamFinished: {
-                try {
-                    const items = (JSON.parse(text || "{}").items) || [];
-                    pg.bundles = items.filter(item =>
-                        item.category === "bundles" && Number(item.installedCount || 0) > 0);
-                } catch (e) {
-                    pg.bundles = [];
-                }
+        environment: Spawn.env
+        stdout: StdioCollector { id: bundleOut }
+        stderr: StdioCollector { id: bundleErr }
+        onExited: code => {
+            if (code !== 0) {
+                pg.showError("bundles-read",
+                    pg.compactError(bundleErr.text, I18n.tr("Couldn't read installed bundles (exit %1)."), code));
+                return;
+            }
+            try {
+                const items = (JSON.parse(bundleOut.text || "{}").items) || [];
+                if (!Array.isArray(items))
+                    throw new Error("items is not an array");
+                pg.applyBundleCatalogue(items);
                 pg.bundlesLoaded = true;
+                pg.clearError("bundles-read");
+                pg.loadBundleStatus("");
+            } catch (error) {
+                pg.showError("bundles-read", I18n.tr("Couldn't read installed bundles."));
             }
         }
     }
-
+    Process {
+        id: statusProc
+        environment: Spawn.env
+        stdout: StdioCollector { id: statusOut }
+        stderr: StdioCollector { id: statusErr }
+        onExited: code => {
+            const target = pg.statusTarget;
+            if (code !== 0) {
+                pg.showError("bundle-status",
+                    pg.compactError(statusErr.text, I18n.tr("Couldn't check bundle state (exit %1)."), code),
+                    statusProc.command, target);
+                pg.runQueuedStatus();
+                return;
+            }
+            try {
+                const parsed = JSON.parse(statusOut.text || "{}");
+                const rows = target.length > 0 ? [parsed] : (parsed.bundles || []);
+                if (!Array.isArray(rows))
+                    throw new Error("bundles is not an array");
+                for (var i = 0; i < rows.length; ++i)
+                    if (!rows[i] || !Array.isArray(rows[i].items))
+                        throw new Error("bundle items is not an array");
+                pg.applyBundleStatuses(rows);
+                pg.clearError("bundle-status");
+            } catch (error) {
+                pg.showError("bundle-status", I18n.tr("Couldn't read bundle state."),
+                    statusProc.command, target);
+            }
+            pg.runQueuedStatus();
+        }
+    }
+    Process {
+        id: bundleMutProc
+        environment: Spawn.env
+        stderr: StdioCollector { id: bundleMutErr }
+        onExited: code => {
+            const id = pg.bundleMutationId;
+            const item = pg.bundleMutationItem;
+            pg.bundleBusyId = "";
+            if (code !== 0) {
+                pg.showError("bundle-remove",
+                    pg.compactError(bundleMutErr.text, I18n.tr("Couldn't remove bundle content (exit %1)."), code),
+                    bundleMutProc.command, id, item);
+            } else {
+                pg.clearError("bundle-remove");
+            }
+            pg.loadBundleStatus(id);
+        }
+    }
     // ── head: eyebrow, Fraunces title, blurb (matches every page) ───────────
     Column {
         id: head
@@ -272,14 +641,55 @@ Item {
         onChose: label => { pg.tab = label; pg.selId = ""; }
     }
 
+    Rectangle {
+        id: errorBanner
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: tabs.bottom
+        anchors.leftMargin: Tokens.s6
+        anchors.rightMargin: Tokens.s6
+        anchors.topMargin: visible ? Tokens.s3 : 0
+        visible: pg.errorMessage.length > 0
+        height: visible ? 44 : 0
+        radius: Tokens.radius
+        color: "transparent"
+        border.width: Tokens.border
+        border.color: Tokens.lineStrong
+
+        Text {
+            anchors.left: parent.left
+            anchors.right: retryBtn.left
+            anchors.leftMargin: Tokens.s3
+            anchors.rightMargin: Tokens.s3
+            anchors.verticalCenter: parent.verticalCenter
+            text: pg.errorMessage
+            color: Tokens.inkDim
+            font.family: Tokens.ui
+            font.pixelSize: Tokens.fSmall
+            elide: Text.ElideRight
+        }
+        Btn {
+            id: retryBtn
+            anchors.right: parent.right
+            anchors.rightMargin: Tokens.s2
+            anchors.verticalCenter: parent.verticalCenter
+            text: I18n.tr("RETRY")
+            compact: true
+            onAct: pg.retryFailure()
+        }
+    }
+
+
     // ── the body: a Loader swaps master (list) and detail (one plugin) ──────
     Loader {
         id: body
         anchors {
             left: parent.left; right: parent.right
-            top: tabs.bottom; bottom: parent.bottom
+            top: errorBanner.visible ? errorBanner.bottom : tabs.bottom
+            bottom: parent.bottom
             leftMargin: Tokens.s6; rightMargin: Tokens.s6
-            topMargin: Tokens.s5; bottomMargin: Tokens.s6
+            topMargin: errorBanner.visible ? Tokens.s3 : Tokens.s5
+            bottomMargin: Tokens.s6
         }
         sourceComponent: pg.tab === "Bundles" ? bundleComp : (pg.selId === "" ? masterComp : detailComp)
         onLoaded: {
@@ -476,7 +886,7 @@ Item {
             // empty state, gated on load so it does not flash before data lands.
             Text {
                 anchors.centerIn: flick
-                visible: pg.loaded && pg.plugins.length === 0
+                visible: pg.loaded && pg.plugins.length === 0 && pg.errorRetry !== "plugins-read"
                 text: I18n.tr("No add-ons installed. Browse RyoStore to install one.")
                 color: Tokens.inkMuted; font.family: Tokens.ui; font.pixelSize: Tokens.fSmall
             }
@@ -536,6 +946,10 @@ Item {
                             id: bundleCard
                             required property var modelData
                             readonly property var parts: (modelData.metadata || {}).items || []
+                            readonly property var removableParts: bundleCard.parts.filter(part =>
+                                part.installed === true && pg.bundlePartRemovable(part))
+                            readonly property bool hasManualParts: bundleCard.parts.some(part =>
+                                part.installed === true && !pg.bundlePartRemovable(part))
                             width: bundleList.width
                             implicitHeight: bundleBody.implicitHeight + Tokens.s4 * 2
                             color: "transparent"
@@ -552,7 +966,8 @@ Item {
                                     width: parent.width
                                     spacing: Tokens.s3
                                     Column {
-                                        width: Math.max(0, parent.width - removeAll.width - Tokens.s3)
+                                        width: Math.max(0, parent.width
+                                            - (removeAll.visible ? removeAll.width + Tokens.s3 : 0))
                                         Text {
                                             width: parent.width
                                             text: bundleCard.modelData.name || bundleCard.modelData.id
@@ -571,7 +986,11 @@ Item {
                                     }
                                     Btn {
                                         id: removeAll
-                                        text: I18n.tr("REMOVE BUNDLE")
+                                        visible: bundleCard.removableParts.length > 0
+                                        text: pg.bundleBusyId === bundleCard.modelData.id
+                                            ? I18n.tr("REMOVING")
+                                            : (bundleCard.hasManualParts ? I18n.tr("REMOVE MANAGED") : I18n.tr("REMOVE BUNDLE"))
+                                        armed: pg.bundleBusyId === ""
                                         onAct: pg.removeBundle(bundleCard.modelData.id, "")
                                     }
                                 }
@@ -586,7 +1005,8 @@ Item {
                                         Text {
                                             anchors.left: parent.left
                                             anchors.verticalCenter: parent.verticalCenter
-                                            width: Math.max(0, parent.width - state.width - removeOne.width - Tokens.s5)
+                                            width: Math.max(0, parent.width - state.width
+                                                - (removeOne.visible ? removeOne.width + Tokens.s5 : Tokens.s2))
                                             text: partRow.modelData.name + (partRow.modelData.summary ? "  ·  " + partRow.modelData.summary : "")
                                             color: Tokens.ink
                                             font.family: Tokens.ui
@@ -595,10 +1015,12 @@ Item {
                                         }
                                         Text {
                                             id: state
-                                            anchors.right: removeOne.left
-                                            anchors.rightMargin: Tokens.s3
+                                            anchors.right: removeOne.visible ? removeOne.left : parent.right
+                                            anchors.rightMargin: removeOne.visible ? Tokens.s3 : 0
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: partRow.modelData.installed === true ? I18n.tr("INSTALLED") : I18n.tr("ABSENT")
+                                            text: partRow.modelData.installed === true
+                                                ? (pg.bundlePartRemovable(partRow.modelData) ? I18n.tr("INSTALLED") : I18n.tr("MANUAL REMOVE"))
+                                                : I18n.tr("ABSENT")
                                             color: partRow.modelData.installed === true ? Tokens.ink : Tokens.inkFaint
                                             font.family: Tokens.mono
                                             font.pixelSize: Tokens.fTiny
@@ -607,8 +1029,11 @@ Item {
                                             id: removeOne
                                             anchors.right: parent.right
                                             anchors.verticalCenter: parent.verticalCenter
-                                            text: I18n.tr("REMOVE")
+                                            text: pg.bundleBusyId === bundleCard.modelData.id
+                                                ? I18n.tr("REMOVING") : I18n.tr("REMOVE")
                                             visible: partRow.modelData.installed === true
+                                                && pg.bundlePartRemovable(partRow.modelData)
+                                            armed: pg.bundleBusyId === ""
                                             onAct: pg.removeBundle(bundleCard.modelData.id, partRow.modelData.name)
                                         }
                                     }
@@ -622,6 +1047,7 @@ Item {
             Text {
                 anchors.centerIn: parent
                 visible: pg.bundlesLoaded && pg.bundles.length === 0
+                    && pg.errorRetry !== "bundles-read" && pg.errorRetry !== "bundle-status"
                 text: I18n.tr("No bundle components are installed.")
                 color: Tokens.inkMuted
                 font.family: Tokens.ui
@@ -683,7 +1109,8 @@ Item {
                     // Remove: destructive, so it arms the confirm plate first.
                     Btn {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: I18n.tr("REMOVE")
+                        text: pg.busyId === detail.sel.id ? I18n.tr("REMOVING") : I18n.tr("REMOVE")
+                        armed: pg.busyId === ""
                         onAct: pg.confirmRemove = true
                     }
                 }
@@ -1035,8 +1462,6 @@ Item {
                                 ? detail.place.sidebarCard : ({})
                             readonly property var defaults: (detail.man.defaults && detail.man.defaults.sidebar)
                                 ? detail.man.defaults.sidebar : ({})
-                            readonly property string side: sidebarPlacement.card.side
-                                || sidebarPlacement.defaults.side || "left"
                             readonly property string tabName: sidebarPlacement.card.tab
                                 || sidebarPlacement.defaults.tab || "Plugins"
                             readonly property int order: sidebarPlacement.card.order !== undefined
@@ -1048,8 +1473,8 @@ Item {
                             readonly property string glyph: sidebarPlacement.card.glyph
                                 || ((detail.man.defaults || {}).glyph) || "extension"
 
-                            function commit(side, tab, order) {
-                                pg.place(detail.sel.id, "sidebarCard", side, tab, order,
+                            function commit(tab, order) {
+                                pg.place(detail.sel.id, "sidebarCard", tab, order,
                                     sidebarPlacement.label, sidebarPlacement.glyph);
                             }
 
@@ -1058,28 +1483,6 @@ Item {
                                 width: parent.width
                                 spacing: Tokens.s3
 
-                                Item {
-                                    width: parent.width
-                                    height: 30
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: I18n.tr("Side")
-                                        color: Tokens.inkDim
-                                        font.family: Tokens.ui
-                                        font.pixelSize: Tokens.fBody
-                                    }
-                                    Seg {
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        options: [I18n.tr("Left"), I18n.tr("Right")]
-                                        current: sidebarPlacement.side === "right"
-                                            ? I18n.tr("Right") : I18n.tr("Left")
-                                        onChose: label => sidebarPlacement.commit(
-                                            label === I18n.tr("Right") ? "right" : "left",
-                                            sidebarPlacement.tabName, sidebarPlacement.order)
-                                    }
-                                }
 
                                 Item {
                                     width: parent.width
@@ -1102,7 +1505,6 @@ Item {
                                         text: sidebarPlacement.tabName
                                         placeholder: I18n.tr("Plugins")
                                         onCommitted: value => sidebarPlacement.commit(
-                                            sidebarPlacement.side,
                                             String(value).trim() || "Plugins",
                                             sidebarPlacement.order)
                                     }
@@ -1136,7 +1538,6 @@ Item {
                                             to: 100
                                             stepBy: 1
                                             onModified: value => sidebarPlacement.commit(
-                                                sidebarPlacement.side,
                                                 sidebarPlacement.tabName, value)
                                         }
                                     }

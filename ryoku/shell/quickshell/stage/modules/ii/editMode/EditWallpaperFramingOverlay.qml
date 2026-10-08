@@ -7,6 +7,8 @@ import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
 import stage.modules.common.functions
+import Ryoku.Ui as RyokuUi
+import Ryoku.Ui.Singletons
 
 /**
  * Edit Mode's wallpaper, moved by hand: the overlay the desktop card turns into
@@ -518,455 +520,266 @@ Item {
     }
 
     // ── The coach line and the dock ──────────────────────────────────────────
-    // Bottom centre of the card, at native size. Above the gesture area in
-    // declaration order, so the dock's buttons take their own clicks.
-    readonly property real controlHeight: 44
+    readonly property real controlHeight: Tokens.ctlH + Tokens.s3
     readonly property bool hasNotice: root.notice !== ""
-    // While a drag snaps to the centre, the coach line says so instead of
-    // getting out of the way.
     readonly property bool showsSnap: root.dragging && (root.snappedX || root.snappedY) && !root.hasNotice
+    readonly property string coachText: {
+        if (root.hasNotice)
+            return root.notice;
+        if (root.showsSnap) {
+            if (root.tracksFace)
+                return root.onThird ? Translation.tr("Face on a third") : Translation.tr("Face centred");
+            return root.onThird ? Translation.tr("On a third") : Translation.tr("Centred");
+        }
+        if (!root.ready)
+            return root.measureFailed ? Translation.tr("Couldn't measure this picture")
+                : Translation.tr("Measuring the wallpaper…");
+        return Translation.tr("Drag to move · Wheel or pinch to zoom · Double-click to reset");
+    }
 
     ColumnLayout {
         id: controls
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24 * root.counterScale
-        spacing: 10
+        anchors.bottomMargin: Tokens.s5 * root.counterScale
+        spacing: Tokens.s2
         scale: root.counterScale
         transformOrigin: Item.Bottom
 
-        // What the hand can do: three gestures as three tokens, each its own
-        // shape, the verb in weight and the rest in the regular cut. A
-        // gesture that did nothing turns the line tertiary and says why.
-        Item {
-            id: coachSlot
+        Rectangle {
+            id: coach
             Layout.alignment: Qt.AlignHCenter
-            implicitWidth: coach.implicitWidth
-            implicitHeight: coach.implicitHeight
-            opacity: root.coachIn
+            Layout.maximumWidth: root.width - Tokens.s5 * 2
+            implicitWidth: Math.min(coachRow.implicitWidth + Tokens.s4 * 2,
+                root.width - Tokens.s5 * 2)
+            implicitHeight: Tokens.ctlH + Tokens.s2
+            radius: Tokens.radius
+            color: Tokens.paper
+            border.width: Tokens.border
+            border.color: root.hasNotice ? Tokens.lineStrong : Tokens.line
+            opacity: root.coachIn * (dockHover.hovered
+                || (root.dragging && !root.showsSnap && !root.hasNotice) ? 0 : 1)
             visible: opacity > 0
-            transform: Translate {
-                y: (1 - root.coachIn) * 24
+            transform: Translate { y: (1 - root.coachIn) * Tokens.s5 }
+
+            Behavior on opacity {
+                enabled: !Tokens.reduceMotion
+                NumberAnimation { duration: Tokens.snap }
+            }
+            Behavior on border.color {
+                enabled: !Tokens.reduceMotion
+                ColorAnimation { duration: Tokens.snap }
             }
 
-            Rectangle {
-                id: coach
-                width: coach.implicitWidth
-                height: coach.implicitHeight
-                readonly property Item content: root.hasNotice || root.showsSnap ? messageRow : gestureRow
-                implicitWidth: coach.content.implicitWidth + 12 + 18
-                implicitHeight: 40
-                radius: Config.options.appearance.sharpMode ? Appearance.rounding.full : height / 2
-                color: root.hasNotice ? Appearance.colors.colTertiaryContainer
-                    : root.showsSnap ? Appearance.colors.colPrimaryContainer
-                    : Appearance.m3colors.m3surfaceContainerHigh
-                opacity: root.dragging && !root.showsSnap && !root.hasNotice ? 0 : 1
-                visible: opacity > 0
-                clip: true
+            RowLayout {
+                id: coachRow
+                anchors.fill: parent
+                anchors.leftMargin: Tokens.s3
+                anchors.rightMargin: Tokens.s3
+                spacing: Tokens.s2
 
-                Behavior on color {
-                    animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+                MaterialSymbol {
+                    Layout.alignment: Qt.AlignVCenter
+                    text: root.hasNotice ? "info"
+                        : root.showsSnap ? "center_focus_strong" : "pan_tool"
+                    iconSize: Tokens.fBody
+                    color: root.hasNotice ? Tokens.ink : Tokens.inkMuted
                 }
-                Behavior on opacity {
-                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                StyledText {
+                    Layout.fillWidth: true
+                    text: root.coachText
+                    font.family: Tokens.ui
+                    font.pixelSize: Tokens.fSmall
+                    font.weight: root.hasNotice || root.showsSnap ? Font.DemiBold : Font.Normal
+                    color: Tokens.inkDim
+                    elide: Text.ElideRight
                 }
-                Behavior on implicitWidth {
-                    enabled: !Appearance.reducedMotion
-                    animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
-                }
-
-                StyledRectangularShadow {
-                    target: coach
-                }
-
-                Row {
-                    id: gestureRow
-                    x: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 14
-                    opacity: coach.content === gestureRow ? 1 : 0
-                    visible: opacity > 0
-                    Behavior on opacity {
-                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                    }
-
-                    CoachToken {
-                        symbol: "pan_tool"
-                        shape: MaterialShape.Shape.Cookie4Sided
-                        verb: root.ready ? Translation.tr("Drag")
-                            : root.measureFailed ? Translation.tr("Couldn't measure") : Translation.tr("Measuring")
-                        rest: root.ready ? Translation.tr("to move")
-                            : root.measureFailed ? Translation.tr("this picture's size") : Translation.tr("the wallpaper…")
-                    }
-                    CoachToken {
-                        visible: root.ready
-                        symbol: "pinch"
-                        shape: MaterialShape.Shape.Clover4Leaf
-                        verb: Translation.tr("Wheel")
-                        rest: Translation.tr("or pinch to zoom")
-                    }
-                    CoachToken {
-                        visible: root.ready
-                        symbol: "ads_click"
-                        shape: MaterialShape.Shape.Sunny
-                        verb: Translation.tr("Double-click")
-                        rest: Translation.tr("to reset")
-                    }
-                }
-
-                Row {
-                    id: messageRow
-                    x: 6
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 8
-                    opacity: coach.content === messageRow ? 1 : 0
-                    visible: opacity > 0
-                    Behavior on opacity {
-                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                    }
-
-                    MaterialShapeWrappedMaterialSymbol {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.hasNotice ? "info" : "center_focus_strong"
-                        iconSize: 16
-                        padding: 6
-                        shape: root.hasNotice ? MaterialShape.Shape.SoftBurst : MaterialShape.Shape.Gem
-                        color: root.hasNotice ? Appearance.colors.colTertiary : Appearance.colors.colPrimary
-                        colSymbol: root.hasNotice ? Appearance.colors.colOnTertiary : Appearance.colors.colOnPrimary
-                    }
-                    StyledText {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: root.hasNotice ? root.notice
-                            : root.tracksFace
-                                ? (root.onThird ? Translation.tr("Face on a third") : Translation.tr("Face centred"))
-                                : (root.onThird ? Translation.tr("On a third") : Translation.tr("Centred"))
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        font.weight: Font.DemiBold
-                        color: root.hasNotice ? Appearance.colors.colOnTertiaryContainer : Appearance.colors.colOnPrimaryContainer
-                    }
-                }
-        }
+            }
         }
 
-        // The dock: three groups on one floating surface, told apart by gaps
-        // and by how each one is built - a tonal stepper around the zoom in
-        // expressive digits, a connected group for the orientation whose
-        // mirrors morph into a shape when on, and the way back as a filled
-        // action that only exists while there is something to undo.
+        // A single paper instrument plate. Every utility action uses the same
+        // square footprint and hairline; only active mirror state inverts.
         Rectangle {
             id: dock
             Layout.alignment: Qt.AlignHCenter
+            implicitWidth: dockRow.implicitWidth + Tokens.s3 * 2
+            implicitHeight: root.controlHeight + Tokens.s2 * 2
+            radius: Tokens.radius * 2
+            color: Tokens.paper
+            border.width: Tokens.border
+            border.color: Tokens.line
+            enabled: root.ready
             opacity: root.dockIn
             visible: opacity > 0
-            transform: Translate {
-                y: (1 - root.dockIn) * 24
+            transform: Translate { y: (1 - root.dockIn) * Tokens.s5 }
+            HoverHandler {
+                id: dockHover
             }
-            implicitWidth: dockRow.implicitWidth + 16
-            implicitHeight: root.controlHeight + 16
-            radius: Config.options.appearance.sharpMode ? Appearance.rounding.full : height / 2
-            color: Appearance.m3colors.m3surfaceContainer
-            enabled: root.ready
-
-            StyledRectangularShadow {
-                target: dock
+            // The plate is not picture: a press between its buttons must not
+            // start a drag of the wallpaper, and a quick second click there
+            // must not read as the picture's double-click reset.
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
             }
 
             RowLayout {
                 id: dockRow
                 anchors.centerIn: parent
-                spacing: 10
+                spacing: Tokens.s1
 
-                // ── Zoom ─────────────────────────────────────────────────
-                RowLayout {
-                    spacing: 3
-
-                    Segment {
-                        position: "first"
-                        symbol: "remove"
-                        tooltip: Translation.tr("Zoom out")
-                        enabled: root.target.zoom > WallpaperFraming.zoomMin + 0.0001
-                        onClicked: root.zoomBy(1 / 1.1, 0, 0)
-                    }
-
-                    // The one number this dock is about. Bold and condensed
-                    // while zoomed, a lighter cut at 100%; a click goes back
-                    // to the full picture.
-                    Segment {
-                        id: readout
-                        position: "middle"
-                        tooltip: Translation.tr("Back to 100%")
-                        enabled: root.target.zoom > WallpaperFraming.zoomMin + 0.0001
-                        // Disabled at 100% reads as dimmed; the number itself
-                        // must not fade with it.
-                        opacity: 1
-                        Layout.preferredWidth: 78
-                        property real boldness: WallpaperLayout.liveZoom > WallpaperFraming.zoomMin + 0.005 ? 1 : 0
-                        Behavior on boldness {
-                            enabled: !Appearance.reducedMotion
-                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                        }
-                        onClicked: root.zoomTo(WallpaperFraming.zoomMin)
-
-                        contentItem: Item {
-                            Row {
-                                anchors.centerIn: parent
-                                spacing: 1
-
-                                StyledText {
-                                    anchors.baseline: percentSign.baseline
-                                    text: String(Math.round(WallpaperLayout.liveZoom * 100))
-                                    font.family: Appearance.font.family.main
-                                    font.pixelSize: 26
-                                    font.variableAxes: ({
-                                        "wght": Math.round(560 + 200 * readout.boldness),
-                                        "wdth": Math.round(30 + 10 * readout.boldness),
-                                        "ROND": 100
-                                    })
-                                    color: Appearance.colors.colOnSecondaryContainer
-                                }
-                                StyledText {
-                                    id: percentSign
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.verticalCenterOffset: 3
-                                    text: "%"
-                                    font.pixelSize: Appearance.font.pixelSize.smaller
-                                    font.weight: Font.Bold
-                                    color: Appearance.colors.colOnSecondaryContainer
-                                    opacity: 0.7
-                                }
-                            }
-                        }
-                    }
-
-                    Segment {
-                        position: "last"
-                        symbol: "add"
-                        tooltip: Translation.tr("Zoom in")
-                        enabled: root.target.zoom < WallpaperFraming.zoomMax - 0.0001
-                        onClicked: root.zoomBy(1.1, 0, 0)
-                    }
+                DockButton {
+                    symbol: "remove"
+                    tooltip: Translation.tr("Zoom out")
+                    enabled: root.target.zoom > WallpaperFraming.zoomMin + 0.0001
+                    onClicked: root.zoomBy(1 / 1.1, 0, 0)
                 }
 
-                // ── Orientation ──────────────────────────────────────────
-                RowLayout {
-                    spacing: 3
-
-                    Segment {
-                        position: "first"
-                        tonal: false
-                        symbol: "rotate_left"
-                        tooltip: Translation.tr("Turn left")
-                        onClicked: WallpaperLayout.rotate(root.screenName, -1)
-                    }
-                    Segment {
-                        position: "middle"
-                        tonal: false
-                        symbol: "rotate_right"
-                        tooltip: Translation.tr("Turn right")
-                        onClicked: WallpaperLayout.rotate(root.screenName, 1)
-                    }
-                    Segment {
-                        position: "middle"
-                        tonal: false
-                        symbol: "flip"
-                        activeShape: MaterialShape.Shape.Cookie7Sided
-                        toggled: WallpaperLayout.liveFlipH
-                        tooltip: Translation.tr("Mirror horizontally")
-                        onClicked: WallpaperLayout.flip(root.screenName, "horizontal")
-                    }
-                    Segment {
-                        position: "last"
-                        tonal: false
-                        symbol: "flip"
-                        symbolRotation: 90
-                        activeShape: MaterialShape.Shape.Clover4Leaf
-                        toggled: WallpaperLayout.liveFlipV
-                        tooltip: Translation.tr("Mirror vertically")
-                        onClicked: WallpaperLayout.flip(root.screenName, "vertical")
-                    }
-                }
-
-                // ── Position ─────────────────────────────────────────────
-                RippleButton {
-                    id: centreButton
-                    implicitWidth: root.controlHeight
+                Rectangle {
+                    id: readout
+                    Layout.preferredWidth: Tokens.s7 + Tokens.s4 + Tokens.s1
                     implicitHeight: root.controlHeight
-                    buttonRadius: height / 2
-                    enabled: Math.abs(root.target.x) > 0.0005 || Math.abs(root.target.y) > 0.0005
-                    colBackground: ColorUtils.transparentize(Appearance.colors.colOnSurface, 1)
-                    colBackgroundHover: Appearance.colors.colLayer2Hover
-                    colRipple: Appearance.colors.colLayer2Active
-                    onClicked: WallpaperLayout.centre(root.screenName)
+                    radius: Tokens.radius
+                    color: readoutArea.pressed && readoutArea.enabled ? Tokens.tint16
+                        : readoutArea.containsMouse && readoutArea.enabled ? Tokens.tint10 : Tokens.tint5
+                    border.width: Tokens.border
+                    border.color: Tokens.lineSoft
+                    opacity: root.target.zoom > WallpaperFraming.zoomMin + 0.0001 ? 1 : 0.55
 
-                    contentItem: MaterialSymbol {
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        text: "center_focus_strong"
-                        iconSize: Appearance.font.pixelSize.huge
-                        color: Appearance.colors.colOnSurfaceVariant
+                    StyledText {
+                        anchors.centerIn: parent
+                        text: String(Math.round(WallpaperLayout.liveZoom * 100)) + "%"
+                        font.family: Tokens.mono
+                        font.pixelSize: Tokens.fBody
+                        font.weight: Font.DemiBold
+                        color: Tokens.ink
                     }
-
+                    MouseArea {
+                        id: readoutArea
+                        anchors.fill: parent
+                        enabled: root.target.zoom > WallpaperFraming.zoomMin + 0.0001
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.zoomTo(WallpaperFraming.zoomMin)
+                    }
                     StyledToolTip {
                         requireOverlay: false
-                        text: Translation.tr("Centre")
+                        extraVisibleCondition: readoutArea.containsMouse
+                        text: Translation.tr("Back to 100%")
                     }
                 }
 
-                // The way back, as the dock's one filled action. It grows in
-                // from nothing once the picture has been touched and folds
-                // away again at the full picture, so an untouched dock never
-                // offers to undo nothing.
-                Item {
-                    id: resetSlot
-                    readonly property bool wanted: !root.identity
-                    property real reveal: resetSlot.wanted ? 1 : 0
-                    Behavior on reveal {
-                        enabled: !Appearance.reducedMotion
-                        animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
-                    }
-                    Layout.preferredWidth: resetButton.implicitWidth * resetSlot.reveal
-                    Layout.leftMargin: -dockRow.spacing * (1 - resetSlot.reveal)
-                    implicitHeight: root.controlHeight
-                    clip: true
-                    visible: resetSlot.reveal > 0.001
+                DockButton {
+                    symbol: "add"
+                    tooltip: Translation.tr("Zoom in")
+                    enabled: root.target.zoom < WallpaperFraming.zoomMax - 0.0001
+                    onClicked: root.zoomBy(1.1, 0, 0)
+                }
 
-                    RippleButton {
-                        id: resetButton
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        implicitWidth: resetRow.implicitWidth + 32
-                        implicitHeight: root.controlHeight
-                        buttonRadius: height / 2
-                        opacity: resetSlot.reveal
-                        colBackground: Appearance.colors.colPrimary
-                        colBackgroundHover: Appearance.colors.colPrimaryHover
-                        colRipple: Appearance.colors.colPrimaryActive
-                        onClicked: WallpaperLayout.resetFraming(root.screenName)
+                DockDivider {}
 
-                        contentItem: Item {
-                            RowLayout {
-                                id: resetRow
-                                anchors.centerIn: parent
-                                spacing: 6
-                                MaterialSymbol {
-                                    text: "restart_alt"
-                                    iconSize: Appearance.font.pixelSize.larger
-                                    color: Appearance.colors.colOnPrimary
-                                }
-                                StyledText {
-                                    text: Translation.tr("Reset")
-                                    font.family: Appearance.font.family.title
-                                    font.variableAxes: Appearance.font.variableAxes.titleRounded
-                                    font.pixelSize: Appearance.font.pixelSize.normal
-                                    color: Appearance.colors.colOnPrimary
-                                }
-                            }
-                        }
+                DockButton {
+                    symbol: "rotate_left"
+                    tooltip: Translation.tr("Turn left")
+                    onClicked: WallpaperLayout.rotate(root.screenName, -1)
+                }
+                DockButton {
+                    symbol: "rotate_right"
+                    tooltip: Translation.tr("Turn right")
+                    onClicked: WallpaperLayout.rotate(root.screenName, 1)
+                }
+                DockButton {
+                    symbol: "flip"
+                    toggled: WallpaperLayout.liveFlipH
+                    tooltip: Translation.tr("Mirror horizontally")
+                    onClicked: WallpaperLayout.flip(root.screenName, "horizontal")
+                }
+                DockButton {
+                    symbol: "flip"
+                    symbolRotation: 90
+                    toggled: WallpaperLayout.liveFlipV
+                    tooltip: Translation.tr("Mirror vertically")
+                    onClicked: WallpaperLayout.flip(root.screenName, "vertical")
+                }
 
-                        StyledToolTip {
-                            requireOverlay: false
-                            text: Translation.tr("Reset position, zoom and orientation")
-                        }
-                    }
+                DockDivider {}
+
+                DockButton {
+                    symbol: "center_focus_strong"
+                    tooltip: Translation.tr("Centre")
+                    enabled: Math.abs(root.target.x) > 0.0005 || Math.abs(root.target.y) > 0.0005
+                    onClicked: WallpaperLayout.centre(root.screenName)
+                }
+
+                RyokuUi.Btn {
+                    Layout.leftMargin: Tokens.s1
+                    Layout.preferredHeight: root.controlHeight
+                    text: Translation.tr("Reset")
+                    armed: !root.identity
+                    motionEnabled: !Tokens.reduceMotion
+                    onAct: WallpaperLayout.resetFraming(root.screenName)
                 }
             }
         }
     }
 
-    // One gesture on the coach line: a small shape around its glyph, the verb
-    // in weight, the rest in the regular cut.
-    component CoachToken: Row {
-        id: token
-        property string symbol: ""
-        property var shape: MaterialShape.Shape.Circle
-        property string verb: ""
-        property string rest: ""
-        spacing: 7
-
-        MaterialShapeWrappedMaterialSymbol {
-            anchors.verticalCenter: parent.verticalCenter
-            text: token.symbol
-            iconSize: 14
-            padding: 6
-            shape: token.shape
-            color: Appearance.colors.colPrimaryContainer
-            colSymbol: Appearance.colors.colOnPrimaryContainer
-        }
-        StyledText {
-            anchors.verticalCenter: parent.verticalCenter
-            text: token.verb
-            font.pixelSize: Appearance.font.pixelSize.small
-            font.weight: Font.Bold
-            color: Appearance.colors.colOnSurface
-        }
-        StyledText {
-            anchors.verticalCenter: parent.verticalCenter
-            text: token.rest
-            font.pixelSize: Appearance.font.pixelSize.small
-            color: Appearance.colors.colOnSurfaceVariant
-        }
+    component DockDivider: Rectangle {
+        Layout.leftMargin: Tokens.s1
+        Layout.rightMargin: Tokens.s1
+        Layout.preferredWidth: Tokens.border
+        Layout.preferredHeight: root.controlHeight - Tokens.s2
+        color: Tokens.lineSoft
     }
 
-    // A segment of a connected button group: the outer ends pill, the joins
-    // tight; a toggled segment rounds all the way into a pill and its glyph
-    // morphs from a plain circle into the segment's own shape.
-    component Segment: RippleButton {
-        id: segment
-        property string position: "middle"   // "first", "middle" or "last"
-        // Tonal segments sit on the secondary container (the zoom stepper);
-        // the others are quiet until toggled (the orientation group).
-        property bool tonal: true
+    component DockButton: Rectangle {
+        id: button
         property string symbol: ""
         property real symbolRotation: 0
-        property var activeShape: MaterialShape.Shape.Circle
+        property bool toggled: false
         property string tooltip: ""
+        signal clicked()
 
-        readonly property real outer: Config.options.appearance.sharpMode ? Appearance.rounding.verysmall : height / 2
-        property real inner: segment.toggled ? segment.outer : Appearance.rounding.verysmall
-        Behavior on inner {
-            enabled: !Appearance.reducedMotion
-            animation: Appearance.animation.elementMoveSmall.numberAnimation.createObject(this)
+        Layout.preferredWidth: root.controlHeight
+        Layout.preferredHeight: root.controlHeight
+        radius: Tokens.radius
+        opacity: enabled ? 1 : 0.35
+        color: button.toggled ? Tokens.bone
+            : buttonArea.pressed && button.enabled ? Tokens.tint16
+            : buttonArea.containsMouse && button.enabled ? Tokens.tint10 : "transparent"
+        border.width: Tokens.border
+        border.color: button.toggled ? Tokens.bone
+            : buttonArea.containsMouse && button.enabled ? Tokens.lineStrong : Tokens.line
+
+        Behavior on color {
+            enabled: !Tokens.reduceMotion
+            ColorAnimation { duration: Tokens.snap }
         }
-        readonly property bool openLeft: segment.position !== "first"
-        readonly property bool openRight: segment.position !== "last"
-
-        implicitWidth: root.controlHeight + (segment.position === "middle" ? 0 : 4)
-        implicitHeight: root.controlHeight
-        topLeftRadius: segment.openLeft ? segment.inner : segment.outer
-        bottomLeftRadius: segment.openLeft ? segment.inner : segment.outer
-        topRightRadius: segment.openRight ? segment.inner : segment.outer
-        bottomRightRadius: segment.openRight ? segment.inner : segment.outer
-
-        colBackground: segment.tonal ? Appearance.colors.colSecondaryContainer : Appearance.colors.colLayer2
-        colBackgroundHover: segment.tonal ? Appearance.colors.colSecondaryContainerHover : Appearance.colors.colLayer2Hover
-        colBackgroundActive: segment.tonal ? Appearance.colors.colSecondaryContainerActive : Appearance.colors.colLayer2Active
-        colRipple: segment.tonal ? Appearance.colors.colSecondaryContainerActive : Appearance.colors.colLayer2Active
-        colBackgroundToggled: Appearance.colors.colPrimaryContainer
-        colBackgroundToggledHover: Appearance.colors.colPrimaryContainerHover
-        colRippleToggled: Appearance.colors.colPrimaryContainerActive
-
-        contentItem: Item {
-            MaterialShapeWrappedMaterialSymbol {
-                anchors.centerIn: parent
-                visible: segment.symbol !== ""
-                text: segment.symbol
-                rotation: segment.symbolRotation
-                iconSize: 20
-                padding: 4
-                fill: segment.toggled ? 1 : 0
-                shape: segment.toggled ? segment.activeShape : MaterialShape.Shape.Circle
-                color: segment.toggled ? Appearance.colors.colPrimary : "transparent"
-                colSymbol: segment.toggled ? Appearance.colors.colOnPrimary
-                    : segment.tonal ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnSurfaceVariant
-                Behavior on color {
-                    animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
-                }
-            }
+        Behavior on border.color {
+            enabled: !Tokens.reduceMotion
+            ColorAnimation { duration: Tokens.snap }
         }
 
+        MaterialSymbol {
+            anchors.centerIn: parent
+            text: button.symbol
+            rotation: button.symbolRotation
+            iconSize: Tokens.fValue
+            color: button.toggled ? Tokens.inkOnBone : Tokens.inkDim
+        }
+        // An exclusive grab: a click that drifts a few pixels on a touchpad
+        // still lands, where a passive TapHandler would cancel it.
+        MouseArea {
+            id: buttonArea
+            anchors.fill: parent
+            enabled: button.enabled
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: button.clicked()
+        }
         StyledToolTip {
             requireOverlay: false
-            text: segment.tooltip
+            extraVisibleCondition: buttonArea.containsMouse
+            text: button.tooltip
         }
     }
 }

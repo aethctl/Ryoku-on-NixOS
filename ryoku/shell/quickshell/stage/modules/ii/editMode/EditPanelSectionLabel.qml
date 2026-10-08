@@ -8,10 +8,13 @@ import stage.modules.common.widgets
  */
 StyledText {
     Layout.fillWidth: true
-    Layout.leftMargin: 6
-    Layout.topMargin: 10
-    Layout.bottomMargin: 2
+    Layout.leftMargin: Appearance.sizes.space2
+    Layout.topMargin: Appearance.sizes.space4
+    Layout.bottomMargin: Appearance.sizes.space1
+    font.family: Appearance.font.family.monospace
     font.pixelSize: Appearance.font.pixelSize.smaller
-    font.weight: Font.DemiBold
-    color: Appearance.colors.colOnSurfaceVariant
+    font.weight: Font.Medium
+    font.capitalization: Font.AllUppercase
+    font.letterSpacing: Appearance.font.trackLabel
+    color: Appearance.colors.colSubtext
 }

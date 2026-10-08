@@ -6,9 +6,14 @@ import Quickshell.Io
 import Ryoku.Ui
 import Ryoku.Ui.Singletons
 import "Singletons"
+// The pages load by URL, so nothing else imports their directory, and
+// Quickshell writes a qmldir only for directories reached by an import.
+// Without one a page cannot name its siblings (UpdatesPage's UpdateRun) and
+// fails to load.
+import "pages"
 import "schema/DesktopPage.js" as DesktopSchema
-import "schema/DesktopScenePage.js" as DesktopSceneSchema
 import "schema/BarStudioPage.js" as BarStudioSchema
+import "schema/ControlsPage.js" as ControlsSchema
 import "schema/WindowSettings.js" as WindowSettingsSchema
 import "schema/PluginsPage.js" as PluginsSchema
 import "schema/InputPage.js" as InputSchema
@@ -58,47 +63,43 @@ Rectangle {
     // remember the last section so a reopen lands where you left, not the default.
     // Read once at startup by `sectionGet` below; written here on every change.
     onSectionChanged: Quickshell.execDetached(["ryoku-hub", "config", "set", "section", hub.section])
-    // Retired section names and old deep links land on the page that now owns
-    // their remaining general settings rather than a blank pane.
+    // Retired page names stay useful as entry points, but the desktop owns the
+    // editors now. A direct navigation call hands off without changing the
+    // already-open Hub's current page.
+    function editorSectionFor(target) {
+        if (target === "visualizer" || target === "desktop-scene-visualizer")
+            return "visualizer";
+        if (target === "widgets" || target === "desktop-scene-widgets")
+            return "widgets";
+        if (target === "stage" || target === "desktop-scene")
+            return "depth";
+        return "";
+    }
     function canonicalSection(s) {
-        // sections that were folded into another page: an old deep link (the
-        // Store's "open in settings", a keybind, a script) still lands right.
         if (s === "windows") return "windowmanager";
         if (s === "cursor") return "input";
         if (s === "autostart" || s === "environment") return "session";
-        if (s === "sidebar" || s === "sidebars-left" || s === "sidebars-right") return "desktop";
-        if (s === "stage" || s === "visualizer" || s === "widgets"
-                || s === "desktop-scene-visualizer" || s === "desktop-scene-widgets")
-            return "desktop-scene";
+        if (s === "sidebar" || s === "sidebars-left" || s === "sidebars-right") return "controls";
         return s;
     }
-    function routeKeyFor(target) {
-        if (target === "visualizer" || target === "desktop-scene-visualizer") return "visualizer";
-        if (target === "widgets" || target === "desktop-scene-widgets") return "widgets";
-        if (target === "stage" || target === "desktop-scene") return "stage";
-        return "";
-    }
-    // An explicit jump (the nav IPC, i.e. the Store's "open in settings") must
-    // win over the remembered section. `sectionGet` is a Process, so on a cold
-    // start its stdout lands AFTER the IPC has already set the page and the
-    // restore silently drags the user back to wherever they were last -- the
-    // handoff looked like it did nothing. Deep links come through here and latch.
+    // An explicit jump must win over the remembered section. `sectionGet` is
+    // asynchronous, so navigation latches before changing the current page.
     function navigate(target) {
-        var route = hub.routeKeyFor(target);
+        var editorSection = hub.editorSectionFor(target);
+        if (editorSection !== "") {
+            hub.navigated = true;
+            editorHandoff.command = ["qs", "-c", "shell", "ipc", "call",
+                "desktop", "editSection", editorSection, ""];
+            editorHandoff.running = true;
+            return;
+        }
         target = hub.canonicalSection(target);
         if (!target || hub.pageFile(target) === "" || !hub.sectionAvailable(target))
             return;
         hub.navigated = true;
-        hub.routeKey = route;
         hub.section = target;
-        if (route !== "") {
-            hub.pendingFocusKey = route;
-            focusTimer.tries = 0;
-            focusTimer.restart();
-        }
     }
     property bool navigated: false
-    property string routeKey: ""
     property string query: ""
 
     // progressive disclosure: one global Advanced switch (in the rail) reveals the
@@ -132,7 +133,7 @@ Rectangle {
             { key: "layerrules", name: "Layer Rules", adv: true, needs: { rows: true } } ] },
         { name: "DESKTOP", items: [
             { key: "bar-studio", name: "Bar Studio", wired: true }, { key: "desktop", name: "Desktop", wired: true },
-            { key: "desktop-scene", name: "Desktop Scene", wired: true }, { key: "launcher", name: "App Launcher" } ] },
+            { key: "controls", name: "Controls", wired: true }, { key: "launcher", name: "App Launcher" } ] },
         { name: "KEYS & APPS", items: [
             { key: "keybinds", name: "Keybinds" }, { key: "appoverrides", name: "App Overrides", adv: true },
             { key: "windowrules", name: "Window Rules", adv: true } ] },
@@ -157,7 +158,7 @@ Rectangle {
     readonly property var jpName: ({
         "profile": "横顔", "displays": "画面", "input": "入力", "keybinds": "操作",
         "connections": "接続", "gpu": "演算", "recording": "録画", "dictation": "音声",
-        "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "desktop-scene": "舞台",
+        "plugins": "補", "bar-studio": "帯", "desktop": "卓上", "controls": "操作",
         "launcher": "起動", "fastfetch": "情報", "lockscreen": "施錠", "animations": "動き",
         "addons": "拡張", "windowrules": "規則", "appoverrides": "上書", "layerrules": "階層",
         "session": "起動", "performance": "性能", "rashin": "羅針",
@@ -182,7 +183,7 @@ Rectangle {
         "plugins": "plugin plugins hyprland compositor hyprpm title bar titlebar hyprbars glass hyprglass image border imgborders cursor motion dynamic cursors focus flash hyprfocus key sound sounds keyboard keysounds typing click clicky thock creamy cherry mx topre mechvibes switch version abi mismatch rebuild build update add git repository install",
         "bar-studio": "bar frame rails zones widgets menus surfaces style catalogue layout framebars sidebar dock dockapps pinned pin magnify autohide auto-hide media chip peek labels edge taskbar",
         "desktop": "desktop brand logo mark name wallpaper picker clipboard sidebar sidebars controls today panel corner",
-        "desktop-scene": "desktop stage scene depth parallax wallpaper cut layer model quality shadow edge visualizer spectrum widgets placement edit",
+        "controls": "controls quick settings super escape sidebar panel layout sections order graph vitals levels media plugins",
         "launcher": "launcher spotlight command palette greeting weather home",
         "fastfetch": "fetch neofetch terminal system info logo ascii emblem readout",
         "lockscreen": "lock screensaver signin greeter skin theme login",
@@ -207,8 +208,8 @@ Rectangle {
     // section -> its schema rows, the one source for both global search and the
     // compositor-driving classification, so the two cannot drift apart.
     readonly property var sectionRows: ({
-        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows,
-        "desktop-scene": DesktopSceneSchema.rows, "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
+        "bar-studio": BarStudioSchema.rows, "desktop": DesktopSchema.rows, "controls": ControlsSchema.rows,
+        "windowmanager": WindowSettingsSchema.rows, "plugins": PluginsSchema.rows,
         "input": InputSchema.rows, "keybinds": KeybindsSchema.rows,
         "displays": DisplaysSchema.rows, "gpu": GpuSchema.rows,
         "recording": RecordingSchema.rows, "dictation": DictationSchema.rows,
@@ -429,7 +430,7 @@ Rectangle {
     // `framed` pages keep the rail + bottom action bar; `ledger` pages also get
     // the right write-ledger column. Everything else is full-bleed.
     readonly property var framedSet: ({
-        "bar-studio": true, "desktop": true, "plugins": true, "input": true, "animations": true, "global": true, "windowmanager": true,
+        "bar-studio": true, "desktop": true, "controls": true, "plugins": true, "input": true, "animations": true, "global": true, "windowmanager": true,
         "windowrules": true, "appoverrides": true, "layerrules": true,
         "session": true
     })
@@ -518,8 +519,7 @@ Rectangle {
     function pageFile(s) {
         var map = {
             "plugins": "PluginsPage", "profile": "ProfilePage",
-            "bar-studio": "BarStudioPage", "desktop": "DesktopPage",
-            "desktop-scene": "DesktopScenePage", "session": "SessionPage",
+            "bar-studio": "BarStudioPage", "desktop": "DesktopPage", "controls": "ControlsPage", "session": "SessionPage",
             "layerrules": "LayerRulesPage", "windowrules": "WindowRulesPage",
             "appoverrides": "AppOverridesPage", "animations": "AnimationsPage",
             "input": "InputPage", "keybinds": "KeybindsPage",
@@ -839,6 +839,7 @@ Rectangle {
     }
 
     Component.onCompleted: rebase()
+    Process { id: editorHandoff }
     Process {
         id: sectionGet
         command: ["ryoku-hub", "config", "get", "section"]
@@ -1450,7 +1451,6 @@ Rectangle {
                 onLoaded: {
                     if (item) {
                         item.hub = hub;
-                        if (hub.routeKey !== "" && item.focusKey) item.focusKey(hub.routeKey);
                     }
                     pageHost.reveal(la);
                 }
@@ -1466,7 +1466,6 @@ Rectangle {
                 onLoaded: {
                     if (item) {
                         item.hub = hub;
-                        if (hub.routeKey !== "" && item.focusKey) item.focusKey(hub.routeKey);
                     }
                     pageHost.reveal(lb);
                 }
@@ -1593,9 +1592,17 @@ Rectangle {
         visible: !pageArea.full
         anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
         dirty: hub.dirty
+        cleanText: pageHost.shown === "controls" && pageHost.front && pageHost.front.item
+            ? pageHost.front.item.footerText
+            : I18n.tr("SAVED · LIVE ON YOUR DESKTOP")
         onSaved: hub.save()
         onReverted: hub.revert()
-        onReset: hub.resetDefaults()
+        onReset: {
+            if (pageHost.shown === "controls" && pageHost.front && pageHost.front.item)
+                pageHost.front.item.resetLayout();
+            else
+                hub.resetDefaults();
+        }
         onDiffRequested: diffPop.toggle()
     }
     Text {

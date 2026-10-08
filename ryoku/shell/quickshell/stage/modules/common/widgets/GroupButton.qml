@@ -15,13 +15,13 @@ Button {
     property string buttonText
     readonly property bool isHovered: buttonMouseArea.containsMouse
     property bool isPressed: false
-    property real buttonRadius: Appearance?.rounding?.small ?? 8
+    property real buttonRadius: Appearance?.rounding?.small ?? 6
     property real buttonRadiusPressed: Appearance?.rounding?.small ?? 6
     property var downAction // When left clicking (down)
     property var releaseAction // When left clicking (release)
     property var altAction // When right clicking
     property var middleClickAction // When middle clicking
-    property bool bounce: true
+    property bool bounce: false
     property real baseWidth: contentItem.implicitWidth + horizontalPadding * 2
     property real baseHeight: contentItem.implicitHeight + verticalPadding * 2
     property bool enableImplicitWidthAnimation: true
@@ -56,12 +56,12 @@ Button {
     implicitWidth: (root.isPressed && bounce) ? clickedWidth : (isNeighborPressed && bounce ? Math.max(16, baseWidth - 6) : baseWidth)
     implicitHeight: (root.isPressed && bounce) ? clickedHeight : baseHeight
 
-    property color colBackground: ColorUtils.transparentize(colBackgroundHover, 1) || "transparent"
-    property color colBackgroundHover: Appearance?.colors.colLayer1Hover ?? "#E5DFED"
-    property color colBackgroundActive: Appearance?.colors.colLayer1Active ?? "#D6CEE2"
-    property color colBackgroundToggled: Appearance?.colors.colPrimary ?? "#65558F"
-    property color colBackgroundToggledHover: Appearance?.colors.colPrimaryHover ?? "#77699C"
-    property color colBackgroundToggledActive: Appearance?.colors.colPrimaryActive ?? "#D6CEE2"
+    property color colBackground: "transparent"
+    property color colBackgroundHover: Appearance.colors.colLayer1Hover
+    property color colBackgroundActive: Appearance.colors.colLayer1Active
+    property color colBackgroundToggled: Appearance.colors.colSecondary
+    property color colBackgroundToggledHover: Appearance.colors.colSecondaryHover
+    property color colBackgroundToggledActive: Appearance.colors.colSecondaryActive
 
     property real radius: root.isPressed ? root.buttonRadiusPressed : root.buttonRadius
     property real leftRadius: root.isPressed ? root.buttonRadiusPressed : root.buttonRadius
@@ -101,11 +101,11 @@ Button {
         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
     }
 
-    scale: root.isPressed ? 0.95 : (isHovered ? 1.01 : 1.0)
+    scale: root.isPressed ? 0.96 : 1
     Behavior on scale {
         NumberAnimation {
-            duration: 150
-            easing.type: Easing.OutQuad
+            duration: Appearance.animation.elementMoveSnap.duration
+            easing.type: Appearance.animation.elementMoveSnap.type
         }
     }
 
@@ -161,18 +161,22 @@ Button {
         topRightRadius: root.rightRadius
         bottomLeftRadius: root.leftRadius
         bottomRightRadius: root.rightRadius
-        implicitHeight: 50
+        implicitHeight: Appearance.sizes.controlHeight
 
         color: root.color
         Behavior on color {
             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
         }
 
-        border.width: root.tabbedTo ? 2 : 0
-        border.color: Appearance.colors.colSecondary
+        border.width: root.tabbedTo ? 2 : 1
+        border.color: root.toggled ? Appearance.colors.colSecondary
+            : root.tabbedTo ? Appearance.colors.colOnSurface
+            : root.isHovered ? Appearance.colors.colOutline : Appearance.colors.colOutlineVariant
+
     }
 
     contentItem: StyledText {
         text: root.buttonText
+        color: root.toggled ? Appearance.colors.colOnSecondary : Appearance.colors.colOnSurface
     }
 }

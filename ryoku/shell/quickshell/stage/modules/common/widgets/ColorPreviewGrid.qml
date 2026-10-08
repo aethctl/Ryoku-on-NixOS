@@ -2,69 +2,55 @@ import QtQuick
 import QtQuick.Layouts
 import stage.services
 import stage.modules.common
-
-/*
-    Almost all of the custom color schemes (latte.json, samurai.json etc.) are gotten from https://github.com/snowarch/quickshell-ii-niri/blob/main/modules/common/ThemePresets.qml
-
-    To add a new custom color scheme:
-
-    1. Get a proper color scheme (in the same format as the default ones) and put in to ~/.config/illogical_impulse/themes
-    2. Add the exact name of the json file to the config.json - appearance - customColorSchemes
-*/
+import Ryoku.Ui.Singletons
 
 GridLayout {
     id: root
-    implicitWidth: parent.width
-    columns: 3
 
-    readonly property list<string> builtInColorSchemes: ["angel_light", "angel", "ayu", "cobalt2", "cursor", "dracula", "flexoki", "frappe", "github", "gruvbox", "kanagawa", "latte", "macchiato", "material_ocean", "matrix", "mercury", "mocha", "nord", "nothing_os", "open_code", "orng", "osaka_jade", "rose_pine", "sakura", "samurai", "synthwave84", "vercel", "vesper", "zen_burn", "zen_garden"]
-    property list<string> customColorSchemes: Config.options.appearance.customColorSchemes ?? []
-
-    // "intense" is the reference's own variant; Ryoku's matugen validator has
-    // no such scheme_type, so the grid never offers a chip that cannot apply.
-    readonly property list<string> wallpaperColorSchemes: Config.widgetProvider
-        ? ["scheme-auto", "scheme-content", "scheme-tonal-spot", "scheme-fidelity", "scheme-vibrant", "scheme-fruit-salad", "scheme-expressive", "scheme-rainbow", "scheme-neutral", "scheme-monochrome"]
-        : ["scheme-auto", "scheme-content", "scheme-tonal-spot", "scheme-fidelity", "scheme-intense", "scheme-vibrant", "scheme-fruit-salad", "scheme-expressive", "scheme-rainbow", "scheme-neutral", "scheme-monochrome"]
-
-    property bool customTheme: false
-    property bool builtInTheme: false
-    property list<string> colorSchemes: customTheme ? customColorSchemes : builtInTheme ? builtInColorSchemes : root.wallpaperColorSchemes
-
-    function formatText(text) {
-        if (customTheme || builtInTheme) {
-            const name = text.replace(/_/g, " ");
-            return name.charAt(0).toUpperCase() + name.slice(1);
-        }
-        const sliced = text.split("-").slice(1).join(" ");
-        return sliced.charAt(0).toUpperCase() + sliced.slice(1);
-    }
-
+    property string source: "wallpaper"
     property int loadedCount: 0
-    /// Height of every swatch cell; hosts with room give the swatches more.
-    property real cellHeight: 64
-    /// Display name of the swatch under the pointer, "" when none is.
+    property real cellHeight: Tokens.rowH + Tokens.s5
     property string hoveredName: ""
     property bool showTooltips: true
 
-    // The list can change under a live grid (Edit Mode swaps the source in
-    // place); pick the loading back up for the schemes not yet reached.
-    onColorSchemesChanged: {
-        if (root.loadedCount < root.colorSchemes.length) loadTimer.start();
+    readonly property var colorSchemes: root.source === "themes"
+        ? MaterialThemeLoader.namedThemes : MaterialThemeLoader.wallpaperSchemes
+
+    implicitWidth: parent ? parent.width : 0
+    columns: Math.max(2, Math.min(3,
+        Math.floor(Math.max(1, width) / (Tokens.cellH - Tokens.s2))))
+    columnSpacing: Tokens.s2
+    rowSpacing: Tokens.s2
+
+    function formatScheme(value) {
+        const name = String(value).replace(/^scheme-/, "").replace(/-/g, " ");
+        return name.charAt(0).toUpperCase() + name.slice(1);
     }
+
+    function restartLoad() {
+        root.loadedCount = 0;
+        loadTimer.restart();
+    }
+
+    onColorSchemesChanged: root.restartLoad()
+    onSourceChanged: root.restartLoad()
 
     Repeater {
         model: root.colorSchemes
-        
+
         delegate: ColorPreviewButton {
+            required property int index
+            required property var modelData
             Layout.fillWidth: true
             Layout.preferredHeight: root.cellHeight
             showTooltip: root.showTooltips
 
-            colorScheme: modelData
-            colorSchemeDisplayName: formatText(modelData)
-            customTheme: root.customTheme
-            builtInTheme: root.builtInTheme
-            
+            themeCard: root.source === "themes" ? modelData : null
+            colorScheme: root.source === "themes"
+                ? "" : String(modelData)
+            colorSchemeDisplayName: root.source === "themes"
+                ? String(modelData?.label ?? modelData?.id ?? "")
+                : root.formatScheme(modelData)
             shouldLoad: index < root.loadedCount
 
             onHoveredChanged: {
@@ -78,22 +64,15 @@ GridLayout {
 
     Timer {
         id: loadTimer
-        interval: 20
+        interval: Tokens.snap
         repeat: true
-        running: false
-
         onTriggered: {
-            // A few ticks for the whole grid. Swatches read shared caches, so
-            // one-per-tick only stretched a cheap load into a second of
-            // swatches popping in one after another.
-            root.loadedCount += Math.max(1, Math.ceil(root.colorSchemes.length / 3));
-
+            root.loadedCount = Math.min(root.colorSchemes.length,
+                root.loadedCount + Math.max(1, Math.ceil(root.colorSchemes.length / 3)));
             if (root.loadedCount >= root.colorSchemes.length)
-                loadTimer.stop();
+                stop();
         }
     }
 
-    Component.onCompleted: {
-        Qt.callLater(() => loadTimer.start());
-    }
+    Component.onCompleted: root.restartLoad()
 }

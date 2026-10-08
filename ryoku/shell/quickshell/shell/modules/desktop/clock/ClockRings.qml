@@ -21,7 +21,7 @@ Item {
     readonly property color inkSoft: Theme.inkSoftOn2(face.underL, face.inkColorA)
 
     readonly property var t: Clk.parts(Now.date, Config.clock24h)
-    readonly property real s: Config.clockScale
+    property real s: 1
     readonly property real dia: Math.round(232 * s)
 
     implicitWidth: dia

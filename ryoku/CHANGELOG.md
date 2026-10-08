@@ -3,16 +3,80 @@
 ## Unreleased
 
 ### Added
-- **The Stage Editor is the desktop's edit mode.** Editing widgets opens the
-  shrinking chrome ported from ii-p3drovfx's Edit Mode: the toolbar frames one
-  monitor at a time (Desktop | Widgets | Wallpaper | Style, undo, redo, Done),
-  the drawer lists Ryoku's real catalogue (built-ins, Shima and Python faces,
-  installed plugin sets), and every edit - a catalogue add, a wallpaper frame,
-  a style preset, a widget drag, resize or scale - lands in one undo stack.
-  The old Edit widgets bar, its picker and its Reset button are gone: the
-  desktop is the document and undo is the walk-back. Bar, dock and lock
-  editing stay in the Hub (`ryoku/shell/quickshell/stage/`,
-  `shell/modules/stage/`, docs/stage.md).
+- **The window-manager seam can vet plugins and read foreign configs.** Each
+  provider declares which foreign shell interfaces it serves, and
+  `ryoku wm compat <dir>` scans a plugin folder for the ones it needs and says
+  whether the running compositor can run it. Providers also answer
+  `import metadata|scan`, so the niri provider can read a niri config tree and
+  hand back a neutral mapping. `ryoku wm outputs <file>` applies a neutral output
+  layout through the same seam (`wm/compat.go`, `wm/niri/import_*.go`,
+  `cli/wm.go`).
+- **New accounts start with the Ryoku default rice.** The packaged look carries
+  the maintainer's current QS Bar, window styling, visualizer, input and brand
+  choices without machine-specific paths, keyboard layout, app pins or a fixed
+  wallpaper. On the first graphical login Ryoku waits for the desktop services,
+  applies the look, and chooses a random wallpaper from the seeded library
+  (`assets/rices/default/`, `shell/scripts/ryoku-session-intro`).
+- **Prowl lives inside Rashin.** The console's Prowl section (Overview,
+  Providers, Routing, Activity, Projects, Harnesses, Toolkit) is the one place
+  to run Prowl, Ryoku's model gateway and code index: add API keys, keyless free
+  tiers, browser sign-ins and custom endpoints; build routing sets from presets
+  and order their models; read traffic, failures and gateway logs; register and
+  reindex projects; connect coding harnesses. It replaces the Agents and Models
+  sheets. The daemon proxies the gateway's management API under `/api/prowl/`
+  with the machine token and answers only its own console
+  (`rashin/web/src/lib/pages/prowl/`, `rashin/backend/prowlgw.go`).
+- **Rashin's chat picker lists Prowl once and keeps the agent's own models.**
+  Prowl's route takes one Active set entry instead of three, the models from the
+  agent's other providers stay available, and picking Active set switches back
+  to Prowl from any of them (`rashin/backend/acp.go`).
+- **Prowl ships off and starts with Rashin.** `ryoku-prowl.service` (port 8788)
+  has no install target: `ryoku-rashin.service` wants it and it is bound to
+  Rashin, so enabling Rashin brings both up and disabling Rashin stops both
+  (`rashin/systemd/`).
+- **Every harness you connect routes through Prowl.** Connecting Hermes, Claude
+  Code, Codex, opencode or Oh My Pi wires the Ryoku pointer and skills and makes
+  Prowl's `auto` route that harness's default model; Disconnect restores the
+  model it had. With no provider that can serve `auto`, the harness waits as
+  pending and routes once one connects. Detected harnesses keep their own models:
+  `ryoku-rashin wire` and updates re-route only harnesses you connected, so
+  Disconnect is never undone by a later update. Rashin's own chat follows suit:
+  choosing its chat agent connects it. New chats start on Prowl's `auto`, and
+  the agent's other models stay one pick away (`rashin/backend/agents.go`,
+  `rashin/backend/harnesses.go`, `rashin/backend/chatbackend.go`).
+- **The Stage Editor is the desktop's edit mode.** Its toolbar frames one
+  monitor at a time, names the edited display and cycles displays from its chip,
+  while the drawer keeps the active catalogue instead of repeating those tabs.
+  Widget frames appear on hover or selection with four resize handles, a size
+  badge, snapping guides, and Settings and Remove actions. Settings opens a
+  hidden drawer page with quick size, lock, depth, and remove controls above the
+  full widget inspector. Every committed edit joins one undo stack
+  (`shell/quickshell/shell/modules/stage/`,
+  `shell/quickshell/stage/modules/ii/editMode/`).
+- **The live desktop is the editor's document.** Its drawer lists Ryoku's real
+  built-ins, Shima and Python faces, and installed plugin sets. Multi-select,
+  group moves, keyboard nudging, alignment, ryogami's per-screen wallpaper and
+  framing, style presets, desktop icons, and per-output widget layouts all work
+  on the rounded live card. The desktop menu has Wallpaper and Search in its
+  quick row and one Edit desktop action; bar, dock, and lockscreen editing stay
+  in the Hub (`shell/quickshell/shell/modules/desktop/`,
+  `shell/quickshell/stage/modules/ii/editMode/`).
+- **The visualizer is edited instance by instance in the Stage Editor.** The
+  catalogue leads with a gallery of every look, then Look, Place, Colour,
+  Motion, Shape, and Field controls. Each `visualizer:<index>` has its own frame
+  and grip; selecting it retargets the catalogue. `Super+Alt+M` opens the
+  catalogue with an instance selected
+  (`shell/quickshell/shell/modules/visualizer/`,
+  `shell/quickshell/shell/modules/stage/StageVisualizerPage.qml`,
+  `shell/quickshell/shell/modules/stage/StageWidgetProvider.qml`).
+- **Depth has its complete scene workflow in the Stage Editor.** Scene, Layers,
+  Look, Motion, and Front tabs cover Plain, Depth, Parallax, cut progress and
+  recovery, model quality and removal, per-layer placement, look and motion
+  controls, and which widgets rise over the subject. Picture and PNG pickers,
+  confirmed cut-out clearing, and a live preview stay in the catalogue
+  (`shell/quickshell/shell/modules/stage/StageDepthPage.qml`,
+  `shell/quickshell/shell/modules/stage/StageDepthOptions.qml`,
+  `shell/quickshell/shell/modules/stage/StageDepthHero.qml`).
 - **Rashin splits into a Ryoku lane and a Chat lane.** The Ryoku lane is the
   machine agent: the Needle with the vault, the `ryoku` skill, the wiki, prowl
   over the Ryoku source and the approval modes, on the Alt+Space bar, in the
@@ -121,7 +185,118 @@
   physical pixels instead of guessing from the reported height
   (`ui/Singletons/Wm.qml`).
 
+### Changed
+- **The fast lane asks Prowl.** Quick asks post to Prowl's
+  `/v1/chat/completions` on a route (`auto`, an axis such as `auto:fast`, or one
+  of your sets) instead of calling a provider directly. `ryoku-rashin backend
+  <route>` and the Ask bar pick it, and keys left in `~/.config/ryoku/rashin.env`
+  are imported into Prowl once (`rashin/backend/quick.go`).
+
+### Removed
+- **Gemini is no longer a chat agent.** Gemini CLI speaks neither the OpenAI nor
+  the Anthropic API, so it cannot route through Prowl
+  (`rashin/backend/chatbackend.go`).
+- **Rashin no longer knows prowl-agent.** It runs only the `prowl` binary, and
+  the standalone `prowl api` server it used to spawn is replaced by the
+  gateway's own code routes.
+- **Desktop composition no longer has a second settings page in the Hub.**
+  Depth, visualizer, and widget editing live only in the Stage Editor. The
+  retired `desktop-scene`, `desktop-scene-visualizer`,
+  `desktop-scene-widgets`, `stage`, `visualizer`, and `widgets` links open the
+  matching editor catalogue, while the desktop menu's Settings row opens the
+  Hub normally (`hub/quickshell/pages/DesktopScenePage.qml`,
+  `hub/quickshell/schema/DesktopScenePage.js`, `shell/ipc/control.go`).
+
 ### Fixed
+- **The Prowl pages fit their window.** Overview's traffic and live-route cards
+  span the page again instead of squeezing into half of it, where numbers ran
+  past the card edge and left a tall empty card. Activity stacks its platform
+  and model tables while they would be cut off, and the Toolkit and Rashin-lanes
+  cards switch to their compact layout before they overflow
+  (`rashin/web/src/lib/pages/prowl/`).
+- **Console card headings keep their kanji gloss beside the title.** Long
+  descriptions no longer let the gloss drift into the middle of the card
+  (`rashin/web/src/lib/ui/Card.svelte`).
+- **Project cards keep each number under its label.** Values no longer push
+  across the column divider, and harness details line up the same way
+  (`rashin/web/src/app.css`).
+- **Visualizers drag like every other widget in the Stage Editor.** The frame
+  owns the move, so the look follows the pointer one to one, snaps to the same
+  guides, moves in a group, nudges with the arrows, and writes
+  `visualizer.json` once on release instead of easing behind the pointer and
+  rewriting the store every frame. The size grip and turn dot still work
+  (`shell/quickshell/shell/modules/visualizer/`,
+  `shell/quickshell/shell/modules/stage/StageSelection.qml`).
+- **Every Desktop icons setting does something.** Show icons no longer writes
+  the opposite value. Start from, Fill direction, Spacing, Edge margin, and Keep
+  clear of panels re-lay the icons already on the desktop as one undo step,
+  sorting orders folder and stack contents too, and the Auto label style follows
+  the wallpaper's lightness again
+  (`shell/quickshell/stage/modules/ii/editMode/EditDesktopIconsPage.qml`,
+  `shell/quickshell/stage/modules/ii/background/shortcuts/`).
+- **Desktop folders are real folders.** Add apps to desktop highlights an app
+  wherever it is, including inside a folder or the Apps stack, says where it
+  is, and can add straight into a folder or a new one; an app is never placed
+  twice. Folders can be created from the desktop menu or the Desktop icons
+  page, renamed in place, filled from the same app picker, and dissolved, and
+  each app inside has Open, Take out, Move to folder, and Remove
+  (`shell/quickshell/stage/modules/ii/background/shortcuts/`,
+  `shell/quickshell/shell/modules/desktop/DesktopContextMenu.qml`).
+- **Every widget moves in the Stage Editor again.** A press anywhere inside a
+  widget's frame selects it and a drag moves it, whatever the widget's own
+  buttons are and whichever bar style is on, for built-ins, Shima and Python
+  faces, and store tiles alike; a selected group still moves together with one
+  undo step. Double-click or right-click opens the widget's settings. A locked
+  widget now shows a lock, says "Locked" when dragged, and has Lock and Unlock in
+  its action strip instead of silently refusing to move
+  (`shell/quickshell/shell/modules/stage/StageOutline.qml`,
+  `shell/quickshell/shell/modules/desktop/WidgetSlot.qml`,
+  `shell/quickshell/shell/modules/desktop/PluginDesktopSlot.qml`).
+- **The framing dock's turn and mirror buttons work every time.** After a wheel,
+  pinch, or touchpad zoom the steps were never written and the preview stopped
+  following the dock, so a turn or mirror saved but did not show, and the next
+  drag overwrote it. The settled steps are written now, the dock's buttons take
+  the click even when the pointer drifts, and a click between buttons no longer
+  reaches the picture's drag or double-click reset
+  (`shell/quickshell/stage/services/WallpaperLayout.qml`,
+  `shell/quickshell/stage/modules/ii/editMode/EditWallpaperFramingOverlay.qml`).
+- **Wallpaper framing stays where it was released and every layer follows it.**
+  Dragging after a zoom no longer bounces when the committed record reloads,
+  and mirror or rotation redraws the shown picture after a reveal transition.
+  Cut-outs and the Parallax backdrop now share the wallpaper's zoom, offset,
+  rotation, and mirror. Widgets, icons, and the visualizer dim and stop taking
+  input during framing (`shell/quickshell/stage/services/WallpaperLayout.qml`,
+  `shell/quickshell/shell/modules/wallpaper/Backdrop.qml`,
+  `shell/quickshell/shell/modules/wallpaper/WallpaperFramedPlane.qml`,
+  `shell/quickshell/shell/modules/stage/StageLayer.qml`,
+  `shell/quickshell/shell/modules/stage/StageBackdrop.qml`).
+- **Desktop icons appear and respond as soon as their store is ready.** A late
+  store load no longer leaves them hidden; adding and removing apps updates the
+  desktop at once, and adding an app unhides the layer. Right-click opens the
+  icon's own Open, Rename, Details, Copy, and Remove dialog, and files, folders,
+  and web or mail links can be dropped onto the desktop
+  (`shell/quickshell/stage/modules/ii/background/shortcuts/`).
+- **Stage Style changes the live palette everywhere.** Mode, wallpaper scheme,
+  source colour, and named themes now use the same `matugen.json` and
+  `shell.json` seams as the Hub, so the page shows the real current state and
+  every change can be undone. Saved looks include the wallpaper, theme, mode,
+  scheme type, and source colour
+  (`shell/quickshell/stage/modules/ii/editMode/EditStylePage.qml`,
+  `shell/quickshell/stage/modules/ii/editMode/EditStylePresets.qml`).
+- **Removing one visualizer no longer removes the rest.** Remove targets only
+  the selected instance, turns the visualizer off only after the last one is
+  gone, and undo restores the instance at its original index with all settings
+  (`shell/quickshell/shell/modules/visualizer/Singletons/Config.qml`,
+  `shell/quickshell/shell/modules/stage/StageWidgetProvider.qml`).
+- **Canvas resizing writes once instead of on every pointer move.** The frame
+  previews size locally, commits the per-display store on release, and creates
+  one undo entry, keeping resize smooth and store reloads out of the gesture
+  (`shell/quickshell/shell/modules/desktop/WidgetSlot.qml`,
+  `shell/quickshell/shell/modules/desktop/PluginDesktopSlot.qml`,
+  `shell/quickshell/shell/modules/stage/StageOutline.qml`).
+- **Setting rows reserve the full requested control width.** `controlWidth` is
+  no longer truncated to an integer, so buttons such as Choose keep their label
+  instead of eliding it (`ui/SettingRow.qml`).
 - **The keypad choice reaches the login greeter.** Both compositor providers
   now publish the session's effective numlock state to
   `/var/lib/ryoku/greeter-numlock` on every apply (the same hand-off shape as

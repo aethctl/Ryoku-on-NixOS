@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- **`install-qylock` says what it is waiting for.** When a lock screen or a
+  qylock guard holds one of its locks, it names the lock file and how to find
+  the holder before waiting, instead of hanging silently.
+
 ### Changed
 - **The login pointer is visible again.** On a hybrid laptop whose panel is on
   the iGPU, the greeter still forced weston's Pixman renderer -- a workaround

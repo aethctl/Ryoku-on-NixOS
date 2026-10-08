@@ -69,8 +69,9 @@ private:
     void configureCardPipeline(QRhiGraphicsPipeline *pipeline);
     void buildPipeline(QRhi *rhi);
     void buildScenePipeline(QRhi *rhi);
-    void updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, QRhi *rhi,
-                              QRhiResourceUpdateBatch *batch, const std::vector<CardInstance> &data);
+    quint32 updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, QRhi *rhi,
+                                 QRhiResourceUpdateBatch *batch,
+                                 const std::vector<CardInstance> &data);
     bool transitionActive() const { return !m_transitionFrom.empty(); }
 
     QQuickWindow *m_window;
@@ -95,6 +96,8 @@ private:
     std::unique_ptr<QRhiBuffer> m_instanceBuffer;
     std::unique_ptr<QRhiBuffer> m_fromBuffer;
     std::unique_ptr<QRhiBuffer> m_uniformBuffer;
+    quint32 m_uploadedInstanceCount = 0;
+    quint32 m_uploadedFromCount = 0;
     std::unique_ptr<QRhiSampler> m_mipSampler;
     std::unique_ptr<QRhiSampler> m_flatSampler;
     std::unique_ptr<QRhiTexture> m_preview;

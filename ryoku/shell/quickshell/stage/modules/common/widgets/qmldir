@@ -31,6 +31,7 @@ StyledRectangularShadow 1.0 StyledRectangularShadow.qml
 StyledScrollBar 1.0 StyledScrollBar.qml
 StyledSwitch 1.0 StyledSwitch.qml
 StyledText 1.0 StyledText.qml
+StyledTextInput 1.0 StyledTextInput.qml
 StyledTextContextMenu 1.0 StyledTextContextMenu.qml
 StyledTextContextMenuLoader 1.0 StyledTextContextMenuLoader.qml
 StyledToolTip 1.0 StyledToolTip.qml

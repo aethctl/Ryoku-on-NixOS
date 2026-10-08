@@ -3,15 +3,13 @@ import QtQuick.Layouts
 import stage.modules.common
 import stage.modules.common.widgets
 
-/**
- * Material 3 expressive style toolbar.
- * https://m3.material.io/components/toolbars
- */
+// The Stage toolbar is a compact Ryoku instrument strip: flat paper, a
+// hairline edge and one shared corner.
 Item {
     id: root
 
-    property bool enableShadow: true
-    property real padding: 3
+    property bool enableShadow: false
+    property real padding: Appearance.sizes.space2
     property alias colBackground: background.color
     property alias spacing: toolbarLayout.spacing
     default property alias toolbarData: toolbarLayout.data
@@ -33,15 +31,16 @@ Item {
     Rectangle {
         id: background
         anchors.fill: parent
-        color: Appearance.m3colors.m3surfaceContainer
+        color: Appearance.colors.colLayer0
         implicitHeight: Appearance.sizes.toolbarHeight
         implicitWidth: toolbarLayout.implicitWidth + root.padding * 2
-        readonly property int fullRadius: Config.options.appearance.sharpMode ? Appearance.rounding.full : height / 2
-        radius: fullRadius
+        radius: Appearance.rounding.small
+        border.width: 1
+        border.color: Appearance.colors.colOutline
 
         RowLayout {
             id: toolbarLayout
-            spacing: 4
+            spacing: Appearance.sizes.space2
             anchors {
                 fill: parent
                 margins: root.padding

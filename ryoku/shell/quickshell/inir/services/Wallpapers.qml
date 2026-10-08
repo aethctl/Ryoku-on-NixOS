@@ -416,6 +416,8 @@ Singleton {
         // The daemon resolves a clip's poster before it swaps, so a video path
         // needs no still handling here.
         const command = ["ryogami", "wallpaper", "set", clean]
+        if (target === "workspace")
+            command.push("--workspace")
         const monitor = String(monitorName ?? "")
         if (monitor.length > 0)
             command.push("--screen", monitor)

@@ -353,8 +353,8 @@ it in `Ryoku.Ui` and use it somewhere in the same change.
 
 Under `ryoku/ui/lib/` sit the four maths files, each with a `.test.mjs` beside
 it, because they are the arithmetic a component cannot eyeball: `spectrum.js`
-(band resampling), `place.js` (box tilt and rotation, shared by `SpectrumField`
-and the visualiser's `Placer` so the preview and the real thing cannot drift),
+(band resampling), `place.js` (the box's tilt and rotation maths, used by
+`SpectrumField` so previews and the live look cannot drift),
 `keypress.js` (the keypress stack), and `hero.js` (image framing, imported by
 relative path rather than exported, since only `HeroCrop` needs it).
 
@@ -501,22 +501,22 @@ and per-monitor visibility from `ShellState`.
   controls out of the bar. The monitor-local menu manager owns those cards and
   the bounded frame menus. The global Controls panel lives in
   `ryoku/shell/quickshell/shell/modules/sidebar/`; see `docs/sidebars.md`.
-- **dock** an app island cluster on a screen edge, its own shell surface
-  (`shell/modules/dock/DockSurface.qml`, one per monitor) rather than a part of
-  any one bar, so it rides every bar style. Pinned apps hold a stable order you
-  set, then a separator, then whatever else is running; drag an island to
-  reorder the pins. Autohide keeps it as a thin peek strip that reveals on a
-  slow hover along the edge; off reserves its space and always shows it.
-  Hovering magnifies an island to 1.4, shows the app name as a hover label, and
-  grows a live window-preview strip (thumbnail, title, window count, close);
-  left click activates, cycles or launches, middle click opens a fresh
-  instance, right click pins or unpins. An optional media chip rides the end of
-  the band. The top-level `dock` object in `shell.json` drives it: `enabled`
-  (off by default), `edge` (`auto` = opposite the bar, or a fixed side),
-  `autohide`, `pinned`, `magnify`, `frost`, `shadow`, `labels` and `media`.
-  Sumi's `RailDock` rail widget is the in-band alternative: the same pin model
-  on the frame rail, no magnify and no preview, with a running indicator on the
-  outer edge.
+- **dock** a per-monitor shell surface that is independent of the selected bar
+  style. `UniversalDockHost.qml` loads exactly one design: Ryoku's paper islands,
+  the Python flowing dock, Shima's notched capsule, or none. All three consume
+  the same running-window model and canonical desktop-entry pins from the
+  top-level `dock` object in `shell.json`, so changing designs keeps app order
+  and aliases cannot create duplicate pins. The shared controls are enabled
+  state, edge, autohide, icon size, magnification and pin order; each design's
+  own look lives below `dock.python`, `dock.shima`, or the Ryoku look keys.
+  Stage Editor's Dock section is the only settings surface. It carries design
+  previews, shared placement and behaviour, each design's details, and pin
+  ordering. Older dock pages only open that section. The selected design is
+  loaded lazily; unselected designs do not create windows or models.
+  Ryoku's design places pinned apps first, then a separator and running apps.
+  It can magnify, label and preview windows, and optionally show media. Sumi's
+  `RailDock` remains an in-bar alternative, but reads and writes the same shared
+  pins and app identities.
 - **wallpaper** the background itself, drawn on the bottom layer with its own
   reveal shader for transitions: 22 presets the daemon draws from at random on
   each switch, from the crossfades, directional sweeps and circle irises to a
@@ -530,16 +530,18 @@ and per-monitor visibility from `ShellState`.
   glance (glyph, temperature, city) or the full card (condition, humidity / wind
   / feels, three days); notes is a scratch pad whose text lives in
   `~/.local/state/ryoku/desktop-notes.txt`, not in a config key, and which holds
-  the keyboard only while it has focus. Each sits
-  on auto (the wallpaper's calmest, most tonally even region, re-followed on
-  every wallpaper change), a compass zone, or free pixels; drag to move (grid
-  snap, which turns auto into free), scroll to resize, right click for the
-  widget's own menu. A drag draws a faint grid and centre guides under the
-  widgets, and the release flashes the edges and any centre line it snapped to.
-  The desktop's own right-click menu toggles each widget, opens the visualiser
-  placement, and reaches Settings and Reload shell. Each widget is configured in
-  place -- select it while arranging to set its size, look and position, or open
-  its own right-click menu for everything else.
+  keyboard only while it has focus. Each sits on auto (the wallpaper's calmest,
+  most tonally even region, re-followed on every wallpaper change), a compass
+  zone, or free pixels. In the Stage Editor, a widget's frame appears on hover
+  or selection with four corner handles, a size badge, and Settings and Remove.
+  Moves snap to the grid, the card centre, and other widgets' edges and centres;
+  Alt keeps a move free. Resize previews stay local, snap to 5% unless Shift is
+  held, and commit once on release. Double-clicking a handle resets to 100%.
+  Double-clicking the widget or choosing Settings opens its named drawer page
+  with quick size, lock, depth, and remove controls above its full inspector.
+  The desktop's own right-click menu has Wallpaper and Search in its quick row.
+  Its single accent row, Edit desktop, opens the Stage Editor on that monitor;
+  Settings and Reload shell remain below it.
 - **the desktop spectrum** the audio visualiser, described in full below.
 
 ### Summoned
@@ -553,7 +555,7 @@ and per-monitor visibility from `ShellState`.
 |**Ask**|`Alt+Space`|quick Rashin answers, chat, tools, web search, and the optional desktop bubble|
 |**clipboard**|`Super+V`|clipboard history at the bottom edge, with fuzzy search and a starred pane|
 |**wallpaper and theme menu**|`Super+W`|the wallpaper carousel and theme picker|
-|**visualiser placement**|`Super+Alt+M`|grab the spectrum box and aim it|
+|**visualiser placement**|`Super+Alt+M`|open the Stage Editor's Visualizer catalogue|
 |**voice**|`Super+grave`|speech to text with a live mic wave|
 |**Ryoku Settings**|`Super+,`|the Hub|
 
@@ -745,42 +747,36 @@ maps that bound onto the box. The quad then touches all four sides at every lean
 crosses none of them, which `place.test.mjs` pins as an invariant, and the placement
 guides stay honest without the gestures having to invert a projection.
 
-The box is placed by hand rather than by numbers. `Super+Alt+M`, the Move
-visualiser row in the desktop's right-click menu, or the Edit widgets toolbar's
-`Visualizer...` button starts placement mode. The box takes an outline, a grip on its corner and a
-dot on a stem above its top edge: a drag anywhere moves it, the grip or the wheel
-sizes it, and the dot turns it through a full circle. Each step writes to
-`visualizer.json` as it happens, and right click, Escape or the keybind ends it.
+Each visualizer instance is placed by hand rather than by numbers.
+`Super+Alt+M` or
+`qs -c shell ipc call desktop editSection visualizer` opens the Stage Editor's
+Visualizer catalogue with an instance selected. Every instance has its own
+frame and grip (`visualizer:<index>`); selecting one retargets the catalogue.
+Dragging moves it, a corner sizes it, and the top handle turns it. The preview
+stays local during a resize, then one write and one undo step land on release.
+Remove deletes only that instance. The visualizer turns off when the last
+instance is removed, and undo restores a removed instance at its index with all
+of its settings.
 
-An editing bar (`EditBar.qml`) comes with it, fixed to the bottom of the screen and
-stepping to the top when the box would be under it: a readout of the thing being
-moved is the one thing on screen that must not move with it. It carries the look
-itself, and the knobs you judge by eye rather than by number: the current look drawn
-as a silhouette (click for a tray of all thirteen, or wheel the chip to walk them),
-bands, mirror, peak caps, gain, smoothing, the live angle with a SQUARE reset, the
-two leans with a LEVEL reset, the size, a gear that opens a square drawer of
-everything the bar has no room for (`SettingsPopup.qml`: playback, shape, and the
-field's deep knobs, scrollable, dimming what the current look ignores), FLIP and
-DONE. `F` flips, `M` mirrors, `P`
-toggles peak caps, `R` squares, `S` opens the drawer, `[` and `]` walk the looks.
-The point is that a look
-is tuned where you can see it,
-on the wallpaper, instead of behind the Hub's window; the Hub keeps the look
-picker and the enable switch.
+The catalogue leads with a gallery of every look, followed by Look, Place,
+Colour, Motion, Shape, and, where useful, Field chips. Place offers width,
+height, across, down, and turn, with Centre, Square, Full width, Top, Middle,
+and Bottom actions. Done leaves the editor; Escape first closes the open panel
+and clears the selection.
 
-The bar is built from `Ryoku.Ui`'s own controls (`Btn`, `Step`, `Sw`, `Slid`,
-`Gallery`) at the shell's own token metrics, so it is the shell's idiom at the
-shell's size rather than a surface with a look of its own, and the tray is the Hub's
-gallery with the Hub's painter (`VizStyles`), so what a look looks like is drawn from
-one catalogue. Each control carries a tracked eyebrow naming it, and the gestures sit
-under a hairline inside the plate: an instruction is not a control, and outside the
-plate it was unreadable over a picture. A knob that means nothing for the look in
-hand dims rather than vanishing, since a bar that reflows as you walk the catalogue
-cannot be aimed at; `Config` owns which those are (`peaksApply`, `mirrorApplies`) and
-the renderer reads the same rule, so the switch that dims is the one the shader
-ignores. Every edit from the bar settles through the same coalescer as a placement
-gesture: the file is watched, so a write returns as a reload, and the look changes
-the instant the adapter does because the render reads the adapter, not the file.
+The Stage island maps its paper, ink, spacing, and Space Grotesk, Fraunces, and
+mono type through `modules/common/Appearance.qml` to Ryoku.Ui tokens. A look is
+tuned where it is visible, on the live wallpaper, rather than in a detached
+placement surface.
+
+The catalogue uses the desktop menu's rows (`MenuRow`, `MenuSlider`,
+`MenuChip`, `MenuInkPicker`) and the shared `Gallery` painter (`VizStyles`), so
+what a look looks like is drawn from one catalogue. A knob that means nothing
+for the look in hand hides rather than dims; `Config` owns those rules
+(`peaksApply`, `mirrorApplies`) and the renderer reads the same answer. Every
+committed edit settles through the same coalescer: the file is watched, so a
+write returns as a reload, and the render reads the adapter rather than the
+file.
 
 Every gesture applies the pointer's delta from where it was pressed rather than its
 absolute position, so nothing jumps out from under the cursor, and the box eases
@@ -810,19 +806,18 @@ one transform instead of re-deriving every band, its reflection and its bloom; t
 box itself stays axis-aligned, and the wallpaper tone is read from the turned
 region the look actually covers rather than from the box.
 
-Placement runs on its own overlay surface (`Placer.qml`) rather than lifting the
-spectrum's own, which is click-through for life: a masked surface does not start
-taking a pointer again just because the region is swapped. While a box is being
-aimed the spectrum rides the top layer so a window cannot hide what is being
-placed, and aiming one that is off turns it on first, since aiming nothing places
-nothing. Ending placement hands the layer back to the mode, so it drops behind
-windows again unless the overlay is what the user chose.
+Placement runs inside the lifted desktop surface while the Stage Editor frames
+the monitor: the spectrum's own surface is click-through for life and a masked
+surface does not start taking a pointer again just because the region is
+swapped, so the grip rides the desktop instead, which already takes presses
+while composing. Aiming a look that is off turns it on first, since aiming
+nothing places nothing; outside the editor the overlay mode still raises the
+spectrum's own surface over windows.
 
-Whether the spectrum runs at all is the persisted `enabled` key, so the keybind, the
-Hub's switch and the next restart all read one answer; only the layer, desktop or
-overlay, is per-monitor memory. It was in-memory state before, which meant a restart
-started at off with `enabled` still true, and the Hub's switch could not turn a
-running shell's spectrum on.
+Whether the spectrum runs at all is the persisted `enabled` key, so the
+keybind, the catalogue, and the next restart all read one answer; only the
+layer, desktop, or overlay is per-monitor memory. It was in-memory state before,
+which meant a restart started at off with `enabled` still true.
 
 The `curtain` is the one look that reads the rest of the shell: its surface
 honours exclusive zones instead of ignoring them, so it starts where the bar ends

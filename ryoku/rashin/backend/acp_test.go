@@ -2,8 +2,11 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -331,4 +334,232 @@ func TestACPV2ImagesModelsSessions(t *testing.T) {
 	}
 	expectEvent(t, conn.Events(), "models")
 	expectEvent(t, conn.Events(), "replay_end")
+}
+
+func stubChatProwlProfileSets(t *testing.T, lookup func(context.Context) (string, []string, error)) {
+	t.Helper()
+	previous := chatProwlProfileSets
+	chatProwlProfileSets = lookup
+	t.Cleanup(func() {
+		chatProwlProfileSets = previous
+	})
+}
+
+func hermesAdvertisedModels() []ModelInfo {
+	return []ModelInfo{
+		{ID: "openai-codex:gpt-5.6-sol", Name: "GPT 5.6 sol"},
+		{ID: "openai-codex:gpt-5.6-mini", Name: "GPT 5.6 mini"},
+		{ID: "openai-codex:gpt-5.5", Name: "GPT 5.5"},
+		{ID: "openai-codex:gpt-5.5-mini", Name: "GPT 5.5 mini"},
+		{ID: "openai-codex:gpt-5.4", Name: "GPT 5.4"},
+		{ID: "openai-codex:gpt-5.3", Name: "GPT 5.3"},
+		{ID: "openai-codex:gpt-5.2", Name: "GPT 5.2"},
+		{ID: "custom:auto", Name: "Custom endpoint · auto", Description: "Provider: Custom endpoint • current"},
+		{ID: "prowl:auto", Name: "prowl · auto", Description: "Provider: prowl"},
+		{ID: "custom:prowl:auto", Name: "auto", Description: "Provider: prowl"},
+	}
+}
+
+func hermesSessionResult(models []ModelInfo) map[string]any {
+	available := make([]map[string]string, 0, len(models))
+	for _, model := range models {
+		available = append(available, map[string]string{
+			"modelId": model.ID, "name": model.Name, "description": model.Description,
+		})
+	}
+	return map[string]any{
+		"sessionId": "s1",
+		"models": map[string]any{
+			"currentModelId":  "custom:auto",
+			"availableModels": available,
+		},
+	}
+}
+
+func TestChatOfferedModelsMergesProwlAliasesAndKeepsHarnessModels(t *testing.T) {
+	lookups := 0
+	stubChatProwlProfileSets(t, func(context.Context) (string, []string, error) {
+		lookups++
+		return "Everything free", nil, nil
+	})
+	models := hermesAdvertisedModels()
+	conn := &acpConn{
+		agentID:      "hermes",
+		prowl:        chatAgentRouting{Active: true},
+		startedModel: "custom:auto",
+	}
+	conn.cacheProwlActiveSet(models)
+	conn.emitModels(modelState{models: models, current: "custom:auto", ok: true})
+
+	want := []ModelInfo{{ID: "custom:prowl:auto", Name: "Active set", Description: "Prowl · Everything free"}}
+	want = append(want, models[:7]...)
+	if got := conn.offeredModelsSnapshot(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("offered models = %#v, want %#v", got, want)
+	}
+	if lookups != 1 {
+		t.Fatalf("profile lookups = %d, want 1", lookups)
+	}
+}
+
+func TestChatOfferedModelsLookupFailureUsesPlainProwlDescription(t *testing.T) {
+	stubChatProwlProfileSets(t, func(context.Context) (string, []string, error) {
+		return "", nil, errors.New("gateway unavailable")
+	})
+	models := hermesAdvertisedModels()
+	conn := &acpConn{
+		agentID:      "hermes",
+		prowl:        chatAgentRouting{Active: true},
+		startedModel: "custom:auto",
+	}
+	conn.cacheProwlActiveSet(models)
+	conn.emitModels(modelState{models: models, current: "custom:auto", ok: true})
+	got := conn.offeredModelsSnapshot()
+	if len(got) != 8 || got[0] != (ModelInfo{ID: "custom:prowl:auto", Name: "Active set", Description: "Prowl"}) {
+		t.Fatalf("offered models = %#v", got)
+	}
+}
+
+func TestModelsEventNormalizesProwlAliasCurrent(t *testing.T) {
+	models := hermesAdvertisedModels()
+	conn := &acpConn{
+		agentID:      "hermes",
+		prowl:        chatAgentRouting{Active: true},
+		startedModel: "custom:auto",
+	}
+	conn.emitModels(modelState{models: models, current: "custom:auto", ok: true})
+	offered := conn.offeredModelsSnapshot()
+	if got := conn.modelsEvent(offered, "custom:auto").CurrentModel; got != "custom:prowl:auto" {
+		t.Fatalf("alias current = %q, want custom:prowl:auto", got)
+	}
+	if got := conn.modelsEvent(offered, "openai-codex:gpt-5.6-sol").CurrentModel; got != "openai-codex:gpt-5.6-sol" {
+		t.Fatalf("direct current = %q", got)
+	}
+}
+
+func TestChatOfferedModelsLeavesClaudeListUnchanged(t *testing.T) {
+	stubChatProwlProfileSets(t, func(context.Context) (string, []string, error) {
+		t.Fatal("Claude must not look up Prowl's active set")
+		return "", nil, nil
+	})
+	models := []ModelInfo{
+		{ID: "anthropic:opus", Name: "Opus"},
+		{ID: "anthropic:sonnet", Name: "Sonnet"},
+	}
+	conn := &acpConn{agentID: "claude", prowl: chatAgentRouting{Active: true}}
+	conn.cacheProwlActiveSet(models)
+	conn.emitModels(modelState{models: models, current: models[0].ID, ok: true})
+	if got := conn.offeredModelsSnapshot(); !reflect.DeepEqual(got, models) {
+		t.Fatalf("offered models = %#v, want %#v", got, models)
+	}
+}
+
+func TestPendingRoutingMergesMarkedAliasesOnly(t *testing.T) {
+	stubChatProwlProfileSets(t, func(context.Context) (string, []string, error) {
+		return "Everything free", nil, nil
+	})
+	models := hermesAdvertisedModels()
+	conn := &acpConn{
+		agentID:      "hermes",
+		prowl:        chatAgentRouting{Pending: true, Reason: "no provider"},
+		startedModel: "custom:auto",
+	}
+	conn.cacheProwlActiveSet(models)
+	conn.emitModels(modelState{models: models, current: "custom:auto", ok: true})
+	want := []ModelInfo{{ID: "custom:prowl:auto", Name: "Active set", Description: "Prowl · Everything free"}}
+	want = append(want, models[:8]...)
+	event := conn.modelsEvent(conn.offeredModelsSnapshot(), "custom:auto")
+	if event.Prowl != "pending" || event.ProwlReason != "no provider" || !reflect.DeepEqual(event.Models, want) {
+		t.Fatalf("models event = %#v, want %#v", event, want)
+	}
+	if event.CurrentModel != "custom:auto" {
+		t.Fatalf("current model = %q, want custom:auto", event.CurrentModel)
+	}
+}
+
+func TestSetModelSendsHarnessModelWhileRouted(t *testing.T) {
+	conn, agent := newTestPair(t)
+	defer conn.Close()
+	conn.agentID = "hermes"
+	conn.prowl = chatAgentRouting{Active: true}
+	conn.sessionID = "s1"
+
+	done := make(chan error, 1)
+	go func() { done <- conn.SetModel("openai-codex:gpt-5.6-sol") }()
+	request := agent.read()
+	if request.Method != "session/set_model" {
+		t.Fatalf("method = %q, want session/set_model", request.Method)
+	}
+	var params struct {
+		ModelID string `json:"modelId"`
+	}
+	if err := json.Unmarshal(request.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params.ModelID != "openai-codex:gpt-5.6-sol" {
+		t.Fatalf("model id = %q", params.ModelID)
+	}
+	agent.respond(*request.ID, map[string]any{})
+	if err := <-done; err != nil {
+		t.Fatalf("SetModel: %v", err)
+	}
+}
+
+func TestSessionNewReconcilesRememberedHarnessModel(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		saved     string
+		wantModel string
+	}{
+		{name: "direct model is reapplied", saved: "openai-codex:gpt-5.6-sol", wantModel: "openai-codex:gpt-5.6-sol"},
+		{name: "equivalent Prowl alias sends nothing", saved: "custom:auto"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stubChatProwlProfileSets(t, func(context.Context) (string, []string, error) {
+				return "Everything free", nil, nil
+			})
+			conn, agent := newTestPair(t)
+			defer conn.Close()
+			conn.agentID = "hermes"
+			conn.agentName = "Hermes"
+			conn.prowl = chatAgentRouting{Active: true}
+			saveSessionModel(test.saved)
+
+			done := make(chan error, 1)
+			go func() {
+				done <- conn.openSession("session/new", map[string]any{"cwd": "/tmp/vault"})
+			}()
+			request := agent.read()
+			if request.Method != "session/new" {
+				t.Fatalf("method = %q, want session/new", request.Method)
+			}
+			agent.respond(*request.ID, hermesSessionResult(hermesAdvertisedModels()))
+
+			if test.wantModel != "" {
+				setRequest := agent.read()
+				if setRequest.Method != "session/set_model" {
+					t.Fatalf("method = %q, want session/set_model", setRequest.Method)
+				}
+				var params struct {
+					ModelID string `json:"modelId"`
+				}
+				if err := json.Unmarshal(setRequest.Params, &params); err != nil {
+					t.Fatal(err)
+				}
+				if params.ModelID != test.wantModel {
+					t.Fatalf("model id = %q, want %q", params.ModelID, test.wantModel)
+				}
+				agent.respond(*setRequest.ID, map[string]any{})
+			}
+			if err := <-done; err != nil {
+				t.Fatalf("open session: %v", err)
+			}
+			if test.wantModel == "" {
+				select {
+				case unexpected := <-agent.lines:
+					t.Fatalf("unexpected request after session/new: %s", unexpected.Method)
+				default:
+				}
+			}
+		})
+	}
 }

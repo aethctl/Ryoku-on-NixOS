@@ -154,6 +154,7 @@ Singleton {
         console.log(`[Persistent] Migrated states.ai to modelId ${root.states.ai.modelId}`);
     }
 
+
     Timer {
         id: fileReloadTimer
         interval: 100
@@ -201,7 +202,6 @@ Singleton {
     FileView {
         id: persistentStatesFileView
         path: root.filePath
-
         watchChanges: true
         atomicWrites: true
         blockWrites: root.blockWrites

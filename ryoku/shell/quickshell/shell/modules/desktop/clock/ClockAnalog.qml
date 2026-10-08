@@ -21,8 +21,8 @@ Item {
 
     readonly property var t: Clk.parts(Now.date, Config.clock24h)
     readonly property color accent: Clk.pickAccent(Config.clockAccent, Theme.accentOn2(face.underL, face.inkColorA), Theme.brand, face.ink)
-    readonly property real dia: Math.round(220 * Config.clockScale)
-    readonly property real s: Config.clockScale
+    readonly property real dia: Math.round(220 * face.s)
+    property real s: 1
 
     implicitWidth: dia
     implicitHeight: dia

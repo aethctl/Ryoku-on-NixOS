@@ -23,6 +23,7 @@ Item {
     readonly property string style: root.cfg.styleId
     readonly property bool aura: root.style === "aura"
     readonly property bool polar: field.polar
+    readonly property var preview: Config.previewAt(root.index)
 
     // What the placement overlay needs: the look's box, and a colour lit for the
     // same wallpaper. The edge field owns the whole screen, like the frame, so
@@ -129,8 +130,8 @@ Item {
         // cfg owns the rule, so the bar dims the switch this binding ignores.
         peakCaps: root.cfg.peaks && root.cfg.peaksApply
         glow: root.cfg.bloom
-        boxX: root.cfg.x
-        boxY: root.cfg.y
+        boxX: root.preview ? root.preview.x : root.cfg.x
+        boxY: root.preview ? root.preview.y : root.cfg.y
         boxW: root.cfg.w
         boxH: root.cfg.h
         grow: root.cfg.grow

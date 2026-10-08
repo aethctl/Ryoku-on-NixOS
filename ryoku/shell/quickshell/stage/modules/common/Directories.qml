@@ -40,6 +40,10 @@ Singleton {
             : `${root.config}/quickshell/shell/scripts`)
 
     // Wallpaper + theme caches the copied services write into.
+    // Ryogami owns the wallpaper library and its generated 640×360 stills.
+    readonly property string ryogamiConfigPath: FileUtils.trimFileProtocol(`${root.config}/ryoku/ryogami.json`)
+    readonly property string ryogamiCachePath: FileUtils.trimFileProtocol(`${root.genericCache}/ryogami`)
+    readonly property string stageVideoPosterCachePath: FileUtils.trimFileProtocol(`${root.cache}/stage/video-posters`)
     readonly property string colorCachePath: FileUtils.trimFileProtocol(`${root.cache}/stage/colors`)
     readonly property string generatedMaterialThemePath: FileUtils.trimFileProtocol(`${root.cache}/stage/theme.json`)
     readonly property string wallpaperPreviewColorsPath: FileUtils.trimFileProtocol(`${root.cache}/stage/wallpaper-preview-colors.json`)

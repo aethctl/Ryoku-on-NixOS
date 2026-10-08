@@ -37,7 +37,7 @@ Singleton {
     property string activeAudioMode: "none"
     property bool audioFallback: false
 
-    // region capture: the box drawn as "WxH+X+Y" (global physical), set when a
+    // region capture: the box drawn as "WxH+X+Y" (global logical), set when a
     // region recording starts so RegionOverlay can draw the live boundary; ""
     // means a full monitor. A remembered box is valid only for the monitor layout
     // it was drawn in, so it is stamped with a cheap layout signature and dropped

@@ -29,22 +29,25 @@ ColumnLayout {
 
     signal selected(var value)
 
-    spacing: 6
+    spacing: Appearance.sizes.space2
     Layout.fillWidth: true
 
     StyledText {
         Layout.fillWidth: true
-        Layout.leftMargin: 6
+        Layout.leftMargin: Appearance.sizes.space2
         visible: root.label !== ""
         text: root.label
+        font.family: Appearance.font.family.monospace
         font.pixelSize: Appearance.font.pixelSize.smaller
         font.weight: Font.Medium
-        color: Appearance.colors.colOnSurfaceVariant
+        font.capitalization: Font.AllUppercase
+        font.letterSpacing: Appearance.font.trackLabel
+        color: Appearance.colors.colSubtext
     }
 
     Flow {
         Layout.fillWidth: true
-        spacing: 6
+        spacing: Appearance.sizes.space1
 
         Repeater {
             model: root.options
@@ -59,20 +62,23 @@ ColumnLayout {
                 // An option with no icon has nothing to collapse to.
                 readonly property bool labelShown: !root.compact || chip.current || chip.optionIcon === ""
 
-                implicitWidth: chipRow.width + 24
-                implicitHeight: 38
-                radius: Appearance.rounding.full
-                opacity: chip.available ? 1 : 0.4
+                implicitWidth: Math.max(52, chipRow.width + Appearance.sizes.space4)
+                implicitHeight: 24
+                radius: Appearance.rounding.small
+                opacity: chip.available ? 1 : 0.5
                 color: chip.current
-                    ? (chipMouse.containsPress ? Appearance.colors.colPrimaryActive
-                        : chipMouse.containsMouse ? Appearance.colors.colPrimaryHover
-                        : Appearance.colors.colPrimary)
-                    : (chipMouse.containsPress ? Appearance.colors.colSurfaceContainerHighestActive
-                        : chipMouse.containsMouse ? Appearance.colors.colSurfaceContainerHighest
-                        : Appearance.colors.colSurfaceContainerHigh)
+                    ? Appearance.colors.colSecondary
+                    : (chipMouse.containsPress ? Appearance.colors.colLayer1Active
+                        : chipMouse.containsMouse ? Appearance.colors.colLayer1Hover
+                        : "transparent")
+                border.width: 1
+                border.color: chip.current
+                    ? Appearance.colors.colSecondary
+                    : chipMouse.containsMouse ? Appearance.colors.colOutline
+                    : Appearance.colors.colOutlineVariant
 
                 readonly property color colOn: chip.current
-                    ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSurface
+                    ? Appearance.colors.colOnSecondary : Appearance.colors.colOnSurface
 
                 Behavior on color {
                     enabled: !Appearance.reducedMotion
@@ -89,7 +95,7 @@ ColumnLayout {
                 Row {
                     id: chipRow
                     anchors.centerIn: parent
-                    spacing: chip.labelShown ? 6 : 0
+                    spacing: chip.labelShown ? Appearance.sizes.space1 : 0
 
                     Behavior on spacing {
                         enabled: !Appearance.reducedMotion
@@ -100,7 +106,7 @@ ColumnLayout {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: chip.optionIcon !== ""
                         text: chip.optionIcon
-                        iconSize: 18
+                        iconSize: 16
                         fill: chip.current ? 1 : 0
                         color: chip.colOn
                     }
@@ -108,6 +114,7 @@ ColumnLayout {
                         anchors.verticalCenter: parent.verticalCenter
                         text: chip.optionLabel
                         font.pixelSize: Appearance.font.pixelSize.smaller
+                        font.weight: Font.Medium
                         color: chip.colOn
                         clip: true
                         width: chip.labelShown ? implicitWidth : 0

@@ -6,6 +6,7 @@ import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
 import stage.modules.common.functions
+import Ryoku.Ui.Singletons
 
 /**
  * The Wallpaper catalogue's screens, where they stand: each monitor drawn at
@@ -28,10 +29,10 @@ Item {
     readonly property var box: WallpaperLayout.screensBox
     // The map is as wide as the panel and at most this tall; the layout is
     // scaled to fit both and centred.
-    readonly property real maxHeight: 168
+    readonly property real maxHeight: Tokens.s7 * 3 + Tokens.s5
     readonly property real fit: root.box.width > 0 && root.box.height > 0
-        ? Math.min(root.width / root.box.width, root.maxHeight / root.box.height) : 0
-    readonly property real gap: 6
+        ? Math.min(Math.max(0, root.width) / root.box.width, root.maxHeight / root.box.height) : 0
+    readonly property real gap: Tokens.s2
 
     implicitHeight: Math.round(root.box.height * root.fit)
 
@@ -60,8 +61,8 @@ Item {
 
         x: (tile.modelData.x - root.box.x) * root.fit + root.gap / 2
         y: (tile.modelData.y - root.box.y) * root.fit + root.gap / 2
-        width: tile.modelData.width * root.fit - root.gap
-        height: tile.modelData.height * root.fit - root.gap
+        width: Math.max(1, tile.modelData.width * root.fit - root.gap)
+        height: Math.max(1, tile.modelData.height * root.fit - root.gap)
 
         // The selection ring (settings-expressive §3): 2.5px of primary,
         // standing 2px off the screen.
@@ -136,7 +137,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.margins: 6
             spacing: 4
-            width: Math.min(implicitWidth, tile.width - 12)
+            width: Math.max(0, Math.min(implicitWidth, tile.width - Tokens.s3))
 
             Rectangle {
                 visible: tile.coloursHere
@@ -167,8 +168,8 @@ Item {
 
             Rectangle {
                 id: nameTag
-                width: Math.min(nameLabel.implicitWidth + 16,
-                    tile.width - 12 - (tile.coloursHere ? nameTag.height + 4 : 0))
+                width: Math.max(0, Math.min(nameLabel.implicitWidth + Tokens.s4,
+                    tile.width - Tokens.s3 - (tile.coloursHere ? nameTag.height + Tokens.s1 : 0)))
                 height: 22
                 radius: Appearance.rounding.full
                 color: tile.current ? Appearance.colors.colPrimary : Appearance.colors.colSurfaceContainerHigh
@@ -196,9 +197,10 @@ Item {
         Row {
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: 6
-            spacing: 4
-            visible: !tile.current && opacity > 0
+            anchors.margins: Tokens.s2
+            spacing: Tokens.s1
+            visible: !tile.current && tile.width >= tile.actionSize * 2 + Tokens.s4
+                && tile.height >= tile.actionSize + Tokens.s3 && opacity > 0
             opacity: tile.hovered ? 1 : 0
             Behavior on opacity {
                 animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)

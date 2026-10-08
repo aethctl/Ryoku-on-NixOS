@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+- **The package power cutover only touches sessions Ryoku runs in.** The
+  `ryoku-desktop` hook used to pick up any Wayland session whose compositor has
+  a Ryoku provider. That included a rival shell's Hyprland session during a
+  shell install, where it started the Ryoku session inside that desktop. It now
+  skips sessions with no Ryoku daemon running. A failed cutover also stops its
+  qylock generation guard instead of leaving it holding the launch lock, which
+  blocked every lock screen and later `install-qylock` run.
+
+- **The base set gained the iRiS frame's fonts.** `ttf-rubik-vf` and
+  `ttf-readex-pro` join `base.packages`, both shipped from [ryoku], so every
+  install and update carries the numerals and title faces the frame's QML
+  hardcodes; without them the desktop renders on a fallback face with wrong
+  metrics.
+
+- **Lock, wake and lid each have one owner, and suspend now fails closed.** The
+  shell daemon bound to the foreground graphical session owns login1's delay
+  inhibitor and long-lived hard block. Before ownership moves, the outgoing
+  session is qylock-secured; every other online same-user session has its own
+  session-scoped qylock and foreground observer. Only the foreground session may
+  request suspend or unlock. Every shipped suspend path uses
+  `ryoku-shell suspend`, which refuses to sleep until qylock is
+  compositor-secure. Resume starts output and lighting recovery immediately,
+  bounds every provider attempt, and retries protection in order. `hypridle`
+  owns only timers. `ryoku-clamshell` owns lid events only for the active
+  session, follows login1 activity and owner restarts, and treats matching
+  close/open compositor edges as authoritative. AC plus an external display
+  stays live without an unnecessary lock; every other close uses the secure
+  transaction. Logind supplies the safe fallback when no session owns the
+  switch. Hyprland alone performs the panel handoff; niri keeps native topology.
+  Login, updates, package hooks and live checkout deploys use one guarded
+  session-lifecycle helper while they replace shell, idle, clamshell and
+  wallpaper owners; doctor stages qylock repairs under its generation guard for
+  the next managed activation. Lockscreen generations are leased end to end;
+  unlock substitutes a durable sleep block while a daemon generation restarts.
+  Failure leaves protection held until retry or reboot. See
+  `docs/compositors.md` and `system/hardware/README.md`.
+
 - **The GPU MUX knob is GUI-reachable without a terminal.** `ryoku-gpu-mux
   set` escalates through pkexec under a scoped polkit grant
   (`hardware/gpu/45-ryoku-gpu-mux.rules`, wheel, the one program), so the
@@ -43,6 +80,12 @@
   (`system/hardware/gpu/ryoku-gpu`, `tests/gpu-pin-policy.sh`).
 
 ### Added
+- `hardware/gpu/ryoku-gpu`: `order --effective [PATH]` prints the AQ_DRM_DEVICES
+  value the compositor would actually read, straight from the pin file, while
+  the plain `order` keeps reporting the policy's recommendation (and keeps
+  exiting 1 under a stored hybrid/passthrough choice). doctor's reverse-PRIME
+  guard (#270) audits the machine as it is, and previously went blind exactly
+  when a forced or drifted pin coexisted with an opt-out mode stamp.
 - `ttf-maple-mono-nf` (release/packages + base.packages): Maple Mono, Nerd Font
   variant, shipped from [ryoku] as the upstream prebuilt NF release so it
   pacstraps on install and updates with `ryoku update`. Offered as the monospace
@@ -82,14 +125,24 @@
   record their boot-ok files and `ryoku update` could not stat the power-cutover
   marker. The helper now matches the contract and repairs a drifted mode
   (`hardware/network/ryoku-network-kill`, `tests/network-kill.sh`).
+- **Deploys and updates no longer strand a niri desktop.** On a niri login
+  started through niri-session the compositor runs outside the login scope, so
+  the power cutover found no session environment, stopped the shell and never
+  restarted it; it now falls back to the session's own Wayland clients
+  (`hardware/power/ryoku-power-cutover`).
+- `hardware/power/ryoku-power-cutover`: a killed generation guard releases
+  its locks. The hold's keep-alive coprocess inherited the launch and
+  generation flock fds, so a holder killed mid-swap left the locks pinned by
+  an orphan and every later cutover waited on the guard forever
+  (`tests/power-cutover.sh`).
 - `hardware/power/logind-ryoku-lid.conf`: raise `InhibitDelayMaxSec` to 15s.
-  `hypridle` holds a `sleep` delay inhibitor while it runs `ryoku-shell lock`,
-  and logind's 5s default expired first on a Quickshell lock that also had to
-  wait out a display reconfigure (undocking as the lid shuts), so the machine
-  suspended with the session unlocked. logind logged it and went ahead anyway:
-  "Delay lock is active (hypridle) but inhibitor timeout is reached". The
-  inhibitor is released the moment the lock is up, so a normal lid close still
-  suspends immediately.
+  The always-on shell daemon holds a `sleep` delay inhibitor across suspend while
+  it puts a secure lock up, and logind's 5s default expired first on a Quickshell
+  lock that also had to wait out a display reconfigure (undocking as the lid
+  shuts), so the machine suspended with the session unlocked. logind logged it
+  and went ahead anyway: "Delay lock is active ... but inhibitor timeout is
+  reached". The inhibitor is released the moment the lock is up, so a normal lid
+  close still suspends immediately.
 - `boot/limine/limine.conf`: ship `default_entry: 1` (the bootable flat
   placeholder) plus `remember_last_entry: yes`, not the bare `2`. Limine's
   numeric `default_entry` counts top-level entries, so once

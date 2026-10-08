@@ -4,14 +4,29 @@ import stage.modules.common
 
 ToolbarButton {
     id: iconBtn
-    implicitWidth: height
+    Layout.fillHeight: false
+    implicitWidth: Appearance.sizes.controlHeight
+    implicitHeight: Appearance.sizes.controlHeight
+    buttonRadius: Appearance.rounding.small
 
-    colBackgroundToggled: Appearance.colors.colSecondaryContainer
-    colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-    colRippleToggled: Appearance.colors.colSecondaryContainerActive
-    property color colText: toggled ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnSurfaceVariant
+    colBackground: "transparent"
+    colBackgroundHover: Appearance.colors.colLayer1Hover
+    colBackgroundActive: Appearance.colors.colLayer1Active
+    colBackgroundToggled: Appearance.colors.colSecondary
+    colBackgroundToggledHover: Appearance.colors.colSecondaryHover
+    colBackgroundToggledActive: Appearance.colors.colSecondaryActive
+    colRipple: Appearance.colors.colLayer1Active
+    colRippleToggled: Appearance.colors.colOnSecondaryContainer
+    borderWidth: activeFocus ? 2 : 1
+    borderColor: toggled ? Appearance.colors.colSecondary
+        : activeFocus ? Appearance.colors.colOnSurface
+        : hovered ? Appearance.colors.colOutline : Appearance.colors.colOutlineVariant
+
+    property color colText: toggled
+        ? Appearance.colors.colOnSecondary
+        : (hovered ? Appearance.colors.colOnSurface : Appearance.colors.colOnSurfaceVariant)
     property bool iconFill: toggled
-    property real iconSize: Appearance.font.pixelSize.huge
+    property real iconSize: 18
 
     contentItem: MaterialSymbol {
         anchors.centerIn: parent
@@ -23,5 +38,4 @@ ToolbarButton {
         color: iconBtn.colText
         animateChange: true
     }
-
 }

@@ -1,4 +1,6 @@
 #include "cardrendernode.h"
+#include "cardinstancesanitize.h"
+#include "gpupoison.h"
 
 #include <QFile>
 #include <QMatrix4x4>
@@ -6,7 +8,9 @@
 #include <rhi/qrhi.h>
 #include <rhi/qshader.h>
 
+#include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace {
 
@@ -103,6 +107,7 @@ bool CardRenderNode::ensurePreview(QRhi *rhi, QRhiResourceUpdateBatch *batch)
             m_preview.reset();
             return changed;
         }
+        GpuPoison::texture(batch, m_preview.get(), wanted);
         changed = true;
         if (m_previewImage.isNull()) {
             QImage blank(wanted, QImage::Format_RGBA8888);
@@ -198,43 +203,46 @@ bool CardRenderNode::ensureBindings(QRhi *rhi, bool texturesChanged)
 
 void CardRenderNode::sanitize(std::vector<CardInstance> &instances, int nearLayers, int farLayers)
 {
-    for (CardInstance &inst : instances) {
-        if (inst.misc[0] == CardTex::Near && quint32(nearLayers) <= inst.misc[1])
-            inst.misc[0] = CardTex::None;
-        else if (inst.misc[0] == CardTex::Far && quint32(farLayers) <= inst.misc[1])
-            inst.misc[0] = CardTex::None;
-        else if (inst.misc[0] == CardTex::Preview && !m_preview)
-            inst.misc[0] = CardTex::None;
-    }
+    const QSize pixels = renderTarget()->pixelSize();
+    const float limit = std::max(4096.0f, float(std::max(pixels.width(), pixels.height())) * 8.0f);
+    sanitizeCardInstances(instances, nearLayers, farLayers, m_preview != nullptr, limit);
 }
 
-void CardRenderNode::updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, QRhi *rhi,
-                                          QRhiResourceUpdateBatch *batch, const std::vector<CardInstance> &data)
+quint32 CardRenderNode::updateInstanceBuffer(std::unique_ptr<QRhiBuffer> &buffer, QRhi *rhi,
+                                             QRhiResourceUpdateBatch *batch,
+                                             const std::vector<CardInstance> &data)
 {
-    const quint32 bytes = quint32(data.size() * sizeof(CardInstance));
-    if (bytes == 0)
-        return;
+    const quint64 wideBytes = quint64(data.size()) * sizeof(CardInstance);
+    if (wideBytes == 0 || wideBytes > std::numeric_limits<quint32>::max())
+        return 0;
+    const quint32 bytes = quint32(wideBytes);
     if (!buffer || buffer->size() < bytes) {
         quint32 capacity = 128 * sizeof(CardInstance);
-        while (capacity < bytes)
+        while (capacity < bytes && capacity <= std::numeric_limits<quint32>::max() / 2)
             capacity *= 2;
+        if (capacity < bytes)
+            capacity = bytes;
         if (buffer)
             buffer.release()->deleteLater();
         buffer.reset(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::VertexBuffer, capacity));
         if (!buffer->create()) {
             buffer.reset();
-            return;
+            return 0;
         }
+        GpuPoison::buffer(batch, buffer.get());
     }
     batch->updateDynamicBuffer(buffer.get(), 0, bytes, data.data());
+    return quint32(data.size());
 }
 
 void CardRenderNode::prepare()
 {
+    m_didTransition = false;
+    m_uploadedInstanceCount = 0;
+    m_uploadedFromCount = 0;
     QRhi *rhi = m_window->rhi();
     if (!rhi)
         return;
-    m_didTransition = false;
     QRhiResourceUpdateBatch *batch = rhi->nextResourceUpdateBatch();
 
     bool texturesChanged = m_near.commit(rhi, batch);
@@ -264,15 +272,19 @@ void CardRenderNode::prepare()
         m_uniformBuffer.reset(rhi->newBuffer(QRhiBuffer::Dynamic, QRhiBuffer::UniformBuffer, sizeof(Uniforms)));
         if (!m_uniformBuffer->create())
             m_uniformBuffer.reset();
+        else
+            GpuPoison::buffer(batch, m_uniformBuffer.get());
     }
-    if (!m_mipSampler || !m_flatSampler || !m_uniformBuffer)
-        return; // nothing bound yet; the next frame retries
+    if (!m_mipSampler || !m_flatSampler || !m_uniformBuffer) {
+        commandBuffer()->resourceUpdate(batch);
+        return;
+    }
 
     const bool active = transitionActive();
 
-    updateInstanceBuffer(m_instanceBuffer, rhi, batch, m_instances);
+    m_uploadedInstanceCount = updateInstanceBuffer(m_instanceBuffer, rhi, batch, m_instances);
     if (active)
-        updateInstanceBuffer(m_fromBuffer, rhi, batch, m_transitionFrom);
+        m_uploadedFromCount = updateInstanceBuffer(m_fromBuffer, rhi, batch, m_transitionFrom);
 
     Uniforms u{};
     const QMatrix4x4 mvp = *projectionMatrix() * *matrix();
@@ -287,8 +299,12 @@ void CardRenderNode::prepare()
     u.opacity = active ? 1.0f : float(inheritedOpacity());
     batch->updateDynamicBuffer(m_uniformBuffer.get(), 0, sizeof(Uniforms), &u);
 
-    if (!ensureBindings(rhi, texturesChanged))
+    if (!ensureBindings(rhi, texturesChanged)) {
+        commandBuffer()->resourceUpdate(batch);
+        m_uploadedInstanceCount = 0;
+        m_uploadedFromCount = 0;
         return;
+    }
 
     QRhiRenderPassDescriptor *pass = renderTarget()->renderPassDescriptor();
     if (!m_pipeline || !m_pipelinePass || !m_pipelinePass->isCompatible(pass)
@@ -297,7 +313,7 @@ void CardRenderNode::prepare()
 
     bool targetsChanged = false;
     if (active) {
-        targetsChanged = m_transition.ensureTargets(rhi, renderTarget()->pixelSize());
+        targetsChanged = m_transition.ensureTargets(rhi, batch, renderTarget()->pixelSize());
         if (targetsChanged || !m_scenePipeline)
             buildScenePipeline(rhi);
         m_transition.prepare(rhi, batch, renderTarget(), m_transitionProgress, m_transitionKind,
@@ -312,36 +328,38 @@ void CardRenderNode::prepare()
         m_sandy.prepare(rhi, commandBuffer(), renderTarget(), m_sandyPassData, m_near, m_far, mvp, float(inheritedOpacity()));
     }
 
-    // The two scenes are drawn offscreen here, before the main render pass begins.
-    if (active && m_scenePipeline && m_transition.ready()) {
+    // A recreated target is cleared even when a dependent pipeline failed.
+    // That keeps a later retry from ever sampling allocation contents.
+    if (active && m_transition.targetsReady()) {
         QRhiCommandBuffer *cb = commandBuffer();
         const QSize sz = m_transition.size();
         const QRhiViewport vp(0, 0, sz.width(), sz.height());
         const QColor clear(0, 0, 0, 0);
         const QRhiDepthStencilClearValue ds(1.0f, 0);
+        const bool canDraw = m_scenePipeline && m_transition.ready();
 
         cb->beginPass(m_transition.targetA(), clear, ds);
-        if (m_fromBuffer && !m_transitionFrom.empty()) {
+        if (canDraw && m_fromBuffer && m_uploadedFromCount > 0) {
             cb->setGraphicsPipeline(m_scenePipeline.get());
             cb->setViewport(vp);
             cb->setShaderResources(m_bindings.get());
             const QRhiCommandBuffer::VertexInput input(m_fromBuffer.get(), 0);
             cb->setVertexInput(0, 1, &input);
-            cb->draw(6, quint32(m_transitionFrom.size()));
+            cb->draw(6, m_uploadedFromCount);
         }
         cb->endPass();
 
         cb->beginPass(m_transition.targetB(), clear, ds);
-        if (m_instanceBuffer && !m_instances.empty()) {
+        if (canDraw && m_instanceBuffer && m_uploadedInstanceCount > 0) {
             cb->setGraphicsPipeline(m_scenePipeline.get());
             cb->setViewport(vp);
             cb->setShaderResources(m_bindings.get());
             const QRhiCommandBuffer::VertexInput input(m_instanceBuffer.get(), 0);
             cb->setVertexInput(0, 1, &input);
-            cb->draw(6, quint32(m_instances.size()));
+            cb->draw(6, m_uploadedInstanceCount);
         }
         cb->endPass();
-        m_didTransition = true;
+        m_didTransition = canDraw;
     }
 }
 
@@ -352,13 +370,13 @@ void CardRenderNode::render(const RenderState *)
 
     if (m_didTransition && m_transition.ready()) {
         m_transition.render(cb, size);
-    } else if (!m_instances.empty() && m_pipeline && m_instanceBuffer) {
+    } else if (m_uploadedInstanceCount > 0 && m_pipeline && m_instanceBuffer) {
         cb->setGraphicsPipeline(m_pipeline.get());
         cb->setViewport(QRhiViewport(0, 0, size.width(), size.height()));
         cb->setShaderResources();
         const QRhiCommandBuffer::VertexInput input(m_instanceBuffer.get(), 0);
         cb->setVertexInput(0, 1, &input);
-        cb->draw(6, quint32(m_instances.size()));
+        cb->draw(6, m_uploadedInstanceCount);
     }
 
     if (m_sandyPassActive && m_sandy.active())
@@ -378,6 +396,8 @@ void CardRenderNode::releaseResources()
     m_flatSampler.reset();
     m_preview.reset();
     m_previewUploaded = false;
+    m_uploadedInstanceCount = 0;
+    m_uploadedFromCount = 0;
     m_didTransition = false;
     m_transition.releaseResources();
     m_sandy.releaseResources();
@@ -387,7 +407,7 @@ void CardRenderNode::releaseResources()
 
 QSGRenderNode::RenderingFlags CardRenderNode::flags() const
 {
-    return BoundedRectRendering;
+    return BoundedRectRendering | NoExternalRendering;
 }
 
 QRectF CardRenderNode::rect() const

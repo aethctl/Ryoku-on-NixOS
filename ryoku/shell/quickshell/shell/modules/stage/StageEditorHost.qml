@@ -23,18 +23,30 @@ Scope {
     }
 
     // Ryoku's Edit widgets session opens the ported mode on its monitor, with
-    // the widget catalogue already showing; leaving the session closes the mode.
+    // the catalogue it asked for already showing; leaving the session closes
+    // the mode, and asking for another catalogue while open switches to it.
     Connections {
         target: StageCfg.StageSession
         function onModeChanged() {
             if (StageCfg.StageSession.widgets) {
                 GlobalStates.openEditMode(StageCfg.StageSession.monitor);
-                GlobalStates.editDrawerSection = "widgets";
-                GlobalStates.editDrawerOpen = true;
+                root.showSection();
             } else {
                 GlobalStates.editMode = false;
             }
         }
+        function onSectionChanged() {
+            if (StageCfg.StageSession.widgets)
+                root.showSection();
+        }
+    }
+    // A section may name a page inside it ("wallpaper/wallpapers"), so a
+    // hand-off can land on the wallpaper grid rather than its root.
+    function showSection() {
+        const parts = StageCfg.StageSession.section.split("/");
+        GlobalStates.editDrawerSection = parts[0];
+        GlobalStates.editDrawerPage = parts.slice(1).join("/");
+        GlobalStates.editDrawerOpen = true;
     }
 
     // The chrome's Done (and Escape to the top of its ladder) leaves the mode;
@@ -44,6 +56,13 @@ Scope {
         function onEditModeChanged() {
             if (!GlobalStates.editMode && StageCfg.StageSession.widgets)
                 StageCfg.StageSession.leave();
+        }
+        function onEditModeMonitorChanged() {
+            if (GlobalStates.editMode
+                    && StageCfg.StageSession.widgets
+                    && GlobalStates.editModeMonitor !== ""
+                    && StageCfg.StageSession.monitor !== GlobalStates.editModeMonitor)
+                StageCfg.StageSession.monitor = GlobalStates.editModeMonitor;
         }
     }
 }

@@ -23,6 +23,33 @@ type runState struct {
 	Completed []string `json:"completed"`
 	BackupDir string   `json:"backupDir"`
 	Updated   string   `json:"updated"`
+	Ref       string   `json:"ref,omitempty"`
+}
+
+// refBoundSteps depend on the payload ref: its checkout, the [ryoku] channel
+// that ref is built against, and the package set installed from it.
+var refBoundSteps = map[string]bool{"payload": true, "repo": true, "packages": true, "build": true}
+
+// adoptRef makes a resume from another ref (the unstable script after a
+// stable run, or back) redo the ref-bound steps, so the payload, the channel
+// and the packages all come from the same ref. a state written before refs
+// were recorded came from a main run.
+func (s *runState) adoptRef(ref string) {
+	prev := s.Ref
+	if prev == "" {
+		prev = "main"
+	}
+	if prev == ref {
+		return
+	}
+	kept := s.Completed[:0]
+	for _, c := range s.Completed {
+		if !refBoundSteps[c] {
+			kept = append(kept, c)
+		}
+	}
+	s.Completed = kept
+	s.Ref = ref
 }
 
 func statePath(home string) string {
@@ -62,6 +89,7 @@ func (e *engine) markStepDone(id string) {
 	if !e.state.has(id) {
 		e.state.Completed = append(e.state.Completed, id)
 	}
+	e.state.Ref = e.ref
 	if e.backupDir != "" {
 		e.state.BackupDir = e.backupDir
 	}

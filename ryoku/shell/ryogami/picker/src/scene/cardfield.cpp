@@ -126,6 +126,30 @@ void CardField::disconnectSource()
     }
 }
 
+void CardField::resetGenerationState()
+{
+    m_filterIn.clear();
+    m_filterWave = 0.0f;
+    m_filterElapsed = 0.0;
+    m_transVisuals.clear();
+    m_transBuf.clear();
+    m_transActive = false;
+    m_trans.snap(1.0);
+    m_visuals.clear();
+    m_fades.clear();
+    m_hoverRow = -1;
+    m_pressRow = -1;
+    m_hover.snap(0.0);
+    m_press.snap(0.0);
+    if (m_flippedRow >= 0) {
+        m_flippedRow = -1;
+        m_flip.snap(0.0);
+        emit flippedIndexChanged();
+        emit flipChanged();
+    }
+    stopPreview();
+}
+
 void CardField::setSource(QObject *source)
 {
     if (source == m_sourceObj)
@@ -135,6 +159,9 @@ void CardField::setSource(QObject *source)
     m_source = dynamic_cast<CardSource *>(source);
     connectSource();
     m_generation = m_source ? m_source->cardGeneration() : 0;
+    resetGenerationState();
+    if (m_decoder)
+        m_decoder->cancelQueued();
     m_currentKey.clear();
     restoreSelection();
     if (m_layout && m_source) {
@@ -174,15 +201,15 @@ void CardField::onSourceChanged()
         return;
     }
     const int before = m_current;
-    filterStorm();
+    resetGenerationState();
+    if (m_decoder)
+        m_decoder->cancelQueued();
+    m_generation = gen;
     restoreSelection();
     if (m_layout) {
         LayoutContext ctx = makeContext();
         m_layout->reset(ctx);
     }
-    if (m_decoder)
-        m_decoder->cancelQueued();
-    m_generation = gen;
     if (m_current != before)
         emit currentIndexChanged();
     schedulePreview();
@@ -671,43 +698,24 @@ bool CardField::tickFades(double dt)
 bool CardField::advanceFilterSwap(double dt)
 {
     const float step = float(std::min(dt, 0.05) * 1000.0 / std::max(m_filterMs, 50.0));
-    bool active = false;
-    // A swap is a bounded animation; if one ever overruns its budget (a stuck roll), snap
-    // every card to rest so nothing can sit blank/slivered until relaunch.
-    if (!m_filterOld.empty() || !m_filterIn.empty()) {
+    if (!m_filterIn.empty()) {
         m_filterElapsed += std::min(dt, 0.05);
         if (m_filterElapsed * 1000.0 > std::max(m_filterMs * 3.0, 2000.0)) {
-            m_filterOld.clear();
             m_filterIn.clear();
-            m_filterCell.clear();
             m_filterWave = 10.0f;
             return false;
         }
     }
     if (m_filterWave < 10.0f)
         m_filterWave += step;
-    if (!m_filterOld.empty()) {
-        for (FilterOld &fo : m_filterOld)
-            fo.t += step;
-        m_filterOld.erase(std::remove_if(m_filterOld.begin(), m_filterOld.end(),
-                                         [](const FilterOld &fo) { return fo.t >= 1.0f; }),
-                          m_filterOld.end());
-        m_filterCell.clear();
-        for (int i = 0; i < int(m_filterOld.size()); ++i)
-            m_filterCell.insert(m_filterOld[size_t(i)].cell, i);
-        active = !m_filterOld.empty();
+    for (auto it = m_filterIn.begin(); it != m_filterIn.end();) {
+        it.value() += step;
+        if (it.value() >= 1.0f)
+            it = m_filterIn.erase(it);
+        else
+            ++it;
     }
-    if (!m_filterIn.empty()) {
-        for (auto it = m_filterIn.begin(); it != m_filterIn.end();) {
-            it.value() += step;
-            if (it.value() >= 1.0f)
-                it = m_filterIn.erase(it);
-            else
-                ++it;
-        }
-        active = active || !m_filterIn.empty();
-    }
-    return active;
+    return !m_filterIn.empty() || m_filterWave < 2.0f;
 }
 
 void CardField::tick()
@@ -776,79 +784,19 @@ float CardField::flipPhase(float x, float y) const
     return std::clamp(phase, 0.0f, 1.0f);
 }
 
-float CardField::filterRollFor(qint64 cell, const QString &key, float x, float y)
+float CardField::filterRollFor(qint64 cell, float x, float y)
 {
-    if (m_filterOld.empty() && m_filterIn.empty() && m_filterWave >= 2.0f)
+    if (m_filterIn.empty() && m_filterWave >= 2.0f)
         return 1.0f;
-    const auto oit = m_filterCell.constFind(cell);
-    if (oit != m_filterCell.constEnd()) {
-        FilterOld &fo = m_filterOld[size_t(oit.value())];
-        if (fo.key == key && fo.t <= 0.1f) {
-            fo.t = 2.0f;
-            return 1.0f;
-        }
-        return geom::smoothstep(fo.t);
-    }
-    const auto iit = m_filterIn.constFind(cell);
-    if (iit != m_filterIn.constEnd())
-        return geom::smoothstep(iit.value());
+    const auto it = m_filterIn.constFind(cell);
+    if (it != m_filterIn.constEnd())
+        return geom::smoothstep(it.value());
     const float virt = m_filterWave - flipPhase(x, y) * geom::kFilterFlipSweep;
     if (virt < 1.0f) {
         m_filterIn.insert(cell, virt);
         return geom::smoothstep(virt);
     }
     return 1.0f;
-}
-
-void CardField::filterStorm()
-{
-    m_filterCell.clear();
-    m_filterIn.clear();
-    for (const FilterCard &fc : m_filterCache) {
-        if (fc.roll < 1.0f || fc.inst.rect[2] < 0.5f)
-            continue;
-        if (m_filterCell.contains(fc.cell))
-            continue;
-        const float t0 = -flipPhase(fc.inst.rect[0], fc.inst.rect[1]) * geom::kFilterFlipSweep;
-        m_filterCell.insert(fc.cell, int(m_filterOld.size()));
-        m_filterOld.push_back({fc.inst, fc.cell, fc.key, t0});
-    }
-    m_filterWave = 0.0f;
-    m_filterElapsed = 0.0;
-}
-
-void CardField::pushFilterOld(std::vector<CardInstance> &instances, CardRenderNode *node)
-{
-    for (FilterOld &fo : m_filterOld) {
-        const float roll = geom::smoothstep(fo.t);
-        if (roll >= 1.0f)
-            continue;
-        // The cached instance holds an atlas slot from the frame the filter
-        // swapped. find() is the only thing that refreshes a tile's age and
-        // notices eviction; without it a still-drawing old card can sample a
-        // layer another wallpaper has since taken, flashing the wrong image
-        // for as long as the old card animates out.
-        CardInstance &body = fo.inst;
-        const TextureTier::Slot *slot =
-            body.misc[0] == CardTex::Near ? node->nearTier().find(fo.key) : nullptr;
-        const bool near = slot != nullptr;
-        if (!slot)
-            slot = node->farTier().find(fo.key);
-        if (slot) {
-            body.misc[0] = near ? CardTex::Near : CardTex::Far;
-            body.misc[1] = uint32_t(slot->layer);
-            setVec4(body.uv, float(slot->uv.x()), float(slot->uv.y()),
-                    float(slot->uv.width()), float(slot->uv.height()));
-        } else if (body.misc[0] == CardTex::Near || body.misc[0] == CardTex::Far) {
-            body.misc[0] = CardTex::None;
-        }
-        CardInstance cut = body;
-        geom::rollOutCut(cut, roll);
-        if (cut.rect[2] < 0.5f)
-            continue;
-        m_wanted.insert(fo.key);
-        instances.push_back(cut);
-    }
 }
 
 void CardField::drainDecoder(CardRenderNode *node)
@@ -993,7 +941,6 @@ void CardField::applyMicroAnim(CardInstance &inst, int row, bool projected, cons
 void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
                         std::vector<CardInstance> &instances)
 {
-    m_filterCache.clear();
     int pendingShadow = -1;
     int pendingShadowRow = -1;
     for (const CardVisual &v : m_visuals) {
@@ -1004,10 +951,8 @@ void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
             resolveTexture(node, ctx, v, inst, row);
         const bool projected = (inst.misc[3] & CardFlag::Projected) != 0;
         if (isCard && !projected) {
-            const QString key = m_source->cardKey(row);
             const qint64 cell = cellKey(inst.rect[0], inst.rect[1]);
-            const float roll = filterRollFor(cell, key, inst.rect[0], inst.rect[1]);
-            m_filterCache.push_back({inst, cell, key, roll});
+            const float roll = filterRollFor(cell, inst.rect[0], inst.rect[1]);
             geom::rollInCut(inst, roll);
             if (row == m_flippedRow && m_layout->flipsInPlace())
                 applyFlipPayload(inst, row);
@@ -1022,7 +967,6 @@ void CardField::resolve(CardRenderNode *node, const LayoutContext &ctx,
         applyMicroAnim(inst, row, projected, ctx);
         instances.push_back(inst);
     }
-    pushFilterOld(instances, node);
 }
 
 void CardField::resolveTransition(CardRenderNode *node, const LayoutContext &ctx)
@@ -1151,7 +1095,7 @@ QSGNode *CardField::updatePaintNode(QSGNode *old, UpdatePaintNodeData *)
         m_layout->build(ctx, m_visuals);
 
         std::vector<CardInstance> instances;
-        instances.reserve(m_visuals.size() + m_filterOld.size());
+        instances.reserve(m_visuals.size());
         resolve(node, ctx, instances);
 
         publishRects(m_layout->cardRect(ctx.current), m_layout->cardShear(ctx.current),

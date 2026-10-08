@@ -2,6 +2,8 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import shell.services
+import stage.services
+import "../wallpaper" as WallpaperMod
 import "Singletons"
 
 // One stage layer: an alpha PNG drawn back-to-front inside the desktop surface
@@ -15,6 +17,7 @@ Item {
     id: root
 
     property int layerIndex: 1
+    property string screenName: ""
     property string wallPath: ""
     property string url: ""
     property string fit: "Cover"
@@ -38,6 +41,7 @@ Item {
     readonly property real _near: 0.35 + (1 - root._depth) * 0.9
     readonly property real _baseMax: root.width * 0.04
     readonly property real _edge: Config.edge
+    readonly property var _wallpaperGeometry: WallpaperLayout.geometryFor(root.screenName)
     readonly property real _shStrength: Config.shadow
     readonly property real _shAngle: Config.shadowAngle * Math.PI / 180
 
@@ -88,24 +92,9 @@ Item {
     // the subject layer (index 1) dims and a ring with the percent floats over it.
     readonly property bool _busyHere: root.layerIndex === 1 && StageBackend.busy && root.url !== ""
 
-    Image {
-        id: img
+    Item {
+        id: visual
         anchors.fill: parent
-        source: root.url
-        cache: false
-        asynchronous: true
-        fillMode: root._fillMode(img)
-        sourceSize.width: root.width
-        sourceSize.height: root.height
-        // No overscan: a cut-out is transparent at its edges, so drift needs
-        // no headroom, and the subject keeps its size in Depth and Parallax
-        // alike (a scale jump reads as the picture zooming when Parallax turns
-        // on). Breathe is the only thing that scales it.
-        scale: root._idleScale
-        rotation: root._idleRot
-        opacity: (status === Image.Ready ? 1 : 0) * (root._busyHere ? 0.45 : 1)
-        Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
-
         transform: Translate {
             x: root._driftX()
             y: root._driftY() + root._musicY() + root._idleY
@@ -113,18 +102,44 @@ Item {
             Behavior on y { SmoothedAnimation { velocity: 320; duration: 70 } }
         }
 
-        // Edge feather and the angled cast shadow set the cut-out into the scene;
-        // the FBO stays off when both are zero.
-        layer.enabled: root._edge > 0.001 || root._shStrength > 0.001
-        layer.effect: MultiEffect {
-            blurEnabled: root._edge > 0.001
-            blurMax: 16
-            blur: root._edge
-            shadowEnabled: root._shStrength > 0.001
-            shadowColor: Qt.rgba(0, 0, 0, 0.72 * root._shStrength)
-            shadowBlur: 0.55 + 0.45 * root._shStrength
-            shadowHorizontalOffset: Math.round(Math.cos(root._shAngle) * 20 * root._shStrength)
-            shadowVerticalOffset: Math.round(Math.sin(root._shAngle) * 20 * root._shStrength)
+        WallpaperMod.WallpaperFramedPlane {
+            id: framedLayer
+            anchors.fill: parent
+            screenName: root.screenName
+            framingKey: root.wallPath
+            imageWidth: root._wallpaperGeometry?.imageWidth ?? img.sourceSize.width
+            imageHeight: root._wallpaperGeometry?.imageHeight ?? img.sourceSize.height
+
+            Image {
+                id: img
+                anchors.fill: parent
+                source: root.url
+                cache: false
+                asynchronous: true
+                fillMode: framedLayer.framed ? Image.PreserveAspectCrop : root._fillMode(img)
+                sourceSize.width: root.width
+                sourceSize.height: root.height
+                // No overscan: a cut-out is transparent at its edges, so drift
+                // needs no headroom. Breathe is the only extra scale.
+                scale: root._idleScale
+                rotation: root._idleRot
+                opacity: (status === Image.Ready ? 1 : 0) * (root._busyHere ? 0.45 : 1)
+                Behavior on opacity { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }
+
+                // Edge feather and the angled cast shadow set the cut-out into
+                // the scene; the FBO stays off when both are zero.
+                layer.enabled: root._edge > 0.001 || root._shStrength > 0.001
+                layer.effect: MultiEffect {
+                    blurEnabled: root._edge > 0.001
+                    blurMax: 16
+                    blur: root._edge
+                    shadowEnabled: root._shStrength > 0.001
+                    shadowColor: Qt.rgba(0, 0, 0, 0.72 * root._shStrength)
+                    shadowBlur: 0.55 + 0.45 * root._shStrength
+                    shadowHorizontalOffset: Math.round(Math.cos(root._shAngle) * 20 * root._shStrength)
+                    shadowVerticalOffset: Math.round(Math.sin(root._shAngle) * 20 * root._shStrength)
+                }
+            }
         }
     }
 

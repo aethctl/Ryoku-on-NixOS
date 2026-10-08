@@ -39,14 +39,14 @@ MouseArea {
     property bool first: true
     property bool last: true
     // The row is the thing that is on: filled in the primary role.
+    // Selection is the Ryoku inverted plate.
     property bool selected: false
-    // A row whose action takes something away.
     property bool destructive: false
     property bool rowEnabled: true
-    property real rowPadding: 14
-    // A second line that has to be READ rather than glanced at - a choice's
-    // description - wraps and grows the row instead of eliding.
-    property bool subtitleWrap: false
+    property real rowPadding: Appearance.sizes.space4
+    // Descriptions wrap by default. Callers opt out only for rows whose
+    // secondary text is deliberately a one-line status.
+    property bool subtitleWrap: true
     // A drag on this row carries something; the list it sits in must let go of
     // the gesture the moment it wins.
     property bool draggable: false
@@ -72,7 +72,8 @@ MouseArea {
     signal stepUp()
     signal stepDown()
 
-    implicitHeight: Math.max(58, rowLayout.implicitHeight + 16)
+    implicitHeight: Math.max(Appearance.sizes.minimumTouchTarget,
+        rowLayout.implicitHeight + Appearance.sizes.space3 * 2)
     hoverEnabled: true
     enabled: root.rowEnabled
     cursorShape: Qt.PointingHandCursor
@@ -103,8 +104,8 @@ MouseArea {
     }
 
     readonly property color colOn: root.selected
-        ? Appearance.colors.colOnPrimary
-        : root.destructive ? Appearance.m3colors.m3error : Appearance.colors.colOnSurface
+        ? Appearance.colors.colOnSecondary
+        : root.destructive ? Appearance.colors.colError : Appearance.colors.colOnSurface
 
     // ── The gesture ──────────────────────────────────────────────────────────
     property real _pressX: 0
@@ -157,84 +158,67 @@ MouseArea {
         root.dragCancelled();
     }
 
-    // The corner of the surface this row sits on, and how far in from it the
-    // row starts. The end of a run is drawn CONCENTRIC with that surface -
-    // `hostRadius - hostPadding` - rather than at a token of its own, which is
-    // the rule the shell's other inset lists follow (EditMenuRow does the same
-    // arithmetic). Picking `rounding.large` here instead was visibly wrong on
-    // the two menu cards: their corner is `windowRounding` (18 at the default
-    // scale) and the rows were rounder than the card holding them.
-    //
-    // The defaults are the catalogue panel's own numbers, so the pages inside
-    // it need say nothing; the menus hand in theirs.
+    // Kept as caller-facing compatibility inputs; the paper-row treatment has
+    // one corner everywhere instead of changing shape across a recycled run.
     property real hostRadius: Appearance.rounding.verylarge
-    property real hostPadding: 14
-    readonly property real rEnd: Math.max(Appearance.rounding.verysmall, root.hostRadius - root.hostPadding)
-    // The seam between neighbours, as a fraction of the end rather than a
-    // token: at a small end radius a fixed `verysmall` seam is nearly the same
-    // corner and the run stops reading as a run.
-    readonly property real rSeam: Math.max(Appearance.rounding.unsharpen, Math.round(root.rEnd * 0.34))
-    readonly property real rPressed: Math.min(root.height / 2, Appearance.rounding.large * 2)
+    property real hostPadding: Appearance.sizes.space4
+    readonly property real rEnd: Appearance.rounding.small
+    readonly property real rSeam: Appearance.rounding.small
+    readonly property real rPressed: Appearance.rounding.small
 
     Rectangle {
         id: pill
         anchors.fill: parent
-        topLeftRadius: root.pressed ? root.rPressed : (root.first ? root.rEnd : root.rSeam)
-        topRightRadius: root.pressed ? root.rPressed : (root.first ? root.rEnd : root.rSeam)
-        bottomLeftRadius: root.pressed ? root.rPressed : (root.last ? root.rEnd : root.rSeam)
-        bottomRightRadius: root.pressed ? root.rPressed : (root.last ? root.rEnd : root.rSeam)
+        radius: Appearance.rounding.small
         antialiasing: true
-
         color: root.selected
-            ? (root.pressed ? Appearance.colors.colPrimaryActive
-                : root.containsMouse ? Appearance.colors.colPrimaryHover
-                : Appearance.colors.colPrimary)
-            : (root.pressed ? Appearance.colors.colSurfaceContainerHighestActive
-                : root.containsMouse || root.activeFocus ? Appearance.colors.colSurfaceContainerHighest
-                : Appearance.colors.colSurfaceContainerHigh)
-
+            ? Appearance.colors.colSecondary
+            : root.pressed
+                ? Appearance.colors.colLayer1Active
+                : root.containsMouse || root.activeFocus
+                    ? Appearance.colors.colLayer1Hover
+                    : "transparent"
         Behavior on color {
             enabled: !Appearance.reducedMotion
             animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(pill)
         }
-        Behavior on topLeftRadius {
-            enabled: !Appearance.reducedMotion
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(pill)
-        }
-        Behavior on topRightRadius {
-            enabled: !Appearance.reducedMotion
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(pill)
-        }
-        Behavior on bottomLeftRadius {
-            enabled: !Appearance.reducedMotion
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(pill)
-        }
-        Behavior on bottomRightRadius {
-            enabled: !Appearance.reducedMotion
-            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(pill)
-        }
+    }
+
+    // Folio rows are separated by a hairline rather than by stacked filled
+    // pills. The selected plate hides the rule naturally.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.leftMargin: Appearance.sizes.space4
+        anchors.right: parent.right
+        anchors.rightMargin: Appearance.sizes.space4
+        anchors.top: parent.top
+        height: 1
+        visible: !root.selected
+        color: Appearance.colors.colOutlineVariant
     }
 
     RowLayout {
         id: rowLayout
         anchors.fill: parent
         anchors.leftMargin: root.rowPadding
-        anchors.rightMargin: root.trailingKind === "stepper" ? 6 : root.rowPadding
-        spacing: 12
+        anchors.rightMargin: root.trailingKind === "stepper" ? Appearance.sizes.space1 : root.rowPadding
+        anchors.topMargin: Appearance.sizes.space3
+        anchors.bottomMargin: Appearance.sizes.space3
+        spacing: Appearance.sizes.space3
 
-        // The circle. It is what makes a run of rows read as a list of things
-        // rather than as a stack of labels.
+        // A quiet icon plate preserves catalogue recognition without competing
+        // with the row's selected surface.
         Rectangle {
             Layout.alignment: Qt.AlignVCenter
             visible: root.symbol !== "" || root.iconSource !== ""
-            implicitWidth: 38
-            implicitHeight: 38
-            radius: width / 2
+            implicitWidth: 30
+            implicitHeight: 30
+            radius: Appearance.rounding.small
             color: root.selected
-                ? Qt.alpha(Appearance.colors.colOnPrimary, 0.2)
+                ? Appearance.withAlpha(Appearance.colors.colOnSecondary, 0.12)
                 : root.trailingKind === "switch" && root.switchChecked
-                    ? Appearance.colors.colPrimaryContainer
-                    : Appearance.colors.colSurfaceContainerHighest
+                    ? Appearance.colors.colLayer1Active
+                    : "transparent"
 
             Behavior on color {
                 enabled: !Appearance.reducedMotion
@@ -246,10 +230,9 @@ MouseArea {
                 anchors.centerIn: parent
                 visible: root.iconSource === ""
                 text: root.symbol
-                iconSize: 21
+                iconSize: 18
                 fill: (root.trailingKind === "switch" && root.switchChecked) ? 1 : 0
-                color: (root.trailingKind === "switch" && root.switchChecked && !root.selected)
-                    ? Appearance.colors.colOnPrimaryContainer : root.colOn
+                color: root.colOn
 
                 // A glyph that changes under a settled row (a copy turning
                 // into a check, pin into unpin) pops back in from small, so
@@ -274,19 +257,23 @@ MouseArea {
             IconImage {
                 anchors.centerIn: parent
                 visible: root.iconSource !== ""
-                implicitSize: 24
+                implicitSize: 22
                 source: root.iconSource
             }
         }
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 1
+            Layout.minimumWidth: 0
+            Layout.preferredWidth: 0
+            spacing: Appearance.sizes.space1
 
             StyledText {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 text: root.title
-                font.pixelSize: Appearance.font.pixelSize.small
+                font.family: Appearance.font.family.main
+                font.pixelSize: Appearance.font.pixelSize.large
                 font.weight: Font.Medium
                 color: root.colOn
                 elide: Text.ElideRight
@@ -294,24 +281,31 @@ MouseArea {
 
             StyledText {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 visible: root.subtitle !== ""
                 text: root.subtitle
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                color: root.colOn
-                opacity: 0.7
-                elide: Text.ElideRight
+                font.family: Appearance.font.family.main
+                font.pixelSize: Appearance.font.pixelSize.small
+                font.weight: Font.Normal
+                color: root.selected ? Appearance.colors.colOnSecondary : Appearance.colors.colSubtext
+                opacity: 1
+                elide: root.subtitleWrap ? Text.ElideNone : Text.ElideRight
                 wrapMode: root.subtitleWrap ? Text.Wrap : Text.NoWrap
-                maximumLineCount: root.subtitleWrap ? 2 : 1
+                maximumLineCount: root.subtitleWrap ? 2147483647 : 1
             }
         }
 
         StyledText {
             Layout.alignment: Qt.AlignVCenter
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: Math.min(120, root.width * 0.32)
             visible: root.valueText !== "" && root.trailingKind !== "stepper"
             text: root.valueText
+            font.family: Appearance.font.family.numbers
             font.pixelSize: Appearance.font.pixelSize.smaller
             color: root.colOn
             opacity: 0.8
+            elide: Text.ElideRight
         }
 
         MaterialSymbol {
@@ -322,8 +316,7 @@ MouseArea {
                 : root.trailingKind === "add" ? "add_circle" : "chevron_right"
             iconSize: root.trailingKind === "chevron" ? 22 : 20
             fill: root.trailingKind === "check" ? 1 : 0
-            color: (root.trailingKind === "check" && !root.selected)
-                ? Appearance.colors.colPrimary : root.colOn
+            color: root.colOn
             opacity: root.trailingKind === "chevron" ? 0.7 : 1
         }
 
@@ -369,12 +362,16 @@ MouseArea {
         property string symbol: ""
         signal triggered()
 
-        width: 34
-        height: 34
-        radius: width / 2
-        color: stepMouse.containsPress ? Appearance.colors.colSurfaceContainerHighestActive
-            : stepMouse.containsMouse ? Appearance.colors.colSurfaceContainerHighest
-            : "transparent"
+        width: Appearance.sizes.controlHeight
+        height: Appearance.sizes.controlHeight
+        radius: Appearance.rounding.small
+        color: stepMouse.containsPress
+            ? Appearance.colors.colLayer1Active
+            : stepMouse.containsMouse
+                ? Appearance.colors.colLayer1Hover
+                : "transparent"
+        border.width: 1
+        border.color: Appearance.colors.colOutlineVariant
 
         Behavior on color {
             enabled: !Appearance.reducedMotion

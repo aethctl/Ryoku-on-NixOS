@@ -102,16 +102,15 @@ Singleton {
     function commit(result) {
         root.selecting = "";
         if (root._purpose === "record") {
-            // GSR's -region takes physical global pixels; the overlay reports the
-            // selection in logical compositor coordinates, so scale it up by the
-            // picked output's factor before handing it off.
-            var sc = Wm.outputScale(result.output);
-            var rgx = Math.round((result.monX + result.x) * sc);
-            var rgy = Math.round((result.monY + result.y) * sc);
-            var geom = Math.round(result.w * sc) + "x" + Math.round(result.h * sc) + "+" + rgx + "+" + rgy;
+            // A monitor records whole by name. A window or region travels in
+            // layout (logical) coordinates, the space GSR's -region reads: GSR
+            // maps the box onto the output's physical pixels itself, so a box
+            // scaled up here first records an area the output's scale too big,
+            // tiled where it runs past the screen.
             var args = result.mode === "monitor"
-                ? ["--monitor", result.output, "--geometry", geom]
-                : ["--region", "--geometry", geom];
+                ? ["--monitor", result.output]
+                : ["--region", "--geometry", Math.round(result.w) + "x" + Math.round(result.h)
+                    + "+" + Math.round(result.monX + result.x) + "+" + Math.round(result.monY + result.y)];
             // The delay counts from the selection, exactly as it does for a shot:
             // you frame the target first, then get the beat to clear the frame.
             Recorder.startAfter(args.concat(root._recordAudio), root.delay);

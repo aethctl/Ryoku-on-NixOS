@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+### Added
+- **Browser and login-shell choices now carry through the whole conversion.**
+  The plan starts with Firefox, Chromium and Zen plus Fish, Zsh and Bash
+  single-choice rows. The same picks work under `--yes` through `--browser`,
+  `--shell`, `RYOKU_BROWSER` and `RYOKU_LOGIN_SHELL`. The package transaction
+  keeps only the selected stacks, Zen forces its AUR build, the account shell
+  and browser defaults follow the picks, and omitted packages are recorded so
+  later health checks do not add them back.
+- **The installer now looks like Ryoku.** Every screen uses the warm dark
+  terminal palette, paper-and-ink contrast, quiet hairlines and one vermilion
+  力 seal instead of the old generic card and status-colour treatment. The plan
+  and live install views stay bounded at the 80 x 24 minimum terminal size.
+- **The unstable script installs onto the unstable channel.**
+  `RYOKU_SHELL_REF=unstable-dev` now points `[ryoku]` at the testing channel
+  its payload is built against (any other ref stays on stable) and records the
+  choice like `ryoku track` does. Before, it paired an unstable-dev payload
+  with stable packages and failed on packages only testing carries. A rerun
+  from the other ref moves the channel and redoes the payload and package
+  steps, so a stuck stable install can be finished on unstable.
+
+### Fixed
+- **NVIDIA conversion now defaults on when nouveau currently drives the card.**
+  The hardware script keeps nouveau available unless the proprietary module is
+  built successfully, then replaces it after reboot. Unsigned Secure Boot
+  installs remain held off.
+- **The install no longer hangs at 9/15 "Wiring the login session".** A
+  power-policy cutover left behind by the desktop package could keep holding
+  the lock screen's locks, and `install-qylock` then waited on them forever with
+  no output. The session step now stops those leftover guard units first.
+  `install.sh` also stopped ending every run, including successful ones, with
+  `work: unbound variable` and exit 1. Rebuilt the committed binary + checksum.
+- **Converting a box that runs oh-my-zsh-git no longer dies at the desktop
+  transaction.** ryoku-oh-my-zsh provides and replaces both upstream
+  frameworks, but a plain removal under --noconfirm refuses while an installed
+  plugin package depends on oh-my-zsh-git, and the resulting dependency conflict
+  aborted the whole desktop install ("la preparation de la transaction a
+  echoue"). The conflict step now drops the upstream framework with -Rdd first;
+  its plugins re-resolve against ryoku-oh-my-zsh's provides in the same install
+  step, and the undo script puts the framework back. Rebuilt the committed
+  binary + checksum.
+
 ### Fixed
 - **Converting a box no longer aborts on the Plymouth splash theme.**
   `ryoku-desktop` owns `/usr/share/plymouth/themes/ryoku/`, so a resume after a

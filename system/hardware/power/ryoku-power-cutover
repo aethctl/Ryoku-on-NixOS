@@ -731,6 +731,29 @@ session_users() {
   done
 }
 
+# The package hook's session set. A compositor session is Ryoku's only once
+# Ryoku runs in it: a rival shell on the same compositor (the session a shell
+# install runs from) has no lid or sleep owner of ours to swap, and cutting it
+# over would start the Ryoku session inside that desktop and leave its qylock
+# guards holding the locks the installer's install-qylock then waits on.
+package_session_users() {
+  local listing user uid sid rc
+  listing="$(session_users)" || return 1
+  while read -r user uid sid; do
+    [[ -n ${user:-} ]] || continue
+    rc=0
+    pgrep -u "$uid" -x 'ryoku-shell|ryoku-clamshell|ryoku-idle' >/dev/null 2>&1 || rc=$?
+    case $rc in
+      0) printf '%s %s %s\n' "$user" "$uid" "$sid" ;;
+      1) ;;
+      *)
+        log "cannot inspect uid $uid for running Ryoku daemons" >&2
+        return 1
+        ;;
+    esac
+  done <<<"$listing"
+}
+
 current_user_graphical_sessions() {
   local listing sid type class desktop provider uid state activity value rc current_uid
   current_uid="$(id -u)"
@@ -1035,7 +1058,7 @@ prepare_package() {
     (umask 077; : >"$runtime_sessions")
     return 0
   fi
-  for command in systemd-inhibit systemctl systemd-run; do
+  for command in systemd-inhibit systemctl systemd-run pgrep; do
     command -v "$command" >/dev/null 2>&1 || {
       log "$command is required for pretransaction sleep protection" >&2
       return 1
@@ -1045,7 +1068,7 @@ prepare_package() {
     log "cannot acquire pretransaction sleep protection" >&2
     return 1
   fi
-  if ! sessions="$(session_users)"; then
+  if ! sessions="$(package_session_users)"; then
     log "cannot record graphical Ryoku sessions before the package transaction" >&2
     return 1
   fi
@@ -1066,7 +1089,7 @@ run_user_cutover() {
 root_cutover() {
   (( EUID == 0 )) || { log "package cutover must run as root" >&2; return 1; }
   [[ -d /run/systemd/system ]] || return 0
-  for command in systemd-inhibit loginctl getent systemctl systemd-run flock; do
+  for command in systemd-inhibit loginctl getent systemctl systemd-run flock pgrep; do
     command -v "$command" >/dev/null 2>&1 || {
       log "$command is required for the package cutover" >&2
       return 1
@@ -1088,7 +1111,7 @@ root_cutover() {
   local sessions user uid sid failed=0
   if ! target_policy_present && [[ -r $runtime_sessions ]]; then
     sessions="$(<"$runtime_sessions")"
-  elif ! sessions="$(session_users)"; then
+  elif ! sessions="$(package_session_users)"; then
     log "cannot enumerate graphical Ryoku sessions" >&2
     return 1
   fi
@@ -1828,9 +1851,13 @@ user_cutover() {
   # user manager takes the transient unit, and the inhibitor with it, down at
   # logout, and releasing early would open the very window the guard exists
   # to close. The waiter keeps it between retries and releases it when it
-  # gives up.
-  trap 'if (( $? != 0 )) && ! user_guard_session_closing; then
-          release_user_guard
+  # gives up. The qylock generation guard is released on failure the same
+  # way: left up, it holds the launch lock for good, so no lock screen can
+  # start and every later install-qylock blocks on it.
+  trap 'rc=$?
+        if (( rc != 0 )); then
+          [[ ${RYOKU_QYLOCK_WAITER:-0} == 1 ]] || release_qylock_generation_guard || :
+          user_guard_session_closing || release_user_guard
         fi' EXIT
   start_user_guard
   if target_policy_present; then

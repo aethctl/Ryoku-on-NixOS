@@ -3,6 +3,20 @@
 ## Unreleased
 
 ### Added
+- `pacstrap`/`aur`/`offline`: **every package-set reader filters installer
+  removals.** `ryoku_drop_pkg`/`ryoku_drop_from` drop the deselected apps,
+  losing browsers, and losing login-shell stacks from the assembled pacstrap
+  set, online AUR build, and offline AUR batch.
+- `deploy`: **the full drop list is recorded in the provisioning ledger** before
+  first boot, so doctor and update keep those packages absent. Fresh accounts
+  also receive the user-owned `default-rice-pending` marker consumed on their
+  first graphical login.
+- `chroot`: **the primary user's shell follows `RYOKU_LOGIN_SHELL`.** User
+  creation selects `/usr/bin/fish`, `/usr/bin/zsh`, or `/usr/bin/bash`, and
+  refuses a real install if that binary is missing from the target.
+- `aur`: **browser defaults now prefer Firefox.** The selected browser owns xdg
+  HTTP, HTTPS, and HTML handlers plus `desktop.apps.browser`; absent fallback
+  values resolve to Firefox rather than Zen.
 - `bootloader`: **the install records the kernel it boots**, in
   `/etc/ryoku/default-kernel` (`linux-cachyos` on the CachyOS variant, `linux`
   on plain). On a live box a kernel package the user added later is
@@ -29,6 +43,9 @@
   normal install.
 
 ### Fixed
+- `cachyos`: **non-v3 CPUs keep compatible repositories after install.**
+  The target now enables the v3 core/extra rebuilds only when glibc reports
+  x86-64-v3 support; baseline x86-64 uses the generic `[cachyos]` repository.
 - `bootloader`: **a CachyOS install autoboots the CachyOS kernel.**
   `ryoku_limine_autoboot` pointed default_entry at the first kernel the menu listed
   (stock `linux`), so a fresh CachyOS box booted the Arch kernel; it now prefers the

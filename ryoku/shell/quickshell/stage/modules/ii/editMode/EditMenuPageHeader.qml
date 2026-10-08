@@ -19,18 +19,18 @@ RowLayout {
     signal actionRequested()
 
     Layout.fillWidth: true
-    Layout.leftMargin: 2
-    Layout.rightMargin: 4
-    spacing: 10
+    Layout.leftMargin: Appearance.sizes.space1
+    Layout.rightMargin: Appearance.sizes.space1
+    spacing: Appearance.sizes.space3
 
     Rectangle {
         Layout.alignment: Qt.AlignVCenter
-        implicitWidth: 38
-        implicitHeight: 38
-        radius: width / 2
-        color: backMouse.containsPress ? Appearance.colors.colSurfaceContainerHighestActive
-            : backMouse.containsMouse ? Appearance.colors.colSurfaceContainerHighest
-            : Appearance.colors.colSurfaceContainerHigh
+        implicitWidth: Appearance.sizes.controlHeight
+        implicitHeight: Appearance.sizes.controlHeight
+        radius: Appearance.rounding.small
+        color: backMouse.containsPress ? Appearance.colors.colLayer1Active
+            : backMouse.containsMouse ? Appearance.colors.colLayer1Hover
+            : "transparent"
 
         Behavior on color {
             enabled: !Appearance.reducedMotion
@@ -40,7 +40,7 @@ RowLayout {
         MaterialSymbol {
             anchors.centerIn: parent
             text: "arrow_back"
-            iconSize: 22
+            iconSize: 18
             color: Appearance.colors.colOnSurface
         }
 
@@ -56,6 +56,7 @@ RowLayout {
     StyledText {
         Layout.fillWidth: true
         text: root.title
+        font.family: Appearance.font.family.title
         font.pixelSize: Appearance.font.pixelSize.large
         font.weight: Font.DemiBold
         color: Appearance.colors.colOnSurface
@@ -65,11 +66,11 @@ RowLayout {
     Rectangle {
         Layout.alignment: Qt.AlignVCenter
         visible: root.actionSymbol !== ""
-        implicitWidth: 38
-        implicitHeight: 38
-        radius: width / 2
-        color: actionMouse.containsPress ? Appearance.colors.colSurfaceContainerHighestActive
-            : actionMouse.containsMouse ? Appearance.colors.colSurfaceContainerHighest
+        implicitWidth: Appearance.sizes.controlHeight
+        implicitHeight: Appearance.sizes.controlHeight
+        radius: Appearance.rounding.small
+        color: actionMouse.containsPress ? Appearance.colors.colLayer1Active
+            : actionMouse.containsMouse ? Appearance.colors.colLayer1Hover
             : "transparent"
         border.width: 1
         border.color: Appearance.colors.colOutlineVariant

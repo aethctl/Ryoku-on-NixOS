@@ -10,6 +10,7 @@ Item {
     property string prefix: "pythonTime"
     property var screen: null
     property string inkColorA: ""
+    property real scaleCfg: 1
 
     readonly property var rosterFace: PythonRoster.byPrefix(adapter.prefix)
     readonly property var options: {
@@ -53,7 +54,7 @@ Item {
         inkOverride: adapter.hostOverride
         accentOverride: adapter.hostOverride
         sizeOverride: adapter.selectedVariant
-        scaleOverride: Config[adapter.prefix + "Scale"] || 1
+        scaleOverride: adapter.scaleCfg
         radiusOverride: Config[adapter.prefix + "Radius"]
         optionOverrides: adapter.options
     }

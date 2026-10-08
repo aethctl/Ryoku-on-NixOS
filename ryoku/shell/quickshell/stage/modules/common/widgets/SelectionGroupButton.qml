@@ -9,42 +9,66 @@ import stage.modules.common.widgets
 
 GroupButton {
     id: root
-    horizontalPadding: 12
-    verticalPadding: 8
-    bounce: true
-    clickedWidth: baseWidth + (isAtSide ? 8 : 12)
-    buttonRadiusPressed: Appearance.rounding.small
-    Layout.fillWidth: false
-    Layout.fillHeight: false
-    scale: 1.0
+    property real maximumLabelWidth: 140
     property string buttonIcon
     property string buttonShape
     property string buttonSymbol
     property string buttonColor
     property bool leftmost: false
     property bool rightmost: false
-    
-    readonly property bool sharpModeEnabled: Config.options.appearance.sharpMode
-    readonly property int fullRadius: sharpModeEnabled ? Appearance.rounding.full : height / 2
-    leftRadius: root.isPressed ? root.buttonRadiusPressed : ((toggled || leftmost) ? fullRadius : Appearance.rounding.unsharpenmore)
-    rightRadius: root.isPressed ? root.buttonRadiusPressed : ((toggled || rightmost) ? fullRadius : Appearance.rounding.unsharpenmore)
-    colBackground: Appearance.colors.colSecondaryContainer
-    colBackgroundHover: Appearance.colors.colSecondaryContainerHover
-    colBackgroundActive: Appearance.colors.colSecondaryContainerActive
+
+    horizontalPadding: Appearance.sizes.space3
+    verticalPadding: Appearance.sizes.space1
+    bounce: false
+    clickedWidth: baseWidth
+    buttonRadius: Appearance.rounding.small
+    buttonRadiusPressed: Appearance.rounding.small
+    leftRadius: Appearance.rounding.small
+    rightRadius: Appearance.rounding.small
+    Layout.fillWidth: false
+    Layout.fillHeight: false
+    implicitHeight: Appearance.sizes.controlHeight
+    scale: root.isPressed ? 0.96 : 1
+
+    colBackground: "transparent"
+    colBackgroundHover: Appearance.colors.colLayer1Hover
+    colBackgroundActive: Appearance.colors.colLayer1Active
+    colBackgroundToggled: Appearance.colors.colSecondary
+    colBackgroundToggledHover: Appearance.colors.colSecondaryHover
+    colBackgroundToggledActive: Appearance.colors.colSecondaryActive
+
+    readonly property color contentColor: root.toggled
+        ? Appearance.colors.colOnSecondary
+        : (root.isHovered ? Appearance.colors.colOnSurface : Appearance.colors.colOnSurfaceVariant)
+
+    background: Rectangle {
+        radius: Appearance.rounding.small
+        color: root.color
+        border.width: root.activeFocus ? 2 : 1
+        border.color: root.toggled ? Appearance.colors.colSecondary
+            : root.activeFocus ? Appearance.colors.colOnSurface
+            : root.isHovered ? Appearance.colors.colOutline : Appearance.colors.colOutlineVariant
+        Behavior on color {
+            ColorAnimation { duration: Appearance.animation.elementMoveFast.duration }
+        }
+    }
 
     contentItem: RowLayout {
-        spacing: 4 * (root.buttonText?.length > 0)
+        spacing: label.visible && (icon.visible || shapeLoader.visible || symbolLoader.visible)
+            ? Appearance.sizes.space1 : 0
 
         MaterialSymbol {
+            id: icon
             Layout.alignment: Qt.AlignVCenter
             visible: root.buttonIcon !== undefined && root.buttonIcon !== ""
             text: root.buttonIcon || ""
-            iconSize: Appearance.font.pixelSize.larger
+            iconSize: 18
             fill: root.toggled ? 1 : 0
-            color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+            color: root.contentColor
         }
 
         Loader {
+            id: shapeLoader
             Layout.alignment: Qt.AlignVCenter
             active: root.buttonShape !== undefined && root.buttonShape !== ""
             visible: active
@@ -54,43 +78,49 @@ GroupButton {
         Component {
             id: rectangleShapeComp
             Rectangle {
-                implicitWidth: Appearance.font.pixelSize.larger
-                implicitHeight: Appearance.font.pixelSize.larger
-                radius: Math.min(implicitWidth / 2, Appearance.rounding.windowRounding > 0 ? 4 : 0)
-                color: root.buttonColor !== "" ? root.buttonColor : root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+                implicitWidth: 18
+                implicitHeight: 18
+                radius: Appearance.rounding.small
+                color: root.buttonColor !== "" ? root.buttonColor : root.contentColor
             }
         }
 
         Component {
             id: materialShapeComp
             MaterialShape {
-                id: materialSymbol2
-                implicitWidth: Appearance.font.pixelSize.larger
-                implicitHeight: Appearance.font.pixelSize.larger
+                implicitWidth: 18
+                implicitHeight: 18
                 shapeString: root.buttonShape
-                color: root.buttonColor !== "" ? root.buttonColor : root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+                color: root.buttonColor !== "" ? root.buttonColor : root.contentColor
             }
         }
 
         Loader {
+            id: symbolLoader
             Layout.alignment: Qt.AlignVCenter
             active: root.buttonSymbol !== undefined && root.buttonSymbol !== ""
             visible: active
             sourceComponent: CustomIcon {
-                id: materialSymbol3
-                width: Appearance.font.pixelSize.larger
-                height: Appearance.font.pixelSize.larger
+                width: 18
+                height: 18
                 source: root.buttonSymbol
                 colorize: true
-                color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+                color: root.contentColor
             }
         }
 
         StyledText {
+            id: label
             Layout.alignment: Qt.AlignVCenter
+            Layout.minimumWidth: 0
+            Layout.maximumWidth: root.maximumLabelWidth
             visible: root.buttonText !== undefined && root.buttonText.length > 0
-            color: root.toggled ? Appearance.colors.colOnPrimary : Appearance.colors.colOnSecondaryContainer
+            color: root.contentColor
             text: root.buttonText || ""
+            elide: Text.ElideRight
+            font.family: Appearance.font.family.main
+            font.pixelSize: Appearance.font.pixelSize.smaller
+            font.weight: Font.Medium
         }
     }
 }

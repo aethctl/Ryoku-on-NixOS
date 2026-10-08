@@ -9,21 +9,25 @@ TextField {
 
     property alias colBackground: background.color
 
-    Layout.fillHeight: true
+    Layout.fillHeight: false
     implicitWidth: 200
-    padding: 10
+    implicitHeight: 36
+    padding: Appearance.sizes.space2
 
-    placeholderTextColor: Appearance.colors.colSubtext
-    color: Appearance.colors.colOnLayer1
+    // The built-in placeholder cannot elide, so a bounded copy is painted
+    // below while the public placeholderText API remains unchanged.
+    placeholderTextColor: "transparent"
+    color: Appearance.colors.colOnSurface
     font {
         family: Appearance.font.family.main
-        pixelSize: Appearance.font.pixelSize.small
+        pixelSize: Appearance.font.pixelSize.smallie
+        weight: Font.Normal
         hintingPreference: Font.PreferFullHinting
         variableAxes: Appearance.font.variableAxes.main
     }
     renderType: Text.NativeRendering
-    selectedTextColor: Appearance.colors.colOnSecondaryContainer
-    selectionColor: Appearance.colors.colSecondaryContainer
+    selectedTextColor: Appearance.colors.colOnSecondary
+    selectionColor: Appearance.colors.colSecondary
 
     // Set this to the item that should receive focus (and key events)
     // when Ctrl is held, e.g. cheatsheetBackground for tab switching.
@@ -39,8 +43,31 @@ TextField {
 
     background: Rectangle {
         id: background
-        color: Appearance.colors.colLayer1
-        radius: Appearance.rounding.full
+        color: "transparent"
+        radius: Appearance.rounding.small
+        border.width: filterField.activeFocus ? 2 : 1
+        border.color: filterField.activeFocus
+            ? Appearance.colors.colOnSurface
+            : fieldMouse.containsMouse
+                ? Appearance.colors.colOutline
+                : Appearance.colors.colOutlineVariant
+        Behavior on border.color {
+            ColorAnimation { duration: Appearance.animation.elementMoveFast.duration }
+        }
+    }
+
+    StyledText {
+        z: 2
+        anchors.left: parent.left
+        anchors.leftMargin: filterField.leftPadding
+        anchors.right: parent.right
+        anchors.rightMargin: filterField.rightPadding
+        anchors.verticalCenter: parent.verticalCenter
+        visible: filterField.text.length === 0
+        text: filterField.placeholderText
+        color: Appearance.colors.colSubtext
+        font: filterField.font
+        elide: Text.ElideRight
     }
 
     StyledTextContextMenuLoader {
@@ -49,6 +76,7 @@ TextField {
     }
 
     MouseArea {
+        id: fieldMouse
         anchors.fill: parent
         acceptedButtons: Qt.RightButton
         hoverEnabled: true

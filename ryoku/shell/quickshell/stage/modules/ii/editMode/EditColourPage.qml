@@ -4,70 +4,120 @@ import stage
 import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
+import Ryoku.Ui as Ui
+import Ryoku.Ui.Singletons
 
-/**
- * The colour scheme, as a page of Edit Mode's panel: the same swatch grid the
- * Welcome and the Colours page draw, fed the wallpaper on the card. A click
- * regenerates the palette and the whole shell follows, the card included.
- *
- * Three sources, as Settings has them: schemes derived from the wallpaper,
- * the built-in themes, and any custom ones the config lists. Only the last is
- * hidden when there are none - a chip for an empty grid is a promise.
- */
+// Both galleries drive Ryoku's real palette owners. Wallpaper cards tune
+// matugen.json; named cards set shell.json theme.theme through ryoku-shell.
 StyledFlickable {
     id: root
 
     contentHeight: column.implicitHeight
     clip: true
 
-    property string source: "wallpaper"
-    readonly property var customSchemes: Config.options.appearance.customColorSchemes ?? []
-
     ColumnLayout {
         id: column
         width: root.width
-        spacing: 4
+        spacing: Tokens.s3
 
-        // The built-in and custom preset files belong to the island's theme
-        // engine; under the Ryoku mount the swatches are wallpaper-derived
-        // only, so the source picker (and its one chip) stands down.
-        EditOptionChips {
-            label: Translation.tr("Source")
-            compact: false
-            visible: !Config.widgetProvider
-            currentValue: root.source
-            options: {
-                const list = [
-                    { "displayName": Translation.tr("Wallpaper"), "icon": "wallpaper", "value": "wallpaper" },
-                    { "displayName": Translation.tr("Built-in"), "icon": "palette", "value": "builtin" }
-                ];
-                if (root.customSchemes.length > 0)
-                    list.push({ "displayName": Translation.tr("Custom"), "icon": "brush", "value": "custom" });
-                return list;
+        Ui.SettingCard {
+            Layout.fillWidth: true
+            title: Translation.tr("WALLPAPER COLOURS")
+            collapsible: false
+
+            Ui.SettingRow {
+                width: parent.width
+                label: Translation.tr("Source colour")
+                desc: Translation.tr("Choose which dominant wallpaper colour leads.")
+                block: true
+                enabled: !MaterialThemeLoader.busy
+
+                Ui.Chips {
+                    anchors.fill: parent
+                    options: ["0", "1", "2", "3", "4"]
+                    labels: ({
+                        "0": Translation.tr("1st"),
+                        "1": Translation.tr("2nd"),
+                        "2": Translation.tr("3rd"),
+                        "3": Translation.tr("4th"),
+                        "4": Translation.tr("5th")
+                    })
+                    current: String(MaterialThemeLoader.sourceColorIndex)
+                    onChose: key =>
+                        MaterialThemeLoader.setSourceColorIndex(Number(key))
+                }
             }
-            onSelected: value => root.source = value
+
+            Ui.SettingRow {
+                width: parent.width
+                divider: true
+                label: Translation.tr("Scheme variant")
+                desc: Translation.tr("Previewed from the current wallpaper.")
+                block: true
+                enabled: !MaterialThemeLoader.busy
+
+                ColorPreviewGrid {
+                    anchors.fill: parent
+                    source: "wallpaper"
+                    showTooltips: true
+                }
+            }
         }
 
         EditPanelNotice {
             Layout.fillWidth: true
-            Layout.topMargin: 4
-            visible: root.source === "wallpaper" && (Config.options.background.useWallpaperEngine ?? false)
-            symbol: "info"
-            text: Translation.tr("With a Wallpaper Engine scene the swatches are drawn from the last image wallpaper.")
+            visible: MaterialThemeLoader.followsWallpaper
+            symbol: "wallpaper"
+            text: Translation.tr("The selected variant follows the current wallpaper.")
         }
 
-        ColorPreviewGrid {
+        EditPanelNotice {
             Layout.fillWidth: true
-            Layout.topMargin: 8
-            Layout.leftMargin: 2
-            Layout.rightMargin: 2
-            builtInTheme: root.source === "builtin"
-            customTheme: root.source === "custom"
+            visible: !MaterialThemeLoader.catalogReady
+            symbol: "hourglass_top"
+            text: Translation.tr("Loading the theme catalogue…")
+        }
+
+        EditPanelNotice {
+            Layout.fillWidth: true
+            visible: MaterialThemeLoader.catalogReady
+                && MaterialThemeLoader.namedThemes.length === 0
+            symbol: "info"
+            text: Translation.tr("No named themes are available.")
+        }
+
+        Ui.SettingCard {
+            Layout.fillWidth: true
+            visible: MaterialThemeLoader.namedThemes.length > 0
+            title: Translation.tr("NAMED THEMES")
+            collapsible: false
+
+            Ui.SettingRow {
+                width: parent.width
+                label: Translation.tr("Installed themes")
+                desc: Translation.tr("%1 choices").arg(
+                    String(MaterialThemeLoader.namedThemes.length))
+                block: true
+                enabled: !MaterialThemeLoader.busy
+
+                ColorPreviewGrid {
+                    anchors.fill: parent
+                    source: "themes"
+                    showTooltips: true
+                }
+            }
+        }
+
+        EditPanelNotice {
+            Layout.fillWidth: true
+            visible: MaterialThemeLoader.lastError !== ""
+            symbol: "error"
+            text: MaterialThemeLoader.lastError
         }
 
         Item {
             Layout.fillWidth: true
-            implicitHeight: 8
+            implicitHeight: Tokens.s2
         }
     }
 }

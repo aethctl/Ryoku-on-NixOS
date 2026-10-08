@@ -56,7 +56,7 @@ Singleton {
     // one host screen, so it must load even where the user hid the bar. Ricelin
     // is Store-owned but follows the same primary-host contract as Iris/Python.
     function isFrameFamily(id) {
-        return id === "iris" || id === "python" || id === "ricelin";
+        return id === "iris" || id === "python" || id === "nomarchy" || id === "ricelin";
     }
 
 
@@ -71,7 +71,8 @@ Singleton {
         "chroma": "barstyles/chroma/Scene.qml",
         "kairos": "barstyles/kairos/Scene.qml",
         "iris": "barstyles/iris/Scene.qml",
-        "python": "barstyles/python/Scene.qml"
+        "python": "barstyles/python/Scene.qml",
+        "nomarchy": "barstyles/nomarchy/Scene.qml"
     })
 
     function sceneUrl(id) {

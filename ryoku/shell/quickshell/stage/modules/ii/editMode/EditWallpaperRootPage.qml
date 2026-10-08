@@ -7,6 +7,7 @@ import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
 import stage.modules.common.functions
+import Ryoku.Ui.Singletons
 
 /**
  * The Wallpaper catalogue's root: the picture on the screen being edited, the
@@ -23,9 +24,8 @@ import stage.modules.common.functions
  * has one, the light-mode one in light mode when there is one, the shared one
  * otherwise - and the page says which.
  *
- * Writes go through WallpaperLayout and Wallpapers, both of which the mode's
- * history already hears: the per-screen list records its own entries, and a
- * shared wallpaper change is the style history's (EditModeChromeSurface).
+ * Ryogami owns every per-output path through Wallpapers; WallpaperLayout keeps
+ * only the framing history for the provider path painted on each screen.
  */
 StyledFlickable {
     id: root
@@ -72,8 +72,9 @@ StyledFlickable {
 
     ColumnLayout {
         id: column
-        width: root.width
-        spacing: 3
+        x: Tokens.s2
+        width: Math.max(0, root.width - Tokens.s4)
+        spacing: Tokens.s1
 
         // ── The picture ──────────────────────────────────────────────────────
         EditPanelSectionLabel {
@@ -183,16 +184,19 @@ StyledFlickable {
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 anchors.margins: 10
-                width: Math.min(nameText.implicitWidth + 24, preview.width - changeButton.width - 30)
+                width: Math.max(0, Math.min(nameText.implicitWidth + Tokens.s5,
+                    preview.width - changeButton.width - Tokens.s5))
                 height: preview.pillHeight
-                radius: Appearance.rounding.full
-                color: Appearance.colors.colSurfaceContainerHigh
+                radius: Tokens.radius
+                color: Tokens.paper
+                border.width: Tokens.border
+                border.color: Tokens.lineStrong
 
                 StyledText {
                     id: nameText
                     anchors.fill: parent
-                    anchors.leftMargin: 12
-                    anchors.rightMargin: 12
+                    anchors.leftMargin: Tokens.s3
+                    anchors.rightMargin: Tokens.s3
                     verticalAlignment: Text.AlignVCenter
                     text: preview.showsEngine ? Translation.tr("Wallpaper Engine scene") : root.fileName(root.targetPath)
                     font.pixelSize: Appearance.font.pixelSize.small
@@ -237,7 +241,7 @@ StyledFlickable {
             Layout.topMargin: 6
             first: true
             last: false
-            symbol: "photo_library"
+            symbol: "folder"
             title: Translation.tr("Choose from your folder")
             subtitle: Wallpapers.effectiveDirectory.replace(FileUtils.trimFileProtocol(Directories.home), "~")
             trailingKind: "chevron"
@@ -278,6 +282,37 @@ StyledFlickable {
             onActivated: GlobalStates.openWallpaperSelectorFromEditMode(root.lockTarget ? "lockscreen"
                 : root.ownScreen ? "screen:" + root.screenName
                 : root.lightTarget ? "lightmode" : "desktop")
+        }
+
+        EditPanelSectionLabel {
+            visible: !root.lockTab && WallpaperLayout.workspaceLabelFor(root.screenName) !== ""
+            text: Translation.tr("Workspace")
+        }
+
+        EditPanelRow {
+            Layout.fillWidth: true
+            visible: !root.lockTab && WallpaperLayout.workspaceLabelFor(root.screenName) !== ""
+            first: true
+            last: false
+            symbol: "keep"
+            title: Translation.tr("Use for this workspace")
+            subtitle: Translation.tr("Keep this wallpaper on %1").arg(WallpaperLayout.workspaceLabelFor(root.screenName))
+            trailingKind: "value"
+            valueText: Translation.tr("Use")
+            onActivated: WallpaperLayout.assignCurrentToWorkspace(root.screenName)
+        }
+
+        EditPanelRow {
+            Layout.fillWidth: true
+            visible: !root.lockTab && WallpaperLayout.workspaceLabelFor(root.screenName) !== ""
+            first: false
+            last: true
+            symbol: "link_off"
+            title: Translation.tr("Clear workspace wallpaper")
+            subtitle: Translation.tr("Use this display's wallpaper again")
+            trailingKind: "value"
+            valueText: Translation.tr("Clear")
+            onActivated: WallpaperLayout.clearWorkspaceWallpaper(root.screenName)
         }
 
         // ── Screens ──────────────────────────────────────────────────────────
@@ -332,10 +367,9 @@ StyledFlickable {
                     WallpaperLayout.attach(root.screenName);
                     return;
                 }
-                // A shared video cannot be copied to one screen: pick a
-                // picture for it instead.
-                if (!WallpaperLayout.detach(root.screenName))
-                    root.openPageRequested("wallpapers:screen");
+                // Choosing the first distinct path is what gives this output
+                // its own wallpaper in Ryogami.
+                root.openPageRequested("wallpapers:screen");
             }
         }
 
@@ -399,18 +433,16 @@ StyledFlickable {
         }
 
         // ── Position & zoom ──────────────────────────────────────────────────
-        // Position & zoom is the island's own wallpaper plane, which Ryoku's
-        // desktop does not have (ryogami paints the picture); the section
-        // stands down entirely under the Ryoku mount.
+        // Ryoku's backdrop consumes the same framing record as the island's
+        // wallpaper plane, so the panel and card gestures stay in lockstep.
         EditPanelSectionLabel {
-            visible: !Config.widgetProvider
             text: Translation.tr("Position & zoom")
         }
 
         EditPanelNotice {
             Layout.leftMargin: 4
             Layout.rightMargin: 4
-            visible: !Config.widgetProvider && !root.framingAvailable
+            visible: !root.framingAvailable
             symbol: root.lockTab ? "desktop_windows" : "movie"
             text: root.lockTab
                 ? Translation.tr("Moving, zooming and turning the wallpaper happens on the Desktop tab, where the card becomes the picture.")
@@ -592,7 +624,7 @@ StyledFlickable {
 
         Item {
             Layout.fillWidth: true
-            implicitHeight: 8
+            implicitHeight: Tokens.s2
         }
     }
 }

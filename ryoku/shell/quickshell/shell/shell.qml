@@ -218,27 +218,28 @@ ShellRoot {
 
             // Stage now renders entirely inside the desktop surface (one stack:
             // backdrop, layers, widgets), so there is no separate Background
-            // surface here (docs/stage.md). Built on first enable or first
-            // placement; cava and its buffers never exist while the visualizer
-            // is off.
+            // surface here (docs/stage.md). A silent visualizer is unloaded on
+            // every output when the performance policy asks for it; live audio
+            // re-creates the surfaces immediately. Placement runs in the Stage
+            // Editor now: the desktop hosts the look while the mode frames this
+            // monitor, so this surface exists for the plain and overlay cases only.
             LazyLoader {
                 id: vizLoader
-                activeAsync: VizCfg.Config.enabled || (perScreen.st && perScreen.st.visualizerPlacing)
+                activeAsync: VizCfg.Config.enabled && Perf.visualizerResident
                 Visualizer {
                     id: perScreenViz
                     screen: perScreen.modelData
                     mode: !VizCfg.Config.enabled ? "off"
                         : (perScreen.st && perScreen.st.visualizerOverlay ? "overlay" : "desktop")
-                    placing: perScreen.st ? perScreen.st.visualizerPlacing : false
                     // The desktop hosts the visualizer behind the cut-outs while the
-                    // stage is on; this surface steps aside (cava keeps running).
-                    // A rebuilt monitor stack (DPMS off/on, a lid close/open) starts
-                    // with no wallpaper frame, so hostsVisualizer briefly reads false
-                    // even for a stage wallpaper: stay suppressed until the frame
-                    // lands, or the surface maps full-screen and pulses for a few
-                    // seconds on every resume.
+                    // stage is on, and inside the lifted desktop while the Stage
+                    // Editor frames this monitor; this surface steps aside (cava
+                    // keeps running). A rebuilt monitor stack (DPMS off/on, a lid
+                    // close/open) starts with no wallpaper frame, so
+                    // hostsVisualizer briefly reads false even for a stage wallpaper:
+                    // stay suppressed until the frame lands, or the surface maps
+                    // full-screen and pulses for a few seconds on every resume.
                     suppressed: desktop.hostsVisualizer || !wallpaper.reloadReady
-                    onPlacingDone: if (perScreen.st) perScreen.st.visualizerPlacing = false
                 }
             }
 
@@ -296,26 +297,20 @@ ShellRoot {
                     && Config.askBubble.screen === perScreen.modelData.name
             }
 
-            // The dock: a resident per-monitor surface on the edge opposite the
-            // bar. Style-agnostic, so it lives here rather than inside a bar style;
-            // it is not built until the user turns it on (Hub -> Bar Studio -> Dock).
-            LazyLoader {
+            // One cheap host per monitor loads only the selected dock design.
+            // The surface itself remains independent of the active bar style.
+            UniversalDockHost {
                 id: dockLoader
-                activeAsync: Dock.cfg("enabled", false)
-                DockSurface {
-                    id: perScreenDock
-                    screen: perScreen.modelData
-                    // Edit widgets steps the dock back so the whole desktop is the canvas.
-                    visible: Dock.cfg("enabled", false)
-                        && !(StageCfg.StageSession.widgets && StageCfg.StageSession.monitor === perScreen.modelData.name)
-                }
+                screen: perScreen.modelData
+                surfaceVisible: !(StageCfg.StageSession.widgets
+                    && StageCfg.StageSession.monitor === perScreen.modelData.name)
             }
 
             // The dock's right-click context menu: a full-screen overlay on the
             // monitor that owns the open menu (the thin dock strip cannot host it).
             LazyLoader {
                 id: dockMenuLoader
-                property bool open: Dock.menuOpen && Dock.menuScreen === perScreen.modelData.name
+                property bool open: Dock.design === "ryoku" && Dock.menuOpen && Dock.menuScreen === perScreen.modelData.name
                 activeAsync: open || dockMenuHold.running
                 onOpenChanged: if (!open && active) dockMenuHold.restart()
                 DockMenuOverlay {
@@ -561,8 +556,7 @@ ShellRoot {
                 st.visualizerOverlay = !st.visualizerOverlay;
             break;
         case "visualizer-place":
-            if (st)
-                root.placeVisualizer(!st.visualizerPlacing);
+            root.placeVisualizer(!StageCfg.StageSession.active);
             break;
         case "quicksettings":
             ShellState.requestSurfaceActive("sidebar-left", undefined);
@@ -647,14 +641,25 @@ ShellRoot {
         onPressed: root.toggleSurface("visualizer-place")
     }
 
-    // Aiming a hidden spectrum aims nothing, so placing it shows it first.
+    // Aiming a look happens in the Stage Editor now (docs/stage.md): the bind,
+    // the desktop menu row and the Hub hand-off all enter the edit session on
+    // the active monitor, where the look wears its placement grip like every
+    // other widget. A hidden spectrum aims nothing, so placing it shows it
+    // first. The editor's own Done/Escape leaves the session, so `off` only
+    // unwinds a session that is open.
     function placeVisualizer(on) {
         const st = ShellState.forActive();
         if (!st)
             return;
-        if (on && !VizCfg.Config.enabled)
+        const mon = (st.modelData && st.modelData.name) ? st.modelData.name : "";
+        if (!on) {
+            if (StageCfg.StageSession.active)
+                StageCfg.StageSession.leave();
+            return;
+        }
+        if (!VizCfg.Config.enabled)
             VizCfg.Config.setEnabled(true);
-        st.visualizerPlacing = on;
+        StageCfg.StageSession.enterWidgets(mon, "visualizer");
     }
 
     // --- Root machinery (ported from the reference pill root) --------------
@@ -956,8 +961,15 @@ ShellRoot {
     // a keybind or the daemon can open it. niri has no global-shortcut protocol,
     // so every shell surface is driven this way; the editor is no exception.
     IpcHandler {
+        id: desktopIpc
         target: "desktop"
         function editWidgets(mon: string): void {
+            desktopIpc.editSection("widgets", mon);
+        }
+        // Open the Stage Editor straight on one catalogue (widgets, wallpaper,
+        // style, visualizer, depth): the Hub's hand-offs and keybinds land on
+        // the editor they mean. Already open, it switches catalogue in place.
+        function editSection(section: string, mon: string): void {
             var m = mon;
             if (!m || m.length === 0) {
                 const st = ShellState.forActive();
@@ -968,7 +980,10 @@ ShellRoot {
             // which matches no desktop, so fall back to the first output.
             if (!m || m.length === 0)
                 m = ShellState.screens.length > 0 ? ShellState.screens[0].name : "";
-            StageCfg.StageSession.enterWidgets(m);
+            if (StageCfg.StageSession.onMonitor(m))
+                StageCfg.StageSession.openSection(section);
+            else
+                StageCfg.StageSession.enterWidgets(m, section);
         }
         function editDone(): void { StageCfg.StageSession.leave(); }
         // Open a widget's right-click menu on a monitor (empty = focused).

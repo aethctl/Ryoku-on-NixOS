@@ -3,14 +3,13 @@ import QtQuick
 import Quickshell
 import Ryoku.Ui.Singletons
 import shell.services as Services
-import "../visualizer/Singletons" as VizCfg
 import "../stage/Singletons" as StageCfg
 import inir
 
 // The system desktop right-click menu: right-clicking bare wallpaper on any bar
 // style opens this. It carries the iRiS desktop menu's structure -- a quick row
-// of icon tiles (wallpaper thumbnail, widgets, visualiser, search) over the
-// desktop's own actions -- in Ryoku's paper-and-ink language, on the shared
+// of icon tiles (wallpaper thumbnail, search) over the desktop's own actions,
+// led by the one way into the Stage Editor -- in Ryoku's paper-and-ink language, on the shared
 // DesktopMenu chrome. Every action targets the screen the menu opened on (the
 // owning Desktop's slice), never the focused output, which can be a different
 // monitor. The per-widget menu (WidgetMenu) and plugin menu are separate.
@@ -29,7 +28,7 @@ Item {
     function openAt(x, y) { shell.px = x; shell.py = y; shell.open = true; }
     function close() { shell.open = false; }
 
-    // The three editors and the launcher open on the monitor the menu is on: the
+    // The launcher and the Stage Editor open on the monitor the menu is on: the
     // owning desktop's slice, falling back to the focused output only if the menu
     // was built without one.
     function targetState() {
@@ -40,19 +39,19 @@ Item {
         return (st && st.modelData) ? st.modelData.name : "";
     }
 
-    // Widgets owns the edit-mode state machine (StageSession); this only enters it.
-    function editWidgets() {
+    // The one way into the Stage Editor: widgets, the visualiser, the depth
+    // stage and the wallpaper's framing are all its catalogues now, so the
+    // menu enters the mode on this monitor and the toolbar does the rest.
+    function editDesktop() {
         StageCfg.StageSession.enterWidgets(menu.activeMonitor());
         menu.close();
     }
-    function customizeVisualizer() {
-        const st = menu.targetState();
-        if (!st)
-            return;
-        if (!VizCfg.Config.enabled)
-            VizCfg.Config.setEnabled(true);
-        st.visualizerPlacing = true;
+    function newFolder() {
+        const openX = shell.px;
+        const openY = shell.py;
         menu.close();
+        if (menu.desktop)
+            menu.desktop.newDesktopFolder(openX, openY);
     }
     function changeWallpaper() {
         Services.ShellState.requestSurfaceActive("wallpaper", null);
@@ -65,18 +64,14 @@ Item {
             st.launcherOpen = true;
         menu.close();
     }
-    // Quick controls opens the left sidebar; depth and desktop settings open the
-    // scene editor in Ryoku Settings.
+    // Quick controls opens the left sidebar; Settings opens Ryoku Settings on
+    // its normal page, while Edit desktop above owns the Stage Editor entry.
     function quickControls() {
         Services.ShellState.requestSurfaceActive("sidebar-left", undefined);
         menu.close();
     }
-    function depthSettings() {
-        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene"]);
-        menu.close();
-    }
     function openSettings() {
-        Spawn.run(["ryoku-shell", "hub", "open", "desktop-scene-widgets"]);
+        Spawn.run(["ryoku-shell", "hub", "open"]);
         menu.close();
     }
     function refreshShell() {
@@ -97,17 +92,6 @@ Item {
         menu.close();
     }
 
-    // The Stage depth/parallax effect, named for the Depth row (which opens the
-    // full Stage controls rather than juggling two chips inside the menu).
-    readonly property string stageEffect: StageCfg.StageBackend.effect
-    readonly property bool stageBusy: StageCfg.StageBackend.busy
-    readonly property int stagePct: StageCfg.StageBackend.percent
-    readonly property string stageNotice: StageCfg.StageBackend.notice
-    readonly property string depthLabel: menu.stageBusy ? (menu.stagePct + "%")
-        : menu.stageNotice !== "" && menu.stageEffect !== "off" ? I18n.tr("Blocked")
-        : menu.stageEffect === "parallax" ? I18n.tr("Parallax")
-        : menu.stageEffect === "off" ? I18n.tr("Off") : I18n.tr("On")
-
     // The wallpaper thumbnail for the Wallpaper tile: the still the desktop paints
     // (a poster for a video wall), so the tile shows what is on screen.
     readonly property string wallpaperThumb: menu.desktop ? (menu.desktop.wallpaperPath || "") : ""
@@ -120,27 +104,18 @@ Item {
         title: I18n.tr("Desktop")
         gloss: "卓上"
 
-        // ── quick row: the iRiS menu's four tiles, mapped to Ryoku actions ──
+        // ── quick row: the wallpaper picker and the launcher ──
         MenuQuick {
             items: [
                 { icon: "wallpaper", label: I18n.tr("Wallpaper"), image: menu.wallpaperThumb, action: () => menu.changeWallpaper() },
-                { icon: "widgets", label: I18n.tr("Widgets"), action: () => menu.editWidgets() },
-                { icon: "graphic_eq", label: I18n.tr("Visualiser"), action: () => menu.customizeVisualizer() },
                 { icon: "search", label: I18n.tr("Search"), action: () => menu.openSearch() }
             ]
         }
 
         MenuSection {}
 
-        // Depth folds the old Depth/Parallax chips and their settings row into
-        // one quiet row: it names the current mode and opens the Stage controls.
-        MenuRow {
-            icon: "landscape"
-            label: I18n.tr("Depth")
-            value: menu.depthLabel
-            on: menu.stageEffect !== "off"
-            onTriggered: menu.depthSettings()
-        }
+        MenuRow { icon: "dashboard_customize"; label: I18n.tr("Edit desktop"); accent: true; onTriggered: menu.editDesktop() }
+        MenuRow { icon: "create_new_folder"; label: I18n.tr("New folder"); onTriggered: menu.newFolder() }
         MenuRow { icon: "tune"; label: I18n.tr("Quick controls"); onTriggered: menu.quickControls() }
         // iRiS conveniences: Studio and Edit iRiS on the iris bar style only. On
         // every other style they hide, and the Column skips them with no gap.

@@ -591,15 +591,17 @@ ShellRoot {
         Quickshell.execDetached(["xdg-open", root.saveRoot]);
     }
 
-    function physicalRegion() {
+    // grim's -g and GSR's -region both take layout (logical) coordinates, the
+    // space slurp reports and globalSel already lives in; each tool maps the box
+    // onto the output's physical pixels itself, so scaling it here first would
+    // grab an area the output's scale too big.
+    function layoutRegion() {
         if (!globalSel) return null;
         var g = globalSel;
-        var w = anchorOverlay();
-        var sc = (w && w.modelData && w.modelData.name) ? Wm.outputScale(w.modelData.name) : 1;
-        var x = Math.round(g.x * sc);
-        var y = Math.round(g.y * sc);
-        var width = Math.round(g.w * sc);
-        var height = Math.round(g.h * sc);
+        var x = Math.round(g.x);
+        var y = Math.round(g.y);
+        var width = Math.round(g.w);
+        var height = Math.round(g.h);
         return {
             grim: x + "," + y + " " + width + "x" + height,
             record: width + "x" + height + "+" + x + "+" + y
@@ -675,12 +677,10 @@ ShellRoot {
         });
     }
 
-    // Hand the region to the shell's recorder. GSR's -region takes physical global
-    // pixels; globalSel is in logical compositor coordinates, so scale it by the
-    // anchor output's factor. The daemon owns gpu-screen-recorder and the floating
-    // island.
+    // Hand the region to the shell's recorder; the daemon owns
+    // gpu-screen-recorder and the floating island.
     function doRecordRegion() {
-        var region = physicalRegion();
+        var region = layoutRegion();
         if (!region) { Qt.quit(); return; }
         var args = ["ryoku-shell", "record", "start", "--region", "--geometry", region.record];
         if (root.recordAudio) args.push("--with-desktop-audio");
@@ -1089,7 +1089,7 @@ ShellRoot {
                 root.doRecordRegion();
                 return;
             }
-            var region = root.physicalRegion();
+            var region = root.layoutRegion();
             if (!region) { Qt.quit(); return; }
             delayedGrabProc.run(region.grim, root.defaultPath, action);
         }

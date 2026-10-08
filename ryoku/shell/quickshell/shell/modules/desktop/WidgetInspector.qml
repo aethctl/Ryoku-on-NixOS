@@ -7,16 +7,12 @@ import "iris/IrisRoster.js" as IrisRoster
 import "python/PythonRoster.js" as PythonRoster
 import "options/OptionsCatalog.js" as OptionsCatalog
 
-// The widget inspector: the Customize sheet a widget's right-click menu opens. A
-// paper-and-ink card that docks beside the widget (never over it) and gathers
-// every setting the short menu no longer carries onto a horizontal tab strip --
-// Look (design, size, colour, shape), then one tab
-// per group of the widget's own options panel. The generic controls are built
-// here; the per-widget panel is hosted once and sliced by its MenuSection
-// headers, so the 24 options panels are never rewritten. Every control writes
-// the same widgets Config the drag and Ryoku Settings do, live, so the widget
-// retunes while the sheet stays open (a press off it falls through to the
-// widget, it never dismisses on an outside click).
+// The widget inspector is one settings body with two hosts. Ordinary desktop
+// customization docks it beside the widget; the Stage Editor embeds it in the
+// drawer. Look and each MenuSection from the widget's own options panel become
+// tabs here, so neither host carries a second copy of widget-specific logic.
+// Every control writes the same monitor-selected widgets Config and retunes the
+// widget live.
 Item {
     id: insp
 
@@ -24,17 +20,29 @@ Item {
 
     property string scope: "clock"
     property bool open: false
+    // In the Stage Editor the same inspector body belongs to the drawer. The
+    // floating shell stays available for ordinary desktop customization.
+    property bool embedded: false
+    implicitHeight: insp.embedded
+        ? tabStrip.implicitHeight + insp.gap + sheet.bodyDesired : 0
     // The live WidgetSlot, so the dock geometry follows the widget as it resizes.
     property var slot: null
 
     // Live while the sheet is on screen (open, or still fading shut) so the host
     // surface stays mapped through the fade and unmaps only once it settles.
-    readonly property bool showing: insp.open || sheet.opacity > 0.01
+    readonly property bool showing: insp.embedded || insp.open || sheet.opacity > 0.01
     visible: insp.showing
-    // Take focus while shown so Esc reaches the sheet; the host takes keyboard
-    // on demand so the text fields still type.
-    onShowingChanged: if (insp.showing) insp.forceActiveFocus()
-    Keys.onEscapePressed: insp.close()
+    // Take focus while shown so Esc reaches the floating sheet; the drawer owns
+    // keyboard routing for its embedded copy.
+    onShowingChanged: if (insp.showing && !insp.embedded) insp.forceActiveFocus()
+    Keys.onEscapePressed: event => {
+        if (insp.embedded) {
+            event.accepted = false;
+            return;
+        }
+        insp.close();
+        event.accepted = true;
+    }
 
     // The host surface masks input to this item so a press off it passes through
     // to the widgets; the video picker draws full-surface, so widen then.
@@ -43,6 +51,11 @@ Item {
 
     // Remember the last tab per widget for the session.
     property var lastTab: ({})
+    onScopeChanged: {
+        insp.optScroll = 0;
+        insp.curTab = insp._clampTab(insp.lastTab[insp.scope] === undefined
+            ? 0 : insp.lastTab[insp.scope]);
+    }
 
     // The widget rect, live off the slot, for docking.
     readonly property real wx: insp.slot ? insp.slot.x : 0
@@ -50,14 +63,17 @@ Item {
     readonly property real ww: insp.slot ? insp.slot.width : 0
     readonly property real wh: insp.slot ? insp.slot.height : 0
 
-    function openFor(widget, slot) {
+    function retarget(widget) {
         insp.scope = widget;
-        insp.slot = slot || null;
         insp.optScroll = 0;
         insp.curTab = insp._clampTab(insp.lastTab[widget] === undefined ? 0 : insp.lastTab[widget]);
+    }
+    function openFor(widget, slot) {
+        insp.retarget(widget);
+        insp.slot = slot || null;
         insp.open = true;
     }
-    function close() { insp.open = false; }
+    function close() { if (!insp.embedded) insp.open = false; }
     function cap(s) { return (s && s.length > 0) ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
     // ── widget identity: glyph, name and kanji seal for the title row ──────
@@ -66,6 +82,7 @@ Item {
     readonly property var pythonFace: PythonRoster.byPrefix(insp.scope)
     readonly property bool isPython: insp.pythonFace !== null
     readonly property var hostedFace: insp.isIris ? insp.irisFace : insp.pythonFace
+    readonly property bool isCanvas: insp.isIris && insp.irisFace.kind === "canvas"
     readonly property var builtinInfo: ({
         clock: { label: "Clock", icon: "schedule", gloss: "時計" },
         calendar: { label: "Calendar", icon: "calendar_month", gloss: "暦" },
@@ -75,7 +92,8 @@ Item {
         weather: { label: "Weather", icon: "partly_cloudy_day", gloss: "天気" },
         notes: { label: "Notes", icon: "sticky_note_2", gloss: "筆記" },
         dayprogress: { label: "Day Progress", icon: "donut_large", gloss: "経過" },
-        shape: { label: "Shape", icon: "category", gloss: "図形" }
+        shape: { label: "Shape", icon: "category", gloss: "図形" },
+        visualizer: { label: "Visualizer", icon: "graphic_eq", gloss: "音波" }
     })
     readonly property var _info: insp.builtinInfo[insp.scope] || null
     readonly property string wLabel: insp.hostedFace ? insp.hostedFace.label : (insp._info ? insp._info.label : insp.cap(insp.scope))
@@ -89,8 +107,11 @@ Item {
     readonly property bool isAio: insp.scope === "aio"
     readonly property bool isDayprogress: insp.scope === "dayprogress"
     readonly property bool isShape: insp.scope === "shape"
+    // The visualiser's own store owns its look, colour and box, so the generic
+    // Look tab (which writes widgets.json) would edit keys nothing reads; its
+    // tabs come entirely from its options panel.
+    readonly property bool isVisualizer: insp.scope === "visualizer"
     readonly property bool isRyokuStyle: (insp.isIris || insp.isPython) && Config[insp.scope + "Style"] === "ryoku"
-    readonly property bool isCanvas: insp.isIris && insp.irisFace.kind === "canvas"
     readonly property string curIrisSize: insp.isIris ? (Config[insp.scope + "Size"] || insp.irisFace.sizes[0]) : ""
     readonly property string curPythonVariant: insp.isPython ? (Config[insp.scope + "Variant"] || insp.pythonFace.variants[0]) : ""
 
@@ -180,15 +201,16 @@ Item {
     }
 
     readonly property var tabs: {
-        var t = [{ kind: "look", label: I18n.tr("Look"), gloss: "見た目" }];
+        var t = insp.isVisualizer ? [] : [{ kind: "look", label: I18n.tr("Look"), gloss: "見た目" }];
         if (insp.hasOptions) {
             var s = insp.sections;
-            if (s.length <= 1) {
+            var shown = s.filter(sec => sec && sec.visible !== false);
+            if (shown.length <= 1) {
                 // one section or none: a single tab named after the widget itself.
-                t.push({ kind: "opt", label: insp.wLabel, gloss: insp.wGloss, si: (s.length === 1 ? 0 : -1) });
+                t.push({ kind: "opt", label: insp.wLabel, gloss: insp.wGloss, si: (shown.length === 1 ? insp.sections.indexOf(shown[0]) : -1) });
             } else {
-                for (var i = 0; i < s.length; i++)
-                    t.push({ kind: "opt", label: s[i].label, gloss: s[i].gloss, si: i });
+                for (var i = 0; i < shown.length; i++)
+                    t.push({ kind: "opt", label: shown[i].label, gloss: shown[i].gloss, si: insp.sections.indexOf(shown[i]) });
             }
         }
         return t;
@@ -244,7 +266,7 @@ Item {
     MultiEffect {
         source: sheet
         anchors.fill: sheet
-        visible: !Performance.shadowsDisabled && sheet.opacity > 0.01
+        visible: !insp.embedded && !Performance.shadowsDisabled && sheet.opacity > 0.01
         shadowEnabled: true
         shadowColor: Theme.shadow
         shadowBlur: 1.0
@@ -260,14 +282,17 @@ Item {
         readonly property real bodyDesired: (insp.curTabObj && insp.curTabObj.kind === "look") ? lookCol.implicitHeight
             : insp.optBand
 
-        width: insp.sheetW
-        height: Math.min(insp.height - Theme.s2 * 2, sheet.chrome + sheet.bodyDesired)
-        radius: Theme.menuRadius
-        color: Theme.surface
-        border.width: 1
+        width: insp.embedded ? insp.width : insp.sheetW
+        height: insp.embedded ? insp.height
+            : Math.min(insp.height - Theme.s2 * 2, sheet.chrome + sheet.bodyDesired)
+        radius: insp.embedded ? 0 : Theme.menuRadius
+        color: insp.embedded ? "transparent" : Theme.surface
+        border.width: insp.embedded ? 0 : 1
         border.color: Theme.line
 
         x: {
+            if (insp.embedded)
+                return 0;
             const mx = Theme.s2;
             if (!insp.slot)
                 return Math.max(mx, (insp.width - width) / 2);
@@ -277,20 +302,22 @@ Item {
             return Math.max(mx, Math.min(tx, insp.width - width - mx));
         }
         y: {
+            if (insp.embedded)
+                return 0;
             const my = Theme.s2;
             if (!insp.slot)
                 return Math.max(my, (insp.height - height) / 2);
             return Math.max(my, Math.min(insp.wy, insp.height - height - my));
         }
 
-        opacity: insp.open ? 1 : 0
+        opacity: insp.embedded || insp.open ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.quick } }
         Behavior on height { NumberAnimation { duration: Theme.quick; easing.type: Theme.ease } }
         transform: Scale {
             origin.x: insp.dockRight ? 0 : sheet.width
             origin.y: 0
-            xScale: insp.open ? 1 : 0.96
-            yScale: insp.open ? 1 : 0.96
+            xScale: insp.embedded || insp.open ? 1 : 0.96
+            yScale: insp.embedded || insp.open ? 1 : 0.96
             Behavior on xScale { NumberAnimation { duration: Theme.quick; easing.type: Theme.ease } }
             Behavior on yScale { NumberAnimation { duration: Theme.quick; easing.type: Theme.ease } }
         }
@@ -298,6 +325,7 @@ Item {
         // ── title: glyph, name, kanji, and a close button ──
         Item {
             id: titleRow
+            visible: !insp.embedded
             anchors { top: parent.top; left: parent.left; right: parent.right; margins: insp.pad }
             height: Theme.s6
 
@@ -355,7 +383,12 @@ Item {
         // tab stays visible and nothing is cut at the sheet's edge ──
         Flow {
             id: tabStrip
-            anchors { top: titleRow.bottom; topMargin: insp.gap; left: parent.left; right: parent.right; leftMargin: insp.pad; rightMargin: insp.pad }
+            anchors.top: insp.embedded ? parent.top : titleRow.bottom
+            anchors.topMargin: insp.embedded ? 0 : insp.gap
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: insp.embedded ? 0 : insp.pad
+            anchors.rightMargin: insp.embedded ? 0 : insp.pad
             spacing: Theme.s1
             Repeater {
                 id: tabRep
@@ -378,7 +411,9 @@ Item {
             anchors {
                 top: tabStrip.bottom; topMargin: insp.gap
                 left: parent.left; right: parent.right; bottom: parent.bottom
-                leftMargin: insp.pad; rightMargin: insp.pad; bottomMargin: insp.pad
+                leftMargin: insp.embedded ? 0 : insp.pad
+                rightMargin: insp.embedded ? 0 : insp.pad
+                bottomMargin: insp.embedded ? 0 : insp.pad
             }
 
             // ── Look ──
@@ -392,6 +427,7 @@ Item {
                 interactive: false
                 boundsBehavior: Flickable.StopAtBounds
                 WheelHandler {
+                    enabled: !insp.embedded
                     onWheel: (e) => {
                         const m = Math.max(0, lookFlick.contentHeight - lookFlick.height);
                         lookFlick.contentY = Math.max(0, Math.min(m, lookFlick.contentY - e.angleDelta.y));
@@ -517,6 +553,7 @@ Item {
                     MenuSection { label: I18n.tr("Adjust"); gloss: "調整" }
                     MenuSlider {
                         id: sizeSlider
+                        visible: !insp.embedded
                         label: I18n.tr("Size")
                         from: 0.5; to: 2.5; step: 0.02
                         value: Config[insp.scope + "Scale"] || 1
@@ -660,6 +697,7 @@ Item {
                 }
 
                 WheelHandler {
+                    enabled: !insp.embedded
                     onWheel: (e) => {
                         const m = Math.max(0, insp.optBand - optView.height);
                         insp.optScroll = Math.max(0, Math.min(m, insp.optScroll - e.angleDelta.y));

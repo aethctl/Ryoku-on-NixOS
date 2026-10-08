@@ -3,12 +3,21 @@ pragma Singleton
 import QtQuick
 import inir.modules.common
 import inir.modules.iris.style
+import shell.services as Ryoku
 
 QtObject {
     id: root
 
     readonly property var bar: Config.options?.iris?.bar ?? ({})
-    readonly property var dock: Config.options?.iris?.dock ?? ({})
+    readonly property var dock: ({
+        enable: Ryoku.Dock.cfg("enabled", false) && Ryoku.Dock.design === "shima",
+        position: Ryoku.Dock.cfg("edge", "auto"),
+        autoHide: Ryoku.Dock.cfg("autohide", true),
+        iconSize: Ryoku.Dock.cfg("size", 44),
+        magnification: Ryoku.Dock.cfg("magnify", true),
+        notch: Ryoku.Dock.designCfg("shima", "notch", true),
+        reserveSpace: Ryoku.Dock.designCfg("shima", "reserveSpace", true)
+    })
     readonly property var surround: Config.options?.iris?.surround ?? ({})
     readonly property real d: IrisStyle.density
 
@@ -71,25 +80,15 @@ QtObject {
     readonly property string islandEdge: root.edges.includes(String(root.bar?.position ?? "top")) ? String(root.bar.position) : "top"
     readonly property string dockEdge: {
         const wanted = String(root.dock?.position ?? "auto")
-        return root.edges.includes(wanted) && wanted !== root.islandEdge ? wanted : root.opposite(root.islandEdge)
+        return root.edges.includes(wanted) ? wanted : root.opposite(root.islandEdge)
     }
     readonly property string wantedIsland: String(root.bar?.position ?? "top")
     readonly property string wantedDock: String(root.dock?.position ?? "auto")
     property string settledIsland: ""
     property string settledDock: ""
-    Component.onCompleted: { root.settledIsland = root.islandEdge; root.settledDock = root.dockEdge }
-    onWantedIslandChanged: {
-        if (root.edges.includes(root.wantedIsland) && root.wantedIsland === root.wantedDock
-                && root.settledIsland.length > 0 && root.settledIsland !== root.wantedIsland)
-            Config.setNestedValue("iris.dock.position", root.settledIsland)
-        root.settle()
-    }
-    onWantedDockChanged: {
-        if (root.edges.includes(root.wantedDock) && root.wantedDock === root.islandEdge
-                && root.settledDock.length > 0 && root.settledDock !== root.wantedDock)
-            Config.setNestedValue("iris.bar.position", root.settledDock)
-        root.settle()
-    }
+    Component.onCompleted: root.settle()
+    onWantedIslandChanged: root.settle()
+    onWantedDockChanged: root.settle()
     function settle(): void {
         Qt.callLater(() => { root.settledIsland = root.islandEdge; root.settledDock = root.dockEdge })
     }

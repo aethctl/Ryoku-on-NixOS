@@ -1,397 +1,411 @@
 import QtQuick
 import QtQuick.Layouts
-import Qt5Compat.GraphicalEffects
-import Quickshell
-import Quickshell.Io
-import Quickshell.Widgets
 import stage
 import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
-import stage.modules.common.functions
+import Ryoku.Ui as Ui
+import Ryoku.Ui.Singletons
 
-/**
- * Presets, at the top of the Style catalogue: save the look on the card,
- * apply one that was saved before, take the last one back, and the way to
- * the store.
- *
- * Edit Mode is where a look gets made, so it is the natural place to keep
- * one: you have just arranged everything and the card is showing exactly
- * what the preset will hold. The list is the same folder Settings' Preset
- * Manager reads, through the same script, so a preset saved here is there
- * and the other way round.
- *
- * Applying replaces the whole config, which is more than the mode's history
- * can walk back one step at a time: the stack is cleared and "Undo preset"
- * - the snapshot the script takes before it merges - stands in for it. The
- * card applies directly, keeping this compact catalogue focused on choosing
- * a look rather than opening another set of controls.
- *
- * The store itself stays in Settings. It needs a sign-in, publishing, diffs
- * and a review dialog, which is a window's worth of surface; the row here
- * says how many installed presets have an update waiting and hands off.
- */
 ColumnLayout {
     id: root
 
-    // The name field needs the keyboard, and on this surface the keyboard is
-    // held only on request (see EditModeDrawer's search field).
     signal fieldFocusRequested(Item field)
     signal fieldFocusReleased()
 
-    spacing: 3
+    spacing: Tokens.s3
 
-    // [{name, wallpaper, configVersion}], as the script lists them.
-    property var presets: []
     property bool saving: false
-    readonly property string activePreset: PresetStore.activePreset
-    readonly property string presetsScript: `${Directories.scriptPath}/presets.sh`
+    property string renamingPreset: ""
+    property string applyingPreset: ""
+    property var pendingBefore: null
+    property var pendingAfter: null
+    property string applyError: ""
 
-    function refresh() {
-        listProc.running = false;
-        listProc.running = true;
+    readonly property string monitorName: String(Config.widgetProvider?.monitor ?? "")
+    readonly property string activePreset: root.matchingPreset()
+
+    function cleanName(value) {
+        return PresetStore.cleanName(value);
     }
 
-    function cleanName(text) {
-        return String(text ?? "").replace(/[\/\\"]/g, "").trim();
+    function currentWallpaper() {
+        const selected = Wallpapers.currentWallpaperPath(root.monitorName);
+        return String(selected || Wallpapers.effectiveWallpaperPath || "");
     }
 
-    function save() {
+    function captureSnapshot() {
+        const palette = MaterialThemeLoader.snapshot();
+        return {
+            wallpaper: root.currentWallpaper(),
+            theme: palette.themeName,
+            mode: palette.mode,
+            schemeType: palette.schemeType,
+            sourceColorIndex: palette.sourceColorIndex
+        };
+    }
+
+    function paletteState(snapshot) {
+        return {
+            themeName: String(snapshot.theme ?? "Wallpaper"),
+            mode: String(snapshot.mode ?? "smart"),
+            schemeType: String(snapshot.schemeType ?? "scheme-tonal-spot"),
+            sourceColorIndex: Number(snapshot.sourceColorIndex ?? 0)
+        };
+    }
+
+    function sameSnapshot(left, right) {
+        return String(left.wallpaper ?? "") === String(right.wallpaper ?? "")
+            && String(left.theme ?? "Wallpaper") === String(right.theme ?? "Wallpaper")
+            && String(left.mode ?? "smart") === String(right.mode ?? "smart")
+            && String(left.schemeType ?? "scheme-tonal-spot")
+                === String(right.schemeType ?? "scheme-tonal-spot")
+            && Number(left.sourceColorIndex ?? 0) === Number(right.sourceColorIndex ?? 0);
+    }
+
+    function matchingPreset() {
+        const current = root.captureSnapshot();
+        for (const preset of PresetStore.presets) {
+            if (root.sameSnapshot(current, preset))
+                return String(preset.name ?? "");
+        }
+        return "";
+    }
+
+    function commitPresetList(before, after) {
+        PresetStore.replace(after);
+        GlobalStates.editHistoryPush({
+            "undo": () => PresetStore.replace(before),
+            "redo": () => PresetStore.replace(after)
+        });
+    }
+
+    function savePreset() {
         const name = root.cleanName(nameField.text);
         if (name === "")
             return;
-        Quickshell.execDetached([root.presetsScript, "save", name]);
-        nameField.text = "";
+        root.applyError = "";
+        const before = PresetStore.clone(PresetStore.presets);
+        const after = PresetStore.clone(before);
+        const snapshot = Object.assign(root.captureSnapshot(), {
+            name: name,
+            updatedAt: Date.now()
+        });
+        const index = after.findIndex(candidate => candidate.name === name);
+        if (index >= 0)
+            after[index] = snapshot;
+        else
+            after.push(snapshot);
+        root.commitPresetList(before, after);
+        nameField.clear();
         root.saving = false;
         root.fieldFocusReleased();
-        refreshTimer.restart();
+    }
+
+    function beginRename(name) {
+        root.applyError = "";
+        root.saving = false;
+        nameField.clear();
+        root.renamingPreset = name;
+        renameField.text = name;
+        root.fieldFocusRequested(renameField);
+        Qt.callLater(renameField.grabFocus);
+    }
+
+    function cancelRename() {
+        root.renamingPreset = "";
+        renameField.clear();
+        root.fieldFocusReleased();
+    }
+
+    function commitRename() {
+        const beforeName = root.renamingPreset;
+        const afterName = root.cleanName(renameField.text);
+        if (beforeName === "" || afterName === "")
+            return;
+        if (beforeName !== afterName
+                && PresetStore.presets.some(candidate => candidate.name === afterName)) {
+            root.applyError = Translation.tr("That preset name is already in use.");
+            return;
+        }
+        const before = PresetStore.clone(PresetStore.presets);
+        const after = PresetStore.clone(before);
+        const index = after.findIndex(candidate => candidate.name === beforeName);
+        if (index < 0)
+            return;
+        after[index].name = afterName;
+        after[index].updatedAt = Date.now();
+        root.commitPresetList(before, after);
+        root.cancelRename();
+    }
+
+    function deletePreset(name) {
+        root.applyError = "";
+        const before = PresetStore.clone(PresetStore.presets);
+        const after = before.filter(candidate => candidate.name !== name);
+        if (after.length === before.length)
+            return;
+        root.commitPresetList(before, after);
+        if (root.renamingPreset === name)
+            root.cancelRename();
+    }
+
+    function restoreSnapshot(snapshot) {
+        MaterialThemeLoader.applyState(root.paletteState(snapshot), false);
+        const wallpaper = String(snapshot.wallpaper ?? "");
+        if (wallpaper !== "")
+            Wallpapers.applyForScreen(wallpaper, root.monitorName,
+                String(snapshot.mode ?? "") === "dark");
     }
 
     function applyPreset(name) {
-        if (root.activePreset === name || PresetStore.busy)
+        if (name === root.activePreset || root.applyingPreset !== ""
+                || MaterialThemeLoader.busy)
             return;
-        PresetStore.applyPreset(name);
+        const preset = PresetStore.presets.find(candidate => candidate.name === name);
+        if (!preset)
+            return;
+        root.applyError = "";
+        root.applyingPreset = name;
+        root.pendingBefore = root.captureSnapshot();
+        root.pendingAfter = PresetStore.clone(preset);
+        MaterialThemeLoader.applyState(root.paletteState(preset), false,
+            "stage-preset:" + name);
     }
 
-    Component.onCompleted: {
-        PresetStore.ensureLoaded();
-        root.refresh();
+    function presetSummary(preset) {
+        const theme = String(preset.theme ?? "Wallpaper");
+        if (theme !== "Wallpaper")
+            return theme;
+        const scheme = String(preset.schemeType ?? "scheme-tonal-spot")
+            .replace(/^scheme-/, "").replace(/-/g, " ");
+        return scheme + " · " + String(preset.mode ?? "smart");
     }
 
     Connections {
-        target: PresetStore
-        function onPresetFilesChanged() {
-            refreshTimer.restart();
-        }
-        function onApplyFinished(name, ok) {
-            refreshTimer.restart();
-        }
-        function onRevertFinished(ok) {
-            refreshTimer.restart();
+        target: MaterialThemeLoader
+        function onApplyFinished(tag, ok, error) {
+            if (!String(tag).startsWith("stage-preset:"))
+                return;
+            const before = root.pendingBefore;
+            const after = root.pendingAfter;
+            root.applyingPreset = "";
+            root.pendingBefore = null;
+            root.pendingAfter = null;
+            if (!ok || !before || !after) {
+                root.applyError = error || Translation.tr("The preset could not be applied.");
+                return;
+            }
+
+            const wallpaper = String(after.wallpaper ?? "");
+            if (wallpaper !== "")
+                Wallpapers.applyForScreen(wallpaper, root.monitorName,
+                    String(after.mode ?? "") === "dark");
+            GlobalStates.editHistoryPush({
+                "undo": () => root.restoreSnapshot(before),
+                "redo": () => root.restoreSnapshot(after)
+            });
         }
     }
 
-    Timer {
-        id: refreshTimer
-        interval: 900
-        repeat: false
-        onTriggered: root.refresh()
-    }
+    Ui.SettingCard {
+        Layout.fillWidth: true
+        title: Translation.tr("SAVED LOOKS")
+        collapsible: false
 
-    Process {
-        id: listProc
-        command: [root.presetsScript, "list"]
-        property var collected: []
-        onRunningChanged: {
-            if (listProc.running)
-                listProc.collected = [];
-        }
-        stdout: SplitParser {
-            onRead: data => {
-                // One JSON object per line - and a chunk may carry several
-                // lines at once, so the payload is split before it is parsed.
-                for (const line of String(data).split("\n")) {
-                    const text = line.trim();
-                    if (text === "")
-                        continue;
-                    try {
-                        listProc.collected.push(JSON.parse(text));
-                    } catch (e) {
-                        console.log("[EditStylePresets] bad preset line:", text);
+        Ui.SettingRow {
+            width: parent.width
+            label: Translation.tr("Save current look")
+            desc: Translation.tr("Wallpaper, theme and colour controls")
+            enabled: PresetStore.ready
+            controlWidth: saveToggle.implicitWidth
+
+            Ui.Btn {
+                id: saveToggle
+                anchors.fill: parent
+                text: root.saving ? Translation.tr("Cancel") : Translation.tr("Save")
+                compact: true
+                onAct: {
+                    root.saving = !root.saving;
+                    root.renamingPreset = "";
+                    renameField.clear();
+                    if (root.saving) {
+                        root.fieldFocusRequested(nameField);
+                        Qt.callLater(nameField.grabFocus);
+                    } else {
+                        nameField.clear();
+                        root.fieldFocusReleased();
                     }
                 }
             }
         }
-        onExited: root.presets = listProc.collected
-    }
 
-    EditPanelSectionLabel {
-        text: Translation.tr("Presets")
-    }
+        Ui.SettingRow {
+            width: parent.width
+            visible: root.saving
+            label: Translation.tr("Preset name")
+            footH: Tokens.ctlH + Tokens.s1
 
-    // ── Save ─────────────────────────────────────────────────────────────────
-    EditPanelRow {
-        Layout.fillWidth: true
-        first: true
-        last: !root.saving
-        symbol: "save"
-        title: Translation.tr("Save the current look")
-        subtitle: Translation.tr("Layout, wallpaper, colours and settings, as a preset")
-        trailingKind: root.saving ? "none" : "add"
-        selected: root.saving
-        onActivated: {
-            root.saving = !root.saving;
-            if (root.saving)
-                root.fieldFocusRequested(nameField);
-            else
-                root.fieldFocusReleased();
-        }
-    }
+            RowLayout {
+                anchors.fill: parent
+                spacing: Tokens.s2
 
-    Rectangle {
-        Layout.fillWidth: true
-        visible: root.saving
-        implicitHeight: 52
-        color: Appearance.colors.colLayer1
-        bottomLeftRadius: Appearance.rounding.normal
-        bottomRightRadius: Appearance.rounding.normal
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.margins: 8
-            spacing: 6
-
-            ToolbarTextField {
-                id: nameField
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                colBackground: Appearance.colors.colLayer2
-                placeholderText: Translation.tr("Preset name")
-                onPressed: root.fieldFocusRequested(nameField)
-                onAccepted: root.save()
-                Keys.onEscapePressed: event => {
-                    if (nameField.text !== "") {
-                        nameField.text = "";
-                        return;
-                    }
-                    root.saving = false;
-                    root.fieldFocusReleased();
-                    event.accepted = true;
+                Ui.Field {
+                    id: nameField
+                    Layout.fillWidth: true
+                    placeholder: Translation.tr("e.g. Reading")
+                    onAccepted: root.savePreset()
                 }
-            }
-
-            RippleButton {
-                Layout.fillHeight: true
-                implicitWidth: 44
-                buttonRadius: Appearance.rounding.full
-                enabled: root.cleanName(nameField.text) !== ""
-                colBackground: Appearance.colors.colPrimary
-                colBackgroundHover: Appearance.colors.colPrimaryHover
-                colRipple: Appearance.colors.colPrimaryActive
-                onClicked: root.save()
-                contentItem: MaterialSymbol {
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                    text: "check"
-                    iconSize: 20
-                    color: Appearance.colors.colOnPrimary
+                Ui.Btn {
+                    Layout.preferredWidth: implicitWidth
+                    Layout.fillHeight: true
+                    text: Translation.tr("Add")
+                    compact: true
+                    primary: true
+                    armed: root.cleanName(nameField.text) !== ""
+                    onAct: root.savePreset()
                 }
             }
         }
-    }
 
-    // ── The saved looks ──────────────────────────────────────────────────────
-    StyledText {
-        Layout.fillWidth: true
-        Layout.leftMargin: 6
-        Layout.topMargin: 6
-        visible: root.presets.length === 0 && !listProc.running
-        text: Translation.tr("Nothing saved yet.")
-        font.pixelSize: Appearance.font.pixelSize.smaller
-        color: Appearance.colors.colOnSurfaceVariant
-    }
+        Item {
+            width: parent.width
+            height: emptyLabel.visible ? Tokens.rowH + Tokens.s2 : 0
 
-    Item {
-        id: stripContainer
-        Layout.fillWidth: true
-        Layout.topMargin: 6
-        implicitHeight: strip.implicitHeight
-        visible: root.presets.length > 0
+            Text {
+                id: emptyLabel
+                anchors.fill: parent
+                anchors.margins: Tokens.s4
+                visible: PresetStore.ready && PresetStore.presets.length === 0
+                text: Translation.tr("Nothing saved yet.")
+                color: Tokens.inkMuted
+                font.family: Tokens.ui
+                font.pixelSize: Tokens.fSmall
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+        }
 
-        ListView {
-            id: strip
-            anchors.fill: parent
-            orientation: ListView.Horizontal
-            spacing: 10
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            model: root.presets
+        Repeater {
+            model: PresetStore.presets
 
-            readonly property real cardWidth: Math.min(160, Math.max(132, Math.floor((width - spacing) / 2)))
-            readonly property real cardHeight: cardWidth * 0.8
-            implicitHeight: cardHeight
+            delegate: Column {
+                id: presetItem
+                required property var modelData
+                width: parent.width
 
-            delegate: Rectangle {
-                    id: presetItem
-                    required property var modelData
-                    width: strip.cardWidth
-                    height: strip.cardHeight
-                    radius: Appearance.rounding.normal
-                    color: Appearance.colors.colSurfaceContainerLow
-                    opacity: presetBusy ? 0.5 : 1
-                    scale: presetButton.down ? 0.96 : 1
+                readonly property string presetName: String(modelData.name ?? "")
+                readonly property bool selected: root.activePreset === presetName
+                readonly property bool applying: root.applyingPreset === presetName
 
-                    readonly property string presetName: String(modelData.name ?? "")
-                    readonly property string wallpaper: String(modelData.wallpaper ?? "")
-                    readonly property bool active: root.activePreset === presetItem.presetName
-                    readonly property bool presetBusy: PresetStore.busyFor(presetItem.presetName)
-                    readonly property bool tooNew: Number(modelData.configVersion ?? 0) > 0
-                        && Number(modelData.configVersion) > Config.currentConfigVersion
+                Ui.SettingRow {
+                    width: parent.width
+                    divider: true
+                    label: presetItem.presetName
+                    desc: root.presetSummary(presetItem.modelData)
+                    value: presetItem.selected ? Translation.tr("ACTIVE")
+                        : presetItem.applying ? Translation.tr("APPLYING") : ""
+                    changed: presetItem.selected
+                    enabled: root.applyingPreset === ""
+                        && !MaterialThemeLoader.busy
+                    controlWidth: Tokens.s6 * 3 + Tokens.s1 * 2
 
-                    Behavior on scale {
-                        enabled: !Appearance.reducedMotion
-                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(presetItem)
-                    }
-
-                    // The whole card is the single apply action. Keeping the
-                    // real RippleButton above the image gives the pointer a
-                    // hand cursor on every hover, including over the artwork.
-                    RippleButton {
-                        id: presetButton
+                    Row {
                         anchors.fill: parent
-                        enabled: !presetItem.active && !presetItem.presetBusy && !PresetStore.busy
-                        hoverEnabled: true
-                        pointingHandCursor: true
-                        buttonRadius: Appearance.rounding.normal
-                        colBackground: "transparent"
-                        colBackgroundHover: "transparent"
-                        colRipple: ColorUtils.transparentize(Appearance.colors.colPrimary, 0.8)
-                        onClicked: root.applyPreset(presetItem.presetName)
+                        spacing: Tokens.s1
 
-                        StyledToolTip {
-                            text: presetItem.active
-                                ? Translation.tr("Active preset") : Translation.tr("Apply preset")
-                        }
-                    }
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 10
-
-                    Item {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-
-                        StyledImage {
-                            id: previewImage
-                            anchors.fill: parent
-                            sourceSize: Qt.size(400, 400)
-                            source: presetItem.wallpaper !== ""
-                                ? presetItem.wallpaper
-                                : `${Directories.assetsPath}/images/default_wallpaper.png`
-                            fillMode: Image.PreserveAspectCrop
-                            layer.enabled: true
-                            layer.effect: OpacityMask {
-                                maskSource: Rectangle {
-                                    width: previewImage.width
-                                    height: previewImage.height
-                                    radius: Appearance.rounding.small
-                                }
+                        Ui.IconBtn {
+                            width: Tokens.s6
+                            height: Tokens.s6
+                            glyph: "✓"
+                            armed: !presetItem.selected
+                            onAct: root.applyPreset(presetItem.presetName)
+                            HoverHandler { id: applyHover }
+                            StyledToolTip {
+                                extraVisibleCondition: false
+                                alternativeVisibleCondition: applyHover.hovered
+                                text: Translation.tr("Apply preset")
                             }
                         }
-
-                        MaterialSymbol {
-                            anchors.centerIn: parent
-                            visible: presetItem.wallpaper === ""
-                            text: "style"
-                            iconSize: Appearance.font.pixelSize.huge
-                            color: Appearance.colors.colOnSurfaceVariant
-                        }
-
-                        Rectangle {
-                            anchors.top: parent.top
-                            anchors.left: parent.left
-                            anchors.margins: 6
-                            visible: presetItem.tooNew
-                            implicitWidth: 26
-                            implicitHeight: 26
-                            radius: Appearance.rounding.full
-                            color: Appearance.colors.colErrorContainer
-
-                            MaterialSymbol {
-                                anchors.centerIn: parent
-                                text: "system_update_alt"
-                                iconSize: Appearance.font.pixelSize.smaller
-                                color: Appearance.colors.colOnErrorContainer
+                        Ui.IconBtn {
+                            width: Tokens.s6
+                            height: Tokens.s6
+                            glyph: "✎"
+                            onAct: root.beginRename(presetItem.presetName)
+                            HoverHandler { id: renameHover }
+                            StyledToolTip {
+                                extraVisibleCondition: false
+                                alternativeVisibleCondition: renameHover.hovered
+                                text: Translation.tr("Rename preset")
                             }
                         }
-
-                        Rectangle {
-                            anchors.top: parent.top
-                            anchors.right: parent.right
-                            anchors.margins: 6
-                            visible: presetItem.active
-                            implicitWidth: 26
-                            implicitHeight: 26
-                            radius: Appearance.rounding.full
-                            color: Appearance.colors.colPrimary
-
-                            MaterialSymbol {
-                                anchors.centerIn: parent
-                                text: "check"
-                                iconSize: Appearance.font.pixelSize.smaller
-                                color: Appearance.colors.colOnPrimary
+                        Ui.IconBtn {
+                            width: Tokens.s6
+                            height: Tokens.s6
+                            glyph: "×"
+                            onAct: root.deletePreset(presetItem.presetName)
+                            HoverHandler { id: deleteHover }
+                            StyledToolTip {
+                                extraVisibleCondition: false
+                                alternativeVisibleCondition: deleteHover.hovered
+                                text: Translation.tr("Delete preset")
                             }
                         }
                     }
+                }
 
-                    Item {
-                        Layout.fillWidth: true
-                        implicitHeight: 30
+            }
+        }
 
-                        StyledText {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: presetItem.presetName
-                            color: Appearance.colors.colOnLayer1
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            font.weight: presetItem.active ? Font.DemiBold : Font.Normal
-                            elide: Text.ElideRight
-                        }
+        Ui.SettingRow {
+            width: parent.width
+            visible: root.renamingPreset !== ""
+            label: Translation.tr("Rename %1").arg(root.renamingPreset)
+            footH: Tokens.s6
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: Tokens.s2
+
+                Ui.Field {
+                    id: renameField
+                    Layout.fillWidth: true
+                    placeholder: Translation.tr("Preset name")
+                    onAccepted: root.commitRename()
+                }
+                Ui.IconBtn {
+                    Layout.preferredWidth: Tokens.s6
+                    Layout.fillHeight: true
+                    glyph: "×"
+                    onAct: root.cancelRename()
+                    HoverHandler { id: cancelRenameHover }
+                    StyledToolTip {
+                        extraVisibleCondition: false
+                        alternativeVisibleCondition: cancelRenameHover.hovered
+                        text: Translation.tr("Cancel rename")
+                    }
+                }
+                Ui.IconBtn {
+                    Layout.preferredWidth: Tokens.s6
+                    Layout.fillHeight: true
+                    glyph: "✓"
+                    armed: root.cleanName(renameField.text) !== ""
+                    onAct: root.commitRename()
+                    HoverHandler { id: saveRenameHover }
+                    StyledToolTip {
+                        extraVisibleCondition: false
+                        alternativeVisibleCondition: saveRenameHover.hovered
+                        text: Translation.tr("Save name")
                     }
                 }
             }
         }
     }
 
-    // ── Undo, and the store ──────────────────────────────────────────────────
-    EditPanelRow {
+    EditPanelNotice {
         Layout.fillWidth: true
-        Layout.topMargin: 6
-        visible: root.activePreset !== ""
-        first: true
-        last: false
-        rowEnabled: !PresetStore.busy
-        symbol: "history"
-        title: Translation.tr("Undo preset")
-        subtitle: Translation.tr("Back to the settings from before %1").arg(root.activePreset)
-        trailingKind: "none"
-        onActivated: PresetStore.revert()
-    }
-
-    EditPanelRow {
-        Layout.fillWidth: true
-        Layout.topMargin: root.activePreset !== "" ? 0 : 6
-        first: root.activePreset === ""
-        last: true
-        symbol: "storefront"
-        title: Translation.tr("Browse the store")
-        subtitle: Translation.tr("Leaves Edit Mode")
-        valueText: PresetStore.updateCount > 0
-            ? Translation.tr("%1 updates").arg(String(PresetStore.updateCount)) : ""
-        trailingKind: "chevron"
-        onActivated: GlobalStates.openSettingsFromEditMode("presets", "store")
+        visible: root.applyError !== "" || PresetStore.lastError !== ""
+        symbol: "error"
+        text: root.applyError !== "" ? root.applyError : PresetStore.lastError
     }
 }

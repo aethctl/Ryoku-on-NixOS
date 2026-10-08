@@ -7,6 +7,7 @@ import stage.services
 import stage.modules.common
 import stage.modules.common.widgets
 import stage.modules.common.functions
+import Ryoku.Ui.Singletons
 
 /**
  * The wallpaper folder, as a grid of thumbnails on Edit Mode's panel.
@@ -17,10 +18,8 @@ import stage.modules.common.functions
  * and the online browser stay with the selector, which the Style page hands
  * off to.
  *
- * Which wallpaper a pick sets is the page's `target`, decided by the
- * Wallpaper catalogue from the tab, the screen and the variants: the lock's
- * own, the light mode's, this screen's own (services/WallpaperLayout.qml), or
- * the desktop's shared one.
+ * A screen target goes straight to Ryogami's per-output selector. Lock and
+ * light-mode variants retain their existing services.
  */
 Item {
     id: root
@@ -32,41 +31,39 @@ Item {
     readonly property bool screenTarget: root.target === "screen"
     readonly property string appliedPath: {
         if (root.screenTarget)
-            return WallpaperLayout.ownPathFor(root.screenName);
+            return Wallpapers.currentWallpaperPath(root.screenName);
+        if (root.target === "desktop")
+            return Wallpapers.currentWallpaperPath();
         const background = Config.options.background;
         const raw = root.target === "lockscreen" ? background.lockscreenWallpaperPath
-            : root.target === "lightmode" ? background.lightModeWallpaperPath
-            : background.wallpaperPath;
+            : background.lightModeWallpaperPath;
         return FileUtils.trimFileProtocol(String(raw ?? ""));
     }
 
-    readonly property int columns: 3
-    readonly property real cellGap: 6
-    // The view's cell carries the gap, so the cell is the width divided by
-    // the columns and the tile is what is left of it: a tile sized first and
-    // a gap added after came to a hair more than the width, and the view
-    // fitted two.
-    readonly property real cellStride: Math.floor(root.width / root.columns)
-    readonly property real cellWidth: root.cellStride - root.cellGap
+    readonly property real cellGap: Tokens.s2
+    readonly property real minimumCellWidth: Tokens.cellH
+    readonly property int columns: Math.max(1, Math.min(3,
+        Math.floor((Math.max(0, grid.width) + root.cellGap) / (root.minimumCellWidth + root.cellGap))))
+    // The gap belongs to the stride, keeping the final column inside the view.
+    readonly property real cellStride: Math.floor(Math.max(0, grid.width) / root.columns)
+    readonly property real cellWidth: Math.max(1, root.cellStride - root.cellGap)
     readonly property real cellHeight: Math.round(root.cellWidth * 10 / 16)
 
-    // The folder's files, in the service's sorted order. Directories are the
-    // selector's navigation, not a wallpaper, so they are left out here.
+    // Ryogami's index is the library of record, including its separate video
+    // directory and nested folders. Before its first scan, keep the source
+    // folder model as the usable fallback.
     readonly property var files: {
-        const model = Wallpapers.sortedFolderModel;
+        const library = Wallpapers.ryogamiLibraryModel;
+        const model = library.count > 0 ? library : Wallpapers.sortedFolderModel;
         const out = [];
-        // Read so the binding follows the model's refills.
         const count = model.count;
         for (let i = 0; i < count; i++) {
             const entry = model.get(i);
             if (!entry || entry.fileIsDir)
                 continue;
             const name = String(entry.fileName ?? "");
-            if (!Images.isValidImageByName(name) && !Wallpapers.isVideoFile(name))
-                continue;
-            // A screen of its own shows a picture: videos are played or
-            // painted for the whole desktop.
-            if (root.screenTarget && Wallpapers.isVideoFile(name))
+            const lowerName = name.toLowerCase();
+            if (!Wallpapers.extensions.some(ext => lowerName.endsWith("." + ext)))
                 continue;
             out.push({
                 "filePath": FileUtils.trimFileProtocol(String(entry.filePath ?? "")),
@@ -78,7 +75,7 @@ Item {
 
     function apply(path) {
         if (root.screenTarget) {
-            WallpaperLayout.setOwnWallpaper(root.screenName, path);
+            Wallpapers.selectForScreen(path, root.screenName);
             return;
         }
         if (root.target === "lockscreen") {
@@ -92,18 +89,12 @@ Item {
         Wallpapers.select(path);
     }
 
-    // The thumbnails are made once for the size the cells draw at, the same
-    // way the selector asks for its own.
-    Component.onCompleted: {
-        Wallpapers.load();
-        const dpr = (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1;
-        Wallpapers.generateThumbnail(Images.thumbnailSizeNameForDimensions(
-            Math.ceil(root.cellWidth * dpr), Math.ceil(root.cellHeight * dpr)));
-    }
+    Component.onCompleted: Wallpapers.load()
 
     GridView {
         id: grid
         anchors.fill: parent
+        anchors.margins: Tokens.s2
         clip: true
         cellWidth: root.cellStride
         cellHeight: root.cellHeight + root.cellGap
@@ -143,13 +134,51 @@ Item {
                     radius: tile.radius - tile.border.width
                     color: "transparent"
 
-                    ThumbnailImage {
+                    Item {
+                        id: thumbnail
                         anchors.fill: parent
-                        sourcePath: cell.modelData.filePath
-                        thumbnailService: Wallpapers
-                        generateThumbnail: false
-                        fillMode: Image.PreserveAspectCrop
-                        cache: false
+                        readonly property real dpr: (QsWindow.window as QsWindow)?.devicePixelRatio ?? 1
+                        readonly property string filePath: cell.modelData.filePath
+                        readonly property bool video: Wallpapers.isVideoFile(thumbnail.filePath)
+                        readonly property string ryogamiPath: {
+                            void Wallpapers.ryogamiIndexRevision;
+                            return Wallpapers.ryogamiThumbnailPath(thumbnail.filePath);
+                        }
+
+                        Image {
+                            id: ryogamiThumbnail
+                            anchors.fill: parent
+                            source: Wallpapers.localFileUrl(thumbnail.ryogamiPath)
+                            sourceSize.width: Math.max(1, Math.ceil(width * thumbnail.dpr))
+                            sourceSize.height: Math.max(1, Math.ceil(height * thumbnail.dpr))
+                            fillMode: Image.PreserveAspectCrop
+                            asynchronous: true
+                            cache: false
+                            visible: status === Image.Ready
+                        }
+
+                        Loader {
+                            anchors.fill: parent
+                            active: thumbnail.ryogamiPath === "" || ryogamiThumbnail.status === Image.Error
+                            sourceComponent: Image {
+                                readonly property int posterRevision: Wallpapers.videoPosterRevision
+                                readonly property string fallbackPath: thumbnail.video
+                                    ? Wallpapers.videoPosterPath(thumbnail.filePath)
+                                    : thumbnail.filePath
+                                readonly property string fallbackUrl: Wallpapers.localFileUrl(fallbackPath)
+                                source: fallbackUrl === "" ? ""
+                                    : fallbackUrl + (thumbnail.video ? `?v=${posterRevision}` : "")
+                                sourceSize.width: Math.max(1, Math.ceil(width * thumbnail.dpr))
+                                sourceSize.height: Math.max(1, Math.ceil(height * thumbnail.dpr))
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                                Component.onCompleted: {
+                                    if (thumbnail.video)
+                                        Wallpapers.ensureVideoPoster(thumbnail.filePath);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -189,9 +218,12 @@ Item {
 
     StyledText {
         anchors.centerIn: parent
+        width: Math.max(0, root.width - Tokens.s5 * 2)
         visible: grid.count === 0
         text: Wallpapers.directoryLoading ? Translation.tr("Loading…") : Translation.tr("No wallpapers in this folder")
         font.pixelSize: Appearance.font.pixelSize.small
         color: Appearance.colors.colOnSurfaceVariant
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
     }
 }

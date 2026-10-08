@@ -86,6 +86,12 @@ pkgs.stdenv.mkDerivation {
     mkdir -p "$cfg/quickshell"
     cp -a ryoku/shell/quickshell/. "$cfg/quickshell/"
 
+    # Nomarchy is a shell-owned compatibility payload. Arch exposes it under
+    # /usr/share/ryoku; Nix keeps the same data layout inside desktop-data.
+    mkdir -p "$out/share/ryoku/nomarchy"
+    cp -a ryoku/shell/nomarchy/. "$out/share/ryoku/nomarchy/"
+    patchShebangs "$out/share/ryoku/nomarchy"
+
     # ── Ryoku Settings / Hub ───────────────────────────────────
 
     mkdir -p "$cfg/quickshell/hub"

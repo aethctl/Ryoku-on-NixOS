@@ -409,9 +409,10 @@ func ReadRelease() Release {
 }
 
 // ChannelIntentFile records the channel the user deliberately chose with `ryoku
-// track` (root-owned). It is the only signal that separates a pin the user asked
-// for from one a failed boot-guard revert or a hand-edit left behind, so nothing
-// but Track writes it. A var so tests point it at a fixture.
+// track` or by picking the stable or unstable shell installer (root-owned). It
+// is the only signal that separates a pin the user asked for from one a failed
+// boot-guard revert or a hand-edit left behind, so nothing else writes it. A
+// var so tests point it at a fixture.
 var ChannelIntentFile = "/var/lib/ryoku/channel-intent"
 
 // ReadChannelIntent returns the channel Track recorded, or "" when none is on

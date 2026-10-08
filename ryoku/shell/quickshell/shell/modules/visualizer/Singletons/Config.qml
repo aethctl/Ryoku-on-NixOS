@@ -68,6 +68,23 @@ Singleton {
             return root.primaryData();
         return (adapter.extras || [])[index - 1] || ({});
     }
+    property var previews: ({})
+    function previewAt(index) {
+        return root.previews["" + index] || null;
+    }
+    function setPreview(index, nx, ny) {
+        const next = Object.assign({}, root.previews);
+        next["" + index] = { x: nx, y: ny };
+        root.previews = next;
+    }
+    function clearPreview(index) {
+        const key = "" + index;
+        if (root.previews[key] === undefined)
+            return;
+        const next = Object.assign({}, root.previews);
+        delete next[key];
+        root.previews = next;
+    }
     readonly property var list: {
         var out = [root.primaryData()];
         var ex = adapter.extras || [];
@@ -221,11 +238,13 @@ Singleton {
     function setGradient(on) { root.poke("gradient", on === true); }
     function toggleGradient() { root.setGradient(!root.gradient); }
 
-    // persist on/off so the hub toggle and Super+M keybind agree, and it
-    // survives a restart. Global, so it always writes the flat key.
+    // Global, so it always writes the flat key. It shares the settle coalescer
+    // with instance edits so enabling a restored instance cannot race its data.
     function setEnabled(on) {
-        adapter.enabled = on;
-        file.writeAdapter();
+        if (adapter.enabled === (on === true))
+            return;
+        adapter.enabled = on === true;
+        settle.restart();
     }
 
     // fps and adaptive are global, not per-viz: write the flat keys directly, so
@@ -287,6 +306,30 @@ Singleton {
         root.poke("x", b.x);
         root.poke("y", b.y);
     }
+    function moveBoxAt(index, nx, ny, aspect) {
+        const i = Math.max(0, Math.min(root.count - 1, Math.round(index)));
+        const data = root.dataAt(i);
+        const w = Number(data.w);
+        const h = Number(data.h);
+        const angle = Number(data.angle);
+        const b = root.fitBox(nx, ny,
+            isFinite(w) ? w : 1,
+            isFinite(h) ? h : 0.42,
+            isFinite(angle) ? angle : 0,
+            aspect);
+        if (i === 0) {
+            adapter.x = b.x;
+            adapter.y = b.y;
+        } else {
+            const arr = (adapter.extras || []).slice();
+            const entry = Object.assign({}, arr[i - 1]);
+            entry.x = b.x;
+            entry.y = b.y;
+            arr[i - 1] = entry;
+            adapter.extras = arr;
+        }
+        settle.restart();
+    }
     function sizeBox(nw, nh, aspect) {
         root.setBox(root.x, root.y, nw, nh, aspect);
     }
@@ -334,23 +377,27 @@ Singleton {
     }
 
     // --- instance management --------------------------------------------------
+    function cloneData(o) {
+        return JSON.parse(JSON.stringify(o || {}));
+    }
     function setActive(i) {
         adapter.active = Math.max(0, Math.min(root.count - 1, i));
         settle.restart();
     }
     function addVisualizer() {
         if (root.count >= root.maxVisualizers)
-            return;
+            return -1;
         var arr = (adapter.extras || []).slice();
         // Seed from the active instance, nudged so the new one is not hidden
         // exactly under it, and given a fresh box so it is easy to grab.
-        var seed = Object.assign({}, root.activeData);
+        var seed = root.cloneData(root.activeData);
         seed.x = Math.max(-0.2, Math.min(0.8, (seed.x || 0) + 0.06));
         seed.y = Math.max(-0.2, Math.min(0.8, (seed.y || 0.58) - 0.12));
         arr.push(seed);
         adapter.extras = arr;
-        adapter.active = arr.length;   // the new extra is the last instance
-        file.writeAdapter();
+        adapter.active = arr.length;
+        settle.restart();
+        return adapter.active;
     }
     function applyPrimary(o) {
         adapter.style = o.style; adapter.shape = o.shape;
@@ -369,25 +416,67 @@ Singleton {
                 adapter[k] = o[k];
         }
     }
+    function replaceVisualizer(i, data) {
+        var idx = Math.max(0, Math.min(root.count - 1, i));
+        var copy = root.cloneData(data);
+        if (idx === 0) {
+            root.applyPrimary(copy);
+        } else {
+            var arr = (adapter.extras || []).slice();
+            arr[idx - 1] = copy;
+            adapter.extras = arr;
+        }
+        adapter.active = idx;
+        settle.restart();
+    }
+    function insertVisualizer(i, data) {
+        if (root.count >= root.maxVisualizers)
+            return -1;
+        var idx = Math.max(0, Math.min(root.count, i));
+        var copy = root.cloneData(data);
+        if (idx === 0) {
+            var arr0 = (adapter.extras || []).slice();
+            arr0.unshift(root.cloneData(root.primaryData()));
+            root.applyPrimary(copy);
+            adapter.extras = arr0;
+        } else {
+            var arr = (adapter.extras || []).slice();
+            arr.splice(idx - 1, 0, copy);
+            adapter.extras = arr;
+        }
+        adapter.active = idx;
+        settle.restart();
+        return idx;
+    }
+    function replaceAll(instances, selected, on) {
+        var rows = root.cloneData(instances);
+        if (!rows || rows.length === 0)
+            rows = [root.primaryData()];
+        root.applyPrimary(rows[0]);
+        adapter.extras = rows.slice(1, root.maxVisualizers);
+        adapter.active = Math.max(0, Math.min(rows.length - 1, selected || 0));
+        adapter.enabled = on === true;
+        settle.restart();
+    }
     function removeVisualizer(i) {
-        var idx = i === undefined ? root.active : i;
-        if (idx <= 0) {
-            // Removing the primary promotes the first extra into the flat slot, so
-            // there is always a primary; refuse if it is the only visualiser.
+        var idx = Math.max(0, Math.min(root.count - 1, i === undefined ? root.active : i));
+        if (root.count === 1) {
+            root.setEnabled(false);
+            return true;
+        }
+        if (idx === 0) {
             var ex = (adapter.extras || []).slice();
-            if (ex.length === 0)
-                return;
             var promoted = ex.shift();
             root.applyPrimary(promoted);
             adapter.extras = ex;
         } else {
             var arr = (adapter.extras || []).slice();
-            if (idx - 1 < arr.length)
-                arr.splice(idx - 1, 1);
+            arr.splice(idx - 1, 1);
             adapter.extras = arr;
         }
-        adapter.active = Math.max(0, Math.min(root.count - 1, adapter.active));
-        file.writeAdapter();
+        adapter.active = Math.max(0, Math.min(idx, root.count - 1));
+        settle.restart();
+        return true;
     }
 
     Timer {

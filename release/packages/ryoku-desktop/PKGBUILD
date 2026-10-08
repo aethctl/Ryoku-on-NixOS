@@ -14,7 +14,9 @@ pkgdesc="Ryoku desktop: Quickshell configuration, helpers, and runtime (composit
 # package() compiles Go helpers (ryovm-fetch), so the payload is arch-specific.
 arch=('x86_64')
 url="https://ryoku.dev"
-license=('GPL-3.0-or-later')
+# The Python bar style's ported QML stays AGPL-3.0-or-later (Serpantinum); the
+# rest of the package is GPL-3.0-or-later. AGPL-3.0 s13 permits the combination.
+license=('GPL-3.0-or-later' 'AGPL-3.0-or-later')
 # go builds the app helpers (ryovm-fetch); cmake+Qt6 build any compiled ryoku/apps app.
 makedepends=('go' 'cmake' 'ninja')
 depends=(
@@ -28,7 +30,6 @@ depends=(
   "ryoku-blobs=$pkgver"
   "ryoku=$pkgver"
   'ryoku-keyring'
-  "ryoku-oh-my-zsh=$pkgver"
   # the RyokuArch package manager (GlazePKG)
   'gpk'
   # a compositor variant provides this virtual; an installed base pulls the sole
@@ -95,10 +96,6 @@ depends=(
   # reinstalled apps people deleted. The ISO pacstraps them from
   # system/packages/base.packages and `ryoku doctor` delivers them once
   # (reconcile_shipped_apps.go). Tools the shell calls by name stay below.
-  'zsh'
-  'zsh-autosuggestions'
-  'zsh-history-substring-search'
-  'zsh-syntax-highlighting'
   # tools the shipped autostart, pill, ryoshot, and helper scripts call by name
   'brightnessctl'
   'playerctl'
@@ -134,9 +131,9 @@ depends=(
   # live (video) wallpapers: the daemon grabs one frame with ffmpeg to derive the
   # wallpaper palette. official repo, so a hard depend reaches existing boxes.
   'ffmpeg'
-  # ryogami's wall-ui source browser fetches remote wallpapers (Wallhaven,
-  # MoeWalls, MotionBGs, GitHub, Steam) with curl; a hard depend so the browser
-  # works out of the box on the ISO and on existing boxes after `ryoku update`.
+  # the shell's weather, calendar and screenshot upload, the Hub's location
+  # search and the CLI's recovery helpers fetch with curl; a hard depend so they
+  # work out of the box on the ISO and on existing boxes after `ryoku update`.
   'curl'
   # qt6-multimedia + qt6-declarative back the QML video surfaces: the wallpaper
   # picker's live previews, the shell's video-wallpaper preview, and qylock.
@@ -182,9 +179,7 @@ depends=(
   'tesseract'            # OCR text grab (pill Super+D)
   'tesseract-data-eng'   # English OCR language data
   'zbar'                 # QR-code scanning (pill Super+D)
-  'gpu-screen-recorder'  # hardware-encoded screen recording (pill Super+U, ryomotion)
-  'wf-recorder'          # multi-GPU capture fallback (pill Super+U)
-  'hyprsunset'           # night-light colour temperature (pill Super+U)
+  'gpu-screen-recorder'  # the screen recorder behind the capture card and `ryoku-shell record`
   'wtype'                # voice-dictation typing on Wayland (Voxtype)
   'libqalculate'         # calculator backend (launcher Super+Space)
   'upower'               # battery + power status (pill/bar battery indicator)
@@ -194,6 +189,12 @@ depends=(
   # was base.packages-only, so it never reached update/shell boxes (the pill
   # faders were silently dead there); a hard depend fixes every path.
   'ddcutil'
+  # Two clients the Hyprland variant used to own that are protocol-neutral, not
+  # Hyprland-specific: niri serves ext-idle-notify-v1 and wlr-screencopy/layer-
+  # shell just the same. Shipping only with the Hyprland variant left a niri box
+  # with no idle management and a dead color picker everywhere; base reaches both.
+  'hypridle'             # idle daemon ryoku-idle renders a config for (ext-idle-notify-v1)
+  'hyprpicker'           # screen color picker (ryoku-cmd-color-picker, Super+Shift+C)
   # Game controllers: xpadneo-dkms (Xbox One/Series Bluetooth pads, from the AUR
   # step) is a DKMS module, so it needs the kernel headers and the DKMS build
   # system to compile its module; without them the build silently fails and the
@@ -211,6 +212,11 @@ optdepends=(
   'kitty: the default terminal'
   'fish: optional interactive shell'
   'blesh: Bash line editor'
+  'zsh: optional interactive shell'
+  'zsh-autosuggestions: command suggestions for Zsh'
+  'zsh-history-substring-search: history search for Zsh'
+  'zsh-syntax-highlighting: syntax highlighting for Zsh'
+  "ryoku-oh-my-zsh=$pkgver: Ryoku prompt and plugins for Zsh"
   'starship: shell prompt'
   'fastfetch: system summary (launcher, RyoStore covers)'
   'yazi: terminal file manager'
@@ -218,7 +224,6 @@ optdepends=(
   'nautilus: graphical file manager'
   'nautilus-python: Ryoku stash actions in the Nautilus right-click menu'
   'ryotunes: the Ryoku music app the now-playing widget follows'
-  'ryomotion: screen-demo recorder and editor'
   'waifu2x-ncnn-vulkan: AI upscale for ryoshot Beautify HD and ryowalls Enhance'
   'pavucontrol: GUI mixer behind the bar Open audio button'
   'songrec: Recognize Music in the launcher'
@@ -377,11 +382,17 @@ EOF
   install -Dm644 "$_repo/ryoku/shell/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settings.ini"
   install -Dm644 "$_repo/ryoku/apps/btop/btop.conf"       "$cfg/btop/btop.conf"
   install -Dm644 "$_repo/ryoku/apps/starship/starship.toml" "$cfg/starship.toml"
+  install -d "$cfg/starship/layouts"
+  cp -a "$_repo/ryoku/apps/starship/layouts/." "$cfg/starship/layouts/"
+  install -Dm644 "$_repo/ryoku/apps/starship/ryoku-colors.toml" \
+    "$cfg/starship/ryoku-colors.toml"
   # session environment: Hyprland sets its own from env.lua, which never reaches
   # niri; the user manager reads this at login, so both compositors get it.
   install -Dm644 "$_repo/ryoku/shell/environment.d/ryoku-session.conf" \
     "$cfg/environment.d/ryoku-session.conf"
   install -Dm644 "$_repo/ryoku/apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
+  install -Dm644 "$_repo/ryoku/apps/fastfetch/ryoku-colors.json" \
+    "$cfg/fastfetch/ryoku-colors.json"
   # the fastfetch logo the config above draws. ships beside config.jsonc so
   # `ryoku materialize` lays both together on every update; seeding it only as a
   # brand asset (installer-time) left updated machines pointing at a file they
@@ -423,13 +434,16 @@ EOF
     "$pkgdir/usr/share/applications/ryoku-hub.desktop"
   install -Dm644 "$_repo/ryoku/assets/brand/logo.svg" \
     "$pkgdir/usr/share/icons/hicolor/scalable/apps/ryoku-hub.svg"
-  # Default apps: the vendor layer, NOT ~/.config/mimeapps.list. That file is
+  # Default apps: the site layer, NOT ~/.config/mimeapps.list. That file is
   # where "Set as default" (GNOME, Firefox, xdg-mime) writes, and materializing
-  # over it threw a user's choices away on every update. /usr/share/applications
-  # is the lowest layer of the XDG mimeapps chain, so these defaults apply until
-  # the user picks something else, and then their pick wins for good.
+  # over it threw a user's choices away on every update. /usr/local/share is
+  # first in the XDG mimeapps chain below the user's file, so these defaults
+  # apply until the user picks something else, and their pick wins for good.
+  # It is also the one applications layer no distro package owns: shipping to
+  # /usr/share/applications/mimeapps.list collided with omarchy-settings on
+  # Omarchy installs and aborted the whole transaction (#295).
   install -Dm644 "$_repo/ryoku/apps/mimeapps.list" \
-    "$pkgdir/usr/share/applications/mimeapps.list"
+    "$pkgdir/usr/local/share/applications/mimeapps.list"
   # chromium reads ~/.config/chromium-flags.conf and Google Chrome reads
   # ~/.config/chrome-flags.conf; lay the one source to both so each pins the GNOME
   # keyring password store and native Wayland (screen share works, and Chrome does
@@ -444,6 +458,13 @@ EOF
   cp -a "$_repo/ryoku/lockscreen/qylock" "$pkgdir/usr/share/ryoku/lockscreen/qylock"
   install -Dm755 "$_repo/ryoku/lockscreen/install-qylock" \
     "$pkgdir/usr/share/ryoku/lockscreen/install-qylock"
+  install -Dm755 "$_repo/ryoku/lockscreen/ryoku-qylock-activate" \
+    "$pkgdir/usr/bin/ryoku-qylock-activate"
+  install -Dm755 "$_repo/ryoku/lockscreen/ryoku-qylock-lock" \
+    "$pkgdir/usr/bin/ryoku-qylock-lock"
+  install -Dm755 \
+    "$_repo/ryoku/lockscreen/qylock/quickshell-lockscreen/ryoku-qylock-unlock-prepare" \
+    "$pkgdir/usr/bin/ryoku-qylock-unlock-prepare"
   # the Wayland greeter compositor wrapper: weston --shell=kiosk at each
   # output's top mode, so the login screen matches a high-refresh session.
   install -Dm755 "$_repo/ryoku/lockscreen/sddm/ryoku-greeter" \
@@ -497,6 +518,11 @@ EOF
   # seeds a fresh install straight from the repo. the chmod below covers it.
   install -d "$pkgdir/usr/share/ryoku/ryodecors"
   cp -a "$_repo/ryoku/assets/ryodecors/." "$pkgdir/usr/share/ryoku/ryodecors/"
+
+  # packaged rices are immutable source looks; the Hub copies one into the
+  # user's rice library on first apply so later edits stay user-owned.
+  install -d "$pkgdir/usr/share/ryoku/rices"
+  cp -a "$_repo/ryoku/assets/rices/." "$pkgdir/usr/share/ryoku/rices/"
 
   # cp -a kept source mode bits; normalize so hypr/scripts stays executable
   # and the rest is world-readable data.
@@ -685,12 +711,20 @@ EOF
   install -Dm644 "$_repo/system/containers/46-ryoku-docker.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/46-ryoku-docker.rules"
 
-  # Laptop clamshell: logind suspends on lid close in every case; the
-  # ryoku-clamshell daemon (installed to /usr/bin by the hardware glob above) is
-  # the only thing that keeps a closed lid awake, and only on AC power with an
-  # external display. The .install reloads logind so it applies without a reboot.
+  # Laptop clamshell: logind provides the sessionless fallback, while
+  # ryoku-clamshell (installed to /usr/bin by the hardware glob above) holds
+  # the active session's lid inhibitor. It keeps AC-plus-external closes awake
+  # and sends every other close through the shell's secure suspend transaction.
+  # Paired transaction hooks preserve the old executor before replacement, then
+  # adopt every live Hyprland/niri user after install, downgrade, or removal.
+  # A durable global sleep block covers logind reload and every user's
+  # materialize/helper/shell replacement, and remains if adoption fails.
   install -Dm644 "$_repo/system/hardware/power/logind-ryoku-lid.conf" \
     "$pkgdir/etc/systemd/logind.conf.d/10-ryoku-lid.conf"
+  install -Dm644 "$_repo/system/hardware/power/94-ryoku-power-cutover-prepare.hook" \
+    "$pkgdir/usr/share/libalpm/hooks/94-ryoku-power-cutover-prepare.hook"
+  install -Dm644 "$_repo/system/hardware/power/95-ryoku-power-cutover.hook" \
+    "$pkgdir/usr/share/libalpm/hooks/95-ryoku-power-cutover.hook"
 
   # Battery/ASPM power knobs: a polkit rule authorizes ryoku-power (installed to
   # /usr/bin by the hardware glob above) for the active wheel user without a
@@ -730,6 +764,13 @@ EOF
   # 2 GiB boot partition (issue #140's stale image).
   install -Dm644 "$_repo/system/boot/mkinitcpio/install/ryoku-gpu-trim" \
     "$pkgdir/usr/lib/initcpio/install/ryoku-gpu-trim"
+
+  # The install hook gives Plymouth /etc/vconsole.conf, and the runtime hook
+  # applies Num Lock before unlock, so keys follow the user's console layout.
+  install -Dm644 "$_repo/system/boot/mkinitcpio/install/ryoku-console-keys" \
+    "$pkgdir/usr/lib/initcpio/install/ryoku-console-keys"
+  install -Dm644 "$_repo/system/boot/mkinitcpio/hooks/ryoku-console-keys" \
+    "$pkgdir/usr/lib/initcpio/hooks/ryoku-console-keys"
 
   # The boot look, shipped so `ryoku update` refreshes it on every box, not just
   # fresh installs; the ryoku-desktop scriptlet then runs ryoku-boot-apply.

@@ -1,5 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import stage.services
+import "../wallpaper" as WallpaperMod
 import "Singletons"
 
 // The Parallax backdrop, drawn inside the desktop surface just above the base
@@ -14,6 +16,8 @@ Item {
 
     property var screen
     property string wallpaperPath: ""
+    readonly property string screenName: root.screen ? root.screen.name : ""
+    readonly property var wallpaperGeometry: WallpaperLayout.geometryFor(root.screenName)
     property string wallpaperFit: "Cover"
 
     anchors.fill: parent
@@ -44,26 +48,38 @@ Item {
         }
     }
 
-    Image {
-        id: bg
+    Item {
+        id: visual
         anchors.fill: parent
-        source: root.url
-        cache: false
-        asynchronous: true
-        fillMode: root.fillModeFor(bg)
-        sourceSize.width: root.width
-        sourceSize.height: root.height
-        // Never scaled: there are no pixels past the wallpaper's edge, so any
-        // overscan is the whole picture zooming when Parallax turns on. The far
-        // plane stays still by default; Backdrop drift moves it at the cost of
-        // a sliver of the base wallpaper at the trailing edge.
-        opacity: (root.shown && status === Image.Ready) ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
         transform: Translate {
             x: root.offsetX()
             y: root.offsetY()
             Behavior on x { SmoothedAnimation { velocity: 320; duration: 70 } }
             Behavior on y { SmoothedAnimation { velocity: 320; duration: 70 } }
+        }
+
+        WallpaperMod.WallpaperFramedPlane {
+            id: framedBackdrop
+            anchors.fill: parent
+            screenName: root.screenName
+            framingKey: root.wallpaperPath
+            imageWidth: root.wallpaperGeometry?.imageWidth ?? bg.sourceSize.width
+            imageHeight: root.wallpaperGeometry?.imageHeight ?? bg.sourceSize.height
+
+            Image {
+                id: bg
+                anchors.fill: parent
+                source: root.url
+                cache: false
+                asynchronous: true
+                fillMode: framedBackdrop.framed ? Image.PreserveAspectCrop : root.fillModeFor(bg)
+                sourceSize.width: root.width
+                sourceSize.height: root.height
+                // The framing owns the crop; pointer drift moves the completed
+                // plane in screen coordinates on top of that transform.
+                opacity: (root.shown && status === Image.Ready) ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 260; easing.type: Easing.OutCubic } }
+            }
         }
     }
 

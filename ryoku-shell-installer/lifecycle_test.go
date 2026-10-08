@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -71,5 +72,47 @@ func TestNewEngineAnchorsPayloadOnResume(t *testing.T) {
 	e2 := newEngine(f, defaultPlan(f), true, "main", "/srv/checkout")
 	if e2.payload != "/srv/checkout" {
 		t.Fatalf("override payload = %q, want /srv/checkout", e2.payload)
+	}
+}
+
+// A stable run that stopped after installing stable packages, resumed by the
+// unstable script: skipping payload/repo/packages would lay unstable-dev
+// configs over stable packages on the stable channel.
+func TestResumeFromOtherRefRedoesRefBoundSteps(t *testing.T) {
+	done := []string{"legacy", "sysupgrade", "tools", "payload", "backup", "repo", "conflicts", "packages", "drivers"}
+	f := &facts{homeDir: t.TempDir(), prevRun: &runState{Completed: append([]string(nil), done...)}}
+	p := defaultPlan(f)
+	e := newEngine(f, p, true, "unstable-dev", "")
+	for _, id := range []string{"payload", "repo", "packages"} {
+		if e.state.has(id) {
+			t.Errorf("step %s from the main run was kept for an unstable-dev resume", id)
+		}
+	}
+	for _, id := range []string{"legacy", "backup", "conflicts", "drivers"} {
+		if !e.state.has(id) {
+			t.Errorf("ref-independent step %s was dropped from the resume", id)
+		}
+	}
+
+	same := &facts{homeDir: t.TempDir(), prevRun: &runState{Completed: append([]string(nil), done...), Ref: "unstable-dev"}}
+	if e := newEngine(same, defaultPlan(same), true, "unstable-dev", ""); len(e.state.Completed) != len(done) {
+		t.Fatalf("a same-ref resume redid finished steps: %v", e.state.Completed)
+	}
+}
+
+func TestSetRyokuServerTouchesOnlyRyokuStanza(t *testing.T) {
+	conf := "[options]\nArchitecture = auto\n\n[core]\nInclude = /etc/pacman.d/mirrorlist\n\n" +
+		"[ryoku]\nSigLevel = Required\n#Server = https://old.example/$arch\nServer = " + stableServer + "\n\n" +
+		"[custom]\nServer = https://mirror.example/$arch\n"
+	got, prev := setRyokuServer(conf, testingServer)
+	if prev != stableServer {
+		t.Fatalf("replaced server = %q, want %q", prev, stableServer)
+	}
+	want := strings.Replace(conf, "Server = "+stableServer, "Server = "+testingServer, 1)
+	if got != want {
+		t.Fatalf("rewritten config:\n%s\nwant:\n%s", got, want)
+	}
+	if _, prev := setRyokuServer("[core]\nServer = x\n", testingServer); prev != "" {
+		t.Fatalf("a config with no [ryoku] stanza reported server %q", prev)
 	}
 }

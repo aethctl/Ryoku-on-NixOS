@@ -3,6 +3,12 @@
 ## Unreleased
 
 ### Fixed
+- **Dvorak, Colemak and other keyboard variants carry into the installer.** The
+  graphical installer switched its keyboard to the base layout only, so picking
+  Dvorak captured the disk passphrase on QWERTY while the boot unlock prompt
+  used Dvorak, and the passphrase never matched. The installer now relaunches
+  under the layout and its variant (`tui/system.go`, `ryoku-installer-session`).
+
 - **The offline package closure now carries `asusctl`.** Supported ASUS Aura
   laptops can select the native keyboard-lighting provider during an offline
   install without making every target install laptop-specific control software.
@@ -10,7 +16,7 @@
 - **A truncated package no longer ships in the offline repo.** `offline-repo.sh`
   downloaded the closure with `pacman -Sw --needed` into a persistent cache and
   reflinked it in with no integrity check, so a download cut short by one network
-  hiccup (most likely on a big package like the ryomotion Electron app) sat
+  hiccup (most likely on a big package) sat
   corrupt in the cache forever (`--needed` never re-fetches a file that already
   exists by name) and shipped in every ISO, bricking the offline pacstrap with a
   "truncated <pkg>" error. The bake now verifies every cached package with
@@ -19,6 +25,10 @@
   ISO). Covered by `tests/offline-repo-integrity.sh`.
 
 ### Added
+- The offline closure ships GPU Screen Recorder. `base.packages` swaps
+  `wf-recorder` for `gpu-screen-recorder`, so the baked `[offline]` repo carries
+  the GPU-only recorder; Ryoku Motion (`ryomotion`) is no longer built, so it
+  drops out of the closure.
 - **Two ISO variants from one tree (`RYOKU_VARIANT` plain|cachyos), both fully
   offline.** `build.sh` bakes the whole package closure into a `file://`
   `[offline]` repo so the installer pacstraps with no network, and a

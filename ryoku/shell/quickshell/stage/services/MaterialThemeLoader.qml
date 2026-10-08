@@ -1,248 +1,340 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
-import stage
-import stage.modules.common
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import stage
+import stage.modules.common
 
-/**
- * Automatically reloads generated material colors.
- * It is necessary to run reapplyTheme() on startup because Singletons are lazily loaded.
- */
+// The Stage Editor's view of Ryoku's real colour controls. shell.json owns the
+// selected named theme, matugen.json owns the wallpaper palette knobs, and both
+// are read live so opening the drawer always reflects the running desktop.
 Singleton {
     id: root
-    property string filePath: Directories.generatedMaterialThemePath
 
-    // While the lock's look is on screen (session lock or Edit Mode's Lockscreen
-    // preview) and a separate lock wallpaper is configured, the palette generated
-    // for that wallpaper is applied in memory instead of rewriting colors.json.
-    readonly property bool lockThemeActive: GlobalStates.lockLookActive
-        && (Config.options?.background?.useSeparateLockscreenWallpaper ?? false)
-        && (Config.options?.background?.lockscreenWallpaperPath ?? "") !== ""
-    property var activeColorAnimations: []
-    // Animating every role invalidates dozens of global bindings per frame while
-    // the lock blur is moving; keep the structural/accent roles fluid and set
-    // the rest atomically.
-    readonly property var animatedColorRoles: ({
-        m3background: true, m3onBackground: true, m3surface: true,
-        m3surfaceContainerLow: true, m3surfaceContainer: true,
-        m3surfaceContainerHigh: true, m3onSurface: true,
-        m3onSurfaceVariant: true, m3outline: true, m3outlineVariant: true,
-        m3primary: true, m3onPrimary: true, m3primaryContainer: true,
-        m3onPrimaryContainer: true, m3secondary: true, m3onSecondary: true,
-        m3secondaryContainer: true, m3onSecondaryContainer: true,
-        m3tertiary: true, m3onTertiary: true, m3tertiaryContainer: true,
-        m3onTertiaryContainer: true
-    })
+    readonly property string shellSettingsPath: `${Directories.config}/ryoku/shell.json`
+    readonly property string matugenSettingsPath: `${Directories.config}/ryoku/matugen.json`
+    readonly property string livePalettePath: `${Directories.cache}/ryoku/colors.json`
 
-    // FileView.reload() only emits loadedChanged on the initial load, so a
-    // reapply has to read the file itself instead of waiting for a signal that
-    // never arrives once the view is loaded.
-    function reapplyTheme() {
-        themeFileView.reload();
-        delayedFileRead.restart();
-    }
-
-    function stopColorAnimations() {
-        for (const animation of activeColorAnimations) {
-            animation.stop();
-            animation.destroy();
-        }
-        activeColorAnimations = [];
-    }
-
-    // Which palette should be on screen right now.
-    function applyCurrentPalette(animated) {
-        const lockContent = lockFileView.text();
-        if (root.lockThemeActive && lockContent && lockContent.trim() !== "") {
-            root.applyColors(lockContent, animated);
-            return;
-        }
-        root.applyColors(themeFileView.text(), animated);
-    }
-
-    function applyColors(fileContent, animated = false) {
-        try {
-            if (!fileContent || fileContent.trim() === "") {
-                console.warn("[MaterialThemeLoader] colors.json is empty, keeping current palette")
-                return;
-            }
-
-            const json = JSON.parse(fileContent)
-            const skip = { "darkmode": true, "transparent": true }
-            root.stopColorAnimations();
-            const animate = animated && !Appearance.reducedMotion;
-            const animations = [];
-            for (const key in json) {
-                if (!json.hasOwnProperty(key) || skip[key]) continue;
-                const m3Key = root._toM3Key(key);
-                if (Appearance.m3colors[m3Key] === undefined) continue;
-                if (animate && root.animatedColorRoles[m3Key] === true
-                        && Appearance.m3colors[m3Key] != json[key]) {
-                    animations.push(Appearance.animation.elementMoveFast.colorAnimation.createObject(root, {
-                        target: Appearance.m3colors,
-                        property: m3Key,
-                        from: Appearance.m3colors[m3Key],
-                        to: json[key]
-                    }));
-                } else {
-                    Appearance.m3colors[m3Key] = json[key]
-                }
-            }
-            activeColorAnimations = animations;
-            for (const animation of animations) animation.start();
-
-            root.updateDarkMode(json)
-        } catch (e) {
-            console.warn("[MaterialThemeLoader] Error parsing colors.json:", e)
-        }
-    }
-
-    function updateDarkMode(json) {
-        if (typeof json.darkmode === "boolean") {
-            Appearance.m3colors.darkmode = json.darkmode;
-            return;
-        }
-
-        const background = json.background ?? json.surface;
-        if (background !== undefined && background !== null && background !== "") {
-            Appearance.m3colors.darkmode = Qt.color(background).hslLightness < 0.5;
-        }
-    }
-
-    function _toM3Key(key) {
-        const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
-        return `m3${camelCaseKey}`
-    }
-
-    function resetFilePathNextTime() {
-        resetFilePathNextWallpaperChange.enabled = true
-    }
-
-    Connections {
-        id: resetFilePathNextWallpaperChange
-        enabled: false
-        target: Config.options.background
-        function onWallpaperPathChanged() {
-            root.filePath = ""
-            root.filePath = Directories.generatedMaterialThemePath
-            resetFilePathNextWallpaperChange.enabled = false
-        }
-    }
-
-    Timer {
-        id: delayedFileRead
-        interval: Config.options?.hacks?.arbitraryRaceConditionDelay ?? 100
-        repeat: false
-        running: false
-        onTriggered: {
-            // While a preset holds motion, snap. The crossfade re-evaluates
-            // every coloured binding in every window once per palette role per
-            // frame (20–30 ms a frame), and the hold is the one moment nothing
-            // is moving — the wallpaper change waits for its release too — so
-            // the new palette lands in a single frame nobody sees stutter.
-            if (GlobalStates.presetHoldMotion) {
-                // A cached palette can land before the bar has left; it waits
-                // for that slide like the config does.
-                if (GlobalStates.presetWorkDeferred) {
-                    root._paletteWaitsForBar = true;
-                    return;
-                }
-                root.applyCurrentPalette(false);
-                root.paletteSerial++;
-                return;
-            }
-            // While a preset is being applied, crossfade the palette instead of
-            // snapping — a preset switch is the one time colors.json changes
-            // wholesale, and the flash is exactly what the staged transition is
-            // meant to remove. Ordinary edits keep their instant apply.
-            root.applyCurrentPalette(GlobalStates.presetRecoloring)
-        }
-    }
-
-    // Bumped when a palette lands during a preset's hold.
+    property string themeName: "Wallpaper"
+    property string mode: "smart"
+    property string schemeType: "scheme-tonal-spot"
+    property int sourceColorIndex: 0
+    property var themeCatalog: []
+    property bool stateReady: false
+    property bool catalogReady: false
+    property bool busy: false
+    property string lastError: ""
     property int paletteSerial: 0
-    property bool _paletteWaitsForBar: false
 
-    Connections {
-        target: GlobalStates
-        function onPresetWorkDeferredChanged() {
-            if (GlobalStates.presetWorkDeferred || !root._paletteWaitsForBar)
+    readonly property bool followsWallpaper: root.themeName === "Wallpaper"
+    readonly property var wallpaperSchemes: [
+        "scheme-tonal-spot",
+        "scheme-content",
+        "scheme-expressive",
+        "scheme-fidelity",
+        "scheme-vibrant",
+        "scheme-fruit-salad",
+        "scheme-rainbow",
+        "scheme-neutral",
+        "scheme-monochrome"
+    ]
+    readonly property var namedThemes: root.themeCatalog.filter(card =>
+        card && String(card.id ?? "") !== "Wallpaper")
+
+    property var _jobs: []
+    property var _rollbackJobs: []
+    property var _currentUndo: []
+    property var _before: ({})
+    property var _after: ({})
+    property bool _recordHistory: false
+    property bool _rollingBack: false
+    property string _failureError: ""
+    property string _tag: ""
+
+    signal applyFinished(string tag, bool ok, string error)
+
+    function snapshot() {
+        return {
+            themeName: root.themeName,
+            mode: root.mode,
+            schemeType: root.schemeType,
+            sourceColorIndex: root.sourceColorIndex
+        };
+    }
+
+    function cloneState(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function normalizedState(value) {
+        const mode = ["dark", "light", "smart", "sun"].includes(String(value.mode))
+            ? String(value.mode) : "smart";
+        const scheme = root.wallpaperSchemes.includes(String(value.schemeType))
+            ? String(value.schemeType) : "scheme-tonal-spot";
+        const index = Math.max(0, Math.min(4, Math.round(Number(value.sourceColorIndex) || 0)));
+        return {
+            themeName: String(value.themeName || "Wallpaper"),
+            mode: mode,
+            schemeType: scheme,
+            sourceColorIndex: index
+        };
+    }
+
+    function sameState(left, right) {
+        return left.themeName === right.themeName
+            && left.mode === right.mode
+            && left.schemeType === right.schemeType
+            && left.sourceColorIndex === right.sourceColorIndex;
+    }
+
+    function assignState(value) {
+        root.themeName = value.themeName;
+        root.mode = value.mode;
+        root.schemeType = value.schemeType;
+        root.sourceColorIndex = value.sourceColorIndex;
+        root.stateReady = true;
+    }
+
+    // Every writer below is the same writer used by Ryoku Settings:
+    // `ryoku-shell theme` reaches settings.patch for theme.theme, while the Hub
+    // backend merge-writes matugen.json and the shell daemon repaints from it.
+    function applyState(patch, recordHistory = true, tag = "") {
+        if (root.busy)
+            return false;
+
+        const before = root.snapshot();
+        const after = root.normalizedState(Object.assign({}, before, patch ?? ({})));
+        if (root.sameState(before, after)) {
+            Qt.callLater(() => root.applyFinished(tag, true, ""));
+            return true;
+        }
+
+        const jobs = [];
+        if (before.themeName !== after.themeName) {
+            jobs.push({
+                command: ["ryoku-shell", "theme", after.themeName],
+                rollback: ["ryoku-shell", "theme", before.themeName]
+            });
+        }
+
+        const matugen = {};
+        const oldMatugen = {};
+        if (before.mode !== after.mode) {
+            matugen.mode = after.mode;
+            oldMatugen.mode = before.mode;
+        }
+        if (before.schemeType !== after.schemeType) {
+            matugen.schemeType = after.schemeType;
+            oldMatugen.schemeType = before.schemeType;
+        }
+        if (before.sourceColorIndex !== after.sourceColorIndex) {
+            matugen.sourceColorIndex = after.sourceColorIndex;
+            oldMatugen.sourceColorIndex = before.sourceColorIndex;
+        }
+        if (Object.keys(matugen).length > 0) {
+            jobs.push({
+                command: ["ryoku-hub", "desktop", "matugen", "set",
+                    JSON.stringify(matugen)],
+                rollback: ["ryoku-hub", "desktop", "matugen", "set",
+                    JSON.stringify(oldMatugen)]
+            });
+        }
+
+        root._before = root.cloneState(before);
+        root._after = root.cloneState(after);
+        root._recordHistory = recordHistory;
+        root._tag = tag;
+        root._jobs = jobs;
+        root.lastError = "";
+        root._rollbackJobs = [];
+        root._rollingBack = false;
+        root._failureError = "";
+        root.busy = true;
+        root.runNextJob();
+        return true;
+    }
+
+    function setMode(value) {
+        return root.applyState({ themeName: "Wallpaper", mode: value });
+    }
+
+    function setSchemeType(value) {
+        return root.applyState({ themeName: "Wallpaper", schemeType: value });
+    }
+
+    function setSourceColorIndex(value) {
+        return root.applyState({ themeName: "Wallpaper", sourceColorIndex: value });
+    }
+
+    function setTheme(value) {
+        return root.applyState({ themeName: value });
+    }
+
+    function runNextJob() {
+        if (root._jobs.length === 0) {
+            root.finishApply(true, "");
+            return;
+        }
+        const job = root._jobs[0];
+        root._jobs = root._jobs.slice(1);
+        root._currentUndo = job.rollback;
+        styleProcess.command = job.command;
+        styleProcess.running = true;
+    }
+
+    function beginRollback(error) {
+        root._jobs = [];
+        root._rollingBack = true;
+        root._failureError = error;
+        root.runNextRollback();
+    }
+
+    function runNextRollback() {
+        if (root._rollbackJobs.length === 0) {
+            root._rollingBack = false;
+            root.finishApply(false, root._failureError);
+            return;
+        }
+        styleProcess.command = root._rollbackJobs[0];
+        root._rollbackJobs = root._rollbackJobs.slice(1);
+        styleProcess.running = true;
+    }
+
+    function finishApply(ok, error) {
+        const before = root.cloneState(root._before);
+        const after = root.cloneState(root._after);
+        const record = root._recordHistory;
+        const tag = root._tag;
+        root._jobs = [];
+        root._rollbackJobs = [];
+        root._currentUndo = [];
+        root._rollingBack = false;
+        root._failureError = "";
+        root.busy = false;
+
+        if (ok) {
+            root.assignState(after);
+            if (record) {
+                GlobalStates.editHistoryPush({
+                    "undo": () => root.applyState(before, false),
+                    "redo": () => root.applyState(after, false)
+                });
+            }
+        } else {
+            root.assignState(before);
+            root.lastError = error;
+            shellSettingsFile.reload();
+            matugenSettingsFile.reload();
+        }
+        root.applyFinished(tag, ok, error);
+    }
+
+    function loadShellSettings(text) {
+        try {
+            const document = JSON.parse(String(text || "{}"));
+            root.themeName = String(document?.theme?.theme || "Wallpaper");
+        } catch (error) {
+            root.themeName = "Wallpaper";
+        }
+        root.stateReady = true;
+    }
+
+    function loadMatugenSettings(text) {
+        try {
+            const document = JSON.parse(String(text || "{}"));
+            root.mode = ["dark", "light", "smart", "sun"].includes(String(document.mode))
+                ? String(document.mode) : "smart";
+            root.schemeType = root.wallpaperSchemes.includes(String(document.schemeType))
+                ? String(document.schemeType) : "scheme-tonal-spot";
+            root.sourceColorIndex = Math.max(0, Math.min(4,
+                Math.round(Number(document.sourceColorIndex) || 0)));
+        } catch (error) {
+            root.mode = "smart";
+            root.schemeType = "scheme-tonal-spot";
+            root.sourceColorIndex = 0;
+        }
+        root.stateReady = true;
+    }
+
+    Process {
+        id: styleProcess
+        stderr: StdioCollector { id: styleError }
+        onExited: (exitCode, exitStatus) => {
+            if (root._rollingBack) {
+                root.runNextRollback();
                 return;
-            root._paletteWaitsForBar = false;
-            root.applyCurrentPalette(!GlobalStates.presetHoldMotion);
+            }
+            if (exitCode !== 0) {
+                const message = String(styleError.text || "").trim()
+                    || Translation.tr("The colour change could not be applied.");
+                root.beginRollback(message);
+                return;
+            }
+            root._rollbackJobs = [root._currentUndo].concat(root._rollbackJobs);
+            root.runNextJob();
+        }
+    }
+
+    Process {
+        id: catalogProcess
+        command: ["ryoku-shell", "theme", "catalog"]
+        running: true
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    const rows = JSON.parse(String(this.text || "[]"));
+                    root.themeCatalog = Array.isArray(rows) ? rows : [];
+                } catch (error) {
+                    root.themeCatalog = [];
+                }
+                root.catalogReady = true;
+            }
+        }
+        onExited: exitCode => {
+            if (exitCode !== 0)
+                root.catalogReady = true;
+        }
+    }
+
+    FileView {
+        id: shellSettingsFile
+        path: root.shellSettingsPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.loadShellSettings(text())
+        onLoadFailed: root.loadShellSettings("")
+    }
+
+    FileView {
+        id: matugenSettingsFile
+        path: root.matugenSettingsPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.loadMatugenSettings(text())
+        onLoadFailed: root.loadMatugenSettings("")
+    }
+
+    // PresetTransition waits for this serial. The actual shell palette is
+    // already loaded by Ryoku's Theme singleton; Stage only observes its file.
+    FileView {
+        id: livePaletteFile
+        path: root.livePalettePath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: {
+            reload();
             root.paletteSerial++;
         }
+        onLoaded: root.paletteSerial++
     }
-
-    Connections {
-        target: root
-        function onLockThemeActiveChanged() {
-            root.applyCurrentPalette(true);
-        }
-    }
-
-    FileView {
-        id: lockFileView
-        path: Qt.resolvedUrl(Directories.lockscreenColorsPath)
-        watchChanges: true
-        onFileChanged: {
-            this.reload();
-            if (root.lockThemeActive) delayedFileRead.restart();
-        }
-        onLoadedChanged: {
-            if (lockFileView.loaded && root.lockThemeActive)
-                root.applyCurrentPalette(false)
-        }
-    }
-
-    FileView {
-        id: themeFileView
-        path: Qt.resolvedUrl(root.filePath)
-        watchChanges: true
-        onFileChanged: {
-            this.reload();
-            delayedFileRead.restart();
-        }
-        onLoadedChanged: {
-            if (themeFileView.loaded)
-                root.applyCurrentPalette(false)
-        }
-        onLoadFailed: root.resetFilePathNextTime()
-    }
-
-    function toggleLightDark() {
-        const currentlyDark = Appearance.m3colors.darkmode;
-        if (Config.options?.background?.useSeparateLightModeWallpaper) {
-            if (currentlyDark) {
-                const lightPath = Config.options.background.lightModeWallpaperPath;
-                if (lightPath && lightPath !== "") {
-                    Wallpapers.applyLightModeWallpaper(lightPath);
-                    return;
-                }
-            } else {
-                const darkPath = Config.options.background.wallpaperPath;
-                if (darkPath && darkPath !== "") {
-                    Wallpapers.apply(darkPath, true);
-                    return;
-                }
-            }
-        }
-        Quickshell.execDetached(["bash", "-c", `env -u LD_LIBRARY_PATH -u PYTHONHOME -u PYTHONPATH PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH "${Directories.wallpaperSwitchScriptPath}" --mode ${currentlyDark ? "light" : "dark"} --noswitch`]);
-    }
-
 
     IpcHandler {
         target: "theme"
-
-        function toggleLightDark(): void {
-            root.toggleLightDark();
-        }
-
-        function reapplyTheme(): void {
-            root.reapplyTheme();
-        }
+        function toggleLightDark(): void { root.toggleLightDark(); }
+        function reapplyTheme(): void { root.reapplyTheme(); }
     }
 }

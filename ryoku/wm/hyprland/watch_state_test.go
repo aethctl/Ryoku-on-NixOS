@@ -25,10 +25,19 @@ func TestFocusEventsDoNotQueryAndPreserveHistory(t *testing.T) {
 	defer restore()
 	var frames []wm.Frame
 	s := newWatchState(func(f wm.Frame) { frames = append(frames, f) }, func(wm.FrameKind) bool { return true })
+	if mon, ok := parseFocusedMon("focusedmonv2>>DP-1,1"); !ok || mon != "DP-1" {
+		t.Fatalf("focusedmonv2 parsed as %q, %v", mon, ok)
+	}
 	s.windows = []wm.Window{{ID: "0xa", FocusOrder: 0}, {ID: "0xb", FocusOrder: 1}, {ID: "0xc", FocusOrder: 2}}
 	s.publish(wm.Frame{Kind: wm.FrameWindows, Windows: s.windows})
 	if s.event("activewindow>>kitty,a title, with commas") != 0 {
 		t.Fatal("v1 refreshed")
+	}
+	if s.event("focusedmon>>DP-1,1") != 0 {
+		t.Fatal("focused monitor refreshed full state")
+	}
+	if s.event("focusedmonv2>>DP-1,1") != 0 {
+		t.Fatal("focused monitor v2 refreshed full state")
 	}
 	if s.event("activewindowv2>>b") != 0 {
 		t.Fatal("known focus refreshed")

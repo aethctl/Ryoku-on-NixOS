@@ -8,6 +8,7 @@ import stage.modules.common as StageIsland
 import "Singletons" as StageCfg
 import "../desktop/Singletons" as WidgetStore
 import "../visualizer/Singletons" as VizCfg
+import Ryoku.Ui.Singletons
 
 // The Stage Editor's store bridge: Ryoku's real desktop widgets, seen through
 // the ported chrome's own widget API. The chrome (stage.modules.common.Config)
@@ -21,8 +22,7 @@ import "../visualizer/Singletons" as VizCfg
 Scope {
     id: root
 
-    // The screen this provider speaks for (kept for diagnostics; Ryoku's
-    // widget store is not per-monitor forked the way the island's is).
+    // The output whose widget fork this provider reads and writes.
     property string monitor: ""
     // The roster rows, in the chrome's row shape: {id, label, icon, enabled,
     // group}. Fed from Desktop.addItems, so the catalogue is exactly what the
@@ -69,6 +69,60 @@ Scope {
                 return r.enabled ? 1 : 0;
         return 0;
     }
+    readonly property var inspectingRow: {
+        const id = StageCfg.StageSession.inspecting;
+        for (const row of root.rows || [])
+            if (row.id === id)
+                return row;
+        return null;
+    }
+    readonly property string inspectingLabel: root.inspectingRow && root.inspectingRow.label
+        ? root.inspectingRow.label : I18n.tr("Widget")
+    readonly property string inspectingIcon: root.inspectingRow && root.inspectingRow.icon
+        ? root.inspectingRow.icon : "widgets"
+
+    // Visualizer and Depth are toolbar catalogues. Widget settings uses the
+    // same provider path but stays hidden until a selected frame hands off to it.
+    readonly property var extraSections: [
+        {
+            "section": "widget",
+            "label": root.inspectingLabel,
+            "icon": root.inspectingIcon,
+            "tooltip": I18n.tr("Tune the selected widget"),
+            "intro": "",
+            "hidden": true,
+            "back": StageCfg.StageSession.inspectingBack || "widgets",
+            "page": widgetPage
+        },
+        {
+            "section": "visualizer",
+            "label": I18n.tr("Visualizer"),
+            "icon": "graphic_eq",
+            "tooltip": I18n.tr("The audio visualizer: look, place, colour and motion"),
+            "intro": I18n.tr("Drag the look on the desktop to move it, its corner to size it and the dot to turn it, or set it by number below."),
+            "page": visualizerPage
+        },
+        {
+            "section": "depth",
+            "label": I18n.tr("Depth"),
+            "icon": "layers",
+            "tooltip": I18n.tr("Cut the wallpaper into layers and lift widgets between them"),
+            "intro": I18n.tr("Cut the wallpaper's subject out so widgets can sit behind it, and choose how the layers look and move."),
+            "page": depthPage
+        }
+    ]
+    Component {
+        id: widgetPage
+        StageWidgetPage {}
+    }
+    Component {
+        id: visualizerPage
+        StageVisualizerPage {}
+    }
+    Component {
+        id: depthPage
+        StageDepthPage {}
+    }
 
     // ── Writers ──────────────────────────────────────────────────────────────
 
@@ -99,10 +153,15 @@ Scope {
         }
         if (widgetId === "visualizer") {
             VizCfg.Config.setEnabled(true);
+            // A drop places the look's centre where the pointer let go, the same
+            // way a built-in lands under the cursor: the visualiser box is
+            // fractions of the monitor, so the chrome's pixel point converts here.
+            if (x !== undefined && y !== undefined)
+                root.placeVisualizerAt(x, y);
             return;
         }
         if (x === undefined || y === undefined) {
-            store.set(widgetId + "Enabled", true);
+            store.setFor(root.monitor, widgetId + "Enabled", true);
             return;
         }
         const patch = {};
@@ -110,18 +169,65 @@ Scope {
         patch[widgetId + "Anchor"] = "free";
         patch[widgetId + "X"] = Math.round(x);
         patch[widgetId + "Y"] = Math.round(y);
-        store.setMany(patch);
+        store.setManyFor(root.monitor, patch);
+    }
+
+    function addVisualizer() {
+        const v = VizCfg.Config;
+        if (v.count >= v.maxVisualizers)
+            return -1;
+        const wasEnabled = v.enabled;
+        const index = v.addVisualizer();
+        if (index < 0)
+            return -1;
+        v.setEnabled(true);
+        const id = "visualizer:" + index;
+        const after = root.snapshot(id);
+        GlobalStates.editHistoryPush({
+            "undo": () => {
+                root.restore(id, null);
+                if (!wasEnabled)
+                    v.setEnabled(false);
+            },
+            "redo": () => root.restore(id, after)
+        });
+        return index;
+    }
+
+    // The drop point is the widget's top-left in screen px; the visualiser has
+    // no top-left to keep (it is a centred box), so the box centre lands there
+    // and the store's own clamp keeps it on screen.
+    function placeVisualizerAt(px, py) {
+        const scr = root._screen();
+        if (!scr)
+            return;
+        const v = VizCfg.Config;
+        const nx = px / scr.width - v.w / 2;
+        const ny = py / scr.height - v.h / 2;
+        v.setBox(nx, ny, v.w, v.h, scr.width / Math.max(1, scr.height));
+    }
+
+    // The screen this provider frames, falling back to the first one.
+    function _screen() {
+        return Quickshell.screens.find(s => s.name === root.monitor)
+            || Quickshell.screens[0] || null;
     }
 
     function removeWidget(instanceId) {
         root.restore(instanceId, null);
     }
 
-    // The state a restore needs, or null when the widget is not on the
-    // desktop (the undo of an add is then a plain disable). For a
-    // built-in/face: its placement keys; for a plugin: its whole plugins.json
-    // entry (through Registry's merged placement); for the visualizer, a
-    // marker (only the flag matters).
+    function visualizerIndex(instanceId) {
+        const text = "" + instanceId;
+        if (text.indexOf("visualizer:") !== 0)
+            return -1;
+        const index = parseInt(text.slice(11));
+        return isNaN(index) ? -1 : index;
+    }
+
+    // An indexed visualizer snapshot is its complete settings object plus the
+    // roster size. The size distinguishes restoring a moved instance from
+    // inserting one that was removed.
     function snapshot(instanceId) {
         const store = WidgetStore.Config;
         if (instanceId.indexOf("plugin:") === 0) {
@@ -131,18 +237,38 @@ Scope {
                 return null;
             return { plugin: pid, entry: JSON.parse(JSON.stringify(e.placement)) };
         }
-        if (instanceId === "visualizer")
-            return VizCfg.Config.enabled ? { viz: true } : null;
-        if (store[instanceId + "Enabled"] !== true)
+        const vi = root.visualizerIndex(instanceId);
+        if (vi >= 0) {
+            if (!VizCfg.Config.enabled || vi >= VizCfg.Config.count)
+                return null;
+            return {
+                viz: true,
+                index: vi,
+                count: VizCfg.Config.count,
+                data: VizCfg.Config.cloneData(VizCfg.Config.dataAt(vi))
+            };
+        }
+        if (instanceId === "visualizer") {
+            const all = [];
+            for (let i = 0; i < VizCfg.Config.count; ++i)
+                all.push(VizCfg.Config.cloneData(VizCfg.Config.dataAt(i)));
+            return {
+                visualizers: true,
+                enabled: VizCfg.Config.enabled,
+                active: VizCfg.Config.active,
+                instances: all
+            };
+        }
+        if (store.get(instanceId + "Enabled", root.monitor) !== true)
             return null;
         return { key: instanceId,
-            anchor: store[instanceId + "Anchor"],
-            x: store[instanceId + "X"],
-            y: store[instanceId + "Y"] };
+            anchor: store.get(instanceId + "Anchor", root.monitor),
+            x: store.get(instanceId + "X", root.monitor),
+            y: store.get(instanceId + "Y", root.monitor) };
     }
 
     // Put a widget back the way a snapshot found it; `null` means it was not
-    // on the desktop, so this is the disable path.
+    // on the desktop, so this is the disable or remove path.
     function restore(instanceId, snap) {
         const store = WidgetStore.Config;
         if (instanceId.indexOf("plugin:") === 0) {
@@ -157,12 +283,31 @@ Scope {
                 root.enqueue([root.placeTool, pid, "enabled", "true"]);
             return;
         }
+        const vi = root.visualizerIndex(instanceId);
+        if (vi >= 0) {
+            const v = VizCfg.Config;
+            if (snap === null || snap === undefined) {
+                v.setActive(vi);
+                v.removeVisualizer(vi);
+                return;
+            }
+            if (v.count < snap.count)
+                v.insertVisualizer(snap.index, snap.data);
+            else
+                v.replaceVisualizer(snap.index, snap.data);
+            v.setEnabled(true);
+            v.setActive(snap.index);
+            return;
+        }
         if (instanceId === "visualizer") {
-            VizCfg.Config.setEnabled(snap !== null && snap !== undefined);
+            if (snap && snap.visualizers)
+                VizCfg.Config.replaceAll(snap.instances, snap.active, snap.enabled);
+            else
+                VizCfg.Config.setEnabled(false);
             return;
         }
         if (snap === null || snap === undefined) {
-            store.set(instanceId + "Enabled", false);
+            store.setFor(root.monitor, instanceId + "Enabled", false);
             return;
         }
         const patch = {};
@@ -170,7 +315,28 @@ Scope {
         patch[instanceId + "Anchor"] = snap.anchor;
         patch[instanceId + "X"] = snap.x;
         patch[instanceId + "Y"] = snap.y;
-        store.setMany(patch);
+        store.setManyFor(root.monitor, patch);
+    }
+
+    // A visualizer gesture records one complete instance document. Full data,
+    // rather than only placement, also makes a remove undo exact.
+    function recordVisualizer(instanceId, before) {
+        if (!before)
+            return;
+        const after = root.snapshot(instanceId);
+        if (!after || JSON.stringify(before) === JSON.stringify(after))
+            return;
+        GlobalStates.editHistoryPush({
+            "undo": () => root.restore(instanceId, before),
+            "redo": () => root.restore(instanceId, after)
+        });
+    }
+
+    // The framed screen's width over its height: the visualiser box is
+    // fractions of the monitor, and its clamp needs the real proportions.
+    function aspect() {
+        const scr = root._screen();
+        return scr ? scr.width / Math.max(1, scr.height) : 1;
     }
 
     // ── The place tool, one command at a time ────────────────────────────────
@@ -178,9 +344,17 @@ Scope {
     // The chrome's store seam is one global; a monitor switch mounts the next
     // screen's provider before this one dies, so only clear the slot when it
     // still holds this provider.
-    Component.onCompleted: StageIsland.Config.widgetProvider = root
-    Component.onDestruction: if (StageIsland.Config.widgetProvider === root)
-        StageIsland.Config.widgetProvider = null
+    Component.onCompleted: {
+        StageIsland.Config.widgetProvider = root;
+        WidgetStore.Config.selectMonitor(root.monitor, true);
+    }
+    Component.onDestruction: {
+        if (StageIsland.Config.widgetProvider === root) {
+            StageIsland.Config.widgetProvider = null;
+            if (WidgetStore.Config.writeMonitor === root.monitor)
+                WidgetStore.Config.selectMonitor("");
+        }
+    }
 
     property var _queue: []
     Process {

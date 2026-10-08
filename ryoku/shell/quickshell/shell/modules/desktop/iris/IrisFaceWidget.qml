@@ -25,6 +25,8 @@ Item {
     property var screen: null
     property real hostX: 0
     property real hostY: 0
+    property real scaleCfg: 1
+    property string sizeCfg: ""
 
     // Pushed by WidgetSlot for the Fixed colour mode (hex or "").
     property string inkColorA: ""
@@ -69,8 +71,8 @@ Item {
             ryokuStyle: adapter.ryokuStyle
             inkOverride: adapter._override
             accentOverride: adapter._override
-            sizeOverride: Config[adapter.prefix + "Size"] || ""
-            scaleOverride: Config[adapter.prefix + "Scale"]
+            sizeOverride: adapter.sizeCfg
+            scaleOverride: adapter.scaleCfg
             radiusOverride: Config[adapter.prefix + "Radius"]
             optionOverrides: adapter._opts
         }
@@ -104,7 +106,7 @@ Item {
             ryokuStyle: adapter.ryokuStyle
             inkOverride: adapter._override
             accentOverride: adapter._override
-            scaleOverride: Config[adapter.prefix + "Scale"]
+            scaleOverride: adapter.scaleCfg
             radiusOverride: Config[adapter.prefix + "Radius"]
             // Match the slot card's resolved rounding so the Ryoku custom-image
             // surface clips its media to the same shape (Theme.radius = square).

@@ -46,13 +46,13 @@ private:
     };
 
     Resolved resolve(TextureTier &near, TextureTier &far, const QString &key) const;
-    void ensureStatics(QRhi *rhi, QRhiResourceUpdateBatch *batch);
+    bool ensureStatics(QRhi *rhi, QRhiResourceUpdateBatch *batch);
     void ensureFieldBindings(QRhi *rhi, QRhiTexture *nearTex, QRhiTexture *farTex, QRhiTexture *prevTex,
                              QRhiTexture *prevOutTex);
     void ensureInlinePipeline(QRhi *rhi, QRhiRenderPassDescriptor *rp, int samples);
     void ensureBlitBindings(QRhi *rhi, QRhiTexture *tex);
     void ensureBlitPipeline(QRhi *rhi, QRhiRenderPassDescriptor *rp, int samples);
-    void ensureOffscreen(QRhi *rhi, QSize size);
+    bool ensureOffscreen(QRhi *rhi, QRhiResourceUpdateBatch *batch, QSize size);
     void buildFieldPipeline(QRhi *rhi, QRhiRenderPassDescriptor *rp, int samples,
                             std::unique_ptr<QRhiGraphicsPipeline> &out);
     void releaseOffscreen();

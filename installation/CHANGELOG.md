@@ -13,6 +13,18 @@
   its space is listed but needs GPT (`backend/lib/disk.sh`, `tui/system.go`).
 
 ### Added
+- **Pick a window manager, browser, login shell, and optional apps in the
+  installer.** Four steps between graphics mode and disk setup choose the
+  desktop provider, exactly one browser, exactly one account shell, and the
+  optional app set. Firefox and Fish are the recommended defaults; Chromium,
+  Zen, Zsh, and Bash remain first-class choices. The backend filters every
+  losing browser and shell stack from both package sources, creates the user
+  with the selected shell, points xdg and the desktop browser role at the
+  browser pick, and records every dropped package in the doctor's provisioning
+  ledger so updates leave it absent. Fresh accounts also receive a one-shot
+  marker that applies the shipped default rice and a random wallpaper on first
+  graphical login (`tui/{main,apps,system}.go`,
+  `backend/ryoku-install`, `backend/lib/{chroot,aur,deploy}.sh`).
 - **Install into the free space on a disk that has no ESP.** A GPT disk with free
   space but no EFI System Partition of its own (a second, OS-less drive) now gets
   the `create-esp` verdict: the installer offers "Install in the free space",
@@ -61,11 +73,10 @@ ISO detail live in `backend/CHANGELOG.md` and `iso/CHANGELOG.md`.
   Hub trees against the installed Qt modules after `ryoku materialize`, so a
   file that cannot instantiate (a handler on a signal the type lacks) fails the
   publish instead of blanking a page on every user's box.
-- **Zen is the default browser on new installs.** The ISO and install script
-  now install `zen-browser-bin` (post-install, best-effort, online-only) and set
-  it as the default web browser. `ryoku update` never installs Zen or repoints a
-  browser, so existing boxes are untouched; the Super+B browser role prefers Zen
-  when present and falls back to Chromium otherwise.
+- **Firefox is the default browser on new installs.** The ISO and install script
+  offer Firefox first and set it as the xdg HTTP, HTTPS, and HTML handler plus
+  the desktop browser role. Chromium and Zen remain selectable; choosing either
+  drops Firefox and points the same roles at the selected browser.
 - **Dual-boot handles old 96 MiB Windows EFI partitions.** The installer
   automatically uses a dedicated Ryoku ESP when the existing ESP lacks 8 MiB
   free, without moving Windows partitions or changing the required free-space

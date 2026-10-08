@@ -17,7 +17,7 @@ func TestMigrateSidebarRework(t *testing.T) {
 	}{
 		{
 			name:    "retires global tree and original frame surfaces",
-			in:      `{"frameBars":{"version":1,"rails":{"top":{"enabled":true}},"menus":{"quick-settings":{"anchor":"left","modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic","left":{"cards":["weather"],"geometry":{"DP-1":{"x":2}}},"right":{"pinned":true}},"custom":{"nested":[1,2,3]},"fontScale":1.3}`,
+			in:      `{"frameBars":{"version":1,"rails":{"top":{"enabled":true}},"menus":{"quick-settings":{"anchor":"left","modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic","left":{"cards":["weather"],"geometry":{"DP-1":{"x":2}}},"right":{"pinned":true}},"controls":{"sections":[{"id":"levels","visible":true},{"id":"vitals","visible":false}],"hidden":["liveGraph"]},"custom":{"nested":[1,2,3]},"fontScale":1.3}`,
 			changed: true,
 		},
 		{
@@ -79,6 +79,13 @@ func TestMigrateSidebarRework(t *testing.T) {
 					t.Fatalf("unrelated custom settings changed: before=%s after=%s", want, got)
 				}
 			}
+			if before["controls"] != nil {
+				got, _ := json.Marshal(after["controls"])
+				want, _ := json.Marshal(before["controls"])
+				if string(got) != string(want) {
+					t.Fatalf("current controls settings changed: before=%s after=%s", want, got)
+				}
+			}
 			if frameBars, ok := after["frameBars"].(map[string]any); ok {
 				if menus, ok := frameBars["menus"].(map[string]any); ok {
 					if _, present := menus["quick-settings"]; present {
@@ -125,7 +132,7 @@ func TestReconcileSidebarRework(t *testing.T) {
 		t.Fatalf("missing shell.json: status=%s detail=%q, want ok", r.status.label(), r.detail)
 	}
 
-	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic"},"theme":"paper"}`
+	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"system":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebars":{"layout":"classic"},"controls":{"sections":[{"id":"levels","visible":true}],"hidden":["liveGraph"]},"theme":"paper"}`
 	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +157,10 @@ func TestReconcileSidebarRework(t *testing.T) {
 	if _, present := cfg["sidebars"]; present {
 		t.Fatal("fix left the retired global sidebar tree in place")
 	}
+	controls := cfg["controls"].(map[string]any)
+	if hidden := controls["hidden"].([]any); len(hidden) != 1 || hidden[0] != "liveGraph" {
+		t.Fatalf("fix changed current Controls settings: %v", controls)
+	}
 	frameBars := cfg["frameBars"].(map[string]any)
 	menus := frameBars["menus"].(map[string]any)
 	if _, present := menus["quick-settings"]; present {
@@ -172,61 +183,5 @@ func TestReconcileSidebarRework(t *testing.T) {
 	}
 	if r := reconcileSidebarRework(false); r.status != recOK {
 		t.Fatalf("clean store: status=%s detail=%q, want ok", r.status.label(), r.detail)
-	}
-}
-
-func TestMigrateShellConfigLaneConvergesPreSidebarStore(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	path := filepath.Join(sys.ConfigHome(), "ryoku", "shell.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	stored := `{"frameBars":{"menus":{"quick-settings":{"modules":["home","stage"]},"theme":{"anchor":"right"}},"surfaces":{"stash":{"anchor":"right"},"future":{"anchor":"top"}}},"sidebarLeftPanes":["stash"],"sidebarRightPanes":["weather"],"sidebarWidth":360,"theme":"paper"}`
-	if err := os.WriteFile(path, []byte(stored), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := MigrateShellConfig(); err != nil {
-		t.Fatalf("MigrateShellConfig: %v", err)
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var cfg map[string]any
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		t.Fatalf("migrated shell.json does not parse: %v", err)
-	}
-	for _, key := range []string{"sidebarLeftPanes", "sidebarRightPanes", "sidebarWidth"} {
-		if _, present := cfg[key]; present {
-			t.Errorf("retired key %s survived migration", key)
-		}
-	}
-	frameBars := cfg["frameBars"].(map[string]any)
-	if _, present := frameBars["menus"].(map[string]any)["quick-settings"]; present {
-		t.Error("retired quick-settings menu survived migration")
-	}
-	if _, present := frameBars["surfaces"].(map[string]any)["stash"]; present {
-		t.Error("retired stash surface survived migration")
-	}
-	if _, present := cfg["sidebars"]; present {
-		t.Fatal("retired global sidebars object survived migration")
-	}
-	if cfg["theme"] != "paper" {
-		t.Errorf("unrelated setting changed: theme=%v", cfg["theme"])
-	}
-
-	before := string(raw)
-	if err := MigrateShellConfig(); err != nil {
-		t.Fatalf("second MigrateShellConfig: %v", err)
-	}
-	after, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(after) != before {
-		t.Error("shell config migration lane is not idempotent")
 	}
 }

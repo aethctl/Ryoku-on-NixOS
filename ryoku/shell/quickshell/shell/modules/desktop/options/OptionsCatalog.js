@@ -32,6 +32,7 @@ var _has = {
     "irisUptime": true,
     "irisNews": true,
     "irisVisualizer": true,
+    "visualizer": true,
     // Python faces (PythonRoster + the options/Python* panels).
     "pythonTime": true,
     "pythonMusic": true,

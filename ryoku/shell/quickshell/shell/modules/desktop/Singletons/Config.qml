@@ -3,9 +3,9 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// Live config for the wallpaper clock. Ryoku Settings, desktop dragging and the
-// right-click menu share widgets.json; FileView watches it so every surface
-// follows the next write. Placement is a compass anchor or free monitor pixels.
+// Live desktop widget config. The legacy top-level values remain the fallback;
+// Stage edits add output-keyed overrides in the same widgets.json file.
+// FileView watches it so every desktop follows the next write.
 Singleton {
     id: root
     property bool ready: false
@@ -659,42 +659,230 @@ Singleton {
     property alias markTint:  brandAdapter.markTint
     property alias brandName: brandAdapter.name
 
-    // write helpers used by desktop drag + right-click menu. write the same file
-    // Settings does; the watch reloads it (no-op for the value just written) so
-    // running widgets and the next Settings open agree.
+    // The desktop sets this before opening one of its menus. Once that output
+    // owns a fork, the unchanged menu API writes back to that output instead
+    // of changing the legacy values followed by every unforked output.
+    property string writeMonitor: ""
+    property bool writeMonitorForced: false
+    // FileView replaces var-valued adapter properties while a watched atomic
+    // write reloads. Keep the live forks detached so that reload cannot erase
+    // an edit made after the write it is returning.
+    property var _monitorState: ({})
+    property int _monitorRevision: 0
+    property int _flushedMonitorRevision: 0
+    property int _loadingMonitorRevision: 0
+
+    function _plainMonitorMap(value) {
+        if (!value || typeof value !== "object")
+            return {};
+        try {
+            return JSON.parse(JSON.stringify(value)) || {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function _finishLoad() {
+        if (root._loadingMonitorRevision === root._monitorRevision) {
+            root._monitorState = root._plainMonitorMap(adapter.monitors);
+            root._flushedMonitorRevision = root._monitorRevision;
+        } else {
+            adapter.monitors = root._plainMonitorMap(root._monitorState);
+        }
+        root.ready = true;
+    }
+
+    function selectMonitor(monitor, forced = false) {
+        root.writeMonitor = monitor || "";
+        root.writeMonitorForced = root.writeMonitor !== "" && forced;
+    }
+
+    function _usesMonitorContext() {
+        return root.writeMonitor !== ""
+            && (root.writeMonitorForced || root.isForked(root.writeMonitor));
+    }
+
+    function _monitorMap(monitor) {
+        const all = root._monitorState;
+        if (!monitor || !all || typeof all !== "object")
+            return null;
+        const local = all[monitor];
+        return local && typeof local === "object" ? local : null;
+    }
+
+    function isForked(monitor) {
+        return root._monitorMap(monitor) !== null;
+    }
+
+    function get(key, monitor) {
+        if (!root._isPerMonitorKey(key))
+            return adapter[key];
+        const local = root._monitorMap(monitor);
+        return local && Object.prototype.hasOwnProperty.call(local, key)
+            ? local[key] : adapter[key];
+    }
+
+    // Find the widget owning a schema key from its <widget>Enabled property.
+    // This keeps hosted rosters extensible: adding a new face to the adapter
+    // automatically makes every one of that face's keys fork together.
+    function _widgetPrefix(key) {
+        let found = "";
+        const keys = Object.keys(adapter);
+        for (let i = 0; i < keys.length; i++) {
+            const candidate = keys[i];
+            if (!candidate.endsWith("Enabled"))
+                continue;
+            const prefix = candidate.slice(0, -7);
+            if (key.startsWith(prefix) && prefix.length > found.length)
+                found = prefix;
+        }
+        return found;
+    }
+
+    function _belongsToWidget(key, prefix) {
+        return key.startsWith(prefix);
+    }
+
+    function _isPerMonitorKey(key) {
+        const prefix = root._widgetPrefix(key);
+        if (prefix === "")
+            return false;
+        const suffix = key.slice(prefix.length);
+        return ["Enabled", "Anchor", "X", "Y", "Scale", "Locked",
+            "Size", "Width", "Height"].indexOf(suffix) >= 0;
+    }
+
+    // Fork one widget from the values this output currently sees. Reassigning
+    // the nested map is deliberate: JsonAdapter cannot observe in-place edits.
+    function _ensureWidgetFork(all, monitor, key) {
+        const current = all[monitor];
+        const local = current && typeof current === "object"
+            ? Object.assign({}, current) : {};
+        const prefix = root._widgetPrefix(key);
+        let hasWidget = prefix === "";
+        if (prefix !== "") {
+            const localKeys = Object.keys(local);
+            for (let i = 0; i < localKeys.length; i++) {
+                if (root._belongsToWidget(localKeys[i], prefix)
+                        && root._isPerMonitorKey(localKeys[i])) {
+                    hasWidget = true;
+                    break;
+                }
+            }
+        }
+        if (!hasWidget) {
+            const schemaKeys = Object.keys(adapter);
+            for (let i = 0; i < schemaKeys.length; i++) {
+                const schemaKey = schemaKeys[i];
+                if (schemaKey !== "monitors" && root._belongsToWidget(schemaKey, prefix)
+                        && root._isPerMonitorKey(schemaKey)
+                        && typeof adapter[schemaKey] !== "function")
+                    local[schemaKey] = root.get(schemaKey, monitor);
+            }
+        }
+        all[monitor] = local;
+        return local;
+    }
+
+    function _setManyFor(monitor, values, persist) {
+        if (!monitor) {
+            for (const key in values)
+                if (adapter[key] !== values[key])
+                    adapter[key] = values[key];
+            if (persist)
+                settle.restart();
+            return;
+        }
+        const all = root._plainMonitorMap(root._monitorState);
+        let local = null;
+        for (const key in values) {
+            local = root._ensureWidgetFork(all, monitor, key);
+            local[key] = values[key];
+            all[monitor] = local;
+        }
+        root._monitorState = all;
+        root._monitorRevision++;
+        adapter.monitors = root._plainMonitorMap(all);
+        if (persist)
+            settle.restart();
+    }
+
+    function setFor(monitor, key, value) {
+        const patch = {};
+        patch[key] = value;
+        root._setManyFor(monitor, patch, true);
+    }
+
+    function setManyFor(monitor, values) {
+        root._setManyFor(monitor, values, true);
+    }
+
+    function setLiveFor(monitor, key, value) {
+        const patch = {};
+        patch[key] = value;
+        root._setManyFor(monitor, patch, false);
+    }
+
+    // Appearance stays global. Only presence, placement, size and lock use the
+    // selected desktop's fork; legacy callers otherwise keep their old API.
     function set(key, value) {
+        if (root._usesMonitorContext() && root._isPerMonitorKey(key)) {
+            root.setFor(root.writeMonitor, key, value);
+            return;
+        }
         adapter[key] = value;
-        file.writeAdapter();
+        settle.restart();
     }
-    // Many keys, one write. A burst of set() calls interleaves file writes with
-    // the watcher's reloads of older versions, and a stale reload followed by
-    // the next write can put an old value back (a Reset restoring thirty keys
-    // lost some this way); assigning everything first and writing once cannot.
     function setMany(values) {
-        for (const key in values)
-            if (adapter[key] !== values[key])
-                adapter[key] = values[key];
-        file.writeAdapter();
+        if (!root._usesMonitorContext()) {
+            root._setManyFor("", values, true);
+            return;
+        }
+        const local = {};
+        const global = {};
+        for (const key in values) {
+            if (root._isPerMonitorKey(key))
+                local[key] = values[key];
+            else
+                global[key] = values[key];
+        }
+        if (Object.keys(local).length > 0)
+            root._setManyFor(root.writeMonitor, local, false);
+        for (const key in global)
+            adapter[key] = global[key];
+        settle.restart();
     }
-    // memory-only, no file write. for a live drag like resize: aliases update
-    // at once so the widget re-renders; setFree/set on release does the single
-    // persisting write.
     function setLive(key, value) {
+        if (root._usesMonitorContext() && root._isPerMonitorKey(key)) {
+            root.setLiveFor(root.writeMonitor, key, value);
+            return;
+        }
         adapter[key] = value;
     }
     function toggle(key) {
-        adapter[key] = !adapter[key];
-        file.writeAdapter();
+        const monitor = root._usesMonitorContext() && root._isPerMonitorKey(key)
+            ? root.writeMonitor : "";
+        root.set(key, !root.get(key, monitor));
     }
     function setAnchor(prefix, zone) {
-        adapter[prefix + "Anchor"] = zone;
-        file.writeAdapter();
+        root.set(prefix + "Anchor", zone);
     }
     function setFree(prefix, x, y) {
-        adapter[prefix + "Anchor"] = "free";
-        adapter[prefix + "X"] = x;
-        adapter[prefix + "Y"] = y;
-        file.writeAdapter();
+        const patch = {};
+        patch[prefix + "Anchor"] = "free";
+        patch[prefix + "X"] = x;
+        patch[prefix + "Y"] = y;
+        root.setMany(patch);
+    }
+
+    Timer {
+        id: settle
+        interval: 400
+        onTriggered: {
+            adapter.monitors = root._plainMonitorMap(root._monitorState);
+            root._flushedMonitorRevision = root._monitorRevision;
+            file.writeAdapter();
+        }
     }
 
     FileView {
@@ -704,12 +892,18 @@ Singleton {
         watchChanges: true
         printErrors: false
         atomicWrites: true
-        onFileChanged: reload()
-        onLoaded: root.ready = true
+        onFileChanged: {
+            if (settle.running || root._monitorRevision !== root._flushedMonitorRevision)
+                return;
+            root._loadingMonitorRevision = root._monitorRevision;
+            reload();
+        }
+        onLoaded: root._finishLoad()
         onLoadFailed: root.ready = true
 
         JsonAdapter {
             id: adapter
+            property var monitors: ({})
             property bool clockEnabled: true
             property string clockDesign: "digital"
             property bool clock24h: true

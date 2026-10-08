@@ -115,13 +115,13 @@ func consume(conn net.Conn, emit func(wm.Frame), wants func(wm.FrameKind) bool) 
 			if !ok {
 				return
 			}
-			if mon, isFocus := parseFocusedMon(line); isFocus && wants(wm.FrameFocus) {
-				emit(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: mon})
+			if mon, isFocus := parseFocusedMon(line); isFocus {
+				state.publish(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: mon})
 			}
-			if name, removed := parseMonitorRemoved(line); removed && wants(wm.FrameFocus) {
+			if name, removed := parseMonitorRemoved(line); removed {
 				// A removed output must not linger until the debounce: the next
 				// keybind would target a dead monitor.
-				emit(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: focusedFallback(name)})
+				state.publish(wm.Frame{Kind: wm.FrameFocus, FocusedOutput: focusedFallback(name)})
 			}
 			dirty |= state.event(line)
 			if dirty == 0 {
@@ -499,11 +499,11 @@ func focusedFallback(gone string) string {
 	return ""
 }
 
-// focusedmonv2 is rejected on purpose: matching v1 exactly means a future
-// Hyprland that drops it fails in the tests instead of going silently stale.
+// Both event versions carry the monitor name first; v2 only changes the
+// workspace field from a name to an ID.
 func parseFocusedMon(line string) (string, bool) {
 	ev, data, ok := strings.Cut(line, ">>")
-	if !ok || ev != "focusedmon" {
+	if !ok || (ev != "focusedmon" && ev != "focusedmonv2") {
 		return "", false
 	}
 	mon, _, _ := strings.Cut(data, ",")

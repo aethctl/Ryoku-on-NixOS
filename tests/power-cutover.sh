@@ -96,7 +96,13 @@ case "$2" in
   *) exit 2 ;;
 esac
 EOF
-chmod +x "$tmp/session-bin/loginctl" "$tmp/session-bin/getent"
+cat >"$tmp/session-bin/pgrep" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $1 == -u && $3 == -x ]] || exit 2
+[[ " ${RYOKU_RUNNING_UIDS-1001} " == *" $2 "* ]]
+EOF
+chmod +x "$tmp/session-bin/loginctl" "$tmp/session-bin/getent" "$tmp/session-bin/pgrep"
 for provider in hyprland niri; do
   : >"$tmp/provider-bin/ryoku-wm-$provider"
   chmod +x "$tmp/provider-bin/ryoku-wm-$provider"
@@ -108,6 +114,21 @@ users="$(
 )"
 [[ $users == 'alice 1001 7' ]] \
   || fail "session selection did not choose only each user's active Ryoku Wayland login: $users"
+for running in 1001 ""; do
+  users="$(
+    RYOKU_RUNNING_UIDS="$running" PATH="$tmp/session-bin:$PATH" \
+      RYOKU_CUTOVER_RUNTIME_ROOT="$tmp/runtime" \
+      RYOKU_CUTOVER_PROVIDER_ROOT="$tmp/provider-bin" \
+      bash -c 'source "$1"; package_session_users' _ "$helper"
+  )"
+  if [[ -n $running ]]; then
+    [[ $users == 'alice 1001 7' ]] \
+      || fail "the package hook skipped a session Ryoku runs in: $users"
+  else
+    [[ -z $users ]] \
+      || fail "the package hook selected a session running another shell, not Ryoku: $users"
+  fi
+done
 if LOGINCTL_FAIL_LIST=1 PATH="$tmp/session-bin:$PATH" \
     RYOKU_CUTOVER_RUNTIME_ROOT="$tmp/runtime" \
     RYOKU_CUTOVER_PROVIDER_ROOT="$tmp/provider-bin" \
@@ -674,6 +695,8 @@ if SHELL_RESTART_FAIL=1 CUTOVER_LOG="$tmp/calls" CUTOVER_STATE="$tmp/state" \
 fi
 grep -qxF 'systemctl --user stop ryoku-power-cutover-guard.service' "$tmp/calls" \
   || fail "a failed cutover leaked its durable sleep guard"
+[[ ! -e $tmp/state/generation-guard ]] \
+  || fail "a failed cutover left its qylock generation guard holding the launch lock"
 
 # uwsm keeps transient session variables out of the user manager, so its
 # compositor carries no XDG_SESSION_ID at all. When this user holds exactly

@@ -3,6 +3,77 @@
 ## Unreleased
 
 ### Added
+- **One dock for every bar style, in any design.** The dock is no longer tied
+  to a bar style: pick the Ryoku, Python or Shima dock (or none) and it runs
+  the same under QS Bar, Kairos, Shima, Python, Sumi and Nomarchy, on both
+  compositors, with never two docks at once. Every dock setting now lives in
+  the Stage Editor's Dock section: the design cards, placement, autohide,
+  size, magnify, each design's own options, and one pinned-app list that all
+  three designs and Sumi's rail share. QS Bar Settings, the Python guide,
+  Shima's settings and Bar Studio link there, and `ryoku doctor` moves old
+  per-style pins and dock options into the shared store in order
+  (`quickshell/shell/modules/dock/UniversalDockHost.qml`,
+  `quickshell/shell/services/Dock.qml`, `../cli/internal/doctor/doctor.go`).
+- **Nomarchy: Omarchy's shell as a Ryoku bar style.** Pick Nomarchy in Bar
+  Studio or the welcome tour and the Omarchy (quattro) bar runs on Ryoku, on
+  both Hyprland and niri: its panels, menu, emoji picker, reminders, Agents
+  usage, notifications and OSD. Ryoku keeps its own launcher, wallpaper,
+  clipboard, lock, idle, night light, polkit, capture, updates, Super+Esc and
+  every keybind. Omarchy plugins install as published, with
+  `omarchy plugin add <repo> --enable` into `~/.config/omarchy/plugins`; the
+  `omarchy` commands are linked only while Nomarchy is the active style, and a
+  plugin that needs Hyprland is refused on niri with the reason. Colours follow
+  the wallpaper or any of Omarchy's 22 themes
+  (`quickshell/shell/modules/bar/barstyles/nomarchy/`, `nomarchy/`,
+  `ipc/nomarchy.go`).
+- **Choose what Super+Esc shows.** Ryoku Hub > Controls draws a miniature of
+  the panel: drag its blocks into the order you want, hide whole blocks, and
+  pick the parts inside them (the live graph, each vital, each connection tile,
+  the sliders, session actions, plugin cards, and a new Now playing block). The
+  layout is shared by every bar style and both compositors, applies live on
+  every display, and anything hidden is never created, so a hidden graph or
+  brightness probe costs nothing. If the shell cannot save the change, the page
+  says so and offers Retry (`quickshell/shell/modules/sidebar/ControlsBoard.qml`,
+  `ipc/settings.go`, `../hub/quickshell/pages/ControlsPage.qml`).
+- **The mouse remapper knows more mice and plays macros.** A built-in catalogue
+  names popular Logitech, Razer, SteelSeries, Corsair, Glorious and Zowie mice
+  and labels their buttons; any other mouse still works with generic labels.
+  MMO side grids (Razer Naga, Corsair Scimitar) and keys a mouse sends through
+  its second, keyboard-class interface now show up as that mouse's buttons, and
+  the full button range is bindable. A button can run a timed sequence of key
+  taps, holds and delays with repeat and cancel-on-release, recorded or built in
+  Hub > Input > Mouse (`ipc/mousemap.go`, `ipc/mousemacro.go`,
+  `ipc/mousecatalog.json`).
+- **Depth and Parallax offer five cut-out models.** Besides U2Net Portable and
+  BiRefNet General Lite, the Stage Editor's model picker lists Silueta (small
+  and fast), BiRefNet General (best edges and hair) and BiRefNet Portrait
+  (people). Each quality tier keeps its own model choice in `stage.json`, the
+  picker shows size, licence and download state, and changing a tier's model
+  recuts the wallpaper with it (`scripts/ryostage`, `ipc/stage.go`,
+  `quickshell/shell/modules/stage/StageDepthOptions.qml`).
+- **Each workspace can keep its own wallpaper.** The picker's target choice
+  now offers All, This monitor and This workspace, and the Stage Editor's
+  wallpaper page has Use for this workspace and Clear workspace wallpaper.
+  Ryogami resolves workspace, then monitor, then the shared wallpaper on every
+  workspace switch, on both Hyprland and niri: a settled switch reveals with
+  the usual transition, fast cycling cuts straight to the wallpaper you land
+  on, video wallpapers paint their poster first, and the choice survives a
+  restart. A Ryogami restart no longer leaves the desktop deaf to later
+  wallpaper changes (`ryogami/daemon/workspaces.go`,
+  `quickshell/shell/modules/wallpaper/Wallpaper.qml`).
+- **First run is a live tour instead of a static slideshow.** Welcome now opens
+  with the compact Ryoku artwork, lets a new user try all five shipped bar
+  styles immediately, introduces wallpaper and Ryostore, and turns the
+  essential shortcuts into useful actions. It follows the wallpaper palette,
+  respects reduced motion and low-power mode, and fits smaller screens
+  (`quickshell/welcome/`).
+- **New installs land on Ryoku's default rice.** On the first login after a
+  fresh install, the session intro applies the packaged default look (QS Bar
+  with the shipped settings, matched on both compositors), picks a random
+  wallpaper from the seeded set, and only then opens the welcome. A failed
+  apply keeps the installer's marker and retries on the next login; existing
+  accounts never carry the marker and are untouched
+  (`scripts/ryoku-session-intro`).
 - **Clipboard history supports keyboard selection.** The up and down arrows
   move through the entries and Enter copies the selected one and closes the
   panel, so the history is usable without reaching for the mouse
@@ -315,6 +386,11 @@
   Ryoku's seams (`../inir/`).
 
 ### Changed
+- **The Ask bar's Fast lane lists Prowl routes.** Its model drawer offers the
+  active set, the capability axes and your routing sets instead of provider
+  names (`quickshell/shell/modules/ask/AskSurface.qml`,
+  `quickshell/shell/services/Needle.qml`). `deploy.sh` installs
+  `ryoku-prowl.service` beside the Rashin unit.
 - **The visualiser's deep settings moved onto the desktop editor.** The
   placement bar grew a gear that opens a square drawer of everything it has no
   room for: playback (enabled, idle wave, frame rate, adaptive quality), shape
@@ -435,6 +511,98 @@
   `../../hyprland/modules/binds.lua`).
 
 ### Fixed
+- **Switching workspaces no longer replays the wallpaper transition.** Since
+  per-workspace wallpapers, every switch (a three-finger swipe included)
+  repainted the output with a reveal even when both workspaces show the same
+  wallpaper. Ryogami now remembers what each output shows and only animates
+  when the workspace's wallpaper is actually different
+  (`ryogami/daemon/workspaces.go`, `ryogami/daemon/apply.go`).
+- **Nomarchy's battery panel shows three power profiles, not eleven.** The
+  profile list also picked up power-profiles-daemon's detail lines
+  (`CpuDriver:`, `PlatformDriver:`, `Degraded:`) as profiles, so the row filled
+  with overlapping buttons. Only the profile names are listed now
+  (`nomarchy/bin/omarchy-powerprofiles-list`).
+- **The wallpaper picker stops scrambling its text and drawing shards.** On
+  NVIDIA, the picker reloaded compiled GPU programs from the shader cache that
+  every Quickshell window shares, and those drew wrong: provider names and
+  icons in the Download menu turned into stray letters, and the browser could
+  break into shards while you hovered or switched providers. Ryogami now starts
+  the picker without Qt's disk shader cache, so it compiles its own once per
+  start (`ryogami/daemon/process.go`).
+- **The wallpaper picker draws all of itself again on Qt 6.12.** Its card
+  renderer only issues commands through Qt's own graphics layer but never said
+  so, so Qt fenced it off as raw OpenGL on every frame. On Qt 6.12 with OpenGL
+  that fencing wiped the rest of the picker: the header, tabs, panels and text
+  disappeared, and download results were drawn over the main card when you
+  switched providers. The renderer now declares it renders through Qt's
+  graphics layer only (`ryogami/picker/src/render/cardrendernode.cpp`).
+- **Multi-monitor desktops stay smooth.** Moving the pointer from one monitor
+  to another made the shell fetch and re-parse every output, workspace and
+  window on each crossing; it now gets a 44-byte focus note, and Hyprland no
+  longer refreshes its whole state for it. All bars share one network-speed
+  reader instead of starting a process per monitor every two seconds, the dial
+  clock only ticks each second when it draws a second hand, and the
+  visualiser leaves every monitor 30 seconds after the sound stops, which is
+  what Performance > "Unload the visualiser" always promised; it comes back the
+  moment audio plays. The idle wave still moves during that grace
+  (`ipc/wmclient.go`, `../ui/Singletons/Wm.qml`, `quickshell/shell/services/`,
+  `quickshell/shell/shell.qml`, `../wm/hyprland/watch.go`).
+- **Nomarchy draws again on Qt 6.12.** Qt 6.12 added its own `Color` type to
+  QtQuick, and it hides the bar style's theme colours, so the bar, menus and
+  panels came up blank. Nomarchy's files now import QtQuick 6.11, which keeps
+  the new name out of reach (`quickshell/shell/Commons/`, `quickshell/shell/Ui/`,
+  `quickshell/shell/modules/bar/barstyles/nomarchy/`).
+- **Omarchy plugins draw their colours on Qt 6.12 too.** A third-party
+  plugin's QML imports plain QtQuick, which now hides the shell's `Color`, so
+  its panels came up without theme colours. Nomarchy loads each plugin from a
+  cached copy whose QML carries the same QtQuick 6.11 pin as its own files;
+  everything else in the copy links back to the plugin folder, which is never
+  changed, and editing or removing a plugin refreshes or clears its copy
+  (`quickshell/shell/modules/bar/barstyles/nomarchy/services/PluginRegistry.qml`).
+- **New cut-out models install on machines upgraded from the old depth
+  tool.** Ryostage adopts the earlier `depth` environment by moving it, which
+  left its `pip` pointing at the old folder, so every model download failed
+  with "bad interpreter" while models already on disk kept working. It now
+  runs pip through the environment's own Python (`scripts/ryostage`).
+- **The wallpaper picker's download browser no longer tears into shards.**
+  Switching providers and pages rapidly could eventually corrupt thumbnails,
+  panels and text on NVIDIA's OpenGL RHI. The same damage remained when the
+  picker submitted no custom draw or resource-update commands, while Vulkan
+  stayed clean under the identical workload. On proprietary NVIDIA systems
+  with a usable Vulkan ICD, the resident picker now chooses Qt's Vulkan RHI;
+  explicit backend choices and machines without Vulkan remain untouched. The
+  renderer also draws only the instances uploaded for the
+  current frame, clears offscreen targets before sampling them, drops the old
+  provider's transitions on reset, keys thumbnails by provider and clamps
+  layout values. `RYOGAMI_POISON_GPU=1` fills fresh allocations with garbage
+  for regression runs (`ryogami/daemon/process.go`,
+  `ryogami/picker/src/render/cardrendernode.cpp`, `src/scene/cardfield.cpp`).
+- **The Stage Editor's toolbar and catalogue answer clicks on Hyprland.** While
+  the editor was open the desktop held the keyboard exclusively, and Hyprland
+  hands a surface holding that grab every click too, so only the desktop's own
+  widgets moved: the catalogue rows, the tabs and Done did nothing. The seam
+  now says whether a compositor keeps the pointer apart from a keyboard grab
+  (`keyboardGrabSharesPointer`, claimed by niri), and where it does not, the
+  desktop asks for the keyboard on demand, taking it as the pointer crosses the
+  desktop (`quickshell/shell/modules/desktop/Desktop.qml`, `../wm/caps.go`).
+- **A shell reload no longer brings back an old live wallpaper.** The Stage
+  Editor kept its own copy of the wallpaper and, at every shell start, replayed
+  it through ryogami whenever that copy was a video. The copy only changes when
+  a wallpaper is picked inside the editor, so after a switch through Super+W,
+  random or a rice, `ryoku reload` put the replaced clip back. Ryogami already
+  restores what it last applied, so the editor no longer replays anything on
+  start or when its video backend option changes
+  (`quickshell/stage/services/Wallpapers.qml`).
+- **Region recordings no longer come out tiled.** The screenshot tool's Record
+  action (including Capture this monitor) and the capture card's Window and
+  Region targets scaled the box to physical pixels before handing it to GPU
+  Screen Recorder, which reads `-region` in layout coordinates and scales it
+  again. On a scaled display the recorder grabbed an area the scale too big, so
+  the clip repeated the screen in tiles (a 1.33-scaled 2560x1600 panel recorded
+  at 3414x2134). The box now travels in layout coordinates, and the delayed
+  screenshot crop, which grim reads the same way, lands where it was drawn
+  (`quickshell/ryoshot/shell.qml`, `quickshell/shell/services/Capture.qml`).
+
 - **The lid can no longer deny its own suspend.** The sleep transaction
   closed its hard block and asked login1 to suspend on the same connection
   immediately; login1 watches the block fd on its own schedule, so a Suspend
@@ -450,14 +618,14 @@
   engine's availability probe now asks about the model the configured quality
   tier actually uses (a fine-tier box no longer reads as missing because the
   draft weights are absent), a blocked or failed cut publishes the engine's
-  one-line reason on the `stage` frame, and the Hub Scene page and the
-  desktop menu's Depth row show it instead of a dead toggle. A wall left on
-  whose cut-outs vanished is re-cut by the next wake, and Clear now takes the
-  wall back to Plain so it stops asking for a cut it deleted
-  (`ipc/stage.go`, `scripts/ryostage`,
+  one-line reason on the `stage` frame, and the Stage Editor's Depth page and
+  desktop menu show it instead of a dead toggle. A wall left on whose cut-outs
+  vanished is re-cut by the next wake, and Clear now takes the wall back to
+  Plain so it stops asking for a cut it deleted (`ipc/stage.go`,
+  `scripts/ryostage`,
   `quickshell/shell/modules/stage/Singletons/StageBackend.qml`,
-  `quickshell/shell/modules/desktop/DesktopContextMenu.qml`,
-  `../../hub/quickshell/pages/DesktopScenePage.qml`).
+  `quickshell/shell/modules/stage/StageDepthPage.qml`,
+  `quickshell/shell/modules/desktop/DesktopContextMenu.qml`).
 
 - **A reload always plays its cover.** Several teardowns restarted the shell
   without ever raising the cover, and some raised one the new shell could not
@@ -746,6 +914,11 @@
 - **The old wall-ui picker.** Replaced by the new picker; its day/night
   rotation lives on as two schedule rules, migrated automatically
   (`ryogami/wall-ui/`).
+- **The QS Bar settings rail ends at its routes.** The footer block under the
+  Community route (the Search hint, the QS BAR / QUICK SETTINGS switch, the
+  OPEN THE HUB link and the RYOKU barcode) is gone. Ctrl+K still opens search,
+  and the brand logo keeps opening QS Bar Settings
+  (`quickshell/shell/modules/bar/barstyles/qsbar/controlcenter/CcRail.qml`).
 
 ### Added
 - **The iRiS frame's Spotlight is now a launcher style.** Settings -> App

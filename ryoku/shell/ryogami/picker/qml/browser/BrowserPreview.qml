@@ -112,6 +112,7 @@ Item {
         visible: preview._artSource.length > 0
         source: preview._artSource
         fillMode: Image.PreserveAspectFit
+        sourceSize: Qt.size(Math.max(1, Math.ceil(width)), Math.max(1, Math.ceil(height)))
         asynchronous: true
         cache: false
         opacity: preview.anim

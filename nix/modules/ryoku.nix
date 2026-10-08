@@ -1528,6 +1528,7 @@ in
       RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
       RYOKU_UPDATE_BACKEND = "nix";
       RYOKU_I18N_DIR = "${ryokuDesktopData}/share/ryoku/i18n";
+      RYOKU_NOMARCHY_SOURCE = "${ryokuDesktopData}/share/ryoku/nomarchy";
       RYOKU_NIX_FLAKE = cfg.updateFlake;
       RYOKU_NIX_INPUT = cfg.updateInput;
       RYOKU_NIX_SUDO =
@@ -2006,6 +2007,7 @@ in
         RYOKU_NIX_SYSTEM_BRIDGE = "1";
         RYOKU_NIX_INTEGRATION = "/etc/ryoku/nix-integration.json";
         RYOKU_DEFAULT_BROWSER = if cfg.browser == null then "" else cfg.browser;
+        RYOKU_NOMARCHY_SOURCE = "${ryokuDesktopData}/share/ryoku/nomarchy";
         RYOKU_POLKIT_AGENT = "1";
         RYOKU_SYSTEMD_RUN = "${pkgs.systemd}/bin/systemd-run";
 

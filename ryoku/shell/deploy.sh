@@ -323,6 +323,10 @@ say "installed $bindir/ryogami"
 
 # The picker entry the daemon spawns; the unit rewrite points RYOGAMI_SHELL_QML here.
 datadir="${XDG_DATA_HOME:-$HOME/.local/share}"
+nomarchy_source="$datadir/ryoku/nomarchy-package"
+rm -rf "$nomarchy_source"
+mkdir -p "$nomarchy_source"
+cp -a "$here/nomarchy/." "$nomarchy_source/"
 install -Dm644 "$here/ryogami/picker/shell.qml" "$datadir/ryogami/shell.qml"
 say "installed ryogami picker entry -> $datadir/ryogami/shell.qml"
 # The retired wall-ui picker ran from its own tree; the daemon restart below keeps
@@ -350,13 +354,21 @@ say "installed $bindir/ryoku-rashin (and the rashin command)"
 "$bindir/ryoku-rashin" repo-index "$here/../.." \
   "${XDG_STATE_HOME:-$HOME/.local/state}/ryoku/rashin-repo.md"
 say "indexed ryoku repo for rashin"
-# Rashin's systemd user unit: the dev deploy points ExecStart at ~/.local/bin
-# (the package ships /usr/bin); reload so systemctl sees the fresh unit.
+# Rashin's systemd user units: the dev deploy points packaged binary paths at
+# the binaries available in this checkout and on this machine.
 mkdir -p "$cfg/systemd/user"
 sed "s|^ExecStart=.*|ExecStart=$bindir/ryoku-rashin serve --if-enabled|" \
   "$here/../rashin/systemd/ryoku-rashin.service" > "$cfg/systemd/user/ryoku-rashin.service"
-systemctl --user daemon-reload 2>/dev/null || true
 say "installed rashin systemd user unit"
+prowl_bin=$(command -v prowl 2>/dev/null || true)
+if [[ -n $prowl_bin ]]; then
+  sed "s|/usr/bin/prowl|$prowl_bin|g" \
+    "$here/../rashin/systemd/ryoku-prowl.service" > "$cfg/systemd/user/ryoku-prowl.service"
+  say "installed prowl systemd user unit"
+else
+  say "skipped prowl systemd user unit: prowl is not installed"
+fi
+systemctl --user daemon-reload 2>/dev/null || true
 # Rashin is on by default: bring it up at boot now unless the user opted out.
 "$bindir/ryoku-rashin" ensure 2>/dev/null || true
 say "building ryoku CLI"
@@ -892,11 +904,10 @@ wireplumber_before=
 [[ -f $wireplumber_policy ]] && wireplumber_before=$(<"$wireplumber_policy")
 
 # Files the machine owns after first boot are seeded once and never re-laid,
-# the same generatedSeed set `ryoku materialize` honours (ryoku/cli
-# internal/updater/materialize.go): the Hub and the store rewrite
-# fastfetch/config.jsonc in place (an imported logo lives in it), matugen owns
-# kitty/current-theme.conf. Re-copying them on every deploy is what reset the
-# fastfetch emblem on a dev box after each `ryoku update`.
+# matching `ryoku materialize`: the Hub and stores edit Fastfetch and Starship
+# in place, while Matugen owns their palette siblings and kitty's generated
+# theme. Re-copying any of them on deploy would silently undo the user's choice
+# or the current wallpaper palette.
 seed_once() { [[ -e $2 ]] || cp -a "$1" "$2"; }
 
 # Palette generation, per-app config, and the user session target.
@@ -912,8 +923,13 @@ mkdir -p "$cfg/qt6ct"; cp -a "$here/qt6ct/qt6ct.conf" "$cfg/qt6ct/qt6ct.conf"
 mkdir -p "$cfg/gtk-3.0"; cp -a "$here/gtk-3.0/settings.ini" "$cfg/gtk-3.0/settings.ini"
 mkdir -p "$cfg/gtk-4.0"; cp -a "$here/gtk-4.0/settings.ini" "$cfg/gtk-4.0/settings.ini"
 mkdir -p "$cfg/btop"; cp -a "$here/../apps/btop/btop.conf" "$cfg/btop/btop.conf"
+mkdir -p "$cfg/starship/layouts"
+cp -a "$here/../apps/starship/layouts/." "$cfg/starship/layouts/"
+seed_once "$here/../apps/starship/starship.toml" "$cfg/starship.toml"
+seed_once "$here/../apps/starship/ryoku-colors.toml" "$cfg/starship/ryoku-colors.toml"
 mkdir -p "$cfg/fastfetch"
 seed_once "$here/../apps/fastfetch/config.jsonc" "$cfg/fastfetch/config.jsonc"
+seed_once "$here/../apps/fastfetch/ryoku-colors.json" "$cfg/fastfetch/ryoku-colors.json"
 install -m755 "$here/../apps/fastfetch/ryoku-fastfetch" "$bindir/ryoku-fastfetch"
 mkdir -p "$cfg/kitty"
 cp -a "$here/../apps/kitty/kitty.conf" "$cfg/kitty/kitty.conf"

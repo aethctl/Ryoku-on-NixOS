@@ -356,7 +356,8 @@ start_recording() {
   rm -f "$PID_FILE" "$STOP_FILE" "$STATUS_FILE" "$GSR_SOCKET"
 
   # ── capture target. -w is a monitor name (fullscreen/monitor), the whole screen
-  # (fallback), or region + physical-pixel geometry the shell already converted.
+  # (fallback), or a region in layout (logical) coordinates, the space slurp and
+  # the shell's selectors report; GSR maps it onto the output's physical pixels.
   local -a target=()
   case "$MODE" in
   region)

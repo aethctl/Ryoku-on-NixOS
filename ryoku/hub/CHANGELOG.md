@@ -1,6 +1,44 @@
 # Changelog: ryoku/hub/
 
+## Unreleased
+
+### Changed
+- **Rices can ship with Ryoku.** The picker merges packaged looks from
+  `/usr/share/ryoku/rices` with the user's library, prefers a user rice when
+  slugs match, and copies a packaged rice into the user library before applying
+  it. A rice can also carry provider-specific window sections while its shared
+  look continues to apply everywhere (`backend/rice.go`).
+- **The Rashin page shows Prowl.** Beside the master switch the page reports
+  Prowl's gateway (running and its address, or why it is not) instead of
+  Hermes's model, and connecting an agent now says it routes that agent's models
+  through Prowl (`quickshell/pages/RashinPage.qml`).
+
 ### Fixed
+- **Mouse macros take a lone Shift, Ctrl, Alt or Super, and the side grid
+  stops double-acting.** Holding just a modifier while recording a macro showed
+  it but never added the step; it now commits when you let go. The MACRO and
+  CLEAR buttons on a side-grid key no longer also open the key-chord prompt,
+  clicking outside the prompt to cancel no longer starts a bind on the key
+  underneath, and the macro editor names the mouse (Razer · Naga V2 / Pro)
+  instead of its device id (`quickshell/pages/InputPage.qml`).
+- **The Add-ons page tells the truth.** Removing a bundle or one of its parts
+  now refreshes the card from the installer's own status once the terminal
+  closes, instead of showing stale counts and dead Remove buttons until you
+  pressed refresh. A failed install, removal, placement or settings write, or a
+  catalogue that cannot be read, shows a small error with Retry and keeps the
+  last good list rather than claiming nothing is installed. The sidebar card
+  placement no longer offers a Right side that never applied: Controls has one
+  host (`quickshell/pages/AddonsPage.qml`,
+  `../shell/quickshell/plugins/ryoku-plugins-place`).
+- **The Updates and Session pages open again.** The Updates page named its
+  own parts (the run timeline, the log, the password prompt), but Quickshell
+  only writes a type list for directories something imports, and nothing
+  imported the pages, so the page failed to load and the Hub stayed on the
+  previous one. The Hub now imports its pages directory. The Session page had
+  dropped out of the page map when Desktop Scene was retired, so its rail
+  entry did nothing. `tests/ui/hub-pages-probe.sh` loads every section's page
+  (`quickshell/Hub.qml`).
+
 - **Vesktop colours follow the Ryoku theme, not Midnight.** The palette
   bridge's Vesktop integration wrote a competing Midnight theme file and could
   clobber the user's QuickCSS; it now ships a managed palette template beside
@@ -8,11 +46,6 @@
   QuickCSS marker, preserves any existing QuickCSS on setup and removal, and
   the Settings integration card reports the template it actually manages
   (`../palette-bridge/`, `backend/palettebridge.go`).
-
-- **The Stage scene page reports a blocked cut.** When the daemon cannot cut
-  (the quality tier's model is not installed, or a cut failed), the page now
-  says why and offers Retry instead of showing a wallpaper that never gains
-  layers (`quickshell/pages/DesktopScenePage.qml`).
 
 - **The Profile dossier keeps its composure on short windows.** The live
   telemetry column sat on hard-coded pixels while the dossier foot climbed from
@@ -40,6 +73,11 @@
   (`quickshell/SchemaPage.qml`, `quickshell/AppPicker.qml`)
 
 ### Removed
+- **Desktop Scene is no longer a Hub page.** Wallpaper depth, visualizers, and
+  desktop widgets now open directly in the shell's Stage Editor. Retired links
+  skip Hub and open the matching catalogue, while direct navigation to an
+  already-open Hub hands off without replacing its current page
+  (`quickshell/Hub.qml`, `../shell/ipc/control.go`).
 - **Sidebar styles and layout customization.** Controls and Today now have one
   compact layout shared by every bar style. The Sidebars page, Classic/Modern
   selector, geometry, pinning, and content-order controls are gone. Sidebar
@@ -47,6 +85,25 @@
   (`quickshell/Hub.qml`)
 
 ### Added
+- **Dictation has more Whisper models.** The page now lists English Tiny,
+  Base and Small, multilingual Base, Medium and Large Turbo, and the OpenAI
+  API, each with its language, speed and download size; models over 1 GB ask
+  before downloading. The Voxtype setup now runs from the shell service, so it
+  happens on niri as well as Hyprland, and it leaves boxes without Voxtype
+  untouched (`backend/voxtype.go`, `quickshell/pages/DictationPage.qml`,
+  `../shell/systemd/user/ryoku-shell.service`).
+- **Import config reads niri.** Point the Import page at a niri config folder
+  or a dotfiles checkout and it follows the `include` tree, maps input, layout,
+  animations, environment, startup apps, cursor, binds and window rules onto
+  Ryoku's settings, lists conflicts with Ryoku's shortcuts, and keeps anything
+  it cannot map in a marked `niri/user.kdl` block instead of dropping it. A niri
+  config imported while another desktop runs is saved for the switch and
+  nothing changes live; Undo restores every touched file
+  (`backend/import_provider.go`, `quickshell/pages/ImportPage.qml`).
+- **Credits name ii-p3drovfx.** The Stage Editor is ported from the Edit Mode
+  of P3DROVFX's ii-p3drovfx shell; the Credits page now lists it beside the
+  other shells Ryoku grows from, and NOTICE records where the ported code comes
+  from (`quickshell/pages/CreditsPage.qml`, `../../NOTICE`).
 - **UPDATE NOW runs the update right in Ryoku Settings.** No terminal window:
   the page asks for your password itself, answers the run's questions, and
   draws the run as a timeline of its steps with how long each took, the line
@@ -55,12 +112,6 @@
   stays up until you dismiss it (`quickshell/pages/UpdatesPage.qml`,
   `quickshell/pages/UpdateRun.qml`, `quickshell/pages/UpdateAuth.qml`,
   `quickshell/pages/UpdateLog.qml`).
-- **Desktop Scene brings the editors together.** Scene, Visualizer, and Widgets
-  have dedicated views. The scene view includes layers, cut quality, shadow
-  direction, motion presets, idle speed, music intensity, and pointer tuning.
-  Visualizer and widget editors open on the desktop and close Hub after a
-  successful hand-off; the shell stays the writer of their settings
-  (`quickshell/pages/DesktopScenePage.qml`).
 - **Bar Studio knows Python.** The style shelf lists the ported serpantinum
   style, and while it is active the page carries a Python card that opens the
   style's own settings guide through the shell IPC, like the Shima and QS Bar

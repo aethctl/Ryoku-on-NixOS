@@ -26,39 +26,199 @@ Singleton {
     // than whatever was written before, so it self-heals on the very next switch.
     property real _wallpaperRequestSeq: Date.now()
 
-    property string thumbgenScriptPath: `${FileUtils.trimFileProtocol(Directories.scriptPath)}/thumbnails/thumbgen-venv.sh`
     property string extractColorsScriptPath: FileUtils.trimFileProtocol(Directories.extractColorsScriptPath)
     property alias directory: folderModel.folder
     readonly property string effectiveDirectory: FileUtils.trimFileProtocol(folderModel.folder.toString())
-    property url defaultFolder: {
-        if (Config.ready && Config.options.wallpaperSelector.useCustomDefaultPath && Config.options.wallpaperSelector.customDefaultPath) {
-            return Qt.resolvedUrl("file://" + Config.options.wallpaperSelector.customDefaultPath);
-        }
-        return Qt.resolvedUrl(Directories.pictures + "/Wallpapers");
-    }
-    property alias folderModel: folderModel // Expose for direct binding when needed
+    property string ryogamiWallpaperDirectory: FileUtils.trimFileProtocol(`${Directories.pictures}/Wallpapers`)
+    property string ryogamiCacheDirectory: Directories.ryogamiCachePath
+    property var ryogamiEntriesByPath: ({})
+    property int ryogamiIndexRevision: 0
+    property var ryogamiOutputs: ({})
+    property int ryogamiOutputsRevision: 0
+    property url defaultFolder: Qt.resolvedUrl("file://" + root.ryogamiWallpaperDirectory)
+    property alias folderModel: folderModel
     property string searchQuery: ""
-    readonly property list<string> extensions: [ // TODO: add videos
-        "jpg", "jpeg", "png", "webp", "avif", "bmp", "svg", "mp4", "mkv", "webm", "avi", "mov", "m4v", "ogv"
+    readonly property list<string> extensions: [
+        "jpg", "jpeg", "png", "webp", "avif", "bmp", "gif", "tiff", "tif",
+        "mp4", "mkv", "webm", "avi", "mov", "m4v", "ogv"
     ]
-    property list<string> wallpapers: [] // List of absolute file paths (without file://)
-    readonly property bool thumbnailGenerationRunning: thumbgenProc.running
-    property real thumbnailGenerationProgress: 0
+    property list<string> wallpapers: []
+    readonly property bool thumbnailGenerationRunning: false
     property var colorCache: ({})
     property string sortField: "modified"
     property bool sortReversed: false
     property var creationTimes: ({})
     property list<string> pendingCreationPaths: []
     property alias sortedFolderModel: sortedFolderModel
+    property alias ryogamiLibraryModel: ryogamiLibraryModel
     property string directoryError: ""
     readonly property bool directoryLoading: folderModel.status === FolderListModel.Loading
+    property var pendingVideoPosters: []
+    property var requestedVideoPosters: ({})
+    property int videoPosterRevision: 0
 
     signal changed()
-    signal thumbnailGenerated(directory: string)
-    signal thumbnailGeneratedFile(filePath: string)
     signal sortChanged()
+    signal videoPosterReady(filePath: string)
 
-    function load () {} // For forcing initialization
+    function load () {}
+
+    function expandUserPath(path) {
+        const value = String(path ?? "").trim();
+        if (value.startsWith("~/"))
+            return FileUtils.trimFileProtocol(Directories.home) + "/" + value.slice(2);
+        return FileUtils.trimFileProtocol(value);
+    }
+
+    function loadRyogamiConfig(text) {
+        let data = null;
+        try {
+            data = JSON.parse(String(text ?? ""));
+        } catch (error) {
+            return;
+        }
+        const paths = data?.paths ?? {};
+        const wallpaper = root.expandUserPath(paths.wallpaper);
+        const cache = root.expandUserPath(paths.cache);
+        root.ryogamiWallpaperDirectory = wallpaper !== ""
+            ? wallpaper : FileUtils.trimFileProtocol(`${Directories.pictures}/Wallpapers`);
+        root.ryogamiCacheDirectory = cache !== "" ? cache : Directories.ryogamiCachePath;
+    }
+
+    function loadRyogamiIndex(text) {
+        let data = null;
+        try {
+            data = JSON.parse(String(text ?? ""));
+        } catch (error) {
+            data = null;
+        }
+        const byPath = {};
+        if (data) {
+            for (const key in data) {
+                const entry = data[key];
+                const path = FileUtils.trimFileProtocol(String(entry?.path ?? ""));
+                if (path !== "")
+                    byPath[path] = entry;
+            }
+        }
+        root.ryogamiEntriesByPath = byPath;
+        root.ryogamiIndexRevision++;
+        root.rebuildRyogamiLibraryModel();
+    }
+    function loadRyogamiOutputs(text) {
+        let data = null;
+        try {
+            data = JSON.parse(String(text ?? ""));
+        } catch (error) {
+            data = null;
+        }
+        root.ryogamiOutputs = data ?? {};
+        root.ryogamiOutputsRevision++;
+    }
+
+    function currentWallpaperPath(screenName = "") {
+        void root.ryogamiOutputsRevision;
+        const monitor = String(screenName ?? "");
+        let entry = monitor !== "" ? root.ryogamiOutputs[monitor] : null;
+        if (!entry)
+            entry = root.ryogamiOutputs["*"];
+        if (!entry && monitor === "") {
+            const names = Object.keys(root.ryogamiOutputs).sort();
+            entry = names.length > 0 ? root.ryogamiOutputs[names[0]] : null;
+        }
+        const path = FileUtils.trimFileProtocol(String(entry?.path ?? ""));
+        if (path !== "")
+            return path;
+        const configured = FileUtils.trimFileProtocol(String(Config.wallpaperPath ?? ""));
+        return configured !== "" ? configured : FileUtils.trimFileProtocol(Directories.defaultWallpaperImagePath);
+    }
+
+
+    function ryogamiThumbnailPath(filePath) {
+        const entry = root.ryogamiEntriesByPath[FileUtils.trimFileProtocol(String(filePath ?? ""))];
+        return FileUtils.trimFileProtocol(String(entry?.thumb ?? entry?.thumb_sm ?? ""));
+    }
+    function localFileUrl(filePath) {
+        const clean = FileUtils.trimFileProtocol(String(filePath ?? ""));
+        if (clean === "")
+            return "";
+        const encoded = clean.split("/").map(part => encodeURIComponent(part).replace(/[!'()*]/g, character =>
+            "%" + character.charCodeAt(0).toString(16).toUpperCase())).join("/");
+        return "file://" + encoded;
+    }
+
+
+    function videoPosterPath(filePath) {
+        const clean = FileUtils.trimFileProtocol(String(filePath ?? ""));
+        return clean === "" ? "" : `${Directories.stageVideoPosterCachePath}/${Qt.md5(clean)}.jpg`;
+    }
+
+    function ensureVideoPoster(filePath) {
+        const clean = FileUtils.trimFileProtocol(String(filePath ?? ""));
+        if (!root.isVideoFile(clean) || root.requestedVideoPosters[clean])
+            return;
+        const requested = Object.assign({}, root.requestedVideoPosters);
+        requested[clean] = true;
+        root.requestedVideoPosters = requested;
+        root.pendingVideoPosters = root.pendingVideoPosters.concat([clean]);
+        root.runNextVideoPoster();
+    }
+
+    function runNextVideoPoster() {
+        if (videoPosterProc.running || root.pendingVideoPosters.length === 0)
+            return;
+        videoPosterProc.filePath = root.pendingVideoPosters[0];
+        root.pendingVideoPosters = root.pendingVideoPosters.slice(1);
+        videoPosterProc.outputPath = root.videoPosterPath(videoPosterProc.filePath);
+        videoPosterProc.running = true;
+    }
+
+    FileView {
+        id: ryogamiConfigFile
+        path: Directories.ryogamiConfigPath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.loadRyogamiConfig(text())
+    }
+
+    FileView {
+        id: ryogamiIndexFile
+        path: `${root.ryogamiCacheDirectory}/wallpaper/index.json`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.loadRyogamiIndex(text())
+        onLoadFailed: root.loadRyogamiIndex("")
+    }
+    FileView {
+        id: ryogamiOutputsFile
+        path: `${root.ryogamiCacheDirectory}/outputs.json`
+        watchChanges: true
+        printErrors: false
+        onFileChanged: reload()
+        onLoaded: root.loadRyogamiOutputs(text())
+        onLoadFailed: root.loadRyogamiOutputs("")
+    }
+
+
+    Process {
+        id: videoPosterProc
+        property string filePath: ""
+        property string outputPath: ""
+        command: [
+            "bash", "-c",
+            "mkdir -p -- \"$1\" && { test -s \"$3\" || ffmpeg -v error -y -i \"$2\" -frames:v 1 -vf 'scale=640:360:force_original_aspect_ratio=decrease' \"$3\"; }",
+            "stage-video-poster", Directories.stageVideoPosterCachePath, filePath, outputPath
+        ]
+        onExited: exitCode => {
+            if (exitCode === 0) {
+                root.videoPosterRevision++;
+                root.videoPosterReady(videoPosterProc.filePath);
+            }
+            root.runNextVideoPoster();
+        }
+    }
 
     function normalizeSortField(value) {
         const field = String(value || "modified");
@@ -94,6 +254,25 @@ Singleton {
             return entry.fileLastModified;
         }
     }
+    function compareEntries(left, right) {
+        if (left.fileIsDir !== right.fileIsDir)
+            return left.fileIsDir ? -1 : 1;
+        const leftValue = root.sortValue(left);
+        const rightValue = root.sortValue(right);
+        let comparison = 0;
+        if (typeof leftValue === "string") {
+            comparison = leftValue.localeCompare(rightValue);
+        } else if (leftValue > rightValue) {
+            comparison = -1;
+        } else if (leftValue < rightValue) {
+            comparison = 1;
+        }
+        if (root.sortReversed)
+            comparison = -comparison;
+        return comparison !== 0 ? comparison
+            : left.fileName.toLocaleLowerCase().localeCompare(right.fileName.toLocaleLowerCase());
+    }
+
 
     function rebuildSortedFolderModel() {
         const entries = [];
@@ -116,42 +295,46 @@ Singleton {
             });
         }
 
-        entries.sort((left, right) => {
-            if (left.fileIsDir !== right.fileIsDir) {
-                return left.fileIsDir ? -1 : 1;
-            }
-
-            const leftValue = root.sortValue(left);
-            const rightValue = root.sortValue(right);
-            let comparison = 0;
-
-            if (typeof leftValue === "string") {
-                comparison = leftValue.localeCompare(rightValue);
-            } else {
-                // For numbers (modified date, created date, size):
-                // Default (!root.sortReversed) is descending (newest first, largest first)
-                if (leftValue > rightValue) {
-                    comparison = -1;
-                } else if (leftValue < rightValue) {
-                    comparison = 1;
-                }
-            }
-
-            if (root.sortReversed) {
-                comparison = -comparison;
-            }
-
-            if (comparison === 0) {
-                comparison = left.fileName.toLocaleLowerCase().localeCompare(right.fileName.toLocaleLowerCase());
-            }
-            return comparison;
-        });
+        entries.sort(root.compareEntries);
 
         sortedFolderModel.clear();
         for (let i = 0; i < entries.length; i++) {
             sortedFolderModel.append(entries[i]);
         }
     }
+    function rebuildRyogamiLibraryModel() {
+        const query = root.searchQuery.trim().toLocaleLowerCase();
+        const entries = [];
+        for (const path in root.ryogamiEntriesByPath) {
+            const entry = root.ryogamiEntriesByPath[path];
+            const name = String(entry?.name ?? path.substring(path.lastIndexOf("/") + 1));
+            const lowerName = name.toLocaleLowerCase();
+            if (query !== "" && !lowerName.includes(query))
+                continue;
+            if (!root.extensions.some(extension => lowerName.endsWith("." + extension)))
+                continue;
+            const slash = name.lastIndexOf("/");
+            const fileName = slash >= 0 ? name.slice(slash + 1) : name;
+            const suffix = fileName.includes(".") ? fileName.slice(fileName.lastIndexOf(".") + 1) : "";
+            entries.push({
+                filePath: path,
+                fileUrl: root.localFileUrl(path),
+                fileName: fileName,
+                fileBaseName: suffix === "" ? fileName : fileName.slice(0, -(suffix.length + 1)),
+                fileSuffix: suffix,
+                fileSize: Number(entry?.filesize ?? 0),
+                fileLastModified: Number(entry?.mtime ?? 0) * 1000,
+                fileCreated: Number(entry?.mtime ?? 0) * 1000,
+                fileIsDir: false
+            });
+        }
+        entries.sort(root.compareEntries);
+        ryogamiLibraryModel.clear();
+        for (let i = 0; i < entries.length; i++)
+            ryogamiLibraryModel.append(entries[i]);
+    }
+
+    onSearchQueryChanged: root.rebuildRyogamiLibraryModel()
 
     function refreshCreationTimes() {
         const paths = [];
@@ -197,6 +380,7 @@ Singleton {
         root.sortReversed = options?.sortReversed === true;
         root.applyNativeSort();
         root.queueFolderModelRefresh();
+        root.rebuildRyogamiLibraryModel();
     }
 
     function selectSortField(field) {
@@ -213,6 +397,7 @@ Singleton {
         Config.saveOptionsNow();
         root.applyNativeSort();
         root.rebuildSortedFolderModel();
+        root.rebuildRyogamiLibraryModel();
         root.sortChanged();
     }
 
@@ -329,13 +514,10 @@ Singleton {
         function onReadyChanged() {
             if (!Config.ready) return;
             root.loadSortOptions();
-            if (Config.options.background.useWallpaperEngine) {
-                if (Config.options.background.wallpaperEngineId) {
-                    root.apply(Config.options.background.wallpaperEngineId, Appearance.m3colors.darkmode);
-                }
-            } else if (root.isVideoFile(Config.options.background.wallpaperPath.toLowerCase())) {
-                root.apply(Config.options.background.wallpaperPath, Appearance.m3colors.darkmode);
-            }
+            // No restore here: ryogami brings back the wallpaper it last applied
+            // when it starts. This editor's own record goes stale whenever the
+            // wallpaper changes elsewhere (Super+W, random, a rice), so replaying
+            // it at every shell start put back a clip the user had replaced.
             root.enforceVideoWallpaperConstraints();
             root.recordRecent(Config.options.background.wallpaperPath);
             // Pre-generate lockscreen colors if configured but missing
@@ -359,22 +541,8 @@ Singleton {
         function onUseWallpaperEngineChanged() {
             root.enforceVideoWallpaperConstraints();
         }
-        // switchwall.sh reads the backend: re-applying the current video
-        // starts mpvpaper, or stops it when the shell takes playback over.
-        // Re-applying picks (or drops) the screen-sized copy.
-        function onVideoDownscaleChanged() {
-            const path = Config.options.background.wallpaperPath;
-            if (!Config.options.background.useWallpaperEngine && root.isVideoFile(path)) {
-                Config.saveOptionsNow();
-                root.apply(path, Appearance.m3colors.darkmode);
-            }
-        }
+        // Ryogami owns playback; the backend only changes what the editor locks.
         function onVideoBackendChanged() {
-            const path = Config.options.background.wallpaperPath;
-            if (!Config.options.background.useWallpaperEngine && root.isVideoFile(path)) {
-                Config.saveOptionsNow(); // the script reads the backend from disk
-                root.apply(path, Appearance.m3colors.darkmode);
-            }
             root.enforceVideoWallpaperConstraints();
         }
     }
@@ -537,6 +705,39 @@ Singleton {
             root.apply(cleanPath, darkMode);
         }
     }
+    function applyForScreen(filePath, screenName, darkMode) {
+        const envBinPath = `${FileUtils.trimFileProtocol(Directories.home)}/.local/bin:${FileUtils.trimFileProtocol(Directories.home)}/.cargo/bin:/usr/local/bin:/usr/bin:/bin`;
+        Quickshell.execDetached([
+            "env", "-u", "LD_LIBRARY_PATH", "-u", "PYTHONHOME", "-u", "PYTHONPATH",
+            `PATH=${envBinPath}`, "bash", Directories.wallpaperSwitchScriptPath,
+            "--mode", darkMode ? "dark" : "light", "--image", filePath,
+            "--screen", screenName, "--request-seq", String(++root._wallpaperRequestSeq)
+        ]);
+        root.changed();
+    }
+
+    // A forced same-path write pins a wildcard-backed output before the
+    // wildcard changes; it has no visual delta and therefore no history entry.
+    function selectForScreen(filePath, screenName, darkMode = Appearance.m3colors.darkmode, force = false) {
+        const cleanPath = FileUtils.trimFileProtocol(String(filePath ?? ""));
+        const monitor = String(screenName ?? "");
+        if (cleanPath === "" || monitor === "")
+            return false;
+        const previous = root.currentWallpaperPath(monitor);
+        if (previous === cleanPath && !force) {
+            root.changed();
+            return false;
+        }
+        root.applyForScreen(cleanPath, monitor, darkMode);
+        if (previous !== cleanPath) {
+            GlobalStates.editHistoryPush({
+                "undo": () => root.applyForScreen(previous, monitor, darkMode),
+                "redo": () => root.applyForScreen(cleanPath, monitor, darkMode)
+            });
+        }
+        return true;
+    }
+
 
     function selectLockscreen(filePath, darkMode = Appearance.m3colors.darkmode) {
         if (!filePath || filePath.length === 0) return;
@@ -681,48 +882,11 @@ Singleton {
     ListModel {
         id: sortedFolderModel
     }
+    ListModel {
+        id: ryogamiLibraryModel
+    }
 
-    // Thumbnail generation
-    // One bounded process per folder (scripts/thumbnails/thumbgen.py): it skips fresh
-    // thumbnails with a stat and reports only the files it actually made.
-    function generateThumbnail(size: string, force = false) {
-        if (!["normal", "large", "x-large", "xx-large"].includes(size)) throw new Error("Invalid thumbnail size");
-        const directory = FileUtils.trimFileProtocol(root.directory);
-        // A second ask for the run already going would only kill and restart it.
-        if (thumbgenProc.running && !force && thumbgenProc.directory === directory && thumbgenProc.size === size)
-            return;
-        thumbgenProc.running = false
-        thumbgenProc.directory = directory
-        thumbgenProc.size = size
-        thumbgenProc.command = [thumbgenScriptPath, "--size", size, "-d", directory].concat(force ? ["--force"] : [])
-        root.thumbnailGenerationProgress = 0
-        thumbgenProc.running = true
-    }
-    Process {
-        id: thumbgenProc
-        property string directory
-        property string size
-        stdout: SplitParser {
-            onRead: data => {
-                // print("thumb gen proc:", data)
-                let match = data.match(/PROGRESS (\d+)\/(\d+)/)
-                if (match) {
-                    const completed = parseInt(match[1])
-                    const total = parseInt(match[2])
-                    root.thumbnailGenerationProgress = completed / total
-                }
-                match = data.match(/FILE (.+)/)
-                if (match) {
-                    const filePath = match[1]
-                    root.thumbnailGeneratedFile(filePath)
-                }
-            }
-        }
-        onExited: (exitCode, exitStatus) => {
-            // print("[Wallpapers] Thumbnail generation completed with exit code", exitCode)
-            root.thumbnailGenerated(thumbgenProc.directory)
-        }
-    }
+
 
     Process {
         id: readColorCacheProc

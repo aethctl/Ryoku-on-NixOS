@@ -4,15 +4,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
-import Ryoku.Ui.Singletons
 import stage.services
 import stage.modules.common
+import stage.modules.ii.editMode
 
 Singleton {
     id: root
 
-    // Decode only when persisted state changes, not on pointer movement or per icon.
+    // Persistent.ready is an explicit dependency because JsonAdapter initially
+    // exposes the "{}" default before replacing it with states.json.
     readonly property var screens: {
+        void Persistent.ready;
         try {
             const value = JSON.parse(Persistent.states.desktopShortcutsJson);
             return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -61,21 +63,13 @@ Singleton {
         const w = screen?.width ?? 1920;
         const h = screen?.height ?? 1080;
         const m = Math.max(0, root.options.margin ?? 0);
-        let top = m, right = m, bottom = m, left = m;
-        if (root.options.avoidPanels) {
-            if (Config.options.bar.vertical) {
-                if (Config.options.bar.bottom)
-                    right += Appearance.sizes.verticalBarWidth;
-                else
-                    left += Appearance.sizes.verticalBarWidth;
-            } else if (Config.options.bar.bottom) {
-                bottom += Appearance.sizes.barHeight;
-            } else {
-                top += Appearance.sizes.barHeight;
-            }
-            if (Config.options.dock?.enable)
-                bottom += (Config.options.dock.height ?? 60) + 10;
-        }
+        const panelInsets = root.options.avoidPanels
+            ? EditModeInsets.insetsFor(screenName)
+            : { "top": 0, "right": 0, "bottom": 0, "left": 0 };
+        const top = m + panelInsets.top;
+        const right = m + panelInsets.right;
+        const bottom = m + panelInsets.bottom;
+        const left = m + panelInsets.left;
         const x = Math.ceil(left / 10) * 10;
         const y = Math.ceil(top / 10) * 10;
         const x2 = Math.floor((w - right) / 10) * 10;
@@ -180,7 +174,7 @@ Singleton {
     }
 
     // ── Order ──────────────────────────────────────────────────────────────
-    readonly property var typeRank: ({ "app": 0, "group": 1, "directory": 2, "file": 3 })
+    readonly property var typeRank: ({ "app": 0, "group": 1, "directory": 2, "file": 3, "url": 4 })
     function useCount(item) {
         if (item.type === "group")
             return (item.apps ?? []).reduce((sum, app) => sum + (app.launchCount ?? 0), item.launchCount ?? 0);
@@ -212,7 +206,10 @@ Singleton {
                 d = label(a.item).localeCompare(label(b.item));
             return descending ? -d : d;
         });
-        return indexed.map(entry => entry.item);
+        return indexed.map(entry => entry.item.type === "group"
+            ? Object.assign({}, entry.item, {
+                apps: root.sorted(entry.item.apps ?? [], by, descending)
+            }) : entry.item);
     }
     // Sort now. Choosing the order already in use flips its direction, the
     // way a column header does.
@@ -228,14 +225,92 @@ Singleton {
             root.options.sortBy, root.options.sortDescending)));
     }
     function setKeepSorted(value) {
+        if ((root.options.keepSorted ?? false) === value)
+            return;
         Config.options.background.desktopIcons.keepSorted = value;
         if (value)
             root.renormalizeAll();
     }
     function setAutoArrange(value) {
+        if ((root.options.autoArrange ?? false) === value)
+            return;
         Config.options.background.desktopIcons.autoArrange = value;
         if (value)
-            root.renormalizeAll();
+            root.arrangeAll();
+    }
+
+    function readingOrder(g, items) {
+        return items.map((item, index) => {
+            const cell = root.cellOf(g, item.x, item.y);
+            const order = g.byColumns ? cell.col * g.rows + cell.row : cell.row * g.cols + cell.col;
+            return { item: item, index: index, order: order };
+        }).sort((a, b) => (a.order - b.order) || (a.index - b.index)).map(entry => entry.item);
+    }
+    function writeLayoutAction(next) {
+        if (!Persistent.ready || Persistent.blockWrites)
+            return false;
+        root.pushUndo();
+        return root.writeAll(next);
+    }
+    function arrangeAll() {
+        const next = Object.assign({}, root.screens);
+        for (const name of Object.keys(next)) {
+            const items = root.readingOrder(root.grid(name), root.itemsFor(name));
+            next[name] = root.normalize(name, root.arrangeList(root.grid(name), items));
+        }
+        return root.writeLayoutAction(next);
+    }
+    function setOrigin(value) {
+        if (!value || root.options.origin === value)
+            return false;
+        const ordered = {};
+        for (const name of Object.keys(root.screens))
+            ordered[name] = root.readingOrder(root.grid(name), root.itemsFor(name));
+        Config.options.background.desktopIcons.origin = value;
+        const next = Object.assign({}, root.screens);
+        for (const name of Object.keys(next))
+            next[name] = root.normalize(name, root.arrangeList(root.grid(name), ordered[name]));
+        return root.writeLayoutAction(next);
+    }
+    function setFlow(value) {
+        if (!value || root.options.flow === value)
+            return false;
+        const ordered = {};
+        for (const name of Object.keys(root.screens))
+            ordered[name] = root.readingOrder(root.grid(name), root.itemsFor(name));
+        Config.options.background.desktopIcons.flow = value;
+        const next = Object.assign({}, root.screens);
+        for (const name of Object.keys(next))
+            next[name] = root.normalize(name, root.arrangeList(root.grid(name), ordered[name]));
+        return root.writeLayoutAction(next);
+    }
+    function settleAll() {
+        const next = Object.assign({}, root.screens);
+        for (const name of Object.keys(next)) {
+            const items = root.itemsFor(name);
+            next[name] = root.normalize(name, root.settle(root.grid(name), items, items.map(item => item.id)));
+        }
+        return root.writeLayoutAction(next);
+    }
+    function setMargin(value) {
+        const margin = Math.max(0, Number(value) || 0);
+        if ((root.options.margin ?? 0) === margin)
+            return false;
+        Config.options.background.desktopIcons.margin = margin;
+        return root.settleAll();
+    }
+    function setAvoidPanels(value) {
+        if ((root.options.avoidPanels ?? false) === value)
+            return false;
+        Config.options.background.desktopIcons.avoidPanels = value;
+        return root.settleAll();
+    }
+    function setSpacing(value) {
+        if (!value || root.options.spacing === value || !Persistent.ready || Persistent.blockWrites)
+            return false;
+        root.pushUndo();
+        Config.options.background.desktopIcons.spacing = value;
+        return true;
     }
 
     // ── Stacks ─────────────────────────────────────────────────────────────
@@ -263,7 +338,8 @@ Singleton {
         for (const item of items) {
             if (item.type === "group")
                 continue;
-            const kind = item.type === "directory" || item.type === "file" ? item.type : "app";
+            const kind = item.type === "directory" ? "directory"
+                : item.type === "file" || item.type === "url" ? "file" : "app";
             let stack = stacks.get(kind);
             if (!stack) {
                 stack = { id: "stack:" + kind, type: "group", stack: kind, name: root.stackName(kind),
@@ -415,7 +491,8 @@ Singleton {
             return;
         root.error = "";
         root.currentImport = root.importQueue.shift();
-        resolver.command = ["/usr/bin/python3", Directories.scriptPath + "/desktop_shortcuts.py",
+        resolver.command = ["/usr/bin/python3",
+            FileUtils.trimFileProtocol(Qt.resolvedUrl("desktop_shortcuts.py")),
             JSON.stringify(root.currentImport.urls)];
         resolver.running = true;
     }
@@ -448,6 +525,133 @@ Singleton {
         const items = root.screens[screenName];
         return Array.isArray(items) ? items : [];
     }
+
+    function placedAppIds(screenName) {
+        const found = [];
+        const seen = new Set();
+        for (const item of root.itemsFor(screenName)) {
+            const entries = item.type === "group" ? (item.apps ?? []) : [item];
+            for (const entry of entries) {
+                if (entry.type === "app" && !seen.has(entry.id)) {
+                    seen.add(entry.id);
+                    found.push(entry.id);
+                }
+            }
+        }
+        return found;
+    }
+    function locate(screenName, appId) {
+        for (const item of root.itemsFor(screenName)) {
+            if (item.type === "app" && item.id === appId)
+                return { where: "desktop", folderId: "", folderName: "", isStack: false };
+            if (item.type === "group" && (item.apps ?? []).some(app => app.id === appId))
+                return { where: "folder", folderId: item.id,
+                    folderName: item.name || (item.stack ? root.stackName(item.stack) : Translation.tr("Folder")),
+                    isStack: !!item.stack };
+        }
+        return { where: "", folderId: "", folderName: "", isStack: false };
+    }
+    function folders(screenName) {
+        return root.readingOrder(root.grid(screenName), root.itemsFor(screenName))
+            .filter(item => item.type === "group" && !item.stack)
+            .map(item => ({ id: item.id, name: item.name || Translation.tr("Folder"),
+                count: (item.apps ?? []).length }));
+    }
+    function appEntry(items, appId) {
+        for (const item of items) {
+            if (item.type === "app" && item.id === appId)
+                return item;
+            if (item.type === "group") {
+                const member = (item.apps ?? []).find(app => app.id === appId);
+                if (member)
+                    return member;
+            }
+        }
+        return null;
+    }
+    function withoutApps(items, ids) {
+        const out = [];
+        for (const item of items) {
+            if (item.type === "app" && ids.has(item.id))
+                continue;
+            if (item.type === "group") {
+                const apps = (item.apps ?? []).filter(app => !ids.has(app.id));
+                if (item.stack && apps.length === 0)
+                    continue;
+                out.push(Object.assign({}, item, { apps: apps }));
+            } else {
+                out.push(item);
+            }
+        }
+        return out;
+    }
+    function nextFolderName(items, requested) {
+        const wanted = String(requested ?? "").trim();
+        if (wanted)
+            return wanted;
+        const base = Translation.tr("Folder");
+        const used = new Set(items.filter(item => item.type === "group" && !item.stack)
+            .map(item => String(item.name || "")));
+        if (!used.has(base))
+            return base;
+        let number = 2;
+        while (used.has(base + " " + number))
+            ++number;
+        return base + " " + number;
+    }
+    function uniqueFolderId(items) {
+        const used = new Set(items.map(item => item.id));
+        let id = "folder:" + Date.now();
+        let suffix = 2;
+        while (used.has(id))
+            id = "folder:" + Date.now() + ":" + suffix++;
+        return id;
+    }
+    function freePoint(screenName, items, x, y) {
+        const g = root.grid(screenName);
+        const taken = root.takenCells(g, items);
+        let cell;
+        if (Number.isFinite(x) && Number.isFinite(y)) {
+            const wanted = root.cellOf(g, x, y);
+            cell = root.nearestFree(g, taken, wanted.col, wanted.row);
+        } else {
+            cell = root.firstFree(g, taken) ?? root.slotCell(g, items.length);
+        }
+        return root.cellPos(g, cell.col, cell.row);
+    }
+    function newFolder(screenName, name, x, y) {
+        const items = root.itemsFor(screenName).slice();
+        const point = root.freePoint(screenName, items, x, y);
+        const id = root.uniqueFolderId(items);
+        const folder = { id: id, type: "group", name: root.nextFolderName(items, name),
+            icon: "folder", apps: [], x: point.x, y: point.y, addedAt: Date.now() };
+        return root.save(screenName, items.concat([folder])) ? id : "";
+    }
+    function addToFolder(screenName, folderId, entries) {
+        const items = root.itemsFor(screenName);
+        const folder = items.find(item => item.id === folderId && item.type === "group");
+        if (!folder || !entries || entries.length === 0)
+            return false;
+        const ids = new Set(entries.filter(entry => entry && entry.id).map(entry => entry.id));
+        const resolved = [];
+        for (const entry of entries) {
+            if (!entry || !entry.id || resolved.some(item => item.id === entry.id))
+                continue;
+            resolved.push(root.appEntry(items, entry.id) ?? entry);
+        }
+        let next = root.withoutApps(items, ids);
+        if (folder.stack) {
+            for (const entry of resolved) {
+                const point = root.freePoint(screenName, next, folder.x, folder.y);
+                next.push(Object.assign({}, entry, point, { addedAt: entry.addedAt ?? Date.now() }));
+            }
+        } else {
+            next = next.map(item => item.id === folderId
+                ? Object.assign({}, item, { apps: (item.apps ?? []).concat(resolved.map(entry =>
+                    Object.assign({}, entry, { addedAt: entry.addedAt ?? Date.now() }))) }) : item);
+        }
+        return root.save(screenName, next);
+    }
     // Screens that hold icons, connected or not, other than this one: the
     // sources "Move icons here" offers after a monitor change.
     function otherScreens(screenName) {
@@ -476,52 +680,80 @@ Singleton {
     }
 
     function add(screenName, entries, x, y, targetId, width, height) {
-        if (!entries.length)
+        if (!entries || entries.length === 0)
             return false;
-        const items = root.itemsFor(screenName).slice();
-        const targetIndex = targetId && entries.every(entry => root.isGroupable(entry))
+        const original = root.itemsFor(screenName);
+        const materialized = [];
+        const seenTop = new Set();
+        const seenApps = new Set();
+        for (const candidate of entries) {
+            if (!candidate || !candidate.id || seenTop.has(candidate.id))
+                continue;
+            if (candidate.type === "app") {
+                if (seenApps.has(candidate.id))
+                    continue;
+                seenApps.add(candidate.id);
+                materialized.push(root.appEntry(original, candidate.id) ?? candidate);
+            } else if (candidate.type === "group") {
+                const apps = [];
+                for (const app of candidate.apps ?? []) {
+                    if (!app.id || seenApps.has(app.id))
+                        continue;
+                    seenApps.add(app.id);
+                    apps.push(root.appEntry(original, app.id) ?? app);
+                }
+                materialized.push(Object.assign({}, candidate, { apps: apps }));
+            } else {
+                materialized.push(original.find(item => item.id === candidate.id) ?? candidate);
+            }
+            seenTop.add(candidate.id);
+        }
+        if (materialized.length === 0)
+            return false;
+        const appIds = new Set();
+        const topIds = new Set();
+        for (const entry of materialized) {
+            topIds.add(entry.id);
+            for (const app of entry.type === "group" ? (entry.apps ?? []) : [entry]) {
+                if (app.type === "app")
+                    appIds.add(app.id);
+            }
+        }
+        let items = root.withoutApps(original, appIds)
+            .filter(item => !topIds.has(item.id));
+        const targetIndex = targetId && materialized.every(entry => root.isGroupable(entry))
             ? items.findIndex(item => item.id === targetId && root.isGroupable(item)) : -1;
         if (targetIndex >= 0) {
             const target = items[targetIndex];
-            const apps = target.type === "group" ? target.apps.slice() : [target];
-            for (const entry of entries) {
-                if (!root.isGroupable(entry))
-                    continue;
-                for (const app of entry.type === "group" ? entry.apps : [entry]) {
+            const apps = target.type === "group" ? (target.apps ?? []).slice() : [target];
+            for (const entry of materialized) {
+                for (const app of entry.type === "group" ? (entry.apps ?? []) : [entry]) {
                     if (!apps.some(existing => existing.id === app.id))
                         apps.push(app);
                 }
             }
-            items[targetIndex] = { id: target.type === "group" ? target.id : "group:" + Date.now(),
-                type: "group", name: target.type === "group" ? target.name : Translation.tr("App group"),
-                apps: apps, x: target.x, y: target.y, addedAt: target.addedAt ?? Date.now() };
+            items[targetIndex] = { id: target.type === "group" ? target.id : root.uniqueFolderId(items),
+                type: "group", name: target.type === "group" ? target.name : Translation.tr("Folder"),
+                icon: "folder", apps: apps, x: target.x, y: target.y,
+                addedAt: target.addedAt ?? Date.now() };
         } else {
             const g = root.grid(screenName);
             const cw = g.cw, ch = g.ch;
             const maxX = Math.max(0, (width || g.area.screenWidth) - cw);
             const maxY = Math.max(0, (height || g.area.screenHeight) - ch);
             const now = Date.now();
-            for (const entry of entries) {
-                if (items.some(item => item.id === entry.id))
-                    continue;
-                let px = Math.max(0, Math.min(maxX, Math.round(x / 10) * 10));
-                let py = Math.max(0, Math.min(maxY, Math.round(y / 10) * 10));
-                const taken = root.takenCells(g, items);
-                if (root.options.autoArrange) {
-                    const want = root.cellOf(g, px, py);
-                    const cell = root.nearestFree(g, taken, want.col, want.row);
-                    const p = root.cellPos(g, cell.col, cell.row);
-                    px = p.x;
-                    py = p.y;
-                } else if (items.some(item => Math.abs(item.x - px) < cw && Math.abs(item.y - py) < ch)) {
-                    const cell = root.firstFree(g, taken);
-                    if (!cell) {
-                        root.error = Translation.tr("No free space for desktop shortcuts");
-                        break;
+            for (const entry of materialized) {
+                let point = root.freePoint(screenName, items, x, y);
+                let px = Math.max(0, Math.min(maxX, point.x));
+                let py = Math.max(0, Math.min(maxY, point.y));
+                if (Number.isFinite(x) && Number.isFinite(y) && !root.options.autoArrange) {
+                    px = Math.max(0, Math.min(maxX, Math.round(x / 10) * 10));
+                    py = Math.max(0, Math.min(maxY, Math.round(y / 10) * 10));
+                    if (items.some(item => Math.abs(item.x - px) < cw && Math.abs(item.y - py) < ch)) {
+                        point = root.freePoint(screenName, items, x, y);
+                        px = point.x;
+                        py = point.y;
                     }
-                    const p = root.cellPos(g, cell.col, cell.row);
-                    px = p.x;
-                    py = p.y;
                 }
                 items.push(Object.assign({}, entry, { x: px, y: py, addedAt: entry.addedAt ?? now }));
             }
@@ -549,8 +781,8 @@ Singleton {
                     apps.push(app);
             }
             root.save(screenName, items.filter(item => item.id !== itemId).map(item => item.id === target.id
-                ? { id: target.type === "group" ? target.id : "group:" + Date.now(), type: "group",
-                    name: target.type === "group" ? target.name : Translation.tr("App group"),
+                ? { id: target.type === "group" ? target.id : root.uniqueFolderId(items), type: "group",
+                    name: target.type === "group" ? target.name : Translation.tr("Folder"), icon: "folder",
                     apps: apps, x: target.x, y: target.y, addedAt: target.addedAt ?? Date.now() } : item));
         } else {
             root.releaseKeptOrder();
@@ -727,8 +959,8 @@ Singleton {
             }
         }
         const gone = new Set(chosen.map(item => item.id));
-        const group = { id: "group:" + Date.now(), type: "group", name: Translation.tr("App group"),
-            apps: apps, x: chosen[0].x, y: chosen[0].y, addedAt: Date.now() };
+        const group = { id: root.uniqueFolderId(items), type: "group", name: Translation.tr("Folder"),
+            icon: "folder", apps: apps, x: chosen[0].x, y: chosen[0].y, addedAt: Date.now() };
         root.save(screenName, items.filter(item => !gone.has(item.id)).concat([group]));
     }
     function canGroup(screenName, ids) {
@@ -771,8 +1003,73 @@ Singleton {
     }
 
     function removeMember(screenName, groupId, appId) {
-        root.save(screenName, root.itemsFor(screenName).map(item => item.id === groupId
-            ? Object.assign({}, item, { apps: item.apps.filter(app => app.id !== appId) }) : item));
+        const items = root.itemsFor(screenName);
+        const group = items.find(item => item.id === groupId && item.type === "group");
+        if (!group || !(group.apps ?? []).some(app => app.id === appId))
+            return false;
+        return root.save(screenName, items.map(item => item.id === groupId
+            ? Object.assign({}, item, { apps: (item.apps ?? []).filter(app => app.id !== appId) }) : item));
+    }
+
+    function canTakeOut(screenName, folderId) {
+        const folder = root.itemsFor(screenName).find(item => item.id === folderId && item.type === "group");
+        return !!folder && !(folder.stack && root.options.stacks);
+    }
+    function takeOut(screenName, folderId, appId, x, y) {
+        if (!root.canTakeOut(screenName, folderId))
+            return false;
+        const items = root.itemsFor(screenName);
+        const folder = items.find(item => item.id === folderId && item.type === "group");
+        const entry = (folder.apps ?? []).find(app => app.id === appId);
+        if (!entry)
+            return false;
+        let next = root.withoutApps(items, new Set([appId]));
+        const g = root.grid(screenName);
+        let px = x, py = y;
+        if (!Number.isFinite(px) || !Number.isFinite(py)) {
+            const home = root.cellOf(g, folder.x, folder.y);
+            const beside = root.cellPos(g, Math.min(g.cols - 1, home.col + 1), home.row);
+            px = beside.x;
+            py = beside.y;
+        }
+        const point = root.freePoint(screenName, next, px, py);
+        next.push(Object.assign({}, entry, point));
+        return root.save(screenName, next);
+    }
+    function moveToFolder(screenName, fromFolderId, appId, toFolderId) {
+        const items = root.itemsFor(screenName);
+        const source = items.find(item => item.id === fromFolderId && item.type === "group");
+        const entry = (source?.apps ?? []).find(app => app.id === appId);
+        if (!source || !entry || fromFolderId === toFolderId)
+            return toFolderId || "";
+        let next = root.withoutApps(items, new Set([appId]));
+        let destinationId = toFolderId;
+        let destination = next.find(item => item.id === destinationId && item.type === "group");
+        if (!destinationId) {
+            destinationId = root.uniqueFolderId(next);
+            const g = root.grid(screenName);
+            const home = root.cellOf(g, source.x, source.y);
+            const beside = root.cellPos(g, Math.min(g.cols - 1, home.col + 1), home.row);
+            const point = root.freePoint(screenName, next, beside.x, beside.y);
+            destination = { id: destinationId, type: "group", name: root.nextFolderName(next, ""),
+                icon: "folder", apps: [], x: point.x, y: point.y, addedAt: Date.now() };
+            next.push(destination);
+        }
+        if (!destination)
+            return "";
+        if (destination.stack) {
+            const point = root.freePoint(screenName, next, destination.x, destination.y);
+            next.push(Object.assign({}, entry, point));
+        } else {
+            next = next.map(item => item.id === destinationId
+                ? Object.assign({}, item, { apps: (item.apps ?? []).concat([entry]) }) : item);
+        }
+        return root.save(screenName, next) ? destinationId : "";
+    }
+    function removeApp(screenName, appId) {
+        if (!root.locate(screenName, appId).where)
+            return false;
+        return root.save(screenName, root.withoutApps(root.itemsFor(screenName), new Set([appId])));
     }
 
     // Dissolve a group: its members return to the desktop as individual
@@ -800,9 +1097,9 @@ Singleton {
     }
 
     function launch(entry) {
-        // Folders and plain files go to the default handler; only .desktop
-        // paths are launchable through gio directly.
-        if ((entry.type === "directory" || entry.type === "file") && entry.path)
+        // Files, folders and URLs go through the desktop's default handler.
+        // Only dropped .desktop files use Gio's desktop-entry launcher.
+        if ((entry.type === "directory" || entry.type === "file" || entry.type === "url") && entry.path)
             Quickshell.execDetached(["xdg-open", entry.path]);
         else if (entry.path)
             Quickshell.execDetached(["gio", "launch", entry.path]);
@@ -837,12 +1134,10 @@ Singleton {
             root.writeAll(next);
     }
 
-    // Only apps and groups fold into a group: a folder or a file on the
-    // desktop is its own thing, never merge fuel, and a stack takes its
-    // members from the stacks rule alone. The layer's targetAt and the
-    // guards above share this one rule.
+    // Only apps and app groups fold together. Files, folders and URLs retain
+    // their own launch semantics; automatic stacks can still collect them.
     function isGroupable(item) {
-        return item.type !== "directory" && item.type !== "file" && !item.stack;
+        return (item.type === "app" || item.type === "group") && !item.stack;
     }
 
     // ── Badges ─────────────────────────────────────────────────────────────

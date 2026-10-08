@@ -94,4 +94,14 @@ Singleton {
             0, 0, 1, 0,
             0, 0, 0, 1);
     }
+
+    // The card that matrix draws the desktop into, as a rect in screen space:
+    // what EditModeCard cuts its blurred surround around (the reference's
+    // BackgroundRoot.editCard, for a surface that is not the reference's).
+    function cardRectFor(screenName, screenWidth, screenHeight, progress, drawerProgress) {
+        const viewport = root.viewportFor(screenName, screenWidth, screenHeight);
+        const shift = EditModeLogic.drawerTravel(viewport) * drawerProgress;
+        const c = EditModeLogic.cardRect(viewport, progress, screenWidth, screenHeight, shift);
+        return Qt.rect(c.x, c.y, c.width, c.height);
+    }
 }

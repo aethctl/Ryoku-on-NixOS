@@ -15,6 +15,10 @@ image) the CachyOS performance layer. All told, a fresh box lands at roughly
 ## How the default set is assembled
 
 Nothing here is magic; it comes from four well-defined places, in this order.
+The installer's window-manager, browser, and apps steps (see
+`installation/tui/apps.go`) can remove entries from the default set: what you
+drop is filtered out of every step below and recorded so `ryoku update` never
+puts it back.
 
 1. **`pacstrap`** lays down the base system from `system/packages/base.packages`,
    the developer toolchains from `dev.packages`, and the microcode for your CPU
@@ -49,7 +53,6 @@ upgrade never leaves the shell QML running against a stale plugin.
 | `ryoku-blobs` | The shared `Ryoku.Blobs` QML plugin |
 | `gpk` | GlazePKG, the RyokuArch package manager |
 | `ryogami` | The wallpaper daemon the shell drives: static, live, and shader transitions |
-| `ryomotion` | The screen-demo recorder and editor |
 | `ryostore` | RyoStore: the catalogue of rices, bundles, and bar styles |
 | `ryowalls` | The wallpaper browser, preview, and AI enhancer |
 | `ryovm` | The virtual-machine manager |
@@ -129,7 +132,7 @@ The small daemons and utilities the desktop leans on every session.
 
 | Package | Role |
 |---|---|
-| `chromium` | The web browser |
+| `firefox` / `chromium` / Zen (`zen-browser-bin`) | The web browser: the installer picks exactly one of the three, with Firefox recommended |
 | `kitty` | The default terminal |
 | `mpv`, `mpv-mpris` | The media player, wired onto the players bus |
 | `nautilus`, `nautilus-python` | The file manager and its "Install / Compress / Send with Ryoku" right-click actions |
@@ -147,9 +150,9 @@ The command line Ryoku hands you is already comfortable.
 
 | Package | Kind | Role |
 |---|---|---|
-| `fish` | Shell | The default account shell |
-| `bash`, `zsh` | Shell | Account-wide alternatives selectable in Ryoku Settings |
-| `blesh` | Shell | Fish-like highlighting and suggestions for Bash |
+| `fish` | Shell | The recommended account shell |
+| `bash` | Shell | Account-wide alternative with `blesh` highlighting and suggestions |
+| `zsh` | Shell | Account-wide alternative with Ryoku Oh My Zsh |
 | `zsh-autosuggestions`, `zsh-syntax-highlighting`, `zsh-history-substring-search` | Shell | Fish-like editing for Zsh |
 | `starship` | Prompt | The shared prompt |
 | `bash-completion` | CLI | Bash completions |
@@ -194,8 +197,8 @@ Everything behind the pill's Super+D, Super+U, and voice tools.
 |---|---|
 | `tesseract`, `tesseract-data-eng` | OCR text grab |
 | `zbar` | QR-code scanning |
-| `gpu-screen-recorder`, `wf-recorder` | Hardware screen recording, with a multi-GPU fallback |
-| `hyprsunset` | The night-light color-temperature toggle |
+| `gpu-screen-recorder` | GPU-only screen capture and encode, replay-capable, on every compositor |
+| `hyprsunset` (Hyprland), `wlsunset` (niri) | The night-light color-temperature toggle: each variant ships its compositor's gamma backend |
 | `wtype` | Types voice-dictation output into the focused app |
 | `libqalculate` | The launcher's calculator backend |
 | `songrec` | The launcher's Recognize Music |
@@ -260,7 +263,7 @@ pass.
 | Package | Role |
 |---|---|
 | `yay-bin` | The AUR helper, bootstrapped first so the rest can build |
-| `voxtype-bin` | The offline Whisper voice-dictation daemon (pill Super+`) |
+| `voxtype-bin` | The Whisper voice-dictation daemon with curated local English and multilingual models (pill Super+`) |
 | `localsend-bin` | AirDrop-style LAN file sharing, spoken by the file stash |
 | `nvibrant-bin` | NVIDIA digital vibrance for the pill's saturation fader |
 | `game-devices-udev` | udev rules and battery reporting for DualSense and Switch Pro pads |

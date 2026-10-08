@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -64,6 +65,8 @@ type AcpEvent struct {
 	Models       []ModelInfo
 	CurrentModel string
 	AgentName    string
+	Prowl        string
+	ProwlReason  string
 	Commands     []CommandInfo
 	SessionID    string
 	SessionTitle string
@@ -118,11 +121,17 @@ type acpConn struct {
 	promptImages bool
 	// agentName is the chat backend's display name (Hermes, Oh My Pi, ...), so
 	// the UI can label the session even when the agent advertises no model list.
+	agentID   string
 	agentName string
+	prowl     chatAgentRouting
 	// modelOption is the id of the agent's model config option when it offers
 	// models as ACP configOptions (omp) instead of the legacy models block.
-	modelOption string
-
+	modelOption  string
+	startedModel string
+	models       []ModelInfo
+	// offeredModels is what the pickers saw, so reconcile only reapplies a model that was on offer.
+	offeredModels  []ModelInfo
+	prowlActiveSet string
 	// errTail holds the agent's own stderr, bounded. An ACP error like
 	// session/new's bare "Internal error" carries no cause; the agent always
 	// writes the real reason to its log stream. The tail rides on the failure
@@ -339,14 +348,140 @@ func configModelState(opts []acpConfigOption) modelState {
 	return modelState{}
 }
 
+// Hermes advertises the same Prowl route under several provider aliases; only
+// custom:prowl:auto is guaranteed to switch back to Prowl from a direct model.
+func chatOfferedModels(agentID string, active bool, models []ModelInfo, current, started, activeSet string) []ModelInfo {
+	if agentID == "claude" {
+		return models
+	}
+
+	aliases := make([]ModelInfo, 0, 3)
+	other := make([]ModelInfo, 0, len(models))
+	for _, model := range models {
+		if chatModelProwlAlias(active, model, started) {
+			aliases = append(aliases, model)
+		} else {
+			other = append(other, model)
+		}
+	}
+	if len(aliases) == 0 {
+		return models
+	}
+
+	id := aliases[0].ID
+	hasHermesAlias := false
+	for _, alias := range aliases {
+		if strings.EqualFold(strings.TrimSpace(alias.ID), "custom:prowl:auto") {
+			id = alias.ID
+			hasHermesAlias = true
+			break
+		}
+	}
+	if !hasHermesAlias {
+		isAdvertisedAlias := func(candidate string) bool {
+			for _, alias := range aliases {
+				if strings.EqualFold(strings.TrimSpace(alias.ID), strings.TrimSpace(candidate)) {
+					return true
+				}
+			}
+			return false
+		}
+		if isAdvertisedAlias(current) {
+			id = current
+		} else if isAdvertisedAlias(started) {
+			id = started
+		}
+	}
+
+	description := "Prowl"
+	if activeSet != "" {
+		description += " · " + activeSet
+	}
+	offered := make([]ModelInfo, 0, 1+len(other))
+	offered = append(offered, ModelInfo{ID: id, Name: "Active set", Description: description})
+	return append(offered, other...)
+}
+
+func normalizedModelID(id string, models, offered []ModelInfo, active bool, started string) string {
+	for _, model := range models {
+		if model.ID == id && chatModelProwlAlias(active, model, started) {
+			if len(offered) > 0 && offered[0].Name == "Active set" {
+				return offered[0].ID
+			}
+			break
+		}
+	}
+	return id
+}
+
+func (c *acpConn) cacheProwlActiveSet(models []ModelInfo) {
+	c.mu.Lock()
+	agentID, active, started := c.agentID, c.prowl.Active, c.startedModel
+	c.mu.Unlock()
+
+	hasAlias := false
+	if agentID != "claude" {
+		for _, model := range models {
+			if chatModelProwlAlias(active, model, started) {
+				hasAlias = true
+				break
+			}
+		}
+	}
+	activeSet := ""
+	if hasAlias {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		var err error
+		activeSet, _, err = chatProwlProfileSets(ctx)
+		cancel()
+		if err != nil {
+			activeSet = ""
+		}
+	}
+
+	c.mu.Lock()
+	c.prowlActiveSet = activeSet
+	c.mu.Unlock()
+}
+
+func (c *acpConn) offeredModelsSnapshot() []ModelInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]ModelInfo(nil), c.offeredModels...)
+}
+
 // emitModels always emits a models event for a fresh session, carrying the
 // backend's name so the UI can label the agent even when it advertises no
 // models. A stale model from a different backend is never shown.
 func (c *acpConn) emitModels(st modelState) {
 	c.mu.Lock()
 	c.modelOption = st.option
+	c.models = append(c.models[:0], st.models...)
+	offered := chatOfferedModels(
+		c.agentID, c.prowl.Active, st.models, st.current, c.startedModel, c.prowlActiveSet,
+	)
+	c.offeredModels = append(c.offeredModels[:0], offered...)
+	eventModels := append([]ModelInfo(nil), c.offeredModels...)
 	c.mu.Unlock()
-	c.emit(AcpEvent{Type: "models", Models: st.models, CurrentModel: st.current, AgentName: c.agentName})
+	c.emit(c.modelsEvent(eventModels, st.current))
+}
+
+func (c *acpConn) modelsEvent(offered []ModelInfo, current string) AcpEvent {
+	c.mu.Lock()
+	agentName, routing, started := c.agentName, c.prowl, c.startedModel
+	models := append([]ModelInfo(nil), c.models...)
+	c.mu.Unlock()
+	current = normalizedModelID(current, models, offered, routing.Active, started)
+	prowl := ""
+	if routing.Active {
+		prowl = "active"
+	} else if routing.Pending {
+		prowl = "pending"
+	}
+	return AcpEvent{
+		Type: "models", Models: offered, CurrentModel: current, AgentName: agentName,
+		Prowl: prowl, ProwlReason: routing.Reason,
+	}
 }
 
 // reconcileModel keeps a fresh session on the remembered model, and remembers
@@ -356,10 +491,16 @@ func (c *acpConn) reconcileModel(st modelState, method string) {
 	if !st.ok {
 		return
 	}
-	current := st.current
+	c.mu.Lock()
+	models := append([]ModelInfo(nil), c.models...)
+	offered := append([]ModelInfo(nil), c.offeredModels...)
+	active, started := c.prowl.Active, c.startedModel
+	c.mu.Unlock()
+	current := normalizedModelID(st.current, models, offered, active, started)
 	saved := savedSessionModel()
+	saved = normalizedModelID(saved, models, offered, active, started)
 	avail := func(id string) bool {
-		for _, m := range st.models {
+		for _, m := range offered {
 			if m.ID == id {
 				return true
 			}
@@ -369,7 +510,7 @@ func (c *acpConn) reconcileModel(st modelState, method string) {
 	// A remembered pick that is still on offer: apply it to this fresh session.
 	if method == "session/new" && saved != "" && saved != current && avail(saved) {
 		if err := c.SetModel(saved); err == nil {
-			c.emit(AcpEvent{Type: "models", Models: st.models, CurrentModel: saved, AgentName: c.agentName})
+			c.emit(c.modelsEvent(offered, saved))
 			return
 		}
 	}
@@ -447,10 +588,12 @@ func (c *acpConn) openSession(method string, params map[string]any) error {
 	if out.SessionID == "" {
 		return errors.New(method + ": no sessionId")
 	}
+	st := out.modelState()
 	c.mu.Lock()
 	c.sessionID = out.SessionID
+	c.startedModel = st.current
 	c.mu.Unlock()
-	st := out.modelState()
+	c.cacheProwlActiveSet(st.models)
 	c.emitModels(st)
 	c.reconcileModel(st, method)
 	return nil
@@ -893,6 +1036,9 @@ func startACP(cwd string) (*acpConn, error) {
 	if !ok {
 		return nil, errors.New("no chat agent available; install Hermes (recommended) or a supported ACP agent")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	routing := chatHarnessRouting(ctx, b.ID)
+	cancel()
 	stamp := hermesConfigStamp()
 	cmd := exec.Command(b.Argv[0], b.Argv[1:]...)
 	cmd.Dir = cwd
@@ -915,7 +1061,9 @@ func startACP(cwd string) (*acpConn, error) {
 	c := newACPConn(stdin, stdout, stdin)
 	c.errTail = tail
 	c.configStamp = stamp
+	c.agentID = b.ID
 	c.agentName = b.Name
+	c.prowl = routing
 	go func() { _ = cmd.Wait() }()
 	return c, nil
 }

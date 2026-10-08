@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Widgets
+import Ryoku.Ui
+import Ryoku.Ui.Singletons
 import stage
 import stage.services
 import stage.modules.common
@@ -9,6 +11,7 @@ import stage.modules.common.widgets
 import stage.modules.common.functions
 import stage.modules.ii.background.widgets
 import stage.modules.ii.background.shortcuts
+import shell.services as ShellServices
 
 /**
  * Edit Mode's panel: the surface that slides in from the right of the card.
@@ -55,7 +58,6 @@ Item {
     signal barDragMoved(string componentId, real x, real y)
     signal barDropRequested(string componentId, real x, real y)
     signal barDragCancelled()
-    signal dockToggleRequested(string appId)
     signal addAppRequested(string appId, real dropX, real dropY)
     signal toggleAppOnHomeScreenRequested(string appId)
     signal addAppPairRequested(string firstAppId, string secondAppId, string name)
@@ -77,9 +79,17 @@ Item {
         ? GlobalStates.editDrawerPage : ""
     property var dragMetadata: null
 
+    // A provider-added catalogue (Config.extraSections) showing now, or null.
+    readonly property var extraSection: root.extraSectionFor(root.section)
+    function extraSectionFor(section) {
+        return Config.extraSections.find(s => s.section === section) ?? null;
+    }
+
     function pageValidFor(section, page) {
         if (page === "")
             return true;
+        if (root.extraSectionFor(section))
+            return false;
         if (section === "apps")
             return true;
         if (section === "widgets")
@@ -104,6 +114,16 @@ Item {
     // direction the step was.
     property int navDirection: 1
     readonly property bool atRoot: root.page === "" || root.searching
+    readonly property string backSection: {
+        if (!root.extraSection)
+            return "";
+        const destination = "" + (root.extraSection.back ?? "");
+        if (destination !== "")
+            return destination;
+        return root.extraSection.hidden === true ? "widgets" : "";
+    }
+    readonly property bool canGoBack: !root.searching
+        && (root.page !== "" || root.backSection !== "")
 
     // Milliseconds between one row of a page entering and the next. The panel
     // is 380px wide and a page is a short run of rows, so this is smaller than
@@ -134,22 +154,23 @@ Item {
 
     function goBack() {
         root.navDirection = -1;
-        GlobalStates.editDrawerPage = "";
+        if (root.page !== "") {
+            GlobalStates.editDrawerPage = "";
+            return;
+        }
+        if (root.backSection !== "") {
+            GlobalStates.editDrawerPage = "";
+            GlobalStates.editDrawerSection = root.backSection;
+        }
     }
 
-    function setSection(section) {
-        if (GlobalStates.editDrawerSection === section)
-            return;
-        root.navDirection = 1;
-        GlobalStates.editDrawerPage = "";
-        GlobalStates.editDrawerSection = section;
-    }
 
     // ── The query ────────────────────────────────────────────────────────────
     // The dock's catalogue alone runs to two hundred rows. A query FLATTENS the
     // catalogue it filters, pages and all: someone typing is after one row, not
     // after where it lives. The lock screen's switches are not worth a box.
     readonly property bool searchable: root.section !== "lock" && root.section !== "style" && root.section !== "wallpaper"
+        && root.extraSection === null
     property string query: ""
     readonly property string needle: root.query.trim().toLowerCase()
     readonly property bool searching: root.searchable && root.needle !== ""
@@ -428,28 +449,29 @@ Item {
         return group ? group.items : [];
     }
 
-    // The dock's catalogue, in three groups for the three answers to "why is
-    // this app in the list": it is on the dock, it is open right now, or it is
-    // merely installed. Without the last one an app that is neither pinned nor
-    // running could not be pinned at all - it had to be launched first.
+    // The dock catalogue reads the shell's canonical desktop ids. Running
+    // aliases are resolved before grouping so one application never appears in
+    // both Open now and On the dock under different names.
     readonly property var dockGroups: {
         if (root.section !== "dock")
             return [];
-        const pinnedIds = Config.options.dock.pinnedApps ?? [];
-        const running = (TaskbarApps.apps ?? []).filter(app => app && !app.pinned && app.appId);
+        const pinnedIds = ShellServices.Dock.pinnedOrStarter();
         const taken = {};
         for (const id of pinnedIds)
-            taken[TaskbarApps.normalizeAppId(id)] = true;
-        for (const app of running)
-            taken[TaskbarApps.normalizeAppId(app.appId)] = true;
+            taken[ShellServices.Dock.canonicalId(id)] = true;
+        const running = [];
+        for (const client of ShellServices.Dock.clients) {
+            const id = ShellServices.Dock.canonicalId(client.className);
+            if (!id || taken[id] || running.some(app => app.appId === id))
+                continue;
+            taken[id] = true;
+            running.push({ appId: id });
+        }
         const rest = Array.from(AppSearch.list ?? [])
             .filter(entry => entry && entry.id && !entry.noDisplay
-                && !taken[TaskbarApps.normalizeAppId(entry.id)]);
-        // The name is resolved HERE, once per catalogue, and carried on the
-        // item: a heuristic lookup per row per keystroke over two hundred apps
-        // is the exact cost the launcher had to have taken out of it.
+                && !taken[ShellServices.Dock.canonicalId(entry.id)]);
         const item = (appId, pinned, name) => ({
-            "appId": appId,
+            "appId": ShellServices.Dock.canonicalId(appId),
             "pinned": pinned,
             "name": name || root.appName(appId)
         });
@@ -522,47 +544,108 @@ Item {
             || item.id.toLowerCase().includes(q)
             || item.genericName.toLowerCase().includes(q));
     }
-    // The desktop twin of the tablet's home-screen list: same AppSearch rows,
-    // but `onScreen` reads the DesktopShortcuts store, so the check marks the
-    // icon standing on THIS screen's desktop.
+    property string desktopAppsDestination: ""
+    // Read the adapter property explicitly: itemsFor() is a function call, and
+    // QML otherwise misses the late states.json load that populates this list.
+    readonly property var desktopFolders: {
+        void Persistent.states.desktopShortcutsJson;
+        return DesktopShortcuts.folders(root.screenName);
+    }
+    readonly property string resolvedDesktopAppsDestination: root.desktopFolders
+        .some(folder => folder.id === root.desktopAppsDestination) ? root.desktopAppsDestination : ""
+    readonly property var desktopDestinationOptions: [""]
+        .concat(root.desktopFolders.map(folder => folder.id)).concat(["__new__"])
+    readonly property var desktopDestinationLabels: {
+        const labels = {
+            "": Translation.tr("Desktop"),
+            "__new__": Translation.tr("+ New folder")
+        };
+        for (const folder of root.desktopFolders) {
+            const name = folder.name.length > 22 ? folder.name.slice(0, 21) + "…" : folder.name;
+            labels[folder.id] = folder.count > 0 ? `${name} (${folder.count})` : name;
+        }
+        return labels;
+    }
     readonly property var desktopAppsItems: {
+        void Persistent.states.desktopShortcutsJson;
+        if (root.section !== "widgets" || root.page !== "desktopApps")
+            return [];
         const q = root.needle;
         const all = Array.from(AppSearch.list ?? []).filter(e => e && e.id && !e.noDisplay);
-        const onDesktop = new Set(DesktopShortcuts.itemsFor(root.screenName)
-            .filter(item => item.type === "app").map(item => item.id));
-        const mapped = all.map(entry => ({
-            "id": entry.id,
-            "name": entry.name ?? entry.id,
-            "genericName": entry.genericName ?? "",
-            "comment": entry.comment ?? "",
-            "onScreen": onDesktop.has(entry.id)
-        }));
+        const mapped = all.map(entry => {
+            const location = DesktopShortcuts.locate(root.screenName, entry.id);
+            let placement = "";
+            if (location.where === "desktop")
+                placement = Translation.tr("On the desktop");
+            else if (location.isStack)
+                placement = Translation.tr("In the %1 stack").arg(location.folderName);
+            else if (location.where === "folder")
+                placement = Translation.tr("In %1").arg(location.folderName);
+            return {
+                "id": entry.id,
+                "name": entry.name ?? entry.id,
+                "genericName": entry.genericName ?? "",
+                "comment": entry.comment ?? "",
+                "onScreen": location.where !== "",
+                "placement": placement
+            };
+        });
         if (!q)
             return mapped;
         return mapped.filter(item => item.name.toLowerCase().includes(q)
             || item.id.toLowerCase().includes(q)
             || item.genericName.toLowerCase().includes(q));
     }
-    readonly property int desktopAppCount: DesktopShortcuts.itemsFor(root.screenName)
-        .filter(item => item.type === "app").length
+    readonly property int desktopAppCount: {
+        void Persistent.states.desktopShortcutsJson;
+        return DesktopShortcuts.placedAppIds(root.screenName).length;
+    }
+    readonly property int desktopIconCount: {
+        void Persistent.states.desktopShortcutsJson;
+        return DesktopShortcuts.itemsFor(root.screenName).length;
+    }
 
-    // Click-toggle: an icon on the desktop goes back to the store, a missing
-    // one is placed by the store's own free-space finder, which walks the
-    // grid from the top-left — repeated adds never stack on one cell.
+    function createDesktopFolder() {
+        const folderId = DesktopShortcuts.newFolder(root.screenName, "");
+        if (folderId) {
+            root.desktopAppsDestination = folderId;
+            if (DesktopShortcuts.hidden)
+                DesktopShortcuts.setHidden(false);
+        }
+        return folderId;
+    }
+    function chooseDesktopDestination(key) {
+        if (key === "__new__")
+            root.createDesktopFolder();
+        else
+            root.desktopAppsDestination = key;
+    }
     function toggleAppOnDesktop(appId) {
-        if (!appId)
+        if (!appId || !Persistent.ready || Persistent.blockWrites)
             return;
-        const items = DesktopShortcuts.itemsFor(root.screenName);
-        if (items.some(item => item.type === "app" && item.id === appId)) {
-            DesktopShortcuts.remove(root.screenName, appId);
+        if (DesktopShortcuts.locate(root.screenName, appId).where) {
+            DesktopShortcuts.removeApp(root.screenName, appId);
             return;
         }
         const app = DesktopShortcuts.application(appId);
         if (!app)
             return;
-        const screen = Quickshell.screens.find(s => s.name === root.screenName);
-        DesktopShortcuts.add(root.screenName, [app], 20, 80, "",
-            screen?.width ?? 1920, screen?.height ?? 1080);
+        const destination = root.resolvedDesktopAppsDestination;
+        if (destination) {
+            DesktopShortcuts.addToFolder(root.screenName, destination, [app]);
+        } else {
+            const items = DesktopShortcuts.itemsFor(root.screenName);
+            const screen = Quickshell.screens.find(s => s.name === root.screenName);
+            const grid = DesktopShortcuts.grid(root.screenName);
+            const cell = DesktopShortcuts.firstFree(grid, DesktopShortcuts.takenCells(grid, items));
+            if (!cell)
+                return;
+            const point = DesktopShortcuts.cellPos(grid, cell.col, cell.row);
+            DesktopShortcuts.add(root.screenName, [app], point.x, point.y, "",
+                screen?.width ?? grid.area.screenWidth, screen?.height ?? grid.area.screenHeight);
+        }
+        if (DesktopShortcuts.hidden)
+            DesktopShortcuts.setHidden(false);
     }
 
     readonly property bool lockTab: GlobalStates.editLockPreview
@@ -623,6 +706,8 @@ Item {
         if (root.searching)
             return Translation.tr("Results");
         if (root.page === "") {
+            if (root.extraSection)
+                return root.extraSection.label;
             if (root.section === "apps")
                 return Translation.tr("Home screen apps");
             if (root.section === "bar")
@@ -667,14 +752,16 @@ Item {
             return BarComponentRegistry.getComponent(root.page.substring(10))?.title ?? Translation.tr("Widget");
         if (root.page === "appearance")
             return root.section === "dock"
-                ? (PanelFamily.touchFirst ? Translation.tr("Taskbar appearance & items") : Translation.tr("Dock appearance"))
+                ? (PanelFamily.touchFirst ? Translation.tr("Taskbar appearance & items") : Translation.tr("Dock design & settings"))
                 : Translation.tr("Bar appearance");
         if (root.page === "widgets")
-            return Translation.tr("Dock widgets");
+            return Translation.tr("Pinned apps & order");
         return Translation.tr("Edit");
     }
 
     readonly property string headerSymbol: {
+        if (root.extraSection)
+            return root.extraSection.icon;
         if (root.section === "apps") {
             if (root.page === "createPair")
                 return "splitscreen";
@@ -721,8 +808,11 @@ Item {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: Appearance.sizes.editModeDrawerWidth
-        color: Appearance.m3colors.m3surfaceContainer
-        radius: Appearance.rounding.verylarge
+        color: Appearance.colors.colLayer0
+        radius: Appearance.rounding.small
+        border.width: 1
+        border.color: Appearance.colors.colOutline
+        clip: true
 
         // The remove tint: lit while a desktop widget is carried over the panel.
         Rectangle {
@@ -738,30 +828,32 @@ Item {
         ColumnLayout {
             id: column
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 8
+            anchors.margins: Appearance.sizes.space4
+            spacing: Appearance.sizes.space3
             // The contents arrive after the panel: faded on the panel's own scalar.
             opacity: Math.max(0, Math.min(1, (GlobalStates.editDrawerProgress - 0.4) / 0.6))
 
             // ── Header ───────────────────────────────────────────────────────
             RowLayout {
                 Layout.fillWidth: true
-                Layout.leftMargin: 2
-                Layout.rightMargin: 4
-                spacing: 10
+                spacing: Appearance.sizes.space3
 
-                // One control does both jobs: an icon at a root, the way back
-                // on a page. Same circle either way, so the header does not
-                // change shape as the panel navigates.
+                // The section mark becomes a back action on sub-pages and
+                // provider pages with an explicit return destination.
                 Rectangle {
                     Layout.alignment: Qt.AlignVCenter
-                    implicitWidth: 38
-                    implicitHeight: 38
-                    radius: width / 2
-                    color: root.atRoot ? "transparent"
-                        : backMouse.containsPress ? Appearance.colors.colSurfaceContainerHighestActive
-                        : backMouse.containsMouse ? Appearance.colors.colSurfaceContainerHighest
-                        : Appearance.colors.colSurfaceContainerHigh
+                    implicitWidth: Appearance.sizes.controlHeight
+                    implicitHeight: Appearance.sizes.controlHeight
+                    radius: Appearance.rounding.small
+                    color: !root.canGoBack ? "transparent"
+                        : backMouse.containsPress
+                            ? Appearance.colors.colLayer1Active
+                            : backMouse.containsMouse
+                                ? Appearance.colors.colLayer1Hover
+                                : "transparent"
+                    border.width: 1
+                    border.color: root.canGoBack
+                        ? Appearance.colors.colOutlineVariant : "transparent"
 
                     Behavior on color {
                         enabled: !Appearance.reducedMotion
@@ -770,96 +862,74 @@ Item {
 
                     MaterialSymbol {
                         anchors.centerIn: parent
-                        text: root.atRoot ? root.headerSymbol : "arrow_back"
-                        iconSize: 22
+                        text: root.canGoBack ? "arrow_back" : root.headerSymbol
+                        iconSize: 18
                         color: Appearance.colors.colOnSurface
                     }
 
                     MouseArea {
                         id: backMouse
                         anchors.fill: parent
-                        enabled: !root.atRoot
+                        enabled: root.canGoBack
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.goBack()
                     }
                 }
 
-                StyledText {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    text: root.headerTitle
-                    font.pixelSize: Appearance.font.pixelSize.large
-                    font.weight: Font.DemiBold
-                    color: Appearance.colors.colOnSurface
-                    elide: Text.ElideRight
-                }
-            }
+                    Layout.minimumWidth: 0
+                    spacing: 1
 
-            // ── Catalogue picker ─────────────────────────────────────────────
-            // Up to seven catalogues in a 380px panel. While every label fits
-            // the group shows them all; when they do not, the current
-            // catalogue keeps its label and the others fold to their icon
-            // (named by a tooltip) - nothing is scaled, so text stays at its
-            // real size.
-            Item {
-                id: pickerHost
-                Layout.fillWidth: true
-                Layout.leftMargin: 4
-                Layout.rightMargin: 4
-                visible: root.atRoot
-                implicitHeight: catalogueGroup.implicitHeight
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        spacing: Appearance.sizes.space2
 
-                readonly property var tabs: [
-                    { "section": "widgets", "label": Translation.tr("Widgets"), "icon": "widgets", "shown": true },
-                    { "section": "wallpaper", "label": Translation.tr("Wallpaper"), "icon": "wallpaper", "shown": true },
-                    { "section": "style", "label": Translation.tr("Style"), "icon": "palette", "shown": true }
-                ]
-                readonly property var shownTabs: pickerHost.tabs.filter(tab => tab.shown)
-                // The group with every label: the labels' own widths plus
-                // each button's padding (SelectionGroupButton, 12 a side) and
-                // the group's gaps.
-                readonly property real fullWidth: labelMeasure.implicitWidth
-                    + pickerHost.shownTabs.length * 24 + catalogueGroup.spacing * Math.max(0, pickerHost.shownTabs.length - 1)
-                readonly property bool compact: pickerHost.fullWidth > pickerHost.width
-
-                Row {
-                    id: labelMeasure
-                    visible: false
-                    Repeater {
-                        model: pickerHost.shownTabs
-                        delegate: StyledText {
-                            required property var modelData
-                            text: modelData.label
+                        Rectangle {
+                            implicitWidth: 2
+                            implicitHeight: 10
+                            radius: 1
+                            color: Appearance.colors.colOnSurfaceVariant
+                        }
+                        StyledText {
+                            text: Translation.tr("Stage editor").toUpperCase()
+                            font.family: Appearance.font.family.monospace
+                            font.pixelSize: Appearance.font.pixelSize.smallest
+                            font.weight: Font.Medium
+                            font.letterSpacing: Appearance.font.trackLabel
+                            color: Appearance.colors.colSubtext
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            implicitHeight: 1
+                            color: Appearance.colors.colOutlineVariant
                         }
                     }
-                }
 
-                ButtonGroup {
-                    id: catalogueGroup
-
-                    CatalogueTab {
-                        tab: pickerHost.tabs[0]
-                        compact: pickerHost.compact
-                        leftmost: true
-                    }
-                    CatalogueTab {
-                        tab: pickerHost.tabs[1]
-                        compact: pickerHost.compact
-                    }
-                    CatalogueTab {
-                        tab: pickerHost.tabs[2]
-                        compact: pickerHost.compact
-                        rightmost: true
+                    StyledText {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: root.headerTitle
+                        font.family: Appearance.font.family.title
+                        font.pixelSize: Appearance.font.pixelSize.larger
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnSurface
+                        elide: Text.ElideRight
                     }
                 }
             }
+
 
             StyledText {
                 Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                visible: root.atRoot && !root.searching
-                text: root.section === "apps"
+                Layout.leftMargin: Appearance.sizes.space1
+                Layout.rightMargin: Appearance.sizes.space1
+                visible: root.atRoot && !root.searching && text.length > 0
+                text: root.extraSection ? root.extraSection.intro
+                    : root.section === "apps"
                     ? Translation.tr("Add apps, pairs or folders to the home screen, or drag to place them.")
                     : root.section === "widgets"
                     ? (root.lockTab
@@ -878,9 +948,13 @@ Item {
                         : (PanelFamily.touchFirst
                             ? Translation.tr("Configure taskbar appearance and items.")
                             : Translation.tr("Pin apps, and choose how the dock itself is drawn."))
-                font.pixelSize: Appearance.font.pixelSize.smaller
-                color: Appearance.colors.colOnSurfaceVariant
+                font.family: Appearance.font.family.main
+                font.pixelSize: Appearance.font.pixelSize.small
+                font.weight: Font.Normal
+                color: Appearance.colors.colSubtext
                 wrapMode: Text.Wrap
+                lineHeightMode: Text.ProportionalHeight
+                lineHeight: 1.35
             }
 
             // ── Search ───────────────────────────────────────────────────────
@@ -895,17 +969,16 @@ Item {
                 // over and clearing the field puts the page back.
                 visible: root.searchable && root.atRoot
                 Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                implicitHeight: 38
+                Layout.leftMargin: Appearance.sizes.space1
+                Layout.rightMargin: Appearance.sizes.space1
+                implicitHeight: 36
 
                 ToolbarTextField {
                     id: searchField
                     anchors.fill: parent
                     Layout.fillHeight: false
-                    leftPadding: 34
-                    rightPadding: 34
-                    colBackground: Appearance.colors.colLayer1
+                    leftPadding: 32
+                    rightPadding: 32
                     placeholderText: root.section === "apps" || (root.section === "widgets" && root.page === "desktopApps")
                         ? Translation.tr("Search applications")
                         : root.section === "dock" ? Translation.tr("Search apps")
@@ -939,7 +1012,7 @@ Item {
 
                 MaterialSymbol {
                     anchors.left: parent.left
-                    anchors.leftMargin: 10
+                    anchors.leftMargin: Appearance.sizes.space3
                     anchors.verticalCenter: parent.verticalCenter
                     text: "search"
                     iconSize: 18
@@ -948,16 +1021,19 @@ Item {
 
                 FadeLoader {
                     anchors.right: parent.right
-                    anchors.rightMargin: 6
+                    anchors.rightMargin: Appearance.sizes.space1
                     anchors.verticalCenter: parent.verticalCenter
                     shown: searchField.text !== ""
                     sourceComponent: RippleButton {
                         implicitWidth: 26
                         implicitHeight: 26
-                        buttonRadius: Appearance.rounding.full
+                        buttonRadius: Appearance.rounding.small
                         colBackground: "transparent"
-                        colBackgroundHover: Appearance.colors.colLayer2Hover
-                        colRipple: Appearance.colors.colLayer2Active
+                        colBackgroundHover: Appearance.withAlpha(Appearance.m3colors.m3onSurface, 0.09)
+                        colBackgroundActive: Appearance.withAlpha(Appearance.m3colors.m3onSurface, 0.16)
+                        colRipple: Appearance.withAlpha(Appearance.m3colors.m3onSurface, 0.16)
+                        borderWidth: 1
+                        borderColor: Appearance.withAlpha(Appearance.m3colors.m3onSurface, 0.18)
                         onClicked: {
                             searchField.text = "";
                             searchField.forceActiveFocus();
@@ -972,22 +1048,13 @@ Item {
                 }
             }
 
-            // ── The page ─────────────────────────────────────────────────────
-            // Clipped to a rounded rectangle, not a square one. The panel's
-            // corner is `verylarge` and this sits `column`'s margin inside it,
-            // so a straight clip cuts across the curve — which is exactly what
-            // the last row of a scrolled list landed on. The inner radius is
-            // the outer one less that inset, which is what keeps two rounded
-            // rectangles concentric.
-            //
-            // `ClippingRectangle` clips through the scene graph rather than
-            // through a layer, so a list being scrolled inside it does not pay
-            // for a full-surface redraw per frame.
+            // The reading pane is a bounded paper layer. Its own six-pixel clip
+            // keeps scrolled labels and thumbnails inside the drawer surface.
             ClippingRectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "transparent"
-                radius: Math.max(0, panel.radius - column.anchors.margins)
+                color: Appearance.withAlpha(Appearance.m3colors.m3surface, 0.965)
+                radius: Appearance.rounding.small
 
                 Loader {
                     id: pageLoader
@@ -1008,6 +1075,8 @@ Item {
                     }
 
                     sourceComponent: {
+                        if (root.extraSection)
+                            return root.extraSection.page;
                         if (root.searching)
                             return root.section === "bar" ? barListPage
                                 : root.section === "dock" ? dockAppListPage
@@ -1110,12 +1179,12 @@ Item {
                     EditPanelRow {
                         id: desktopAppsRow
                         Layout.fillWidth: true
-                        visible: !root.lockTab && !Config.widgetProvider
+                        visible: !root.lockTab
                         first: true
                         last: true
                         symbol: "add_to_home_screen"
-                        title: Translation.tr("Add apps manually")
-                        subtitle: Translation.tr("Toggle applications onto the desktop")
+                        title: Translation.tr("Add apps to desktop")
+                        subtitle: Translation.tr("Place apps on the desktop or in a folder")
                         valueText: root.desktopAppCount > 0 ? `${root.desktopAppCount}` : ""
                         trailingKind: "chevron"
                         onActivated: root.openPage("desktopApps")
@@ -1126,13 +1195,13 @@ Item {
                     // shortcuts, not of the widget canvas above it.
                     EditPanelRow {
                         Layout.fillWidth: true
-                        visible: !root.lockTab && !Config.widgetProvider
+                        visible: !root.lockTab
                         first: true
                         last: true
                         symbol: "grid_view"
                         title: Translation.tr("Desktop icons")
-                        subtitle: Translation.tr("Size, spacing, labels and badges")
-                        valueText: `${Config.options.background.desktopIconScale ?? 1}×`
+                        subtitle: Translation.tr("Arrange icons, folders, labels and marks")
+                        valueText: root.desktopIconCount > 0 ? `${root.desktopIconCount}` : ""
                         trailingKind: "chevron"
                         onActivated: root.openPage("desktopIcons")
                     }
@@ -1156,48 +1225,175 @@ Item {
         }
     }
 
-    // Port of the tablet's appsListPage: same rows, same check/add trailing
-    // state, but the store is DesktopShortcuts — a click toggles the app icon
-    // on this screen's desktop. No pairs or folders: the desktop groups by
-    // dragging icons onto each other, which the layer already speaks.
     Component {
         id: desktopIconsPage
-        EditDesktopIconsPage {}
+        EditDesktopIconsPage {
+            screenName: root.screenName
+            onAddAppsToFolder: folderId => {
+                root.desktopAppsDestination = folderId;
+                root.openPage("desktopApps");
+            }
+        }
     }
 
     Component {
         id: desktopAppsPage
 
         Item {
-            StyledListView {
-                id: desktopAppList
-                anchors.fill: parent
-                popin: false
-                animateAppearance: false
-                clip: true
-                spacing: 3
-                model: root.desktopAppsItems
+            SettingCard {
+                id: destinationCard
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                title: Translation.tr("DESTINATION")
+                collapsible: false
 
-                delegate: EditPanelRow {
-                    required property var modelData
-                    required property int index
-                    width: desktopAppList.width
-                    first: index === 0
-                    last: index === root.desktopAppsItems.length - 1
-                    iconSource: Quickshell.iconPath(AppSearch.guessIcon(modelData.id ?? ""), "image-missing")
-                    title: modelData.name ?? modelData.id
-                    subtitle: modelData.genericName || modelData.comment || ""
-                    trailingKind: modelData.onScreen ? "check" : "add"
-                    valueText: modelData.onScreen ? Translation.tr("On desktop") : ""
-                    onActivated: root.toggleAppOnDesktop(modelData.id ?? "")
+                SettingRow {
+                    width: parent.width
+                    label: Translation.tr("Add apps to")
+                    desc: Translation.tr("Placed apps can be removed from any location below")
+                    block: true
+                    Chips {
+                        width: parent.width
+                        options: root.desktopDestinationOptions
+                        labels: root.desktopDestinationLabels
+                        current: root.resolvedDesktopAppsDestination
+                        onChose: key => root.chooseDesktopDestination(key)
+                    }
+                }
+                SettingRow {
+                    width: parent.width
+                    visible: Config.options.background.desktopIcons.stacks ?? false
+                    divider: true
+                    label: Translation.tr("New desktop apps join the Apps stack")
                 }
             }
 
-            StyledText {
+            StyledListView {
+                id: desktopAppList
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: destinationCard.bottom
+                anchors.topMargin: Tokens.s3
+                anchors.bottom: parent.bottom
+                popin: false
+                animateAppearance: false
+                clip: true
+                spacing: Tokens.s1
+                model: root.desktopAppsItems
+
+                // Every toggle rewrites the store, which hands the list a new
+                // model and would throw the reader back to the top.
+                property real heldY: -1
+                function toggle(appId) {
+                    desktopAppList.heldY = desktopAppList.contentY;
+                    root.toggleAppOnDesktop(appId);
+                }
+                onModelChanged: {
+                    if (desktopAppList.heldY < 0)
+                        return;
+                    const y = desktopAppList.heldY;
+                    desktopAppList.heldY = -1;
+                    Qt.callLater(() => desktopAppList.contentY = Math.min(y,
+                        Math.max(0, desktopAppList.contentHeight - desktopAppList.height)));
+                }
+
+                delegate: Rectangle {
+                    id: appRow
+                    required property var modelData
+                    required property int index
+                    width: desktopAppList.width
+                    height: Tokens.rowH + Tokens.s2
+                    radius: Tokens.radius
+                    color: modelData.onScreen ? Tokens.bone
+                        : rowTap.pressed ? Tokens.tint16
+                        : rowHover.hovered ? Tokens.tint5 : "transparent"
+                    border.width: Tokens.border
+                    border.color: modelData.onScreen ? Tokens.bone
+                        : rowHover.hovered ? Tokens.lineStrong : Tokens.line
+                    opacity: Persistent.ready && !Persistent.blockWrites ? 1 : 0.45
+                    activeFocusOnTab: true
+
+                    Behavior on color {
+                        ColorAnimation { duration: Tokens.snap }
+                    }
+
+                    Image {
+                        id: appIcon
+                        anchors.left: parent.left
+                        anchors.leftMargin: Tokens.s3
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Tokens.s6
+                        height: Tokens.s6
+                        sourceSize: Qt.size(width, height)
+                        source: Quickshell.iconPath(AppSearch.guessIcon(appRow.modelData.id ?? ""), "image-missing")
+                        fillMode: Image.PreserveAspectFit
+                    }
+
+                    Column {
+                        anchors.left: appIcon.right
+                        anchors.leftMargin: Tokens.s3
+                        anchors.right: stateMark.left
+                        anchors.rightMargin: Tokens.s3
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
+                        Text {
+                            width: parent.width
+                            text: appRow.modelData.name ?? appRow.modelData.id
+                            color: appRow.modelData.onScreen ? Tokens.inkOnBone : Tokens.ink
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fRow
+                            font.weight: Font.Medium
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            width: parent.width
+                            visible: text.length > 0
+                            text: appRow.modelData.placement
+                                || appRow.modelData.genericName || appRow.modelData.comment || ""
+                            color: appRow.modelData.onScreen ? Tokens.inkOnBoneDim : Tokens.inkMuted
+                            font.family: Tokens.ui
+                            font.pixelSize: Tokens.fSmall
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    Text {
+                        id: stateMark
+                        anchors.right: parent.right
+                        anchors.rightMargin: Tokens.s3
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: appRow.modelData.onScreen ? Translation.tr("ON") : "+"
+                        color: appRow.modelData.onScreen ? Tokens.inkOnBone : Tokens.inkDim
+                        font.family: appRow.modelData.onScreen ? Tokens.mono : Tokens.ui
+                        font.pixelSize: appRow.modelData.onScreen ? Tokens.fTiny : Tokens.fBody
+                        font.letterSpacing: appRow.modelData.onScreen ? Tokens.trackLabel : 0
+                    }
+
+                    HoverHandler {
+                        id: rowHover
+                        enabled: Persistent.ready && !Persistent.blockWrites
+                        cursorShape: Qt.PointingHandCursor
+                    }
+                    TapHandler {
+                        id: rowTap
+                        enabled: Persistent.ready && !Persistent.blockWrites
+                        onTapped: desktopAppList.toggle(appRow.modelData.id ?? "")
+                    }
+                    Keys.onPressed: event => {
+                        if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                            || event.key === Qt.Key_Space) && !event.isAutoRepeat) {
+                            desktopAppList.toggle(appRow.modelData.id ?? "");
+                            event.accepted = true;
+                        }
+                    }
+                }
+            }
+
+            Empty {
                 anchors.centerIn: parent
                 visible: desktopAppList.count === 0
-                text: Translation.tr("No applications found")
-                color: Appearance.colors.colOnSurfaceVariant
+                caption: Translation.tr("No applications match this search.")
             }
         }
     }
@@ -1462,8 +1658,8 @@ Item {
                     first: true
                     last: false
                     symbol: "palette"
-                    title: Translation.tr("Dock appearance")
-                    subtitle: Translation.tr("Position, size, style and icons")
+                    title: Translation.tr("Dock design & settings")
+                    subtitle: Translation.tr("Design, placement, behaviour and design details")
                     onActivated: root.openPage("appearance")
                 }
 
@@ -1472,9 +1668,9 @@ Item {
                     Layout.fillWidth: true
                     first: false
                     last: true
-                    symbol: "widgets"
-                    title: Translation.tr("Dock widgets")
-                    subtitle: Translation.tr("Media, weather, sports and the buttons")
+                    symbol: "keep"
+                    title: Translation.tr("Pinned apps & order")
+                    subtitle: Translation.tr("Remove pins or move them into place")
                     onActivated: root.openPage("widgets")
                 }
 
@@ -1501,7 +1697,7 @@ Item {
                         ? Translation.tr("Restore tablet dock defaults")
                         : Translation.tr("The pins and the order the shell ships with")
                     trailingKind: "none"
-                    onActivated: root.resetRequested("dock")
+                    onActivated: ShellServices.Dock.setPinned(ShellServices.Dock.starterPins())
                 }
 
                 EditPanelSectionLabel {
@@ -1540,10 +1736,8 @@ Item {
             StyledListView {
                 id: appList
                 anchors.fill: parent
-                // No cascade here, and no row transitions either: pinning an
-                // app genuinely moves it between groups, so this model IS a
-                // function of `dock.pinnedApps` and is rebuilt on every click.
-                // Animated, the whole list would replay its entrance each time.
+                // Pinning moves an app between groups and rebuilds this list.
+                // Entrance animations would replay the whole page on each click.
                 popin: false
                 animateAppearance: false
                 clip: true
@@ -1556,10 +1750,10 @@ Item {
                     width: appList.width
                     first: index === 0
                     last: index === root.dockItems.length - 1
-                    iconSource: Quickshell.iconPath(AppSearch.guessIcon(modelData.appId ?? ""), "image-missing")
+                    iconSource: ShellServices.Dock.iconFor(modelData.appId ?? "")
                     title: modelData.name ?? modelData.appId
                     trailingKind: modelData.pinned === true ? "check" : "add"
-                    onActivated: root.dockToggleRequested(modelData.appId ?? "")
+                    onActivated: ShellServices.Dock.togglePin(modelData.appId ?? "")
                 }
             }
 
@@ -2056,22 +2250,4 @@ Item {
         }
     }
 
-    // One catalogue in the picker. Folded (`compact`), only the current one
-    // keeps its label; the rest show their icon and say their name on hover.
-    component CatalogueTab: SelectionGroupButton {
-        id: catalogueTab
-        required property var tab
-        property bool compact: false
-        visible: catalogueTab.tab.shown
-        toggled: root.section === catalogueTab.tab.section
-        buttonIcon: catalogueTab.compact ? catalogueTab.tab.icon : ""
-        buttonText: !catalogueTab.compact || catalogueTab.toggled ? catalogueTab.tab.label : ""
-        onClicked: root.setSection(catalogueTab.tab.section)
-
-        StyledToolTip {
-            requireOverlay: false
-            extraVisibleCondition: catalogueTab.compact && !catalogueTab.toggled
-            text: catalogueTab.tab.label
-        }
-    }
 }

@@ -241,11 +241,6 @@ Singleton {
             // persisted Config.enabled, so a restart and the Hub switch agree with it.
             property bool visualizerOverlay: false
 
-            // Placement takes the pointer over the look's own box. Leaving it hands
-            // the layer back, so the spectrum drops behind windows again unless the
-            // overlay is what the user chose.
-            property bool visualizerPlacing: false
-
             // A place for the on-screen-display and notification surfaces to
             // signal activity when they migrate (Phase 5).
             property bool osdVisible: false
