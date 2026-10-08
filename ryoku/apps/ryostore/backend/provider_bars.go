@@ -72,11 +72,14 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 		return nil, state, registryErr
 	}
 	seen := make(map[string]bool, len(entries)+len(items))
-	for _, item := range items {
-		seen[item.ID] = true
+	builtinIndex := make(map[string]int, len(items))
+	for i := range items {
+		seen[items[i].ID] = true
+		builtinIndex[items[i].ID] = i
 	}
 	for _, entry := range entries {
-		if seen[entry.ID] {
+		if i, builtin := builtinIndex[entry.ID]; builtin {
+			mergeBuiltinBarStylePresentation(&items[i], p.cache.base, entry)
 			continue
 		}
 		item, err := productEntryItem(p.cache.base, "barstyles", entry)
@@ -117,6 +120,30 @@ func (p barProvider) Load(ctx context.Context, refresh bool) ([]Item, SourceStat
 
 // builtinBarStyles are the styles this binary ships; their text lives here, so a
 // catalogue snapshot built by an older binary is checked against it.
+func mergeBuiltinBarStylePresentation(item *Item, base string, entry ProductEntry) {
+	if item == nil {
+		return
+	}
+	item.Art = resolveAsset(base, entry.Path, entry.Preview)
+	item.ArtRaw = resolveAsset(base, entry.Path, entry.PreviewRaw)
+	item.Screenshots = resolveAssets(base, entry.Path, entry.Screenshots)
+	if entry.Author != "" {
+		item.Author = entry.Author
+	}
+	if entry.Accent != "" {
+		item.Accent = entry.Accent
+	}
+	if entry.Surface != "" {
+		item.Surface = entry.Surface
+	}
+	if entry.Upstream != "" {
+		item.Upstream = entry.Upstream
+	}
+	if entry.Discord != "" {
+		item.Discord = entry.Discord
+	}
+}
+
 func builtinBarStyles() []Item {
 	return []Item{{
 		ID: "sumi", Category: "barstyles", Name: "Sumi",

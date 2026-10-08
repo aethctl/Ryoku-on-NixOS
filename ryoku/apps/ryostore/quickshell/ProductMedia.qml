@@ -61,6 +61,22 @@ Item {
         anchors.margins: media.inset
         visible: media.fallbackNeeded && media.fallbackText !== ""
         color: media.fallbackSurface
+        gradient: Gradient {
+            GradientStop { position: 0; color: Qt.lighter(media.fallbackSurface, 1.28) }
+            GradientStop { position: 0.58; color: media.fallbackSurface }
+            GradientStop { position: 1; color: Qt.darker(media.fallbackSurface, 1.48) }
+        }
+
+        Rectangle {
+            width: parent.width * 0.78
+            height: width
+            anchors.centerIn: parent
+            rotation: -18
+            radius: width / 2
+            color: "transparent"
+            border.width: Math.max(1, Tokens.border)
+            border.color: Qt.rgba(media.fallbackInk.r, media.fallbackInk.g, media.fallbackInk.b, 0.28)
+        }
 
         Text {
             objectName: "ryostore-media-fallback-text"
@@ -68,8 +84,9 @@ Item {
             text: media.fallbackText
             color: media.fallbackInk
             font.family: Tokens.display
-            font.pixelSize: Math.max(Tokens.fHero, Math.min(parent.width, parent.height) * 0.24)
-            font.weight: Font.Medium
+            font.pixelSize: Math.max(Tokens.fHero, Math.min(parent.width, parent.height) * 0.28)
+            font.weight: Font.Black
+            font.letterSpacing: -1
         }
     }
 

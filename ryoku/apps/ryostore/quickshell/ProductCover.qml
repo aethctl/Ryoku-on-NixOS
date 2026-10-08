@@ -17,13 +17,11 @@ Item {
         const raw = String(item && (item.accent || item.surface) || "").trim().toLowerCase();
         if (/^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(raw))
             return Qt.color(raw);
-        if (raw !== "") {
-            var hash = 0;
-            for (var i = 0; i < raw.length; i++)
-                hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
-            return Qt.hsla(Math.abs(hash % 360) / 360, 0.52, 0.42, 1);
-        }
-        return Tokens.paperLift;
+        const seed = raw !== "" ? raw : String(item && (item.id || item.name) || "ryoku");
+        var hash = 0;
+        for (var i = 0; i < seed.length; i++)
+            hash = ((hash << 5) - hash + seed.charCodeAt(i)) | 0;
+        return Qt.hsla(Math.abs(hash % 360) / 360, raw !== "" ? 0.52 : 0.32, raw !== "" ? 0.42 : 0.28, 1);
     }
 
     readonly property bool tile: mode === "cover"
