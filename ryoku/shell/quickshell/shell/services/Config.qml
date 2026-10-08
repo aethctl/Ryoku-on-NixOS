@@ -172,12 +172,6 @@ Singleton {
                 && root.python.general.osd === false);
     }
 
-    readonly property bool styleOwnsBanners:
-        root.styleOwnsBannersFor("")
-
-    readonly property bool styleOwnsFeedback:
-        root.styleOwnsFeedbackFor("")
-
     readonly property var askBubble: {
         const ask = adapter.ask && typeof adapter.ask === "object" ? adapter.ask : ({});
         const bubble = ask.bubble && typeof ask.bubble === "object" ? ask.bubble : ({});
