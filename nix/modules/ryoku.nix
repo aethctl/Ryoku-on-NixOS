@@ -835,6 +835,8 @@ in
         Optional Ryoku applications and tool groups supplied by the NixOS
         integration. Required desktop contracts remain installed regardless of
         this list. The graphical installer writes this option declaratively.
+      '';
+    };
 
     binaryCache.enable = lib.mkOption {
       type = lib.types.bool;
@@ -843,9 +845,6 @@ in
       description = ''
         Use Ryoku's public Ryotunes binary cache to avoid
         compiling the music application locally.
-      '';
-    };
-
       '';
     };
 
