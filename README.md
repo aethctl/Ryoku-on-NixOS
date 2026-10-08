@@ -165,24 +165,12 @@ Ryoku is designed to change character without changing identity.
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/readme/assets/showroom/blue-hour.webp" alt="Blue Hour" width="100%" /></td>
-    <td width="33%"><img src="docs/readme/assets/showroom/chrome.webp" alt="Chrome" width="100%" /></td>
-    <td width="33%"><img src="docs/readme/assets/showroom/forest.webp" alt="Forest" width="100%" /></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/torii-sunset.webp" alt="Ryoku desktop with a Japanese sunset landscape" width="100%" /></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-hands.webp" alt="Monochrome Ryoku desktop with widgets and ASCII artwork" width="100%" /></td>
   </tr>
   <tr>
-    <td align="center"><sub>BLUE HOUR</sub></td>
-    <td align="center"><sub>CHROME</sub></td>
-    <td align="center"><sub>FOREST</sub></td>
-  </tr>
-  <tr>
-    <td width="33%"><img src="docs/readme/assets/showroom/red-august.webp" alt="Red August" width="100%" /></td>
-    <td width="33%"><img src="docs/readme/assets/showroom/rose.webp" alt="Rose" width="100%" /></td>
-    <td width="33%"><img src="docs/readme/assets/showroom/teal.webp" alt="Teal" width="100%" /></td>
-  </tr>
-  <tr>
-    <td align="center"><sub>RED AUGUST</sub></td>
-    <td align="center"><sub>ROSE</sub></td>
-    <td align="center"><sub>TEAL</sub></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/blue-clouds.webp" alt="Blue Ryoku desktop with a minimal launcher and media widget" width="100%" /></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-anime.webp" alt="Monochrome Ryoku desktop with large typography and system widgets" width="100%" /></td>
   </tr>
 </table>
 
