@@ -32,6 +32,64 @@ NixOS-specific packaging, modules, system bridges, installer behaviour and updat
 
 ---
 
+## The desktop
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku desktop" width="100%" />
+      <br />
+      <sub><b>Desktop.</b> Aesthetic by default and heavily customisable.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/launcher.webp" alt="Ryoku launcher" width="100%" />
+      <br />
+      <sub><b>App Launcher.</b> Apps, commands, files, packages, calculator and more in one launcher.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/controls.webp" alt="Ryoku controls" width="100%" />
+      <br />
+      <sub><b>Controls.</b> Session, connectivity, sound, brightness, media and power in one sidebar.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/profile.webp" alt="Ryoku profile page" width="100%" />
+      <br />
+      <sub><b>Profile.</b> User-facing customizable configuration bundled in one sleek page.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/hub-page.webp" alt="Ryoku Hub" width="100%" />
+      <br />
+      <sub><b>Ryoku Hub.</b> System information, settings and Ryoku-specific control in one place.</sub>
+    </td>
+    <td width="50%">
+      <img src="docs/readme/assets/ui/batgirl.webp" alt="Ryoku themed desktop" width="100%" />
+      <br />
+      <sub><b>Matugen.</b> No matter the wallpaper, components recolour themselves around it.</sub>
+    </td>
+  </tr>
+</table>
+
+### Customise it your way
+
+Ryoku is designed to change character without changing identity.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/readme/assets/showroom/torii-sunset.webp" alt="Ryoku desktop with a Japanese sunset landscape" width="100%" /></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-hands.webp" alt="Monochrome Ryoku desktop with widgets and ASCII artwork" width="100%" /></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/readme/assets/showroom/blue-clouds.webp" alt="Blue Ryoku desktop with a minimal launcher and media widget" width="100%" /></td>
+    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-anime.webp" alt="Monochrome Ryoku desktop with large typography and system widgets" width="100%" /></td>
+  </tr>
+</table>
+
+---
+
 ## What this port owns
 
 Ryoku's desktop code and interaction model remain shared with upstream. This
@@ -113,66 +171,6 @@ The NixOS port does not reinterpret Ryoku. It preserves it.
 Wallpaper-driven colour, quiet typography, animated surfaces and the surrounding
 frame all belong to the same visual system. The desktop is designed to feel like
 one product rather than a collection of unrelated widgets or amalgamation of config files.
-
----
-
-## The desktop
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku desktop" width="100%" />
-      <br />
-      <sub><b>Desktop.</b> Aesthetic by default and heavily customisable.</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/launcher.webp" alt="Ryoku launcher" width="100%" />
-      <br />
-      <sub><b>App Launcher.</b> Apps, commands, files, packages, calculator and more in one launcher.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/controls.webp" alt="Ryoku controls" width="100%" />
-      <br />
-      <sub><b>Controls.</b> Session, connectivity, sound, brightness, media and power in one sidebar.</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/profile.webp" alt="Ryoku profile page" width="100%" />
-      <br />
-      <sub><b>Profile.</b> User-facing customizable configuration bundled in one sleek page.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/hub-page.webp" alt="Ryoku Hub" width="100%" />
-      <br />
-      <sub><b>Ryoku Hub.</b> System information, settings and Ryoku-specific control in one place.</sub>
-    </td>
-    <td width="50%">
-      <img src="docs/readme/assets/ui/batgirl.webp" alt="Ryoku themed desktop" width="100%" />
-      <br />
-      <sub><b>Matugen.</b> No matter the wallpaper, components recolour themselves around it.</sub>
-    </td>
-  </tr>
-</table>
-
----
-
-## Showroom
-
-Ryoku is designed to change character without changing identity.
-
-<table>
-  <tr>
-    <td width="50%"><img src="docs/readme/assets/showroom/torii-sunset.webp" alt="Ryoku desktop with a Japanese sunset landscape" width="100%" /></td>
-    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-hands.webp" alt="Monochrome Ryoku desktop with widgets and ASCII artwork" width="100%" /></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/readme/assets/showroom/blue-clouds.webp" alt="Blue Ryoku desktop with a minimal launcher and media widget" width="100%" /></td>
-    <td width="50%"><img src="docs/readme/assets/showroom/monochrome-anime.webp" alt="Monochrome Ryoku desktop with large typography and system widgets" width="100%" /></td>
-  </tr>
-</table>
 
 ---
 
