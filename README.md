@@ -14,12 +14,6 @@ a complete Wayland desktop with deep customisation, integrated applications and 
 
 <br />
 
-<a href="https://aethctl.github.io/Ryoku-on-NixOS/">
-  <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku on NixOS desktop" width="100%" />
-</a>
-
-<br />
-
 **Beauty on the surface. Nix underneath.**
 
 The shell, Hub, launcher, RyoStore, theming and Ryoku applications stay close to upstream while
