@@ -2,27 +2,31 @@
 
 <img src="docs/readme/assets/brand/ryoku-logo.png" alt="Ryoku" width="220" />
 
-<br />
-
 # Ryoku on NixOS
 
 ### 力と美のために
-**For the sake of power and beauty.**
+**The Ryoku you already know, made declarative for NixOS.**
 
-Ryoku on NixOS is the maintained NixOS port of [**Ryoku**](https://github.com/Ryoku-dev/ryoku), a Hyprland + Quickshell desktop.
-The shared desktop stays close to upstream; NixOS-specific packaging, modules, installer behavior, system bridges and update integration live under `nix/`.
+Ryoku on NixOS is the maintained NixOS port of [**Ryoku**](https://github.com/Ryoku-dev/ryoku):
+a complete Wayland desktop with deep customisation, integrated applications and a shared ecosystem.
 
-<br />
-
-[**Install**](#install) · [**Explore the desktop**](#the-desktop) · [**Documentation**](docs/README.md) · [**Maintainer notes**](docs/maintenance.md) · [**Upstream Ryoku**](https://github.com/Ryoku-dev/ryoku)
+[**Website**](https://aethctl.github.io/Ryoku-on-NixOS/) · [**Install on NixOS**](#install) · [**Installer ISO**](https://github.com/aethctl/Ryoku-on-NixOS/releases) · [**Discord**](https://discord.gg/8KjBmUEyKA) · [**Documentation**](docs/README.md) · [**Upstream Ryoku**](https://github.com/Ryoku-dev/ryoku)
 
 <br />
 
-```bash
-nix run github:aethctl/Ryoku-on-NixOS/main#install
-```
+<a href="https://aethctl.github.io/Ryoku-on-NixOS/">
+  <img src="docs/readme/assets/ui/desktop.png" alt="Ryoku on NixOS desktop" width="100%" />
+</a>
 
-<sub>Existing flake-based NixOS system required.</sub>
+<br />
+
+**Beauty on the surface. Nix underneath.**
+
+The shell, Hub, launcher, RyoStore, theming and Ryoku applications stay close to upstream while
+NixOS-specific packaging, modules, system bridges, installer behaviour and updates remain declarative.
+
+> **v1 is currently in active beta.** The existing-NixOS installer is the recommended route today.
+> The bootable installer ISO is available for testing from GitHub Releases and **will erase the selected disk** during installation.
 
 </div>
 
@@ -239,23 +243,22 @@ app bundles are the main area that still needs Nix-native adaptation.
 
 ## Install
 
-Ryoku on NixOS installs on top of an existing **flake-based NixOS system**.
+There are two installation paths.
 
-Start the guided installer as your normal user:
+### Existing NixOS system
+
+For an existing **flake-based NixOS system**, start the guided installer as your normal user:
 
 ```bash
 nix run github:aethctl/Ryoku-on-NixOS/main#install
 ```
 
-Choose Hyprland or Niri, Chromium or Firefox, Fish or Zsh, and the optional apps
-you want. Review your choices before installation begins.
-
-Use arrow keys to move, Enter to continue, Space to toggle apps and Esc to go back.
+Choose your compositor, browser, shell and optional apps, then review the generated changes before installation begins.
 
 The installer:
 
 - adds Ryoku to your existing flake,
-- creates the installer-managed ryoku.nix,
+- creates the installer-managed `ryoku.nix`,
 - updates the flake lock,
 - builds the new NixOS generation,
 - switches only after the build succeeds,
@@ -263,6 +266,15 @@ The installer:
 
 For custom flake paths, multi-host setups and manual integration, see the
 [**NixOS guide**](docs/nixos.md).
+
+### Fresh install / bootable ISO
+
+The bootable Ryoku on NixOS installer ISO is currently in **pre-release testing** ahead of v1.
+It is intended to become the primary path for fresh installations.
+
+[**View installer ISO releases →**](https://github.com/aethctl/Ryoku-on-NixOS/releases)
+
+> **Testing warning:** installation **will erase the selected disk**. Back up anything important before using a pre-release ISO.
 
 ---
 
@@ -319,6 +331,20 @@ integration guards.
 For compositor, display, audio, GPU or installer behavior, a green CI run is not
 treated as runtime proof. Pull requests should record the machine/runtime test
 that was actually performed.
+
+---
+
+## Community and contributing
+
+Ryoku on NixOS is actively maintained and contributions are welcome.
+
+- [**Join the Ryoku Discord**](https://discord.gg/8KjBmUEyKA) for installation help, testing and development discussion.
+- [**Browse open issues**](https://github.com/aethctl/Ryoku-on-NixOS/issues) for current work.
+- [**Start with a good first issue**](https://github.com/aethctl/Ryoku-on-NixOS/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22good%20first%20issue%22) if you want a bounded first contribution.
+- Read [**CONTRIBUTING.md**](CONTRIBUTING.md) for the development workflow, testing expectations and upstream/NixOS ownership boundary.
+- Read the [**performance roadmap**](docs/roadmap.md) for measured shell-performance work that needs contributors.
+
+Testing is useful too. Hardware-facing changes cannot be proven by CI alone, so real reports from different GPUs, compositors and machines materially improve the port.
 
 ---
 
