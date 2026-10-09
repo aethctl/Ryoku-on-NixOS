@@ -31,6 +31,36 @@ func barStyleByID(items []Item, id string) *Item {
 	return nil
 }
 
+func TestBuiltinBarStyleInheritsRegistryPresentation(t *testing.T) {
+	item := Item{
+		ID: "chroma", Category: "barstyles", Name: "Chroma",
+		Installed: true, Metadata: map[string]any{"scene": "Scene.qml", "core": true},
+	}
+	entry := ProductEntry{
+		ID: "chroma", Path: "barstyles/chroma", Author: "aethctl",
+		Preview: "assets/preview.png", PreviewRaw: "assets/preview-raw.png",
+		Screenshots: []string{"assets/detail.png"}, Accent: "#9bd8f5", Surface: "#10191f",
+		Upstream: "https://example.invalid/chroma", Discord: "https://example.invalid/discord",
+	}
+	mergeBuiltinBarStylePresentation(&item, "https://store.example", entry)
+
+	if item.Art != "https://store.example/barstyles/chroma/assets/preview.png" {
+		t.Fatalf("art = %q", item.Art)
+	}
+	if item.ArtRaw != "https://store.example/barstyles/chroma/assets/preview-raw.png" {
+		t.Fatalf("artRaw = %q", item.ArtRaw)
+	}
+	if len(item.Screenshots) != 1 || item.Screenshots[0] != "https://store.example/barstyles/chroma/assets/detail.png" {
+		t.Fatalf("screenshots = %#v", item.Screenshots)
+	}
+	if item.Author != "aethctl" || item.Accent != "#9bd8f5" || item.Surface != "#10191f" {
+		t.Fatalf("presentation metadata = %+v", item)
+	}
+	if !item.Installed || item.Metadata["core"] != true {
+		t.Fatalf("builtin ownership was lost: %+v", item)
+	}
+}
+
 func newBarProviderFixture(t *testing.T) barProviderFixture {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
