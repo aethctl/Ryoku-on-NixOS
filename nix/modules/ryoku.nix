@@ -36,6 +36,20 @@ let
   ryokuMapleMonoNF = ryokuPkgs.ryoku-maple-mono-nf;
   materializer = ryokuPkgs.ryoku-materialize;
 
+  # The shell, suspend guard and Hub lock preview all enter qylock through this
+  # stable launcher. Keep it in the Nix closure instead of assuming the Arch
+  # package installed /usr/bin/ryoku-qylock-lock.
+  ryokuQylockLock = pkgs.runCommand "ryoku-qylock-lock" {
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+  } ''
+    mkdir -p "$out/bin"
+    cp ${../../ryoku/lockscreen/ryoku-qylock-lock} "$out/bin/ryoku-qylock-lock"
+    chmod 0755 "$out/bin/ryoku-qylock-lock"
+    patchShebangs "$out/bin/ryoku-qylock-lock"
+    wrapProgram "$out/bin/ryoku-qylock-lock" \
+      --prefix PATH : ${lib.makeBinPath [ pkgs.util-linux ]}
+  '';
+
   ryokuNixSessionStart = pkgs.writeShellScriptBin "ryoku-nix-session-start" ''
     set -euo pipefail
 
@@ -69,6 +83,11 @@ let
     fi
 
     ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+
+    # Older Ryoku releases enabled user units into ~/.config/systemd/user. A
+    # dangling user-local .wants link outranks the declarative /etc link, so
+    # clean that migration state before systemd resolves the session target.
+    ${materializer}/bin/ryoku-materialize || true
     ${pkgs.systemd}/bin/systemctl --user daemon-reload
 
     ${pkgs.systemd}/bin/systemctl --user reset-failed       ryoku-shell.service       ryogami.service       hypridle.service       >/dev/null 2>&1 || true
@@ -614,6 +633,7 @@ EOF
     ryokuHelpers
     materializer
     ryokuNixSessionStart
+    ryokuQylockLock
     ryokuSddmThemeApply
     ryokuSddmTheme
     ryokuPkgs.gpk
@@ -1030,6 +1050,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Nixpkgs wraps gsr-kms-server with the narrow capability upstream expects.
+    # Installing gpu-screen-recorder as a plain package leaves that helper
+    # unprivileged and forces an authentication prompt for every recording.
+    programs.gpu-screen-recorder.enable = true;
+
     # Public binary cache for independently compiled Ryotunes releases.
     # Never distribute the private Cachix authentication token.
     nix.settings = lib.mkIf cfg.binaryCache.enable {

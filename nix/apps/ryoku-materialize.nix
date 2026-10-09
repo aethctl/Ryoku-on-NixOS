@@ -344,7 +344,13 @@ EOF
       "$user_units/hyprland-session.target" \
       "$user_units/ryoku-shell.service" \
       "$user_units/ryogami.service" \
+      "$user_units/ryoku-session.target.wants/ryoku-materialize.service" \
+      "$user_units/ryoku-session.target.wants/ryoku-shell.service" \
       "$user_units/ryoku-session.target.wants/ryogami.service" \
+      "$user_units/ryoku-session.target.wants/ryoku-bluetooth-reset.service" \
+      "$user_units/ryoku-session.target.wants/ryoku-clamshell.service" \
+      "$user_units/ryoku-session.target.wants/ryoku-idle.service" \
+      "$user_units/default.target.wants/ryoku-rashin.service" \
       "$user_units/ryoku-rashin.service" \
       "$user_units/ryoku-ai-usage.service" \
       "$user_units/ryoku-ai-usage.timer" \

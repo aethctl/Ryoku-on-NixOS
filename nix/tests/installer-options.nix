@@ -79,6 +79,7 @@ assert !builtins.elem "gamescope" slimNames;
 assert !builtins.elem "quickemu" slimNames;
 assert slim.services.displayManager.defaultSession == "ryoku-niri";
 assert slim.environment.sessionVariables.RYOKU_DEFAULT_BROWSER == "firefox";
+assert slim.security.wrappers."gsr-kms-server".capabilities == "cap_sys_admin+ep";
 
 assert plasmaCoexist.services.desktopManager.plasma6.enable;
 assert plasmaCoexist.services.displayManager.sddm.enable;
