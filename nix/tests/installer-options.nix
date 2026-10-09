@@ -44,6 +44,7 @@ let
 
   defaultNames = names defaults;
   slimNames = names slim;
+  ryogamiPathNames = map lib.getName defaults.systemd.user.services.ryogami.path;
   plasmaCoexist = evaluate {
     services.desktopManager.plasma6.enable = true;
     services.displayManager.sddm.enable = true;
@@ -68,6 +69,8 @@ assert !defaults.services.flatpak.enable;
 assert builtins.elem "fastfetch" defaultNames;
 assert builtins.elem "gamescope" defaultNames;
 assert builtins.elem "quickemu" defaultNames;
+assert builtins.elem "skwd-paper" defaultNames;
+assert builtins.elem "skwd-paper" ryogamiPathNames;
 
 assert !slim.virtualisation.docker.enable;
 assert slim.services.flatpak.enable;

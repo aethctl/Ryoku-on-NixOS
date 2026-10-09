@@ -169,6 +169,22 @@
         "type": "github"
       }
     },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 1787736819,
+        "narHash": "sha256-cV5xEJJK3BvhU8rEd4mC9UsmDi5qscv/kzGPhBRC5WA=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "9fbb54b33e91ee4ca368e35a78e0613c720600b3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "npm-lockfile-fix": {
       "inputs": {
         "nixpkgs": [
@@ -250,7 +266,8 @@
         "nixpkgs": "nixpkgs_2",
         "ryokuPackagesNixpkgs": "ryokuPackagesNixpkgs",
         "ryomanagerSrc": "ryomanagerSrc",
-        "ryotunesSrc": "ryotunesSrc"
+        "ryotunesSrc": "ryotunesSrc",
+        "skwdWall": "skwdWall"
       }
     },
     "ryokuPackagesNixpkgs": {
@@ -300,6 +317,25 @@
         "owner": "Ryoku-dev",
         "repo": "ryotunes",
         "rev": "8fad27becd373ca7943b2e8943a8f14398b67ddb",
+        "type": "github"
+      }
+    },
+    "skwdWall": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
+        "lastModified": 1790891305,
+        "narHash": "sha256-VFhWFUmADuG55w5XPRikv0NOzRdid6ECmlEEAxnu50U=",
+        "owner": "liixini",
+        "repo": "skwd-wall",
+        "rev": "2b85cb2b45a1efb1140280571d522f53a58169d9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "liixini",
+        "ref": "nix",
+        "repo": "skwd-wall",
         "type": "github"
       }
     },

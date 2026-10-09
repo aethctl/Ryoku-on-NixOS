@@ -6,6 +6,7 @@
   imgbordersSrc,
   ryomanagerSrc,
   ryotunesSrc,
+  skwdPaper,
   version,
 }:
 
@@ -308,6 +309,7 @@ let
       ryovmHelpers
       livewall
       ryogami
+      skwdPaper
       ryotunes
       ryomanager
       qmkHid
@@ -339,6 +341,7 @@ in
     ryovmHelpers
     livewall
     ryogami
+    skwdPaper
     ryotunes
     ryomanager
     ryotunesUnwrapped

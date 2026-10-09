@@ -21,6 +21,10 @@
       url = "github:NousResearch/hermes-agent";
     };
 
+    skwdWall = {
+      url = "github:liixini/skwd-wall/nix";
+    };
+
     hyprglassSrc = {
       url = "github:hyprnux/hyprglass/v0.7.0";
       flake = false;
@@ -50,7 +54,7 @@
     };
   };
 
-  outputs = { self, nixpkgs, ryokuPackagesNixpkgs, glazepkg, hermesAgent, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryomanagerSrc, ryotunesSrc, ... }:
+  outputs = { self, nixpkgs, ryokuPackagesNixpkgs, glazepkg, hermesAgent, skwdWall, hyprglassSrc, bibataMaterialSrc, imgbordersSrc, ryomanagerSrc, ryotunesSrc, ... }:
     let
       version =
         builtins.replaceStrings
@@ -78,6 +82,8 @@
         ];
       };
 
+      skwdPaper = skwdWall.packages.${system}.skwd-paper;
+
       ryoku = import ./nix/packages {
         inherit
           pkgs
@@ -86,6 +92,7 @@
           imgbordersSrc
           ryomanagerSrc
           ryotunesSrc
+          skwdPaper
           version
           ;
 
@@ -188,6 +195,7 @@
         ryoku-ryovm-helpers = ryoku.ryovmHelpers;
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
+        ryoku-skwd-paper = ryoku.skwdPaper;
         ryoku-ryotunes = ryoku.ryotunes;
         ryomanager = ryoku.ryomanager;
         ryotunes-unwrapped = ryoku.ryotunesUnwrapped;
@@ -357,6 +365,7 @@
         ryoku-ryovm-helpers = ryoku.ryovmHelpers;
         ryoku-livewall = ryoku.livewall;
         ryoku-ryogami = ryoku.ryogami;
+        ryoku-skwd-paper = ryoku.skwdPaper;
         ryoku-ryotunes = ryoku.ryotunes;
         ryomanager = ryoku.ryomanager;
         ryoku-keysounds = ryoku.keysounds;

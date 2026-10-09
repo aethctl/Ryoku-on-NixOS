@@ -16,6 +16,7 @@ let
   ryokuSystemBridge = ryokuPkgs.ryoku-nixos-system-bridge;
   ryokuDesktopData = ryokuPkgs.ryoku-desktop-data;
   ryokuRyogami = ryokuPkgs.ryoku-ryogami;
+  ryokuSkwdPaper = ryokuPkgs.ryoku-skwd-paper;
   ryokuPaletteBridge = ryokuPkgs.ryoku-palette-bridge;
   ryokuQuickshell = ryokuNixpkgs.quickshell;
   ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
@@ -637,6 +638,7 @@ EOF
     ryokuSddmThemeApply
     ryokuSddmTheme
     ryokuPkgs.gpk
+    ryokuSkwdPaper
 
     # ─────────────────────────────────────────────────────────
     # Standard userspace expected by Ryoku's shell snippets
