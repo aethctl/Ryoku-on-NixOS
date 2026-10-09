@@ -6,6 +6,8 @@ pkgs.stdenvNoCC.mkDerivation {
 
   inherit src;
 
+  nativeBuildInputs = [ pkgs.python3 ];
+
   dontBuild = true;
 
   installPhase = ''
@@ -38,6 +40,27 @@ pkgs.stdenvNoCC.mkDerivation {
     substituteInPlace "$cfg/niri/autostart.kdl" \
       --replace-fail '$HOME/.local/lib/qt6/qml' \
         '$HOME/.local/lib/qt6/qml:/run/current-system/sw/lib/qt-6/qml'
+
+    # NixOS owns graphical-session lifecycle. Replace the compositor-specific
+    # inline bootstrap with one helper that waits for a real active Wayland
+    # login before importing the environment and starting Ryoku services.
+    python3 - "$cfg/hypr/modules/autostart.lua" "$cfg/niri/autostart.kdl" <<'PY_SESSION'
+from pathlib import Path
+import sys
+
+for name in sys.argv[1:]:
+    path = Path(name)
+    text = path.read_text()
+    marker = "dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload; systemctl --user reset-failed ryogami ryoku-shell 2>/dev/null; systemctl --user start ryoku-session.target; systemctl --user restart ryoku-shell; systemctl --user restart ryogami; systemctl --user try-restart "
+    start = text.find(marker)
+    if start < 0:
+        raise SystemExit(f"session bootstrap not found in {path}")
+    end = text.find('"', start)
+    if end < 0:
+        raise SystemExit(f"session bootstrap terminator not found in {path}")
+    text = text[:start] + "ryoku-nix-session-start" + text[end:]
+    path.write_text(text)
+PY_SESSION
 
 
     # ── Shared translation catalog ─────────────────────────────

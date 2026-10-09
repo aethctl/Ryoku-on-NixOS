@@ -211,6 +211,20 @@
           installer = ryokuInstall;
         };
 
+        ryoku-session-bootstrap = pkgs.runCommand "ryoku-session-bootstrap-check"
+          { nativeBuildInputs = [ pkgs.gnugrep ]; }
+          ''
+            hypr=${ryoku.desktopData}/share/ryoku/config/hypr/modules/autostart.lua
+            niri=${ryoku.desktopData}/share/ryoku/config/niri/autostart.kdl
+
+            grep -Fq 'ryoku-nix-session-start' "$hypr"
+            grep -Fq 'ryoku-nix-session-start' "$niri"
+            ! grep -Fq 'dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload' "$hypr"
+            ! grep -Fq 'dbus-update-activation-environment --systemd --all; systemctl --user daemon-reload' "$niri"
+
+            touch "$out"
+          '';
+
         # Core runtime
         ryoku-shell = ryoku.shell;
         ryoku-cli = ryoku.cli;

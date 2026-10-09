@@ -35,6 +35,51 @@ let
   ryokuMapleMonoNF = ryokuPkgs.ryoku-maple-mono-nf;
   materializer = ryokuPkgs.ryoku-materialize;
 
+  # A compositor can start before login1/systemd --user has fully published the
+  # graphical session. Centralize the NixOS handoff so Hyprland and Niri do not
+  # race WAYLAND_DISPLAY and leave a fresh login with no shell.
+  ryokuNixSessionStart = pkgs.writeShellScriptBin "ryoku-nix-session-start" ''
+    set -euo pipefail
+
+    sid="''${XDG_SESSION_ID:-}"
+    ready=0
+
+    if [ -n "$sid" ]; then
+      attempt=0
+      while [ "$attempt" -lt 150 ]; do
+        session_type="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Type --value 2>/dev/null || true)"
+        session_class="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Class --value 2>/dev/null || true)"
+        session_active="$(${pkgs.systemd}/bin/loginctl show-session "$sid" -p Active --value 2>/dev/null || true)"
+
+        if [ "$session_type" = "wayland" ] &&
+           { [ "$session_class" = "user" ] || [ "$session_class" = "user-early" ]; } &&
+           [ "$session_active" = "yes" ]; then
+          ready=1
+          break
+        fi
+
+        attempt=$((attempt + 1))
+        ${pkgs.coreutils}/bin/sleep 0.1
+      done
+
+      if [ "$ready" -ne 1 ]; then
+        printf 'ryoku-nix-session-start: graphical session %s never became ready\n' "$sid" >&2
+        exit 1
+      fi
+    fi
+
+    ${pkgs.dbus}/bin/dbus-update-activation-environment --systemd --all
+    ${pkgs.systemd}/bin/systemctl --user daemon-reload
+    ${pkgs.systemd}/bin/systemctl --user reset-failed \
+      ryoku-shell.service ryogami.service hypridle.service >/dev/null 2>&1 || true
+    ${pkgs.systemd}/bin/systemctl --user restart ryoku-session.target
+    ${pkgs.systemd}/bin/systemctl --user try-restart \
+      xdg-desktop-portal.service \
+      xdg-desktop-portal-hyprland.service \
+      xdg-desktop-portal-gnome.service \
+      xdg-desktop-portal-gtk.service >/dev/null 2>&1 || true
+  '';
+
   # ───────────────────────────────────────────────────────────
   # Ryoku qylock
   #
@@ -474,6 +519,7 @@ EOF
     ryokuBundle
     ryokuHelpers
     materializer
+    ryokuNixSessionStart
     ryokuSddmThemeApply
     ryokuSddmTheme
     ryokuPkgs.gpk
