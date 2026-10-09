@@ -80,6 +80,53 @@ let
       xdg-desktop-portal-gtk.service >/dev/null 2>&1 || true
   '';
 
+  # Niri's stock display-manager entry can start before Ryoku has ever
+  # materialized ~/.config/niri. In that state Niri falls back to its bare
+  # default config, which also means the Ryoku session bootstrap is absent and
+  # ryoku-materialize.service can never be reached. Break that cycle at the
+  # session boundary: the Ryoku-owned entry seeds the config before handing off
+  # to Nixpkgs' normal niri-session launcher.
+  ryokuNiriSession = pkgs.runCommand "ryoku-niri-session" {
+    passthru.providedSessions = [ "ryoku-niri" ];
+  } ''
+    mkdir -p "$out/bin" "$out/share/wayland-sessions"
+
+    cat > "$out/bin/ryoku-niri-session" <<'EOF'
+#!${pkgs.runtimeShell}
+set -eu
+
+config_home="''${XDG_CONFIG_HOME:-$HOME/.config}"
+
+if [ ! -f "$config_home/niri/config.kdl" ] ||
+   [ ! -f "$config_home/niri/autostart.kdl" ]; then
+  ${materializer}/bin/ryoku-materialize
+fi
+
+export PATH="${lib.makeBinPath [
+  ryokuNiri
+  pkgs.bash
+  pkgs.coreutils
+  pkgs.dbus
+  pkgs.gnugrep
+  pkgs.procps
+  pkgs.systemd
+]}:$PATH"
+
+exec ${ryokuNiri}/bin/niri-session "$@"
+EOF
+
+    chmod 0755 "$out/bin/ryoku-niri-session"
+
+    cat > "$out/share/wayland-sessions/ryoku-niri.desktop" <<EOF
+[Desktop Entry]
+Name=Niri (Ryoku)
+Comment=Ryoku desktop on the Niri compositor
+Exec=$out/bin/ryoku-niri-session
+Type=Application
+DesktopNames=niri
+EOF
+  '';
+
   # ───────────────────────────────────────────────────────────
   # Ryoku qylock
   #
@@ -410,7 +457,7 @@ EOF
 
   compositorSession = {
     hyprland = "hyprland";
-    niri = "niri";
+    niri = "ryoku-niri";
   };
 
   optionalAppIds = [
@@ -1379,7 +1426,7 @@ in
         (lib.mkOverride 900 compositorSession.${cfg.defaultCompositor});
 
     services.displayManager.sessionPackages = [
-      ryokuNiri
+      ryokuNiriSession
     ];
 
     services.displayManager.sddm = {

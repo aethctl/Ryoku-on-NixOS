@@ -29,6 +29,20 @@ pkgs.writeShellApplication {
     apps_set=0
     default_apps="prompt,fastfetch,yazi,cli-tools,pavucontrol,songrec,openrgb,upscale,gamescope,gamemode,mangohud,vm,docker,mise"
 
+    # This installer deliberately runs as the desktop user and elevates only
+    # the NixOS transaction. Running the whole process under sudo makes HOME
+    # point at /root, so the post-switch materialization seeds root's config
+    # and the real user later lands in a bare compositor with no Ryoku shell.
+    if [ "$(id -u)" -eq 0 ]; then
+      echo "ryoku-install: do not run the NixOS migration installer as root" >&2
+      if [ -n "''${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        echo "Re-run it as $SUDO_USER without sudo; Ryoku will request sudo only for the system rebuild." >&2
+      else
+        echo "Run it from the target user's login session; Ryoku will request sudo only for the system rebuild." >&2
+      fi
+      exit 1
+    fi
+
     # Bootstrap the public cache before the new NixOS generation
     # activates its declarative substituter configuration.
     cache_url="https://ryotunes.cachix.org"
