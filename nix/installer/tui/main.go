@@ -272,7 +272,7 @@ func (m model) onKey(k string) (tea.Model, tea.Cmd) {
 			m.appCursor = clamp(m.appCursor-1, 0, len(apps)-1)
 		case "down", "j":
 			m.appCursor = clamp(m.appCursor+1, 0, len(apps)-1)
-		case " ":
+		case "space":
 			m.keep[apps[m.appCursor].ID] = !m.keep[apps[m.appCursor].ID]
 		case "a":
 			for _, a := range apps {
