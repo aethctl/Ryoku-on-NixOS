@@ -10,6 +10,7 @@ pkgs.writeShellApplication {
     gnugrep
     jq
     nix
+    pciutils
     python3
     systemd
   ];
@@ -60,6 +61,112 @@ pkgs.writeShellApplication {
         ${pkgs.coreutils}/bin/env \
         "PATH=$trusted_root_path" \
         "$@"
+    }
+
+    detect_gpu_vendors() {
+      if [ -n "''${RYOKU_INSTALL_GPU_VENDORS:-}" ]; then
+        printf '%s\n' "$RYOKU_INSTALL_GPU_VENDORS" | tr ',' '\n'
+        return
+      fi
+
+      lspci -Dn 2>/dev/null | awk '
+        $2 ~ /^(0300|0302|0380):$/ {
+          split($3, id, ":")
+          vendor = tolower(id[1])
+          if (vendor == "10de") print "nvidia"
+          else if (vendor == "1002") print "amd"
+          else if (vendor == "8086") print "intel"
+        }
+      ' | awk '!seen[$0]++'
+    }
+
+    detect_nvidia_model() {
+      if [ -n "''${RYOKU_INSTALL_NVIDIA_MODEL:-}" ]; then
+        printf '%s\n' "$RYOKU_INSTALL_NVIDIA_MODEL"
+        return
+      fi
+
+      lspci -nn 2>/dev/null |
+        awk 'BEGIN { IGNORECASE=1 } /VGA compatible controller|3D controller|Display controller/ && /NVIDIA/ { print; exit }'
+    }
+
+    nvidia_package_attr() {
+      model="$1"
+
+      case "$model" in
+        *"GTX 6"??*|*"GTX 7"??*)
+          printf '%s\n' legacy_470
+          ;;
+        *"GTX 9"??*|*"GTX 10"??*)
+          printf '%s\n' legacy_580
+          ;;
+        *)
+          printf '%s\n' stable
+          ;;
+      esac
+    }
+
+    render_gpu_config() {
+      vendors="$(detect_gpu_vendors || true)"
+      has_intel=0
+      has_amd=0
+      has_nvidia=0
+
+      while IFS= read -r vendor; do
+        case "$vendor" in
+          intel) has_intel=1 ;;
+          amd) has_amd=1 ;;
+          nvidia) has_nvidia=1 ;;
+        esac
+      done <<< "$vendors"
+
+      cat <<'EOF_GPU'
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+  };
+EOF_GPU
+
+      kernel_modules=()
+      if [ "$has_intel" -eq 1 ]; then
+        kernel_modules+=(i915)
+      fi
+      if [ "$has_amd" -eq 1 ]; then
+        kernel_modules+=(amdgpu)
+      fi
+      if [ "''${#kernel_modules[@]}" -gt 0 ]; then
+        printf '\n  boot.initrd.kernelModules = lib.mkAfter ['
+        printf ' "%s"' "''${kernel_modules[@]}"
+        printf ' ];\n'
+      fi
+
+      if [ "$has_intel" -eq 1 ]; then
+        cat <<'EOF_GPU'
+  hardware.graphics.extraPackages = lib.mkAfter [
+    pkgs.intel-media-driver
+    pkgs.vpl-gpu-rt
+  ];
+EOF_GPU
+      fi
+
+      if [ "$has_nvidia" -eq 1 ]; then
+        model="$(detect_nvidia_model || true)"
+        package_attr="$(nvidia_package_attr "$model")"
+        cat <<EOF_GPU
+
+  # NVIDIA detected by ryoku-install: ''${model:-unknown model}
+  nixpkgs.config.allowUnfree = true;
+  services.xserver.videoDrivers = [ "nvidia" ];
+  hardware.nvidia = {
+    modesetting.enable = true;
+    powerManagement.enable = true;
+    powerManagement.finegrained = false;
+    open = false;
+    nvidiaSettings = true;
+    package = config.boot.kernelPackages.nvidiaPackages.$package_attr;
+  };
+EOF_GPU
+      fi
     }
 
     usage() {
@@ -332,9 +439,11 @@ EOF
       apps_block="$(printf '      "%s"\n' "''${selected_apps[@]}")"
     fi
 
+    gpu_block="$(render_gpu_config)"
+
     cat > "$work_module" <<EOF
 # Managed by ryoku-install.
-{ ... }:
+{ config, lib, pkgs, ... }:
 
 {
   programs.ryoku = {
@@ -346,6 +455,8 @@ EOF
 $apps_block
     ];
   };
+
+$gpu_block
 }
 EOF
 
@@ -359,6 +470,8 @@ EOF
     printf 'WM      %s\n' "$compositor"
     printf 'Browser %s\n' "$browser"
     printf 'Shell   %s\n' "$shell_choice"
+    gpu_summary="$(detect_gpu_vendors 2>/dev/null | paste -sd, -)"
+    printf 'GPU     %s\n' "''${gpu_summary:-generic}"
     if [ "''${#selected_apps[@]}" -gt 0 ]; then
       printf 'Apps    %s\n' "$(IFS=,; echo "''${selected_apps[*]}")"
     else
