@@ -78,6 +78,52 @@ let
     ${pkgs.systemd}/bin/systemctl --user try-restart       xdg-desktop-portal.service       xdg-desktop-portal-gnome.service       xdg-desktop-portal-gtk.service       xdg-desktop-portal-wlr.service       >/dev/null 2>&1 || true
   '';
 
+  # Niri's stock display-manager entry can start before Ryoku has ever
+  # materialized ~/.config/niri. In that state Niri falls back to its bare
+  # default config, which also means the Ryoku session bootstrap is absent and
+  # ryoku-materialize.service can never be reached. Break that cycle at the
+  # session boundary by seeding the config before handing off to niri-session.
+  ryokuNiriSession = pkgs.runCommand "ryoku-niri-session" {
+    passthru.providedSessions = [ "ryoku-niri" ];
+  } ''
+    mkdir -p "$out/bin" "$out/share/wayland-sessions"
+
+    cat > "$out/bin/ryoku-niri-session" <<'EOF'
+#!${pkgs.runtimeShell}
+set -eu
+
+config_home="''${XDG_CONFIG_HOME:-$HOME/.config}"
+
+if [ ! -f "$config_home/niri/config.kdl" ] ||
+   [ ! -f "$config_home/niri/autostart.kdl" ]; then
+  ${materializer}/bin/ryoku-materialize
+fi
+
+export PATH="${lib.makeBinPath [
+  ryokuNiri
+  pkgs.bash
+  pkgs.coreutils
+  pkgs.dbus
+  pkgs.gnugrep
+  pkgs.procps
+  pkgs.systemd
+]}:$PATH"
+
+exec ${ryokuNiri}/bin/niri-session "$@"
+EOF
+
+    chmod 0755 "$out/bin/ryoku-niri-session"
+
+    cat > "$out/share/wayland-sessions/ryoku-niri.desktop" <<EOF
+[Desktop Entry]
+Name=Niri (Ryoku)
+Comment=Ryoku desktop on the Niri compositor
+Exec=$out/bin/ryoku-niri-session
+Type=Application
+DesktopNames=niri
+EOF
+  '';
+
   # Mango's stock session starts the compositor directly. Ryoku needs its
   # writable config tree before Mango reads config.conf, so the greeter entry
   # closes the first-login gap by materializing once when that entry is absent.
@@ -457,7 +503,7 @@ EOF
 
   compositorSession = {
     hyprland = "hyprland";
-    niri = "niri";
+    niri = "ryoku-niri";
     mango = "ryoku-mango";
   };
 
@@ -1482,7 +1528,7 @@ in
 
     # Supply a greeter on No Desktop installs, preserving another login manager.
     services.displayManager.sessionPackages = [
-      ryokuNiri
+      ryokuNiriSession
       ryokuMangoSession
     ];
 

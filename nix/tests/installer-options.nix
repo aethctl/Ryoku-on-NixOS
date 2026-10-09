@@ -44,6 +44,13 @@ let
 
   defaultNames = names defaults;
   slimNames = names slim;
+  plasmaCoexist = evaluate {
+    services.desktopManager.plasma6.enable = true;
+    services.displayManager.sddm.enable = true;
+    services.displayManager.defaultSession = "plasma";
+    programs.ryoku.defaultCompositor = "niri";
+  };
+  plasmaSessionNames = map lib.getName plasmaCoexist.services.displayManager.sessionPackages;
   slimManifest = manifest slim;
 in
 assert lib.hasSuffix ".drv" defaults.system.build.toplevel.drvPath;
@@ -70,8 +77,14 @@ assert builtins.elem "firefox" slimNames;
 assert !builtins.elem "fastfetch" slimNames;
 assert !builtins.elem "gamescope" slimNames;
 assert !builtins.elem "quickemu" slimNames;
-assert slim.services.displayManager.defaultSession == "niri";
+assert slim.services.displayManager.defaultSession == "ryoku-niri";
 assert slim.environment.sessionVariables.RYOKU_DEFAULT_BROWSER == "firefox";
+
+assert plasmaCoexist.services.desktopManager.plasma6.enable;
+assert plasmaCoexist.services.displayManager.sddm.enable;
+assert plasmaCoexist.services.displayManager.defaultSession == "plasma";
+assert builtins.elem "ryoku-niri-session" plasmaSessionNames;
+assert builtins.any (name: lib.hasPrefix "plasma-workspace" name) plasmaSessionNames;
 
 assert slimManifest.schema == 1;
 assert slimManifest.host == "ryoku-installer-test";
