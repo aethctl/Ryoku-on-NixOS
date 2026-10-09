@@ -393,15 +393,36 @@ func validSlug(slug string) error {
 	return nil
 }
 
-// escalateGreeter re-execs this binary under pkexec to install the skin as the
-// SDDM greeter (it has to write /usr/share/sddm + /etc). pkexec pops the
-// graphical polkit prompt; cancel -> error.
-func escalateGreeter(slug string) error {
+func greeterApplyInvocation(slug string) (string, []string, error) {
+	if helper := strings.TrimSpace(os.Getenv("RYOKU_SDDM_THEME_APPLY")); helper != "" {
+		if !filepath.IsAbs(helper) {
+			return "", nil, fmt.Errorf("RYOKU_SDDM_THEME_APPLY must be an absolute path")
+		}
+		return helper, []string{slug}, nil
+	}
+
+	if nixManagedHost() {
+		helper, err := exec.LookPath("ryoku-sddm-theme-apply")
+		if err != nil {
+			return "", nil, fmt.Errorf("NixOS SDDM theme helper is unavailable: %w", err)
+		}
+		return helper, []string{slug}, nil
+	}
+
 	self, err := os.Executable()
+	if err != nil {
+		return "", nil, err
+	}
+	return self, []string{"lock", "apply-greeter", slug}, nil
+}
+
+func escalateGreeter(slug string) error {
+	program, args, err := greeterApplyInvocation(slug)
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("pkexec", self, "lock", "apply-greeter", slug)
+
+	cmd := exec.Command("pkexec", append([]string{program}, args...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr

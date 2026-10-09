@@ -373,3 +373,26 @@ func TestReceiptLockSlug(t *testing.T) {
 		}
 	}
 }
+
+func TestGreeterApplyInvocationUsesNixHelper(t *testing.T) {
+	const helper = "/nix/store/test/bin/ryoku-sddm-theme-apply"
+	t.Setenv("RYOKU_SDDM_THEME_APPLY", helper)
+
+	program, args, err := greeterApplyInvocation("clockwork/orbital")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if program != helper {
+		t.Fatalf("program = %q, want %q", program, helper)
+	}
+	if len(args) != 1 || args[0] != "clockwork/orbital" {
+		t.Fatalf("args = %#v", args)
+	}
+}
+
+func TestGreeterApplyInvocationRejectsRelativeNixHelper(t *testing.T) {
+	t.Setenv("RYOKU_SDDM_THEME_APPLY", "ryoku-sddm-theme-apply")
+	if _, _, err := greeterApplyInvocation("clockwork/orbital"); err == nil {
+		t.Fatal("relative helper path was accepted")
+	}
+}
