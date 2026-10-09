@@ -211,6 +211,17 @@
           installer = ryokuInstall;
         };
 
+        ryoku-materializer-unit-cleanup = pkgs.runCommand
+          "ryoku-materializer-unit-cleanup-check"
+          { nativeBuildInputs = [ pkgs.gnugrep ]; }
+          ''
+            materializer=${./nix/apps/ryoku-materialize.nix}
+            grep -Fq 'ryogami.service' "$materializer"
+            grep -Fq 'ryoku-session.target.wants/ryogami.service' "$materializer"
+            touch "$out"
+          '';
+
+
         ryoku-session-bootstrap = pkgs.runCommand "ryoku-session-bootstrap-check"
           { nativeBuildInputs = [ pkgs.gnugrep ]; }
           ''

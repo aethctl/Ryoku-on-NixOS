@@ -63,6 +63,7 @@ pkgs.writeShellApplication {
         ryoku-session.target \
         hyprland-session.target \
         ryoku-shell.service \
+        ryogami.service \
         ryoku-rashin.service \
         ryoku-ai-usage.service \
         ryoku-ai-usage.timer \
@@ -324,6 +325,8 @@ EOF
       "$user_units/ryoku-session.target" \
       "$user_units/hyprland-session.target" \
       "$user_units/ryoku-shell.service" \
+      "$user_units/ryogami.service" \
+      "$user_units/ryoku-session.target.wants/ryogami.service" \
       "$user_units/ryoku-rashin.service" \
       "$user_units/ryoku-ai-usage.service" \
       "$user_units/ryoku-ai-usage.timer" \
