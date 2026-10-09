@@ -1325,11 +1325,12 @@ in
       runtimePackages;
 
 
-    # Ryoku's login greeter. Plasma enables SDDM on systems which ship it;
-    # this overrides Plasma's default Breeze choice without overriding an
-    # explicit user-selected SDDM theme.
-    services.displayManager.defaultSession = lib.mkIf (cfg.defaultCompositor != null)
-      (lib.mkDefault compositorSession.${cfg.defaultCompositor});
+    # A fresh installer can choose the initial compositor while all three
+    # remain available for runtime switching. Manual integrations leave this
+    # null and keep the host's existing display-manager preference.
+    services.displayManager.defaultSession =
+      lib.mkIf (cfg.defaultCompositor != null)
+        (lib.mkOverride 900 compositorSession.${cfg.defaultCompositor});
 
     services.displayManager.sessionPackages = [
       ryokuNiri
