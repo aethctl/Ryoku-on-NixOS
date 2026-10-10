@@ -42,7 +42,7 @@
 
     # RyoManager task manager, pinned to the approved Ryoku UI build.
     ryomanagerSrc = {
-      url = "github:aethctl/ryomanager/4bb3d08dd9264ae311d4d12ae5c0a94a2dcf9165";
+      url = "github:aethctl/ryomanager/1abb5f099cdf51882dd3683db4a1c55e5e6a54df";
       flake = false;
     };
 
