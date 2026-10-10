@@ -279,7 +279,7 @@ func Serve(cfg Config) error {
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.Port)),
-		Handler:           mux,
+		Handler:           protectBrowserMutations(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -369,6 +369,25 @@ func loopbackOrigin(r *http.Request) bool {
 	}
 	u, err := url.Parse(o)
 	return err == nil && (u.Hostname() == "127.0.0.1" || u.Hostname() == "localhost")
+}
+
+// protectBrowserMutations keeps a website opened in the user's browser from
+// driving Rashin's loopback POST/PUT/PATCH/DELETE API. CLI and daemon-internal
+// clients do not send Origin and remain valid because the server itself only
+// listens on loopback. WebSockets are GET upgrades and keep their stricter
+// origin check in acceptWS below.
+func protectBrowserMutations(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet, http.MethodHead, http.MethodOptions:
+		default:
+			if !loopbackOrigin(r) {
+				http.Error(w, "forbidden origin", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // acceptWS upgrades only when the Origin is this machine's own dashboard.
