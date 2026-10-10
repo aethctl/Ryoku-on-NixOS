@@ -15,6 +15,7 @@ pkgs.writeShellApplication {
     procps
     python3
     systemd
+    util-linux
   ];
 
   text = ''
