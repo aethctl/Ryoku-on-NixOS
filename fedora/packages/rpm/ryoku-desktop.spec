@@ -9,6 +9,8 @@ Source0:        ryoku-%{version}.tar.gz
 BuildRequires:  bash
 BuildRequires:  coreutils
 BuildRequires:  findutils
+BuildRequires:  gtk3-devel
+BuildRequires:  webkit2gtk4.1-devel
 BuildRequires:  golang >= 1.26.4
 BuildRequires:  cmake
 BuildRequires:  ninja-build
@@ -131,7 +133,7 @@ bash fedora/packages/rpm/stage-package.sh %{name} "$PWD/stage" %{_libdir}
 
 %install
 cp -a stage/. %{buildroot}/
-find %{buildroot} -type f -o -type l | sed 's|^%{buildroot}||' > rpm-files
+find %{buildroot} \( -type f -o -type l \) -print0 | python3 -c 'import os,sys; root=os.fsencode(sys.argv[1]); [print("\"" + os.fsdecode(p[len(root):]).replace("\\", "\\\\").replace("\"", "\\\"") + "\"") for p in sys.stdin.buffer.read().split(bytes([0])) if p]' %{buildroot} > rpm-files
 
 %pre
 # Block sleep before the old lid, idle and shell owners are replaced. An
@@ -157,9 +159,8 @@ systemctl enable ryoku-wifi-regdom.service >/dev/null 2>&1 || :
 /usr/bin/ryoku-bluetooth-tune >/dev/null 2>&1 || :
 # boot_success is set by the shell once the desktop proves itself, so a boot
 # that never gets there shows the GRUB menu; Fedora's timer would set it for
-# any login. Then give the kernels already installed a Ryoku console entry.
+# any login.
 systemctl --global disable grub-boot-success.timer >/dev/null 2>&1 || :
-/usr/lib/kernel/install.d/95-ryoku-console.install sync >/dev/null 2>&1 || :
 systemctl enable ryoku-snapshot-restored.service ryoku-snapshot-menu.path >/dev/null 2>&1 || :
 
 %posttrans

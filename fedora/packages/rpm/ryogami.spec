@@ -8,10 +8,17 @@ Source0:        ryoku-%{version}.tar.gz
 %global debug_package %{nil}
 BuildRequires:  bash
 BuildRequires:  coreutils
+BuildRequires:  cmake
+BuildRequires:  ninja-build
 BuildRequires:  findutils
 BuildRequires:  golang >= 1.26.4
 BuildRequires:  gcc
 BuildRequires:  pkgconf-pkg-config
+BuildRequires:  qt6-qtbase-devel
+BuildRequires:  qt6-qtbase-private-devel
+BuildRequires:  qt6-qtdeclarative-devel
+BuildRequires:  qt6-qtshadertools-devel
+BuildRequires:  qt6-qtmultimedia-devel
 BuildRequires:  wayland-devel
 BuildRequires:  wayland-protocols-devel
 BuildRequires:  ffmpeg-free-devel

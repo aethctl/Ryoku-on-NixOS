@@ -166,8 +166,6 @@ EOF
   # matugen owns ryoku-colors, which the config includes for the palette.
   install -d "$cfg/ghostty"
   cp -a "$_repo/ryoku/apps/ghostty/." "$cfg/ghostty/"
-  # alacritty: seeded once like ghostty; matugen renders colors.toml beside it.
-  install -Dm644 "$_repo/ryoku/apps/alacritty/alacritty.toml" "$cfg/alacritty/alacritty.toml"
 
   # neovim (LazyVim seed): the config only, not the repo docs.
   install -Dm644 "$_repo/ryoku/apps/nvim/init.lua"       "$cfg/nvim/init.lua"
@@ -232,24 +230,6 @@ EOF
   # [Wayland] SessionCommand by sddm/setup and doctor.
   install -Dm755 "$_repo/ryoku/lockscreen/sddm/ryoku-wayland-session" \
     "$pkgdir/usr/share/ryoku/lockscreen/ryoku-wayland-session"
-
-  # console recovery (system/recovery): a text login with a banner on tty1
-  # when sddm fails or the login screen keeps restarting, and a "Ryoku console"
-  # GRUB entry per kernel. The sddm drop-in pulls the guard in, so nothing
-  # needs enabling; %posttrans twins the kernels already installed.
-  local rec="$_repo/system/recovery"
-  install -Dm644 "$rec/sddm-console-fallback.conf" \
-    "$pkgdir/usr/lib/systemd/system/sddm.service.d/50-ryoku-console-fallback.conf"
-  install -Dm644 "$rec/ryoku-console-fallback.service" \
-    "$pkgdir/usr/lib/systemd/system/ryoku-console-fallback.service"
-  install -Dm644 "$rec/ryoku-console-guard.service" \
-    "$pkgdir/usr/lib/systemd/system/ryoku-console-guard.service"
-  install -Dm644 "$rec/console-fallback.issue" \
-    "$pkgdir/usr/share/ryoku/recovery/console-fallback.issue"
-  install -Dm644 "$rec/ryoku-recovery.tmpfiles.conf" \
-    "$pkgdir/usr/lib/tmpfiles.d/ryoku-recovery.conf"
-  install -Dm755 "$rec/95-ryoku-console.install" \
-    "$pkgdir/usr/lib/kernel/install.d/95-ryoku-console.install"
 
   # boot menu (fedora/bootmenu): the Ryoku GRUB theme and bootable snapshots.
   # The snapper plugin and ryoku-snapshot-menu.path resync the "Ryoku
@@ -455,7 +435,7 @@ EOF
   # password prompt; world domain 00 disables most 5 GHz channels.
   install -Dm644 "$_repo/system/hardware/network/48-ryoku-wifi-regdom.rules" \
     "$pkgdir/usr/share/polkit-1/rules.d/48-ryoku-wifi-regdom.rules"
-  install -Dm644 "$_repo/system/hardware/network/ryoku-wifi-regdom.service" \
+  install -Dm644 "$_repo/fedora/system/hardware/network/ryoku-wifi-regdom.service" \
     "$pkgdir/usr/lib/systemd/system/ryoku-wifi-regdom.service"
 
   # Game Mode wifi power-save: a polkit rule authorizes the privileged helper

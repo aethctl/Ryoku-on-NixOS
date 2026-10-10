@@ -21,10 +21,15 @@ The installer downloads the signing key, checks its full fingerprint against
 the value supplied by the repository operator, imports the verified key, then
 creates the DNF repository with package and metadata signature checks enabled.
 It refreshes metadata and installs `ryoku`, `ryoku-desktop`, and the selected
-compositor package. No COPR project or repository is enabled by the
-installer. Review `fedora/packages/rpm/dependency-coprs` before enabling any
-third-party repositories; `enable-dependencies.sh` is a separate, explicit
-step for users who choose those sources.
+compositor package. The desktop specs depend on several packages hosted in COPR.
+Review `fedora/packages/rpm/dependency-coprs` and, if you accept those sources,
+enable them before installation:
+
+```sh
+sudo fedora/packages/rpm/enable-dependencies.sh
+```
+
+The installer leaves third-party repository setup as an explicit step.
 
 `ryoku track stable`, `ryoku track testing`, and release tags use the same
 repository ID, `ryoku`. RPM packages include a Fedora package mapping table at
