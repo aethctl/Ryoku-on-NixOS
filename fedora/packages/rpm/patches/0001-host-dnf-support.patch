@@ -1,0 +1,525 @@
+diff --git a/ryoku/cli/internal/host/advice.go b/ryoku/cli/internal/host/advice.go
+index ee562408d..7d308f137 100644
+--- a/ryoku/cli/internal/host/advice.go
++++ b/ryoku/cli/internal/host/advice.go
+@@ -20,0 +21,3 @@ func (a *App) InstallAdvice(names ...string) string {
++	if manager == DNF {
++		return "sudo dnf install " + strings.Join(names, " ")
++	}
+diff --git a/ryoku/cli/internal/host/capabilities.go b/ryoku/cli/internal/host/capabilities.go
+index 2038efc67..b66d6ffb8 100644
+--- a/ryoku/cli/internal/host/capabilities.go
++++ b/ryoku/cli/internal/host/capabilities.go
+@@ -30 +30,5 @@ func (a *App) Capabilities() int {
+-		aurReason = "The AUR is an Arch Linux service; Void installs come from XBPS."
++		if manager == XBPS {
++			aurReason = "The AUR is an Arch Linux service; Void installs come from XBPS."
++		} else {
++			aurReason = "The AUR is an Arch Linux service; Fedora installs come from DNF."
++		}
+diff --git a/ryoku/cli/internal/host/detect.go b/ryoku/cli/internal/host/detect.go
+index cb75c9341..59d76e0e4 100644
+--- a/ryoku/cli/internal/host/detect.go
++++ b/ryoku/cli/internal/host/detect.go
+@@ -19,0 +20 @@ const (
++	DNF    PackageManager = "dnf"
+@@ -41 +42 @@ func (a *App) PackageManager() (PackageManager, error) {
+-		case Pacman, XBPS:
++		case Pacman, XBPS, DNF:
+@@ -52,0 +54,3 @@ func (a *App) PackageManager() (PackageManager, error) {
++	if a.cfg.Runner.LookPath("dnf5") || a.cfg.Runner.LookPath("dnf") {
++		return DNF, nil
++	}
+diff --git a/ryoku/cli/internal/host/dnf.go b/ryoku/cli/internal/host/dnf.go
+new file mode 100644
+index 000000000..fd0e13914
+--- /dev/null
++++ b/ryoku/cli/internal/host/dnf.go
+@@ -0,0 +1,178 @@
++package host
++
++import (
++	"fmt"
++	"strings"
++)
++
++func (a *App) dnfCommand() string {
++	if a.cfg.Runner.LookPath("dnf5") {
++		return "dnf5"
++	}
++	return "dnf"
++}
++
++func (a *App) fedoraTable() (packageTable, error) {
++	path := a.getenv("RYOKU_HOST_FEDORA_TABLE")
++	if path == "" {
++		path = "/usr/share/ryoku/packages/fedora.tsv"
++	}
++	table, err := readPackageTable(path)
++	if err != nil {
++		return nil, err
++	}
++	return table, nil
++}
++
++func dnfPackages(table packageTable, names []string) ([]string, []string) {
++	return translatePackages(table, names)
++}
++
++func (a *App) dnf(args []string) int {
++	if len(args) == 0 {
++		return ExitUsage
++	}
++	verb, rest := args[0], args[1:]
++	table, err := a.fedoraTable()
++	if err != nil {
++		return a.failf("read Fedora package table: %v", err)
++	}
++	if verb == "count" {
++		if len(rest) > 1 || len(rest) == 1 && rest[0] != "--foreign" {
++			return ExitUsage
++		}
++		cmd, args := "rpm", []string{"-qa", "--qf", "%{NAME}\n"}
++		if len(rest) == 1 {
++			cmd, args = a.dnfCommand(), []string{"repoquery", "--extras", "--installed", "--qf", "%{name}"}
++		}
++		result := a.query(cmd, args...)
++		if result.Code != 0 {
++			return ExitFailure
++		}
++		fmt.Fprintln(a.cfg.Stdout, countLines(result.Output))
++		return ExitOK
++	}
++	if verb == "why" {
++		if len(rest) != 1 {
++			return ExitUsage
++		}
++		return ExitFalse
++	}
++	if verb == "local" {
++		if len(rest) == 0 {
++			return ExitUsage
++		}
++		for _, name := range rest {
++			mapping := translatePackage(table, name)
++			if mapping.Special != "" {
++				fmt.Fprintln(a.cfg.Stdout)
++			} else {
++				fmt.Fprintln(a.cfg.Stdout, strings.Join(mapping.Names, " "))
++			}
++		}
++		return ExitOK
++	}
++	upgrade := false
++	if verb == "install" {
++		for len(rest) > 0 && strings.HasPrefix(rest[0], "--") {
++			switch rest[0] {
++			case "--upgrade":
++				upgrade = true
++				rest = rest[1:]
++			case "--aur":
++				return ExitNotProvided
++			case "--overwrite":
++				if len(rest) < 2 {
++					return ExitUsage
++				}
++				rest = rest[2:]
++			default:
++				return ExitUsage
++			}
++		}
++	}
++	if len(rest) == 0 {
++		return ExitUsage
++	}
++	if verb == "version" || verb == "owner" {
++		if len(rest) != 1 {
++			return ExitUsage
++		}
++		switch verb {
++		case "version":
++			result := a.query("rpm", "-q", "--qf", "%{VERSION}-%{RELEASE}\n", rest[0])
++			if result.Code != 0 {
++				return ExitFalse
++			}
++			fmt.Fprint(a.cfg.Stdout, strings.TrimSpace(result.Output))
++			return ExitOK
++		case "owner":
++			result := a.query("rpm", "-qf", "--qf", "%{NAME}\n", rest[0])
++			if result.Code != 0 {
++				return ExitFalse
++			}
++			fmt.Fprint(a.cfg.Stdout, strings.TrimSpace(result.Output))
++			return ExitOK
++		}
++	}
++	if verb == "install-file" {
++		cmd := append([]string{"install", "-y"}, rest...)
++		return commandExit(a.run(a.dnfCommand(), cmd...))
++	}
++	if verb != "installed" && verb != "available" && verb != "install" && verb != "remove" && verb != "explicit" {
++		return ExitUsage
++	}
++	names, unavailable := dnfPackages(table, rest)
++	if len(unavailable) > 0 {
++		if verb == "installed" || verb == "available" {
++			return ExitFalse
++		}
++		fmt.Fprintf(a.cfg.Stderr, "ryoku-host: packages unavailable on Fedora: %s\n", strings.Join(unavailable, " "))
++		return ExitNotProvided
++	}
++	switch verb {
++	case "installed":
++		for _, name := range names {
++			if a.probe("rpm", "-q", "--quiet", name).Code != 0 {
++				return ExitFalse
++			}
++		}
++		return ExitOK
++	case "available":
++		for _, name := range names {
++			if a.probe(a.dnfCommand(), "repoquery", "--available", "--quiet", "--qf", "%{name}", name).Code != 0 {
++				return ExitFalse
++			}
++		}
++		return ExitOK
++	case "install":
++		args := []string{"install", "-y", "--setopt=install_weak_deps=False"}
++		if upgrade {
++			args = append([]string{"upgrade", "-y", "--setopt=install_weak_deps=False"}, names...)
++		} else {
++			args = append(args, names...)
++		}
++		return commandExit(a.run(a.dnfCommand(), args...))
++	case "remove":
++		return commandExit(a.run(a.dnfCommand(), append([]string{"remove", "-y"}, names...)...))
++	case "explicit":
++		cmd := a.dnfCommand()
++		if cmd == "dnf5" {
++			return commandExit(a.run(cmd, append([]string{"mark", "user"}, names...)...))
++		}
++		return commandExit(a.run(cmd, append([]string{"mark", "install"}, names...)...))
++	}
++	return ExitUsage
++}
++
++func (a *App) dnfOrphans() ([]string, error) {
++	result := a.query(a.dnfCommand(), "repoquery", "--unneeded", "--installed", "--qf", "%{name}")
++	if result.Code != 0 {
++		return nil, fmt.Errorf("dnf repoquery --unneeded: exit %d: %s", result.Code, strings.TrimSpace(result.Output))
++	}
++	output := strings.TrimSpace(result.Output)
++	if output == "" {
++		return nil, nil
++	}
++	return strings.Split(output, "\n"), nil
++}
+diff --git a/ryoku/cli/internal/host/dnf_test.go b/ryoku/cli/internal/host/dnf_test.go
+new file mode 100644
+index 000000000..f481cadf6
+--- /dev/null
++++ b/ryoku/cli/internal/host/dnf_test.go
+@@ -0,0 +1,99 @@
++package host
++
++import (
++	"os"
++	"path/filepath"
++	"reflect"
++	"runtime"
++	"testing"
++)
++
++func fedoraPackageFixture(t *testing.T) string {
++	t.Helper()
++	path := filepath.Join(t.TempDir(), "fedora.tsv")
++	body := "arch\tfedora\tlanes\tnotes\nfd\tfd-find\tdesktop\t\ngithub-cli\tgh\tdesktop\t\nmissing\t-\tdesktop\tnot packaged\n"
++	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	return path
++}
++
++func TestDNFPackageTranslationAndCommands(t *testing.T) {
++	table := fedoraPackageFixture(t)
++	runner := &fakeRunner{
++		paths: map[string]bool{"dnf5": true},
++		answer: func(command Command) Result {
++			if argv(command) == "rpm -q --quiet fd-find" || argv(command) == "rpm -q --quiet gh" {
++				return Result{}
++			}
++			if command.Name == "rpm" {
++				return Result{Code: 1}
++			}
++			return Result{}
++		},
++	}
++	app, stdout, stderr := testApp(runner, map[string]string{
++		"RYOKU_HOST_PKGMGR":       "dnf",
++		"RYOKU_HOST_FEDORA_TABLE": table,
++	})
++	if code := app.Package([]string{"installed", "fd", "github-cli"}); code != ExitOK {
++		t.Fatalf("installed exit = %d", code)
++	}
++	runner.commands = nil
++	if code := app.Package([]string{"install", "fd", "github-cli"}); code != ExitOK {
++		t.Fatalf("install exit = %d, stderr=%q", code, stderr.String())
++	}
++	if got := argv(runner.commands[len(runner.commands)-1]); got != "dnf5 install -y --setopt=install_weak_deps=False fd-find gh" {
++		t.Fatalf("install argv = %q", got)
++	}
++	runner.commands = nil
++	if code := app.Package([]string{"available", "fd"}); code != ExitOK {
++		t.Fatalf("available exit = %d", code)
++	}
++	if got := argv(runner.commands[0]); got != "dnf5 repoquery --available --quiet --qf %{name} fd-find" {
++		t.Fatalf("available argv = %q", got)
++	}
++	runner.commands = nil
++	if code := app.Package([]string{"install", "missing"}); code != ExitNotProvided {
++		t.Fatalf("unmapped install exit = %d", code)
++	}
++	if len(runner.commands) != 0 {
++		t.Fatalf("unmapped install ran commands: %v", runner.commands)
++	}
++	if stdout.Len() != 0 {
++		t.Fatalf("unexpected stdout: %q", stdout.String())
++	}
++}
++
++func TestDNFDetectionAndCapabilities(t *testing.T) {
++	runner := &fakeRunner{paths: map[string]bool{"dnf5": true}}
++	app, stdout, _ := testApp(runner, map[string]string{"RYOKU_HOST_INIT": "systemd"})
++	manager, err := app.PackageManager()
++	if err != nil || manager != DNF {
++		t.Fatalf("PackageManager = %q, %v", manager, err)
++	}
++	if code := app.Capabilities(); code != ExitOK {
++		t.Fatalf("Capabilities exit = %d", code)
++	}
++	want := "{\"packageManager\":\"dnf\",\"init\":\"systemd\",\"snapshots\":{\"supported\":false,\"reason\":\"Snapshot rollback is not enabled by the Fedora package layer.\"},\"aur\":{\"supported\":false,\"reason\":\"The AUR is an Arch Linux service; Fedora installs come from DNF.\"}}\n"
++	if got := stdout.String(); got != want {
++		t.Fatalf("capabilities = %q, want %q", got, want)
++	}
++}
++
++func TestFedoraPackageTable(t *testing.T) {
++	_, source, _, ok := runtime.Caller(0)
++	if !ok {
++		t.Fatal("could not locate host test source")
++	}
++	path := filepath.Join(filepath.Dir(source), "../../../../fedora/packages/rpm/payload/fedora.tsv")
++	table, err := readPackageTable(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	got, unavailable := dnfPackages(table, []string{"fd", "github-cli", "adw-gtk-theme", "ttf-jetbrains-mono-nerd"})
++	want := []string{"fd-find", "gh", "adw-gtk3-theme"}
++	if !reflect.DeepEqual(got, want) || !reflect.DeepEqual(unavailable, []string{"ttf-jetbrains-mono-nerd"}) {
++		t.Fatalf("translation = %v, unavailable = %v", got, unavailable)
++	}
++}
+diff --git a/ryoku/cli/internal/host/package.go b/ryoku/cli/internal/host/package.go
+index 5e4945b5d..aecdd6af7 100644
+--- a/ryoku/cli/internal/host/package.go
++++ b/ryoku/cli/internal/host/package.go
+@@ -35,0 +36,3 @@ func (a *App) Package(args []string) int {
++	if manager == DNF {
++		return a.dnf(args)
++	}
+@@ -62,0 +66,3 @@ func (a *App) Orphans() ([]string, error) {
++	if manager == DNF {
++		return a.dnfOrphans()
++	}
+@@ -91,0 +98,7 @@ func (a *App) PackageOwner(path string) (string, error) {
++	if manager == DNF {
++		result := a.query("rpm", "-qf", "--qf", "%{NAME}\n", path)
++		if result.Code != 0 {
++			return "", fmt.Errorf("rpm -qf: exit %d", result.Code)
++		}
++		return strings.TrimSpace(result.Output), nil
++	}
+diff --git a/ryoku/cli/internal/host/repo.go b/ryoku/cli/internal/host/repo.go
+index 02b9addc4..bbcb2f937 100644
+--- a/ryoku/cli/internal/host/repo.go
++++ b/ryoku/cli/internal/host/repo.go
+@@ -17,0 +18 @@ const (
++	DNFRepoBase    = "https://repo.ryoku.dev/stable/fedora"
+@@ -19,0 +21 @@ const (
++	dnfRepoConfig  = "/etc/yum.repos.d/ryoku.repo"
+@@ -36,0 +39,2 @@ func RepoURLFor(manager PackageManager, channel string) string {
++	} else if manager == DNF {
++		base, arch = DNFRepoBase, "$releasever/$basearch"
+@@ -99,0 +104,2 @@ func RepoChannelOf(manager PackageManager, raw string) string {
++	} else if manager == DNF {
++		base = DNFRepoBase
+@@ -101,0 +108,17 @@ func RepoChannelOf(manager PackageManager, raw string) string {
++	if manager == DNF {
++		value = strings.TrimSuffix(value, "/")
++		rest := strings.Trim(strings.TrimPrefix(value, base), "/")
++		rest = strings.Trim(strings.TrimSuffix(rest, "$releasever/$basearch"), "/")
++		switch {
++		case rest == "":
++			return "stable"
++		case rest == "channels/testing":
++			return "testing"
++		case strings.HasPrefix(rest, "releases/"):
++			tag := strings.TrimPrefix(rest, "releases/")
++			if releaseTagPattern.MatchString(tag) {
++				return tag
++			}
++		}
++		return ""
++	}
+@@ -137,0 +161,7 @@ func (a *App) xbpsShippedConfig() string {
++func (a *App) dnfRepoPath() string {
++	if path := a.getenv("RYOKU_DNF_REPO_CONFIG"); path != "" {
++		return path
++	}
++	return dnfRepoConfig
++}
++
+@@ -142,0 +173,10 @@ func (a *App) RepoURL() (string, error) {
++	if manager == DNF {
++		body, err := os.ReadFile(a.dnfRepoPath())
++		if err != nil {
++			return "", ErrRepoAbsent
++		}
++		if value := dnfRepoURL(string(body)); value != "" {
++			return value, nil
++		}
++		return "", ErrRepoAbsent
++	}
+@@ -188,0 +229,18 @@ func pacmanRepoURL(body string) string {
++func dnfRepoURL(body string) string {
++	inRepo := false
++	scanner := bufio.NewScanner(strings.NewReader(body))
++	for scanner.Scan() {
++		line := strings.TrimSpace(scanner.Text())
++		if strings.HasPrefix(line, "[") {
++			inRepo = line == "[ryoku]"
++			continue
++		}
++		if inRepo && strings.HasPrefix(strings.ToLower(line), "baseurl") {
++			if _, value, ok := strings.Cut(line, "="); ok {
++				return strings.TrimSpace(value)
++			}
++		}
++	}
++	return ""
++}
++
+@@ -252,0 +311,4 @@ func (a *App) RepoSetURL(url string) error {
++	if manager == DNF {
++		body := "[ryoku]\nname=Ryoku\nbaseurl=" + strings.TrimSpace(url) + "\nenabled=1\ngpgcheck=1\nrepo_gpgcheck=1\ngpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-ryoku\n"
++		return replaceFile(a.dnfRepoPath(), body, 0o644)
++	}
+@@ -319,0 +382,5 @@ func (a *App) RepoSync(force bool) error {
++	} else if manager == DNF {
++		name, args = a.dnfCommand(), []string{"makecache"}
++		if force {
++			args = append(args, "--refresh")
++		}
+@@ -334,0 +402,18 @@ func (a *App) RepoPackages() ([]RepoPackage, error) {
++	if manager == DNF {
++		result := a.query(a.dnfCommand(), "repoquery", "--available", "--repo="+ryokuRepoName, "--qf", "%{name}\t%{version}-%{release}")
++		if result.Code != 0 {
++			return nil, commandError(a.dnfCommand(), []string{"repoquery", "--available", "--repo=" + ryokuRepoName}, result)
++		}
++		var packages []RepoPackage
++		for _, line := range strings.Split(result.Output, "\n") {
++			fields := strings.SplitN(strings.TrimSpace(line), "\t", 2)
++			if len(fields) == 2 && fields[0] != "" {
++				packages = append(packages, RepoPackage{Name: fields[0], Version: fields[1], Repository: ryokuRepoName})
++			}
++		}
++		if len(packages) == 0 {
++			return nil, fmt.Errorf("the Ryoku DNF repository package list is empty")
++		}
++		sort.Slice(packages, func(i, j int) bool { return packages[i].Name < packages[j].Name })
++		return packages, nil
++	}
+@@ -403,0 +489,14 @@ func (a *App) RepoInstalledSet(allowDowngrade bool, excluded map[string]bool) ([
++	if manager == DNF {
++		result := a.query(a.dnfCommand(), "repoquery", "--upgrades", "--installed", "--repo="+ryokuRepoName, "--qf", "%{name}")
++		if result.Code != 0 {
++			return nil, 0, commandError(a.dnfCommand(), []string{"repoquery", "--upgrades", "--installed", "--repo=" + ryokuRepoName}, result)
++		}
++		var targets []string
++		for _, line := range strings.Split(result.Output, "\n") {
++			if name := strings.TrimSpace(line); name != "" && !excluded[name] {
++				targets = append(targets, name)
++			}
++		}
++		sort.Strings(targets)
++		return targets, 0, nil
++	}
+@@ -447,0 +547,2 @@ func (a *App) installedVersion(manager PackageManager, name string) (string, boo
++	} else if manager == DNF {
++		command, args = "rpm", []string{"-q", "--qf", "%{VERSION}-%{RELEASE}\n", name}
+@@ -456 +557 @@ func (a *App) installedVersion(manager PackageManager, name string) (string, boo
+-	} else {
++	} else if manager == XBPS {
+diff --git a/ryoku/cli/internal/host/repo_test.go b/ryoku/cli/internal/host/repo_test.go
+index 1b8a12cc7..305e9bb87 100644
+--- a/ryoku/cli/internal/host/repo_test.go
++++ b/ryoku/cli/internal/host/repo_test.go
+@@ -134,0 +135,43 @@ func TestParseXBPSRepoPackagesAndInstalledSet(t *testing.T) {
++
++func TestDNFRepoURLAndChannel(t *testing.T) {
++	channels := map[string]string{
++		"stable":  "$releasever/$basearch",
++		"testing": "channels/testing/$releasever/$basearch",
++		"v1.2.3":  "releases/v1.2.3/$releasever/$basearch",
++	}
++	for want, suffix := range channels {
++		url := RepoURLFor(DNF, want)
++		if got := RepoChannelOf(DNF, url); got != want {
++			t.Errorf("RepoChannelOf(%q) = %q", url, got)
++		}
++		if !strings.HasSuffix(url, suffix) {
++			t.Errorf("RepoURLFor(%q) = %q", want, url)
++		}
++	}
++	if got := RepoChannelOf(DNF, "https://example.invalid/other"); got != "" {
++		t.Fatalf("unknown DNF repo channel = %q", got)
++	}
++}
++
++func TestDNFRepoConfigReadAndWrite(t *testing.T) {
++	path := filepath.Join(t.TempDir(), "ryoku.repo")
++	app, _, _ := testApp(&fakeRunner{}, map[string]string{
++		"RYOKU_HOST_PKGMGR":     "dnf",
++		"RYOKU_DNF_REPO_CONFIG": path,
++	})
++	url := RepoURLFor(DNF, "testing")
++	if err := app.RepoSetURL(url); err != nil {
++		t.Fatal(err)
++	}
++	got, err := app.RepoURL()
++	if err != nil || got != url {
++		t.Fatalf("RepoURL() = %q, %v", got, err)
++	}
++	body, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !strings.Contains(string(body), "[ryoku]\n") || !strings.Contains(string(body), "baseurl="+url+"\n") || !strings.Contains(string(body), "repo_gpgcheck=1\n") {
++		t.Fatalf("repo config = %q", body)
++	}
++}
+diff --git a/ryoku/cli/internal/host/snapshots.go b/ryoku/cli/internal/host/snapshots.go
+index 81c55cee0..0992bfb3e 100644
+--- a/ryoku/cli/internal/host/snapshots.go
++++ b/ryoku/cli/internal/host/snapshots.go
+@@ -10,0 +11,3 @@ func (a *App) Snapshots() (supported bool, reason string) {
++	if err == nil && manager == DNF {
++		return false, "Snapshot rollback is not enabled by the Fedora package layer."
++	}
+diff --git a/ryoku/cli/internal/host/table.go b/ryoku/cli/internal/host/table.go
+index e538e3d0d..994edaec0 100644
+--- a/ryoku/cli/internal/host/table.go
++++ b/ryoku/cli/internal/host/table.go
+@@ -37 +37 @@ func readPackageTable(path string) (packageTable, error) {
+-			if len(fields) != 4 || fields[0] != "arch" || fields[1] != "void" || fields[2] != "lanes" || fields[3] != "notes" {
++			if len(fields) != 4 || fields[0] != "arch" || (fields[1] != "void" && fields[1] != "fedora") || fields[2] != "lanes" || fields[3] != "notes" {
