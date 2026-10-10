@@ -14,6 +14,7 @@ on:
   push:
     branches:
       - main
+      - unstable-dev
     paths:
       - 'ryoku/hyprland/**'
       - 'ryoku/shell/ipc/**'

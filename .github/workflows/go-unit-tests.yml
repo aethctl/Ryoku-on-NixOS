@@ -17,6 +17,7 @@ on:
     paths:
       - 'ryoku/cli/**'
       - 'ryoku/shell/ipc/**'
+      - 'ryoku/shell/ryogami/daemon/**'
       - 'ryoku-shell-installer/**'
       - 'ryoku/apps/ryostore/backend/**'
       - 'ryoku/hub/backend/**'
@@ -29,6 +30,7 @@ on:
     paths:
       - 'ryoku/cli/**'
       - 'ryoku/shell/ipc/**'
+      - 'ryoku/shell/ryogami/daemon/**'
       - 'ryoku-shell-installer/**'
       - 'ryoku/apps/ryostore/backend/**'
       - 'ryoku/hub/backend/**'
@@ -79,6 +81,26 @@ jobs:
           go build ./...
           go vet ./...
           go test -short ./...
+
+  ryogami-daemon:
+    name: Ryogami daemon
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ryoku/shell/ryogami/daemon/go.mod
+
+      - name: Build, vet, and test
+        shell: bash
+        working-directory: ryoku/shell/ryogami/daemon
+        run: |
+          go build ./...
+          go vet ./...
+          go test ./...
 
   shell-installer:
     name: shell installer (binary parity)
