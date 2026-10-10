@@ -143,6 +143,7 @@
               browser = "chromium";
               shell = "fish";
               optionalApps = [ "prompt" ];
+              binaryCache = true;
               ryokuSource = "github:aethctl/Ryoku-on-NixOS/main";
               nixpkgsSource = "github:NixOS/nixpkgs/nixos-unstable";
             };
@@ -298,6 +299,8 @@
             grep -Fq 'choose_install_parallelism' "$backend"
             grep -Fq -- '--max-jobs "$install_jobs"' "$backend"
             grep -Fq -- '--cores "$install_cores"' "$backend"
+            grep -Fq -- '--no-cache' "$backend"
+            grep -Fq 'binaryCache = ''${binary_cache_nix};' "$backend"
             touch "$out"
           '';
 
@@ -311,6 +314,7 @@
           in
           assert generic.config.networking.hostName == "ryoku-ci";
           assert generic.config.programs.ryoku.enable;
+          assert generic.config.programs.ryoku.binaryCache.enable;
           assert generic.config.nix.package == nixpkgs.legacyPackages.${system}.nixVersions.latest;
           assert nvidia.config.services.xserver.videoDrivers == [ "nvidia" ];
           assert nvidia.config.hardware.nvidia.modesetting.enable;

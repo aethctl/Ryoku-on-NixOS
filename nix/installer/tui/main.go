@@ -106,6 +106,7 @@ var flow = []step{
 type options struct {
 	flake, source string
 	dryRun        bool
+	noCache       bool
 	iso           bool
 }
 
@@ -195,6 +196,9 @@ func (m *model) startInstall() tea.Cmd {
 		args = append(args, "--iso")
 	} else {
 		args = append(args, "--yes")
+	}
+	if m.opts.noCache {
+		args = append(args, "--no-cache")
 	}
 	if m.opts.dryRun {
 		args = append(args, "--dry-run")
@@ -431,12 +435,17 @@ func (m model) reviewBody() string {
 		av = fmt.Sprintf("%d selected", len(apps))
 	}
 
+	cache := "enabled"
+	if m.opts.noCache {
+		cache = "disabled"
+	}
+
 	var lines []string
 	if m.opts.iso {
 		lines = []string{
 			bold(cBrand, "Ready for full Ryoku installation"), "",
 			row("source", m.opts.source), row("compositor", m.picks["compositor"]),
-			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
+			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), row("cache", cache), "",
 			fg(cGreen, "✓ disk and filesystem selection happens next"),
 			fg(cGreen, "✓ installs a flake-based NixOS target under /mnt"),
 			bold(cYell, "! the selected target disk will be erased only after exact-path confirmation"),
@@ -445,7 +454,7 @@ func (m model) reviewBody() string {
 		lines = []string{
 			bold(cBrand, "Ready to configure Ryoku on NixOS"), "",
 			row("flake", m.opts.flake), row("source", m.opts.source), row("compositor", m.picks["compositor"]),
-			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
+			row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), row("cache", cache), "",
 			fg(cGreen, "✓ builds the generation before switching"),
 			fg(cGreen, "✓ backs up installer-managed Nix files"),
 			fg(cGreen, "✓ leaves disks, boot layout and unrelated modules alone"),
@@ -591,6 +600,7 @@ Interactive options:
   --flake PATH[#HOST]   NixOS flake to configure (default: /etc/nixos)
   --source REF          Ryoku flake reference
   --iso                 Full disk installation mode used by the Ryoku ISO
+  --no-cache            Install without the Ryotunes Cachix binary cache
   --dry-run             Run the backend without writing files or disks
   snapshot              Print representative screens without installing
 
@@ -629,6 +639,9 @@ func parseOptions(args []string) (options, bool, []string, error) {
 			} else {
 				o.source = v
 			}
+		case "--no-cache":
+			o.noCache = true
+			backendArgs = append(backendArgs, a)
 		case "--dry-run":
 			o.dryRun = true
 			backendArgs = append(backendArgs, a)

@@ -4,6 +4,7 @@ source_ref="${RYOKU_INSTALL_SOURCE:-github:aethctl/Ryoku-on-NixOS/main}"
 flake_arg="/etc/nixos"
 assume_yes=0
 dry_run=0
+use_cache=1
 compositor=""
 browser=""
 shell_choice=""
@@ -373,6 +374,8 @@ render_iso_target() {
   nix_keyboard="$(nix_quote "$target_keyboard")"
   nix_firmware="$(nix_quote "$firmware")"
   nix_kernel="$(nix_quote "$kernel_choice")"
+  binary_cache_nix=true
+  [ "$use_cache" -eq 1 ] || binary_cache_nix=false
 
   if [ "${#selected_apps[@]}" -gt 0 ]; then
     apps_block="$(printf '    "%s"
@@ -431,6 +434,7 @@ $apps_block
 
   ryokuSource = $nix_ryoku;
   nixpkgsSource = $nix_nixpkgs;
+  binaryCache = ${binary_cache_nix};
 }
 EOF_VALUES
 }
@@ -791,6 +795,7 @@ Options:
   --gpu VENDORS         auto, none, or comma-separated nvidia,amd,intel
   --firmware MODE       auto, uefi, or bios (default: auto)
   --confirm-disk DEVICE Required with --iso --yes; must exactly match --disk
+  --no-cache            Do not use or configure the Ryotunes Cachix binary cache
   --dry-run             Show proposed changes without writing them
   -y, --yes             Skip non-destructive prompts; disk confirmation still required
   -h, --help            Show this help
@@ -921,6 +926,11 @@ while [ "$#" -gt 0 ]; do
       [ "$#" -ge 2 ] || die "--confirm-disk requires a value"
       confirm_disk="$2"
       shift 2
+      ;;
+    --no-cache)
+      use_cache=0
+      bootstrap_cache=()
+      shift
       ;;
     --dry-run)
       dry_run=1
@@ -1137,6 +1147,7 @@ cat > "$work_module" <<EOF
 {
   programs.ryoku = {
 enable = true;
+binaryCache.enable = $([ "$use_cache" -eq 1 ] && printf true || printf false);
 defaultCompositor = "$compositor";
 browser = "$browser";
 shell = "$shell_choice";
