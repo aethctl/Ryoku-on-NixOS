@@ -289,17 +289,17 @@
     "ryomanagerSrc": {
       "flake": false,
       "locked": {
-        "lastModified": 1791658002,
-        "narHash": "sha256-VW2gna/Wiy4uzmk/fBDuaW1BF97UO2bLQuaomnhKY6U=",
+        "lastModified": 1791659701,
+        "narHash": "sha256-5MDMwvNC/AfAg5/MiMpvri3VqGZGgtAdV61J8sNxlNg=",
         "owner": "aethctl",
         "repo": "ryomanager",
-        "rev": "1abb5f099cdf51882dd3683db4a1c55e5e6a54df",
+        "rev": "107452c39ff90a287ebb0d26b6de27a466db1243",
         "type": "github"
       },
       "original": {
         "owner": "aethctl",
         "repo": "ryomanager",
-        "rev": "1abb5f099cdf51882dd3683db4a1c55e5e6a54df",
+        "rev": "107452c39ff90a287ebb0d26b6de27a466db1243",
         "type": "github"
       }
     },
