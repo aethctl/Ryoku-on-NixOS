@@ -1,6 +1,10 @@
 package updater
 
-import "testing"
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 // Only one `ryoku update` may run at a time: a held flock refuses a second
 // acquire, and releasing it frees the lock again.
@@ -26,6 +30,23 @@ func TestAcquireUpdateLockBlocksSecond(t *testing.T) {
 		t.Fatalf("acquire after release: busy=%v", busy3)
 	}
 	third.Close()
+}
+
+func TestAcquireUpdateLockFailsClosedWhenLockCannotBeCreated(t *testing.T) {
+	// Point XDG_RUNTIME_DIR below a missing parent. OpenFile cannot create
+	// intermediate directories, so this deterministically exercises the lock
+	// creation failure without depending on the test runner's permissions.
+	runtime := filepath.Join(t.TempDir(), "missing", "runtime")
+	t.Setenv("XDG_RUNTIME_DIR", runtime)
+
+	lock, err := acquireUpdateLock()
+	if lock != nil {
+		lock.Close()
+		t.Fatal("lock unexpectedly acquired")
+	}
+	if err == nil || !strings.Contains(err.Error(), "open ryoku update lock") {
+		t.Fatalf("error = %v, want a lock creation failure", err)
+	}
 }
 
 func TestHumanBytes(t *testing.T) {
