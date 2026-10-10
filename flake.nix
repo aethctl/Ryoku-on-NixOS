@@ -511,6 +511,22 @@
             touch "$out"
           '';
 
+        ryoku-nix-update-refresh = pkgs.runCommand
+          "ryoku-nix-update-refresh-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              gawk
+              gnugrep
+            ];
+          }
+          ''
+            RYOKU_NIX_UPDATE_TEST_HELPER=${./nix/scripts/ryoku-nix-update} \
+              bash ${./nix/tests/test-nix-update-refresh.sh}
+            touch "$out"
+          '';
+
         # CLI integration
         ryoku-cli-config-base = pkgs.runCommand
           "ryoku-cli-config-base-check"
