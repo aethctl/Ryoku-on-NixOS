@@ -236,15 +236,16 @@ func Update(args []string) error {
 
 // acquireUpdateLock takes an exclusive, non-blocking flock so only one
 // `ryoku update` runs at a time. Returns (nil, err) when another update already
-// holds it (the caller aborts); (nil, nil) when the lock file cannot even be
-// created (proceed best-effort, like the snapshot); (f, nil) when acquired -- the
-// caller keeps f open for the update's lifetime and closes it to release. The fd
-// is close-on-exec, so the stage1->stage2 handoff re-acquires cleanly.
+// holds it or the lock cannot be created, and (f, nil) when acquired. Updates
+// fail closed here: running without mutual exclusion can race package/database
+// mutations and is less safe than asking the user to repair the runtime dir.
+// The caller keeps f open for the update's lifetime and closes it to release.
+// The fd is close-on-exec, so the stage1->stage2 handoff re-acquires cleanly.
 func acquireUpdateLock() (*os.File, error) {
 	f, err := os.OpenFile(filepath.Join(sys.Xdg("XDG_RUNTIME_DIR", ".cache"), "ryoku-update.lock"),
 		os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		return nil, nil // cannot create a lock file -> never block the update
+		return nil, fmt.Errorf("open ryoku update lock: %w", err)
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
