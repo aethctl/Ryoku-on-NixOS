@@ -208,6 +208,9 @@ func runShellPref(args []string) error {
 		if len(args) != 2 {
 			return fmt.Errorf("shell set needs fish, bash, or zsh")
 		}
+		if nixManagedHost() {
+			return fmt.Errorf("the login shell is managed declaratively on NixOS; change programs.ryoku.shell and rebuild")
+		}
 		path, err := validateShellChoice(args[1], accountShells, "/etc/shells")
 		if err != nil {
 			return err
@@ -226,6 +229,9 @@ func runShellPref(args []string) error {
 		}
 		return setZshPrompt(current.HomeDir, args[1])
 	case "apply":
+		if nixManagedHost() {
+			return fmt.Errorf("the login shell is managed declaratively on NixOS; refusing usermod")
+		}
 		if len(args) != 2 || os.Geteuid() != 0 {
 			return fmt.Errorf("shell apply requires privileged fish, bash, or zsh")
 		}

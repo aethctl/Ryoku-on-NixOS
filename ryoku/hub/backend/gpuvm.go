@@ -107,6 +107,12 @@ func parseVMFlags(args []string) map[string]string {
 // and a human blocker when not. It reuses the caps engine so the lane gates on
 // exactly the dossier the GPU page shows.
 func vmReadiness() (bool, string, *Capability) {
+	if nixManagedHost() && !nixGpuPassthroughConfigured() {
+		return false,
+			"GPU passthrough is disabled on NixOS; enable programs.ryoku.gpuPassthrough and rebuild",
+			nil
+	}
+
 	cap, err := detectCapability()
 	if err != nil {
 		return false, "could not read the GPU passthrough state: " + err.Error(), nil
