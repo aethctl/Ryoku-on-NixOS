@@ -350,6 +350,23 @@
             touch "$out"
           '';
 
+        ryoku-nix-update-local-rollback = pkgs.runCommand
+          "ryoku-nix-update-local-rollback-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              git
+              jq
+              util-linux
+            ];
+          }
+          ''
+            RYOKU_NIX_UPDATE_TEST_HELPER=${./nix/scripts/ryoku-nix-update} \
+              bash ${./nix/tests/test-nix-update-local-rollback.sh}
+            touch "$out"
+          '';
+
         # CLI integration
         ryoku-cli-config-base = pkgs.runCommand
           "ryoku-cli-config-base-check"
