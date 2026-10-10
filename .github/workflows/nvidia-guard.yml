@@ -17,6 +17,7 @@ on:
   push:
     branches:
       - main
+      - unstable-dev
     paths:
       - 'system/hardware/drivers/ryoku-nvidia-guard'
       - 'system/hardware/drivers/nvidia.sh'
