@@ -233,6 +233,21 @@ It is intended to become the primary path for fresh installations.
 
 > **Testing warning:** installation **will erase the selected disk**. Back up anything important before using a pre-release ISO.
 
+## Requirements
+
+Ryoku is `x86_64` only and boots in UEFI mode. The session is Wayland on
+Hyprland or niri, with the GPU-composited Ryoku shell on top. The installer
+refuses a machine with Secure Boot on (Limine ships unsigned) unless you have
+enrolled your own keys, and there is no 32-bit build and no legacy BIOS path.
+
+|  | Minimum | Recommended |
+|---|---|---|
+| CPU | 64-bit x86_64, dual-core | quad-core or better |
+| RAM | 4 GB | 8 GB, 16 GB with the dev toolchains |
+| GPU | any card with working KMS and OpenGL/Vulkan | recent integrated or discrete |
+| Storage | 32 GB (installer floor) | 64 GB+ SSD |
+| Firmware | UEFI, Secure Boot off | UEFI, Secure Boot off |
+
 ---
 
 ## What ships
