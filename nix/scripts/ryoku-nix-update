@@ -29,6 +29,25 @@ die() {
     return 1
 }
 
+acquire_mutation_lock() {
+    lock_root="${XDG_RUNTIME_DIR:-${XDG_CACHE_HOME:-}}"
+    if [ -z "$lock_root" ] && [ -n "${HOME:-}" ]; then
+        lock_root="$HOME/.cache"
+    fi
+    [ -n "$lock_root" ] || die "no private runtime/cache directory is available for the update lock"
+
+    lock_path="${RYOKU_NIX_LOCK_PATH:-$lock_root/ryoku-nix-update.lock}"
+    lock_dir="$(dirname "$lock_path")"
+    mkdir -p "$lock_dir" || die "could not create update lock directory: $lock_dir"
+
+    if ! exec 9>"$lock_path"; then
+        die "could not open update lock: $lock_path"
+    fi
+    if ! flock -n 9; then
+        die "another Ryoku Nix update or channel switch is already running"
+    fi
+}
+
 trim_version() {
     sed -n '1{s/\r$//;p;}'
 }
@@ -650,10 +669,12 @@ case "${1:-status}" in
         status_json
         ;;
     update)
+        acquire_mutation_lock
         update_nix
         ;;
     track)
         shift
+        acquire_mutation_lock
         track_nix "$@"
         ;;
     *)

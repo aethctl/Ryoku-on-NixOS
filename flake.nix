@@ -477,6 +477,23 @@
             touch "$out"
           '';
 
+        # Nix update helper serialization
+        ryoku-nix-update-lock = pkgs.runCommand
+          "ryoku-nix-update-lock-check"
+          {
+            nativeBuildInputs = with pkgs; [
+              bash
+              coreutils
+              gnugrep
+              util-linux
+            ];
+          }
+          ''
+            RYOKU_NIX_UPDATE_TEST_HELPER=${./nix/scripts/ryoku-nix-update} \
+              bash ${./nix/tests/test-nix-update-lock.sh}
+            touch "$out"
+          '';
+
         # CLI integration
         ryoku-cli-config-base = pkgs.runCommand
           "ryoku-cli-config-base-check"
