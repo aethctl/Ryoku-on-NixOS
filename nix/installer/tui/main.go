@@ -105,6 +105,7 @@ var flow = []step{
 type options struct {
 	flake, source string
 	dryRun        bool
+	noCache       bool
 }
 
 func defaultOptions() options {
@@ -188,6 +189,9 @@ func (m *model) startInstall() tea.Cmd {
 		"--flake", m.opts.flake, "--source", m.opts.source,
 		"--compositor", m.picks["compositor"], "--browser", m.picks["browser"],
 		"--shell", m.picks["shell"], "--apps", appArg, "--yes",
+	}
+	if m.opts.noCache {
+		args = append(args, "--no-cache")
 	}
 	if m.opts.dryRun {
 		args = append(args, "--dry-run")
@@ -423,10 +427,14 @@ func (m model) reviewBody() string {
 	if len(apps) > 0 {
 		av = fmt.Sprintf("%d selected", len(apps))
 	}
+	cache := "enabled"
+	if m.opts.noCache {
+		cache = "disabled"
+	}
 	lines := []string{
 		bold(cBrand, "Ready to configure Ryoku on NixOS"), "",
 		row("flake", m.opts.flake), row("source", m.opts.source), row("compositor", m.picks["compositor"]),
-		row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), "",
+		row("browser", m.picks["browser"]), row("shell", m.picks["shell"]), row("apps", av), row("cache", cache), "",
 		fg(cGreen, "✓ builds the generation before switching"),
 		fg(cGreen, "✓ backs up installer-managed Nix files"),
 		fg(cGreen, "✓ leaves disks, boot layout and unrelated modules alone"),
@@ -549,6 +557,7 @@ func usage() {
 Interactive options:
   --flake PATH[#HOST]   NixOS flake to configure (default: /etc/nixos)
   --source REF          Ryoku flake reference
+  --no-cache            Install without the Ryotunes Cachix binary cache
   --dry-run             Run the backend without writing files
   snapshot              Print representative screens without installing
 
@@ -582,6 +591,9 @@ func parseOptions(args []string) (options, bool, []string, error) {
 			} else {
 				o.source = v
 			}
+		case "--no-cache":
+			o.noCache = true
+			backendArgs = append(backendArgs, a)
 		case "--dry-run":
 			o.dryRun = true
 			backendArgs = append(backendArgs, a)

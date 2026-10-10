@@ -22,6 +22,7 @@ pkgs.writeShellApplication {
     flake_arg="/etc/nixos"
     assume_yes=0
     dry_run=0
+    use_cache=1
     compositor=""
     browser=""
     shell_choice=""
@@ -195,6 +196,7 @@ Options:
   --browser NAME        Browser: chromium or firefox
   --shell NAME          Interactive shell: fish or zsh
   --apps CSV            Optional app IDs, comma-separated; use none for empty
+  --no-cache            Do not use or configure the Ryotunes Cachix binary cache
   --dry-run             Show proposed changes without writing them
   -y, --yes             Skip confirmation
   -h, --help            Show this help
@@ -251,6 +253,11 @@ EOF
           apps_spec="$2"
           apps_set=1
           shift 2
+          ;;
+        --no-cache)
+          use_cache=0
+          bootstrap_cache=()
+          shift
           ;;
         --dry-run)
           dry_run=1
@@ -462,6 +469,7 @@ EOF
 {
   programs.ryoku = {
     enable = true;
+    binaryCache.enable = $([ "$use_cache" -eq 1 ] && printf true || printf false);
     defaultCompositor = "$compositor";
     browser = "$browser";
     shell = "$shell_choice";

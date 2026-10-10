@@ -19,7 +19,7 @@ FLAKE = """{
 
 
 class TransactionTests(unittest.TestCase):
-    def run_case(self, failure, existing=False):
+    def run_case(self, failure, existing=False, no_cache=False):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             host = root / "host"
@@ -56,10 +56,12 @@ class TransactionTests(unittest.TestCase):
             test_backend = script("backend", backend.partition("\n")[2])
             calls = root / "calls"
             env = dict(os.environ, TEST_CALLS=str(calls), TEST_FAILURE=failure)
-            result = subprocess.run([str(test_backend), "--flake", str(host) + "#host",
-                                     "--compositor", "niri", "--browser", "firefox",
-                                     "--shell", "zsh", "--apps", "none", "--yes"],
-                                    env=env, capture_output=True, text=True, timeout=20)
+            args = [str(test_backend), "--flake", str(host) + "#host",
+                    "--compositor", "niri", "--browser", "firefox",
+                    "--shell", "zsh", "--apps", "none", "--yes"]
+            if no_cache:
+                args.append("--no-cache")
+            result = subprocess.run(args, env=env, capture_output=True, text=True, timeout=20)
             if failure:
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 after = {p.name: p.read_bytes() for p in host.iterdir()}
@@ -69,10 +71,15 @@ class TransactionTests(unittest.TestCase):
             else:
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(calls.read_text().splitlines(), ["lock", "build", "switch"])
-                self.assertIn('defaultCompositor = "niri"', (host / "ryoku.nix").read_text())
+                module = (host / "ryoku.nix").read_text()
+                self.assertIn('defaultCompositor = "niri"', module)
+                self.assertIn(f'binaryCache.enable = {"false" if no_cache else "true"};', module)
 
     def test_success(self):
         self.run_case("")
+
+    def test_success_without_binary_cache(self):
+        self.run_case("", no_cache=True)
 
     def test_failures_restore_new_and_existing_configs(self):
         for failure in ("lock", "build", "switch", "interrupt"):

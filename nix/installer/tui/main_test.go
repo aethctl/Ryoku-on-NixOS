@@ -36,7 +36,7 @@ func TestParseOptionsDirectBackendCompatibility(t *testing.T) {
 	opts, direct, args, err := parseOptions([]string{
 		"--cli", "--flake", "/tmp/nixos#host", "--source", "path:/tmp/ryoku",
 		"--compositor", "niri", "--browser", "firefox", "--shell", "zsh",
-		"--apps", "prompt,docker", "--dry-run", "-y",
+		"--apps", "prompt,docker", "--no-cache", "--dry-run", "-y",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -44,7 +44,7 @@ func TestParseOptionsDirectBackendCompatibility(t *testing.T) {
 	if !direct {
 		t.Fatal("--cli/-y should select direct backend mode")
 	}
-	if opts.flake != "/tmp/nixos#host" || opts.source != "path:/tmp/ryoku" || !opts.dryRun {
+	if opts.flake != "/tmp/nixos#host" || opts.source != "path:/tmp/ryoku" || !opts.noCache || !opts.dryRun {
 		t.Fatalf("parsed options = %+v", opts)
 	}
 	if len(args) == 0 || args[0] != "--flake" {

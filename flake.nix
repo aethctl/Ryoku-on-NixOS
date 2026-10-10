@@ -206,6 +206,15 @@
             touch "$out"
           '';
 
+        ryoku-installer-cache-option = pkgs.runCommand "ryoku-installer-cache-option-check"
+          { nativeBuildInputs = [ pkgs.gnugrep ]; }
+          ''
+            backend=${ryokuInstallBackend}/bin/ryoku-install-backend
+            "$backend" --help | grep -Fq -- '--no-cache'
+            grep -Fq 'binaryCache.enable = $([ "$use_cache" -eq 1 ] && printf true || printf false);' ${./nix/apps/ryoku-install-backend.nix}
+            touch "$out"
+          '';
+
         ryoku-installer-wrapper = import ./nix/tests/installer-wrapper.nix {
           inherit pkgs;
           installer = ryokuInstall;
