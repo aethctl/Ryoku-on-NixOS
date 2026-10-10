@@ -19,6 +19,12 @@ let
   ryokuRyogami = ryokuPkgs.ryoku-ryogami;
   ryokuPaletteBridge = ryokuPkgs.ryoku-palette-bridge;
   ryokuQuickshell = ryokuNixpkgs.quickshell;
+
+  # Keep the preview share picker in Ryoku's pinned package universe rather
+  # than the host package set. NixOS stable releases may not expose this
+  # attribute even though Ryoku's xdph.conf expects the binary.
+  ryokuPreviewSharePicker =
+    lib.attrByPath [ "hyprland-preview-share-picker" ] null ryokuNixpkgs;
   ryokuRyotunes = ryokuPkgs.ryoku-ryotunes;
   ryokuWmHyprland = ryokuPkgs.ryoku-wm-hyprland;
   ryokuWmNiri = ryokuPkgs.ryoku-wm-niri;
@@ -563,7 +569,6 @@ EOF
       "libqalculate"
       "ddcutil"
       "gpu-screen-recorder"
-      "hyprland-preview-share-picker"
     ];
 
   # NixOS cannot keep setuid executables in the immutable Nix store.
@@ -744,7 +749,11 @@ EOF
     glib
     libnotify
     xdg-utils
-  ] ++ optionalRuntime ++ optionalAppPackages ++ browserPackages;
+  ]
+  ++ lib.optional (ryokuPreviewSharePicker != null) ryokuPreviewSharePicker
+  ++ optionalRuntime
+  ++ optionalAppPackages
+  ++ browserPackages;
 
   # Number of direct packages in the final NixOS system profile.
   #

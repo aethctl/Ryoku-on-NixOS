@@ -199,9 +199,19 @@ PY_SESSION
     cp ryoku/apps/chromium-flags.conf \
       "$cfg/chromium-flags.conf"
 
-    mkdir -p "$cfg/hyprland-preview-share-picker"
-    cp ryoku/apps/hyprland-preview-share-picker/config.yaml \
-      "$cfg/hyprland-preview-share-picker/config.yaml"
+    ${pkgs.lib.optionalString (builtins.hasAttr "hyprland-preview-share-picker" pkgs) ''
+      mkdir -p "$cfg/hyprland-preview-share-picker"
+      cp ryoku/apps/hyprland-preview-share-picker/config.yaml \
+        "$cfg/hyprland-preview-share-picker/config.yaml"
+    ''}
+
+    ${pkgs.lib.optionalString (! builtins.hasAttr "hyprland-preview-share-picker" pkgs) ''
+      # NixOS stable releases may not package the preview picker. In that case
+      # remove the custom command so xdg-desktop-portal-hyprland falls back to
+      # its bundled hyprland-share-picker instead of returning no selection.
+      sed -Ei '/^[[:space:]]*custom_picker_binary[[:space:]]*=[[:space:]]*hyprland-preview-share-picker[[:space:]]*$/d' \
+        "$cfg/hypr/xdph.conf"
+    ''}
 
     # ── User systemd session units ─────────────────────────────
     #
